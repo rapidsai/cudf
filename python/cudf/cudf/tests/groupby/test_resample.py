@@ -48,6 +48,19 @@ def test_series_upsample_simple():
     )
 
 
+def test_series_resample_preserves_frequency():
+    index = pd.DatetimeIndex(
+        pd.date_range("2020-01-01", freq="D", periods=3).to_numpy()
+    )
+    psr = pd.Series(range(3), index=index)
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.resample("D").max()
+    result = gsr.resample("D").max()
+
+    assert_eq(result, expected, check_dtype=False, check_index_type=False)
+
+
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_ffill(rule):
     date_idx = pd.date_range("1/1/2012", periods=10, freq="5s")

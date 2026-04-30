@@ -6,8 +6,8 @@
 #include "deletion_vectors_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/roaring_bitmap.hpp>
 
@@ -105,8 +105,9 @@ namespace detail {
                                           cudf::get_current_device_resource_ref());
   // Filter the table using the deletion vector
   return table_with_metadata{
-    // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
-    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream, mr),
+    // Supply user-provided mr to apply deletion mask to allocate output table's memory
+    cudf::detail::apply_mask(
+      table_with_index->view(), row_mask->view(), cudf::detail::mask_type::DELETION, stream, mr),
     std::move(metadata)};
 }
 
@@ -312,8 +313,9 @@ table_with_metadata chunked_parquet_reader::read_chunk()
                                                   _stream,
                                                   cudf::get_current_device_resource_ref());
   return table_with_metadata{
-    // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
-    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), _stream, _mr),
+    // Supply user-provided mr to apply deletion mask to allocate output table's memory
+    cudf::detail::apply_mask(
+      table_with_index->view(), row_mask->view(), cudf::detail::mask_type::DELETION, _stream, _mr),
     std::move(metadata)};
 }
 
