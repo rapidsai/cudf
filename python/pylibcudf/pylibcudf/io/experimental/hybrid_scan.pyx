@@ -163,17 +163,16 @@ cdef class HybridScanReader:
         cdef byte_range_info info = self.c_obj.get()[0].page_index_byte_range()
         return ByteRangeInfo(info.offset(), info.size())
 
-    def setup_page_index(self, bytes page_index_bytes):
+    def setup_page_index(self, const uint8_t[::1] page_index_bytes):
         """Setup the page index within the Parquet file metadata.
 
         Parameters
         ----------
-        page_index_bytes : bytes
+        page_index_bytes : Buffer
             Parquet page index buffer bytes
         """
-        cdef const uint8_t[::1] page_view = page_index_bytes
         self.c_obj.get()[0].setup_page_index(
-            host_span[const_uint8_t](&page_view[0], len(page_index_bytes))
+            host_span[const_uint8_t](&page_index_bytes[0], len(page_index_bytes))
         )
 
     def all_row_groups(self, ParquetReaderOptions options):
