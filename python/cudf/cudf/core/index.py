@@ -3532,7 +3532,7 @@ class DatetimeIndex(Index):
             self._column.to_julian_date(), name=self.name
         )
 
-    def to_period(self, freq) -> pd.PeriodIndex:
+    def to_period(self, freq=None) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
 
     def normalize(self) -> Self:
