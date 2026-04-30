@@ -101,9 +101,9 @@ def simple_hybrid_scan_reader(simple_parquet_bytes, simple_parquet_options):
     )
     footer_start = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES - footer_size
     footer_end = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES
-    footer_bytes = simple_parquet_mv[footer_start:footer_end]
+    footer_mv = simple_parquet_mv[footer_start:footer_end]
 
-    return HybridScanReader(footer_bytes, simple_parquet_options)
+    return HybridScanReader(footer_mv, simple_parquet_options)
 
 
 def test_hybrid_scan_reader_basic(simple_hybrid_scan_reader, num_rows):
