@@ -93,15 +93,17 @@ def simple_hybrid_scan_reader(simple_parquet_bytes, simple_parquet_options):
     PARQUET_MAGIC_BYTES = 4  # Number of bytes for "PAR1" magic number
     PARQUET_SUFFIX_BYTES = PARQUET_FOOTER_SIZE_BYTES + PARQUET_MAGIC_BYTES
 
+    simple_parquet_mv = memoryview(simple_parquet_bytes)
+
     footer_size = int.from_bytes(
-        simple_parquet_bytes[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
+        simple_parquet_mv[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
         byteorder="little",
     )
     footer_start = (
-        len(simple_parquet_bytes) - PARQUET_SUFFIX_BYTES - footer_size
+        len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES - footer_size
     )
-    footer_end = len(simple_parquet_bytes) - PARQUET_SUFFIX_BYTES
-    footer_bytes = simple_parquet_bytes[footer_start:footer_end]
+    footer_end = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES
+    footer_bytes = simple_parquet_mv[footer_start:footer_end]
 
     return HybridScanReader(footer_bytes, simple_parquet_options)
 
