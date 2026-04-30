@@ -788,6 +788,7 @@ add_library(
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/contains_multiple.cu
+  src/strings/search/count.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_instance.cu
@@ -854,6 +855,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
+  src/utilities/roaring_bitmap.cu
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
@@ -1001,8 +1003,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow::nanoarrow zstd
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
+          nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1080,8 +1082,8 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
-                           $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+                           cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -1161,6 +1163,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
+                 BUILD_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
@@ -1237,8 +1241,16 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 )
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
-  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
+  install(
+    TARGETS cudf_identify_stream_usage_mode_cudf
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
+  install(
+    TARGETS cudf_identify_stream_usage_mode_testing
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
 endif()
 
 set(doc_string

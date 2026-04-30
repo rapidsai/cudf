@@ -46,7 +46,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
@@ -71,10 +71,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import StatsCollector
-    from cudf_polars.experimental.dispatch import (
-        LowerIRTransformer,
-        State as LowerState,
-    )
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -107,48 +103,39 @@ def evaluate_logical_plan(
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Lower the IR graph on the client process (for now).
-    ir, partition_info, stats = lower_ir_graph(ir, config_options)
-
-    # Dask may return chunks in arbitrary order.
-    # Make sure we always finish with a Repartition for now.
-    if config_options.executor.cluster == "distributed" and not isinstance(
-        ir, Repartition
-    ):
-        ir = Repartition(ir.schema, ir)
-        partition_info[ir] = PartitionInfo(count=1)
-
     query_id = uuid.uuid4()
 
-    # Reserve shuffle IDs for the entire pipeline execution
-    with (
-        ReserveOpIDs(ir, config_options) as collective_id_map,
-        cudf_polars.dsl.tracing.bound_contextvars(cudf_polars_query_id=str(query_id)),
+    with cudf_polars.dsl.tracing.bound_contextvars(
+        cudf_polars_query_id=str(query_id),
     ):
-        # Log the query plan structure for tracing (no-op if tracing disabled)
-        log_query_plan(ir, config_options)
-
-        # Build and execute the streaming pipeline.
-        # This must be done on all worker processes
-        # for cluster == "distributed".
         match config_options.executor.cluster:
             case "distributed":  # pragma: no cover; block depends on executor type and Distributed cluster
-                # Distributed execution: Use client.run
-                # NOTE: Distributed execution requires Dask for now
+                # Legacy distributed execution: lower on the client,
+                # ship the lowered plan to workers.
                 from cudf_polars.experimental.rapidsmpf.dask import (
                     evaluate_pipeline_dask,
                 )
 
-                result, metadata_collector = evaluate_pipeline_dask(
-                    evaluate_pipeline,
-                    ir,
-                    partition_info,
-                    config_options,
-                    stats,
-                    collective_id_map,
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
+                stats = collect_statistics(ir, config_options)
+                ir, partition_info = lower_ir_graph(ir, config_options, stats)
+
+                # Dask may return chunks in arbitrary order.
+                if not isinstance(ir, Repartition):
+                    ir = Repartition(ir.schema, ir)
+                    partition_info[ir] = PartitionInfo(count=1)
+
+                with ReserveOpIDs(ir, config_options) as collective_id_map:
+                    log_query_plan(ir, config_options)
+                    result, metadata_collector = evaluate_pipeline_dask(
+                        evaluate_pipeline,
+                        ir,
+                        partition_info,
+                        config_options,
+                        stats,
+                        collective_id_map,
+                        collect_metadata=collect_metadata,
+                        query_id=query_id,
+                    )
             case "spmd":
                 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
                     evaluate_pipeline_spmd_mode,
@@ -156,10 +143,7 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_spmd_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
@@ -170,10 +154,7 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_ray_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
@@ -184,25 +165,26 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_dask_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
             case "single":
-                # Single-process execution: Run locally
-                result, metadata_collector = evaluate_pipeline(
-                    ir,
-                    partition_info,
-                    config_options,
-                    stats,
-                    collective_id_map,
-                    single_process_communicator(Options(), ProgressThread()),
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
+                # Single-process execution: lower and run locally.
+                stats = collect_statistics(ir, config_options)
+                ir, partition_info = lower_ir_graph(ir, config_options, stats)
+                with ReserveOpIDs(ir, config_options) as collective_id_map:
+                    log_query_plan(ir, config_options)
+                    result, metadata_collector = evaluate_pipeline(
+                        ir,
+                        partition_info,
+                        config_options,
+                        stats,
+                        collective_id_map,
+                        single_process_communicator(Options(), ProgressThread()),
+                        collect_metadata=collect_metadata,
+                        query_id=query_id,
+                    )
             case other:
                 raise ValueError(f"Unknown cluster mode: {other}")
 
@@ -397,49 +379,6 @@ def evaluate_pipeline(
                 rmm.mr.set_current_device_resource(_original_mr)
 
         return result, metadata_collector
-
-
-def lower_ir_graph(
-    ir: IR,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
-    """
-    Rewrite an IR graph and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        Root of the graph to rewrite.
-    config_options
-        GPUEngine configuration options.
-    stats
-        The statistics collector.
-
-    Returns
-    -------
-    new_ir, partition_info, stats
-        The rewritten graph, a mapping from unique nodes
-        in the new graph to associated partitioning information,
-        and the statistics collector.
-
-    Notes
-    -----
-    This function is nearly identical to the `lower_ir_graph` function
-    in the `parallel` module, but with some differences:
-    - A distinct `lower_ir_node` function is used.
-    - A `Repartition` node is added to ensure a single chunk is produced.
-    - Statistics are returned.
-
-    See Also
-    --------
-    lower_ir_node
-    """
-    state: LowerState = {
-        "config_options": config_options,
-        "stats": collect_statistics(ir, config_options),
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return *mapper(ir), state["stats"]
 
 
 def determine_fanout_nodes(

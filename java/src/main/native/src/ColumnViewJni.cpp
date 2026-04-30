@@ -1621,6 +1621,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContains(JNIEnv* en
   JNI_CATCH(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsPerRow(JNIEnv* env,
+                                                                            jobject j_object,
+                                                                            jlong j_view_handle,
+                                                                            jlong j_targets_handle)
+{
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
+  JNI_NULL_CHECK(env, j_targets_handle, "targets column is null", false);
+
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    auto* column_view         = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    auto* targets_view        = reinterpret_cast<cudf::column_view*>(j_targets_handle);
+    auto const strings_column = cudf::strings_column_view(*column_view);
+    auto const targets_column = cudf::strings_column_view(*targets_view);
+    return release_as_jlong(cudf::strings::contains(strings_column, targets_column));
+  }
+  JNI_CATCH(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv* env,
                                                                  jobject j_object,
                                                                  jlong j_view_handle,
