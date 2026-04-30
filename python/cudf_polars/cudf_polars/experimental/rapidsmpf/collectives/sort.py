@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Sort (ShuffleSorted) logic for the RapidsMPF streaming runtime."""
+"""Sort logic for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
@@ -24,22 +24,29 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
-from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    default_node_single,
+    shutdown_on_error,
+)
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     allgather_reduce,
     chunk_to_frame,
     concat_batch,
     empty_table_chunk,
+    evaluate_batch,
+    evaluate_chunk,
     gather_in_task_group,
     names_to_indices,
+    process_children,
     recv_metadata,
     replay_buffered_channel,
     send_metadata,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.sort import (
-    ShuffleSorted,
     _get_final_sort_boundaries,
+    _has_simple_zlice,
     _select_local_split_candidates,
     find_sort_splits,
 )
@@ -76,6 +83,63 @@ class ChunkStore:
             yield self._store.extract(mid=self._mids.popleft())
 
 
+async def _simple_top_or_bottom_k(
+    context: Context,
+    comm: Communicator,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    ir: Sort,
+    ir_context: IRExecutionContext,
+    metadata_in: ChannelMetadata,
+    collective_ids: list[int],
+    tracer: ActorTracer | None,
+) -> None:
+    """Sort + simple head/tail slice."""
+    # TODO: We may need to gate this optimization on the slice size.
+    await send_metadata(
+        ch_out,
+        context,
+        ChannelMetadata(local_count=1, partitioning=None, duplicated=True),
+    )
+
+    chunks: list[TableChunk] = []
+    while (msg := await ch_in.recv(context)) is not None:
+        chunks.append(
+            await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
+            )
+        )
+    chunk: TableChunk = await evaluate_batch(chunks, context, ir, ir_context=ir_context)
+    chunks.clear()
+
+    if comm.nranks > 1 and not metadata_in.duplicated:
+        allgather = AllGatherManager(context, comm, collective_ids.pop())
+        with allgather.inserting() as inserter:
+            inserter.insert(comm.rank, chunk)
+
+        stream = ir_context.get_cuda_stream()
+        chunk = await evaluate_chunk(
+            context,
+            TableChunk.from_pylibcudf_table(
+                await allgather.extract_concatenated(stream, ordered=True),
+                stream,
+                exclusive_view=True,
+                br=context.br(),
+            ),
+            ir,
+            ir_context=ir_context,
+        )
+
+    if tracer is not None:
+        tracer.add_chunk(table=chunk.table_view())
+    await ch_out.send(context, Message(comm.rank, chunk))
+
+    await ch_out.drain(context)
+
+
 def _boundary_schema(by: list[str], by_dtypes: list[DataType]) -> Schema:
     """Schema of boundaries table."""
     name_gen = unique_names(by)
@@ -94,7 +158,7 @@ async def _compute_sort_boundaries(
     comm: Communicator,
     ir_context: IRExecutionContext,
     local_candidates_list: list[TableChunk],
-    ir: ShuffleSorted,
+    ir: Sort,
     by: list[str],
     num_partitions: int,
     allgather_id: int | None,
@@ -210,10 +274,11 @@ async def _receive_and_buffer_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
     chunk_store: ChunkStore,
-    sort_ir: Sort,
+    ir: Sort,
     by: list[str],
     num_partitions: int,
     comm: Communicator,
+    ir_context: IRExecutionContext,
 ) -> list[TableChunk]:
     """Receive input chunks, collect local split candidates, and buffer chunks for later insert."""
     await recv_metadata(ch_in, context)
@@ -223,10 +288,14 @@ async def _receive_and_buffer_chunks(
     while (msg := await ch_in.recv(context)) is not None:
         seq_num = msg.sequence_number
         df = chunk_to_frame(
-            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-                context.br(), allow_overbooking=True
+            # Make sure chunks are pre-sorted
+            await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
             ),
-            sort_ir,
+            ir,
         )
         local_candidates_list.append(
             TableChunk.from_pylibcudf_table(
@@ -238,7 +307,7 @@ async def _receive_and_buffer_chunks(
                 br=context.br(),
             )
         )
-        if sort_ir.stable:
+        if ir.stable:
             nrows = df.table.num_rows()
             start = (comm.rank * (1 << 48)) + local_row_offset
             seq_id_col = plc.filling.sequence(
@@ -276,7 +345,7 @@ async def _insert_chunks_into_shuffle(
     metadata_in: ChannelMetadata,
     chunk_store: ChunkStore,
     sort_boundaries_df: DataFrame,
-    ir: ShuffleSorted,
+    ir: Sort,
     ir_context: IRExecutionContext,
     by: list[str],
 ) -> tuple[ShuffleManager, Sort]:
@@ -286,8 +355,6 @@ async def _insert_chunks_into_shuffle(
     by_indices = names_to_indices(tuple(by), ir.schema)
 
     skip_insert = metadata_in.duplicated and comm.rank != 0
-    local_sort_ir = ir.children[0]
-    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
 
     shuffle = ShuffleManager(
         context,
@@ -323,21 +390,21 @@ async def _insert_chunks_into_shuffle(
             )
             inserter.insert_split(available_chunk, splits)
 
-    post_sort_ir = local_sort_ir
-    if local_sort_ir.stable:
-        assert local_sort_ir.zlice is None
+    post_sort_ir = ir
+    if ir.stable:
+        assert ir.zlice is None
         seq_id_name = next(unique_names(ir.schema.keys()))
         post_sort_ir = Sort(
-            local_sort_ir.schema | {seq_id_name: DataType(pl.UInt64())},
+            ir.schema | {seq_id_name: DataType(pl.UInt64())},
             (
-                *local_sort_ir.by,
+                *ir.by,
                 NamedExpr(seq_id_name, Col(DataType(pl.UInt64()), seq_id_name)),
             ),
-            (*local_sort_ir.order, plc.types.Order.ASCENDING),
-            (*local_sort_ir.null_order, plc.types.NullOrder.AFTER),
-            local_sort_ir.stable,
+            (*ir.order, plc.types.Order.ASCENDING),
+            (*ir.null_order, plc.types.NullOrder.AFTER),
+            ir.stable,
             None,
-            local_sort_ir.children[0],
+            ir.children[0],
         )
 
     return shuffle, post_sort_ir
@@ -369,19 +436,19 @@ async def _extract_partitions_and_send(
                 ),
                 context=ir_context,
             ).table
-        if table.num_columns() > ncols_out:
-            table = plc.Table(table.columns()[:ncols_out])
-        if tracer is not None:
-            tracer.add_chunk(table=table)
-        await ch_out.send(
-            context,
-            Message(
-                partition_id,
-                TableChunk.from_pylibcudf_table(
-                    table, stream, exclusive_view=True, br=context.br()
+            if table.num_columns() > ncols_out:
+                table = plc.Table(table.columns()[:ncols_out])
+            if tracer is not None:
+                tracer.add_chunk(table=table)
+            await ch_out.send(
+                context,
+                Message(
+                    partition_id,
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=context.br()
+                    ),
                 ),
-            ),
-        )
+            )
 
     await ch_out.drain(context)
 
@@ -390,7 +457,7 @@ async def _extract_partitions_and_send(
 async def sort_actor(
     context: Context,
     comm: Communicator,
-    ir: ShuffleSorted,
+    ir: Sort,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
@@ -400,13 +467,28 @@ async def sort_actor(
     collective_ids: list[int],
 ) -> None:
     """Streaming sort actor."""
-    local_sort_ir = ir.children[0]
-    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
     ch_replay = context.create_channel()
     async with shutdown_on_error(
         context, ch_in, ch_out, ch_replay, trace_ir=ir, ir_context=ir_context
     ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
+
+        if ir.zlice is not None:
+            assert _has_simple_zlice(ir.zlice), (
+                f"This slice not supported in `sort_actor`: {ir.zlice}."
+            )
+            await _simple_top_or_bottom_k(
+                context,
+                comm,
+                ch_in,
+                ch_out,
+                ir,
+                ir_context,
+                metadata_in,
+                collective_ids,
+                tracer,
+            )
+            return
 
         sampled_chunks, num_partitions = await _sample_chunks_for_size_estimate(
             context, comm, ch_in, num_partitions, metadata_in, executor, collective_ids
@@ -427,10 +509,11 @@ async def sort_actor(
                 context,
                 ch_replay,
                 chunk_store,
-                local_sort_ir,
+                ir,
                 by,
                 num_partitions,
                 comm,
+                ir_context,
             ),
         )
 
@@ -460,22 +543,45 @@ async def sort_actor(
         )
 
         await _extract_partitions_and_send(
-            context, ch_out, shuffle, post_sort_ir, ir_context, ir.schema, tracer=tracer
+            context,
+            ch_out,
+            shuffle,
+            post_sort_ir,
+            ir_context,
+            ir.schema,
+            tracer=tracer,
         )
 
 
-@generate_ir_sub_network.register(ShuffleSorted)
-def _shuffle_sorted_network(
-    ir: ShuffleSorted, rec: SubNetGenerator
-) -> tuple[dict, dict]:
+@generate_ir_sub_network.register(Sort)
+def _sort_rapidsmpf_network(ir: Sort, rec: SubNetGenerator) -> tuple[dict, dict]:
+    """Wire multi-partition ``Sort`` to ``sort_actor``; single-partition uses ``default_node_single``."""
+    executor = rec.state["config_options"].executor
+    partition_info = rec.state["partition_info"]
+    dynamic = executor.dynamic_planning is not None
+
+    if partition_info[ir].count == 1 and (
+        not dynamic or isinstance(ir.children[0], Repartition)
+    ):
+        nodes, channels = process_children(ir, rec)
+        channels[ir] = ChannelManager(rec.state["context"])
+        nodes[ir] = [
+            default_node_single(
+                rec.state["context"],
+                ir,
+                rec.state["ir_context"],
+                channels[ir].reserve_input_slot(),
+                channels[ir.children[0]].reserve_output_slot(),
+            )
+        ]
+        return nodes, channels
+
     (child,) = ir.children
     nodes, channels = rec(child)
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):
         raise NotImplementedError("Sorting columns must be column names.")
 
-    executor = rec.state["config_options"].executor
-    dynamic = executor.dynamic_planning is not None
     collective_ids = list(rec.state["collective_id_map"][ir])
     expected_id_count = 3 if dynamic else 2
     assert len(collective_ids) == expected_id_count, (
@@ -492,7 +598,7 @@ def _shuffle_sorted_network(
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             by=by,
-            num_partitions=rec.state["partition_info"][ir].count,
+            num_partitions=partition_info[ir].count,
             executor=executor,
             collective_ids=collective_ids,
         )

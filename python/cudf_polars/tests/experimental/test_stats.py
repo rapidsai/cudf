@@ -18,6 +18,7 @@ from cudf_polars.experimental.io import (
     ParquetSourceInfo,
     _clear_source_info_cache,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
@@ -155,19 +156,10 @@ def test_dataframe_round_trip() -> None:
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "target_partition_size": 10_000,
-                "max_rows_per_partition": 1_000,
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_stats_planning(tmp_path, kind, streaming_engine):
+def test_stats_planning(tmp_path, kind, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=10_000, max_rows_per_partition=1_000),
+    )
     sales = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
