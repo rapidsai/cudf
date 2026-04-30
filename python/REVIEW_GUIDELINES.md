@@ -58,7 +58,7 @@
 
 ### pylibcudf (Cython Bindings)
 - Incorrect Cython object lifetime management
-- Exceptions not handled correctly across Python/C++ boundary
+- Exceptions not handled correctly across Python/C++ boundary (missing `+libcudf_exception_handler` if not `noexcept`)
 - Incorrect GIL handling for CUDA operations
 - Cython bindings not matching the C++ API
 
@@ -66,6 +66,9 @@
 - Missing coverage of Polars expression types (silent fallback to CPU without warning)
 - Incorrect GPU executor fallback logic
 - IR nodes not properly translated
+- Stream argument not explicitly passed to a pylibcudf API
+- `asyncio.Task`s not explicitly canceled in a finally block upon failure
+- rapidsmpf `Channel`s enter the `shutdown_on_error` context manager for proper resource cleanup
 
 ### dask_cudf
 - Dask DataFrame API compatibility issues
