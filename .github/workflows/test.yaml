@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -40,7 +40,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -52,7 +52,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -67,7 +67,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -80,7 +80,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -93,7 +93,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -105,7 +105,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -120,7 +120,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -135,7 +135,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -147,7 +147,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -159,7 +159,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -171,7 +171,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -187,7 +187,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -199,7 +199,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
@@ -215,7 +215,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
@@ -227,7 +227,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}

@@ -15,7 +15,7 @@ jobs:
     get-project-id:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@main
       if: github.event.pull_request.state == 'open'
-      secrets: inherit
+      secrets: inherit # zizmor: ignore[secrets-inherit]
       permissions:
         contents: read
       with:
@@ -39,7 +39,7 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit
+      secrets: inherit # zizmor: ignore[secrets-inherit]
 
     get-release:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
@@ -79,4 +79,4 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit
+      secrets: inherit # zizmor: ignore[secrets-inherit]

@@ -51,7 +51,7 @@ jobs:
       - streams-build
       - streams-test-matrix
       - streams-test
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
     with:
@@ -88,7 +88,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
     with:
@@ -341,7 +341,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
     with:
@@ -352,7 +352,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
     with:
       build_type: pull-request
@@ -362,7 +362,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
@@ -373,7 +373,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@main
     with:
       build_type: pull-request
@@ -382,7 +382,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     with:
@@ -393,7 +393,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: pull-request
@@ -405,7 +405,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: pull-request
@@ -416,7 +416,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_polars_nor_dask_cudf
     with:
@@ -428,7 +428,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
     with:
@@ -439,7 +439,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
     with:
@@ -453,7 +453,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_notebooks
     with:
@@ -467,7 +467,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).build_docs
     with:
@@ -481,7 +481,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
@@ -496,7 +496,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: pull-request
@@ -511,7 +511,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: pull-request
@@ -526,7 +526,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_polars_nor_dask_cudf
     with:
@@ -537,7 +537,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
@@ -553,7 +553,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
     with:
@@ -566,7 +566,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
     with:
@@ -580,7 +580,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
     with:
@@ -593,7 +593,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
@@ -609,7 +609,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).not_cudf_polars
     with:
@@ -621,7 +621,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@main
     with:
@@ -642,7 +642,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     if: (fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas) && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_polars_nor_dask_cudf
     with:
@@ -655,7 +655,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cpp_nor_cudf_polars_nor_dask_cudf
     with:
@@ -674,7 +674,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cpp_nor_cudf_polars_nor_dask_cudf
     with:
@@ -690,7 +690,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cpp_nor_cudf_polars_nor_dask_cudf
     with:
