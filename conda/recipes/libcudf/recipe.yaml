@@ -126,6 +126,7 @@ outputs:
         - ${{ compiler("c") }}
       host:
         - cuda-version =${{ cuda_version }}
+        - cuda-sanitizer-api
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
         - libnvcomp-dev ${{ nvcomp_version }}
