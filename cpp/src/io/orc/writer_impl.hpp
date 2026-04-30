@@ -97,10 +97,19 @@ struct file_segmentation {
 
 /**
  * @brief ORC per-chunk streams of encoded data.
+ *
+ * The encoded buffers for every (stripe, stream) pair are packed into two arena
+ * allocations rather than one `device_uvector` per pair: `encoded_buffer` holds
+ * the raw encoder output, and `gathered_buffer` holds the contiguous gather
+ * destination produced by `gather_stripes`. The `data` field exposes
+ * non-owning device_span<uint8_t> views into whichever arena currently owns
+ * each (stripe, stream) entry.
  */
 struct encoded_data {
-  std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
-  hostdevice_2dvector<encoder_chunk_streams> streams;  // streams of encoded data, per chunk
+  rmm::device_uvector<uint8_t> encoded_buffer;          // arena for raw encoded streams
+  rmm::device_uvector<uint8_t> gathered_buffer;         // arena for gather_stripes output
+  std::vector<std::vector<device_span<uint8_t>>> data;  // [stripe][strm_id] views
+  hostdevice_2dvector<encoder_chunk_streams> streams;   // streams of encoded data, per chunk
 };
 
 /**
