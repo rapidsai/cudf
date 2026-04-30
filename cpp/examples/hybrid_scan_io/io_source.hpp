@@ -53,14 +53,14 @@ struct pinned_allocator : public std::allocator<T> {
 
   T* allocate(std::size_t n)
   {
-    auto ptr = mr.allocate(stream, n * sizeof(T), rmm::CUDA_ALLOCATION_ALIGNMENT);
+    auto ptr = mr.allocate(stream, n * sizeof(T), alignof(T));
     stream.synchronize();
     return static_cast<T*>(ptr);
   }
 
   void deallocate(T* ptr, std::size_t n) noexcept
   {
-    mr.deallocate(stream, ptr, n * sizeof(T), rmm::CUDA_ALLOCATION_ALIGNMENT);
+    mr.deallocate(stream, ptr, n * sizeof(T), alignof(T));
   }
 
  private:
