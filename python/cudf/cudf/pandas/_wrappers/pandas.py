@@ -2310,52 +2310,72 @@ NDArrayBackedExtensionIndex = make_final_proxy_type(
     },
 )
 
+# SQLTable and SQLiteTable set their instance attributes in __init__,
+# so they aren't visible via dir(cls). Forward them explicitly because
+# the proxy's __getattr__ fallback is only installed when the slow type
+# defines __getattr__.
+_SQL_TABLE_ATTRS = {
+    name: _FastSlowAttribute(name)
+    for name in (
+        "dtype",
+        "frame",
+        "if_exists",
+        "index",
+        "keys",
+        "name",
+        "pd_sql",
+        "prefix",
+        "schema",
+        "table",
+    )
+}
+
+SQLTable = make_final_proxy_type(
+    "SQLTable",
+    _Unusable,
+    pd.io.sql.SQLTable,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **_SQL_TABLE_ATTRS,
+    },
+)
+
+SQLiteTable = make_final_proxy_type(
+    "SQLiteTable",
+    _Unusable,
+    pd.io.sql.SQLiteTable,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **_SQL_TABLE_ATTRS,
+    },
+)
+
+SQLDatabase = make_final_proxy_type(
+    "SQLDatabase",
+    _Unusable,
+    pd.io.sql.SQLDatabase,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **{
+            name: _FastSlowAttribute(name)
+            for name in ("con", "exit_stack", "meta", "returns_generator")
+        },
+    },
+)
+
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
     pd.plotting._core.PlotAccessor,
-    pd.io.sql.SQLiteTable,
-    pd.io.sql.SQLTable,
-    pd.io.sql.SQLDatabase,
     pd.io.sql.SQLiteDatabase,
     pd.io.sql.PandasSQL,
 ]
-
-# Instance attributes set in __init__ that aren't in dir(cls) — these
-# need explicit forwarding because the proxy's __getattr__ fallback is
-# only installed when the slow type defines __getattr__.
-_PANDAS_OBJ_FINAL_EXTRA_ATTRS = {
-    pd.io.sql.SQLiteTable: (
-        "dtype",
-        "frame",
-        "if_exists",
-        "index",
-        "keys",
-        "name",
-        "pd_sql",
-        "prefix",
-        "schema",
-        "table",
-    ),
-    pd.io.sql.SQLTable: (
-        "dtype",
-        "frame",
-        "if_exists",
-        "index",
-        "keys",
-        "name",
-        "pd_sql",
-        "prefix",
-        "schema",
-        "table",
-    ),
-    pd.io.sql.SQLDatabase: (
-        "con",
-        "exit_stack",
-        "meta",
-        "returns_generator",
-    ),
-}
 
 _PANDAS_OBJ_INTERMEDIATE_TYPES = [
     pd.core.groupby.groupby.GroupByPlot,
@@ -2368,10 +2388,6 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         # if we already defined a proxy type
         # corresponding to this type, use that.
         continue
-    _extra_attrs = {
-        name: _FastSlowAttribute(name)
-        for name in _PANDAS_OBJ_FINAL_EXTRA_ATTRS.get(typ, ())
-    }
     globals()[typ.__name__] = make_final_proxy_type(
         typ.__name__,
         _Unusable,
@@ -2380,7 +2396,6 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         slow_to_fast=_Unusable(),
         additional_attributes={
             "__hash__": _FastSlowAttribute("__hash__"),
-            **_extra_attrs,
         },
     )
 
