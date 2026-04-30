@@ -15,6 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode, is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
@@ -142,12 +143,11 @@ def test_groupby_sorted_keys(
     df: pl.LazyFrame,
     keys,
     exprs,
-    using_streaming_engine,
     request,
 ):
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine,
+            is_streaming_engine(engine),
             strict=False,
             reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
         )
@@ -304,13 +304,13 @@ def test_groupby_nested_list_struct_raises(dtype):
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(
     engine: pl.GPUEngine,
-    blocksize_mode,
     nrows,
     nkeys,
     with_nulls,
-    using_streaming_engine,
 ):
-    if nrows > 30 and (blocksize_mode == "small" or using_streaming_engine):
+    if nrows > 30 and (
+        get_blocksize_mode(engine) == "small" or is_streaming_engine(engine)
+    ):
         pytest.skip("streaming executor too slow for large n_rows")
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)
@@ -412,7 +412,7 @@ def test_groupby_sum_all_null_group_returns_null(engine: pl.GPUEngine):
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
 def test_groupby_aggs_keep_unsupported_as_null(
-    engine: pl.GPUEngine, using_streaming_engine, request, df: pl.LazyFrame, agg_expr
+    engine: pl.GPUEngine, request, df: pl.LazyFrame, agg_expr
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
@@ -425,7 +425,7 @@ def test_groupby_aggs_keep_unsupported_as_null(
             condition="quantile" in str(agg_expr)
             and not POLARS_VERSION_LT_132
             and POLARS_VERSION_LT_134
-            and using_streaming_engine,
+            and is_streaming_engine(engine),
             reason="Decimal precision mismatch (9 vs 38)",
         )
     )

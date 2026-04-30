@@ -152,7 +152,7 @@ class rmm_host_allocator {
    *  with this \c rmm_host_allocator.
    *
    *  @param p A \c pointer to the previously allocated memory.
-   *  @param cnt Number of objects that werepreviously allocated.
+   *  @param cnt Number of objects that were previously allocated.
    *  @note This method does not invoke \p value_type's destructor.
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
