@@ -51,8 +51,11 @@ jobs:
   cpp-build:
     needs: [telemetry-setup]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
     with:
@@ -65,8 +68,11 @@ jobs:
   python-build:
     needs: [telemetry-setup, cpp-build]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
@@ -80,8 +86,11 @@ jobs:
   python-build-noarch:
     needs: [telemetry-setup, cpp-build, python-build]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
@@ -94,8 +103,11 @@ jobs:
   upload-conda:
     needs: [cpp-build, python-build, python-build-noarch]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
@@ -107,8 +119,11 @@ jobs:
     if: github.ref_type == 'branch'
     needs: [python-build, python-build-noarch]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
@@ -123,8 +138,11 @@ jobs:
   wheel-build-libcudf:
     needs: [telemetry-setup]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -141,8 +159,11 @@ jobs:
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -155,8 +176,11 @@ jobs:
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -173,8 +197,11 @@ jobs:
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -188,8 +215,11 @@ jobs:
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -206,8 +236,11 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -221,8 +254,11 @@ jobs:
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -240,8 +276,11 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -254,8 +293,11 @@ jobs:
   wheel-build-cudf-polars:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -273,8 +315,11 @@ jobs:
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     permissions:
+      actions: read
       contents: read
       id-token: write
+      packages: read
+      pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
