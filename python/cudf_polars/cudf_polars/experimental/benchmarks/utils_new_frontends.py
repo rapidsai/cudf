@@ -636,7 +636,6 @@ def get_executor_options(
     executor_options: dict[str, Any] = (
         run_config.streaming_options.to_executor_options()
     )
-    executor_options["runtime"] = "rapidsmpf"
     executor_options["max_io_threads"] = run_config.max_io_threads
 
     # PDSHQueries: inject unique_fraction when dynamic planning is explicitly disabled

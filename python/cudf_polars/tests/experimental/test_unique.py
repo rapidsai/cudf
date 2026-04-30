@@ -38,9 +38,10 @@ def df():
 def test_unique(
     df, streaming_engine_factory, keep, subset, maintain_order, cardinality
 ):
-    engine = streaming_engine_factory(
-        StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
-    )
+    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
+        engine = streaming_engine_factory(
+            StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
+        )
     q = df.unique(subset=subset, keep=keep, maintain_order=maintain_order)
     check_row_order = maintain_order
     if keep == "any" and subset:
@@ -51,13 +52,14 @@ def test_unique(
 
 
 def test_unique_fallback(df, streaming_engine_factory):
-    engine = streaming_engine_factory(
-        StreamingOptions(
-            unique_fraction={"y": 1.0},
-            fallback_mode="raise",
-            dynamic_planning=None,
-        ),
-    )
+    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
+        engine = streaming_engine_factory(
+            StreamingOptions(
+                unique_fraction={"y": 1.0},
+                fallback_mode="raise",
+                dynamic_planning=None,
+            ),
+        )
     q = df.unique(keep="first", maintain_order=True)
     with pytest.raises(
         NotImplementedError,
@@ -69,13 +71,14 @@ def test_unique_fallback(df, streaming_engine_factory):
 @pytest.mark.parametrize("maintain_order", [True, False])
 @pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
 def test_unique_select(df, streaming_engine_factory, maintain_order, cardinality):
-    engine = streaming_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=4,
-            unique_fraction=cardinality,
-            fallback_mode="warn",
-        ),
-    )
+    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
+        engine = streaming_engine_factory(
+            StreamingOptions(
+                max_rows_per_partition=4,
+                unique_fraction=cardinality,
+                fallback_mode="warn",
+            ),
+        )
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
     if cardinality == {"y": 0.5} and maintain_order:
         with pytest.warns(

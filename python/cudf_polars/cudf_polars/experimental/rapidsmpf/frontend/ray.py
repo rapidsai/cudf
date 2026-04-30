@@ -567,7 +567,6 @@ class RayEngine(StreamingEngine):
                 nranks=nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "ray",
                     "ray_context": RayContext(rank_actors),
                 },

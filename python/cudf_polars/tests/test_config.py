@@ -354,9 +354,7 @@ def test_validate_shuffle_method_defaults(
         "max_rows_per_partition",
         "unique_fraction",
         "target_partition_size",
-        "groupby_n_ary",
         "broadcast_join_limit",
-        "rapidsmpf_spill",
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
@@ -425,9 +423,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", '{"a": 0.5}')
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
-        m.setenv("CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", "43")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
-        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
@@ -444,9 +440,7 @@ def test_config_option_from_env(
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.unique_fraction == {"a": 0.5}
         assert config.executor.target_partition_size == 100
-        assert config.executor.groupby_n_ary == 43
         assert config.executor.broadcast_join_limit == 44
-        assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
         assert config.cuda_stream_policy is None
 

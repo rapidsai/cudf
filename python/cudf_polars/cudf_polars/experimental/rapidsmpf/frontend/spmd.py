@@ -386,7 +386,6 @@ class SPMDEngine(StreamingEngine):
                 nranks=comm.nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
                         comm=comm, context=ctx, py_executor=py_executor

@@ -137,13 +137,14 @@ def test_pickle_conditional_join_args():
 
 
 def test_preserve_partitioning(streaming_engine_factory):
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=2,
-            broadcast_join_limit=2,
-            unique_fraction={"a": 1.0},
-        ),
-    )
+    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
+        streaming_engine = streaming_engine_factory(
+            StreamingOptions(
+                max_rows_per_partition=2,
+                broadcast_join_limit=2,
+                unique_fraction={"a": 1.0},
+            ),
+        )
     left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
     right = pl.LazyFrame({"a": [3, 4, 5, 6, 7] * 4, "c": range(20)})
     q = (
