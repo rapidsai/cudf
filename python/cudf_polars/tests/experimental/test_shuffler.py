@@ -25,14 +25,12 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
             "executor_options": {
                 "max_rows_per_partition": 1,
                 "broadcast_join_limit": 2,
-                "shuffle_method": "rapidsmpf",
             }
         },
         {
             "executor_options": {
                 "max_rows_per_partition": 5,
                 "broadcast_join_limit": 2,
-                "shuffle_method": "rapidsmpf",
             }
         },
     ],

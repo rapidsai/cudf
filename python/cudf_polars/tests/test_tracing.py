@@ -94,7 +94,6 @@ def test_log_query_plan() -> None:
         executor="streaming",
         executor_options={
             "cluster": "single",
-            "runtime": "rapidsmpf",
             "max_rows_per_partition": 5,
         },
         memory_resource=rmm.mr.ManagedMemoryResource(),
@@ -132,7 +131,6 @@ def test_sets_cudf_polars_query_id():
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": "rapidsmpf"},
     )
 
     with structlog.testing.capture_logs(

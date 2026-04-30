@@ -673,7 +673,6 @@ def test_dynamic_planning_adds_repartition(df, op):
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "runtime": "rapidsmpf",
             "dynamic_planning": {},
             "max_rows_per_partition": 1_000_000,
         },
