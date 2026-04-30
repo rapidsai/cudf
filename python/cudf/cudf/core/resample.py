@@ -31,6 +31,19 @@ class _Resampler(GroupBy):
         by = _ResampleGrouping(obj, by)
         super().__init__(obj, by=by)
 
+    def _restore_freq(self, result: DataFrameOrSeries) -> DataFrameOrSeries:
+        if self.grouping._freq is not None and isinstance(
+            result.index, cudf.DatetimeIndex
+        ):
+            if result is self.obj:
+                result = result.copy(deep=False)
+            result.index = cudf.DatetimeIndex._from_column(
+                result.index._column,
+                name=result.index.name,
+                freq=self.grouping._freq,
+            )
+        return result
+
     def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
         result = super().agg(
             func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
@@ -39,18 +52,22 @@ class _Resampler(GroupBy):
             index = cudf.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
-            return result._align_to_index(
-                index, how="right", sort=False, allow_non_unique=True
+            return self._restore_freq(
+                result._align_to_index(
+                    index, how="right", sort=False, allow_non_unique=True
+                )
             )
         else:
-            return result.sort_index()
+            return self._restore_freq(result.sort_index())
 
     def asfreq(self):
-        return self.obj._align_to_index(
-            self.grouping.bin_labels,
-            how="right",
-            sort=False,
-            allow_non_unique=True,
+        return self._restore_freq(
+            self.obj._align_to_index(
+                self.grouping.bin_labels,
+                how="right",
+                sort=False,
+                allow_non_unique=True,
+            )
         )
 
     def _scan_fill(
@@ -71,11 +88,13 @@ class _Resampler(GroupBy):
 
         # filter the result to only include the values corresponding
         # to the bin labels:
-        return filled._align_to_index(
-            self.grouping.bin_labels,
-            how="right",
-            sort=False,
-            allow_non_unique=True,
+        return self._restore_freq(
+            filled._align_to_index(
+                self.grouping.bin_labels,
+                how="right",
+                sort=False,
+                allow_non_unique=True,
+            )
         )
 
     def serialize(self):

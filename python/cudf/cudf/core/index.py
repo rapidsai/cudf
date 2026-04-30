@@ -3265,9 +3265,11 @@ class DatetimeIndex(Index):
         columns: list[ColumnBase],
         column_names: Iterable[str] | None = None,
     ):
-        result = super()._from_columns_like_self(columns, column_names)
-        result._freq = _validate_freq(self._freq)
-        return result
+        # Callers (e.g. _gather, sort_values) reorder or filter values, so we
+        # cannot assume self._freq still applies to the result. Leave _freq
+        # unset (None) and let callers that know the freq is preserved set it
+        # explicitly. Matches pandas, which drops freq on these operations.
+        return super()._from_columns_like_self(columns, column_names)
 
     @classmethod
     def _from_data(
@@ -4028,7 +4030,11 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            # Re-infer from the result's values rather than trusting the cached
+            # self._freq, which (e.g. via deserialization or external assignment)
+            # may not conform. Pandas validates on assignment and raises when
+            # values don't match, so inferring keeps the proxy round-trip robust.
+            result.freq = result.inferred_freq
         return result
 
     @_performance_tracking
@@ -4221,11 +4227,6 @@ class DatetimeIndex(Index):
         """
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_column(result_col, name=self.name)
-
-    def repeat(self, repeats, axis=None) -> Self:
-        res = super().repeat(repeats, axis=axis)
-        res._freq = None
-        return res
 
 
 class TimedeltaIndex(Index):
