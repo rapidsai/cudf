@@ -98,7 +98,7 @@ cdef class HybridScanReader:
 
     Parameters
     ----------
-    footer_bytes : bytes
+    footer_bytes : Buffer
         Parquet file footer bytes
     options : ParquetReaderOptions
         Parquet reader options
@@ -114,10 +114,9 @@ cdef class HybridScanReader:
     >>> row_groups = reader.all_row_groups(options)
     """
 
-    def __init__(self, bytes footer_bytes, ParquetReaderOptions options):
-        cdef const uint8_t[::1] footer_view = footer_bytes
+    def __init__(self, const uint8_t[::1] footer_bytes, ParquetReaderOptions options):
         self.c_obj = make_unique[cpp_hybrid_scan_reader](
-            host_span[const_uint8_t](&footer_view[0], len(footer_bytes)),
+            host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
             options.c_obj
         )
 
