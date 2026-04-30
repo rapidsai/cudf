@@ -3828,16 +3828,23 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if is_dtype_obj_string(self._data[col].dtype):
+            col_dtype = self._data[col].dtype
+            # pandas rejects nlargest/nsmallest on object, complex, string,
+            # and categorical dtypes.
+            unsupported = (
+                is_dtype_obj_string(col_dtype)
+                or getattr(col_dtype, "kind", None) in {"O", "c"}
+                or isinstance(col_dtype, pd.CategoricalDtype)
+            )
+            if unsupported:
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
-                        f"Column '{col}' has dtype {self._data[col].dtype}, "
+                        f"Column '{col}' has dtype {col_dtype}, "
                         f"cannot use method '{method}' with this dtype"
                     )
                 else:
                     error_msg = (
-                        f"Cannot use method '{method}' with "
-                        f"dtype {self._data[col].dtype}"
+                        f"Cannot use method '{method}' with dtype {col_dtype}"
                     )
                 raise TypeError(error_msg)
         if len(self) == 0:

@@ -613,9 +613,50 @@ class DatetimeColumn(TemporalBaseColumn):
 
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
+
+        pandas_compatible = cudf.get_option("mode.pandas_compatible")
+
+        # pandas raises TypeError on inequality ops against None / NaN
+        # (which are not datetime-like). Equality ops still allow these
+        # by returning False/True.
+        if (
+            pandas_compatible
+            and op in {"__lt__", "__le__", "__gt__", "__ge__"}
+            and (
+                other is None or (isinstance(other, float) and np.isnan(other))
+            )
+        ):
+            raise TypeError(
+                f"Invalid comparison between dtype={self.dtype} and "
+                f"{type(other).__name__}"
+            )
+
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
+
+        # tz-mismatch detection: pandas raises TypeError when comparing or
+        # adding/subtracting tz-naive vs tz-aware datetime-like operands.
+        if pandas_compatible:
+            self_is_tz = isinstance(self, DatetimeTZColumn)
+            other_is_tz_dt: bool | None = None
+            if isinstance(other, DatetimeColumn):
+                other_is_tz_dt = isinstance(other, DatetimeTZColumn)
+            elif isinstance(other, pa.Scalar) and pa.types.is_timestamp(
+                other.type
+            ):
+                other_is_tz_dt = other.type.tz is not None
+            if other_is_tz_dt is not None and self_is_tz != other_is_tz_dt:
+                if op in {"__lt__", "__le__", "__gt__", "__ge__"}:
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} and "
+                        f"{type(other).__name__}"
+                    )
+                if op in {"__sub__"}:
+                    raise TypeError(
+                        "Cannot subtract tz-naive and tz-aware "
+                        "datetime-like objects"
+                    )
 
         other_is_null_scalar = False
         if reflect:

@@ -144,6 +144,52 @@ class StringColumn(ColumnBase, Scannable):
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if cudf.get_option("mode.pandas_compatible"):
+            # pandas string dtype rejects non-string values (int/float/bool).
+            if is_scalar(value):
+                if (
+                    value is not None
+                    and not is_na_like(value)
+                    and not isinstance(value, (str, np.str_))
+                ):
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
+            elif isinstance(value, ColumnBase):
+                if value.dtype.kind in {"i", "u", "f", "b"}:
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
+            elif getattr(getattr(value, "dtype", None), "kind", None) in {
+                "i",
+                "u",
+                "f",
+                "b",
+            }:
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            else:
+                # Plain Python sequences without a dtype attribute (e.g.
+                # list/tuple): inspect element types.
+                try:
+                    iterator = iter(value)
+                except TypeError:
+                    iterator = None
+                if iterator is not None:
+                    for v in iterator:
+                        if (
+                            v is None
+                            or is_na_like(v)
+                            or isinstance(v, (str, np.str_))
+                        ):
+                            continue
+                        raise TypeError(
+                            f"Invalid value '{value}' for dtype '{self.dtype}'"
+                        )
+        return super()._cast_setitem_value(value)
+
     def sum(
         self,
         skipna: bool = True,

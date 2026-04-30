@@ -98,6 +98,36 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             value = self._PD_SCALAR(value)
         elif value is pd.NaT:
             value = None
+        elif cudf.get_option("mode.pandas_compatible"):
+            # pyarrow silently coerces int/float to epoch values; pandas
+            # raises TypeError for these.
+            if (
+                is_scalar(value)
+                and not is_na_like(value)
+                and not isinstance(value, (bool, np.bool_))
+                and isinstance(value, (int, float, np.integer, np.floating))
+            ):
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            if (
+                not is_scalar(value)
+                and not isinstance(value, ColumnBase)
+                and getattr(getattr(value, "dtype", None), "kind", None)
+                in {"i", "u", "f", "b"}
+            ):
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            if isinstance(value, ColumnBase) and value.dtype.kind in {
+                "i",
+                "u",
+                "f",
+                "b",
+            }:
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
         return super()._cast_setitem_value(value)
 
     def _process_values_for_isin(
@@ -131,11 +161,20 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     arrow_type = cudf_dtype_to_pa_type(self.dtype)
                 return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
-                if other.tz is not None:
+                self_tz = getattr(self.dtype, "tz", None)
+                if (other.tz is None) != (self_tz is None):
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise TypeError(
+                            f"Invalid comparison between dtype={self.dtype} "
+                            f"and {type(other).__name__}"
+                        )
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
-                other = other.to_numpy()
+                if other.tz is None:
+                    other = other.to_numpy()
+                else:
+                    return pa.scalar(other)
             elif self.dtype.kind == "M" and isinstance(other, str):
                 try:
                     other = pd.Timestamp(other)
@@ -169,7 +208,13 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
-                if scalar.type.tz is not None:
+                self_tz = getattr(self.dtype, "tz", None)
+                if (scalar.type.tz is None) != (self_tz is None):
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise TypeError(
+                            f"Invalid comparison between dtype={self.dtype} "
+                            f"and {type(other).__name__}"
+                        )
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
@@ -232,6 +277,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if cudf.get_option("mode.pandas_compatible") and dtype.kind == "f":
+            # pandas raises TypeError for datetime/timedelta → float casts
+            # (only integer casts are allowed via Series constructor).
+            kind_name = "Datetime" if self.dtype.kind == "M" else "Timedelta"
+            raise TypeError(f"Cannot cast {kind_name}Array to dtype {dtype}")
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
