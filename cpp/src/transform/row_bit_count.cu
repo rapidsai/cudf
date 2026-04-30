@@ -520,7 +520,8 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
   }
 
   // create a contiguous block of column_device_views
-  auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
+  auto d_cols = contiguous_copy_column_device_views<column_device_view>(
+    host_span<column_view const>{cols}, stream);
 
   // move stack info to the gpu
   rmm::device_uvector<column_info> d_info =

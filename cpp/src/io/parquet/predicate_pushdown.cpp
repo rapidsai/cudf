@@ -6,6 +6,7 @@
 #include "expression_transform_helpers.hpp"
 #include "reader_impl_helpers.hpp"
 #include "stats_filter_helpers.hpp"
+#include "timestamp_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -55,6 +56,15 @@ struct row_group_stats_caster : public stats_caster_base {
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
+      // Compute timestamp scale factor for precision conversion
+      auto const ts_scale = [&] {
+        if constexpr (cudf::is_timestamp<T>()) {
+          auto const& schema = per_file_metadata[0].schema[schema_idx];
+          return calc_timestamp_scale(schema.logical_type, static_cast<int32_t>(T::period::den));
+        }
+        return 0;
+      }();
+
       host_column<T> min(total_row_groups, stream);
       host_column<T> max(total_row_groups, stream);
       std::optional<host_column<bool>> is_null;
@@ -78,8 +88,8 @@ struct row_group_stats_caster : public stats_caster_base {
                                       ? colchunk.meta_data.statistics.max_value
                                       : colchunk.meta_data.statistics.max;
             // translate binary data to Type then to <T>
-            min.set_index(stats_idx, min_value, colchunk.meta_data.type);
-            max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+            min.set_index(stats_idx, min_value, colchunk.meta_data.type, ts_scale);
+            max.set_index(stats_idx, max_value, colchunk.meta_data.type, ts_scale);
             // Check the nullability of this column chunk
             if (has_is_null_operator) {
               if (colchunk.meta_data.statistics.null_count.has_value()) {
@@ -229,7 +239,8 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Collect equality literals for each input table column for bloom filtering
   auto const equality_literals =
-    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{
+      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)

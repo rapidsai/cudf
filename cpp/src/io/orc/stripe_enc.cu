@@ -5,8 +5,8 @@
 
 #include "io/comp/compression.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
+#include "utilities/time_utils.cuh"
 
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
@@ -801,14 +801,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
             int64_t ts          = column.element<int64_t>(row);
-            int32_t ts_scale    = powers_of_ten[9 - min(s->chunk.scale, 9)];
+            int32_t ts_scale    = cudf::detail::powers_of_ten[9 - min(s->chunk.scale, 9)];
             int64_t seconds     = ts / ts_scale;
             int64_t nanos       = (ts - seconds * ts_scale);
             s->vals.i64[nz_idx] = seconds - orc_utc_epoch;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
-              nanos *= powers_of_ten[min(s->chunk.scale, 9)];
+              nanos *= cudf::detail::powers_of_ten[min(s->chunk.scale, 9)];
               if (!(nanos % 100)) {
                 nanos /= 100;
                 zeroes = 1;

@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "timestamp_utils.cuh"
+
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -66,9 +68,10 @@ class stats_caster_base {
   }
 
   template <typename ToType, typename FromType>
-  static inline ToType target_type(FromType const value)
+  static inline ToType target_type(FromType value, int32_t ts_scale = 0)
   {
     if constexpr (cudf::is_timestamp<ToType>()) {
+      if (ts_scale != 0) { value = apply_ts_scale(value, ts_scale); }
       return static_cast<ToType>(
         typename ToType::duration{static_cast<typename ToType::rep>(value)});
     } else if constexpr (std::is_same_v<ToType, string_view>) {
@@ -80,14 +83,20 @@ class stats_caster_base {
 
   // uses storage type as T
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
   {
-    CUDF_FAIL("unsupported type for stats casting");
+    CUDF_FAIL("Unsupported type for stats casting");
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_boolean<T>())
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
@@ -96,27 +105,31 @@ class stats_caster_base {
 
   // integral but not boolean, and fixed_point, and chrono.
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
   {
     switch (type) {
       case Type::INT32:
         return stats_caster_base::target_type<T>(
-          decode_fixed_width_value<int32_t>(stats_val, stats_size));
+          decode_fixed_width_value<int32_t>(stats_val, stats_size), ts_scale);
       case Type::INT64:
         return stats_caster_base::target_type<T>(
-          decode_fixed_width_value<int64_t>(stats_val, stats_size));
+          decode_fixed_width_value<int64_t>(stats_val, stats_size), ts_scale);
       case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::target_type<T>(
           static_cast<__int128_t>(decode_fixed_width_value<int64_t>(stats_val, stats_size)) << 32 |
-          decode_fixed_width_value<int32_t>(stats_val + sizeof(int64_t), stats_size));
+            decode_fixed_width_value<int32_t>(stats_val + sizeof(int64_t), stats_size),
+          ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           if constexpr (cudf::is_chrono<T>()) {
             return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
+              decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
           } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
             // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
             // big-endian.
@@ -128,13 +141,18 @@ class stats_caster_base {
               decode_fixed_width_value<T>(stats_val, stats_size));
           }
         }
+        [[fallthrough]];
+      default:
         // unsupported type
-      default: CUDF_FAIL("Invalid type and stats combination");
+        CUDF_FAIL("Invalid type and stats combination");
     }
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_floating_point<T>())
   {
     switch (type) {
@@ -147,7 +165,10 @@ class stats_caster_base {
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(std::is_same_v<T, string_view>)
   {
     switch (type) {
@@ -182,7 +203,8 @@ class stats_caster_base {
 
     void inline set_index(size_type index,
                           std::optional<std::vector<uint8_t>> const& binary_value,
-                          Type const type)
+                          Type const type,
+                          int32_t ts_scale = 0)
     {
       if (binary_value.has_value()) {
         // For strings, also insert the characters
@@ -200,10 +222,9 @@ class stats_caster_base {
             type);
         } else {
           val[index] = stats_caster_base::convert<T>(
-            binary_value.value().data(), binary_value.value().size(), type);
+            binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         }
-      }
-      if (not binary_value.has_value()) {
+      } else {
         clear_bit_unsafe(null_mask.data(), index);
         null_count++;
       }

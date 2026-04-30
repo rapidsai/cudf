@@ -369,6 +369,32 @@ TEST_F(StreamCompactionTest, ApplyBooleanMask)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
 }
 
+TEST_F(StreamCompactionTest, ApplyDeletionMask)
+{
+  auto const col = int32s_col{
+    9668, 9590, 9526, 9205, 9434, 9347, 9160, 9569, 9143, 9807, 9606, 9446, 9279, 9822, 9691};
+  cudf::test::fixed_width_column_wrapper<bool> mask({false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true});
+  cudf::table_view input({col});
+  auto const col_expected = int32s_col{9668, 9590, 9205, 9434, 9160, 9143, 9606, 9446, 9822};
+  cudf::table_view expected({col_expected});
+  auto const result = cudf::apply_deletion_mask(input, mask, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+}
+
 TEST_F(StreamCompactionTest, FilterUDF)
 {
   auto const col              = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
