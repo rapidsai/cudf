@@ -17,7 +17,6 @@ try:
 except ImportError:
     from typing_extensions import Buffer
 
-
 class UseDataPageMask(IntEnum):
     YES: int
     NO: int
