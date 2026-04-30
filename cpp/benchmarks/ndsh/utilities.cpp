@@ -393,12 +393,13 @@ void generate_parquet_data_sources(double scale_factor,
 {
   CUDF_BENCHMARK_RANGE();
 
-  // Set the memory resource to the managed pool
-  auto old_mr = cudf::get_current_device_resource_ref();
+  // Use a managed pool for parquet generation. Capture the *owning* prev
+  // resource: round-tripping device_async_resource_ref through any_resource{ref}
+  // drops the cuda_async pool handle, breaking restore under --rmm_mode=async.
   // TODO: if old_mr is already managed pool or managed, don't create new one.
   rmm::mr::pool_memory_resource managed_pool_mr{rmm::mr::managed_memory_resource{},
                                                 rmm::percent_of_free_device_memory(50)};
-  cudf::set_current_device_resource(managed_pool_mr);
+  auto prev_mr = cudf::set_current_device_resource(managed_pool_mr);
   // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
@@ -462,5 +463,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  cudf::set_current_device_resource(old_mr);
+  cudf::set_current_device_resource(std::move(prev_mr));
 }
