@@ -339,7 +339,8 @@ class StringColumn(ColumnBase, Scannable):
             dtype = np.dtype("object")
         if dtype != self.dtype:
             if (
-                isinstance(dtype, np.dtype)
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(dtype, np.dtype)
                 and dtype == np.dtype("O")
                 and isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype))
                 and self.dtype.na_value is pd.NA
