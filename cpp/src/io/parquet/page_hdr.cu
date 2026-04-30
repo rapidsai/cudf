@@ -592,7 +592,8 @@ void __launch_bounds__(decode_page_headers_block_size)
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size > 0 and
+            bs->page.num_input_values > 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -692,10 +693,9 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
     uint32_t dictionary_page_count = 0;
     warp.sync();
     while (values_found < num_values and bs->cur < bs->end) {
-      auto const prev_cur    = bs->cur;
-      auto const prev_values = values_found;
       cg::invoke_one(warp, [&] {
-        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size > 0 and
+            bs->page.num_input_values > 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -722,12 +722,6 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
               static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
           }
         } else {
-          error[warp_id] |=
-            static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
-          bs->cur = bs->end;
-        }
-        // Parsed page must advance the byte stream.
-        if (bs->cur == prev_cur and values_found == prev_values) {
           error[warp_id] |=
             static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
           bs->cur = bs->end;
@@ -792,7 +786,9 @@ struct decode_page_headers_with_pgidx_fn {
     // bs.page.chunk_row not computed here and will be filled in later by
     // `fill_in_page_info()`.
 
-    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size < 0) {
+    // Parsed page must be valid and not empty
+    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size <= 0 or
+        bs.page.num_input_values <= 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
                 error_code);
       return;
