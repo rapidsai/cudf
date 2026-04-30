@@ -128,7 +128,7 @@ def test_sort_slice(df, engine, offset):
     q = df.sort(by=["y", "z"]).slice(offset, 2)
     with pytest.raises(
         NotImplementedError,
-        match="Sort does not support a multi-partition slice with an offset.",
+        match="This slice not supported for multiple partitions.",
     ):
         assert_gpu_result_equal(q, engine=engine)
 
