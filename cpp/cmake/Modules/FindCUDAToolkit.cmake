@@ -1169,10 +1169,6 @@ find_package_handle_standard_args(CUDAToolkit
     CUDAToolkit_VERSION
 )
 
-foreach(var IN ITEMS CUDAToolkit_ROOT_DIR CUDAToolkit_LIBRARY_ROOT CUDAToolkit_TARGET_DIR CUDAToolkit_LIBRARY_SEARCH_DIRS)
-  message(STATUS "${var}: ${${var}}")
-endforeach()
-
 unset(CUDAToolkit_ROOT_DIR)
 mark_as_advanced(CUDA_CUDART
                  CUDAToolkit_NVCC_EXECUTABLE
