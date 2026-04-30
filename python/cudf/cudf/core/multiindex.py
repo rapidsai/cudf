@@ -1018,7 +1018,7 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def __getitem__(self, index):
-        flatten = isinstance(index, int)
+        flatten = is_integer(index)
 
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
