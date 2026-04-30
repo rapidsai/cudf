@@ -248,11 +248,14 @@ jobs:
       - name: Trigger pandas-tests
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.branch }}
+          SHA: ${{ inputs.sha }}
+          DATE: ${{ inputs.date }}
         run: |
           gh workflow run pandas-tests.yaml \
-            -f branch=${{ inputs.branch }} \
-            -f sha=${{ inputs.sha }} \
-            -f date=${{ inputs.date }}
+            -f branch=$BRANCH \
+            -f sha=$SHA \
+            -f date=$DATE
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4
