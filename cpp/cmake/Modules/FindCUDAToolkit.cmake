@@ -1542,10 +1542,10 @@ if(CUDAToolkit_FOUND)
   _CUDAToolkit_find_and_add_import_lib(
     sanitizer
     ONLY_SEARCH_FOR sanitizer-public
-    LIBRARY_SEARCH_DIRS
-      "${CUDAToolkit_LIBRARY_ROOT}/compute-sanitizer"
-      "${CUDAToolkit_LIBRARY_ROOT}/Sanitizer"
-      "${CUDAToolkit_LIBRARY_ROOT}/extras/Sanitizer"
+    EXTRA_PATH_SUFFIXES
+      "../compute-sanitizer"
+      "../Sanitizer"
+      "../extras/Sanitizer"
     EXTRA_INCLUDE_DIRS "${CUDAToolkit_CUPTI_INCLUDE_DIR}"
   )
   if(TARGET CUDA::sanitizer)
