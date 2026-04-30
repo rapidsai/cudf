@@ -130,6 +130,25 @@ struct insert_and_map_fn {
 };
 
 /*
+ * Per-row hash producer used to populate the precomputed batch hash cache.
+ * Returns 0 (a dummy value never read) for rows excluded by the null bitmask
+ * under `null_policy::EXCLUDE`, avoiding wasted hash work for rows that won't
+ * probe the set.  Cuco only consults the cache for rows whose `insert_and_map_fn`
+ * actually called `insert_and_find`, so the dummy is invisible to it.
+ */
+template <typename RowHasher>
+struct conditional_hash_fn {
+  RowHasher row_hasher;
+  bitmask_type const* row_bitmask;
+
+  __device__ hash_value_type operator()(size_type i) const noexcept
+  {
+    if (row_bitmask && !cudf::bit_is_set(row_bitmask, i)) { return hash_value_type{0}; }
+    return row_hasher(i);
+  }
+};
+
+/*
  * Hasher backed by a precomputed cache, indexed by `idx - offset`.
  * In streaming_groupby `offset = max_groups`, so transient batch values
  * `max_groups + batch_idx` resolve to `cache[batch_idx]`.  Caching is faster

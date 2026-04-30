@@ -40,6 +40,15 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto const batch_hasher_obj = cudf::detail::row::hash::row_hasher{preprocessed_batch};
   auto const d_batch_hash     = batch_hasher_obj.device_hasher(has_null);
 
+  // Compute the null-exclusion bitmask first so the hash cache pass can skip
+  // hashing rows that will be excluded — the dummy hash for excluded rows is
+  // never read by cuco because `insert_and_map_fn` short-circuits on those rows.
+  auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
+  auto [bitmask_buffer, batch_bitmask] =
+    skip_rows_with_nulls
+      ? detail::compute_row_bitmask(batch_keys, stream)
+      : std::pair<rmm::device_buffer, bitmask_type const*>{rmm::device_buffer{0, stream}, nullptr};
+
   // Precompute batch hash values.  Caching is faster than inlining the row hasher
   // inside cuco's probe at high cardinality.
   rmm::device_uvector<hash_value_type> batch_hash_cache(batch_size, stream, temp_mr);
@@ -47,14 +56,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(batch_size),
                     batch_hash_cache.begin(),
-                    d_batch_hash);
-
-  // Batch-local bitmask for null exclusion.
-  auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
-  auto [bitmask_buffer, batch_bitmask] =
-    skip_rows_with_nulls
-      ? detail::compute_row_bitmask(batch_keys, stream)
-      : std::pair<rmm::device_buffer, bitmask_type const*>{rmm::device_buffer{0, stream}, nullptr};
+                    conditional_hash_fn<decltype(d_batch_hash)>{d_batch_hash, batch_bitmask});
 
   // Build comparator and hasher.
   auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};

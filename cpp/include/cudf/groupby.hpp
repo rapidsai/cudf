@@ -431,10 +431,10 @@ struct streaming_aggregation_request {
  * `streaming_groupby` and the stateless `groupby` serve different use cases.  Use
  * the stateless `groupby` for single-shot aggregation when all input fits in memory
  * at once.  Use `streaming_groupby` when input arrives over multiple batches and
- * memory efficiency matters: memory footprint scales with the number of *distinct*
- * keys, not the number of *input* rows, because only the distinct keys seen so far
- * and one aggregation slot per group are kept across batches.  Arbitrarily long
- * high-duplicate streams therefore accumulate without running out of memory.
+ * memory efficiency matters: peak memory does not scale with the number of *input*
+ * rows, because only the distinct keys seen so far and one aggregation slot per
+ * group are kept across batches.  Arbitrarily long high-duplicate streams therefore
+ * accumulate without running out of memory.
  *
  * If memory is not a concern, concatenating all batches and calling the stateless
  * `groupby` once is also a valid choice.  Reach for `streaming_groupby` when
@@ -446,13 +446,19 @@ struct streaming_aggregation_request {
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
  * The `max_groups` parameter sets the upper bound on the number of distinct key
- * combinations across the lifetime of this object. The hash set, companion vectors,
- * and aggregation results table are all pre-allocated to this capacity. Cumulative
- * input rows are not bounded — only cumulative distinct keys.
+ * combinations across the lifetime of this object.  Total memory has two parts:
  *
- * Distinct keys are accumulated incrementally — only newly discovered keys are stored,
- * and key storage grows proportionally to the number of distinct keys actually seen
- * rather than `max_groups`.
+ *   - **Pre-allocated baseline, O(max_groups):** the hash set, the companion
+ *     `(batch_id, row)` vector, and the aggregation results table are all sized
+ *     to `max_groups` at the first `aggregate()` call regardless of the actual
+ *     distinct-key count.  This is the memory cost the user opts into via
+ *     `max_groups` and stays constant for the lifetime of the object.
+ *   - **Incremental key data, O(distinct_keys × key_size):** the actual key
+ *     payload is stored only for keys that have been seen.  Newly discovered
+ *     keys append to per-batch compacted tables, so this part grows in step with
+ *     `distinct_count()` rather than with `max_groups`.
+ *
+ * Cumulative input rows are not bounded — only cumulative distinct keys.
  * All column types (including variable-width types such as strings, lists, and structs)
  * are supported for key columns. Only hash-based aggregation kinds are supported.
  *

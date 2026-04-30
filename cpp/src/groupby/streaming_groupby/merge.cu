@@ -6,6 +6,7 @@
 #include "common.cuh"
 
 #include <cudf/detail/aggregation/device_aggregators.cuh>
+#include <cudf/detail/copy.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -114,16 +115,17 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
   auto const num_other_groups = other._distinct_count;
   if (num_other_groups == 0) { return; }
 
-  auto other_aggs = other.gather_agg_results(stream, mr);
-
   update_nullable_state(other_key_view);
 
   if (!_key_set) { create_key_set(stream); }
 
   auto result = probe_and_insert(other_key_view, stream);
 
-  // Merge aggregation values using dense target indices.
-  auto const d_source = table_device_view::create(other_aggs->view(), stream);
+  // Merge aggregation values using dense target indices.  We only read from
+  // `other._agg_results`; no need to deep-copy the source rows like keys.
+  auto const other_aggs_view =
+    cudf::detail::slice(other._agg_results->view(), {0, num_other_groups}, stream).front();
+  auto const d_source = table_device_view::create(other_aggs_view, stream);
 
   auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
   thrust::for_each_n(
