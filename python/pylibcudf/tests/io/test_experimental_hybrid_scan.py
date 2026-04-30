@@ -740,13 +740,14 @@ def test_hybrid_scan_metadata_with_page_index(
     assert page_index_byte_range.size > 0
 
     # Fetch page index bytes from the parquet file
-    page_index_bytes = simple_parquet_bytes[
+    simple_parquet_mv = memoryview(simple_parquet_bytes)
+    page_index_mv = simple_parquet_mv[
         page_index_byte_range.offset : page_index_byte_range.offset
         + page_index_byte_range.size
     ]
 
     # Setup page index with the fetched bytes
-    simple_hybrid_scan_reader.setup_page_index(page_index_bytes)
+    simple_hybrid_scan_reader.setup_page_index(page_index_mv)
 
     # Now try to use build_row_mask_with_page_index_stats AFTER setup_page_index
     # This should work successfully
