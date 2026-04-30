@@ -149,7 +149,7 @@ def test_groupby_sorted_keys(
         pytest.mark.xfail(
             using_streaming_engine,
             strict=False,
-            reason="Needs https://github.com/rapidsai/cudf/issues/21642",
+            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
         )
     )
     sorted_keys = [
