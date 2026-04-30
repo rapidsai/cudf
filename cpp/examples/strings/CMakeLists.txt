@@ -7,8 +7,7 @@ cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../set_cuda_architecture.cmake)
 
-# initialize cuda architecture
-rapids_cuda_init_architectures(strings_examples)
+# initialize cuda architecture rapids_cuda_init_architectures(strings_examples)
 
 project(
   strings_examples
@@ -25,6 +24,8 @@ rapids_cmake_build_type("Release")
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
+set(CMAKE_CUDA_ARCHITECTURES native)
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
