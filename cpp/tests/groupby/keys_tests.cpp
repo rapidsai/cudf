@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -27,7 +26,7 @@ TYPED_TEST(groupby_keys_test, basic)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::COUNT_VALID>;
+  using R = cudf::size_type;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
@@ -45,7 +44,7 @@ TYPED_TEST(groupby_keys_test, zero_valid_keys)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::COUNT_VALID>;
+  using R = cudf::size_type;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_nulls() );
@@ -63,7 +62,7 @@ TYPED_TEST(groupby_keys_test, some_null_keys)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::COUNT_VALID>;
+  using R = cudf::size_type;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
@@ -84,7 +83,7 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
@@ -112,7 +111,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys        { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4};
@@ -137,7 +136,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys        { 4, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1};
@@ -163,7 +162,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys(       { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4},
@@ -189,7 +188,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
 {
   using K = TypeParam;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys(       { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4},
@@ -235,7 +234,7 @@ TYPED_TEST(groupby_keys_test, structs)
 {
   using V = TypeParam;
 
-  using R       = cudf::detail::target_type_t<int, cudf::aggregation::ARGMAX>;
+  using R       = cudf::size_type;
   using STRINGS = cudf::test::strings_column_wrapper;
   using STRUCTS = cudf::test::structs_column_wrapper;
 
@@ -288,7 +287,7 @@ using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
 TYPED_TEST(groupby_keys_test, lists)
 {
-  using R = cudf::detail::target_type_t<int32_t, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   auto keys   = LCW<TypeParam> { {1,1}, {2,2}, {3,3}, {1,1}, {2,2} };
@@ -307,7 +306,7 @@ struct groupby_string_keys_test : public cudf::test::BaseFixture {};
 TEST_F(groupby_string_keys_test, basic)
 {
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::strings_column_wrapper        keys        { "aaa", "año", "₹1", "aaa", "año", "año", "aaa", "₹1", "₹1", "año"};
@@ -328,7 +327,7 @@ TEST_F(groupby_dictionary_keys_test, basic)
 {
   using K = std::string;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   // clang-format off
   cudf::test::dictionary_column_wrapper<K> keys { "aaa", "año", "₹1", "aaa", "año", "año", "aaa", "₹1", "₹1", "año"};

@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -146,7 +146,7 @@ std::unique_ptr<scalar> dictionary_reduction(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (init.has_value()) { CUDF_FAIL("Initial value not supported for dictionary reductions"); }
+  CUDF_EXPECTS(!init.has_value(), "Initial value not supported for dictionary reductions");
 
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
@@ -305,19 +305,20 @@ struct same_element_type_dispatcher {
              (std::is_same_v<Op, cudf::reduction::detail::op::min> ||
               std::is_same_v<Op, cudf::reduction::detail::op::max>))
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for nested type reductions"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for nested type reductions");
 
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
-    auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
-    auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                           thrust::make_counting_iterator(0),
-                                           thrust::make_counting_iterator(input.size()),
-                                           size_type{0},
-                                           binary_op);
+    auto const binary_op = cudf::detail::cast_functor<size_type>(binop_generator.binop());
+    auto const minmax_idx =
+      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<cudf::size_type>{0},
+                     cuda::counting_iterator{input.size()},
+                     size_type{0},
+                     binary_op);
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
   }

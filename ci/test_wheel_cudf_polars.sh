@@ -18,17 +18,17 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 rapids-logger "Installing cudf_polars and its dependencies"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
-rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
+rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
 # notes:
 #
-#   * echo to expand wildcard before adding `[test,experimental]` requires for pip
-#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
-#     ignored if any other --constraint are passed via the CLI
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
 #
 rapids-pip-retry install \
     -v \
-    --constraint ./constraints.txt \
+    --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
@@ -36,7 +36,8 @@ rapids-pip-retry install \
 
 rapids-logger "Run cudf_polars tests"
 
-POLARS_VERSIONS=$(python ci/utils/fetch_polars_versions.py --latest-patch-only dependencies.yaml)
+available_polars_versions=$(python -m pip index versions polars --json | jq '.versions')
+POLARS_VERSIONS=$(python ci/utils/filter_package_versions.py dependencies.yaml run_cudf_polars polars "$available_polars_versions")
 
 # shellcheck disable=SC2317
 function set_exitcode()
@@ -55,7 +56,7 @@ LATEST_VERSION="${VERSIONS[-1]}"
 
 for version in "${VERSIONS[@]}"; do
     rapids-logger "Installing polars==${version}"
-    pip install -U "polars==${version}"
+    rapids-pip-retry install -U "polars==${version}"
 
     rapids-logger "Running tests for polars==${version}"
 

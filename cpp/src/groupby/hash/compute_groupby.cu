@@ -14,11 +14,15 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail::hash {
@@ -56,21 +60,30 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
   [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
     [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
-    if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
+    if (!skip_rows_with_nulls) {
+      return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
+    }
 
     if (keys.num_columns() == 1) {
       auto const& keys_col = keys.column(0);
       // Only use the input null mask directly if the keys table was not sliced.
-      if (keys_col.offset() == 0) { return {rmm::device_buffer{0, stream}, keys_col.null_mask()}; }
+      if (keys_col.offset() == 0) {
+        return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+                keys_col.null_mask()};
+      }
       // If the keys table was sliced, we need to copy the null mask to ensure its first bit aligns
       // with the first row of the keys table.
-      auto null_mask_data  = cudf::copy_bitmask(keys_col, stream);
+      auto null_mask_data =
+        cudf::copy_bitmask(keys_col, stream, cudf::get_current_device_resource_ref());
       auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
       return {std::move(null_mask_data), null_mask};
     }
 
-    auto [null_mask_data, null_count] = cudf::bitmask_and(keys, stream);
-    if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
+    auto [null_mask_data, null_count] =
+      cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref());
+    if (null_count == 0) {
+      return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
+    }
 
     auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
     return {std::move(null_mask_data), null_mask};
@@ -83,11 +96,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       });
 
     if (num_columns <= HASH_CACHING_THRESHOLD) {
-      return rmm::device_uvector<hash_value_type>{0, stream};
+      return rmm::device_uvector<hash_value_type>{
+        0, stream, cudf::get_current_device_resource_ref()};
     }
 
-    rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    rmm::device_uvector<hash_value_type> hashes(
+      num_keys, stream, cudf::get_current_device_resource_ref());
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      hashes.begin(),
                      hashes.end(),
                      [d_row_hash, row_bitmask] __device__(size_type const idx) {
@@ -114,7 +129,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return cudf::detail::gather(keys,
                                 gather_map,
                                 out_of_bounds_policy::DONT_CHECK,
-                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                cudf::negative_index_policy::NOT_ALLOWED,
                                 stream,
                                 mr);
   };
@@ -122,14 +137,15 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // In case of no requests, we still need to generate a set of unique keys.
   if (requests.empty()) {
     thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
       num_keys,
       [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
         if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }
       });
 
-    rmm::device_uvector<size_type> unique_key_indices(num_keys, stream);
+    rmm::device_uvector<size_type> unique_key_indices(
+      num_keys, stream, cudf::get_current_device_resource_ref());
     auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.value());
     auto const key_gather_map = device_span<size_type const>{
       unique_key_indices.data(),

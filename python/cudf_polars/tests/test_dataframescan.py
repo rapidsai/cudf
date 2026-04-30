@@ -86,7 +86,13 @@ def test_dataframescan_with_decimals():
     POLARS_VERSION_LT_138,
     reason="height parameter added in Polars 1.38",
 )
-def test_dataframescan_zero_width_with_rows():
+def test_dataframescan_zero_width_with_rows(request, using_rapidsmpf):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf,
+            reason="https://github.com/rapidsai/cudf/issues/21644",
+        )
+    )
     df = pl.LazyFrame(height=5)
     q = df.select(pl.len())
     assert_gpu_result_equal(q)

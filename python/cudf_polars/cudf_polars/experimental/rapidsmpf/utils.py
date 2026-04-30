@@ -5,20 +5,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import itertools
 import operator
 import struct
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any
-
-from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-
-try:
-    import structlog
-    import structlog.contextvars
-except ImportError:
-    pass
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
@@ -35,16 +30,20 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 import pylibcudf as plc
+import rmm.mr
 
+import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
+from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
+from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -57,11 +56,52 @@ if TYPE_CHECKING:
     from cudf_polars.typing import DataType, Schema
 
 
+@contextlib.contextmanager
+def set_memory_resource(mr: rmm.mr.DeviceMemoryResource) -> Iterator[None]:
+    """
+    Context manager that temporarily sets ``mr`` as the current device resource.
+
+    On entry, ``mr`` is installed via ``rmm.mr.set_current_device_resource(mr)``.
+    On exit, the previously active resource is restored unconditionally.
+
+    Parameters
+    ----------
+    mr
+        The memory resource to activate for the duration of the block.
+    """
+    old = rmm.mr.get_current_device_resource()
+    rmm.mr.set_current_device_resource(mr)
+    try:
+        yield
+    finally:
+        rmm.mr.set_current_device_resource(old)
+
+
+async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[Any]:
+    """
+    asyncio.gather-like API for running tasks in a asyncio.TaskGroup.
+
+    Parameters
+    ----------
+    coroutines
+        Tasks to execute.
+
+    Returns
+    -------
+    list[Any]
+        The results of the coroutines.
+    """
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(coro) for coro in coroutines]
+    return [task.result() for task in tasks]
+
+
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
     *channels: Channel[Any],
-    trace_ir: IR | None = None,
+    trace_ir: IR,
+    ir_context: IRExecutionContext | None = None,
 ) -> AsyncIterator[ActorTracer | None]:
     """
     Shutdown on error for rapidsmpf.
@@ -80,6 +120,9 @@ async def shutdown_on_error(
         When provided and LOG_TRACES is enabled, an ActorTracer
         is yielded for collecting stats, and a structlog event is
         emitted on exit.
+    ir_context
+        The IR execution context from cudf-polars. This is used to propagate
+        the query_id to the structlog logs emitted in this context.
 
     Yields
     ------
@@ -88,37 +131,48 @@ async def shutdown_on_error(
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
     tracer: ActorTracer | None = None
-    if LOG_TRACES and trace_ir is not None:
-        from cudf_polars.experimental.rapidsmpf.tracing import (
-            ActorTracer,
-        )
+    contextvars: dict[str, Any] = {}
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
-        ir_id = trace_ir.get_stable_id()
-        ir_type = type(trace_ir).__name__
-        tracer = ActorTracer(ir_id, ir_type)
-        structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
+    ir_id = trace_ir.get_stable_id()
+    ir_type = type(trace_ir).__name__
+    tracer = ActorTracer(ir_id, ir_type)
+    contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
 
-    try:
-        yield tracer
-    except BaseException:
-        await asyncio.gather(*(ch.shutdown(context) for ch in channels))
-        raise
-    finally:
-        if tracer is not None:
-            log = structlog.get_logger()
+    if ir_context is not None:
+        contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
+
+    with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
+        start = time.monotonic_ns()
+        try:
+            yield tracer
+        except BaseException:
+            await gather_in_task_group(
+                *itertools.chain.from_iterable(
+                    (ch.shutdown(context), ch.shutdown_metadata(context))
+                    for ch in channels
+                )
+            )
+            raise
+        finally:
+            stop = time.monotonic_ns()
             record: dict[str, Any] = {
                 "scope": Scope.ACTOR.value,
-                "actor_ir_id": tracer.ir_id,
-                "actor_ir_type": tracer.ir_type,
-                "chunk_count": tracer.chunk_count,
-                "duplicated": tracer.duplicated,
             }
-            if tracer.row_count is not None:
-                record["rows"] = tracer.row_count
-            if tracer.decision is not None:
-                record["decision"] = tracer.decision
-            log.info("Streaming Actor", **record)
-            structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
+            if tracer is not None:
+                record.update(
+                    {
+                        "chunk_count": tracer.chunk_count,
+                        "duplicated": tracer.duplicated,
+                    }
+                )
+                if tracer.row_count is not None:
+                    record["row_count"] = tracer.row_count
+                if tracer.decision is not None:
+                    record["decision"] = tracer.decision
+            cudf_polars.dsl.tracing.log(
+                "Streaming Actor", start=start, stop=stop, **record
+            )
 
 
 def _remap_scheme_select(
@@ -158,6 +212,16 @@ def _remap_scheme_simple(
     return scheme  # None or "inherit" passes through unchanged
 
 
+def _hstack_to_select(hstack: HStack) -> Select:
+    """Translate HStack to the equivalent Select node."""
+    col_map = {ne.name: ne for ne in hstack.columns}
+    exprs = tuple(
+        col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+        for name, dtype in hstack.schema.items()
+    )
+    return Select(hstack.schema, exprs, hstack.should_broadcast, hstack.children[0])
+
+
 def maybe_remap_partitioning(
     ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
 ) -> Partitioning | None:
@@ -188,10 +252,20 @@ def maybe_remap_partitioning(
     """
     if partitioning is None:
         return None  # Nothing to preserve
-    if isinstance(ir, Select):
+    if isinstance(ir, (Select, HStack)):
+        if isinstance(ir, HStack):
+            # HStack is a special case of Select
+            ir = _hstack_to_select(ir)
         return Partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
             local=_remap_scheme_select(ir, partitioning.local),
+        )
+    if isinstance(ir, GroupBy):
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(
+                ir, partitioning.inter_rank, ir.children[0]
+            ),
+            local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
         )
     if isinstance(ir, (Cache, Join, Projection, Filter)):
         child = child_ir if child_ir is not None else ir.children[0]
@@ -261,6 +335,7 @@ def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
     ir_context: IRExecutionContext,
+    br: BufferResource,
 ) -> TableChunk:
     """
     Apply an IR node's do_evaluate to a table chunk (synchronous).
@@ -276,6 +351,8 @@ def _evaluate_chunk_sync(
         The IR node to evaluate.
     ir_context
         The IR execution context.
+    br
+        The buffer resource for lifetime tracking.
 
     Returns
     -------
@@ -289,7 +366,9 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=br
+    )
 
 
 async def evaluate_chunk(
@@ -327,7 +406,7 @@ async def evaluate_chunk(
     with opaque_memory_usage(extra):
         for single_ir in irs:
             chunk = await asyncio.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context
+                _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
 
@@ -377,7 +456,9 @@ async def concat_batch(
             context=ir_context,
         )
         del batch
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
 
 
 async def evaluate_batch(
@@ -454,18 +535,26 @@ async def chunkwise_evaluate(
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()
 
-    seq_num = 0
     received_any = False
     while (msg := await ch_in.recv(context)) is not None:
         received_any = True
-        result = await evaluate_chunk(
-            context, TableChunk.from_message(msg), ir, ir_context=ir_context
-        )
-        del msg
+        cd = msg.get_content_description()
+        seq_num = msg.sequence_number
+        with cudf_polars.dsl.tracing.bound_contextvars(
+            content_sizes=cd.content_sizes,
+            spillable=cd.spillable,
+            sequence_number=msg.sequence_number,
+        ):
+            result = await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
+            )
+        del msg, cd
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
         await ch_out.send(context, Message(seq_num, result))
-        seq_num += 1
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
@@ -473,7 +562,7 @@ async def chunkwise_evaluate(
         del chunk
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await ch_out.send(context, Message(0, result))
 
     await ch_out.drain(context)
 
@@ -528,6 +617,8 @@ async def replay_buffered_channel(
     ch_in: Channel[TableChunk],
     buffered_chunks: dict[int, TableChunk],
     metadata: ChannelMetadata,
+    *,
+    trace_ir: IR,
 ) -> None:
     """
     Replay a buffered input channel into an output channel.
@@ -544,8 +635,10 @@ async def replay_buffered_channel(
         The buffered chunks to yield first.
     metadata
         The metadata to send to the output channel.
+    trace_ir
+        The IR node to trace. Passed through to shutdown_on_error.
     """
-    async with shutdown_on_error(context, ch_out, ch_in):
+    async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
         await send_metadata(ch_out, context, metadata)
         for seq_num, chunk in buffered_chunks.items():
             await ch_out.send(context, Message(seq_num, chunk))
@@ -698,6 +791,10 @@ class NormalizedPartitioning:
             # Use the latter representation for consistency.
             inter_rank_modulus = local_modulus
             local_modulus = None
+        elif local_modulus is None and not strict_inter_rank_modulus:
+            # Don't allow local partitioning to "inherit"
+            # when there is not proper inter-rank partitioning
+            local_modulus = 0
 
         return inter_rank_modulus, local_modulus
 
@@ -838,6 +935,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+        br=context.br(),
     )
 
 
@@ -968,8 +1066,10 @@ async def allgather_reduce(
     packed = PackedData.from_host_bytes(data, context.br())
 
     allgather = AllGather(context, comm, op_id)
-    allgather.insert(0, packed)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed)
+    finally:
+        allgather.insert_finished()
 
     results = await allgather.extract_all(context, ordered=False)
 

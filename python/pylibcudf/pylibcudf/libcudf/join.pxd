@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
@@ -225,13 +225,11 @@ cdef extern from "cudf/join/filtered_join.hpp" namespace "cudf" nogil:
         filtered_join(
             const table_view build,
             null_equality compare_nulls,
-            set_as_build_table reuse_tbl,
             cuda_stream_view stream
         ) except +libcudf_exception_handler
         filtered_join(
             const table_view build,
             null_equality compare_nulls,
-            set_as_build_table reuse_tbl,
             double load_factor,
             cuda_stream_view stream
         ) except +libcudf_exception_handler

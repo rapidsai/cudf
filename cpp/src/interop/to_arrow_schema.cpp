@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -81,7 +81,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType  = int32_t;
-  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
   return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
@@ -90,10 +90,8 @@ int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
                                                            column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int64_t;
-  // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
-  // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
-  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>() - 1);
+  using DeviceType  = int64_t;
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
   return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
@@ -103,7 +101,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
                                                             ArrowSchema* out)
 {
   using DeviceType  = __int128_t;
-  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
   return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 

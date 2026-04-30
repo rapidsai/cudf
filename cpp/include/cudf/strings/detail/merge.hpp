@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -7,12 +7,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/merge.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace strings::detail {
 /**
  * @brief Merges two strings columns
@@ -31,4 +30,4 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace strings::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

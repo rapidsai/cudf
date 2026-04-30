@@ -170,4 +170,5 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=[("ext_price", True), ("brand_id", False), ("t_hour", False)],
         limit=None,
+        nulls_last=False,
     )

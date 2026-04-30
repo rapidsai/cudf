@@ -19,7 +19,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/sequence.h>
 
 #include <numeric>
@@ -46,9 +46,9 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
   CUDF_FUNC_RANGE();
 
   rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
-  thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::counting_iterator<cuda::std::size_t>(0),
-                   thrust::counting_iterator(chunks.size()),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<cuda::std::size_t>{0},
+                   cuda::counting_iterator{chunks.size()},
                    [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
                      auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
 
@@ -62,7 +62,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
   }
 
   // Setup dictionary page for each chunk
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    pages.device_begin(),
                    pages.device_end(),
                    [chunks = chunks.device_begin()] __device__(PageInfo const& p) {
@@ -292,9 +292,9 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
 
   // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
   // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator(total_rows),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{total_rows},
                     out_row_mask.begin<bool>() + out_row_mask_offset,
                     [is_nullable = in_row_mask.nullable(),
                      in_row_mask = in_row_mask.begin<bool>(),

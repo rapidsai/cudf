@@ -119,179 +119,100 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    sort_by = {
-        "s_store_name": False,
-        "s_company_id": False,
-        "s_street_number": False,
-        "s_street_name": False,
-        "s_street_type": False,
-        "s_suite_number": False,
-        "s_city": False,
-        "s_county": False,
-        "s_state": False,
-        "s_zip": False,
-    }
+
+    # Pre-filter date_dim for the target year/month, then join with
+    # store_returns early to shrink the fact table before the expensive
+    # multi-key join with store_sales.
+    d2 = date_dim.filter(
+        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    ).select("d_date_sk")
+
+    group_cols = [
+        "s_store_name",
+        "s_company_id",
+        "s_street_number",
+        "s_street_name",
+        "s_street_type",
+        "s_suite_number",
+        "s_city",
+        "s_county",
+        "s_state",
+        "s_zip",
+    ]
+    sort_by = {col: False for col in group_cols}
     limit = 100
+    diff = pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk")
+
     return QueryResult(
         frame=(
-            store_sales
-            # Join with store_returns on ticket_number, item_sk, and customer_sk
+            store_returns.join(d2, left_on="sr_returned_date_sk", right_on="d_date_sk")
             .join(
-                store_returns,
-                left_on=["ss_ticket_number", "ss_item_sk", "ss_customer_sk"],
-                right_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],
-                how="inner",
+                store_sales,
+                left_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],
+                right_on=["ss_ticket_number", "ss_item_sk", "ss_customer_sk"],
             )
-            # Join with store for store details
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-            # Join with date_dim for sales date (d1)
             .join(
-                date_dim.select(
-                    [
-                        pl.col("d_date_sk").alias("d1_date_sk"),
-                        pl.col("d_year").alias("d1_year"),
-                        pl.col("d_moy").alias("d1_moy"),
-                    ]
-                ),
+                date_dim.select("d_date_sk"),
                 left_on="ss_sold_date_sk",
-                right_on="d1_date_sk",
+                right_on="d_date_sk",
+                how="semi",
             )
-            # Join with date_dim for return date (d2)
-            .join(
-                date_dim.select(
-                    [
-                        pl.col("d_date_sk").alias("d2_date_sk"),
-                        pl.col("d_year").alias("d2_year"),
-                        pl.col("d_moy").alias("d2_moy"),
-                    ]
-                ),
-                left_on="sr_returned_date_sk",
-                right_on="d2_date_sk",
-            )
-            # Filter for returns in specified year and month
-            .filter((pl.col("d2_year") == year) & (pl.col("d2_moy") == month))
-            # Pre-compute bucket indicator columns
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
             .with_columns(
-                [
-                    (
-                        (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                        <= 30
-                    ).alias("bucket_30"),
-                    (
-                        (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            > 30
-                        )
-                        & (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            <= 60
-                        )
-                    ).alias("bucket_31_60"),
-                    (
-                        (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            > 60
-                        )
-                        & (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            <= 90
-                        )
-                    ).alias("bucket_61_90"),
-                    (
-                        (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            > 90
-                        )
-                        & (
-                            (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                            <= 120
-                        )
-                    ).alias("bucket_91_120"),
-                    (
-                        (pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk"))
-                        > 120
-                    ).alias("bucket_120_plus"),
-                ]
+                (diff <= 30).alias("bucket_30"),
+                ((diff > 30) & (diff <= 60)).alias("bucket_31_60"),
+                ((diff > 60) & (diff <= 90)).alias("bucket_61_90"),
+                ((diff > 90) & (diff <= 120)).alias("bucket_91_120"),
+                (diff > 120).alias("bucket_120_plus"),
             )
-            # Calculate return time buckets with simple aggregations
-            .group_by(
-                [
-                    "s_store_name",
-                    "s_company_id",
-                    "s_street_number",
-                    "s_street_name",
-                    "s_street_type",
-                    "s_suite_number",
-                    "s_city",
-                    "s_county",
-                    "s_state",
-                    "s_zip",
-                ]
-            )
+            .group_by(group_cols)
             .agg(
-                [
-                    pl.col("bucket_30").sum().alias("bucket_30_sum"),
-                    pl.col("bucket_31_60").sum().alias("bucket_31_60_sum"),
-                    pl.col("bucket_61_90").sum().alias("bucket_61_90_sum"),
-                    pl.col("bucket_91_120").sum().alias("bucket_91_120_sum"),
-                    pl.col("bucket_120_plus").sum().alias("bucket_120_plus_sum"),
-                    pl.col("sr_returned_date_sk").count().alias("return_count"),
-                ]
+                pl.col("bucket_30").sum().alias("bucket_30_sum"),
+                pl.col("bucket_31_60").sum().alias("bucket_31_60_sum"),
+                pl.col("bucket_61_90").sum().alias("bucket_61_90_sum"),
+                pl.col("bucket_91_120").sum().alias("bucket_91_120_sum"),
+                pl.col("bucket_120_plus").sum().alias("bucket_120_plus_sum"),
+                pl.col("sr_returned_date_sk").count().alias("return_count"),
             )
             .with_columns(
-                [
-                    pl.when(pl.col("return_count") > 0)
-                    .then(pl.col("bucket_30_sum"))
-                    .otherwise(None)
-                    .alias("30 days"),
-                    pl.when(pl.col("return_count") > 0)
-                    .then(pl.col("bucket_31_60_sum"))
-                    .otherwise(None)
-                    .alias("31-60 days"),
-                    pl.when(pl.col("return_count") > 0)
-                    .then(pl.col("bucket_61_90_sum"))
-                    .otherwise(None)
-                    .alias("61-90 days"),
-                    pl.when(pl.col("return_count") > 0)
-                    .then(pl.col("bucket_91_120_sum"))
-                    .otherwise(None)
-                    .alias("91-120 days"),
-                    pl.when(pl.col("return_count") > 0)
-                    .then(pl.col("bucket_120_plus_sum"))
-                    .otherwise(None)
-                    .alias(">120 days"),
-                ]
+                pl.when(pl.col("return_count") > 0)
+                .then(pl.col("bucket_30_sum"))
+                .otherwise(None)
+                .alias("30 days"),
+                pl.when(pl.col("return_count") > 0)
+                .then(pl.col("bucket_31_60_sum"))
+                .otherwise(None)
+                .alias("31-60 days"),
+                pl.when(pl.col("return_count") > 0)
+                .then(pl.col("bucket_61_90_sum"))
+                .otherwise(None)
+                .alias("61-90 days"),
+                pl.when(pl.col("return_count") > 0)
+                .then(pl.col("bucket_91_120_sum"))
+                .otherwise(None)
+                .alias("91-120 days"),
+                pl.when(pl.col("return_count") > 0)
+                .then(pl.col("bucket_120_plus_sum"))
+                .otherwise(None)
+                .alias(">120 days"),
             )
             .drop(
-                [
-                    "bucket_30_sum",
-                    "bucket_31_60_sum",
-                    "bucket_61_90_sum",
-                    "bucket_91_120_sum",
-                    "bucket_120_plus_sum",
-                    "return_count",
-                ]
+                "bucket_30_sum",
+                "bucket_31_60_sum",
+                "bucket_61_90_sum",
+                "bucket_91_120_sum",
+                "bucket_120_plus_sum",
+                "return_count",
             )
             .select(
-                [
-                    "s_store_name",
-                    "s_company_id",
-                    "s_street_number",
-                    "s_street_name",
-                    "s_street_type",
-                    "s_suite_number",
-                    "s_city",
-                    "s_county",
-                    "s_state",
-                    "s_zip",
-                    "30 days",
-                    "31-60 days",
-                    "61-90 days",
-                    "91-120 days",
-                    ">120 days",
-                ]
+                *group_cols,
+                "30 days",
+                "31-60 days",
+                "61-90 days",
+                "91-120 days",
+                ">120 days",
             )
-            .sort(sort_by.keys(), nulls_last=True)
+            .sort(group_cols, nulls_last=True)
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

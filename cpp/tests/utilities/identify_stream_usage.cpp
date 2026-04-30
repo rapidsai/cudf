@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,7 +51,7 @@ namespace test {
 rmm::cuda_stream_view const get_default_stream()
 {
   static rmm::cuda_stream stream{};
-  return {stream};
+  return stream;
 }
 
 #ifdef STREAM_MODE_TESTING

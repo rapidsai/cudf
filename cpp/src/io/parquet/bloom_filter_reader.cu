@@ -4,9 +4,9 @@
  */
 
 #include "compact_protocol_reader.hpp"
+#include "expression_transform_helpers.hpp"
 #include "reader_impl_helpers.hpp"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -24,7 +24,7 @@
 
 #include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/tabulate.h>
 
 #include <future>
@@ -41,8 +41,8 @@ namespace {
 struct bloom_filter_caster {
   cudf::device_span<cudf::device_span<cuda::std::byte const> const> bloom_filter_spans;
   host_span<Type const> parquet_types;
-  size_t total_row_groups;
-  size_t num_equality_columns;
+  std::size_t total_row_groups;
+  std::size_t num_equality_columns;
 
   enum class is_int96_timestamp : bool { YES, NO };
 
@@ -77,7 +77,7 @@ struct bloom_filter_caster {
 
     // Query literal in bloom filters from each column chunk (row group).
     thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       results_span.begin(),
       results_span.end(),
       [filter_span          = bloom_filter_spans.data(),
@@ -117,11 +117,12 @@ struct bloom_filter_caster {
         }
       });
 
-    return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
-                                          static_cast<cudf::size_type>(total_row_groups),
-                                          std::move(results),
-                                          rmm::device_buffer{},
-                                          0);
+    return std::make_unique<cudf::column>(
+      cudf::data_type{cudf::type_id::BOOL8},
+      static_cast<cudf::size_type>(total_row_groups),
+      std::move(results),
+      rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+      0);
   }
 
   // Creates device columns from bloom filter membership
@@ -199,59 +200,53 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
     using cudf::ast::ast_operator;
-    auto const operands       = expr.get_operands();
-    auto const op             = expr.get_operator();
-    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
-    if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second (if binary operation) should be literal.
-      CUDF_EXPECTS(operator_arity == 1 or cudf::ast::detail::ast_operator_arity(op) == 2,
-                   "Only unary and binary operations are supported on column reference");
-      CUDF_EXPECTS(
-        operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-        "Second operand of binary operation with column reference must be a literal");
-      v->accept(*this);
+    auto const input_op       = expr.get_operator();
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-      // Propagate the `_always_true` as expression to its unary operator parent
-      if (operator_arity == 1) {
+    // Unary operation
+    if (operator_arity == 1) {
+      auto visit_operands_fn = [this](auto const& operands) {
+        return this->visit_operands(operands);
+      };
+      return parquet::detail::apply_unary_membership_transform(
+        expr, _bloom_filter_expr, *_always_true, *this, visit_operands_fn);
+    }
+
+    // Binary operation
+    auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+
+    // Push expressions for `col op lit` or `lit op col` forms
+    if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
+      col_ref->accept(*this);
+
+      if (op == ast_operator::EQUAL) {
+        auto const col_idx            = col_ref->get_column_index();
+        auto const& equality_literals = _equality_literals[col_idx];
+        auto col_literal_offset       = _col_literals_offsets[col_idx];
+
+        auto const literal_iter =
+          std::find(equality_literals.cbegin(), equality_literals.cend(), literal);
+        CUDF_EXPECTS(literal_iter != equality_literals.end(),
+                     "Bloom filter expression converter encountered an unexpected literal");
+
+        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
+        auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
+      } else {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
         return *_always_true;
       }
-
-      if (op == ast_operator::EQUAL) {
-        // Search the literal in this input column's equality literals list and add to the offset.
-        auto const col_idx            = v->get_column_index();
-        auto const& equality_literals = _equality_literals[col_idx];
-        auto col_literal_offset       = _col_literals_offsets[col_idx];
-        auto const literal_iter       = std::find(equality_literals.cbegin(),
-                                            equality_literals.cend(),
-                                            dynamic_cast<ast::literal const*>(&operands[1].get()));
-        CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
-        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
-
-        // Evaluate boolean is_true(value) expression as IDENTITY(value)
-        auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
-        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
-      }
-      // For all other expressions, push the `_always_true` expression
-      else {
-        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
-      }
-    } else {
-      auto new_operands = visit_operands(operands);
-      if (operator_arity == 2) {
-        _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (operator_arity == 1) {
-        // If the new_operands is just a `_always_true` literal, propagate it here
-        if (&new_operands.front().get() == _always_true.get()) {
-          _bloom_filter_expr.push(
-            ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
-          return *_always_true;
-        } else {
-          _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
-        }
-      }
+    }  // Visit operands and push expression for `expr op expr` form
+    else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {
+      auto new_operands = visit_operands(expr.get_operands());
+      _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
+    }  // Push _always_true for `col op col`, `expr op col`, `expr op lit` forms
+    else {
+      _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
+
     return _bloom_filter_expr.back();
   }
 
@@ -286,7 +281,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
  */
 void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources,
-                            size_t num_chunks,
+                            std::size_t num_chunks,
                             cudf::host_span<rmm::device_buffer> bloom_filter_data,
                             cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
                             cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
@@ -305,12 +300,12 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
   auto constexpr words_per_block = policy_type::words_per_block;
 
   // Read tasks for bloom filter data
-  std::vector<std::future<size_t>> read_tasks;
+  std::vector<std::future<std::size_t>> read_tasks;
 
   // Read bloom filters for all column chunks
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_chunks),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_chunks},
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
       if (not bloom_filter_offsets[chunk].has_value()) {
@@ -325,7 +320,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // entire bitset as well.
       auto constexpr bloom_filter_size_guess = 256;
       auto const initial_read_size =
-        static_cast<size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
+        static_cast<std::size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
 
       // Read an initial buffer from source
       auto& source = sources[chunk_source_map[chunk]];
@@ -352,7 +347,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Bloom filter header size
       auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-      auto const bitset_size              = static_cast<size_t>(header.num_bytes);
+      auto const bitset_size              = static_cast<std::size_t>(header.num_bytes);
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
@@ -403,7 +398,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
 }  // namespace
 
-size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
+std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
 {
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
@@ -413,7 +408,7 @@ size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
                                                             cuco::thread_scope_thread,
                                                             policy_type>::filter_block_type);
   static_assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2");
-  return std::max<size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
+  return std::max<std::size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
 }
 
 std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
@@ -442,8 +437,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   auto have_bloom_filters = false;
 
   // For all data sources
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
                   auto const& rg_indices = row_group_indices[src_index];
@@ -488,31 +483,6 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   return bloom_filter_data;
 }
 
-std::vector<Type> aggregate_reader_metadata::get_parquet_types(
-  host_span<std::vector<size_type> const> row_group_indices,
-  host_span<int const> column_schemas) const
-{
-  std::vector<Type> parquet_types(column_schemas.size());
-  // Find a source with at least one row group
-  auto const src_iter = std::find_if(row_group_indices.begin(),
-                                     row_group_indices.end(),
-                                     [](auto const& rg) { return rg.size() > 0; });
-  CUDF_EXPECTS(src_iter != row_group_indices.end(), "");
-
-  // Source index
-  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
-  std::transform(column_schemas.begin(),
-                 column_schemas.end(),
-                 parquet_types.begin(),
-                 [&](auto const schema_idx) {
-                   // Use the first row group in this source
-                   auto constexpr row_group_index = 0;
-                   return get_column_metadata(row_group_index, src_index, schema_idx).type;
-                 });
-
-  return parquet_types;
-}
-
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
   cudf::host_span<cudf::device_span<cuda::std::byte const> const> bloom_filter_data,
   host_span<std::vector<size_type> const> input_row_group_indices,
@@ -536,17 +506,17 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{device_bloom_filter_data,
                                              parquet_types,
-                                             static_cast<size_t>(total_row_groups),
+                                             static_cast<std::size_t>(total_row_groups),
                                              bloom_filter_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
   // The table contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
-  size_t equality_col_idx = 0;
+  std::size_t equality_col_idx = 0;
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(output_dtypes.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{output_dtypes.size()},
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 
@@ -614,34 +584,34 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   ast::operation const& expr)
 {
   using cudf::ast::ast_operator;
-  auto const operands = expr.get_operands();
-  auto const op       = expr.get_operator();
 
-  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation) should be literal.
-    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
-    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-                 "Only unary and binary operations are supported on column reference");
-    CUDF_EXPECTS(
-      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-      "Second operand of binary operation with column reference must be a literal");
+  auto const input_op       = expr.get_operator();
+  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-    v->accept(*this);
+  if (operator_arity == 1) {
+    auto const [kind, col_ref] = extract_unary_operand(expr);
 
-    // Return early if this is a unary operation
-    if (operator_arity == 1) { return expr; }
-
-    // Push to the corresponding column's literals list iff equality predicate is seen
-    if (op == ast_operator::EQUAL) {
-      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-      auto const col_idx     = v->get_column_index();
-      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
+    if (kind == operand_kind::COLUMN_REF) {
+      col_ref->accept(*this);
+    } else {
+      std::ignore = visit_operands(expr.get_operands());
     }
-  } else {
-    // Just visit the operands and ignore any output
-    std::ignore = visit_operands(operands);
+    return expr;
   }
 
+  // Binary operation
+  auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+
+  if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
+    col_ref->accept(*this);
+    if (op == ast_operator::EQUAL) {
+      auto const col_idx = col_ref->get_column_index();
+      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
+    }
+  } else {
+    // For all other forms, visit operands to collect any nested literals
+    std::ignore = visit_operands(expr.get_operands());
+  }
   return expr;
 }
 

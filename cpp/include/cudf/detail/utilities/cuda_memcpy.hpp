@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,53 @@ enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Wrapper around cudaMemcpyBatchAsync
+ *
+ * Uses `cudaMemcpyBatchAsync` on CUDA 13.0+ with `cudaMemcpySrcAccessOrderStream`, which defers
+ * reading the source buffers until the stream reaches each copy. The source buffers must therefore
+ * remain valid until the stream has executed the copies; for device memory this is naturally
+ * satisfied, but for host memory the caller must ensure the source is not freed before the stream
+ * is synchronized.
+ *
+ * All copies share a single attribute entry (`cudaMemcpySrcAccessOrderStream` +
+ * `cudaMemcpyFlagPreferOverlapWithCompute`). Per-copy attributes are not supported by this
+ * wrapper; callers requiring different attributes per copy should call `cudaMemcpyBatchAsync`
+ * directly.
+ *
+ * @param dsts Host pointer to a list of destination pointers.
+ * @param srcs Host pointer to a list of source pointers.
+ * @param sizes Host pointer to a list of sizes.
+ * @param count Size of dsts, srcs, sizes arrays
+ * @param stream CUDA stream on which copies are enqueued
+ */
+[[nodiscard]] cudaError_t memcpy_batch_async(void* const* dsts,
+                                             void const* const* srcs,
+                                             std::size_t const* sizes,
+                                             std::size_t count,
+                                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Asynchronously copies a single buffer, wrapping `memcpy_batch_async`.
+ *
+ * Carries the same source-lifetime requirement as `memcpy_batch_async`: the source buffer must
+ * remain valid until the stream has executed the copy.
+ *
+ * Prefer `cudf::detail::cuda_memcpy_async` for host/device copies involving typed spans.
+ * Use this function for device-to-device copies or when a raw `void*` interface is required.
+ * The copy direction is inferred from the pointer types (`cudaMemcpyDefault`).
+ *
+ * @param dst Destination memory address
+ * @param src Source memory address
+ * @param count Size in bytes to copy
+ * @param stream CUDA stream on which the copy is enqueued
+ * @return cudaError_t CUDA error code
+ */
+[[nodiscard]] cudaError_t memcpy_async(void* dst,
+                                       void const* src,
+                                       size_t count,
+                                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Asynchronously copies data from host to device memory.

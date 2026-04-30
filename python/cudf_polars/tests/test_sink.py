@@ -153,6 +153,15 @@ def test_chunked_sink_empty_table_to_parquet(tmp_path):
     )
 
 
+@pytest.mark.parametrize("file_type", ["csv", "ndjson"])
+def test_sink_in_memory_executor(df, tmp_path, file_type):
+    assert_sink_result_equal(
+        df,
+        tmp_path / f"out.{file_type}",
+        engine=pl.GPUEngine(raise_on_fail=True, executor="in-memory"),
+    )
+
+
 @pytest.mark.parametrize("compression", ["gzip", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
 @pytest.mark.skipif(

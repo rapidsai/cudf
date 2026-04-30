@@ -4,6 +4,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -472,8 +473,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto seq_col0                      = random_values<int32_t>(num_rows);
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
@@ -505,7 +505,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
     expected_metadata.column_metadata[1].set_encoding(cudf::io::column_encoding::PLAIN);
 
     args.set_metadata(std::move(expected_metadata));
-    cudf::io::write_parquet(args);
+    EXPECT_CUDF_LOG_WARN(cudf::io::write_parquet(args));
 
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -651,7 +651,7 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
 
 TEST_F(ParquetWriterTest, CheckPageRows)
 {
-  auto sequence = thrust::make_counting_iterator(0);
+  auto sequence = cuda::counting_iterator<int>{0};
 
   constexpr auto page_rows = 5000;
   constexpr auto num_rows  = 2 * page_rows;
@@ -1531,8 +1531,7 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   auto const col1_data = random_values<int32_t>(num_rows);
 
   auto const col0_validity = cudf::test::iterators::no_nulls();
-  auto const col1_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto const col1_validity = cudf::test::iterators::valids_at_multiples_of(2);
 
   column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), col0_validity};
   column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), col1_validity};
@@ -1696,7 +1695,7 @@ TEST_F(ParquetWriterTest, UserRequestedDictFallback)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
       .metadata(table_metadata)
       .max_dictionary_size(max_dict_size);
-  cudf::io::write_parquet(opts);
+  EXPECT_CUDF_LOG_WARN(cudf::io::write_parquet(opts));
 
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
@@ -1776,7 +1775,7 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
       .metadata(table_metadata)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .compression(cudf::io::compression_type::ZSTD);
-  cudf::io::write_parquet(opts);
+  EXPECT_CUDF_LOG_WARN(cudf::io::write_parquet(opts));
 
   // check page headers to make sure each column is encoded with the appropriate encoder
   auto const source = cudf::io::datasource::create(filepath);
@@ -1854,7 +1853,7 @@ TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .metadata(table_metadata);
-  cudf::io::write_parquet(out_opts);
+  EXPECT_CUDF_LOG_WARN(cudf::io::write_parquet(out_opts));
 
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
@@ -1922,8 +1921,7 @@ make_byte_stream_split_table(bool as_struct)
 
     // make as a nested struct
     if (as_struct) {
-      auto valids =
-        cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+      auto valids                  = cudf::test::iterators::valids_at_multiples_of(2);
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
 
       std::vector<std::unique_ptr<cudf::column>> table_cols;
@@ -2218,7 +2216,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 {
   auto sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);

@@ -114,6 +114,19 @@ def assert_gpu_result_equal(
     # the 'misc' is for 'error: Keywords must be strings'
     expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[misc, call-overload]
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
+    # In multi-rank SPMD mode each rank holds only its local slice; gather the
+    # full result on every rank so each rank can compare against the CPU result.
+    if (
+        engine.config.get("executor_options", {}).get("cluster") == "spmd"
+    ):  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+            SPMDEngine,
+            allgather_polars_dataframe,
+        )
+
+        assert isinstance(engine, SPMDEngine)
+        if engine.nranks > 1:
+            got = allgather_polars_dataframe(engine=engine, local_df=got, op_id=0)
 
     assert_kwargs_bool: dict[str, bool] = {
         "check_row_order": check_row_order,

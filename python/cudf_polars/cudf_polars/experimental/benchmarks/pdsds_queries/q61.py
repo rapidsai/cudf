@@ -171,7 +171,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                         * 100.0
                     )
                     .alias(
-                        "((CAST(promotions AS DECIMAL(15,4)) / CAST(total AS DECIMAL(15,4))) * 100)"
+                        "((CAST(promotions AS DECIMAL(15, 4)) / CAST(total AS DECIMAL(15, 4))) * 100)"
                     )
                 ]
             )

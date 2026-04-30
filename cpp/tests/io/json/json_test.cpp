@@ -946,8 +946,7 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjectsMissingData)
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
   EXPECT_EQ(result.metadata.schema_info[2].name, "col1");
 
-  auto col1_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto col1_validity = cudf::test::iterators::null_at(0);
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 

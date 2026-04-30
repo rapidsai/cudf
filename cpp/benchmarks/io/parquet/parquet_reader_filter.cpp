@@ -11,7 +11,7 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/sequence.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -132,10 +132,7 @@ struct filter_generator<DataType> {
 
     auto num_selected = static_cast<cudf::size_type>(num_rows * selectivity);
 
-    auto indices = cudf::detail::sequence(num_rows,
-                                          cudf::numeric_scalar<cudf::size_type>{0},
-                                          cudf::get_default_stream(),
-                                          cudf::get_current_device_resource_ref());
+    auto indices = cudf::sequence(num_rows, cudf::numeric_scalar<cudf::size_type>{0});
 
     auto copy_mask = cudf::binary_operation(indices->view(),
                                             cudf::numeric_scalar<cudf::size_type>{num_selected},

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -25,6 +26,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 #include <nanoarrow/nanoarrow.h>
@@ -51,8 +53,7 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
 
   rmm::device_buffer chars(char_data_length, stream, mr);
   auto const* chars_data = static_cast<uint8_t const*>(input->buffers[chars_buffer_idx]) + offset;
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(chars.data(), chars_data, chars.size(), cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(chars.data(), chars_data, chars.size(), stream));
 
   return make_strings_column(static_cast<size_type>(input->length),
                              std::move(offsets_column),
@@ -76,11 +77,8 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                                items + input->offset,
-                                input->length * sizeof(ArrowBinaryView),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+    d_items.data(), items + input->offset, input->length * sizeof(ArrowBinaryView), stream));
 
   // then copy variadic buffers to device
   auto variadics     = std::vector<rmm::device_buffer>();
@@ -101,9 +99,9 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
   // create indices to string fragments for the make_strings_column gather
   auto d_indices = rmm::device_uvector<string_index_pair>(input->length, stream, mr);
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(input->length),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{static_cast<cudf::size_type>(input->length)},
     d_indices.begin(),
     [d_items = d_items.data(), d_ptrs, d_mask] __device__(auto idx) -> string_index_pair {
       if (d_mask && !bit_is_set(d_mask, idx)) { return string_index_pair{nullptr, 0}; }

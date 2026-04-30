@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,14 +10,13 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace reduction::detail {
 /**
  * @brief Computes sum of elements in input column
@@ -474,4 +473,4 @@ std::unique_ptr<scalar> count(column_view const& col,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

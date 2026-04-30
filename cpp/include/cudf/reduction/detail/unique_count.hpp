@@ -12,7 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -31,4 +31,4 @@ cudf::size_type unique_count(table_view const& input,
                              rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

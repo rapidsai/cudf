@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
@@ -40,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
     send_metadata,
@@ -49,6 +49,7 @@ from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
 
     from cudf_polars.dsl.ir import IRExecutionContext
@@ -217,11 +218,12 @@ async def _local_aggregation(
         chunks_received += 1
         chunk = await evaluate_chunk(
             context,
-            TableChunk.from_message(msg),
+            TableChunk.from_message(msg, br=context.br()),
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
-        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema, context.br())
+        total_size += chunk.data_alloc_size()
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
             evaluated_chunks = [
@@ -232,7 +234,7 @@ async def _local_aggregation(
                     ir_context=ir_context,
                 )
             ]
-            total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
+            total_size = evaluated_chunks[0].data_alloc_size()
         if total_size > target_partition_size and allow_early_exit:
             break
 
@@ -306,13 +308,13 @@ async def _tree_reduce(
 
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
-
-        allgather.insert(
-            0,
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
-        )
-
-        allgather.insert_finished()
+        with allgather.inserting() as inserter:
+            inserter.insert(
+                0,
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+            )
 
         stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
@@ -321,6 +323,7 @@ async def _tree_reduce(
                 await allgather.extract_concatenated(stream),
                 stream,
                 exclusive_view=True,
+                br=context.br(),
             ),
             decomposed.reduction_ir,
             ir_context=ir_context,
@@ -429,41 +432,44 @@ async def _shuffle_reduce(
         shuffle_context,
         shuffle_comm,
         modulus,
-        decomposed.shuffle_indices,
         collective_id,
     )
-
-    shuffle.insert_chunk(
-        _enforce_schema(
-            aggregated,
-            decomposed.reduction_ir.schema,
-        )
-    )
-    del aggregated
-
-    while not input_drained:
-        aggregated, input_drained, _ = await _local_aggregation(
-            context,
-            decomposed,
-            ir_context,
-            ch_in,
-            target_partition_size,
-        )
-        shuffle.insert_chunk(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema)
+    async with shuffle.inserting() as inserter:
+        inserter.insert_hash(
+            _enforce_schema(
+                aggregated,
+                decomposed.reduction_ir.schema,
+                context.br(),
+            ),
+            decomposed.shuffle_indices,
         )
         del aggregated
 
-    await shuffle.insert_finished()
+        while not input_drained:
+            aggregated, input_drained, _ = await _local_aggregation(
+                context,
+                decomposed,
+                ir_context,
+                ch_in,
+                target_partition_size,
+            )
+            inserter.insert_hash(
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+                decomposed.shuffle_indices,
+            )
+            del aggregated
     extract_irs = [decomposed.reduction_ir] + (
         [decomposed.select_ir] if decomposed.select_ir else []
     )
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         partition_chunk = TableChunk.from_pylibcudf_table(
-            await shuffle.extract_chunk(partition_id, stream),
+            shuffle.extract_chunk(partition_id, stream),
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
         partition_chunk = await evaluate_chunk(
             context,
@@ -481,6 +487,7 @@ async def _shuffle_reduce(
 def _enforce_schema(
     chunk: TableChunk,
     canonical_schema: dict[str, Any],
+    br: BufferResource,
 ) -> TableChunk:
     """Enforce the canonical schema of a TableChunk."""
     tbl = chunk.table_view()
@@ -508,7 +515,7 @@ def _enforce_schema(
         for col, target_plc in zip(cols, target_plcs, strict=True)
     ]
     return TableChunk.from_pylibcudf_table(
-        plc.Table(new_columns), chunk.stream, exclusive_view=True
+        plc.Table(new_columns), chunk.stream, exclusive_view=True, br=br
     )
 
 
@@ -521,7 +528,7 @@ def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
         return tuple(schema_keys[k] for k in groupby_key_names)
     else:
         subset = ir.subset or frozenset(ir.schema)
-        return tuple(schema_keys[k] for k in subset)
+        return tuple(schema_keys[k] for k in schema if k in subset)
 
 
 def _require_tree(ir: GroupBy | Distinct) -> bool:
@@ -576,7 +583,7 @@ async def _choose_strategy(
     -------
     The output count.
     """
-    aggregated_size = aggregated.data_alloc_size(MemoryType.DEVICE)
+    aggregated_size = aggregated.data_alloc_size()
     local_estimated_size = (aggregated_size // max(1, chunks_received)) * local_count
 
     if skip_global_comm:
@@ -656,7 +663,9 @@ async def groupby_actor(
     collective_ids
         The collective IDs.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks
@@ -682,13 +691,20 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            metadata_out = ChannelMetadata(
+                local_count=metadata_in.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir, metadata_in.partitioning, child_ir=ir.children[0]
+                ),
+                duplicated=metadata_in.duplicated,
+            )
             await chunkwise_evaluate(
                 context,
                 ir,
                 ir_context,
                 ch_out,
                 ch_in,
-                metadata_in,
+                metadata_out,
                 tracer=tracer,
             )
             return

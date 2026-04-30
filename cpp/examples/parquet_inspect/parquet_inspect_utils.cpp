@@ -24,6 +24,8 @@
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -85,8 +87,8 @@ namespace {
 
         // For all pages in this column chunk, update page row counts and offsets.
         std::for_each(
-          thrust::counting_iterator<size_t>(0),
-          thrust::counting_iterator(row_group_num_pages),
+          cuda::counting_iterator<std::size_t>{0},
+          cuda::counting_iterator{row_group_num_pages},
           [&](auto const page_idx) {
             int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
             // For the last page, this is simply the total number of rows in the
@@ -332,8 +334,8 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   columns.emplace_back(make_index_column(num_row_groups, stream));
 
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_columns),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_columns},
     [&](auto const col_idx) {
       auto const [page_row_counts, page_row_offsets, page_byte_offsets, col_page_offsets] =
         compute_page_row_counts_and_offsets(metadata, col_idx, stream);
@@ -360,8 +362,8 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   cudf::io::table_input_metadata out_metadata(table->view());
   out_metadata.column_metadata[0].set_name("row group index");
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_columns),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{num_columns},
                 [&](auto const col_idx) {
                   std::string const col_name = "col" + std::to_string(col_idx);
                   out_metadata.column_metadata[1 + col_idx * output_cols_per_column].set_name(

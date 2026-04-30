@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
@@ -27,7 +28,7 @@ struct write_if {
   using token_t   = cudf::io::json::token_t;
   using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
-  size_t n;
+  std::size_t n;
   // Index, value
   __device__ void operator()(size_type i, scan_type x)
   {
@@ -263,7 +264,7 @@ void validate_token_stream(device_span<char const> d_input,
     });
 
   auto num_tokens = tokens.size();
-  auto count_it   = thrust::make_counting_iterator(0);
+  auto count_it   = cuda::counting_iterator<std::size_t>{0};
   auto predicate  = cuda::proclaim_return_type<bool>([tokens        = tokens.begin(),
                                                      token_indices = token_indices.begin(),
                                                      validate_values,
@@ -281,7 +282,7 @@ void validate_token_stream(device_span<char const> d_input,
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
         if (x) { d_invalid[i] = true; }
       }));
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     count_it,
                     count_it + num_tokens,
                     conditional_invalidout_it,
@@ -301,12 +302,13 @@ void validate_token_stream(device_span<char const> d_input,
       return {static_cast<token_t>(tokens[i]), tokens[i] == token_t::LineEnd};
     });
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   count_it,
-                                   count_it + num_tokens,
-                                   conditional_output_it,
-                                   transform_op,
-                                   binary_op);  // in-place scan
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    count_it,
+    count_it + num_tokens,
+    conditional_output_it,
+    transform_op,
+    binary_op);  // in-place scan
 }
 }  // namespace detail
 }  // namespace cudf::io::json

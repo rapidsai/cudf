@@ -59,7 +59,11 @@ class Agg(Expr):
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
-            req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
+            req = plc.aggregation.nunique(
+                null_handling=plc.types.NullPolicy.EXCLUDE
+                if options
+                else plc.types.NullPolicy.INCLUDE
+            )
         elif name == "first" or name == "last":
             req = None
         elif name == "mean":
@@ -164,14 +168,9 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
-        if (
-            # For sum, this condition can only pass
-            # after expression decomposition in the streaming
-            # engine
-            self.name in {"sum", "mean", "median"}
-            and plc.traits.is_fixed_point(column.dtype.plc_type)
-            and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-        ):
+        if plc.traits.is_fixed_point(
+            column.dtype.plc_type
+        ) and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
             column = column.astype(self.dtype, stream=stream)
         return Column(
             plc.Column.from_scalar(

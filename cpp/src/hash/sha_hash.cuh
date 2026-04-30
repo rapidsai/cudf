@@ -27,7 +27,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <memory>
@@ -522,8 +521,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{input.num_rows()},
     [d_chars, device_input = *device_input] __device__(auto row_index) {
       Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * Hasher::digest_size));
       for (auto const& col : device_input) {

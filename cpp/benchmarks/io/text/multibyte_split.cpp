@@ -164,7 +164,7 @@ static void bench_multibyte_split(nvbench::state& state,
         }
         return cudf::io::text::make_source_from_bgzip_file(temp_file_name);
       }
-      default: CUDF_FAIL();
+      default: CUDF_FAIL("Unexpected case");
     }
   }();
 

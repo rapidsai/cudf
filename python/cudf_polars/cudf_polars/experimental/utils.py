@@ -10,10 +10,10 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedRollingWindow, UnaryFunction
+from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import ColumnStat, PartitionInfo
+from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
-    from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -67,9 +66,13 @@ def _lower_ir_fallback(
     # If any children contain multiple partitions,
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
+    from cudf_polars.experimental.select import _inline_hstack_false
 
     config_options = rec.state["config_options"]
     rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
+
+    # Make sure we avoid mixed-length columns in intermediate TableChunks.
+    ir = _inline_hstack_false(ir)
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
@@ -114,9 +117,6 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
 def _get_unique_fractions(
     column_names: Sequence[str],
     user_unique_fractions: dict[str, float],
-    *,
-    row_count: ColumnStat[int] | None = None,
-    column_stats: dict[str, ColumnStats] | None = None,
 ) -> dict[str, float]:
     """
     Return unique-fraction statistics subset.
@@ -127,44 +127,22 @@ def _get_unique_fractions(
         The column names to get unique-fractions for.
     user_unique_fractions
         The user-provided unique-fraction dictionary.
-    row_count
-        Row-count statistics. This will be None if
-        statistics planning is not enabled.
-    column_stats
-        The column statistics. This will be None if
-        statistics planning is not enabled.
 
     Returns
     -------
     unique_fractions
-        The final unique-fraction dictionary.
+        The final unique-fraction dictionary filtered to column_names.
     """
-    unique_fractions: dict[str, float] = {}
-    column_stats = column_stats or {}
-    row_count = row_count or ColumnStat[int](None)
-    if isinstance(row_count.value, int) and row_count.value > 0:
-        for c in set(column_names).intersection(column_stats):
-            if (unique_count := column_stats[c].unique_count.value) is not None:
-                # Use unique_count_estimate (if available)
-                unique_fractions[c] = max(
-                    min(1.0, unique_count / row_count.value),
-                    0.00001,
-                )
-
-    # Update with user-provided unique-fractions
-    unique_fractions.update(
-        {
-            c: max(min(f, 1.0), 0.00001)
-            for c, f in user_unique_fractions.items()
-            if c in column_names
-        }
-    )
-    return unique_fractions
+    return {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in user_unique_fractions.items()
+        if c in column_names
+    }
 
 
 def _contains_over(exprs: Sequence[Expr]) -> bool:
-    """Return True if any expression in 'exprs' contains an over(...) (ie. GroupedRollingWindow)."""
-    return any(isinstance(e, GroupedRollingWindow) for e in traversal(exprs))
+    """Return True if any expression contains a window expression."""
+    return any(isinstance(e, GroupedWindow) for e in traversal(exprs))
 
 
 def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:

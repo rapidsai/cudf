@@ -125,29 +125,74 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
 
-    # CTE: ss (store sales by county, quarter, year)
-    ss = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
-        .group_by(["ca_county", "d_qoy", "d_year"])
-        .agg([pl.col("ss_ext_sales_price").sum().alias("store_sales")])
-    )
+    # Pre-filter date_dim to target year to avoid aggregating across all years.
+    # Build per-quarter aggregations directly instead of filtering after the fact.
+    date_year = date_dim.filter(pl.col("d_year") == year).select(["d_date_sk", "d_qoy"])
 
-    # CTE: ws (web sales by county, quarter, year)
-    ws = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ws_bill_addr_sk", right_on="ca_address_sk")
-        .group_by(["ca_county", "d_qoy", "d_year"])
-        .agg([pl.col("ws_ext_sales_price").sum().alias("web_sales")])
-    )
+    def build_quarter_agg(
+        sales_table: pl.LazyFrame,
+        date_key: str,
+        addr_key: str,
+        price_col: str,
+        agg_alias: str,
+        quarter: int,
+    ) -> pl.LazyFrame:
+        date_q = date_year.filter(pl.col("d_qoy") == quarter).select("d_date_sk")
+        return (
+            sales_table.join(date_q, left_on=date_key, right_on="d_date_sk")
+            .join(customer_address, left_on=addr_key, right_on="ca_address_sk")
+            .group_by("ca_county")
+            .agg([pl.col(price_col).sum().alias(agg_alias)])
+        )
 
-    # Create filtered versions for each quarter
-    ss1 = ss.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == year))
-    ss2 = ss.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
-    ss3 = ss.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
-    ws1 = ws.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == year))
-    ws2 = ws.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
-    ws3 = ws.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
+    ss1 = build_quarter_agg(
+        store_sales,
+        "ss_sold_date_sk",
+        "ss_addr_sk",
+        "ss_ext_sales_price",
+        "store_sales",
+        1,
+    )
+    ss2 = build_quarter_agg(
+        store_sales,
+        "ss_sold_date_sk",
+        "ss_addr_sk",
+        "ss_ext_sales_price",
+        "store_sales",
+        2,
+    )
+    ss3 = build_quarter_agg(
+        store_sales,
+        "ss_sold_date_sk",
+        "ss_addr_sk",
+        "ss_ext_sales_price",
+        "store_sales",
+        3,
+    )
+    ws1 = build_quarter_agg(
+        web_sales,
+        "ws_sold_date_sk",
+        "ws_bill_addr_sk",
+        "ws_ext_sales_price",
+        "web_sales",
+        1,
+    )
+    ws2 = build_quarter_agg(
+        web_sales,
+        "ws_sold_date_sk",
+        "ws_bill_addr_sk",
+        "ws_ext_sales_price",
+        "web_sales",
+        2,
+    )
+    ws3 = build_quarter_agg(
+        web_sales,
+        "ws_sold_date_sk",
+        "ws_bill_addr_sk",
+        "ws_ext_sales_price",
+        "web_sales",
+        3,
+    )
 
     sort_by = {polars_agg: False}
     # Join all quarters together by county
@@ -202,7 +247,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select(
             [
                 pl.col("ca_county"),
-                pl.col("d_year"),
+                pl.lit(year, dtype=pl.Int64).alias("d_year"),
                 "web_q1_q2_increase",
                 "store_q1_q2_increase",
                 "web_q2_q3_increase",

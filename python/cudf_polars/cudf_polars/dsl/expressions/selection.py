@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -36,6 +36,13 @@ class Gather(Expr):
             child.evaluate(df, context=context) for child in self.children
         )
         n = values.size
+        if indices.size == 0:
+            return Column(
+                plc.column_factories.make_empty_column(
+                    self.dtype.plc_type, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         lo, hi = plc.reduce.minmax(indices.obj, stream=df.stream)
         if hi.to_py(stream=df.stream) >= n or lo.to_py(stream=df.stream) < -n:  # type: ignore[operator]
             raise ValueError("gather indices are out of bounds")

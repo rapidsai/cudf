@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,6 @@
 
 #include <cuda/functional>
 #include <cuda/std/optional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -138,6 +137,7 @@ struct hierarchy_info {
  * @param out: (output) Flattened vector of output column_views
  * @param info: (output) Additional per-output column_view metadata needed by the gpu
  * @param h_info: (output) Information about the hierarchy
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param cur_depth: Current absolute depth in the hierarchy
  * @param cur_branch_depth: Current branch depth
  * @param parent_index: Index into `out` representing our owning parent column

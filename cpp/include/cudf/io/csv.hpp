@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -795,9 +795,7 @@ class csv_reader_options {
    */
   void set_na_values(std::vector<std::string> vals)
   {
-    if ((!vals.empty()) and (!_na_filter)) {
-      CUDF_FAIL("Can't set na_values when na_filtering is disabled");
-    }
+    CUDF_EXPECTS(vals.empty() or _na_filter, "Can't set na_values when na_filtering is disabled");
 
     _na_values = std::move(vals);
   }

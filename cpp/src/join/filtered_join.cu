@@ -31,7 +31,6 @@
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
 #include <memory>
@@ -111,7 +110,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           build_iter,
           _build.num_rows(),
-          thrust::counting_iterator<size_type>{0},
+          cuda::counting_iterator<size_type>{0},
           row_is_valid{row_bitmask_ptr},
           insert_ref);
     } else {
@@ -172,7 +171,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           probe_iter,
           probe.num_rows(),
-          thrust::counting_iterator<size_type>{0},
+          cuda::counting_iterator<size_type>{0},
           row_is_valid{row_bitmask_ptr},
           contains_iter,
           query_ref);
@@ -204,11 +203,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                        thrust::counting_iterator<size_type>(0),
-                                        thrust::counting_iterator<size_type>(probe.num_rows()),
-                                        gather_map.begin(),
-                                        gather_mask{kind, contains_map});
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{probe.num_rows()},
+                    gather_map.begin(),
+                    gather_mask{kind, contains_map});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }
@@ -361,7 +361,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
   if (_build.num_rows() == 0) {
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, mr);
-    thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     result->begin(),
+                     result->end());
     return result;
   }
 
@@ -374,17 +376,31 @@ filtered_join::~filtered_join() = default;
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<cudf::detail::distinct_filtered_join>(
+      build, compare_nulls, load_factor, stream)}
+{
+}
+
+filtered_join::filtered_join(cudf::table_view const& build,
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream)
+  : filtered_join(build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+{
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+filtered_join::filtered_join(cudf::table_view const& build,
+                             null_equality compare_nulls,
                              set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
+  : filtered_join(build, compare_nulls, load_factor, stream)
 {
-  CUDF_EXPECTS(
-    reuse_tbl == set_as_build_table::RIGHT,
-    "Left table reuse is yet to be implemented. Filtered join requires the right table to be the "
-    "build table");
-  _reuse_tbl = reuse_tbl;
-  _impl      = std::make_unique<cudf::detail::distinct_filtered_join>(
-    build, compare_nulls, load_factor, stream);
+  CUDF_EXPECTS(reuse_tbl == set_as_build_table::RIGHT,
+               "Left table reuse is not supported. Use cudf::mark_join for left table reuse.");
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
@@ -394,6 +410,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, reuse_tbl, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
+#pragma GCC diagnostic pop
 
 std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::semi_join(
   cudf::table_view const& probe,

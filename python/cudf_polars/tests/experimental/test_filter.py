@@ -1,30 +1,35 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.testing.asserts import assert_gpu_result_equal
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
-@pytest.fixture(scope="module")
-def engine():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 3,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
+@pytest.fixture
+def engine(
+    request: pytest.FixtureRequest,
+) -> Generator[StreamingEngine, None, None]:
+    params: dict[str, Any] = getattr(request, "param", {})
+    executor_options = {
+        "max_rows_per_partition": 3,
+        "dynamic_planning": {},
+        **params.get("executor_options", {}),
+    }
+    with SPMDEngine(executor_options=executor_options) as engine:
+        yield engine
 
 
 @pytest.fixture(scope="module")

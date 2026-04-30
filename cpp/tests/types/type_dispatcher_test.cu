@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,17 +49,19 @@ TYPED_TEST(TypedDispatcherTest, TypeToId)
 
 namespace {
 struct verify_dispatched_type {
+  cudf::type_id expected_id;
+
   template <typename T>
   __host__ __device__ bool operator()(cudf::type_id id)
   {
-    return id == cudf::type_to_id<T>();
+    return id == expected_id;
   }
 };
 
 CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
+    *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{id}, id);
 }
 }  // namespace
 
@@ -81,7 +83,7 @@ INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest, testing::ValuesIn(cudf::te
 TEST_P(IdDispatcherTest, IdToType)
 {
   auto t = GetParam();
-  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{t}, verify_dispatched_type{}, t));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{t}, verify_dispatched_type{t}, t));
 }
 
 template <typename T>
@@ -109,18 +111,24 @@ TYPED_TEST(TypedDoubleDispatcherTest, TypeToId)
 
 namespace {
 struct verify_double_dispatched_type {
+  cudf::type_id expected_id1;
+  cudf::type_id expected_id2;
+
   template <typename T1, typename T2>
   __host__ __device__ bool operator()(cudf::type_id id1, cudf::type_id id2)
   {
-    return id1 == cudf::type_to_id<T1>() && id2 == cudf::type_to_id<T2>();
+    return id1 == expected_id1 && id2 == expected_id2;
   }
 };
 
 CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::double_type_dispatcher(
-      cudf::data_type{id1}, cudf::data_type{id2}, verify_double_dispatched_type{}, id1, id2);
+    *d_result = cudf::double_type_dispatcher(cudf::data_type{id1},
+                                             cudf::data_type{id2},
+                                             verify_double_dispatched_type{id1, id2},
+                                             id1,
+                                             id2);
 }
 }  // namespace
 
@@ -146,7 +154,7 @@ TEST_P(IdDoubleDispatcherTest, IdToType)
   // Test double-dispatch of all types using the same type for both dispatches
   auto t = GetParam();
   EXPECT_TRUE(cudf::double_type_dispatcher(
-    cudf::data_type{t}, cudf::data_type{t}, verify_double_dispatched_type{}, t, t));
+    cudf::data_type{t}, cudf::data_type{t}, verify_double_dispatched_type{t, t}, t, t));
 }
 
 struct IdFixedDoubleDispatcherTest : public DispatcherTest,
@@ -160,16 +168,18 @@ TEST_P(IdFixedDoubleDispatcherTest, IdToType)
 {
   // Test double-dispatch of all types against one fixed type, in each direction
   auto t = GetParam();
-  EXPECT_TRUE(cudf::double_type_dispatcher(cudf::data_type{t},
-                                           cudf::data_type{cudf::type_to_id<float>()},
-                                           verify_double_dispatched_type{},
-                                           t,
-                                           cudf::type_to_id<float>()));
-  EXPECT_TRUE(cudf::double_type_dispatcher(cudf::data_type{cudf::type_to_id<float>()},
-                                           cudf::data_type{t},
-                                           verify_double_dispatched_type{},
-                                           cudf::type_to_id<float>(),
-                                           t));
+  EXPECT_TRUE(
+    cudf::double_type_dispatcher(cudf::data_type{t},
+                                 cudf::data_type{cudf::type_to_id<float>()},
+                                 verify_double_dispatched_type{t, cudf::type_to_id<float>()},
+                                 t,
+                                 cudf::type_to_id<float>()));
+  EXPECT_TRUE(
+    cudf::double_type_dispatcher(cudf::data_type{cudf::type_to_id<float>()},
+                                 cudf::data_type{t},
+                                 verify_double_dispatched_type{cudf::type_to_id<float>(), t},
+                                 cudf::type_to_id<float>(),
+                                 t));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

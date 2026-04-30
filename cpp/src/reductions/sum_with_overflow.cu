@@ -16,8 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform_reduce.h>
 
@@ -132,27 +132,29 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   }
 
   // Perform the reduction using thrust::transform_reduce
-  auto counting_iter = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
   auto dcol_ptr      = dcol.get();
   sum_overflow_result result;
 
   if (col.has_nulls()) {
     // Use null-aware transform functor
-    result = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                                      counting_iter,
-                                      counting_iter + col.size(),
-                                      null_aware_to_sum_overflow{dcol_ptr},
-                                      initial_value,
-                                      overflow_sum_op{});
+    result = thrust::transform_reduce(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      counting_iter,
+      counting_iter + col.size(),
+      null_aware_to_sum_overflow{dcol_ptr},
+      initial_value,
+      overflow_sum_op{});
   } else {
     // Use direct iterator for non-null case
     auto input_iter = dcol->begin<int64_t>();
-    result          = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                                      input_iter,
-                                      input_iter + col.size(),
-                                      to_sum_overflow{},
-                                      initial_value,
-                                      overflow_sum_op{});
+    result          = thrust::transform_reduce(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      input_iter,
+      input_iter + col.size(),
+      to_sum_overflow{},
+      initial_value,
+      overflow_sum_op{});
   }
 
   // Create result struct scalar with {sum: int64_t, overflow: bool}

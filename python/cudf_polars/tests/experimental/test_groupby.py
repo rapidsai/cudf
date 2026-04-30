@@ -1,44 +1,102 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
+"""Tests for dynamic GroupBy operations using the rapidsmpf runtime."""
 
 from __future__ import annotations
 
 import contextlib
+from unittest.mock import patch
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
-def engine():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 4,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
-
-
-@pytest.fixture(scope="module")
-def df():
+def df() -> pl.LazyFrame:
+    """Create a test DataFrame for groupby."""
     return pl.LazyFrame(
         {
+            "key": list(range(50)) * 3,  # 50 unique keys
+            "key2": list(range(10)) * 15,  # 10 unique keys
+            "value": range(150),
+            "value2": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
             "x": range(150),
             "xx": list(range(75)) * 2,
             "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )
+
+
+@pytest.mark.parametrize("keys", [("key",), ("key", "key2")])
+@pytest.mark.parametrize("agg", ["sum", "mean", "len", "min", "max"])
+def test_dynamic_groupby_basic(df, engine, keys, agg):
+    """Test dynamic groupby with various key and agg combinations."""
+    expr = getattr(pl.col("value"), agg)()
+    q = df.group_by(*keys).agg(expr)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 100_000_000}}],
+    indirect=True,
+)
+def test_dynamic_groupby_tree_strategy(df, engine):
+    """Test that small output uses tree reduction (high target_partition_size)."""
+    q = df.group_by("key2").agg(pl.col("value").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 1000}}],
+    indirect=True,
+)
+def test_dynamic_groupby_shuffle_strategy(engine):
+    """Test that large output uses shuffle (low target_partition_size)."""
+    df = pl.LazyFrame({"key": range(1000), "value": range(1000)})
+    q = df.group_by("key").agg(pl.col("value").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_dynamic_groupby_single_group(engine):
+    """Test dynamic groupby where all rows have the same key."""
+    df = pl.LazyFrame({"key": [1] * 100, "value": range(100)})
+    q = df.group_by("key").agg(pl.col("value").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_dynamic_groupby_multiple_aggs(df, engine):
+    """Test dynamic groupby with multiple aggregations."""
+    q = df.group_by("key").agg(
+        pl.col("value").sum().alias("value_sum"),
+        pl.col("value").mean().alias("value_mean"),
+        pl.col("value2").min().alias("value2_min"),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_dynamic_groupby_maintain_order(df, engine):
+    """Test dynamic groupby with maintain_order=True."""
+    q = df.group_by("key", maintain_order=True).agg(pl.col("value").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_dynamic_groupby_single_row(engine):
+    """Test dynamic groupby on single-row DataFrame."""
+    df = pl.LazyFrame({"key": [1], "value": [42]})
+    q = df.group_by("key").agg(pl.col("value").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+# ---------------------------------------------------------------------------
+# Tests migrated from tests/experimental/test_groupby.py
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])
@@ -50,21 +108,14 @@ def test_groupby(df, engine, op, keys):
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby_single_partitions(df, op, keys):
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": int(1e9)}}],
+    indirect=True,
+)
+def test_groupby_single_partitions(df, engine, op, keys):
     q = getattr(df.group_by(*keys), op)()
-    assert_gpu_result_equal(
-        q,
-        engine=pl.GPUEngine(
-            raise_on_fail=True,
-            executor="streaming",
-            executor_options={
-                "max_rows_per_partition": int(1e9),
-                "cluster": DEFAULT_CLUSTER,
-                "runtime": DEFAULT_RUNTIME,
-            },
-        ),
-        check_row_order=False,
-    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
@@ -77,42 +128,17 @@ def test_groupby_agg(df, engine, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
-@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby_agg_config_options(df, op, keys):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 4,
-            # Trigger shuffle-based groupby
-            "unique_fraction": {"z": 0.5},
-            # Check that we can change the n-ary factor
-            "groupby_n_ary": 8,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
-        },
-    )
-    agg = getattr(pl.col("x"), op)()
-    if op in ("sum", "mean"):
-        agg = agg.round(2)  # Unary test coverage
-    q = df.group_by(*keys).agg(agg)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-
-
-@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
-def test_groupby_fallback(df, engine, fallback_mode):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "fallback_mode": fallback_mode,
-            "max_rows_per_partition": 4,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
+@pytest.mark.parametrize(
+    "fallback_mode,engine",
+    [
+        ("silent", {"executor_options": {"fallback_mode": "silent"}}),
+        ("raise", {"executor_options": {"fallback_mode": "raise"}}),
+        ("warn", {"executor_options": {"fallback_mode": "warn"}}),
+        ("foo", {"executor_options": {"fallback_mode": "foo"}}),
+    ],
+    indirect=["engine"],
+)
+def test_groupby_fallback(df, fallback_mode, engine):
     match = "Failed to decompose groupby aggs"
 
     q = df.group_by("y").median()
@@ -149,7 +175,7 @@ def test_groupby_agg_literal(df, engine):
         pl.max("x") + 1,
     ],
 )
-def test_groupby_agg_binop(df: pl.LazyFrame, engine: pl.GPUEngine, op: pl.Expr) -> None:
+def test_groupby_agg_binop(df: pl.LazyFrame, engine, op: pl.Expr) -> None:
     q = df.group_by("y").agg(op)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
@@ -161,9 +187,7 @@ def test_groupby_agg_binop(df: pl.LazyFrame, engine: pl.GPUEngine, op: pl.Expr) 
         (pl.mean("x"), "x__mean_sum"),
     ],
 )
-def test_groupby_agg_duplicate(
-    engine: pl.GPUEngine, op: pl.Expr, column_name: str
-) -> None:
+def test_groupby_agg_duplicate(engine, op: pl.Expr, column_name: str) -> None:
     # Ensure that the column names we create internally don't collide with
     # the user's column names.
     df = pl.LazyFrame(
@@ -177,16 +201,14 @@ def test_groupby_agg_duplicate(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+def test_groupby_agg_empty(df: pl.LazyFrame, engine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.filterwarnings("ignore:This slice not supported for multiple partitions.")
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
-def test_groupby_then_slice(
-    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
-) -> None:
+def test_groupby_then_slice(engine, zlice: tuple[int, int]) -> None:
     df = pl.LazyFrame(
         {
             "x": [0, 1, 2, 3] * 2,
@@ -197,7 +219,7 @@ def test_groupby_then_slice(
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+def test_groupby_on_equality(engine) -> None:
     # See: https://github.com/rapidsai/cudf/issues/19152
     df = pl.LazyFrame(
         {
@@ -217,41 +239,23 @@ def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         [1, None, None, None],
     ],
 )
-def test_mean_partitioned(values: list[int | None]) -> None:
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_mean_partitioned(values: list[int | None], engine) -> None:
     df = pl.LazyFrame(
         {
             "key1": [1, 1, 2, 2],
             "uint16_with_null": pl.Series(values, dtype=pl.UInt16()),
         }
     )
-
     q = df.group_by("key1").agg(pl.col("uint16_with_null").mean())
-    assert_gpu_result_equal(
-        q,
-        engine=pl.GPUEngine(
-            executor="streaming",
-            executor_options={
-                "max_rows_per_partition": 2,
-                "cluster": DEFAULT_CLUSTER,
-                "runtime": DEFAULT_RUNTIME,
-            },
-        ),
-        check_row_order=False,
-    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_literal_with_stats_planning(df):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 4,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "stats_planning": {"use_reduction_planning": True},
-        },
-    )
-
+def test_groupby_literal_key(df, engine):
     q = (
         df.group_by(
             pl.lit(True).alias("key"),  # noqa: FBT003
@@ -260,5 +264,63 @@ def test_groupby_literal_with_stats_planning(df):
         .agg(pl.col("x").sum())
         .drop("key")
     )
-
     assert_gpu_result_equal(q, engine=engine)
+
+
+# ---------------------------------------------------------------------------
+# Tests migrated from tests/experimental/test_groupby.py
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 4,
+                "unique_fraction": {"z": 0.5},
+                "groupby_n_ary": 8,
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_groupby_agg_config_options(df, op, keys, engine):
+    agg = getattr(pl.col("x"), op)()
+    if op in ("sum", "mean"):
+        agg = agg.round(2)  # Unary test coverage
+    q = df.group_by(*keys).agg(agg)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 1}}],
+    indirect=True,
+)
+def test_groupby_count_type_mismatch(df, engine):
+    q = df.group_by("key", maintain_order=True).agg(pl.col("value").count())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 10, "max_rows_per_partition": 5}}],
+    indirect=True,
+)
+def test_shuffle_reduce_insert_finished_called_on_oom(engine):
+    # Tests that an exception raised inside insert_hash() must not leave the
+    # C++ ShufflerAsync without insert_finished() being called.
+
+    def foo(*args, **kwargs):
+        raise MemoryError("OOM in insert_hash()")
+
+    df = pl.LazyFrame({"a": range(10), "b": range(10)})
+    with (
+        patch.object(ShuffleManager.Inserter, "insert_hash", foo),
+        pytest.raises(ExceptionGroup) as exc_info,
+    ):
+        df.group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
+    assert any("OOM in insert_hash" in str(e) for e in exc_info.value.exceptions)

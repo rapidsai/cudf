@@ -24,8 +24,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -111,8 +111,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       offsets.begin(),
                       offsets.end(),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(output_size),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{output_size},
                       indices.begin());
 
   return gather(

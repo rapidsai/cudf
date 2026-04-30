@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -22,3 +22,10 @@ def test_unique(maintain_order, pre_sorted):
 
     query = ldf.select(pl.col("b").unique(maintain_order=maintain_order))
     assert_gpu_result_equal(query, check_row_order=maintain_order)
+
+
+def test_unique_on_sorted_expression():
+    # Sort expr produces a column with is_sorted=YES, covering the sorted fast-path
+    ldf = pl.DataFrame({"b": [3.0, 1.0, 2.0, 1.0, 3.0]}).lazy()
+    query = ldf.select(pl.col("b").sort().unique())
+    assert_gpu_result_equal(query, check_row_order=False)

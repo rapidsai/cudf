@@ -247,7 +247,7 @@ template <typename state_buf>
 inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
   char const* ptr = nullptr;
-  using len_type  = std::tuple_element<1, string_index_pair>::type;
+  using len_type  = cuda::std::tuple_element<1, string_index_pair>::type;
   len_type len    = 0;
 
   if (s->dict_base) {
@@ -555,8 +555,7 @@ __device__ size_type initialize_string_descriptors(page_state_s* s,
  * @brief Store a validity mask containing value_count bits into the output validity buffer of the
  * page.
  *
- * @param[in,out] nesting_info The page/nesting information to store the mask in. The validity map
- * offset is also updated
+ * @param[in] valid_map_offset The offset into the validity map at which to store bits
  * @param[in,out] valid_map Pointer to bitmask to store validity information to
  * @param[in] valid_mask The validity mask to be stored
  * @param[in] value_count # of bits in the validity mask

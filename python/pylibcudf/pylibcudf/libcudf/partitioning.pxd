@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.types as libcudf_types
 from libc.stdint cimport int32_t, uint32_t
@@ -25,6 +25,17 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         hash_partition "cudf::hash_partition" (
         const table_view& input,
         const vector[libcudf_types.size_type]& columns_to_hash,
+        int num_partitions,
+        hash_id hash_function,
+        uint32_t seed,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
+    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
+        hash_partition "cudf::hash_partition" (
+        const table_view& input,
+        const table_view& keys,
         int num_partitions,
         hash_id hash_function,
         uint32_t seed,

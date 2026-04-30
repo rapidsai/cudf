@@ -21,7 +21,6 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -188,8 +187,8 @@ struct null_considering_binop {
 
     // Execute it on every element
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(col_size),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{col_size},
                       out_col,
                       binop_func);
   }

@@ -26,9 +26,10 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
@@ -129,7 +130,7 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
     hash_table.find_async(
       iter, iter + probe_table_num_rows, d_equal, hasher, found_begin, stream.value());
   } else {
-    auto stencil = thrust::counting_iterator<size_type>{0};
+    auto stencil = cuda::counting_iterator<size_type>{0};
     auto const row_bitmask =
       cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
     auto const pred =
@@ -188,7 +189,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(build))) {
       this->_hash_table.insert_async(iter, iter + build_table_num_rows, stream.value());
     } else {
-      auto stencil = thrust::counting_iterator<size_type>{0};
+      auto stencil = cuda::counting_iterator<size_type>{0};
       auto const row_bitmask =
         cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
       auto const pred =
@@ -360,7 +361,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   } else {
     // If build table is empty, return probe table
     if (this->_build.num_rows() == 0) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    build_indices->begin(),
                    build_indices->end(),
                    cudf::JoinNoMatch);

@@ -34,6 +34,17 @@ def test_gather_with_nulls():
     assert_gpu_result_equal(query)
 
 
+def test_gather_empty_indices():
+    ldf = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+        }
+    )
+
+    query = ldf.select(pl.col("a").gather(pl.lit(pl.Series("idx", [], dtype=pl.Int64))))
+    assert_gpu_result_equal(query)
+
+
 @pytest.mark.parametrize("negative", [False, True])
 def test_gather_out_of_bounds(negative):
     ldf = pl.LazyFrame(

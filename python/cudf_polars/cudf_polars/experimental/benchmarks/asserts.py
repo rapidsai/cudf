@@ -46,6 +46,8 @@ def assert_tpch_result_equal(
     abs_tol: float = 1e-08,
     categorical_as_str: bool = False,
     sort_by: list[tuple[str, bool]],
+    nulls_last: bool = True,
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     limit: int | None = None,
 ) -> None:
     """
@@ -62,6 +64,20 @@ def assert_tpch_result_equal(
     sort_by : list[tuple[str, bool]]
         The columns to sort by, and the sort order. This *must* be the same
         as the ``sort_by`` and ``descending`` required by the query
+    nulls_last : bool, optional
+        Whether NULLs should be placed last when checking sortedness.
+        Must match the NULL placement used by the query's ``ORDER BY``.
+        DuckDB defaults to NULLS LAST for ``ASC`` and NULLS FIRST for
+        ``DESC``; some TPC-DS queries override this with explicit
+        ``NULLS FIRST`` on all columns, which requires ``nulls_last=False``.
+        Defaults to ``True`` (NULLS LAST), matching DuckDB's ``ASC`` default.
+    sort_keys : list[tuple[pl.Expr, bool]] | None, optional
+        Polars expressions for the sortedness check. Use this when the query
+        sorts by a conditional expression that cannot be represented as a plain
+        column name in ``sort_by`` (e.g. ROLLUP queries that sort by
+        ``CASE WHEN lochierarchy = 0 THEN i_category END``). When provided,
+        these expressions are evaluated and used only for the sortedness check;
+        ``sort_by`` still drives the ties/limit boundary logic.
     limit : int | None, optional
         The limit (passed to ``.head``) used in the query, if any. This is
         used to break ties in the ``sort_by`` columns. See notes below.
@@ -201,17 +217,36 @@ def assert_tpch_result_equal(
 
         # First, validate the sortedness. We can do this independently for each dataframe.
         # And we don't really need to worry about floating-point columns here.
+        # If sort_keys is provided, use those expressions for the sortedness check
+        # (e.g. for ROLLUP queries with conditional sort expressions like
+        # CASE WHEN lochierarchy = 0 THEN i_category END). Otherwise fall back to sort_by.
+        if sort_keys is not None:
+            exprs, check_desc = zip(*sort_keys, strict=True)
+            check_cols = [f"_sk{i}" for i in range(len(exprs))]
+            check_select = [
+                e.alias(col) for e, col in zip(exprs, check_cols, strict=True)
+            ]
+            check_msg = "sort_keys expressions"
+        else:
+            check_cols = list(by)
+            check_desc = descending
+            check_msg = "sort_by columns"
+
         for side, df in [("left", left), ("right", right)]:
             try:
+                tmp = df.select(check_select) if sort_keys is not None else df
                 polars.testing.assert_frame_equal(
-                    df.select(by),
-                    df.select(by).sort(
-                        by=by, descending=descending, maintain_order=True
+                    tmp,
+                    tmp.sort(
+                        by=check_cols,
+                        descending=check_desc,
+                        maintain_order=True,
+                        nulls_last=nulls_last,
                     ),
                 )
             except AssertionError as e:
                 raise ValidationError(
-                    message=f"{side} dataframe is not sorted by sort_by columns",
+                    message=f"{side} dataframe is not sorted by {check_msg}",
                     details={"error": str(e)},
                 ) from e
 
@@ -224,10 +259,10 @@ def assert_tpch_result_equal(
             for col in left.columns
             if left.schema[col] not in (pl.Float32, pl.Float64)
         ]
-        left_sorted = left.sort(by=non_float_columns)
-        right_sorted = right.sort(by=non_float_columns)
+        left_sorted = left.sort(by=non_float_columns, nulls_last=nulls_last)
+        right_sorted = right.sort(by=non_float_columns, nulls_last=nulls_last)
 
-        if limit is None:
+        if limit is None or left.is_empty():
             try:
                 polars.testing.assert_frame_equal(
                     left_sorted,
@@ -257,16 +292,19 @@ def assert_tpch_result_equal(
             # expected: [ [a, b, c], [d - epsilon, d] ]
 
             (split_at,) = (
-                left.select(by).sort(by=by, descending=descending).tail(1).to_dicts()
+                left.select(by)
+                .sort(by=by, descending=descending, nulls_last=nulls_last)
+                .tail(1)
+                .to_dicts()
             )
             # Note that we multiply abs_tol by 2; In our example above, our split point will
             # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
             # of 'd' as well.
 
-            exprs = []
+            filter_exprs = []
             for (col, val), desc in zip(split_at.items(), descending, strict=True):
                 if isinstance(val, float):
-                    exprs.append(
+                    filter_exprs.append(
                         pl.col(col).lt(val - 2 * abs_tol)
                         | pl.col(col).gt(val + 2 * abs_tol)
                     )
@@ -276,9 +314,9 @@ def assert_tpch_result_equal(
                         op = pl.col(col).gt
                     else:
                         op = pl.col(col).lt
-                    exprs.append(op(val))
+                    filter_exprs.append(op(val))
 
-            expr = pl.Expr.or_(*exprs)
+            expr = pl.Expr.or_(*filter_exprs)
 
             result_first = left.filter(expr)
             expected_first = right.filter(expr)
@@ -287,8 +325,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_first.sort(by=non_float_columns),
-                    expected_first.sort(by=non_float_columns),
+                    result_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    expected_first.sort(by=non_float_columns, nulls_last=nulls_last),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -306,8 +344,12 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_ties.sort(non_float_columns).select(by),
-                    expected_ties.sort(non_float_columns).select(by),
+                    result_ties.sort(non_float_columns, nulls_last=nulls_last).select(
+                        by
+                    ),
+                    expected_ties.sort(non_float_columns, nulls_last=nulls_last).select(
+                        by
+                    ),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:

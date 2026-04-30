@@ -51,6 +51,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_filter(self, Expression filter)
     cpdef void set_source(self, SourceInfo src)
     cpdef bool is_enabled_use_jit_filter(self)
+    cpdef bool is_enabled_case_sensitive_names(self)
+    cpdef void enable_case_sensitive_names(self, bool val)
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -66,6 +68,7 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names)
     cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices)
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
+    cpdef ParquetReaderOptionsBuilder case_sensitive_names(self, bool val)
     cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width)
     cpdef build(self)
 

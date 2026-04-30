@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,6 +30,7 @@ cudf::size_type num_multiprocessors();
  * @param[in] kernel The kernel for which the elements per thread needs to be assessed
  * @param[in] total_size Number of elements
  * @param[in] block_size Expected block size
+ * @param[in] max_per_thread Maximum number of elements per thread
  *
  * @return cudf::size_type Elements per thread that can be processed for given specification.
  */

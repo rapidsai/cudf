@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -123,7 +123,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 88."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -166,55 +166,59 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             )
         )
     )
-    return base_query.select(
-        [
-            pl.when((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h8_30_to_9"),
-            pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h9_to_9_30"),
-            pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h9_30_to_10"),
-            pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h10_to_10_30"),
-            pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h10_30_to_11"),
-            pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h11_to_11_30"),
-            pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h11_30_to_12"),
-            pl.when((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
-            .then(1)
-            .otherwise(0)
-            .sum()
-            .cast(pl.Int64)
-            .alias("h12_to_12_30"),
-        ]
+    return QueryResult(
+        frame=base_query.select(
+            [
+                pl.when((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h8_30_to_9"),
+                pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h9_to_9_30"),
+                pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h9_30_to_10"),
+                pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h10_to_10_30"),
+                pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h10_30_to_11"),
+                pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h11_to_11_30"),
+                pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h11_30_to_12"),
+                pl.when((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int64)
+                .alias("h12_to_12_30"),
+            ]
+        ),
+        sort_by=[],
+        limit=None,
     )

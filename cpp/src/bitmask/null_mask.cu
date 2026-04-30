@@ -227,7 +227,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
     cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
-  auto const mr           = rmm::mr::get_current_device_resource_ref();
+  auto const mr           = cudf::get_current_device_resource_ref();
   auto destinations       = cudf::detail::make_device_uvector_async(bitmasks, stream, mr);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);
@@ -568,7 +568,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream)
 {
-  return detail::segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream);
+  return segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count valid elements in the specified ranges of a validity bitmask
@@ -576,7 +576,7 @@ std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
                                              host_span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
-  return detail::segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
+  return segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count null elements in the specified ranges of a validity bitmask
@@ -584,7 +584,7 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
                                             host_span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
-  return detail::segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
+  return segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Inplace Bitwise AND of the masks
@@ -681,6 +681,27 @@ segmented_bitmask_and(host_span<column_view const> colviews,
     mr);
 }
 
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<bitmask_type const* const> masks,
+                      host_span<size_type const> segment_offsets,
+                      size_type mask_size_bits,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
+  if (masks.size() == 0 || mask_size_bits == 0) { return {}; }
+
+  std::vector<size_type> masks_begin_bits(masks.size(), 0);
+
+  return cudf::detail::segmented_bitmask_binop(
+    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
+    masks,
+    masks_begin_bits,
+    mask_size_bits,
+    segment_offsets,
+    stream,
+    mr);
+}
+
 // Returns the bitwise OR of the null masks of all columns in the table view
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::cuda_stream_view stream,
@@ -718,7 +739,7 @@ void set_all_valid_null_masks(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  if (input.nullable()) {
+  if (input.nullable() && output.size() > 0) {
     auto mask = detail::create_null_mask(output.size(), mask_state::ALL_VALID, stream, mr);
     output.set_null_mask(std::move(mask), 0);
 
@@ -840,6 +861,17 @@ segmented_bitmask_and(host_span<column_view const> colviews,
   return detail::segmented_bitmask_and(colviews, segment_offsets, stream, mr);
 }
 
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<bitmask_type const* const> masks,
+                      host_span<size_type const> segment_offsets,
+                      size_type mask_size_bits,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_bitmask_and(masks, segment_offsets, mask_size_bits, stream, mr);
+}
+
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
@@ -871,6 +903,22 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
     if (bitmasks[i] != nullptr) { counts[i] = num_bits_to_count - counts[i]; }
   }
   return counts;
+}
+
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices,
+                                             rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_valid_count(bitmask, indices, stream);
+}
+
+std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
+                                            host_span<size_type const> indices,
+                                            rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_null_count(bitmask, indices, stream);
 }
 
 size_type index_of_first_set_bit(bitmask_type const* bitmask,

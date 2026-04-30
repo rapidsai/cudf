@@ -1,13 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
@@ -42,6 +42,7 @@ static void reduction(nvbench::state& state, nvbench::type_list<DataType, nvbenc
 {
   if (cudf::is_chrono<DataType>() && kind != cudf::aggregation::MIN) {
     state.skip("Skip chrono types for some aggregations");
+    return;
   }
 
   auto const size      = static_cast<cudf::size_type>(state.get_int64("size"));

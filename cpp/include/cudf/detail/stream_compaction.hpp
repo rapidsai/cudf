@@ -14,7 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
@@ -89,4 +89,4 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

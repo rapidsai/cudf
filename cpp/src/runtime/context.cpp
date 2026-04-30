@@ -27,7 +27,7 @@ void context::ensure_nvcomp_loaded() { io::detail::nvcomp::load_nvcomp_library()
 void context::ensure_jit_cache_initialized()
 {
   std::call_once(_program_cache_init_flag,
-                 [&]() { _program_cache = std::make_unique<jit::program_cache>(); });
+                 [&]() { _program_cache = jit::program_cache::create(); });
 }
 
 jit::program_cache& context::program_cache()
@@ -84,6 +84,10 @@ void teardown()
     _context_deinit_flag.emplace();
   });
 }
+
+void enable_jit_cache(bool enable) { get_context().program_cache().enable(enable); }
+
+void clear_jit_cache() { get_context().program_cache().clear(); }
 
 context& get_context()
 {

@@ -6,6 +6,8 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import DataFrameScan, MapFunction
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -126,3 +128,14 @@ def test_set_sorted_then_inner_join(request):
         pl.LazyFrame({"a": [2, 4], "b": [20, 40]}), on="a", how="inner"
     )
     assert_gpu_result_equal(q)
+
+
+def test_explode_single_legacy_options():
+    # Cover the branch: POLARS_VERSION_LT_136 or len(self.options) == 1
+    # On polars >= 1.36 this branch is only reachable by direct construction
+    # with 1-element options (the old pre-1.36 format).
+    df = pl.DataFrame({"a": [[1, 2], [3, 4]]})
+    child = DataFrameScan({"a": DataType(pl.List(pl.Int64()))}, df._df, None)
+    # 1-element options list: [[columns_to_explode]]
+    node = MapFunction({"a": DataType(pl.Int64())}, "explode", [["a"]], child)
+    assert node.options == (("a",),)

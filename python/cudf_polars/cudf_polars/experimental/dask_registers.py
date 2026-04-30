@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Dask function registrations such as serializers and dispatch implementations."""
@@ -215,7 +215,7 @@ def register() -> None:
         from rapidsmpf.integrations.dask.spilling import register_dask_serialize
 
         register_dask_serialize()  # pragma: no cover; rapidsmpf dependency not included yet
-    except ImportError:
+    except ImportError:  # pragma: no cover
         pass
 
     # Register the tokenizer for NamedExpr and DataType. This is a performance

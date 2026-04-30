@@ -1,18 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -43,8 +43,8 @@ static void BM_binaryop_polynomials(nvbench::state& state)
     std::mt19937 generator;
     std::uniform_real_distribution<key_type> distribution{0, 1};
 
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(order + 1),
+    std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{order + 1},
                    std::back_inserter(constants),
                    [&](int) { return cudf::numeric_scalar<key_type>(distribution(generator)); });
   }
@@ -55,7 +55,7 @@ static void BM_binaryop_polynomials(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
-    cudf::scoped_range range{"benchmark_iteration"};
+    cudf::benchmark::scoped_range range{"benchmark_iteration"};
     rmm::cuda_stream_view stream{launch.get_stream().get_stream()};
     std::vector<std::unique_ptr<cudf::column>> intermediates;
 

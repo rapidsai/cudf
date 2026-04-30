@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -16,8 +17,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
@@ -92,8 +92,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<T>, 1 row
   //
@@ -158,7 +157,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   // Children :
   //    0, 1, 2, 3, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
                                                                                     sequence + 5};
@@ -181,8 +180,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<int>, 1 row
   //
@@ -192,7 +190,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   // Children :
   //    0, NULL, 2, NULL, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
     sequence, sequence + 5, valids};
@@ -296,8 +294,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<T>>, 1 row
   //
@@ -384,8 +381,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<List<T>>>, 2 rows
   //
@@ -582,8 +578,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<T>, 2 rows
   //
@@ -1247,8 +1242,7 @@ TEST_F(ListColumnWrapperTest, ListOfBools)
 
 TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<bool>, 3 rows
   //
@@ -1506,17 +1500,16 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
 
   // Creating Struct<Numeric, Bool>.
   auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
+    cudf::test::iterators::nulls_at_multiples_of(2)};
 
   auto bool_iterator =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 == 0; });
   auto bool_column =
     cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
 
-  auto struct_validity_iterator =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 5 == 0; });
+  auto struct_validity_iterator = cudf::test::iterators::valids_at_multiples_of(5);
   auto struct_column =
     cudf::test::structs_column_wrapper{
       {numeric_column, bool_column},
@@ -1540,9 +1533,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   // Verify that the child is unchanged.
 
   auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
+    cudf::test::iterators::nulls_at_multiples_of(2)};
 
   auto expected_bool_column =
     cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);

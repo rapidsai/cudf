@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,6 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
@@ -132,8 +131,8 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InvalidInput)
 TYPED_TEST(GroupbyMergeM2TypedTest, EmptyInput)
 {
   using T      = TypeParam;
-  using M2_t   = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
-  using mean_t = cudf::detail::target_type_t<T, cudf::aggregation::MEAN>;
+  using M2_t   = double;
+  using mean_t = double;
 
   auto const keys = keys_col<T>{};
   auto vals_count = counts_col{};
@@ -149,7 +148,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, EmptyInput)
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+  using R = double;
 
   // Full dataset:
   //
@@ -208,7 +207,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+  using R = double;
 
   // Full dataset:
   //
@@ -267,7 +266,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
 TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+  using R = double;
 
   // Full dataset:
   //
@@ -327,7 +326,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
 TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+  using R = double;
 
   // Full dataset:
   //
@@ -393,7 +392,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
 TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
+  using R = double;
 
   // This test should compute M2 aggregation on the same dataset as the InputHaveNullsAndNaNs test.
   // i.e.:
