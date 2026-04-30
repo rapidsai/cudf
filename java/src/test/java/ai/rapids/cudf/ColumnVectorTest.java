@@ -3960,6 +3960,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringContainsPerRow() {
+    // Aligns with libcudf StringsFindTest.Contains column-target case (find_tests.cpp).
+    try (ColumnVector haystack = ColumnVector.fromStrings(
+             "Héllo", "thesé", null, "lease", "tést strings", "", "eé", "éte");
+         ColumnVector targets = ColumnVector.fromStrings("Hello", "é", "e", "x", "", null, "n", "t");
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             false, true, null, false, true, false, false, true);
+         ColumnVector result = haystack.stringContainsPerRow(targets)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringContainsPerRowRowCountMismatch() {
+    try (ColumnVector haystack = ColumnVector.fromStrings("a", "b");
+         ColumnVector targets = ColumnVector.fromStrings("a")) {
+      assertThrows(AssertionError.class, () -> haystack.stringContainsPerRow(targets).close());
+    }
+  }
+
+  @Test
   void testStringFindOperations() {
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "1a\"\u0100B1", "a\"\u0100B1", "1a\"\u0100B",
                                       "1a\"\u0100B1\n\t\'", "1a\"\u0100B1\u0453\u1322\u5112", "1a\"\u0100B1Fg26",
