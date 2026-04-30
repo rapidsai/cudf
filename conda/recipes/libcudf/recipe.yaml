@@ -329,6 +329,7 @@ outputs:
           - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
+          - cuda-sanitizer-api
           - cuda-version
           - flatbuffers
           - libcudf
