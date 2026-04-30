@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # libcudf examples build script
@@ -49,7 +49,7 @@ build_example() {
   build_dir="${example_dir}/build"
 
   # Configure
-  cmake -S "${example_dir}" -B "${build_dir}" -Dcudf_ROOT="${LIB_BUILD_DIR}"
+  cmake -S "${example_dir}" -B "${build_dir}" -Dcudf_ROOT="${LIB_BUILD_DIR}" -DCMAKE_CUDA_ARCHITECTURES=native
   # Build
   cmake --build "${build_dir}" -j"${PARALLEL_LEVEL}"
   # Install if needed
