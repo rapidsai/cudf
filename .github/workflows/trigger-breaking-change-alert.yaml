@@ -1,6 +1,6 @@
 name: Trigger Breaking Change Notifications
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     types:
       - closed

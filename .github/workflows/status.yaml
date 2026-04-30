@@ -1,6 +1,6 @@
 name: Custom GH Status from Workflow Artifacts
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ["pr"]
     types:

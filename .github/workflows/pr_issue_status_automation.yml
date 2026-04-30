@@ -3,7 +3,7 @@
 
 name: Set PR and Issue Project Fields
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     # This job runs when a PR is first opened, or it is updated
     # Only runs if the PR is open (we don't want to update the status of a closed PR)

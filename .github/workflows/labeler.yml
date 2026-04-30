@@ -1,6 +1,6 @@
 name: "Pull Request Labeler"
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
 - pull_request_target
 
 jobs:
