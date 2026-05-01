@@ -961,27 +961,19 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
+
+            # Up:ate the query name for the current iteration.
+            quent_context = cudf_polars.quent.quent_context.get()
+            new_context = dataclasses.replace(
+                quent_context,
+                query=cudf_polars.quent.Query(
+                    instance_name=f"Iteration {i + 1}",
+                ),
+            )
+            cudf_polars.quent.quent_context.set(new_context)
+
             if engine is not None:
                 engine._run(setup_logging, q_id, i)
-
-                # Update the query name for the current iteration.
-                # TODO: Figure out the division of responsibility for emitting
-                # events related to query groups / queries. Right now,
-                # we do query groups events (i.e. *require* the user to do it).
-                # Polars doesn't really have a concept of a query group, so
-                # we need to put it *somewhere*, unless we have a query group
-                # per query?
-                #
-                # We also do query events here, but that could be pushed.
-                # into the `.collect()`.
-                quent_context = cudf_polars.quent.quent_context.get()
-                new_context = dataclasses.replace(
-                    quent_context,
-                    query=cudf_polars.quent.Query(
-                        instance_name=f"Iteration {i + 1}",
-                    ),
-                )
-                cudf_polars.quent.quent_context.set(new_context)
 
         try:
             record = run_polars_query_iteration(
@@ -1151,12 +1143,6 @@ def run_polars_spmd(
         "parquet_options": parquet_options,
     }
 
-    if _HAS_STRUCTLOG and run_config.collect_traces:
-        # Ensure that we configure our logger before any engine lifecycle events are emitted.
-        setup_logging(-1, -1)
-
-    cudf_polars.quent.quent_context.set(cudf_polars.quent.QuentContext())
-
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1199,24 +1185,6 @@ def run_polars_spmd(
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
-def _set_quent_context_on_worker(data: dict[str, Any]) -> None:
-    # context = cudf_polars.quent.quent_context.get()
-    new_context = cudf_polars.quent.QuentContext(
-        engine=cudf_polars.quent.Engine(**data["engine"]),
-        query_group=cudf_polars.quent.QueryGroup(**data["query_group"]),
-        query=cudf_polars.quent.Query(**data["query"]),
-    )
-    cudf_polars.quent.quent_context.set(new_context)
-
-
-def set_quent_context(
-    engine: StreamingEngine, local_context: cudf_polars.quent.QuentContext
-) -> None:
-    """Set the Quent context on each remote worker process."""
-    data = dataclasses.asdict(local_context)
-    engine._run(_set_quent_context_on_worker, data)
-
-
 def run_polars_ray(
     benchmark: Any,
     args: argparse.Namespace,
@@ -1243,7 +1211,6 @@ def run_polars_ray(
     if run_config.num_gpus is not None:
         ray_init_options["num_gpus"] = run_config.num_gpus
 
-    setup_logging()  # call before creating the engine, so that Engine init is captured properly.
     quent_context = cudf_polars.quent.quent_context.get()
 
     with RayEngine(
@@ -1287,7 +1254,6 @@ def run_polars_dask(
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
     # TODO: refactor up
-    setup_logging()  # call before creating the engine, so that Engine init is captured properly.
     quent_context = cudf_polars.quent.quent_context.get()
 
     executor_options = get_executor_options(run_config, benchmark=benchmark)
