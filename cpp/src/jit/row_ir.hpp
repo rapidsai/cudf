@@ -6,6 +6,7 @@
 #pragma once
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/ast/jit_expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/operators/error.hpp>
@@ -409,13 +410,7 @@ struct [[nodiscard]] ast_converter {
 
   ~ast_converter() = default;  ///< Destructor
 
- private:
-  friend class ast::literal;
-  friend class ast::column_reference;
-  friend class ast::operation;
-  friend class ast::column_name_reference;
-  friend class ast::detail::predicate;
-
+ public:
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::literal const& expr);
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::column_reference const& expr);
@@ -424,10 +419,11 @@ struct [[nodiscard]] ast_converter {
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::detail::predicate const& expr);
 
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::jit::detail::operation const& expr);
+
   [[nodiscard]] std::tuple<std::string, null_aware, output_nullability, bool> generate_code(
     target target, ast::expression const& expr, std::string_view function_name);
 
- public:
   /**
    * @brief Convert an AST `compute_column` expression to a `cudf::transform`
    * @param target The target for which the IR is generated

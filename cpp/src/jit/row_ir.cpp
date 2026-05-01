@@ -464,6 +464,16 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::predicate 
     row_ir::opcode::PREDICATE, std::nullopt, expr.get_operand().accept(*this));
 }
 
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::jit::detail::operation const& expr)
+{
+  std::vector<std::unique_ptr<row_ir::node>> args;
+  for (auto &arg : expr.get_arguments()) {
+    args.emplace_back(arg.get().accept(*this));
+  }
+  return std::make_unique<row_ir::node>(
+    expr.get_opcode(), expr.get_target_scale(), std::move(args));
+}
+
 bool is_nullable(scalar_input const& in) { return in.scalar_column->view().nullable(); }
 
 bool is_nullable(column_input const& in) { return in.column.nullable(); }

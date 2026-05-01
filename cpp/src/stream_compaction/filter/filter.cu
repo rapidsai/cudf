@@ -100,16 +100,17 @@ std::vector<std::unique_ptr<column>> filter_extended(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter(predicate_udf,
-                        source_type,
-                        is_null_aware,
-                        user_data,
-                        predicate_inputs,
-                        table_view{filter_columns},
-                        ops::error_mode::IGNORE,
-                        predicate_nullability,
-                        stream,
-                        mr);
+  auto table = detail::filter(predicate_udf,
+                              source_type,
+                              is_null_aware,
+                              user_data,
+                              predicate_inputs,
+                              table_view{filter_columns},
+                              ops::error_mode::IGNORE,
+                              predicate_nullability,
+                              stream,
+                              mr);
+  return table->release();
 }
 
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& predicate_columns,
@@ -137,16 +138,17 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
     }
   }
 
-  return detail::filter(predicate_udf,
-                        is_ptx ? cudf::udf_source_type::PTX : cudf::udf_source_type::CUDA,
-                        is_null_aware,
-                        user_data,
-                        inputs,
-                        table_view{filter_columns},
-                        ops::error_mode::IGNORE,
-                        predicate_nullability,
-                        stream,
-                        mr);
+  auto table = detail::filter(predicate_udf,
+                              is_ptx ? cudf::udf_source_type::PTX : cudf::udf_source_type::CUDA,
+                              is_null_aware,
+                              user_data,
+                              inputs,
+                              table_view{filter_columns},
+                              ops::error_mode::IGNORE,
+                              predicate_nullability,
+                              stream,
+                              mr);
+  return table->release();
 }
 
 }  // namespace cudf

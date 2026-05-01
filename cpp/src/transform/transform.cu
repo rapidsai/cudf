@@ -979,7 +979,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                 args.outputs,
                                 std::move(args.string_offsets),
                                 args.row_size,
-                                args.error_handling_mode,
+                                args.error_mode,
                                 stream,
                                 mr);
   auto cols   = result->release();
