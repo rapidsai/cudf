@@ -375,6 +375,7 @@ def _worker_evaluate(
     uid: str,
     collect_metadata: bool = False,
     dask_worker: distributed.Worker | None = None,
+    quent_context: cudf_polars.quent.QuentContext,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Lower and execute a Polars IR query on this Dask worker's GPU.
@@ -396,6 +397,8 @@ def _worker_evaluate(
         Whether to collect channel metadata.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    quent_context
+        The client's current quent context.
 
     Returns
     -------
@@ -417,6 +420,7 @@ def _worker_evaluate(
         config_options,
         collect_metadata=collect_metadata,
         worker_id=mp_ctx.worker_id,
+        quent_context=quent_context,
     )
 
 
@@ -479,6 +483,10 @@ def evaluate_pipeline_dask_mode(
 
     dask_context = config_options.executor.dask_context
 
+    quent_context = cudf_polars.quent.quent_context.get()
+    quent_context.emit_query_group_events()
+    quent_context.emit_query_events()
+
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
         config_options,
@@ -490,6 +498,7 @@ def evaluate_pipeline_dask_mode(
         ir,
         worker_config,
         collect_metadata=collect_metadata,
+        quent_context=quent_context,
     )
 
     dfs: list[pl.DataFrame] = []

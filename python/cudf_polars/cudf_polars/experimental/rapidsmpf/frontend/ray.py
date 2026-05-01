@@ -115,6 +115,13 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
+    # propagate the local quent context to the actors.
+    quent_context = cudf_polars.quent.quent_context.get()
+
+    # Emit the QueryGroup and Query events on the client.
+    quent_context.emit_query_group_events()
+    quent_context.emit_query_events()
+
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
     ir_ref = ray.put(ir)
@@ -126,6 +133,7 @@ def evaluate_pipeline_ray_mode(
                 ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
+                quent_context=quent_context,
             )
             for rank in rank_actors
         ]
@@ -137,6 +145,7 @@ def evaluate_pipeline_ray_mode(
         if md is not None:
             metadata_collector.extend(md)
 
+    quent_context.emit_query_exit_events()
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -371,6 +380,7 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
+        quent_context: cudf_polars.quent.QuentContext,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -388,6 +398,8 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
+        quent_context
+            The client's current quent context.
 
         Returns
         -------
@@ -416,6 +428,7 @@ class RankActor:
             config_options,
             collect_metadata=collect_metadata,
             worker_id=self._worker_id,
+            quent_context=quent_context,
         )
 
     def _drain_quent_events(self) -> list[dict]:
@@ -562,7 +575,8 @@ class RayEngine(StreamingEngine):
         engine_options = engine_options or {}
         ray_init_options = dict(ray_init_options or {})
         # ray_init_options.setdefault("logging_config", ray.LoggingConfig(encoding="JSON", log_level="INFO"))
-        self._engine_id = engine_id or uuid.uuid4()
+        # TODO: this is probably not the right way to do things.
+        self._engine_id = engine_id or cudf_polars.quent.quent_context.get().engine.id
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(

@@ -238,6 +238,26 @@ class StreamingEngine(pl.GPUEngine):
         self.shutdown()
 
     @property
+    def quent_events(self) -> list[dict[str, Any]]:
+        """Return all Quent telemetry events collected during the engine's lifecycle."""
+        import cudf_polars.quent._logging
+
+        events = list(cudf_polars.quent._logging.log_buffer)
+        events.extend(self.worker_quent_events)
+        return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
+
+    # def gather_quent_events(self) -> list[dict[str, Any]]:
+    #     """Drain Quent events collected from workers during shutdown."""
+    #     # Get any client logs from this process
+    #     import cudf_polars.quent._logging
+    #     client_logs = cudf_polars.quent._logging.drain_buffered_events()
+    #     # Get any worker logs from the remote workers.
+    #     worker_logs = self._run(cudf_polars.quent._logging.drain_buffered_events)
+    #     self._worker_quent_events.extend(client_logs)
+    #     for logs in worker_logs:
+    #         self._worker_quent_events.extend(log)
+
+    @property
     def worker_quent_events(self) -> list[dict[str, Any]]:
         """
         Quent telemetry events collected from workers during shutdown.
@@ -500,6 +520,7 @@ def evaluate_on_rank(
     *,
     collect_metadata: bool = False,
     worker_id: uuid.UUID | None = None,
+    quent_context: cudf_polars.quent.QuentContext,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -532,6 +553,8 @@ def evaluate_on_rank(
         declarations). Passed explicitly so that all frontends
         (SPMD, Ray, Dask) can supply their own ID without requiring
         a specific context type.
+    quent_context
+        The quent context to use for this query.
 
     Returns
     -------
@@ -557,7 +580,10 @@ def evaluate_on_rank(
 
     # So... quent context is a *process* global.
     # How in the world do we synchronize this?
-    quent_context = cudf_polars.quent.quent_context.get()
+    # quent_context = cudf_polars.quent.quent_context.get()
+
+    # Do we dare set it here on the worker? I think this is an awful idea.
+    cudf_polars.quent.quent_context.set(quent_context)
 
     if worker_id is not None:
         # TODO: split out build from emit.

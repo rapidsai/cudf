@@ -105,6 +105,7 @@ def evaluate_pipeline_spmd_mode(
     comm = config_options.executor.spmd_context.comm
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
+    quent_context = cudf_polars.quent.quent_context.get()
 
     return evaluate_on_rank(
         context,
@@ -113,6 +114,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        quent_context=quent_context,
     )
 
 

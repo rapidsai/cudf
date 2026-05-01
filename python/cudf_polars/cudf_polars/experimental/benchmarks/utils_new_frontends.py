@@ -963,18 +963,14 @@ def run_polars_query(
                 # We also do query events here, but that could be pushed.
                 # into the `.collect()`.
                 quent_context = cudf_polars.quent.quent_context.get()
-                token = cudf_polars.quent.quent_context.set(
-                    dataclasses.replace(
-                        quent_context,
-                        query=cudf_polars.quent.Query(
-                            instance_name=f"Iteration {i + 1}",
-                        ),
+                new_context = dataclasses.replace(
+                    quent_context,
+                    query=cudf_polars.quent.Query(
+                        instance_name=f"Iteration {i + 1}",
                     ),
                 )
-                token.var.get().emit_query_events()
+                cudf_polars.quent.quent_context.set(new_context)
 
-                # synchronize the quent context on each remote worker process
-                set_quent_context(engine, token.var.get())
         try:
             record = run_polars_query_iteration(
                 q_id=q_id,
@@ -1000,8 +996,6 @@ def run_polars_query(
             )
 
         else:
-            token.var.get().emit_query_exit_events()
-
             if record.validation_result and record.validation_result.status == "Failed":
                 validation_failed = True
                 print(
@@ -1053,7 +1047,7 @@ def _run_query_loop(
             # this is so easy to misuse...
             quent_context = cudf_polars.quent.quent_context.get()
 
-            token = cudf_polars.quent.quent_context.set(
+            cudf_polars.quent.quent_context.set(
                 dataclasses.replace(
                     quent_context,
                     query_group=cudf_polars.quent.QueryGroup(
@@ -1061,7 +1055,6 @@ def _run_query_loop(
                     ),
                 )
             )
-            token.var.get().emit_query_group_events()
 
         try:
             result = run_polars_query(

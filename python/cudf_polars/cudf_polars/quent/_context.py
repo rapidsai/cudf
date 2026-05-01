@@ -44,8 +44,15 @@ class QuentContext:
     query_group: QueryGroup = dataclasses.field(default_factory=QueryGroup)
     query: Query = dataclasses.field(default_factory=Query)
 
+    _query_group_cache: set[uuid.UUID] = dataclasses.field(
+        default_factory=set, init=False
+    )
+
     def emit_query_group_events(self) -> None:
         """Emit a Quent QueryGroup declaration event."""
+        if self.query_group.id in self._query_group_cache:
+            return
+        self._query_group_cache.add(self.query_group.id)
         emit(self.query_group.declare(engine_id=self.engine.id))
 
     def emit_query_events(self) -> None:

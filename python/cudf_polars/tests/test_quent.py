@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from typing import TYPE_CHECKING
 
@@ -399,3 +400,51 @@ def test_query_lifecycle() -> None:
     assert query.planning().to_dict()["data"]["Query"]["seq"] == 1
     assert query.executing().to_dict()["data"]["Query"]["seq"] == 2
     assert query.exit().to_dict()["data"]["Query"]["seq"] == 3
+
+
+def test_quent_events_ray() -> None:
+    # We need to create the engine, to ensure the lifecycle events are emitted properly.
+    import cudf_polars.experimental.rapidsmpf.frontend.ray
+    import cudf_polars.quent
+    import cudf_polars.quent._logging
+
+    # Configure the logging...
+    # TODO: this should be automatic?
+
+    cudf_polars.quent._logging.worker_setup_logging()
+
+    engine = cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine()
+
+    q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
+
+    quent_context = cudf_polars.quent.quent_context.get()
+    cudf_polars.quent.quent_context.set(
+        dataclasses.replace(
+            quent_context,
+            query_group=cudf_polars.quent.QueryGroup(id=uuid.uuid4()),
+            query=cudf_polars.quent.Query(id=uuid.uuid4()),
+        ),
+    )
+
+    with engine:
+        q.collect(engine=engine)
+
+    quent_events = engine.quent_events
+    engine_init, engine_exit = [x for x in quent_events if "Engine" in x["data"]]
+
+    # TODO: assert worker things
+    # TODO: test multiple q.collect() calls, just one QueryGroup thing
+    # TODO: generate new query ID per .collect() call?
+
+    (query_group_declaration,) = [x for x in quent_events if "QueryGroup" in x["data"]]
+    assert (
+        query_group_declaration["data"]["QueryGroup"]["Declaration"]["engine_id"]
+        == engine_init["id"]
+    )
+    query_init, query_planning, query_executing, query_exit = [
+        x for x in quent_events if "Query" in x["data"]
+    ]
+    assert (
+        query_init["data"]["Query"]["state"]["Init"]["query_group_id"]
+        == query_group_declaration["id"]
+    )
