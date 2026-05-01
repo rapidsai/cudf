@@ -110,38 +110,62 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     sort_by = {"i_item_id": False, "i_item_desc": False, "s_state": False}
     limit = 100
 
-    store_sales_base = (
-        store_sales.join(
-            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", suffix="_d1"
-        )
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(pl.col("d_quarter_name") == f"{year}Q1")
+    q1 = f"{year}Q1"
+    q1_q3 = [f"{year}Q1", f"{year}Q2", f"{year}Q3"]
+
+    # Pre-filter date_dim to only qualifying d_date_sk values.
+    d1_dates = date_dim.filter(pl.col("d_quarter_name") == q1).select("d_date_sk")
+    d_q3_dates = date_dim.filter(pl.col("d_quarter_name").is_in(q1_q3)).select("d_date_sk")
+
+    # store_returns has [6] partitions — at the broadcast limit. Filter it to Q1-Q3 dates
+    # first, then use the (customer, item) pairs it contains to pre-filter both store_sales
+    # and catalog_sales before those larger tables enter the expensive shuffle joins.
+    store_returns_filtered = (
+        store_returns
+        .join(d_q3_dates, left_on="sr_returned_date_sk", right_on="d_date_sk", how="semi")
+        .select(["sr_customer_sk", "sr_item_sk", "sr_ticket_number", "sr_return_quantity"])
     )
 
-    store_returns_base = store_returns.join(
-        date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk", suffix="_d2"
-    ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
+    # (customer, item) pairs present in any qualifying store return; stays at [6] partitions
+    # so broadcast is free. Polars will CACHE this shared subplan.
+    sr_customer_item = store_returns_filtered.select(["sr_customer_sk", "sr_item_sk"])
 
-    catalog_sales_base = catalog_sales.join(
-        date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk", suffix="_d3"
-    ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
+    store_sales_filtered = (
+        store_sales
+        .join(d1_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi")
+        .join(sr_customer_item,
+              left_on=["ss_customer_sk", "ss_item_sk"],
+              right_on=["sr_customer_sk", "sr_item_sk"],
+              how="semi")
+        .select(["ss_customer_sk", "ss_item_sk", "ss_store_sk", "ss_ticket_number", "ss_quantity"])
+        .join(item.select(["i_item_sk", "i_item_id", "i_item_desc"]), left_on="ss_item_sk", right_on="i_item_sk")
+        .join(store.select(["s_store_sk", "s_state"]), left_on="ss_store_sk", right_on="s_store_sk")
+        .select(["ss_customer_sk", "ss_item_sk", "ss_ticket_number", "ss_quantity", "i_item_id", "i_item_desc", "s_state"])
+    )
+
+    catalog_sales_filtered = (
+        catalog_sales
+        .join(d_q3_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi")
+        .join(sr_customer_item,
+              left_on=["cs_bill_customer_sk", "cs_item_sk"],
+              right_on=["sr_customer_sk", "sr_item_sk"],
+              how="semi")
+        .select(["cs_bill_customer_sk", "cs_item_sk", "cs_quantity"])
+    )
 
     return QueryResult(
         frame=(
-            store_sales_base.join(
-                store_returns_base,
+            store_sales_filtered
+            .join(
+                store_returns_filtered,
                 left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
                 right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
-                how="inner",
-                suffix="_sr",
             )
+            .select(["ss_customer_sk", "ss_item_sk", "ss_quantity", "sr_return_quantity", "i_item_id", "i_item_desc", "s_state"])
             .join(
-                catalog_sales_base,
+                catalog_sales_filtered,
                 left_on=["ss_customer_sk", "ss_item_sk"],
                 right_on=["cs_bill_customer_sk", "cs_item_sk"],
-                how="inner",
-                suffix="_cs",
             )
             .group_by(["i_item_id", "i_item_desc", "s_state"])
             .agg(
