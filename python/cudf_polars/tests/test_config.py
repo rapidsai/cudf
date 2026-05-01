@@ -32,6 +32,8 @@ from cudf_polars.utils.config import (
     Cluster,
     ConfigOptions,
     MemoryResourceConfig,
+    Runtime,
+    ShuffleMethod,
     StreamingExecutor,
     _default_cuda_stream_policy,
 )
@@ -889,3 +891,28 @@ def test_distributed_sink_to_directory_false_raises() -> None:
 def test_get_dask_cuda_stream() -> None:
     stream = get_dask_cuda_stream()
     assert stream is not None
+
+
+def test_runtime_deprecation_warning() -> None:
+    with pytest.warns(FutureWarning, match="Setting 'runtime' is deprecated"):
+        StreamingExecutor(runtime=Runtime.RAPIDSMPF)
+
+
+def test_shuffle_method_deprecation_warning() -> None:
+    with pytest.warns(FutureWarning, match="Setting 'shuffle_method' is deprecated"):
+        StreamingExecutor(shuffle_method=ShuffleMethod.RAPIDSMPF)
+
+
+def test_unique_fraction_deprecation_warning() -> None:
+    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
+        StreamingExecutor(unique_fraction={"col": 0.5})
+
+
+def test_groupby_n_ary_deprecation_warning() -> None:
+    with pytest.warns(FutureWarning, match="Setting 'groupby_n_ary' is deprecated"):
+        StreamingExecutor(groupby_n_ary=16)
+
+
+def test_rapidsmpf_spill_deprecation_warning() -> None:
+    with pytest.warns(FutureWarning, match="Setting 'rapidsmpf_spill' is deprecated"):
+        StreamingExecutor(rapidsmpf_spill=False)
