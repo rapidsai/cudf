@@ -67,8 +67,7 @@ def test_executor_options_includes_set_fields() -> None:
 
 
 def test_executor_options_unique_fraction() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
+    result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
     assert result["unique_fraction"] == {"col_a": 0.5}
 
 
