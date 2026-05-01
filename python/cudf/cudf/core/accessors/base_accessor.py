@@ -98,7 +98,14 @@ class BaseAccessor(NotIterable):
                         index=self._parent.index,  # type: ignore[union-attr]
                         attrs=self._parent.attrs,  # type: ignore[union-attr]
                     )
-                    if len(table) == 0:
+                    keys = (
+                        tuple(table.keys()) if hasattr(table, "keys") else ()
+                    )
+                    if len(table) == 0 or (
+                        keys
+                        and all(isinstance(k, int) for k in keys)
+                        and tuple(keys) == tuple(range(len(keys)))
+                    ):
                         df._data.rangeindex = True
                     return df
             elif isinstance(self._parent, cudf.Series):

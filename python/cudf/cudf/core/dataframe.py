@@ -2126,6 +2126,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # Reassign index and column names
         if objs[0]._data.multiindex:
             out._set_columns_like(objs[0]._data)
+        elif (
+            all(obj._data.rangeindex for obj in objs)
+            and all(
+                tuple(obj._column_names) == tuple(range(obj._num_columns))
+                for obj in objs
+            )
+            and tuple(names) == tuple(range(len(names)))
+        ):
+            out.columns = cudf.RangeIndex(len(names))
         else:
             out.columns = names
         if not ignore_index:
@@ -2419,6 +2428,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else:
                 raise ValueError("other must be a DataFrame or Series.")
 
+            if isinstance(column_names_list, pd.MultiIndex):
+                ca_attributes["multiindex"] = True
+                ca_attributes["level_names"] = tuple(column_names_list.names)
             sorted_dict = {key: operands[key] for key in column_names_list}
             return sorted_dict, index, ca_attributes
         return operands, index, ca_attributes
@@ -4805,6 +4817,23 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         df.index.name = (
             None if self.index.name != other.index.name else self.index.name
         )
+
+        # Preserve a CategoricalIndex columns axis when both inputs share the
+        # same categorical dtype on their column labels (matches pandas).
+        self_pd_cols = self._data.to_pandas_index
+        other_pd_cols = other._data.to_pandas_index
+        if (
+            isinstance(self_pd_cols, pd.CategoricalIndex)
+            and isinstance(other_pd_cols, pd.CategoricalIndex)
+            and self_pd_cols.dtype == other_pd_cols.dtype
+        ):
+            df.columns = pd.CategoricalIndex(
+                list(self_pd_cols) + list(other_pd_cols),
+                dtype=self_pd_cols.dtype,
+                name=self_pd_cols.name
+                if self_pd_cols.name == other_pd_cols.name
+                else None,
+            )
         return df
 
     @_performance_tracking
@@ -6369,7 +6398,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if len(res) == 0:
                         res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
-            result = DataFrame._from_data(result, attrs=self.attrs)
+            result_ca = ColumnAccessor(
+                result,
+                multiindex=data_df._data.multiindex,
+                level_names=data_df._data.level_names,
+                rangeindex=data_df._data.rangeindex,
+                label_dtype=data_df._data.label_dtype,
+                verify=False,
+            )
+            result = DataFrame._from_data(result_ca, attrs=self.attrs)
 
             if q_is_number and numeric_only:
                 result = result.fillna(np.nan).iloc[0]
@@ -7233,7 +7270,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for label, dtype in self._dtypes
             if cudf_dtype_from_pydata_dtype(dtype) in inclusion
         ]
-        return self.loc[:, to_select]
+        result = self.loc[:, to_select]
+        if not to_select and self._data.rangeindex:
+            # Preserve RangeIndex columns through an empty selection so that
+            # downstream operations match pandas' column metadata.
+            result._data.rangeindex = True
+        return result
 
     @ioutils.doc_to_parquet()
     def to_parquet(

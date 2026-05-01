@@ -129,7 +129,10 @@ def _normalize_series_and_dataframe(
             name = obj.name
             if name is None:
                 if axis == 0:
-                    name = 0
+                    # Preserve "unnamed" semantics so the resulting frame has
+                    # a RangeIndex columns object (matching pandas).
+                    objs[idx] = obj.to_frame()
+                    continue
                 else:
                     name = sr_name
                     sr_name += 1
@@ -1063,12 +1066,39 @@ def pivot(
                 index_data = index_data.get_level_values(0)
         else:
             index_data = cudf.Index(index_data)
+        # An entirely empty input pivots to an empty result. Pandas uses the
+        # default ``object`` dtype for the resulting index axis in that case;
+        # mirror this so index metadata (dtype/inferred_type) matches.
+        if (
+            len(data) == 0
+            and not isinstance(index_data, cudf.MultiIndex)
+            and isinstance(index_data.dtype, pd.StringDtype)
+        ):
+            index_data = cudf.Index(
+                pd.Index([], name=index_data.name, dtype=object)
+            )
 
     column_data = data.loc[:, columns]
+    # When `columns` is a scalar but the source DataFrame has a MultiIndex on
+    # the row axis, ``loc`` may return a 2-D selection in cuDF. Treat the
+    # selection as 1-D so we end up with a flat Index of column labels.
+    if is_scalar(columns) and column_data.ndim == 2:
+        column_data = column_data.iloc[:, 0]
     if column_data.ndim == 2:
         column_data = cudf.MultiIndex.from_frame(column_data)
     else:
         column_data = cudf.Index(column_data)
+    # An entirely empty input pivots to an empty result. Pandas reports the
+    # default ``object`` dtype for the resulting columns axis in that case;
+    # mirror this so column metadata (dtype/inferred_type) matches.
+    if (
+        len(data) == 0
+        and not isinstance(column_data, cudf.MultiIndex)
+        and isinstance(column_data.dtype, pd.StringDtype)
+    ):
+        column_data = cudf.Index(
+            pd.Index([], name=column_data.name, dtype=object)
+        )
 
     # Create a DataFrame composed of columns from both
     # columns and index
