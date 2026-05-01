@@ -4,9 +4,16 @@
 from __future__ import annotations
 
 import numpy as np
+import pyarrow as pa
 import pytest
+from packaging import version
 
 import cudf
+
+pytestmark = pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("21"),
+    reason="pyarrow < 21 does not recognize the Parquet VARIANT logical type",
+)
 
 
 @pytest.fixture(scope="module")
