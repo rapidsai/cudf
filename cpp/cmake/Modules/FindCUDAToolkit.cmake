@@ -1544,8 +1544,11 @@ if(CUDAToolkit_FOUND)
     ONLY_SEARCH_FOR sanitizer-public
     EXTRA_PATH_SUFFIXES
       "../compute-sanitizer"
+      "../../../compute-sanitizer"
       "../Sanitizer"
+      "../../../Sanitizer"
       "../extras/Sanitizer"
+      "../../../extras/Sanitizer"
     EXTRA_INCLUDE_DIRS "${CUDAToolkit_CUPTI_INCLUDE_DIR}"
   )
   if(TARGET CUDA::sanitizer)
