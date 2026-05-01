@@ -467,7 +467,7 @@ def _add_anchor_column(ir: HStack) -> tuple[HStack, str, DataType]:
     """Add temporary anchor column to preserve row count."""
     anchor_name = next(unique_names((*ir.schema, *ir.children[0].schema)))
     anchor_dtype = DataType(pl.datatypes.Int8())
-    anchor_named_expr = NamedExpr(anchor_name, Literal(anchor_dtype, None))
+    anchor_named_expr = NamedExpr(anchor_name, Literal(anchor_dtype, 0))
     new_ir = HStack(
         ir.children[0].schema | {anchor_name: anchor_dtype},
         (anchor_named_expr,),
