@@ -1,5 +1,5 @@
-Polars GPU engine
-=================
+cudf-polars documentation
+=========================
 
 cuDF provides an in-memory, GPU-accelerated execution engine for Python users of the Polars Lazy API.
 The engine supports most of the core expressions and data types as well as a growing set of more advanced dataframe manipulations
