@@ -17,8 +17,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <cuda/std/tuple>
 #include <cuda/iterator>
+#include <cuda/std/tuple>
 
 #include <numeric>
 
@@ -119,8 +119,7 @@ fetch_byte_ranges_to_device_async(
   stream.synchronize();
 
   {
-    auto iter =
-      cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
+    auto iter = cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
 
     std::lock_guard<std::mutex> lock(mutex);
 
