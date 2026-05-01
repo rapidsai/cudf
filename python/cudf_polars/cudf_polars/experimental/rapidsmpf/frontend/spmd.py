@@ -154,7 +154,7 @@ def allgather_polars_dataframe(
     stream = ctx.get_stream_from_pool()
     col_names = local_df.columns
 
-    plc_table = plc.Table.from_arrow(local_df.to_arrow())
+    plc_table = plc.Table.from_arrow(local_df)
 
     packed_data = PackedData.from_cudf_packed_columns(
         pack(plc_table, stream),
