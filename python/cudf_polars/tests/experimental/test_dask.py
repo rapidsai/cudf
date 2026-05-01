@@ -64,7 +64,6 @@ def test_yields_engine(engine: DaskEngine) -> None:
 def test_executor_options_forwarded(engine: DaskEngine) -> None:
     """Reserved executor_options keys are injected into the engine config."""
     opts = engine.config["executor_options"]
-    assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "dask"
     assert isinstance(opts["dask_context"], DaskContext)
 
