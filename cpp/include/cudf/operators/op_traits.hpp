@@ -6,6 +6,7 @@
 #pragma once
 #include <cudf/operators/opcodes.hpp>
 
+#include <span>
 #include <vector>
 
 namespace cudf::detail::row_ir {
@@ -37,12 +38,12 @@ enum [[nodiscard]] type : uint64_t {
   DURATION_MICROSECONDS  = 0x400000,
   DURATION_NANOSECONDS   = 0x800000,
   STRING                 = 0x1000000,
-  INTEGERS               = INT8 | INT16 | INT32 | INT64 | UINT8 | UINT16 | UINT32 | UINT64,
   SIGNED_INTEGERS        = INT8 | INT16 | INT32 | INT64,
   UNSIGNED_INTEGERS      = UINT8 | UINT16 | UINT32 | UINT64,
+  INTEGERS               = SIGNED_INTEGERS | UNSIGNED_INTEGERS,
   FLOATS                 = FLOAT32 | FLOAT64,
   DECIMALS               = DECIMAL32 | DECIMAL64 | DECIMAL128,
-  ARITHMETIC             = SIGNED_INTEGERS | UNSIGNED_INTEGERS | FLOATS | DECIMALS,
+  ARITHMETIC             = INTEGERS | FLOATS | DECIMALS,
   SIGNED_ARITHMETIC      = SIGNED_INTEGERS | FLOATS | DECIMALS,
   ALL                    = 0x0FFFFFFF,
   ARG_MASK               = 0x10000000,
@@ -107,8 +108,8 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::BIT_INVERT: return "bit_invert";
     case opcode::BIT_OR: return "bit_or";
     case opcode::BIT_XOR: return "bit_xor";
-    case opcode::SHIFT_LEFT: return "shift_left";
-    case opcode::SHIFT_RIGHT: return "shift_right";
+    case opcode::BIT_SHIFT_LEFT: return "bit_shift_left";
+    case opcode::BIT_SHIFT_RIGHT: return "bit_shift_right";
     case opcode::CAST_TO_B8: return "cast_to_b8";
     case opcode::CAST_TO_I8: return "cast_to_i8";
     case opcode::CAST_TO_I16: return "cast_to_i16";
@@ -219,13 +220,12 @@ enum class [[nodiscard]] null_output : uint8_t {
   }
 }
 
-[[nodiscard]] inline int32_t get_output_decimal_scale(opcode op,
-                                                      std::span<int32_t const> arg_scales,
-                                                      std::optional<int32_t> output_scale)
+[[nodiscard]] inline int32_t op_rescale(opcode op,
+                                        std::span<int32_t const> arg_scales,
+                                        std::optional<int32_t> target_scale)
 {
-  // TODO: finish up
   switch (op) {
-    case opcode::GET_INPUT:
+    case opcode::GET_INPUT: return 0;
     case opcode::SET_OUTPUT:
     case opcode::IDENTITY:
     case opcode::COALESCE:
@@ -283,8 +283,8 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::BIT_INVERT:
     case opcode::BIT_OR:
     case opcode::BIT_XOR:
-    case opcode::SHIFT_LEFT:
-    case opcode::SHIFT_RIGHT:
+    case opcode::BIT_SHIFT_LEFT:
+    case opcode::BIT_SHIFT_RIGHT:
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
@@ -311,7 +311,7 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::MUL:
     case opcode::ANSI_MUL:
     case opcode::ANSI_TRY_MUL: return arg_scales[0] + arg_scales[1];
-    case opcode::RESCALE: return output_scale.value();
+    case opcode::RESCALE: return target_scale.value();
     default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
@@ -326,7 +326,6 @@ enum class [[nodiscard]] null_output : uint8_t {
  */
 [[nodiscard]] inline op_type get_op_typing(opcode op)
 {
-  // TODO: finish up
   switch (op) {
     case opcode::GET_INPUT: return {type::INPUT, {}};
     case opcode::SET_OUTPUT: return {type::NONE, {type::ALL}};
@@ -341,8 +340,9 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_NEG:
     case opcode::ANSI_TRY_NEG:
     case opcode::ANSI_TRY_ABS: return {type::ARG0, {type::ARITHMETIC}};
-    case opcode::FLOOR_DIV:
-    case opcode::TRUE_DIV: return {type::ARG0, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
+    case opcode::FLOOR_DIV: return {type::ARG0, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
+    case opcode::TRUE_DIV:
+      return {type::FLOAT64, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
     case opcode::ADD:
     case opcode::DIV:
     case opcode::MOD:
@@ -365,19 +365,19 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::BIT_INVERT:
     case opcode::BIT_OR:
     case opcode::BIT_XOR:
-    case opcode::SHIFT_LEFT:
-    case opcode::SHIFT_RIGHT: return {type::ARG0, {type::INTEGERS, type::ARG0}};
-    case opcode::CAST_TO_B8: return {type::BOOL8, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_I8: return {type::INT8, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_I16: return {type::INT16, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_I32: return {type::INT32, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_I64: return {type::INT64, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_U8: return {type::UINT8, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_U16: return {type::UINT16, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_U32: return {type::UINT32, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_U64: return {type::UINT64, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_F32: return {type::FLOAT32, {type{type::INTEGERS | type::FLOATS}}};
-    case opcode::CAST_TO_F64: return {type::FLOAT64, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::BIT_SHIFT_LEFT:
+    case opcode::BIT_SHIFT_RIGHT: return {type::ARG0, {type::INTEGERS, type::ARG0}};
+    case opcode::CAST_TO_B8: return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_I8: return {type::INT8, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_I16: return {type::INT16, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_I32: return {type::INT32, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_I64: return {type::INT64, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_U8: return {type::UINT8, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_U16: return {type::UINT16, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_U32: return {type::UINT32, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_U64: return {type::UINT64, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_F32: return {type::FLOAT32, {type{type::ARITHMETIC | type::BOOL8}}};
+    case opcode::CAST_TO_F64: return {type::FLOAT64, {type{type::ARITHMETIC | type::BOOL8}}};
     case opcode::CAST_TO_DEC32: return {type::DECIMAL32, {type::DECIMALS}};
     case opcode::CAST_TO_DEC64: return {type::DECIMAL64, {type::DECIMALS}};
     case opcode::CAST_TO_DEC128: return {type::DECIMAL128, {type::DECIMALS}};
@@ -386,14 +386,15 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
-    case opcode::LESS_EQUAL: return {type::BOOL8, {type::ALL, type::ARG0}};
+    case opcode::LESS_EQUAL:
     case opcode::NOT_EQUAL:
     case opcode::NULL_EQUAL: return {type::BOOL8, {type::ALL, type::ARG0}};
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR:
     case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR: return {type::BOOL8, {type::BOOL8, type::ARG0}};
-    case opcode::LOGICAL_NOT: return {type::ARG0, {type::BOOL8}};
+    case opcode::LOGICAL_OR:
+      return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}, type::ARG0}};
+    case opcode::LOGICAL_NOT: return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}}};
     case opcode::IF_ELSE: return {type::ARG0, {type::ALL, type::ARG0, type::BOOL8}};
     case opcode::CBRT:
     case opcode::CEIL:

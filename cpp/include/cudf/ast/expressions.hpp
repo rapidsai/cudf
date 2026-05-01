@@ -83,7 +83,7 @@ struct expression {
    * @param visitor The `row_ir::ast_converter` converting this expression tree
    * @return The IR node representing this expression
    */
-  virtual std::unique_ptr<cudf::detail::row_ir::node> accept(
+  [[nodiscard]] virtual std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const = 0;
 
   /**

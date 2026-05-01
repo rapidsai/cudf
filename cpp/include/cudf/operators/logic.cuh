@@ -10,14 +10,14 @@ namespace CUDF_EXPORT cudf {
 namespace ops {
 
 template <typename T>
-__device__ inline errc null_logical_and(T* out, T const* a, T const* b)
+__device__ inline errc null_logical_and(bool* out, T const* a, T const* b)
 {
   *out = (*a && *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc null_logical_and(optional<T>* out,
+__device__ inline errc null_logical_and(optional<bool>* out,
                                         optional<T> const* a,
                                         optional<T> const* b)
 {
@@ -38,14 +38,14 @@ __device__ inline errc null_logical_and(optional<T>* out,
 }
 
 template <typename T>
-__device__ inline errc null_logical_or(T* out, T const* a, T const* b)
+__device__ inline errc null_logical_or(bool* out, T const* a, T const* b)
 {
   *out = (*a || *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc null_logical_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc null_logical_or(optional<bool>* out, optional<T> const* a, optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -64,17 +64,17 @@ __device__ inline errc null_logical_or(optional<T>* out, optional<T> const* a, o
 }
 
 template <typename T>
-__device__ inline errc logical_and(T* out, T const* a, T const* b)
+__device__ inline errc logical_and(bool* out, T const* a, T const* b)
 {
   *out = (*a && *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc logical_and(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc logical_and(optional<bool>* out, optional<T> const* a, optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
-    T r;
+    bool r;
     logical_and(&r, &a->value(), &b->value());
     *out = r;
   } else {
@@ -84,17 +84,17 @@ __device__ inline errc logical_and(optional<T>* out, optional<T> const* a, optio
 }
 
 template <typename T>
-__device__ inline errc logical_or(T* out, T const* a, T const* b)
+__device__ inline errc logical_or(bool* out, T const* a, T const* b)
 {
   *out = (*a || *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc logical_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc logical_or(optional<bool>* out, optional<T> const* a, optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
-    T r;
+    bool r;
     logical_or(&r, &a->value(), &b->value());
     *out = r;
   } else {
@@ -104,17 +104,17 @@ __device__ inline errc logical_or(optional<T>* out, optional<T> const* a, option
 }
 
 template <typename T>
-__device__ inline errc logical_not(T* out, T const* a)
+__device__ inline errc logical_not(bool* out, T const* a)
 {
   *out = !(*a);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc logical_not(optional<T>* out, optional<T> const* a)
+__device__ inline errc logical_not(optional<bool>* out, optional<T> const* a)
 {
   if (a->has_value()) {
-    T r;
+    bool r;
     logical_not(&r, &a->value());
     *out = r;
   } else {

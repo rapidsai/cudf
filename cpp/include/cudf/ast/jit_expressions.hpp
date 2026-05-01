@@ -7,8 +7,8 @@
 #include <cudf/ast/expressions.hpp>
 
 namespace CUDF_EXPORT cudf {
-
 namespace ast {
+
 /**
  * @addtogroup expressions
  * @{

@@ -6,9 +6,11 @@
 #pragma once
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/operators/error.hpp>
 #include <cudf/operators/op_traits.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
@@ -18,7 +20,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -66,34 +67,36 @@ struct target_info {
   target id = target::CUDA;  ///< The target identifier
 };
 
-/**
- * @brief A specification of an input column to the AST
- */
-struct ast_column_input_spec {
-  ast::table_reference table = {};  ///< The table reference (LEFT or RIGHT)
-  int32_t column             = 0;   ///< The column index in the referenced table
+struct scalar_input {
+  std::unique_ptr<column> scalar_column =
+    nullptr;  ///< The scalar value represented as a column with a single element
 };
 
-/**
- * @brief A specification of an input scalar to the AST
- */
-struct ast_scalar_input_spec {
-  std::unique_ptr<column> scalar_column = nullptr;  ///< The broadcasted column, a column of size 1
+struct column_input {
+  column_view column                  = {};  ///< The column input
+  std::optional<int32_t> table_source = std::nullopt;
+  std::optional<int32_t> column_index = std::nullopt;
 };
 
-/**
- * @brief The AST input column arguments used to resolve the column expressions
- */
-struct ast_args {
-  table_view table       = {};  ///< The table view containing the columns (single-table case)
-  table_view left_table  = {};  ///< The left table for join predicates
-  table_view right_table = {};  ///< The right table for join predicates
-};
+using input = std::variant<scalar_input, column_input>;
 
 /**
- * @brief An input specification for the AST
+ * @brief The arguments needed to invoke a `cudf::transform`
  */
-using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec>;
+struct [[nodiscard]] transform_args {
+  std::vector<std::unique_ptr<column>> scalar_columns      = {};
+  std::vector<std::optional<int32_t>> input_table_sources  = {};
+  std::vector<std::optional<int32_t>> input_column_indices = {};
+  std::string udf                                          = {};
+  udf_source_type source_type                              = cudf::udf_source_type::CUDA;
+  null_aware is_null_aware                                 = null_aware::NO;
+  std::optional<void*> user_data                           = std::nullopt;
+  std::vector<transform_input> inputs                      = {};
+  std::vector<transform_output> outputs                    = {};
+  std::vector<std::unique_ptr<column>> string_offsets      = {};
+  std::optional<size_type> row_size                        = std::nullopt;
+  ops::error_mode error_mode                               = ops::error_mode::IGNORE;
+};
 
 /**
  * @brief The context within which the IR is instantiated.
@@ -105,7 +108,7 @@ struct [[nodiscard]] instance_context {
   int32_t num_tmp_vars_   = 0;                 ///< The number of temporary variables generated
   std::string tmp_prefix_ = "tmp_";            ///< The prefix for temporary variable identifiers
   bool has_nulls_         = false;             ///< If expressions involve null values
-  std::vector<ast_input_spec> input_specs_;    ///< The input specs for the AST
+  std::vector<input> inputs_;                  ///< The inputs for the IR
   std::vector<var_info> input_vars_;           ///< The input variables for the IR
   std::vector<untyped_var_info> output_vars_;  ///< The output variables for the IR
   rmm::cuda_stream_view
@@ -113,17 +116,9 @@ struct [[nodiscard]] instance_context {
   rmm::device_async_resource_ref
     mr_;  ///< The device memory resource for any device memory allocation during IR generation
 
- private:
-  void add_input_var(ast_column_input_spec const& in, ast_args const& args);
-
-  void add_input_var(ast_scalar_input_spec const& in, ast_args const& args);
-
-  void add_output_var();
-
-  [[nodiscard]] int32_t add_ast_input(ast_input_spec in);
-
  public:
   friend struct ast_converter;
+  friend struct node;
 
   instance_context(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
     : stream_(stream), mr_(mr)
@@ -139,6 +134,21 @@ struct [[nodiscard]] instance_context {
   instance_context& operator=(instance_context&&) = default;  ///< Move assignment operator
 
   ~instance_context() = default;  ///< Destructor
+
+  [[nodiscard]] int32_t add_output();
+
+  [[nodiscard]] int32_t add_input(input in);
+
+  [[nodiscard]] int32_t add_input(scalar const& scalar)
+  {
+    return add_input(
+      scalar_input{.scalar_column = make_column_from_scalar(scalar, 1, stream_, mr_)});
+  }
+
+  [[nodiscard]] int32_t add_input(column_view const& column)
+  {
+    return add_input(column_input{.column = column});
+  }
 
   /**
    * @brief Generate a globally unique temporary variable identifier
@@ -158,29 +168,22 @@ struct [[nodiscard]] instance_context {
   void set_has_nulls(bool has_nulls);
 
   /**
-   * @brief Get the input specifications for the AST
-   * @return A span of AST input specifications
+   * @brief Get the input values for the IR
+   * @return A span of input values for the IR
    */
-  [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
+  [[nodiscard]] std::span<input const> get_inputs() const;
 
   /**
    * @brief Get the input variables for the IR
    * @return A span of input variable information
    */
-  [[nodiscard]] std::span<var_info const> get_inputs() const;
+  [[nodiscard]] std::span<var_info const> get_input_vars() const;
 
   /**
    * @brief Get the output variables for the IR
    * @return A span of output variable information
    */
-  [[nodiscard]] std::span<untyped_var_info const> get_outputs() const;
-
-  /**
-   * @brief Add a constant scalar value to the IR
-   * @param value The scalar value to add
-   * @return The identifier of the constant variable
-   */
-  [[nodiscard]] int32_t add_constant(cudf::scalar const& value);
+  [[nodiscard]] std::span<untyped_var_info const> get_output_vars() const;
 };
 
 struct [[nodiscard]] code_sink {
@@ -190,7 +193,7 @@ struct [[nodiscard]] code_sink {
  public:
   void emit(std::string_view code) { code_ += code; }
 
-  [[nodiscard]] std::string_view get_code() const { return code_; }
+  [[nodiscard]] std::string const& get_code() const { return code_; }
 };
 
 struct [[nodiscard]] input_reference {
@@ -199,10 +202,6 @@ struct [[nodiscard]] input_reference {
 
 struct [[nodiscard]] output_reference {
   int32_t index = 0;  ///< The index of the output variable
-};
-
-struct [[nodiscard]] scalar_refernce {
-  int32_t index = 0;  ///< The index of the scalar variable
 };
 
 struct [[nodiscard]] node {
@@ -216,7 +215,7 @@ struct [[nodiscard]] node {
   data_type type_ = {};  ///< The resolved type information of the IR node
 
   std::string id_ = {};  ///< The identifier of the IR node
-  scalar_refernce
+  input_reference
     scale_reference_;  ///< The index of the scale variable for decimal rescaling if applicable
 
   /**
@@ -287,6 +286,13 @@ struct [[nodiscard]] node {
    * @param arg The argument node that produces the value to be set to the output variable
    */
   node(output_reference reference, std::unique_ptr<node> arg);
+
+  /**
+   * @brief Construct a new output reference IR node
+   * @param output The index of the output variable
+   * @param arg The argument node that produces the value to be set to the output variable
+   */
+  node(output_reference reference, node arg);
 
   node(node const& other)            = delete;
   node(node&& other)                 = default;  ///< Move constructor
@@ -363,45 +369,6 @@ struct [[nodiscard]] node {
 };
 
 /**
- * @brief The arguments needed to invoke a `cudf::transform`
- */
-struct [[nodiscard]] transform_args {
-  std::vector<std::unique_ptr<column>> scalar_columns =
-    {};  ///< The scalar columns created during the expression conversion
-  std::vector<std::variant<column_view, scalar_column_view>> inputs =
-    {};                                               ///< The input columns to the transform UDF
-  std::string udf       = {};                         ///< The user-defined function to apply
-  data_type output_type = data_type{type_id::EMPTY};  ///< The output type of the transform
-  cudf::udf_source_type source_type = cudf::udf_source_type::CUDA;  ///< The source type of the UDF
-  std::optional<void*> user_data    = std::nullopt;    ///< User data to pass to the transform
-  null_aware is_null_aware          = null_aware::NO;  ///< Whether the transform is null-aware
-  output_nullability null_policy    = output_nullability::PRESERVE;  ///< Null-transformation policy
-  std::optional<size_type> row_size = std::nullopt;  ///< The row size of the transform operation
-  ops::error_mode error_mode =
-    ops::error_mode::IGNORE;                     ///< The error handling mode for the transform
-  std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)
-};
-
-/**
- * @brief The arguments needed to invoke a `cudf::filter`
- */
-struct [[nodiscard]] filter_args {
-  std::vector<std::unique_ptr<column>> scalar_columns =
-    {};  ///< The scalar columns created during the expression conversion
-  std::vector<std::variant<column_view, scalar_column_view>> inputs =
-    {};                                          ///< The input columns to the transform UDF
-  std::vector<column_view> filter_columns = {};  ///< The input columns to the filter
-  std::string udf                   = {};  ///< The user-defined function to apply as a predicate
-  cudf::udf_source_type source_type = cudf::udf_source_type::CUDA;  ///< The source type of the UDF
-  std::optional<void*> user_data    = std::nullopt;    ///< User data to pass to the filter
-  null_aware is_null_aware          = null_aware::NO;  ///< Whether the filter is null-aware
-  output_nullability predicate_nullability =
-    output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
-  ops::error_mode error_mode = ops::error_mode::IGNORE;  ///< The error handling mode for the filter
-  std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)
-};
-
-/**
  * @brief AST Converter is a class for converting AST expressions to codegen targets, ie. CUDA.
  */
 struct [[nodiscard]] ast_converter {
@@ -412,6 +379,8 @@ struct [[nodiscard]] ast_converter {
   rmm::device_async_resource_ref
     mr_;  ///< Device memory resource used to allocate the returned table's device memory
   instance_context instance_;  ///< The instance context used during the IR generation
+  table_view left_table_;      ///< The left input table for the expression
+  table_view right_table_;     ///< The right input table for the expression
 
  public:
   /**
@@ -419,8 +388,15 @@ struct [[nodiscard]] ast_converter {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
    */
-  ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-    : stream_(std::move(stream)), mr_(std::move(mr)), instance_(stream_, mr_)
+  ast_converter(rmm::cuda_stream_view stream,
+                rmm::device_async_resource_ref mr,
+                table_view left_table,
+                table_view right_table)
+    : stream_(std::move(stream)),
+      mr_(std::move(mr)),
+      instance_(stream_, mr_),
+      left_table_(std::move(left_table)),
+      right_table_(std::move(right_table))
   {
   }
 
@@ -449,21 +425,26 @@ struct [[nodiscard]] ast_converter {
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::detail::predicate const& expr);
 
   [[nodiscard]] std::tuple<std::string, null_aware, output_nullability, bool> generate_code(
-    target target, ast::expression const& expr, ast_args const& args);
+    target target, ast::expression const& expr, std::string_view function_name);
 
  public:
   /**
    * @brief Convert an AST `compute_column` expression to a `cudf::transform`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param args The arguments needed to resolve the AST expression
+   * @param left_table The left input table for the expression
+   * @param right_table The right input table for the expression
+   * @param table The input table for the expression
+   * @param function_name The name of the generated function
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
    * @return The result of the conversion, containing the transform arguments and scalar columns
    */
   static transform_args compute_column(target target,
                                        ast::expression const& expr,
-                                       ast_args const& args,
+                                       table_view const& left_table,
+                                       table_view const& right_table,
+                                       std::string_view function_name,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
 
@@ -471,18 +452,21 @@ struct [[nodiscard]] ast_converter {
    * @brief Convert an AST `filter` expression to a `cudf::filter`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param args The arguments needed to resolve the AST expression
-   * @param filter_table The table to be filtered
+   * @param left_table The left input table for the expression
+   * @param right_table The right input table for the expression
+   * @param table The input table for the expression
+   * @param function_name The name of the generated function
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
    * @return The result of the conversion, containing the filter arguments and scalar columns
    */
-  static filter_args filter(target target,
-                            ast::expression const& expr,
-                            ast_args const& args,
-                            table_view const& filter_table,
-                            rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr);
+  static transform_args filter(target target,
+                               ast::expression const& expr,
+                               table_view const& left_table,
+                               table_view const& right_table,
+                               std::string_view function_name,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
 };
 
 }  // namespace row_ir

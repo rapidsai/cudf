@@ -248,7 +248,7 @@ auto reflect(udf_source_type source_type,
     auto element   = std::visit([](auto& c) { return reflect_input_element(c); }, in);
     bool as_scalar = std::holds_alternative<scalar_column_view>(in);
     auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+                      .instantiate(i, column, element, as_scalar, 0);
     in_types.push_back(accessor);
   }
 
@@ -260,7 +260,7 @@ auto reflect(udf_source_type source_type,
     auto element   = std::visit([](auto& c) { return reflect_output_element(c); }, out);
     bool as_scalar = false;  // never scalar
     auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+                      .instantiate(i, column, element, as_scalar, 0);
 
     out_types.push_back(accessor);
   }
@@ -857,11 +857,14 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
     case ops::error_mode::IGNORE: {
     } break;
     case ops::error_mode::ANY_ROW: {
-      auto sink = d_error_sink->value(stream).any_error();
-      auto err  = sink->error();
-      CUDF_EXPECTS(err == ops::errc::OK,
-                   std::format("Error `{}` in transform UDF", ops::to_string(err)),
-                   std::runtime_error);
+      auto error = d_error_sink->value(stream).any_error();
+      switch (error) {
+        case ops::errc::OK: break;
+        case ops::errc::OVERFLOW: CUDF_FAIL("Overflow error in transform UDF", std::overflow_error);
+        case ops::errc::DIVISION_BY_ZERO:
+          CUDF_FAIL("Division by zero error in transform UDF", std::overflow_error);
+        default: CUDF_FAIL("Unknown error in transform UDF", std::runtime_error);
+      }
     } break;
   }
 
@@ -870,18 +873,17 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 
 }  // namespace
 
-std::unique_ptr<table> multi_transform_extended(
-  std::string const& udf,
-  udf_source_type source_type,
-  null_aware is_null_aware,
-  std::optional<void*> user_data,
-  std::span<transform_input const> inputs,
-  std::span<transform_output const> outputs,
-  std::vector<std::unique_ptr<column>>&& string_offsets,
-  std::optional<size_type> row_size,
-  ops::error_mode error_handling_mode,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<table> multi_transform(std::string const& udf,
+                                       udf_source_type source_type,
+                                       null_aware is_null_aware,
+                                       std::optional<void*> user_data,
+                                       std::span<transform_input const> inputs,
+                                       std::span<transform_output const> outputs,
+                                       std::vector<std::unique_ptr<column>>&& string_offsets,
+                                       std::optional<size_type> row_size,
+                                       ops::error_mode error_handling_mode,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   perform_checks(source_type, is_null_aware, row_size, inputs, outputs, string_offsets);
@@ -910,9 +912,18 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
                                            rmm::device_async_resource_ref mr)
 {
   transform_output outputs[] = {{.type = output_type, .nullability = null_policy}};
-  auto table                 = multi_transform(
-    udf, source_type, is_null_aware, user_data, inputs, outputs, {}, row_size, stream, mr);
-  auto cols = table->release();
+  auto table                 = multi_transform(udf,
+                               source_type,
+                               is_null_aware,
+                               user_data,
+                               inputs,
+                               outputs,
+                                               {},
+                               row_size,
+                               ops::error_mode::IGNORE,
+                               stream,
+                               mr);
+  auto cols                  = table->release();
   return std::move(cols[0]);
 }
 
@@ -958,19 +969,21 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  detail::row_ir::ast_args ast_args{.table = table};
   auto args = detail::row_ir::ast_converter::compute_column(
-    detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
-  return transform_extended(args.inputs,
-                            args.udf,
-                            args.output_type,
-                            args.source_type,
-                            args.user_data,
-                            args.is_null_aware,
-                            args.row_size,
-                            args.null_policy,
-                            stream,
-                            mr);
+    detail::row_ir::target::CUDA, expr, table, {}, "compute_operation", stream, mr);
+  auto result = multi_transform(args.udf,
+                                args.source_type,
+                                args.is_null_aware,
+                                args.user_data,
+                                args.inputs,
+                                args.outputs,
+                                std::move(args.string_offsets),
+                                args.row_size,
+                                args.error_handling_mode,
+                                stream,
+                                mr);
+  auto cols   = result->release();
+  return std::move(cols[0]);
 }
 
 }  // namespace cudf

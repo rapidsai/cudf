@@ -62,8 +62,8 @@ enum class [[nodiscard]] opcode : int32_t {
   BIT_INVERT,
   BIT_OR,
   BIT_XOR,
-  SHIFT_LEFT,
-  SHIFT_RIGHT,
+  BIT_SHIFT_LEFT,
+  BIT_SHIFT_RIGHT,
 
   /// Type conversion operators
   CAST_TO_B8,

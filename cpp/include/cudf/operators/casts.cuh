@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/operators/types.cuh>
 
 namespace CUDF_EXPORT cudf {
@@ -188,11 +189,18 @@ __device__ inline errc cast_to_u64(optional<uint64_t>* out, optional<T> const* a
   }
   return errc::OK;
 }
-
 template <typename T>
+  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 __device__ inline errc cast_to_f32(float* out, T const* a)
 {
   *out = static_cast<float>(*a);
+  return errc::OK;
+}
+
+template <typename R>
+__device__ inline errc cast_to_f32(float* out, decimal<R> const* a)
+{
+  *out = convert_fixed_to_floating<float>(*a);
   return errc::OK;
 }
 
@@ -210,9 +218,17 @@ __device__ inline errc cast_to_f32(optional<float>* out, optional<T> const* a)
 }
 
 template <typename T>
+  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 __device__ inline errc cast_to_f64(double* out, T const* a)
 {
   *out = static_cast<double>(*a);
+  return errc::OK;
+}
+
+template <typename R>
+__device__ inline errc cast_to_f64(double* out, decimal<R> const* a)
+{
+  *out = convert_fixed_to_floating<double>(*a);
   return errc::OK;
 }
 
@@ -240,6 +256,8 @@ __device__ inline errc decimal_cast(decimal<T>* out, decimal<U> const* a)
 }
 
 }  // namespace detail
+
+// TODO: CAST_TO_DEC32 for int & float
 
 template <typename R>
 __device__ inline errc cast_to_dec32(numeric::decimal32* out, decimal<R> const* a)
