@@ -137,14 +137,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 "i_size",
             ]
         )
-        .agg(
-            # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-            # See https://github.com/rapidsai/cudf/issues/19560.
-            pl.when(pl.col(amountone).count() > 0)
-            .then(pl.col(amountone).sum())
-            .otherwise(None)
-            .alias("netpaid")
-        )
+        .agg(pl.col(amountone).sum().alias("netpaid"))
     )
 
     threshold_table = ssales.select(
@@ -157,14 +150,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         frame=(
             ssales.filter(pl.col("i_color") == color)
             .group_by(["c_last_name", "c_first_name", "s_store_name"])
-            .agg(
-                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-                # See https://github.com/rapidsai/cudf/issues/19560.
-                pl.when(pl.col("netpaid").count() > 0)
-                .then(pl.col("netpaid").sum())
-                .otherwise(None)
-                .alias("paid")
-            )
+            .agg(pl.col("netpaid").sum().alias("paid"))
             .join(threshold_table, how="cross")
             .filter(pl.col("paid") > pl.col("threshold"))
             .select(["c_last_name", "c_first_name", "s_store_name", "paid"])
@@ -236,12 +222,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
         # SQL: Sum({amountone}) AS netpaid
-        .agg(
-            pl.when(pl.col(amountone).count() > 0)
-            .then(pl.col(amountone).sum())
-            .otherwise(None)
-            .alias("netpaid")
-        )
+        .agg(pl.col(amountone).sum().alias("netpaid"))
     )
 
     # SQL: threshold = 0.05 * Avg(netpaid)
@@ -258,12 +239,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL: GROUP BY c_last_name, c_first_name, s_store_name
             .group_by(["c_last_name", "c_first_name", "s_store_name"])
             # SQL: Sum(netpaid) AS paid
-            .agg(
-                pl.when(pl.col("netpaid").count() > 0)
-                .then(pl.col("netpaid").sum())
-                .otherwise(None)
-                .alias("paid")
-            )
+            .agg(pl.col("netpaid").sum().alias("paid"))
             .join(threshold_table, how="cross")
             # SQL: WHERE paid > threshold (0.05 * avg(netpaid))
             .filter(pl.col("paid") > pl.col("threshold"))

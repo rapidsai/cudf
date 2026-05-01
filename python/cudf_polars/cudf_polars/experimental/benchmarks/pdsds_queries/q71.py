@@ -144,17 +144,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .join(filtered_time, left_on="time_sk", right_on="t_time_sk")
             .group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
-            .agg(
-                pl.col("ext_price").sum().alias("ext_price"),
-                pl.col("ext_price").count().alias("_ext_price_count"),
-            )
-            .with_columns(
-                pl.when(pl.col("_ext_price_count") > 0)
-                .then(pl.col("ext_price"))
-                .otherwise(None)
-                .alias("ext_price")
-            )
-            .drop("_ext_price_count")
+            .agg(pl.col("ext_price").sum().alias("ext_price"))
             .select(
                 pl.col("i_brand_id").alias("brand_id"),
                 pl.col("i_brand").alias("brand"),
@@ -260,19 +250,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL: GROUP BY i_brand, i_brand_id, t_hour, t_minute
             result.group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
             # SQL: Sum(ext_price) AS ext_price
-            .agg(
-                [
-                    pl.col("ext_price").sum().alias("ext_price"),
-                    pl.col("ext_price").count().alias("ext_price_count"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("ext_price_count") > 0)
-                .then(pl.col("ext_price"))
-                .otherwise(None)
-                .alias("ext_price")
-            )
-            .drop("ext_price_count")
+            .agg([pl.col("ext_price").sum().alias("ext_price")])
             # SQL: SELECT i_brand_id AS brand_id, i_brand AS brand, t_hour, t_minute, ext_price
             .select(
                 [

@@ -123,10 +123,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .filter((pl.col("d_year") == year) & demo_filter & geo_filter)
             .select(
                 [
-                    pl.when(pl.col("ss_quantity").count() > 0)
-                    .then(pl.col("ss_quantity").sum())
-                    .otherwise(None)
-                    .alias("sum(ss_quantity)")
+                    pl.col("ss_quantity").sum().alias("sum(ss_quantity)")
                 ]
             )
         ),
@@ -196,10 +193,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL: SELECT Sum(ss_quantity)
             .select(
                 [
-                    pl.when(pl.col("ss_quantity").count() > 0)
-                    .then(pl.col("ss_quantity").sum())
-                    .otherwise(None)
-                    .alias("sum(ss_quantity)")
+                    pl.col("ss_quantity").sum().alias("sum(ss_quantity)")
                 ]
             )
         ),

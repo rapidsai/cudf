@@ -167,42 +167,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .group_by(group_cols)
             .agg(
-                pl.col("bucket_30").sum().alias("bucket_30_sum"),
-                pl.col("bucket_31_60").sum().alias("bucket_31_60_sum"),
-                pl.col("bucket_61_90").sum().alias("bucket_61_90_sum"),
-                pl.col("bucket_91_120").sum().alias("bucket_91_120_sum"),
-                pl.col("bucket_120_plus").sum().alias("bucket_120_plus_sum"),
-                pl.col("sr_returned_date_sk").count().alias("return_count"),
-            )
-            .with_columns(
-                pl.when(pl.col("return_count") > 0)
-                .then(pl.col("bucket_30_sum"))
-                .otherwise(None)
-                .alias("30 days"),
-                pl.when(pl.col("return_count") > 0)
-                .then(pl.col("bucket_31_60_sum"))
-                .otherwise(None)
-                .alias("31-60 days"),
-                pl.when(pl.col("return_count") > 0)
-                .then(pl.col("bucket_61_90_sum"))
-                .otherwise(None)
-                .alias("61-90 days"),
-                pl.when(pl.col("return_count") > 0)
-                .then(pl.col("bucket_91_120_sum"))
-                .otherwise(None)
-                .alias("91-120 days"),
-                pl.when(pl.col("return_count") > 0)
-                .then(pl.col("bucket_120_plus_sum"))
-                .otherwise(None)
-                .alias(">120 days"),
-            )
-            .drop(
-                "bucket_30_sum",
-                "bucket_31_60_sum",
-                "bucket_61_90_sum",
-                "bucket_91_120_sum",
-                "bucket_120_plus_sum",
-                "return_count",
+                pl.col("bucket_30").sum().alias("30 days"),
+                pl.col("bucket_31_60").sum().alias("31-60 days"),
+                pl.col("bucket_61_90").sum().alias("61-90 days"),
+                pl.col("bucket_91_120").sum().alias("91-120 days"),
+                pl.col("bucket_120_plus").sum().alias(">120 days"),
             )
             .select(
                 *group_cols,

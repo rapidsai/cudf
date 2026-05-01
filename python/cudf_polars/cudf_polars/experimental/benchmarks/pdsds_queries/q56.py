@@ -167,19 +167,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
-            .agg(
-                [
-                    pl.col(ext_col).sum().alias("total_sales"),
-                    pl.col(ext_col).count().alias("_n"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("_n") > 0)
-                .then(pl.col("total_sales"))
-                .otherwise(None)
-                .alias("total_sales")
-            )
-            .drop("_n")
+            .agg([pl.col(ext_col).sum().alias("total_sales")])
             .select(["i_item_id", "total_sales"])
         )
         for lf, sold_date_col, item_sk_col, addr_sk_col, ext_col in channels
@@ -191,14 +179,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         frame=(
             pl.concat(per_channel)
             .group_by("i_item_id")
-            .agg(
-                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-                # See https://github.com/rapidsai/cudf/issues/19560.
-                pl.when(pl.col("total_sales").count() > 0)
-                .then(pl.col("total_sales").sum())
-                .otherwise(None)
-                .alias("total_sales")
-            )
+            .agg([pl.col("total_sales").sum().alias("total_sales")])
             .select(["i_item_id", "total_sales"])
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)
@@ -255,19 +236,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 (customer_address, "ss_addr_sk", "ca_address_sk"),
             ],
             extra_filters=[gmt_filter],
-            agg_exprs=[
-                pl.col("ss_ext_sales_price").sum().alias("total_sales"),
-                pl.col("ss_ext_sales_price").count().alias("_n"),
-            ],
+            agg_exprs=[pl.col("ss_ext_sales_price").sum().alias("total_sales")],
             group_by_cols=["i_item_id"],
         )
-        .with_columns(
-            pl.when(pl.col("_n") > 0)
-            .then(pl.col("total_sales"))
-            .otherwise(None)
-            .alias("total_sales")
-        )
-        .drop("_n")
         .select(["i_item_id", "total_sales"])
     )
 
@@ -286,19 +257,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 (customer_address, "cs_bill_addr_sk", "ca_address_sk"),
             ],
             extra_filters=[gmt_filter],
-            agg_exprs=[
-                pl.col("cs_ext_sales_price").sum().alias("total_sales"),
-                pl.col("cs_ext_sales_price").count().alias("_n"),
-            ],
+            agg_exprs=[pl.col("cs_ext_sales_price").sum().alias("total_sales")],
             group_by_cols=["i_item_id"],
         )
-        .with_columns(
-            pl.when(pl.col("_n") > 0)
-            .then(pl.col("total_sales"))
-            .otherwise(None)
-            .alias("total_sales")
-        )
-        .drop("_n")
         .select(["i_item_id", "total_sales"])
     )
 
@@ -317,19 +278,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 (customer_address, "ws_bill_addr_sk", "ca_address_sk"),
             ],
             extra_filters=[gmt_filter],
-            agg_exprs=[
-                pl.col("ws_ext_sales_price").sum().alias("total_sales"),
-                pl.col("ws_ext_sales_price").count().alias("_n"),
-            ],
+            agg_exprs=[pl.col("ws_ext_sales_price").sum().alias("total_sales")],
             group_by_cols=["i_item_id"],
         )
-        .with_columns(
-            pl.when(pl.col("_n") > 0)
-            .then(pl.col("total_sales"))
-            .otherwise(None)
-            .alias("total_sales")
-        )
-        .drop("_n")
         .select(["i_item_id", "total_sales"])
     )
 
@@ -342,19 +293,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             pl.concat([ss, cs, ws])
             # SQL: GROUP BY i_item_id; Sum(total_sales) total_sales
             .group_by("i_item_id")
-            .agg(
-                [
-                    pl.col("total_sales").sum().alias("total_sales"),
-                    pl.col("total_sales").count().alias("_n"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("_n") > 0)
-                .then(pl.col("total_sales"))
-                .otherwise(None)
-                .alias("total_sales")
-            )
-            .drop("_n")
+            .agg([pl.col("total_sales").sum().alias("total_sales")])
             # SQL: SELECT i_item_id, total_sales
             .select(["i_item_id", "total_sales"])
             # SQL: ORDER BY total_sales

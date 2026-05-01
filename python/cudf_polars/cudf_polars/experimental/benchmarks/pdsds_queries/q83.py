@@ -116,18 +116,7 @@ def q83_segment(
         )
         .join(dates, left_on=returned_date_key, right_on="d_date_sk")
         .group_by("i_item_id")
-        .agg(
-            [
-                pl.col(qty_col).count().alias(f"{out_qty_name}_count"),
-                pl.col(qty_col).sum().alias(f"{out_qty_name}_sum"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col(f"{out_qty_name}_count") > 0)
-            .then(pl.col(f"{out_qty_name}_sum"))
-            .otherwise(None)
-            .alias(out_qty_name)
-        )
+        .agg([pl.col(qty_col).sum().alias(out_qty_name)])
         .select(["i_item_id", out_qty_name])
     )
 
@@ -287,19 +276,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .filter(pl.col("d_date").is_not_null())
         # SQL: GROUP BY i_item_id; Sum(sr_return_quantity) AS sr_item_qty
         .group_by("i_item_id")
-        .agg(
-            [
-                pl.col("sr_return_quantity").sum().alias("sr_item_qty_sum"),
-                pl.col("sr_return_quantity").count().alias("sr_item_qty_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("sr_item_qty_count") > 0)
-            .then(pl.col("sr_item_qty_sum"))
-            .otherwise(None)
-            .alias("sr_item_qty")
-        )
-        .drop(["sr_item_qty_sum", "sr_item_qty_count"])
+        .agg([pl.col("sr_return_quantity").sum().alias("sr_item_qty")])
     )
     # SQL: CTE cr_items — FROM catalog_returns, item, date_dim GROUP BY i_item_id; Sum(cr_return_quantity)
     cr_items = (
@@ -312,19 +289,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .filter(pl.col("d_date").is_not_null())
         .group_by("i_item_id")
-        .agg(
-            [
-                pl.col("cr_return_quantity").sum().alias("cr_item_qty_sum"),
-                pl.col("cr_return_quantity").count().alias("cr_item_qty_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("cr_item_qty_count") > 0)
-            .then(pl.col("cr_item_qty_sum"))
-            .otherwise(None)
-            .alias("cr_item_qty")
-        )
-        .drop(["cr_item_qty_sum", "cr_item_qty_count"])
+        .agg([pl.col("cr_return_quantity").sum().alias("cr_item_qty")])
     )
     # SQL: CTE wr_items — FROM web_returns, item, date_dim GROUP BY i_item_id; Sum(wr_return_quantity)
     wr_items = (
@@ -337,19 +302,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .filter(pl.col("d_date").is_not_null())
         .group_by("i_item_id")
-        .agg(
-            [
-                pl.col("wr_return_quantity").sum().alias("wr_item_qty_sum"),
-                pl.col("wr_return_quantity").count().alias("wr_item_qty_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("wr_item_qty_count") > 0)
-            .then(pl.col("wr_item_qty_sum"))
-            .otherwise(None)
-            .alias("wr_item_qty")
-        )
-        .drop(["wr_item_qty_sum", "wr_item_qty_count"])
+        .agg([pl.col("wr_return_quantity").sum().alias("wr_item_qty")])
     )
 
     sort_by = {"item_id": False, "sr_item_qty": False}

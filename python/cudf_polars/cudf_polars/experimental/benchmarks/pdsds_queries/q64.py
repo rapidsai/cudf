@@ -362,20 +362,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .agg(
                 [
                     pl.len().alias("cnt"),
-                    # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-                    # See https://github.com/rapidsai/cudf/issues/19560.
-                    pl.when(pl.col("ss_wholesale_cost").count() > 0)
-                    .then(pl.col("ss_wholesale_cost").sum())
-                    .otherwise(None)
-                    .alias("s1"),
-                    pl.when(pl.col("ss_list_price").count() > 0)
-                    .then(pl.col("ss_list_price").sum())
-                    .otherwise(None)
-                    .alias("s2"),
-                    pl.when(pl.col("ss_coupon_amt").count() > 0)
-                    .then(pl.col("ss_coupon_amt").sum())
-                    .otherwise(None)
-                    .alias("s3"),
+                    pl.col("ss_wholesale_cost").sum().alias("s1"),
+                    pl.col("ss_list_price").sum().alias("s2"),
+                    pl.col("ss_coupon_amt").sum().alias("s3"),
                 ]
             )
             .select(
@@ -621,18 +610,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .agg(
             [
                 pl.len().alias("cnt"),
-                pl.when(pl.col("ss_wholesale_cost").count() > 0)
-                .then(pl.col("ss_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("s1"),
-                pl.when(pl.col("ss_list_price").count() > 0)
-                .then(pl.col("ss_list_price").sum())
-                .otherwise(None)
-                .alias("s2"),
-                pl.when(pl.col("ss_coupon_amt").count() > 0)
-                .then(pl.col("ss_coupon_amt").sum())
-                .otherwise(None)
-                .alias("s3"),
+                pl.col("ss_wholesale_cost").sum().alias("s1"),
+                pl.col("ss_list_price").sum().alias("s2"),
+                pl.col("ss_coupon_amt").sum().alias("s3"),
             ]
         )
         # SQL: SELECT i_product_name AS product_name, i_item_sk AS item_sk, s_store_name, s_zip, addr cols, syear, fsyear, s2year, cnt, s1, s2, s3

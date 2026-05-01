@@ -129,25 +129,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
         .agg(
             [
-                pl.col("ss_coupon_amt").sum().alias("amt_sum"),
-                pl.col("ss_coupon_amt").count().alias("amt_count"),
-                pl.col("ss_net_profit").sum().alias("profit_sum"),
-                pl.col("ss_net_profit").count().alias("profit_count"),
+                pl.col("ss_coupon_amt").sum().alias("amt"),
+                pl.col("ss_net_profit").sum().alias("profit"),
             ]
         )
-        .with_columns(
-            [
-                pl.when(pl.col("amt_count") > 0)
-                .then(pl.col("amt_sum"))
-                .otherwise(None)
-                .alias("amt"),
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit_sum"))
-                .otherwise(None)
-                .alias("profit"),
-            ]
-        )
-        .drop(["amt_sum", "amt_count", "profit_sum", "profit_count"])
         .with_columns([pl.col("ca_city").alias("bought_city")])
         .select(["ss_ticket_number", "ss_customer_sk", "bought_city", "amt", "profit"])
     )
