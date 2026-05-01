@@ -212,7 +212,8 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     from ``.collect()``. Uses the in-memory executor so errors are not wrapped
     by a streaming task group.
     """
-    return pl.GPUEngine(raise_on_fail=True)
+    # TODO: We should be testing will all supported engine variants
+    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
 def pytest_addoption(parser):

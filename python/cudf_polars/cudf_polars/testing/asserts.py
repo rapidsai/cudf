@@ -288,7 +288,8 @@ def assert_collect_raises(
         if polars_except != ():
             raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
-    engine = GPUEngine(raise_on_fail=True)
+    # TODO: https://github.com/rapidsai/cudf/issues/22346
+    engine = GPUEngine(executor="in-memory", raise_on_fail=True)
     try:
         lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
     except cudf_except:
