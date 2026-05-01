@@ -13,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
 
 
@@ -24,7 +25,7 @@ def test_explode_multiple_raises():
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
-def test_explode_single(column):
+def test_explode_single(engine: pl.GPUEngine, column):
     df = pl.LazyFrame(
         {
             "a": [[1, 2], [3, 4], None],
@@ -34,7 +35,7 @@ def test_explode_single(column):
     )
     q = df.explode(column)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("mapping", [{"b": "a"}, {"a": "c", "b": "c"}])
@@ -54,18 +55,18 @@ def test_rename_duplicate_raises(mapping):
 @pytest.mark.parametrize(
     "mapping", [{}, {"b": "c"}, {"b": "a", "a": "b"}, {"a": "c", "b": "d"}]
 )
-def test_rename_columns(mapping):
+def test_rename_columns(engine: pl.GPUEngine, mapping):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
 
     q = df.rename(mapping)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("index", [None, ["a"], ["d", "a"]])
 @pytest.mark.parametrize("variable_name", [None, "names"])
 @pytest.mark.parametrize("value_name", [None, "unpivoted"])
-def test_unpivot(index, variable_name, value_name):
+def test_unpivot(engine: pl.GPUEngine, index, variable_name, value_name):
     df = pl.LazyFrame(
         {
             "a": ["x", "y", "z"],
@@ -78,10 +79,10 @@ def test_unpivot(index, variable_name, value_name):
         ["c", "b"], index=index, variable_name=variable_name, value_name=value_name
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_unpivot_defaults():
+def test_unpivot_defaults(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
@@ -91,10 +92,10 @@ def test_unpivot_defaults():
         }
     )
     q = df.unpivot(index="d")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_with_row_index_defaults():
+def test_with_row_index_defaults(engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
             "a": [1, 3, 5],
@@ -102,7 +103,7 @@ def test_with_row_index_defaults():
         }
     )
     q = lf.with_row_index()
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_unique_hash():
@@ -115,11 +116,17 @@ def test_unique_hash():
     assert hash(ir_a) != hash(ir_b)
 
 
-def test_set_sorted_then_inner_join(request):
+def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_135,
             reason="HintIR not supported",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=get_blocksize_mode(engine) == "small" and POLARS_VERSION_LT_135,
+            reason="set_sorted join result order differs in polars < 1.35",
         )
     )
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
@@ -127,7 +134,7 @@ def test_set_sorted_then_inner_join(request):
     q = df.set_sorted("a").join(
         pl.LazyFrame({"a": [2, 4], "b": [20, 40]}), on="a", how="inner"
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_explode_single_legacy_options():

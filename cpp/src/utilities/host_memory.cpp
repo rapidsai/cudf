@@ -92,6 +92,8 @@ class pinned_pool_with_fallback_memory_resource {
                  std::size_t bytes,
                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
+    if (max_pool_size_ == 0) { return upstream_mr_.allocate(stream, bytes, alignment); }
+
     try {
       return pool_->allocate(stream, bytes, alignment);
     } catch (...) {
@@ -114,6 +116,11 @@ class pinned_pool_with_fallback_memory_resource {
                   std::size_t bytes,
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
+    if (max_pool_size_ == 0) {
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
+      return;
+    }
+
     bool is_fallback{false};
     {
       std::shared_lock lock(fallback_->mutex);
