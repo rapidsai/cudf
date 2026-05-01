@@ -8,7 +8,10 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import io
+import itertools
 import json
+import logging
 import os
 import pprint
 import sys
@@ -58,6 +61,7 @@ except ImportError:
 try:
     import cudf_polars.quent
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.benchmarks.asserts import (
         ValidationError,
@@ -95,7 +99,15 @@ def get_validation_options(args: Any) -> dict[str, Any]:
     }
 
 
-_HAS_STRUCTLOG = importlib.util.find_spec("structlog") is not None
+try:
+    import structlog
+    import structlog.contextvars
+    import structlog.processors
+    import structlog.stdlib
+except ImportError:
+    _HAS_STRUCTLOG = False
+else:
+    _HAS_STRUCTLOG = True
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
@@ -1340,7 +1352,6 @@ def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
         raise RuntimeError(msg)
 
     if _HAS_STRUCTLOG:
-        pass
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using
         # structlog.bind_contextvars; for the distributed cluster we would need
@@ -1352,62 +1363,59 @@ def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
         #
         # So instead we make a new logger each time we need a new context,
         # i.e. for each query/iteration pair.
-        # import cudf_polars.quent._logging
 
-        # cudf_polars.quent._logging.worker_setup_logging()
+        def make_injector(
+            query_id: int, iteration: int
+        ) -> Callable[[logging.Logger, str, dict[str, Any]], dict[str, Any]]:
+            def inject(
+                logger: Any, method_name: Any, event_dict: Any
+            ) -> dict[str, Any]:
+                event_dict["query_id"] = query_id
+                event_dict["iteration"] = iteration
+                return event_dict
 
-        # def make_injector(
-        #     query_id: int, iteration: int
-        # ) -> Callable[[logging.Logger, str, dict[str, Any]], dict[str, Any]]:
-        #     def inject(
-        #         logger: Any, method_name: Any, event_dict: Any
-        #     ) -> dict[str, Any]:
-        #         event_dict["query_id"] = query_id
-        #         event_dict["iteration"] = iteration
-        #         return event_dict
+            return inject
 
-        #     return inject
+        shared_processors = [
+            structlog.contextvars.merge_contextvars,
+            make_injector(query_id, iteration),
+            structlog.processors.add_log_level,
+            structlog.processors.CallsiteParameterAdder(
+                parameters=[
+                    structlog.processors.CallsiteParameter.PROCESS,
+                    structlog.processors.CallsiteParameter.THREAD,
+                ],
+            ),
+            structlog.processors.StackInfoRenderer(),
+            structlog.dev.set_exc_info,
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
+        ]
 
-        # shared_processors = [
-        #     structlog.contextvars.merge_contextvars,
-        #     make_injector(query_id, iteration),
-        #     structlog.processors.add_log_level,
-        #     structlog.processors.CallsiteParameterAdder(
-        #         parameters=[
-        #             structlog.processors.CallsiteParameter.PROCESS,
-        #             structlog.processors.CallsiteParameter.THREAD,
-        #         ],
-        #     ),
-        #     structlog.processors.StackInfoRenderer(),
-        #     structlog.dev.set_exc_info,
-        #     structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
-        # ]
+        # For logging to an in-memory buffer
 
-        # # For logging to an in-memory buffer
+        # For logging to a file
+        json_renderer = structlog.processors.JSONRenderer()
 
-        # # For logging to a file
-        # json_renderer = structlog.processors.JSONRenderer()
+        stream = io.StringIO()
+        json_file_handler = logging.StreamHandler(stream)
+        json_file_handler.setFormatter(
+            structlog.stdlib.ProcessorFormatter(
+                processor=json_renderer,
+                foreign_pre_chain=shared_processors,
+            )
+        )
 
-        # stream = io.StringIO()
-        # json_file_handler = logging.StreamHandler(stream)
-        # json_file_handler.setFormatter(
-        #     structlog.stdlib.ProcessorFormatter(
-        #         processor=json_renderer,
-        #         foreign_pre_chain=shared_processors,
-        #     )
-        # )
+        logging.basicConfig(level=logging.INFO, handlers=[json_file_handler])
 
-        # logging.basicConfig(level=logging.INFO, handlers=[json_file_handler])
-
-        # structlog.configure(
-        #     processors=[
-        #         *shared_processors,
-        #         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        #     ],
-        #     logger_factory=structlog.stdlib.LoggerFactory(),
-        #     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-        #     cache_logger_on_first_use=True,
-        # )
+        structlog.configure(
+            processors=[
+                *shared_processors,
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+            cache_logger_on_first_use=True,
+        )
 
 
 def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
@@ -1461,63 +1469,51 @@ def _consolidate_logs(
     if not (_HAS_STRUCTLOG and run_config.collect_traces):
         return run_config
 
+    def gather_logs() -> str:
+        logger = logging.getLogger()
+        return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+
+    all_logs = "\n".join(engine._run(gather_logs))
+    if gather_client_logs:
+        all_logs += "\n" + gather_logs()
+
+    parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # Some other log records can end up in here. Filter those out.
+    scope_values = {s.value for s in Scope}
+    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # Now we want to augment the existing Records with the trace data.
+
+    def group_key(x: dict) -> int:
+        return x["query_id"]
+
+    def sort_key(x: dict) -> tuple[int, int]:
+        return x["query_id"], x["iteration"]
+
+    grouped = itertools.groupby(
+        sorted(parsed_logs, key=sort_key),
+        key=group_key,
+    )
+
+    for query_id, run_logs_group in grouped:
+        run_logs = list(run_logs_group)
+        by_iteration = [
+            list(x)
+            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+        ]
+        run_records = run_config.records[query_id]
+        assert len(by_iteration) == len(run_records)  # same number of iterations
+        all_traces = [list(iteration) for iteration in by_iteration]
+
+        new_records: list[SuccessRecord | FailedRecord] = []
+        for rec, traces in zip(run_records, all_traces, strict=True):
+            if rec.status == "success":
+                new_records.append(dataclasses.replace(rec, traces=traces))
+            else:
+                new_records.append(rec)
+
+        run_config.records[query_id] = new_records
+
     return run_config
-
-    # parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
-    # # Some other log records can end up in here. Filter those out.
-    # scope_values = {s.value for s in Scope}
-    # parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
-    # # Now we want to augment the existing Records with the trace data.
-
-    # def group_key(x: dict) -> int:
-    #     return x["query_id"]
-    return run_config
-
-    # def gather_logs() -> str:
-    #     logger = logging.getLogger()
-    #     return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
-
-    # all_logs = "\n".join(engine._run(gather_logs))
-    # if gather_client_logs:
-    #     all_logs += "\n" + gather_logs()
-
-    # parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
-    # # Some other log records can end up in here. Filter those out.
-    # scope_values = {s.value for s in Scope}
-    # parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
-    # # Now we want to augment the existing Records with the trace data.
-
-    # def group_key(x: dict) -> int:
-    #     return x["query_id"]
-
-    # def sort_key(x: dict) -> tuple[int, int]:
-    #     return x["query_id"], x["iteration"]
-
-    # grouped = itertools.groupby(
-    #     sorted(parsed_logs, key=sort_key),
-    #     key=group_key,
-    # )
-
-    # for query_id, run_logs_group in grouped:
-    #     run_logs = list(run_logs_group)
-    #     by_iteration = [
-    #         list(x)
-    #         for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
-    #     ]
-    #     run_records = run_config.records[query_id]
-    #     assert len(by_iteration) == len(run_records)  # same number of iterations
-    #     all_traces = [list(iteration) for iteration in by_iteration]
-
-    #     new_records: list[SuccessRecord | FailedRecord] = []
-    #     for rec, traces in zip(run_records, all_traces, strict=True):
-    #         if rec.status == "success":
-    #             new_records.append(dataclasses.replace(rec, traces=traces))
-    #         else:
-    #             new_records.append(rec)
-
-    #     run_config.records[query_id] = new_records
-
-    # return run_config
 
 
 PDSDS_TABLE_NAMES: list[str] = [
