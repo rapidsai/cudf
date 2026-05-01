@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IRExecutionContext, IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 

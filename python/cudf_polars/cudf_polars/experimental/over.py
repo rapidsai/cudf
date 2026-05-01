@@ -13,8 +13,8 @@ from cudf_polars.experimental.groupby import combine, decompose
 from cudf_polars.experimental.utils import _all_over_scalar_and_top_level
 
 if TYPE_CHECKING:
-    from cudf_polars.typing import Schema
     from cudf_polars.dsl.ir import HStack
+    from cudf_polars.typing import Schema
 
 
 def _build_over_groupby_irs(
