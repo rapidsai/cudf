@@ -45,6 +45,7 @@ The GPU engine for Polars is now available in Open Beta and the engine is underg
    streaming_execution
    engine_options
    api
+   developer_docs
 
 Launch on Google Colab
 ----------------------

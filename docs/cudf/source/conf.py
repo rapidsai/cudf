@@ -82,7 +82,7 @@ extensions = [
     "myst_nb",
 ]
 
-remove_from_toctrees = ["user_guide/api_docs/api/*"]
+remove_from_toctrees = ["cudf/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
