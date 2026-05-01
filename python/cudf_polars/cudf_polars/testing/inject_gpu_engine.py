@@ -1,7 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Plugin for running polars test suite setting GPU engine as default."""
+"""Plugin for running polars test suite using the GPU engine."""
 
 from __future__ import annotations
 
@@ -12,11 +12,10 @@ import pytest
 
 import polars
 
-from cudf_polars.utils.config import Runtime, StreamingFallbackMode
+from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -25,64 +24,60 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "cudf-polars", "Plugin to set GPU as default engine for polars tests"
     )
     group.addoption(
-        "--cudf-polars-no-fallback",
-        action="store_true",
-        help="Turn off fallback to CPU when running tests (default use fallback)",
-    )
-    group.addoption(
-        "--executor",
+        "--inject-gpu-engine",
         action="store",
         default="in-memory",
-        choices=("in-memory", "streaming"),
-        help="Executor to use for GPUEngine.",
+        choices=("in-memory", "spmd"),
+        help="Which GPU engine variant to inject globally.",
     )
     group.addoption(
-        "--blocksize-mode",
+        "--inject-gpu-engine-blocksize",
         action="store",
         default="default",
-        choices=("small", "default"),
+        choices=("default", "small"),
         help=(
-            "Blocksize to use for 'streaming' executor. Set to 'small' "
-            "to run most tests with multiple partitions."
+            "Blocksize mode for the 'spmd' engine. Set to 'small' to run most "
+            "tests with multiple partitions. Ignored for 'in-memory'."
         ),
     )
     group.addoption(
-        "--runtime",
-        action="store",
-        default="tasks",
-        choices=("tasks", "rapidsmpf"),
-        help="Runtime to use for the 'streaming' executor.",
+        "--inject-gpu-engine-raise-on-fail",
+        action="store_true",
+        help=(
+            "Force raise_on_fail=True on the injected engine and suppress the "
+            "plugin's xfail markers (tests will surface real failures)."
+        ),
     )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
-    no_fallback = config.getoption("--cudf-polars-no-fallback")
-    executor = config.getoption("--executor")
-    blocksize_mode = config.getoption("--blocksize-mode")
-    runtime = config.getoption("--runtime")
-    if no_fallback:
-        collect = polars.LazyFrame.collect
-        engine = polars.GPUEngine(raise_on_fail=no_fallback)
-        # https://github.com/python/mypy/issues/2427
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
-    elif executor == "in-memory":
-        collect = polars.LazyFrame.collect
-        engine = polars.GPUEngine(executor=executor)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
-    elif executor == "streaming" and blocksize_mode == "small":
-        executor_options: dict[str, Any] = {}
-        executor_options["max_rows_per_partition"] = 4
-        executor_options["target_partition_size"] = 10
-        # We expect many tests to fall back, so silence the warnings
-        executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
-        executor_options["runtime"] = Runtime[runtime.upper()]
-        collect = polars.LazyFrame.collect
-        engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
+    variant = config.getoption("--inject-gpu-engine")
+    blocksize = config.getoption("--inject-gpu-engine-blocksize")
+    raise_on_fail = config.getoption("--inject-gpu-engine-raise-on-fail")
+
+    if variant == "in-memory":
+        engine = polars.GPUEngine(executor="in-memory", raise_on_fail=raise_on_fail)
     else:
-        # run with streaming executor and default blocksize
-        polars.Config.set_engine_affinity("gpu")
+        from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+        executor_options: dict[str, object] = {}
+        if blocksize == "small":
+            executor_options["max_rows_per_partition"] = 4
+            executor_options["target_partition_size"] = 10
+            # We expect many tests to fall back, so silence the warnings.
+            executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        engine = SPMDEngine(
+            executor_options=executor_options,
+            engine_options={"raise_on_fail": raise_on_fail},
+        )
+
+    collect = polars.LazyFrame.collect
+    # https://github.com/python/mypy/issues/2427
+    polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
+    config._inject_gpu_engine = engine  # type: ignore[attr-defined]
+    _verify_collect_patch(engine)
+
     config.addinivalue_line(
         "filterwarnings",
         "ignore:.*GPU engine does not support streaming or background collection",
@@ -91,6 +86,52 @@ def pytest_configure(config: pytest.Config) -> None:
         "filterwarnings",
         "ignore:.*Query execution with GPU not possible",
     )
+
+
+def _verify_collect_patch(engine: object) -> None:
+    """
+    Raise if ``polars.LazyFrame.collect`` is not the partialmethod we installed.
+
+    ``partialmethod`` is a descriptor — accessing ``polars.LazyFrame.collect``
+    via the class invokes ``partialmethod.__get__`` and returns a plain
+    function, so we inspect the raw entry in ``LazyFrame.__dict__`` to see
+    the underlying descriptor.
+    """
+    raw = polars.LazyFrame.__dict__.get("collect")
+    if not isinstance(raw, partialmethod):
+        raise TypeError(
+            f"polars.LazyFrame.collect patch failed: expected partialmethod, "
+            f"got {type(raw).__name__}"
+        )
+    bound = raw.keywords.get("engine")
+    if bound is None:
+        raise RuntimeError(
+            "polars.LazyFrame.collect is a partialmethod but has no "
+            "'engine' keyword bound"
+        )
+    if bound is not engine:
+        raise RuntimeError(
+            f"polars.LazyFrame.collect has a different engine bound "
+            f"({type(bound).__name__}) than the one we installed "
+            f"({type(engine).__name__})"
+        )
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Tear down the injected engine."""
+    engine = getattr(config, "_inject_gpu_engine", None)
+    if engine is None:
+        return
+    shutdown = getattr(engine, "shutdown", None)
+    if shutdown is not None:
+        shutdown()
+
+
+def pytest_report_header(config: pytest.Config) -> str:
+    """Report which GPU engine has been injected into polars.LazyFrame.collect."""
+    engine = getattr(config, "_inject_gpu_engine", None)
+    cls = type(engine)
+    return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
@@ -262,64 +303,60 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 }
 
 
-STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
-    # Add tests that are expected to fail with the streaming executor
-}
-
 # Generally skip for:
-# 1) Tests that are too slow with --blocksize-mode small due to many small partitions for large data
+# 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
 # 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
-RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
+STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --blocksize-mode small",
-    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-sync]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-async]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --blocksize-mode small",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --blocksize-mode small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --blocksize-mode small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --blocksize-mode small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
-    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --blocksize-mode small",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Too slow for CI",
 }
 
 # xfail for tests that produce different results than CPU Polars
-RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
@@ -379,7 +416,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_join.py::test_join_rewrite_panic_23307": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
-    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_joins.py::test_join_anti_semi[SELECT * FROM tbl_a LEFT SEMI JOIN tbl_b USING (a)-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
@@ -396,15 +432,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_joins.py::test_join_on_reversed_constraint_order[df12-df22-(df1.a + df1.a) = df2.b-df2.b = (df1.a + df1.a)-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df11-df21-x + y = sum-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df12-df22-LENGTH(name) = len-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[above_avg]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[equals_max]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[compound_expr]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_distinct": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[sum_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[count_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
 }
 
 
@@ -412,29 +439,22 @@ def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
     """Mark known failing tests."""
-    if config.getoption("--cudf-polars-no-fallback"):
+    if config.getoption("--inject-gpu-engine-raise-on-fail"):
         # Don't xfail tests if running without fallback
         return
-    with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
-    with_streaming = config.getoption("--executor") == "streaming"
+    with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
-            with_rapidsmpf
-            and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
+            with_streaming_engine
+            and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
+            is not None
         ):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
-            with_rapidsmpf
-            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            with_streaming_engine
+            and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
-            item.add_marker(pytest.mark.xfail(reason=r_reason))
-        elif (
-            with_streaming
-            and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
-            is not None
-        ):
-            # Also sets --runtime=rapidsmpf also sets --executor=streaming, so check last
             item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):

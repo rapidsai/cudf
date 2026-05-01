@@ -35,7 +35,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
     all_gather_host_data,
     check_reserved_keys,
-    execute_ir_on_rank,
+    evaluate_on_rank,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -46,13 +46,12 @@ from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
@@ -61,10 +60,7 @@ if TYPE_CHECKING:
 
 def evaluate_pipeline_spmd_mode(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -79,20 +75,17 @@ def evaluate_pipeline_spmd_mode(
     all-gathers, etc.) coordinate across ranks to produce a globally
     consistent result.
 
+    IR lowering is performed collectively on the workers: rank 0
+    collects scan statistics and allgathers them, then every rank
+    lowers the graph independently.
+
     Parameters
     ----------
     ir
-        The IR node.
-    partition_info
-        The partition information.
+        The pre-lowered IR node.
     config_options
         Executor configuration, including the rapidsmpf context and the
         Python thread-pool executor used to drive the actor network.
-    stats
-        The statistics collector.
-    collective_id_map
-        Mapping from IR nodes to their pre-allocated collective operation
-        IDs.
     collect_metadata
         Whether to collect runtime metadata.
     query_id
@@ -111,15 +104,12 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
-    return execute_ir_on_rank(
+    return evaluate_on_rank(
         context,
         comm,
         py_executor,
         ir,
-        partition_info,
         config_options,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 
