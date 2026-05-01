@@ -33,6 +33,7 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.quent._plan import build_plan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
@@ -222,9 +223,7 @@ class StreamingEngine(pl.GPUEngine):
         try:
             self._exit_stack.close()
         finally:
-            from cudf_polars.quent._relay import drain_buffered_events
-
-            self._worker_quent_events.extend(drain_buffered_events())
+            # self._worker_quent_events.extend(drain_buffered_events())
             self._exit_stack = None
             self.device = None
             self.memory_resource = None
@@ -549,26 +548,41 @@ def evaluate_on_rank(
 
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
 
-    logical_plan_id = uuid.uuid4()
+    # logical_plan_id = uuid.uuid4()
+    # TODO: this logical_plan_id is probably wrong. We need this ID to summarize the *entire* logical plan.
+    # not just the last node. We should just generate a random ID on the client and
+    # pass that in.
+    logical_plan_id = uuid.UUID(int=ir.get_stable_id())
     physical_plan_id = uuid.uuid4()
 
+    # So... quent context is a *process* global.
+    # How in the world do we synchronize this?
     quent_context = cudf_polars.quent.quent_context.get()
 
-    if comm.rank == 0 and worker_id is not None:
-        logical_op_by_id = quent_context.emit_plan_events(
+    if worker_id is not None:
+        # TODO: split out build from emit.
+        plan, ops, ports, logical_op_by_id = build_plan(
             ir,
             config_options,
+            query_id=quent_context.query.id,
             plan_id=logical_plan_id,
             worker_id=worker_id,
-            query_id=quent_context.query.id,
             instance_name="logical",
+            parent_plan_id=None,
+            parent_operators_by_node_id=None,
         )
+        if comm.rank == 0:
+            quent_context.emit_plan_declarations(plan, ops, ports)
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
     )
 
-    if comm.rank == 0 and worker_id is not None:
+    if worker_id is not None:
+        # Problem: each worker gets their own `plan.id` so we can't
+        # associate the physical plan with the logical plan on any
+        # rank other than 0.
+        # We would need to pass the plan ID in along with the IR...
         log_query_plan(ir, config_options)
         quent_context.emit_physical_plan_events(
             ir,

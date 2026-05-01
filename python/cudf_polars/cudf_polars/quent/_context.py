@@ -46,13 +46,7 @@ class QuentContext:
 
     def emit_query_group_events(self) -> None:
         """Emit a Quent QueryGroup declaration event."""
-        emit(
-            QueryGroup(
-                self.query_group.id,
-                instance_name=self.query_group.instance_name
-                or self.query_group.id.hex[:8],
-            ).declare(engine_id=self.engine.id)
-        )
+        emit(self.query_group.declare(engine_id=self.engine.id))
 
     def emit_query_events(self) -> None:
         """
@@ -61,6 +55,12 @@ class QuentContext:
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
         emit(self.query.init(query_group_id=self.query_group.id))
+        emit(self.query.planning())
+        emit(self.query.executing())
+
+    def emit_query_exit_events(self) -> None:
+        """Emit a Quent Query exit event."""
+        emit(self.query.exit())
 
     def emit_plan_declarations(
         self, plan: Plan, operators: list[Operator], ports: list[Port]

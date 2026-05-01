@@ -43,7 +43,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.quent._relay import configure_quent_logging, drain_buffered_events
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
@@ -262,7 +261,6 @@ def _setup_worker(
 
     worker_id = worker_ids[comm.rank] if worker_ids is not None else None
 
-    configure_quent_logging()
     if worker_id is not None and engine_id is not None:
         quent_worker = cudf_polars.quent._types.Worker(
             id=worker_id,
@@ -822,9 +820,6 @@ class DaskEngine(StreamingEngine):
             # (including the exit event) from workers.
             ctx.client.run(functools.partial(_teardown_worker, uid=ctx.rapidsmpf_id))
 
-            worker_events = ctx.client.run(drain_buffered_events)
-            for events in worker_events.values():
-                self._worker_quent_events.extend(events)
         except Exception as e:
             exceptions.append(e)
         finally:

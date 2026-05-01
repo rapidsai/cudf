@@ -46,7 +46,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
-from cudf_polars.quent._relay import configure_quent_logging
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
@@ -409,8 +408,6 @@ class SPMDEngine(StreamingEngine):
                 },
                 exit_stack=exit_stack,
             )
-
-            configure_quent_logging()
 
             # TODO: ranks need to choose the same engine ID!
             self._quent_engine = cudf_polars.quent._types.Engine(

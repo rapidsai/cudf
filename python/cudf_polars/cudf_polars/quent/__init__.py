@@ -8,7 +8,7 @@ from __future__ import annotations
 import contextvars
 
 from cudf_polars.quent._context import QuentContext
-from cudf_polars.quent._types import Query, QueryGroup
+from cudf_polars.quent._types import Engine, Query, QueryGroup
 
 quent_context = contextvars.ContextVar[QuentContext](
     "quent_context",
@@ -17,6 +17,7 @@ quent_context = contextvars.ContextVar[QuentContext](
 
 
 __all__ = [
+    "Engine",
     "QuentContext",
     "Query",
     "QueryGroup",

@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import ray
+import ray.exceptions
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
@@ -40,7 +41,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.quent._relay import configure_quent_logging, drain_buffered_events
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
@@ -187,7 +187,7 @@ class RankActor:
         engine_id: uuid.UUID | None = None,
         rank: int = 0,
     ) -> None:
-        configure_quent_logging()
+        cudf_polars.quent._logging.worker_setup_logging()
         bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
@@ -307,6 +307,15 @@ class RankActor:
             self._comm.logger, self._mr, self._rapidsmpf_options
         )
 
+    def _exit(self) -> list[dict[str, Any]]:
+        # Emit the Exit event on the worker.
+        # Maybe generalize this to all application-level things,
+        # followed by framework (ray) level things.
+        if self._quent_worker is not None:
+            cudf_polars.quent._logging.emit(self._quent_worker.exit())
+            return self._drain_quent_events()
+        return []
+
     def shutdown(self) -> None:
         """
         Release actor-owned resources and exit the process.
@@ -409,7 +418,7 @@ class RankActor:
             worker_id=self._worker_id,
         )
 
-    def drain_quent_events(self, *, emit_exit: bool = False) -> list[dict]:
+    def _drain_quent_events(self) -> list[dict]:
         """
         Return and clear all buffered Quent events from this actor.
 
@@ -419,9 +428,7 @@ class RankActor:
             If True, emit Worker.exit before draining so that the exit
             event is included in the returned buffer.
         """
-        if emit_exit and self._quent_worker is not None:
-            cudf_polars.quent._logging.emit(self._quent_worker.exit())
-        return drain_buffered_events()
+        return cudf_polars.quent._logging.drain_buffered_events()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
@@ -881,15 +888,23 @@ class RayEngine(StreamingEngine):
             # emitted and captured before the buffer is drained.
             try:
                 event_lists = ray.get(
-                    [
-                        a.drain_quent_events.remote(emit_exit=True)
-                        for a in self._rank_actors
-                    ]
+                    [a._drain_quent_events.remote() for a in self._rank_actors]
                 )
                 for events in event_lists:
                     self._worker_quent_events.extend(events)
             except Exception as e:
                 exceptions.append(e)
+
+            exit_refs = [a._exit.remote() for a in self._rank_actors]
+            for ref in exit_refs:
+                try:
+                    exit_events = ray.get(ref)
+                except ray.exceptions.RayActorError:
+                    pass  # expected: exit_actor() terminates the process
+                except Exception as e:
+                    exceptions.append(e)
+                else:
+                    self._worker_quent_events.extend(exit_events)
 
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:

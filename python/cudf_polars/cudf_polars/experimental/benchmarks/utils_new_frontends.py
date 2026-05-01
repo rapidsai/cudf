@@ -8,10 +8,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
-import io
-import itertools
 import json
-import logging
 import os
 import pprint
 import sys
@@ -61,7 +58,6 @@ except ImportError:
 try:
     import cudf_polars.quent
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.benchmarks.asserts import (
         ValidationError,
@@ -99,16 +95,7 @@ def get_validation_options(args: Any) -> dict[str, Any]:
     }
 
 
-try:
-    import structlog
-    import structlog.contextvars
-    import structlog.processors
-    import structlog.stdlib
-except ImportError:
-    _HAS_STRUCTLOG = False
-else:
-    _HAS_STRUCTLOG = True
-
+_HAS_STRUCTLOG = importlib.util.find_spec("structlog") is not None
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
@@ -975,7 +962,7 @@ def run_polars_query(
                 #
                 # We also do query events here, but that could be pushed.
                 # into the `.collect()`.
-                quent_context = cudf_polars.quent.QuentContext()
+                quent_context = cudf_polars.quent.quent_context.get()
                 token = cudf_polars.quent.quent_context.set(
                     dataclasses.replace(
                         quent_context,
@@ -985,6 +972,9 @@ def run_polars_query(
                     ),
                 )
                 token.var.get().emit_query_events()
+
+                # synchronize the quent context on each remote worker process
+                set_quent_context(engine, token.var.get())
         try:
             record = run_polars_query_iteration(
                 q_id=q_id,
@@ -1010,6 +1000,8 @@ def run_polars_query(
             )
 
         else:
+            token.var.get().emit_query_exit_events()
+
             if record.validation_result and record.validation_result.status == "Failed":
                 validation_failed = True
                 print(
@@ -1058,7 +1050,9 @@ def _run_query_loop(
     for q_id in run_config.queries:
         if engine is not None:
             # Set the query group for the current query.
-            quent_context = cudf_polars.quent.QuentContext()
+            # this is so easy to misuse...
+            quent_context = cudf_polars.quent.quent_context.get()
+
             token = cudf_polars.quent.quent_context.set(
                 dataclasses.replace(
                     quent_context,
@@ -1200,6 +1194,24 @@ def run_polars_spmd(
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
+def _set_quent_context_on_worker(data: dict[str, Any]) -> None:
+    # context = cudf_polars.quent.quent_context.get()
+    new_context = cudf_polars.quent.QuentContext(
+        engine=cudf_polars.quent.Engine(**data["engine"]),
+        query_group=cudf_polars.quent.QueryGroup(**data["query_group"]),
+        query=cudf_polars.quent.Query(**data["query"]),
+    )
+    cudf_polars.quent.quent_context.set(new_context)
+
+
+def set_quent_context(
+    engine: StreamingEngine, local_context: cudf_polars.quent.QuentContext
+) -> None:
+    """Set the Quent context on each remote worker process."""
+    data = dataclasses.asdict(local_context)
+    engine._run(_set_quent_context_on_worker, data)
+
+
 def run_polars_ray(
     benchmark: Any,
     args: argparse.Namespace,
@@ -1225,17 +1237,16 @@ def run_polars_ray(
         ray_init_options["address"] = run_config.connect
     if run_config.num_gpus is not None:
         ray_init_options["num_gpus"] = run_config.num_gpus
-    if _HAS_STRUCTLOG and run_config.collect_traces:
-        ray_init_options["runtime_env"] = {"worker_process_setup_hook": setup_logging}
-        from cudf_polars.quent._relay import configure_quent_logging
 
-        configure_quent_logging()
+    setup_logging()  # call before creating the engine, so that Engine init is captured properly.
+    quent_context = cudf_polars.quent.quent_context.get()
 
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
         engine_options=engine_options,
         ray_init_options=ray_init_options,
+        engine_id=quent_context.engine.id,
     ) as engine:
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1290,11 +1301,6 @@ def run_polars_dask(
             str(i) for i in range(run_config.num_gpus)
         )
 
-    if _HAS_STRUCTLOG and run_config.collect_traces:
-        from cudf_polars.quent._relay import configure_quent_logging
-
-        configure_quent_logging()
-
     try:
         with DaskEngine(
             rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1347,57 +1353,62 @@ def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
         #
         # So instead we make a new logger each time we need a new context,
         # i.e. for each query/iteration pair.
+        import cudf_polars.quent._logging
 
-        def make_injector(
-            query_id: int, iteration: int
-        ) -> Callable[[logging.Logger, str, dict[str, Any]], dict[str, Any]]:
-            def inject(
-                logger: Any, method_name: Any, event_dict: Any
-            ) -> dict[str, Any]:
-                event_dict["query_id"] = query_id
-                event_dict["iteration"] = iteration
-                return event_dict
+        cudf_polars.quent._logging.worker_setup_logging()
 
-            return inject
+        # def make_injector(
+        #     query_id: int, iteration: int
+        # ) -> Callable[[logging.Logger, str, dict[str, Any]], dict[str, Any]]:
+        #     def inject(
+        #         logger: Any, method_name: Any, event_dict: Any
+        #     ) -> dict[str, Any]:
+        #         event_dict["query_id"] = query_id
+        #         event_dict["iteration"] = iteration
+        #         return event_dict
 
-        shared_processors = [
-            structlog.contextvars.merge_contextvars,
-            make_injector(query_id, iteration),
-            structlog.processors.add_log_level,
-            structlog.processors.CallsiteParameterAdder(
-                parameters=[
-                    structlog.processors.CallsiteParameter.PROCESS,
-                    structlog.processors.CallsiteParameter.THREAD,
-                ],
-            ),
-            structlog.processors.StackInfoRenderer(),
-            structlog.dev.set_exc_info,
-            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
-        ]
+        #     return inject
 
-        # For logging to a file
-        json_renderer = structlog.processors.JSONRenderer()
+        # shared_processors = [
+        #     structlog.contextvars.merge_contextvars,
+        #     make_injector(query_id, iteration),
+        #     structlog.processors.add_log_level,
+        #     structlog.processors.CallsiteParameterAdder(
+        #         parameters=[
+        #             structlog.processors.CallsiteParameter.PROCESS,
+        #             structlog.processors.CallsiteParameter.THREAD,
+        #         ],
+        #     ),
+        #     structlog.processors.StackInfoRenderer(),
+        #     structlog.dev.set_exc_info,
+        #     structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
+        # ]
 
-        stream = io.StringIO()
-        json_file_handler = logging.StreamHandler(stream)
-        json_file_handler.setFormatter(
-            structlog.stdlib.ProcessorFormatter(
-                processor=json_renderer,
-                foreign_pre_chain=shared_processors,
-            )
-        )
+        # # For logging to an in-memory buffer
 
-        logging.basicConfig(level=logging.INFO, handlers=[json_file_handler])
+        # # For logging to a file
+        # json_renderer = structlog.processors.JSONRenderer()
 
-        structlog.configure(
-            processors=[
-                *shared_processors,
-                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-            ],
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-            cache_logger_on_first_use=True,
-        )
+        # stream = io.StringIO()
+        # json_file_handler = logging.StreamHandler(stream)
+        # json_file_handler.setFormatter(
+        #     structlog.stdlib.ProcessorFormatter(
+        #         processor=json_renderer,
+        #         foreign_pre_chain=shared_processors,
+        #     )
+        # )
+
+        # logging.basicConfig(level=logging.INFO, handlers=[json_file_handler])
+
+        # structlog.configure(
+        #     processors=[
+        #         *shared_processors,
+        #         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        #     ],
+        #     logger_factory=structlog.stdlib.LoggerFactory(),
+        #     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        #     cache_logger_on_first_use=True,
+        # )
 
 
 def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
@@ -1420,9 +1431,20 @@ def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
     engine
         The (already shut down) engine instance.
     """
-    quent_logs = engine.worker_quent_events
-    if not quent_logs:
-        return
+    import cudf_polars.quent._logging
+
+    client_logs = cudf_polars.quent._logging.drain_buffered_events()
+    engine_logs = engine.worker_quent_events
+
+    # {"scope": "QUENT", "event": {"id": "2fe7048c-d8f6-42ec-ae89-19b68fe885fd", "timestamp": 1777650217391414628, "data": {"Worker": {"Init": {"parent_engine_id": "27c20dc5-0b89-443d-87e9-921316019436", "instance_name": "rank-2"}}}}, "level": "info", "timestamp": "2026-05-01T15:43:37.391701Z"}
+    quent_logs = sorted(
+        [
+            log["event"]
+            for log in client_logs + engine_logs
+            if log.get("scope") == "QUENT"
+        ],
+        key=lambda x: x["timestamp"],
+    )
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -1441,51 +1463,63 @@ def _consolidate_logs(
     if not (_HAS_STRUCTLOG and run_config.collect_traces):
         return run_config
 
-    def gather_logs() -> str:
-        logger = logging.getLogger()
-        return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
-
-    all_logs = "\n".join(engine._run(gather_logs))
-    if gather_client_logs:
-        all_logs += "\n" + gather_logs()
-
-    parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
-    # Some other log records can end up in here. Filter those out.
-    scope_values = {s.value for s in Scope}
-    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
-    # Now we want to augment the existing Records with the trace data.
-
-    def group_key(x: dict) -> int:
-        return x["query_id"]
-
-    def sort_key(x: dict) -> tuple[int, int]:
-        return x["query_id"], x["iteration"]
-
-    grouped = itertools.groupby(
-        sorted(parsed_logs, key=sort_key),
-        key=group_key,
-    )
-
-    for query_id, run_logs_group in grouped:
-        run_logs = list(run_logs_group)
-        by_iteration = [
-            list(x)
-            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
-        ]
-        run_records = run_config.records[query_id]
-        assert len(by_iteration) == len(run_records)  # same number of iterations
-        all_traces = [list(iteration) for iteration in by_iteration]
-
-        new_records: list[SuccessRecord | FailedRecord] = []
-        for rec, traces in zip(run_records, all_traces, strict=True):
-            if rec.status == "success":
-                new_records.append(dataclasses.replace(rec, traces=traces))
-            else:
-                new_records.append(rec)
-
-        run_config.records[query_id] = new_records
-
     return run_config
+
+    # parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # # Some other log records can end up in here. Filter those out.
+    # scope_values = {s.value for s in Scope}
+    # parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # # Now we want to augment the existing Records with the trace data.
+
+    # def group_key(x: dict) -> int:
+    #     return x["query_id"]
+    return run_config
+
+    # def gather_logs() -> str:
+    #     logger = logging.getLogger()
+    #     return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+
+    # all_logs = "\n".join(engine._run(gather_logs))
+    # if gather_client_logs:
+    #     all_logs += "\n" + gather_logs()
+
+    # parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # # Some other log records can end up in here. Filter those out.
+    # scope_values = {s.value for s in Scope}
+    # parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # # Now we want to augment the existing Records with the trace data.
+
+    # def group_key(x: dict) -> int:
+    #     return x["query_id"]
+
+    # def sort_key(x: dict) -> tuple[int, int]:
+    #     return x["query_id"], x["iteration"]
+
+    # grouped = itertools.groupby(
+    #     sorted(parsed_logs, key=sort_key),
+    #     key=group_key,
+    # )
+
+    # for query_id, run_logs_group in grouped:
+    #     run_logs = list(run_logs_group)
+    #     by_iteration = [
+    #         list(x)
+    #         for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+    #     ]
+    #     run_records = run_config.records[query_id]
+    #     assert len(by_iteration) == len(run_records)  # same number of iterations
+    #     all_traces = [list(iteration) for iteration in by_iteration]
+
+    #     new_records: list[SuccessRecord | FailedRecord] = []
+    #     for rec, traces in zip(run_records, all_traces, strict=True):
+    #         if rec.status == "success":
+    #             new_records.append(dataclasses.replace(rec, traces=traces))
+    #         else:
+    #             new_records.append(rec)
+
+    #     run_config.records[query_id] = new_records
+
+    # return run_config
 
 
 PDSDS_TABLE_NAMES: list[str] = [
