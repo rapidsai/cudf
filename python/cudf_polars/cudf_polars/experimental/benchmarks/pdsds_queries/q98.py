@@ -76,18 +76,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     end_date_py = start_date_py + timedelta(days=30)
     start_date = pl.date(start_date_py.year, start_date_py.month, start_date_py.day)
     end_date = pl.date(end_date_py.year, end_date_py.month, end_date_py.day)
+
+    # Pre-filter item to matching categories before joining against store_sales [58 partitions].
+    filtered_item = item.filter(
+        pl.col("i_category").is_in(params["categories"])
+    ).select(["i_item_sk", "i_item_id", "i_item_desc", "i_current_price", "i_class", "i_category"])
+    # Pre-filter date_dim to the 30-day window; d_date not needed after filter — semi-join.
+    filtered_dates = date_dim.filter(
+        pl.col("d_date").is_between(start_date, end_date, closed="both")
+    ).select("d_date_sk")
+
     return QueryResult(
         frame=(
-            store_sales.join(
-                item, left_on="ss_item_sk", right_on="i_item_sk", how="inner"
-            )
-            .join(
-                date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", how="inner"
-            )
-            .filter(
-                pl.col("i_category").is_in(params["categories"])
-                & pl.col("d_date").is_between(start_date, end_date, closed="both")
-            )
+            store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+            .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi")
             .group_by(
                 [
                     "i_item_id",
