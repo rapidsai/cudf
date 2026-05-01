@@ -17,6 +17,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
@@ -713,11 +714,11 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
-    engine: pl.GPUEngine, tmp_path, custom_engine, request, using_streaming_engine
+    engine: pl.GPUEngine, tmp_path, custom_engine, request
 ):
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine and custom_engine is None,
+            is_streaming_engine(engine) and custom_engine is None,
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )
