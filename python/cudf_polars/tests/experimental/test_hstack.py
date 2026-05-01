@@ -65,6 +65,10 @@ def test_cse_agg_select(df, engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_hstack_non_scalar_cse_fallback(df, engine):
     # Non-scalar CSE (head(5)) skips the CSE transform, falling through to the
     # non-pointwise HStack fallback in lower_ir_node.register(HStack).

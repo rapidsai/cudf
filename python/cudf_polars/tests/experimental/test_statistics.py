@@ -12,6 +12,7 @@ from rapidsmpf.config import Options
 from rapidsmpf.statistics import Statistics
 
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.testing.engine_utils import NUM_RANKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -56,6 +57,10 @@ def engine(
         with RayEngine(
             rapidsmpf_options=rapidsmpf_options,
             executor_options=executor_options,
+            # See test_io_multirank.py for the rationale: coexist with
+            # the cached engine in ``build_streaming_engine``.
+            engine_options={"allow_gpu_sharing": True},
+            num_ranks=NUM_RANKS,
             ray_init_options={"include_dashboard": False},
         ) as engine:
             yield engine

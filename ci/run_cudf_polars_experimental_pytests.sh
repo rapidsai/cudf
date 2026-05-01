@@ -14,7 +14,7 @@ echo "Running the full cudf-polars test suite with both the in-memory and spmd e
 timeout 10m python -m pytest --cache-clear "$@" tests --ignore=tests/experimental/legacy
 
 echo "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'distributed' cluster"
-timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" \
+timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" -v \
     --executor streaming \
     --cluster distributed \
     --runtime rapidsmpf

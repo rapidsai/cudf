@@ -19,6 +19,10 @@ def engine(streaming_engine_factory):
     )
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_rolling_datetime(request, engine):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
@@ -46,6 +50,10 @@ def test_rolling_datetime(request, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_over_in_filter_unsupported(streaming_engine_factory) -> None:
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1, fallback_mode="warn"),

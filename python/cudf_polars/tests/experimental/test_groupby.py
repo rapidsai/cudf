@@ -131,6 +131,10 @@ def test_groupby_std_var_ddof(df, engine, agg, ddof):
 
 
 @pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_groupby_fallback(df, fallback_mode, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(fallback_mode=fallback_mode),
@@ -290,6 +294,11 @@ def test_groupby_count_type_mismatch(df, streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "patch.object only takes effect in the test process; ray actors run "
+    "the un-patched ShuffleManager.Inserter.insert_hash",
+    backend="ray",
+)
 def test_shuffle_reduce_insert_finished_called_on_oom(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=10, max_rows_per_partition=5),

@@ -54,6 +54,10 @@ def test_select(df, engine):
 
 
 @pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode=fallback_mode),
@@ -84,6 +88,10 @@ def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
         assert_gpu_result_equal(query, engine=engine)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_select_fill_null_with_strategy(df, engine):
     q = df.select(pl.col("a").forward_fill())
 
@@ -183,6 +191,10 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_select_with_len(engine):
     # https://github.com/pola-rs/polars/issues/25592
     df1 = pl.LazyFrame({"c0": [1] * 4})

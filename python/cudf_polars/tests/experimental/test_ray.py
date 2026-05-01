@@ -21,6 +21,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine  # noqa: E
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+# Local override: this module's tests exercise the multi-rank code path
+# (cross-rank UCX barrier inside ``RankActor.reset``, multi-actor
+# ``evaluate``), independent of ``engine_utils.NUM_RANKS`` (which is the
+# default for the broader test fixture matrix).
 NUM_RANKS = 2
 
 

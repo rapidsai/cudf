@@ -54,6 +54,10 @@ def test_rename_concat(streaming_engine) -> None:
     assert_gpu_result_equal(q, engine=streaming_engine)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_fallback_on_concat_zlice(streaming_engine_factory) -> None:
     # Pin ``fallback_mode="warn"`` so the spmd-small baseline (which sets
     # ``SILENT``) doesn't suppress the warning this test asserts on.

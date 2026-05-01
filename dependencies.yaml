@@ -354,6 +354,14 @@ files:
     includes:
       - depends_on_rapidsmpf
       - pyarrow_run
+  py_run_cudf_polars_ray:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: ray
+    includes:
+      - depends_on_ray
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -1260,6 +1268,11 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_ray:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - ray>=2.0
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]

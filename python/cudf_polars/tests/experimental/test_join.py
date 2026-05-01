@@ -90,6 +90,10 @@ def test_join_then_shuffle(left, right, streaming_engine_factory):
 
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize("max_rows_per_partition", [3, 9])
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_join_conditional(reverse, max_rows_per_partition, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
@@ -156,6 +160,10 @@ def test_join(left, right, how, reverse, streaming_engine_factory, options):
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_join_and_slice(zlice, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
@@ -219,6 +227,10 @@ def test_bloom_filter_join(how, streaming_engine_factory):
 
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
+)
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
 )
 def test_join_maintain_order_fallback_streaming(
     left, right, maintain_order, streaming_engine_factory

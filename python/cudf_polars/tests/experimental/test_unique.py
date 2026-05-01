@@ -68,6 +68,10 @@ def test_unique_fallback(df, streaming_engine_factory):
 
 @pytest.mark.parametrize("maintain_order", [True, False])
 @pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_unique_select(df, streaming_engine_factory, maintain_order, cardinality):
     engine = streaming_engine_factory(
         StreamingOptions(
@@ -104,6 +108,10 @@ def test_unique_head_tail(keep, zlice, streaming_engine_factory):
     )
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_unique_complex_slice_fallback(df, engine):
     """Test that unique with complex slice (offset >= 1) falls back correctly."""
     # unique().slice(offset=5, length=10) has zlice[0] >= 1, triggering fallback

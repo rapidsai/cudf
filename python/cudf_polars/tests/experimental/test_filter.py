@@ -36,6 +36,10 @@ def test_filter_pointwise(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "Worker-emitted warnings aren't visible to pytest.warns",
+    backend="ray",
+)
 def test_filter_non_pointwise(df, engine):
     query = df.filter(pl.col("a") > pl.col("a").max())
     with pytest.warns(

@@ -13,6 +13,7 @@ import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_sink_result_equal
+from cudf_polars.testing.engine_utils import NUM_RANKS
 from cudf_polars.utils.config import Cluster, StreamingExecutor
 
 if TYPE_CHECKING:
@@ -67,6 +68,8 @@ def engine(
 
         with RayEngine(
             executor_options=executor_options,
+            engine_options={"allow_gpu_sharing": True},
+            num_ranks=NUM_RANKS,
             ray_init_options={"include_dashboard": False},
         ) as eng:
             yield eng

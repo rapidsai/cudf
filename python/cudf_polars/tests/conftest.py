@@ -15,6 +15,7 @@ from cudf_polars.testing.engine_utils import (
     STREAMING_ENGINE_FIXTURE_PARAMS,
     EngineFixtureParam,
     build_streaming_engine,
+    shutdown_streaming_engine_cache,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +88,49 @@ def spmd_comm() -> Communicator:
     return single_communicator(Options(get_environment_variables()), ProgressThread())
 
 
+@pytest.fixture(scope="session")
+def ray_cluster() -> Generator[None, None, None]:
+    """Session-scoped Ray cluster — one ``ray.init`` shared by all ray tests.
+
+    Skipped if ``ray`` is not installed or the suite is running under
+    ``rrun`` (``RayEngine`` refuses to run inside rrun).
+
+    Yields nothing — this fixture is a side-effect setup gate. The cached
+    :class:`RayEngine` (built by ``build_streaming_engine``) lives until
+    this fixture's teardown runs ``shutdown_streaming_engine_cache``
+    *before* ``ray.shutdown()`` so the actor handles aren't invalidated
+    against a torn-down cluster.
+    """
+    pytest.importorskip("ray")
+    import os
+    import tempfile
+
+    import ray
+    from rapidsmpf.bootstrap import is_running_with_rrun
+
+    if is_running_with_rrun():
+        pytest.skip("RayEngine cannot be created inside an rrun cluster")
+
+    if not ray.is_initialized():
+        # Prevent Ray from overriding ``CUDA_VISIBLE_DEVICES`` to ``""``
+        # when a worker process starts with zero visible GPUs (e.g. the
+        # test driver itself). Future Ray versions error if this isn't
+        # set explicitly. Must be set *before* ``ray.init``.
+        os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
+        # Per-process temp dir disables ``/tmp/ray/session_latest``-based
+        # auto-discovery, so concurrent pytest runs (xdist, parallel CI
+        # invocations, repeated local runs) don't accidentally connect
+        # to each other's clusters.
+        temp_dir = tempfile.mkdtemp(prefix=f"ray-pytest-{os.getpid()}-")
+        ray.init(include_dashboard=False, _temp_dir=temp_dir)
+    try:
+        yield
+    finally:
+        # Release the cached RayEngine before tearing down the cluster.
+        shutdown_streaming_engine_cache()
+        ray.shutdown()
+
+
 @pytest.fixture(params=STREAMING_ENGINE_FIXTURE_PARAMS)
 def _streaming_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
     """Parametrization helper to run tests for each streaming engine variant."""
@@ -101,6 +145,7 @@ def _all_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 
 @pytest.fixture
 def streaming_engine_factory(
+    request: pytest.FixtureRequest,
     _streaming_engine_param: EngineFixtureParam,
     spmd_comm: Communicator,
 ) -> Generator[Callable[..., StreamingEngine], None, None]:
@@ -108,10 +153,16 @@ def streaming_engine_factory(
     Yield a factory that constructs :class:`StreamingEngine` instances for tests.
 
     The fixture is parametrized over :data:`STREAMING_ENGINE_FIXTURE_PARAMS`.
-    Created engines are tracked and automatically shut down after the test.
+    SPMD-backend engines are created fresh per call and shut down at test
+    end. Ray-backend engines come from the session-scoped cache inside
+    :func:`build_streaming_engine` (via :meth:`RayEngine._reset`); the cache
+    owns their lifetime, so the per-test teardown skips ray engines.
 
     Parameters
     ----------
+    request
+        Pytest fixture request used to lazily resolve ``ray_cluster`` only
+        for ray-parametrized variants.
     _streaming_engine_param
         Parametrized engine descriptor controlling backend and block size mode.
     spmd_comm
@@ -123,6 +174,9 @@ def streaming_engine_factory(
     factory accepts optional :class:`StreamingOptions`, which are merged on
     top of the parametrized blocksize baseline.
     """
+    if _streaming_engine_param.engine_name == "ray":
+        request.getfixturevalue("ray_cluster")
+
     engines: list[StreamingEngine] = []
 
     def factory(options: StreamingOptions | None = None) -> StreamingEngine:
@@ -132,8 +186,12 @@ def streaming_engine_factory(
 
     yield factory
 
-    for engine in reversed(engines):
-        engine.shutdown()
+    # RayEngine instances are owned by the session-level cache (one
+    # cached engine reused via ``_reset`` across all ray tests); only
+    # shut down per-call engines for non-ray backends.
+    if _streaming_engine_param.engine_name != "ray":
+        for engine in reversed(engines):
+            engine.shutdown()
 
 
 @pytest.fixture
@@ -189,12 +247,18 @@ def engine(
         yield pl.GPUEngine(executor="in-memory", raise_on_fail=True)
         return
 
+    if _all_engine_param.engine_name == "ray":
+        request.getfixturevalue("ray_cluster")
+
     spmd_comm: Communicator = request.getfixturevalue("spmd_comm")
     engine = build_streaming_engine(_all_engine_param, spmd_comm)
     try:
         yield engine
     finally:
-        engine.shutdown()
+        # RayEngine instances are owned by the session-level cache;
+        # SPMDEngine instances are owned by this fixture call.
+        if _all_engine_param.engine_name != "ray":
+            engine.shutdown()
 
 
 @pytest.fixture
@@ -246,10 +310,14 @@ def pytest_configure(config):
 
     config.addinivalue_line(
         "markers",
-        "skip_on_streaming_engine(reason): skip the test for streaming "
-        '``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``) while '
-        "still letting the in-memory variant run. Use this to track features "
-        "that have no multi-partition implementation",
+        "skip_on_streaming_engine(reason, *, backend=None): skip the test "
+        "for streaming ``engine`` variants while still letting the in-memory "
+        "variant run. Use this to track features that have no "
+        "multi-partition implementation. By default, all streaming variants "
+        '(e.g. ``"spmd"``, ``"spmd-small"``, ``"ray"``) are skipped; pass '
+        '``backend="ray"`` (a single backend name) or '
+        '``backend=("ray", ...)`` (a sequence of names) to skip only '
+        "those backends.",
     )
 
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
@@ -283,7 +351,21 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(items):
-    """Apply ``skip_on_streaming_engine`` markers to streaming ``engine`` items."""
+    """Apply ``skip_on_streaming_engine`` markers during test collection.
+
+    The ``skip_on_streaming_engine`` marker supports an optional
+    ``backend=`` keyword:
+
+    - If ``backend`` is ``None`` (default), the test is skipped for all
+      streaming engine variants.
+    - If ``backend`` is specified (e.g. ``"ray"`` or ``("ray",)``), the
+      test is skipped only for matching variants, including suffixed
+      forms such as ``"ray-small"``.
+
+    The skip reason is taken from the first positional argument if
+    provided, otherwise from the ``reason=`` keyword, and defaults to
+    ``"unsupported on streaming engine"``.
+    """
     for item in items:
         marker = item.get_closest_marker("skip_on_streaming_engine")
         if marker is None:
@@ -291,9 +373,24 @@ def pytest_collection_modifyitems(items):
         callspec = getattr(item, "callspec", None)
         if callspec is None:
             continue
-        engine_param = callspec.params.get("_all_engine_param")
+        # Cover both fixture paths: ``_all_engine_param`` for the
+        # ``engine`` fixture, ``_streaming_engine_param`` for the
+        # ``streaming_engine`` / ``streaming_engine_factory`` fixtures.
+        engine_param = callspec.params.get("_all_engine_param") or callspec.params.get(
+            "_streaming_engine_param"
+        )
         if engine_param is None or engine_param == "in-memory":
             continue
+        backend_filter = marker.kwargs.get("backend")
+        if backend_filter is not None:
+            engine_backend = engine_param.removesuffix("-small")
+            backends = (
+                (backend_filter,)
+                if isinstance(backend_filter, str)
+                else tuple(backend_filter)
+            )
+            if engine_backend not in backends:
+                continue
         reason = (
             marker.args[0]
             if marker.args

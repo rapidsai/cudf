@@ -63,6 +63,11 @@ def right() -> pl.LazyFrame:
         ),
     ],
 )
+@pytest.mark.skip_on_streaming_engine(
+    "evaluate_logical_plan is the SPMD evaluation path and doesn't dispatch "
+    "to ray actors",
+    backend="ray",
+)
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
