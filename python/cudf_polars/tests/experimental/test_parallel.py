@@ -15,6 +15,7 @@ from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
@@ -53,7 +54,10 @@ def test_rename_concat(streaming_engine) -> None:
     assert_gpu_result_equal(q, engine=streaming_engine)
 
 
-def test_fallback_on_concat_zlice(streaming_engine) -> None:
+def test_fallback_on_concat_zlice(streaming_engine_factory) -> None:
+    # Pin ``fallback_mode="warn"`` so the spmd-small baseline (which sets
+    # ``SILENT``) doesn't suppress the warning this test asserts on.
+    streaming_engine = streaming_engine_factory(StreamingOptions(fallback_mode="warn"))
     q = pl.concat(
         [
             pl.LazyFrame({"a": [1, 2]}),
@@ -132,20 +136,14 @@ def test_pickle_conditional_join_args():
         pickle.loads(pickle.dumps(node._non_child_args))
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 2,
-                "broadcast_join_limit": 2,
-                "unique_fraction": {"a": 1.0},
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_preserve_partitioning(streaming_engine):
+def test_preserve_partitioning(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            broadcast_join_limit=2,
+            unique_fraction={"a": 1.0},
+        ),
+    )
     left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
     right = pl.LazyFrame({"a": [3, 4, 5, 6, 7] * 4, "c": range(20)})
     q = (

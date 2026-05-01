@@ -13,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
 
 
@@ -115,7 +116,7 @@ def test_unique_hash():
     assert hash(ir_a) != hash(ir_b)
 
 
-def test_set_sorted_then_inner_join(engine: pl.GPUEngine, blocksize_mode, request):
+def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_135,
@@ -124,7 +125,7 @@ def test_set_sorted_then_inner_join(engine: pl.GPUEngine, blocksize_mode, reques
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=blocksize_mode == "small" and POLARS_VERSION_LT_135,
+            condition=get_blocksize_mode(engine) == "small" and POLARS_VERSION_LT_135,
             reason="set_sorted join result order differs in polars < 1.35",
         )
     )
