@@ -111,11 +111,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # Pre-filter date_dim to the 12-month window before joining against store_sales [58].
+    # d_month_seq not needed after filter; keep group-by output columns.
+    filtered_dates = date_dim.filter(
+        pl.col("d_month_seq").is_between(dms, dms + 11)
+    ).select(["d_date_sk", "d_year", "d_qoy", "d_moy"])
+
     base_data = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_store_sk", "ss_sales_price", "ss_quantity"])
+        .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store.select(["s_store_sk", "s_store_id"]), left_on="ss_store_sk", right_on="s_store_sk")
+        .join(
+            item.select(["i_item_sk", "i_category", "i_class", "i_brand", "i_product_name"]),
+            left_on="ss_item_sk",
+            right_on="i_item_sk",
+        )
         .with_columns(
             (pl.col("ss_sales_price") * pl.col("ss_quantity"))
             .fill_null(0)
