@@ -42,7 +42,6 @@
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
@@ -232,16 +231,20 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
                       match_counts_it,
                       comparator);
 
-  auto match_counts_update_it =
-    thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
-                                       size_type idx, size_type val) { match_counts[idx] -= val; });
+  rmm::device_uvector<size_type> lower_bounds(larger_numrows, stream, mr);
   thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       smaller_it,
                       smaller_it + smaller_numrows,
                       cudf::detail::row::rhs_iterator(0),
                       cudf::detail::row::rhs_iterator(0) + larger_numrows,
-                      match_counts_update_it,
+                      lower_bounds.begin(),
                       comparator);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    match_counts.begin(),
+                    match_counts.begin() + larger_numrows,
+                    lower_bounds.begin(),
+                    match_counts.begin(),
+                    thrust::minus<size_type>{});
 
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts));
 }
@@ -318,16 +321,8 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   cub::DeviceTransform::Fill(smaller_indices.begin(), smaller_indices.size(), 1, stream.value());
 
   {
-    auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = thrust::tabulate_output_iterator(
-      [nonzero_matches = nonzero_matches.begin(),
-       match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
-        auto const lhs_idx   = nonzero_matches[idx];
-        auto const pos       = match_offsets[lhs_idx];
-        smaller_indices[pos] = lb;
-      });
-    auto smaller_it = cuda::transform_iterator(
+    auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
+    auto smaller_it       = cuda::transform_iterator(
       sorted_smaller_order_begin,
       cuda::proclaim_return_type<detail::row::lhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
@@ -335,13 +330,23 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
       nonzero_matches.begin(),
       cuda::proclaim_return_type<detail::row::rhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
+    rmm::device_uvector<size_type> lb_positions(nonzero_matches.size(), stream, mr);
     thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         smaller_it,
                         smaller_it + smaller_numrows,
                         larger_it,
                         larger_it + nonzero_matches.size(),
-                        smaller_tabulate_it,
+                        lb_positions.begin(),
                         comparator);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       thrust::counting_iterator<size_type>(0),
+                       nonzero_matches.size(),
+                       [nonzero_matches = nonzero_matches.begin(),
+                        match_offsets   = match_offsets.begin(),
+                        smaller_indices = smaller_indices.begin(),
+                        lb_positions    = lb_positions.begin()] __device__(size_type idx) {
+                         smaller_indices[match_offsets[nonzero_matches[idx]]] = lb_positions[idx];
+                       });
   }
 
   // Use cub API to handle large arrays (> INT32_MAX)
@@ -468,17 +473,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     smaller_indices.begin() + left_join_only_matches, inner_join_matches, 1, stream.value());
 
   {
-    auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = thrust::tabulate_output_iterator(
-      [nonzero_matches = nonzero_matches.begin(),
-       match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx,
-                                                                                      auto lb) {
-        auto const lhs_idx   = nonzero_matches[idx];
-        auto const pos       = match_offsets[lhs_idx];
-        smaller_indices[pos] = lb;
-      });
-    auto smaller_it = cuda::transform_iterator(
+    auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
+    auto smaller_it       = cuda::transform_iterator(
       sorted_smaller_order_begin,
       cuda::proclaim_return_type<detail::row::lhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
@@ -486,13 +482,23 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
       nonzero_matches.begin(),
       cuda::proclaim_return_type<detail::row::rhs_index_type>(
         [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
+    rmm::device_uvector<size_type> lb_positions(nonzero_matches.size(), stream, mr);
     thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         smaller_it,
                         smaller_it + smaller_numrows,
                         larger_it,
                         larger_it + nonzero_matches.size(),
-                        smaller_tabulate_it,
+                        lb_positions.begin(),
                         comparator);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       thrust::counting_iterator<size_type>(0),
+                       nonzero_matches.size(),
+                       [nonzero_matches = nonzero_matches.begin(),
+                        match_offsets   = match_offsets.begin(),
+                        smaller_indices = smaller_indices.begin() + left_join_only_matches,
+                        lb_positions    = lb_positions.begin()] __device__(size_type idx) {
+                         smaller_indices[match_offsets[nonzero_matches[idx]]] = lb_positions[idx];
+                       });
   }
 
   // Use cub API to handle large arrays (> INT32_MAX)
