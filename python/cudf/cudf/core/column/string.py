@@ -340,6 +340,7 @@ class StringColumn(ColumnBase, Scannable):
         if dtype != self.dtype:
             if (
                 cudf.get_option("mode.pandas_compatible")
+                and self.null_count != 0
                 and isinstance(dtype, np.dtype)
                 and dtype == np.dtype("O")
                 and isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype))
