@@ -202,7 +202,7 @@ API Reference
 
 Generally speaking, Dask cuDF tries to offer exactly the same API as
 Dask DataFrame. There are, however, some minor differences mostly because
-cuDF does not :doc:`perfectly mirror <cudf:cudf/PandasCompat>`
+cuDF does not `perfectly mirror <https://docs.rapids.ai/api/cudf/stable/cudf/PandasCompat.html>`__
 the pandas API, or because cuDF provides additional configuration
 flags (these mostly occur in data reading and writing interfaces).
 
