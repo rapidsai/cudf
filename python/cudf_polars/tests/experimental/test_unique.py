@@ -34,51 +34,79 @@ def df():
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.7}])
+@pytest.mark.parametrize(
+    "cardinality",
+    [
+        {},
+        pytest.param(
+            {"y": 0.7},
+            marks=pytest.mark.filterwarnings(
+                "ignore:Setting 'unique_fraction' is deprecated"
+            ),
+        ),
+    ],
+)
 def test_unique(
-    df, streaming_engine_factory, keep, subset, maintain_order, cardinality
+    df, streaming_engine_factory, keep, subset, maintain_order, cardinality, request
 ):
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        engine = streaming_engine_factory(
-            StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
+    request.applymarker(
+        pytest.mark.xfail(
+            not maintain_order
+            and subset is None
+            and keep in {"any", "none"}
+            and "spmd-small" in request.node.name,
+            reason="ValueError: CUDF failure at: /cudf/cpp/src/copying/slice.cu:33: Invalid end of range",
         )
+    )
+    engine = streaming_engine_factory(
+        StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
+    )
     q = df.unique(subset=subset, keep=keep, maintain_order=maintain_order)
     check_row_order = maintain_order
     if keep == "any" and subset:
         q = q.select(*(pl.col(col) for col in subset))
         check_row_order = False
-
     assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
 def test_unique_fallback(df, streaming_engine_factory):
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        engine = streaming_engine_factory(
-            StreamingOptions(
-                unique_fraction={"y": 1.0},
-                fallback_mode="raise",
-                dynamic_planning=None,
-            ),
-        )
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            unique_fraction={"y": 1.0},
+            fallback_mode="raise",
+            dynamic_planning=None,
+        ),
+    )
     q = df.unique(keep="first", maintain_order=True)
-    with pytest.raises(
-        NotImplementedError,
-        match="Unsupported unique options",
+    with (
+        pytest.raises(
+            NotImplementedError,
+            match="Unsupported unique options",
+        ),
+        pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"),
     ):
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.filterwarnings("ignore:Setting 'unique_fraction' is deprecated")
 @pytest.mark.parametrize("maintain_order", [True, False])
 @pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
-def test_unique_select(df, streaming_engine_factory, maintain_order, cardinality):
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        engine = streaming_engine_factory(
-            StreamingOptions(
-                max_rows_per_partition=4,
-                unique_fraction=cardinality,
-                fallback_mode="warn",
-            ),
+def test_unique_select(
+    df, streaming_engine_factory, maintain_order, cardinality, request
+):
+    request.applymarker(
+        pytest.mark.xfail(
+            cardinality and not maintain_order and "spmd" in request.node.name,
+            reason="ValueError: CUDF failure at: /cudf/cpp/src/copying/slice.cu:33: Invalid end of range",
         )
+    )
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=4,
+            unique_fraction=cardinality,
+            fallback_mode="warn",
+        ),
+    )
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
     if cardinality == {"y": 0.5} and maintain_order:
         with pytest.warns(
