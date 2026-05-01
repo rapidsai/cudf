@@ -65,15 +65,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     sort_by = {"ext_price": True, "brand_id": False}
     limit = 100
+
+    # d_year not in GROUP BY so date filter can be a semi-join (no date columns needed).
+    filtered_dates = date_dim.filter(
+        (pl.col("d_moy") == month) & (pl.col("d_year") == year)
+    ).select("d_date_sk")
+    filtered_item = item.filter(pl.col("i_manager_id") == manager_id).select(
+        ["i_item_sk", "i_brand", "i_brand_id"]
+    )
+
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            .filter(
-                (pl.col("i_manager_id") == manager_id)
-                & (pl.col("d_moy") == month)
-                & (pl.col("d_year") == year)
-            )
+            store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+            .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi")
+            .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
             .group_by(["i_brand", "i_brand_id"])
             .agg(pl.col("ss_ext_sales_price").sum().alias("ext_price"))
             .select(
