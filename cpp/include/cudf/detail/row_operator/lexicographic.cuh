@@ -645,11 +645,6 @@ struct less_comparator
     : weak_ordering_comparator_impl<Comparator, cudf::detail::weak_ordering::LESS>{comparator}
   {
   }
-
-  less_comparator<Comparator>& operator=(less_comparator<Comparator> const& other)
-  {
-    return *this;
-  };
 };
 
 /**

@@ -38,12 +38,6 @@ struct noinline_adapter_fn {
   {
     return f(std::forward<Args>(args)...);
   }
-
-  noinline_adapter_fn<Functor>& operator=(noinline_adapter_fn<Functor> const& other)
-  {
-    this->f = other.f;
-    return *this;
-  };
 };
 
 /**
