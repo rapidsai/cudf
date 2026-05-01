@@ -12,6 +12,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -41,24 +42,20 @@ def test_dynamic_groupby_basic(df, streaming_engine, keys, agg):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 100_000_000}}],
-    indirect=True,
-)
-def test_dynamic_groupby_tree_strategy(df, streaming_engine):
+def test_dynamic_groupby_tree_strategy(df, streaming_engine_factory):
     """Test that small output uses tree reduction (high target_partition_size)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=100_000_000),
+    )
     q = df.group_by("key2").agg(pl.col("value").sum())
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 1000}}],
-    indirect=True,
-)
-def test_dynamic_groupby_shuffle_strategy(streaming_engine):
+def test_dynamic_groupby_shuffle_strategy(streaming_engine_factory):
     """Test that large output uses shuffle (low target_partition_size)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=1000),
+    )
     df = pl.LazyFrame({"key": range(1000), "value": range(1000)})
     q = df.group_by("key").agg(pl.col("value").sum())
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
@@ -108,12 +105,10 @@ def test_groupby(df, streaming_engine, op, keys):
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"max_rows_per_partition": int(1e9)}}],
-    indirect=True,
-)
-def test_groupby_single_partitions(df, streaming_engine, op, keys):
+def test_groupby_single_partitions(df, streaming_engine_factory, op, keys):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=int(1e9)),
+    )
     q = getattr(df.group_by(*keys), op)()
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
@@ -135,17 +130,11 @@ def test_groupby_std_var_ddof(df, engine, agg, ddof):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "fallback_mode,streaming_engine",
-    [
-        ("silent", {"executor_options": {"fallback_mode": "silent"}}),
-        ("raise", {"executor_options": {"fallback_mode": "raise"}}),
-        ("warn", {"executor_options": {"fallback_mode": "warn"}}),
-        ("foo", {"executor_options": {"fallback_mode": "foo"}}),
-    ],
-    indirect=["streaming_engine"],
-)
-def test_groupby_fallback(df, fallback_mode, streaming_engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_groupby_fallback(df, fallback_mode, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(fallback_mode=fallback_mode),
+    )
     match = "Failed to decompose groupby aggs"
 
     q = df.group_by("y").median()
@@ -246,12 +235,10 @@ def test_groupby_on_equality(streaming_engine) -> None:
         [1, None, None, None],
     ],
 )
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"max_rows_per_partition": 2}}],
-    indirect=True,
-)
-def test_mean_partitioned(values: list[int | None], streaming_engine) -> None:
+def test_mean_partitioned(values: list[int | None], streaming_engine_factory) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2),
+    )
     df = pl.LazyFrame(
         {
             "key1": [1, 1, 2, 2],
@@ -281,20 +268,13 @@ def test_groupby_literal_key(df, streaming_engine):
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 4,
-                "unique_fraction": {"z": 0.5},
-                "groupby_n_ary": 8,
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_groupby_agg_config_options(df, op, keys, streaming_engine):
+def test_groupby_agg_config_options(df, op, keys, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=4,
+            unique_fraction={"z": 0.5},
+        ),
+    )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
         agg = agg.round(2)  # Unary test coverage
@@ -302,22 +282,18 @@ def test_groupby_agg_config_options(df, op, keys, streaming_engine):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 1}}],
-    indirect=True,
-)
-def test_groupby_count_type_mismatch(df, streaming_engine):
+def test_groupby_count_type_mismatch(df, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=1),
+    )
     q = df.group_by("key", maintain_order=True).agg(pl.col("value").count())
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 10, "max_rows_per_partition": 5}}],
-    indirect=True,
-)
-def test_shuffle_reduce_insert_finished_called_on_oom(streaming_engine):
+def test_shuffle_reduce_insert_finished_called_on_oom(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=10, max_rows_per_partition=5),
+    )
     # Tests that an exception raised inside insert_hash() must not leave the
     # C++ ShufflerAsync without insert_finished() being called.
 
