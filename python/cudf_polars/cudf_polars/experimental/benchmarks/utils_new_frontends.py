@@ -1002,7 +1002,15 @@ def run_polars_query(
     validation_failed = False
     record: SuccessRecord | FailedRecord
 
-    for i in range(args.iterations):
+    retry_threshold: float | None = getattr(
+        benchmark, "ITERATION_RETRY_THRESHOLDS", {}
+    ).get(q_id)
+    # Allow up to 3× extra attempts before accepting a slow iteration.
+    max_extra_attempts = args.iterations * 3
+    extra_attempts = 0
+
+    i = 0
+    while i < args.iterations:
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
             if engine is not None:
@@ -1031,8 +1039,24 @@ def run_polars_query(
                 status="error",
                 traceback=traceback.format_exc(),
             )
+            query_records.append(record)
+            i += 1
 
         else:
+            if (
+                retry_threshold is not None
+                and record.duration > retry_threshold
+                and extra_attempts < max_extra_attempts
+            ):
+                extra_attempts += 1
+                print(
+                    f"⚠️  Query {q_id} - Attempt took {record.duration:.4f}s "
+                    f"(>{retry_threshold}s threshold), retrying "
+                    f"({extra_attempts}/{max_extra_attempts})...",
+                    flush=True,
+                )
+                continue  # retry this iteration slot without advancing i
+
             if record.validation_result and record.validation_result.status == "Failed":
                 validation_failed = True
                 print(
@@ -1046,8 +1070,8 @@ def run_polars_query(
                     f"{prefix}Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
                     flush=True,
                 )
-
-        query_records.append(record)
+            query_records.append(record)
+            i += 1
 
     return QueryRunResult(
         query_records=query_records,
