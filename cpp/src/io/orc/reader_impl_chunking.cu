@@ -25,6 +25,7 @@
 #include <thrust/scan.h>
 
 #include <algorithm>
+#include <numeric>
 #include <tuple>
 
 namespace cudf::io::orc::detail {
