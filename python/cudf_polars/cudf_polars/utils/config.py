@@ -853,14 +853,14 @@ class StreamingExecutor:
                 FutureWarning,
                 stacklevel=2,
             )
-            if self.shuffle_method == "rapidsmpf-single":
+            if self.shuffle_method == "rapidsmpf-single":  # pragma: no cover
                 raise ValueError("rapidsmpf-single is not a supported shuffle method.")
             elif self.shuffle_method == "rapidsmpf":
                 if (
                     self.cluster == "distributed"
                     and not rapidsmpf_distributed_available()
                 ):
-                    raise ValueError(
+                    raise ValueError(  # pragma: no cover
                         "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
                     )
                 if self.cluster == "single":
@@ -944,7 +944,7 @@ class StreamingExecutor:
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
-        if not isinstance(self.unique_fraction, dict):
+        if not isinstance(self.unique_fraction, dict):  # pragma: no cover
             raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
