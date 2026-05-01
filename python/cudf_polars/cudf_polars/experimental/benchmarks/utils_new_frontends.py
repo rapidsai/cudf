@@ -1281,6 +1281,10 @@ def run_polars_dask(
 
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
+    # TODO: refactor up
+    setup_logging()  # call before creating the engine, so that Engine init is captured properly.
+    quent_context = cudf_polars.quent.quent_context.get()
+
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — DaskEngine sets them
     executor_options.pop("runtime", None)
@@ -1307,6 +1311,7 @@ def run_polars_dask(
             executor_options=executor_options,
             engine_options=engine_options,
             dask_client=dask_client,
+            engine_id=quent_context.engine.id,
         ) as engine:
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
             records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1436,7 +1441,6 @@ def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
     client_logs = cudf_polars.quent._logging.drain_buffered_events()
     engine_logs = engine.worker_quent_events
 
-    # {"scope": "QUENT", "event": {"id": "2fe7048c-d8f6-42ec-ae89-19b68fe885fd", "timestamp": 1777650217391414628, "data": {"Worker": {"Init": {"parent_engine_id": "27c20dc5-0b89-443d-87e9-921316019436", "instance_name": "rank-2"}}}}, "level": "info", "timestamp": "2026-05-01T15:43:37.391701Z"}
     quent_logs = sorted(
         [
             log["event"]
