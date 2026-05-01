@@ -406,12 +406,12 @@ def test_quent_events_ray() -> None:
     # We need to create the engine, to ensure the lifecycle events are emitted properly.
     import cudf_polars.experimental.rapidsmpf.frontend.ray
     import cudf_polars.quent
-    import cudf_polars.quent._logging
+    # import cudf_polars.quent._logging
 
     # Configure the logging...
     # TODO: this should be automatic?
 
-    cudf_polars.quent._logging.worker_setup_logging()
+    # cudf_polars.quent._logging.worker_setup_logging()
 
     engine = cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine()
 

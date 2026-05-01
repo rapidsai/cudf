@@ -26,9 +26,22 @@ buffer_lock = threading.Lock()
 log_buffer: collections.deque[dict[str, Any]] = collections.deque(maxlen=100_000)
 
 
+def _get_logger(**initial_values: Any) -> Any:
+    return structlog.wrap_logger(
+        DequeLogger(log_buffer),
+        processors=[
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            collect_to_deque,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        **initial_values,
+    )
+
+
 def emit(event: Event) -> None:
     """Emit a Quent event."""
-    logger = structlog.get_logger()
+    logger = _get_logger()
     logger.info(event.to_dict(), scope=QUENT_SCOPE)
 
 
@@ -50,25 +63,6 @@ def collect_to_deque(
     event_dict: structlog.types.EventDict,
 ) -> structlog.types.EventDict:
     return event_dict
-
-
-def worker_setup_logging() -> None:
-    """
-    Setup logging for a single, remote worker.
-
-    Logs are buffered in memory on each worker in a process global. Use
-    :func:`drain_buffered_events` to retrieve and clear the buffered events.
-    """
-    structlog.configure(
-        processors=[
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            collect_to_deque,
-        ],
-        logger_factory=lambda: DequeLogger(log_buffer),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
 
 
 def drain_buffered_events() -> list[dict[str, Any]]:

@@ -115,9 +115,7 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
-    # propagate the local quent context to the actors.
     quent_context = cudf_polars.quent.quent_context.get()
-
     # Emit the QueryGroup and Query events on the client.
     quent_context.emit_query_group_events()
     quent_context.emit_query_events()
@@ -196,7 +194,7 @@ class RankActor:
         engine_id: uuid.UUID | None = None,
         rank: int = 0,
     ) -> None:
-        cudf_polars.quent._logging.worker_setup_logging()
+        # cudf_polars.quent._logging.worker_setup_logging()
         bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()

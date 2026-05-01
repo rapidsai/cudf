@@ -1340,6 +1340,7 @@ def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
         raise RuntimeError(msg)
 
     if _HAS_STRUCTLOG:
+        pass
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using
         # structlog.bind_contextvars; for the distributed cluster we would need
@@ -1351,9 +1352,9 @@ def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
         #
         # So instead we make a new logger each time we need a new context,
         # i.e. for each query/iteration pair.
-        import cudf_polars.quent._logging
+        # import cudf_polars.quent._logging
 
-        cudf_polars.quent._logging.worker_setup_logging()
+        # cudf_polars.quent._logging.worker_setup_logging()
 
         # def make_injector(
         #     query_id: int, iteration: int

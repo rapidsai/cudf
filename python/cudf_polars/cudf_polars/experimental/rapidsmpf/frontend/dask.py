@@ -230,7 +230,7 @@ def _setup_worker(
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
     """
-    cudf_polars.quent._logging.worker_setup_logging()
+    # cudf_polars.quent._logging.worker_setup_logging()
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
     attr = f"_cudf_polars_mp_context_{uid}"
