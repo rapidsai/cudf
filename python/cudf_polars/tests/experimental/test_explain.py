@@ -540,8 +540,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     dag = serialize_query(q, engine)
 
-    # walk Union -> Scan
-    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    node = dag.nodes[dag.roots[0]]
     assert node.type == "Scan"
     assert node.properties == expected_properties
 
