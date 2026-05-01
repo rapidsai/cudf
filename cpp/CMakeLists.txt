@@ -1150,19 +1150,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       )
     endif()
 
-    get_property(
-      sanitizer_path
-      TARGET CUDA::sanitizer
-      PROPERTY IMPORTED_LOCATION
+    set(sanitizer_relative_genex
+        "$<PATH:RELATIVE_PATH,$<TARGET_FILE_DIR:CUDA::sanitizer>,$<TARGET_FILE_DIR:CUDA::cudart>>"
     )
-    get_filename_component(sanitizer_dir "${sanitizer_path}" DIRECTORY)
-    get_property(
-      cudart_path
-      TARGET CUDA::cudart
-      PROPERTY IMPORTED_LOCATION
-    )
-    get_filename_component(cudart_dir "${cudart_path}" DIRECTORY)
-    file(RELATIVE_PATH sanitizer_dir_name "${cudart_dir}" "${sanitizer_dir}")
     set_target_properties(
       ${_tgt}
       PROPERTIES # set target compile options
@@ -1170,7 +1160,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
                  BUILD_RPATH "\$ORIGIN"
-                 INSTALL_RPATH "\$ORIGIN;\$ORIGIN/${sanitizer_dir_name}"
+                 INSTALL_RPATH "\$ORIGIN;\$ORIGIN/${sanitizer_relative_genex}"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
