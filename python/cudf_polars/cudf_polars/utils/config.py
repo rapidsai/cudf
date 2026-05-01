@@ -335,7 +335,7 @@ def default_target_partition_size(cluster: str, runtime: Runtime) -> int:
         and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
     ):
         # We can use a larger blocksize when UVM is enabled
-        blocksize = int(device_size * 0.0625)
+        blocksize = int(device_size * 0.0625)  # pragma: no cover
     else:
         # Otherwise, use a conservative default
         blocksize = int(device_size * 0.025)
@@ -356,13 +356,13 @@ def default_broadcast_join_limit(cluster: str, runtime: Runtime) -> int:
         # default_target_partition_size is used to set the
         # target partition size (i.e. 5x the 2.5% default).
         return min(5, int(max(1, (device_size * 0.125) // 1e9)))
-    elif (
+    elif (  # pragma: no cover
         cluster == "single"
         and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
     ):
         # We can lean on UVM to support most broadcast joins.
         return 32
-    else:
+    else:  # pragma: no cover
         # Extra-conservative default for the "tasks" runtime.
         # We cannot spill outside a rapidsmpf shuffle within
         # this runtime. So, shuffling is usually preferred.
@@ -948,11 +948,11 @@ class StreamingExecutor:
             raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-        if not isinstance(self.groupby_n_ary, int):
+        if not isinstance(self.groupby_n_ary, int):  # pragma: no cover
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):
             raise TypeError("broadcast_join_limit must be an int")
-        if not isinstance(self.rapidsmpf_spill, bool):
+        if not isinstance(self.rapidsmpf_spill, bool):  # pragma: no cover
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
