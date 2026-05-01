@@ -1156,7 +1156,13 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       PROPERTY IMPORTED_LOCATION
     )
     get_filename_component(sanitizer_dir "${sanitizer_path}" DIRECTORY)
-    file(RELATIVE_PATH sanitizer_dir_name "${CUDAToolkit_LIBRARY_ROOT}" "${sanitizer_dir}")
+    get_property(
+      cudart_path
+      TARGET CUDA::cudart
+      PROPERTY IMPORTED_LOCATION
+    )
+    get_filename_component(cudart_dir "${cudart_path}" DIRECTORY)
+    file(RELATIVE_PATH sanitizer_dir_name "${cudart_dir}" "${sanitizer_dir}")
     set_target_properties(
       ${_tgt}
       PROPERTIES # set target compile options
