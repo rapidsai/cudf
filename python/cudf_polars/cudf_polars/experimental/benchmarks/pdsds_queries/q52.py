@@ -69,15 +69,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     sort_by = {"d_year": False, "ext_price": True, "brand_id": False}
     limit = 100
+
+    # Pre-filter both lookup tables before joining against store_sales [87 partitions].
+    # date_dim keeps d_year because it appears in the GROUP BY.
+    filtered_dates = date_dim.filter(
+        (pl.col("d_moy") == month) & (pl.col("d_year") == year)
+    ).select(["d_date_sk", "d_year"])
+    filtered_item = item.filter(pl.col("i_manager_id") == manager_id).select(
+        ["i_item_sk", "i_brand", "i_brand_id"]
+    )
+
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            .filter(
-                (pl.col("i_manager_id") == manager_id)
-                & (pl.col("d_moy") == month)
-                & (pl.col("d_year") == year)
-            )
+            store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+            .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
             .group_by(["d_year", "i_brand", "i_brand_id"])
             .agg(pl.col("ss_ext_sales_price").sum().alias("ext_price"))
             .select(
