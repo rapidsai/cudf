@@ -151,6 +151,11 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
   return left_shift<Rep, Rad>(val, scale);
 }
 
+// Used by `fixed_point` overflow tracking; defined after `multiplication_overflow` /
+// `division_overflow` in this header.
+template <typename Rep, Radix Rad, typename T>
+CUDF_HOST_DEVICE constexpr bool shift_overflows(T const& val, scale_type const& scale);
+
 }  // namespace detail
 
 /**
@@ -199,6 +204,10 @@ class fixed_point {
   Rep _value{};
   scale_type _scale;
 
+  #ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+  bool _overflow_flag;
+  #endif
+
  public:
   using rep                 = Rep;  ///< The representation type
   static constexpr auto rad = Rad;  ///< The base
@@ -217,7 +226,12 @@ class fixed_point {
   CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     // `value` is cast to `Rep` to avoid overflow in cases where
     // constructing to `Rep` that is wider than `T`
-    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)}, _scale{scale}
+    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)},
+      _scale{scale}
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+      ,
+      _overflow_flag{detail::shift_overflows<Rep, Rad>(static_cast<Rep>(value), scale)}
+#endif
   {
   }
 
@@ -228,6 +242,10 @@ class fixed_point {
    */
   CUDF_HOST_DEVICE inline explicit fixed_point(scaled_integer<Rep> s)
     : _value{s.value}, _scale{s.scale}
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+      ,
+      _overflow_flag{}
+#endif
   {
   }
 
@@ -241,6 +259,10 @@ class fixed_point {
   template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline fixed_point(T const& value)
     : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+      ,
+      _overflow_flag{}
+#endif
   {
   }
 
@@ -248,7 +270,14 @@ class fixed_point {
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
-  CUDF_HOST_DEVICE inline fixed_point() : _scale{scale_type{0}} {}
+  CUDF_HOST_DEVICE inline fixed_point()
+    : _scale{scale_type{0}}
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+      ,
+      _overflow_flag{}
+#endif
+  {
+  }
 
   /**
    * @brief Explicit conversion operator for casting to integral types
@@ -289,6 +318,19 @@ class fixed_point {
    * @return The scale of the `fixed_point` number
    */
   CUDF_HOST_DEVICE [[nodiscard]] inline scale_type scale() const { return _scale; }
+
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+  /**
+   * @brief Whether fixed-point overflow was detected while producing this value
+   *
+   * Only available when libcudf is built with `CUDF_TRACK_FIXED_POINT_OVERFLOW` enabled.
+   * Sticky: once set, propagates through operations that combine this value with others.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool overflow_occurred() const noexcept
+  {
+    return _overflow_flag;
+  }
+#endif
 
   /**
    * @brief Explicit conversion operator to `bool`
@@ -566,8 +608,14 @@ class fixed_point {
   CUDF_HOST_DEVICE [[nodiscard]] inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) { return *this; }
-    Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});
-    return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
+    auto const scale_delta = scale_type{scale - _scale};
+    Rep const value = detail::shift<Rep, Rad>(_value, scale_delta);
+    fixed_point<Rep, Rad> result{scaled_integer<Rep>{value, scale}};
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+    result._overflow_flag =
+      _overflow_flag || detail::shift_overflows<Rep, Rad>(_value, scale_delta);
+#endif
+    return result;
   }
 
   /**
@@ -654,22 +702,71 @@ CUDF_HOST_DEVICE inline auto multiplication_overflow(T lhs, T rhs)
   return rhs == -1 && lhs == min;
 }
 
+namespace detail {
+
+/**
+ * @brief Whether `shift<Rep, Rad>(val, scale)` incurs signed-integer overflow in the mul/div
+ * steps (same conditions as `multiplication_overflow` / `division_overflow` on intermediates).
+ */
+template <typename Rep, Radix Rad, typename T>
+CUDF_HOST_DEVICE inline constexpr bool shift_overflows(T const& val, scale_type const& scale)
+{
+  auto const v = static_cast<Rep>(val);
+  if (scale == 0) { return false; }
+  if (scale > 0) {
+    Rep const divisor = ipow<Rep, Rad>(static_cast<int32_t>(scale));
+    return division_overflow<Rep>(v, divisor);
+  }
+  Rep const multiplier = ipow<Rep, Rad>(static_cast<int32_t>(-scale));
+  return multiplication_overflow<Rep>(v, multiplier);
+}
+
+#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW) || defined(__CUDACC_DEBUG__)
+/**
+ * @brief Run binary integer-overflow predicate once; assert under `__CUDACC_DEBUG__`.
+ *
+ * @tparam Rep1 Representation type
+ * @tparam F Function type `bool (Rep1, Rep1)` (e.g. `&addition_overflow<Rep1, Rep1>`)
+ * @param overflow_fn Predicate on the operation's integer operands
+ * @param lhs_value Left-hand integer operand at common scale (or lhs._value for `*`/`/`)
+ * @param rhs_value Right-hand integer operand
+ * @return Predicate result for sticky `fixed_point` overflow tracking
+ */
+template <typename Rep1, typename F>
+CUDF_HOST_DEVICE inline bool fixed_point_op_overflow_check(F overflow_fn,
+                                                           Rep1 lhs_value,
+                                                           Rep1 rhs_value)
+{
+  bool const op_overflow = static_cast<bool>(overflow_fn(lhs_value, rhs_value));
+#  if defined(__CUDACC_DEBUG__)
+  assert(!op_overflow && "fixed_point overflow");
+#  endif
+  return op_overflow;
+}
+#endif
+
+}  // namespace detail
+
 // PLUS Operation
 template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = cuda::std::min(lhs._scale, rhs._scale);
-  auto const sum   = lhs.rescaled(scale)._value + rhs.rescaled(scale)._value;
+  auto const scale  = cuda::std::min(lhs._scale, rhs._scale);
+  auto const lhs_r  = lhs.rescaled(scale);
+  auto const rhs_r  = rhs.rescaled(scale);
+  auto const sum    = lhs_r._value + rhs_r._value;
+  auto result = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{sum, scale}};
 
-#if defined(__CUDACC_DEBUG__)
-
-  assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-         "fixed_point overflow");
-
+#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
+  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+    &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
+  result._overflow_flag = op_overflow || lhs_r._overflow_flag || rhs_r._overflow_flag;
+#elif defined(__CUDACC_DEBUG__)
+  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+    &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
 #endif
-
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{sum, scale}};
+  return result;
 }
 
 // MINUS Operation
@@ -677,17 +774,21 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = cuda::std::min(lhs._scale, rhs._scale);
-  auto const diff  = lhs.rescaled(scale)._value - rhs.rescaled(scale)._value;
+  auto const scale  = cuda::std::min(lhs._scale, rhs._scale);
+  auto const lhs_r  = lhs.rescaled(scale);
+  auto const rhs_r  = rhs.rescaled(scale);
+  auto const diff   = lhs_r._value - rhs_r._value;
+  auto result = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{diff, scale}};
 
-#if defined(__CUDACC_DEBUG__)
-
-  assert(!subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-         "fixed_point overflow");
-
+#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
+  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+    &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
+  result._overflow_flag = op_overflow || lhs_r._overflow_flag || rhs_r._overflow_flag;
+#elif defined(__CUDACC_DEBUG__)
+  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+    &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
 #endif
-
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{diff, scale}};
+  return result;
 }
 
 // MULTIPLIES Operation
@@ -695,14 +796,20 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-#if defined(__CUDACC_DEBUG__)
-
-  assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
-
+#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
+  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+    &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value);
+#elif defined(__CUDACC_DEBUG__)
+  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+    &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value));
 #endif
 
-  return fixed_point<Rep1, Rad1>{
+  auto result = fixed_point<Rep1, Rad1>{
     scaled_integer<Rep1>(lhs._value * rhs._value, scale_type{lhs._scale + rhs._scale})};
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+  result._overflow_flag = op_overflow || lhs._overflow_flag || rhs._overflow_flag;
+#endif
+  return result;
 }
 
 // DIVISION Operation
@@ -710,14 +817,20 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-#if defined(__CUDACC_DEBUG__)
-
-  assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
-
+#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
+  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+    &division_overflow<Rep1, Rep1>, lhs._value, rhs._value);
+#elif defined(__CUDACC_DEBUG__)
+  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+    &division_overflow<Rep1, Rep1>, lhs._value, rhs._value));
 #endif
 
-  return fixed_point<Rep1, Rad1>{
+  auto result = fixed_point<Rep1, Rad1>{
     scaled_integer<Rep1>(lhs._value / rhs._value, scale_type{lhs._scale - rhs._scale})};
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+  result._overflow_flag = op_overflow || lhs._overflow_flag || rhs._overflow_flag;
+#endif
+  return result;
 }
 
 // EQUALITY COMPARISON Operation
@@ -780,8 +893,14 @@ CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale     = cuda::std::min(lhs._scale, rhs._scale);
-  auto const remainder = lhs.rescaled(scale)._value % rhs.rescaled(scale)._value;
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
+  auto const lhs_r     = lhs.rescaled(scale);
+  auto const rhs_r     = rhs.rescaled(scale);
+  auto const remainder = lhs_r._value % rhs_r._value;
+  auto result          = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
+#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
+  result._overflow_flag = lhs_r._overflow_flag || rhs_r._overflow_flag;
+#endif
+  return result;
 }
 
 using decimal32  = fixed_point<int32_t, Radix::BASE_10>;     ///<  32-bit decimal fixed point
