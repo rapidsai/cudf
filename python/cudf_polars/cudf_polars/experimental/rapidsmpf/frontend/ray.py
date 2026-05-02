@@ -675,6 +675,20 @@ class RayEngine(StreamingEngine):
         engine_options = engine_options or {}
         check_reserved_keys(executor_options, engine_options)
 
+        # Reject keys that cannot be changed.
+        _disallowed_exec = {"num_py_executors"} & executor_options.keys()
+        if _disallowed_exec:
+            raise ValueError(
+                f"executor_options keys {sorted(_disallowed_exec)} cannot be "
+                "changed via _reset(). Construct a fresh RayEngine instead."
+            )
+        _disallowed_engine = {"hardware_binding"} & engine_options.keys()
+        if _disallowed_engine:
+            raise ValueError(
+                f"engine_options keys {sorted(_disallowed_engine)} cannot be "
+                "changed via _reset(). Construct a fresh RayEngine instead."
+            )
+
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
         )

@@ -287,6 +287,34 @@ def test_reset_after_shutdown_raises() -> None:
         engine._reset()
 
 
+def test_reset_rejects_construction_time_executor_options(
+    reset_engine: RayEngine,
+) -> None:
+    """``_reset`` rejects ``executor_options`` keys read at actor construction."""
+    with pytest.raises(ValueError, match="num_py_executors"):
+        reset_engine._reset(
+            executor_options={"num_py_executors": 4},
+            engine_options={"allow_gpu_sharing": True},
+        )
+
+
+def test_reset_rejects_construction_time_engine_options(
+    reset_engine: RayEngine,
+) -> None:
+    """``_reset`` rejects ``engine_options`` keys read at actor construction."""
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    with pytest.raises(ValueError, match="hardware_binding"):
+        reset_engine._reset(
+            engine_options={
+                "allow_gpu_sharing": True,
+                "hardware_binding": HardwareBindingPolicy(enabled=False),
+            },
+        )
+
+
 def test_shutdown_skips_when_ray_not_initialized() -> None:
     """``shutdown`` short-circuits if ``ray.is_initialized()`` is ``False``."""
     engine = RayEngine(
