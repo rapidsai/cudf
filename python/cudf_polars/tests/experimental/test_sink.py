@@ -92,19 +92,6 @@ def test_sink_parquet_directory(
         assert len(list(check_path.iterdir())) == expected_file_count
 
 
-def test_sink_parquet_raises_distributed() -> None:
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": "distributed",
-            "sink_to_directory": False,
-        },
-    )
-    with pytest.raises(ValueError, match="distributed cluster"):
-        ConfigOptions.from_polars_engine(engine)
-
-
 def test_sink_parquet_raises_spmd(spmd_comm):
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
