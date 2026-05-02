@@ -47,17 +47,8 @@ def df():
     ],
 )
 def test_unique(
-    df, streaming_engine_factory, keep, subset, maintain_order, cardinality, request
+    df, streaming_engine_factory, keep, subset, maintain_order, cardinality
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            not maintain_order
-            and subset is None
-            and keep in {"any", "none"}
-            and "spmd-small" in request.node.name,
-            reason="ValueError: CUDF failure at: /cudf/cpp/src/copying/slice.cu:33: Invalid end of range",
-        )
-    )
     engine = streaming_engine_factory(
         StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
     )
@@ -66,6 +57,7 @@ def test_unique(
     if keep == "any" and subset:
         q = q.select(*(pl.col(col) for col in subset))
         check_row_order = False
+
     assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
@@ -91,15 +83,7 @@ def test_unique_fallback(df, streaming_engine_factory):
 @pytest.mark.filterwarnings("ignore:Setting 'unique_fraction' is deprecated")
 @pytest.mark.parametrize("maintain_order", [True, False])
 @pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
-def test_unique_select(
-    df, streaming_engine_factory, maintain_order, cardinality, request
-):
-    request.applymarker(
-        pytest.mark.xfail(
-            cardinality and not maintain_order and "spmd" in request.node.name,
-            reason="ValueError: CUDF failure at: /cudf/cpp/src/copying/slice.cu:33: Invalid end of range",
-        )
-    )
+def test_unique_select(df, streaming_engine_factory, maintain_order, cardinality):
     engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=4,
