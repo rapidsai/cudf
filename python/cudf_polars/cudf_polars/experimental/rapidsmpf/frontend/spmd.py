@@ -174,7 +174,7 @@ def allgather_polars_dataframe(
     plc_result = unpack_and_concat(results, stream, ctx.br())
 
     # pylibcudf Table -> pl.DataFrame (restore column names)
-    ret = pl.from_arrow(plc_result.to_arrow(col_names))
+    ret = pl.DataFrame(plc_result.to_arrow(col_names))
     assert isinstance(ret, pl.DataFrame)
     return ret
 
