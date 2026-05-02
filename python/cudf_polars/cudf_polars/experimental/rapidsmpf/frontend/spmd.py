@@ -23,12 +23,11 @@ from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
-import polars as pl
-
 import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
@@ -50,6 +49,8 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+
+    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import ConfigOptions
@@ -153,6 +154,7 @@ def allgather_polars_dataframe(
     ctx = engine.context
     stream = ctx.get_stream_from_pool()
     col_names = local_df.columns
+    dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
     plc_table = plc.Table.from_arrow(local_df)
 
@@ -174,9 +176,12 @@ def allgather_polars_dataframe(
     plc_result = unpack_and_concat(results, stream, ctx.br())
 
     # pylibcudf Table -> pl.DataFrame (restore column names)
-    ret = pl.DataFrame(plc_result.to_arrow(col_names))
-    assert isinstance(ret, pl.DataFrame)
-    return ret
+    return DataFrame.from_table(
+        plc_result,
+        col_names,
+        dtypes,
+        stream,
+    ).to_polars()
 
 
 class SPMDEngine(StreamingEngine):
