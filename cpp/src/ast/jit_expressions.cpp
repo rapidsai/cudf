@@ -42,9 +42,9 @@ std::unique_ptr<cudf::detail::row_ir::node> operation::accept(
 
 }  // namespace jit::detail
 
-expression const& jit::nullify_if(ast::tree& tree, expression const& condition)
+expression const& jit::nullify_if(ast::tree& tree, expression const& a, expression const& condition)
 {
-  return tree.push(detail::operation(cudf::detail::row_ir::opcode::NULLIFY_IF, {condition}));
+  return tree.push(detail::operation(cudf::detail::row_ir::opcode::NULLIFY_IF, {a, condition}));
 }
 
 expression const& jit::coalesce(ast::tree& tree, expression const& a, expression const& b)
@@ -92,11 +92,12 @@ expression const& jit::ansi_neg(ast::tree& tree, expression const& a)
   return tree.push(detail::operation(cudf::detail::row_ir::opcode::ANSI_NEG, {a}));
 }
 
-expression const& jit::ansi_precision_check(ast::tree& tree, expression const& a, int32_t precision)
+expression const& jit::ansi_precision_check(ast::tree& tree,
+                                            expression const& a,
+                                            expression const& precision)
 {
-  // TODO: actually insert a precision
   return tree.push(
-    detail::operation(cudf::detail::row_ir::opcode::ANSI_PRECISION_CHECK, {a}, precision));
+    detail::operation(cudf::detail::row_ir::opcode::ANSI_PRECISION_CHECK, {a, precision}));
 }
 
 expression const& jit::ansi_try_add(ast::tree& tree, expression const& a, expression const& b)
@@ -136,10 +137,10 @@ expression const& jit::ansi_try_neg(ast::tree& tree, expression const& a)
 
 expression const& jit::ansi_try_precision_check(ast::tree& tree,
                                                 expression const& a,
-                                                int32_t precision)
+                                                expression const& precision)
 {
   return tree.push(
-    detail::operation(cudf::detail::row_ir::opcode::ANSI_TRY_PRECISION_CHECK, {a}, precision));
+    detail::operation(cudf::detail::row_ir::opcode::ANSI_TRY_PRECISION_CHECK, {a, precision}));
 }
 
 expression const& jit::bit_shift_left(ast::tree& tree, expression const& a, expression const& b)

@@ -59,7 +59,7 @@ class expression_transformer;
  * This class is a part of a "visitor" pattern with the `expression_parser` class.
  * Expressions inheriting from this class can accept parsers as visitors.
  */
-struct expression {
+struct [[nodiscard]] expression {
   /**
    * @brief Accepts a visitor class.
    *

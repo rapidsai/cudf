@@ -99,23 +99,44 @@ std::span<std::unique_ptr<node> const> node::get_args() const { return args_; }
 
 bool node::is_null_aware() const
 {
-  return get_op_null_output(op_) ==
-           null_output::ALWAYS_NULLABLE ||  // to emit nulls for always-nullable operators, we need
-                                            // to mark them as null-aware
-         get_op_requires_nulls(op_) ||
-         std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_null_aware(); });
+  if (op_ == opcode::GET_INPUT) { return false; }
+
+  // to emit nulls for always-nullable operators, we  need to mark them as null-aware
+  if (get_op_null_output(op_) == null_output::ALWAYS_NULLABLE) { return true; }
+
+  if (get_op_requires_nulls(op_)) { return true; }
+
+  CUDF_EXPECTS(!args_.empty(),
+               "Unexpectedly found an operator node with no arguments. All operator nodes should "
+               "have at least one argument.");
+
+  return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_null_aware(); });
 }
 
 bool node::is_always_valid() const
 {
-  return get_op_null_output(op_) == null_output::ALWAYS_VALID ||
-         std::all_of(args_.begin(), args_.end(), [](auto& a) { return a->is_always_valid(); });
+  if (op_ == opcode::GET_INPUT) { return false; }
+
+  if (get_op_null_output(op_) == null_output::ALWAYS_VALID) { return true; }
+
+  CUDF_EXPECTS(!args_.empty(),
+               "Unexpectedly found an operator node with no arguments. All operator nodes should "
+               "have at least one argument.");
+
+  return std::all_of(args_.begin(), args_.end(), [](auto& a) { return a->is_always_valid(); });
 }
 
 bool node::is_fallible() const
 {
-  return get_op_is_fallible(op_) ||
-         std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_fallible(); });
+  if (op_ == opcode::GET_INPUT) { return false; }
+
+  if (get_op_is_fallible(op_)) { return true; }
+
+  CUDF_EXPECTS(!args_.empty(),
+               "Unexpectedly found an operator node with no arguments. All operator nodes should "
+               "have at least one argument.");
+
+  return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_fallible(); });
 }
 
 row_ir::type as_typing(data_type type)
@@ -467,7 +488,7 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::predicate 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::jit::detail::operation const& expr)
 {
   std::vector<std::unique_ptr<row_ir::node>> args;
-  for (auto &arg : expr.get_arguments()) {
+  for (auto& arg : expr.get_arguments()) {
     args.emplace_back(arg.get().accept(*this));
   }
   return std::make_unique<row_ir::node>(
@@ -491,23 +512,21 @@ std::tuple<std::string, null_aware, output_nullability, bool> ast_converter::gen
       return std::visit([](auto& c) { return is_nullable(c); }, in);
     });
 
-  auto is_null_aware =
-    std::any_of(
-      output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_null_aware(); })
-      ? null_aware::YES
-      : null_aware::NO;
+  bool is_null_aware = std::any_of(
+    output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_null_aware(); });
 
   bool output_is_always_valid = std::all_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_valid(); });
 
   bool may_evaluate_null = !output_is_always_valid || has_nullable_inputs;
+
   auto null_policy =
     may_evaluate_null ? output_nullability::PRESERVE : output_nullability::ALL_VALID;
 
   auto is_fallible = std::any_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_fallible(); });
 
-  instance_.set_has_nulls(is_null_aware == null_aware::YES);
+  instance_.set_has_nulls(is_null_aware);
 
   // instantiate the IR nodes
   for (auto& ir : output_irs_) {
@@ -561,7 +580,8 @@ std::tuple<std::string, null_aware, output_nullability, bool> ast_converter::gen
     ir->emit_code(instance_, target, sink);
   }
   sink.emit("return cudf::ops::errc::OK;\n}");
-  return {sink.get_code(), is_null_aware, null_policy, is_fallible};
+  return {
+    sink.get_code(), is_null_aware ? null_aware::YES : null_aware::NO, null_policy, is_fallible};
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(scalar_input const& in)
@@ -633,7 +653,7 @@ transform_args ast_converter::compute_column(target target_id,
                    .row_size   = row_size,
                    .error_mode = is_fallible ? ops::error_mode::ANY_ROW : ops::error_mode::IGNORE};
   if (get_context().dump_codegen()) {
-    std::cout << "Generated code for transform: " << result.udf << std::endl;
+    std::cout << "Generated code for transform: \n" << result.udf << std::endl;
   }
 
   return result;

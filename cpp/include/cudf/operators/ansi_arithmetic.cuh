@@ -96,13 +96,13 @@ template <typename R>
 __device__ inline errc ansi_add(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
   auto scale = cuda::std::min(a->scale(), b->scale());
-  auto sum   = a->rescaled(scale).value() + b->rescaled(scale).value();
 
-  if (numeric::addition_overflow(a->rescaled(scale).value(), b->rescaled(scale).value())) {
+  if (numeric::addition_overflow<R>(a->rescaled(scale).value(), b->rescaled(scale).value())) {
     return errc::OVERFLOW;
   }
 
-  *out = decimal<R>{numeric::scaled_integer<R>{sum, scale}};
+  *out = decimal<R>{numeric::scaled_integer<R>{
+    a->rescaled(scale).value() + b->rescaled(scale).value(), numeric::scale_type{scale}}};
   return errc::OK;
 }
 
@@ -159,13 +159,13 @@ template <typename R>
 __device__ inline errc ansi_sub(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
   auto scale = cuda::std::min(a->scale(), b->scale());
-  auto sum   = a->rescaled(scale).value() - b->rescaled(scale).value();
 
-  if (numeric::subtraction_overflow(a->rescaled(scale).value(), b->rescaled(scale).value())) {
+  if (numeric::subtraction_overflow<R>(a->rescaled(scale).value(), b->rescaled(scale).value())) {
     return errc::OVERFLOW;
   }
 
-  *out = decimal<R>{numeric::scaled_integer<R>{sum, scale}};
+  *out = decimal<R>{numeric::scaled_integer<R>{
+    a->rescaled(scale).value() - b->rescaled(scale).value(), numeric::scale_type{scale}}};
   return errc::OK;
 }
 
@@ -221,9 +221,10 @@ __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
 template <typename R>
 __device__ inline errc ansi_mul(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
-  if (numeric::multiplication_overflow(a->value(), b->value())) { return errc::OVERFLOW; }
+  if (numeric::multiplication_overflow<R>(a->value(), b->value())) { return errc::OVERFLOW; }
 
-  *out = decimal<R>{numeric::scaled_integer<R>{a->value() * b->value(), a->scale() + b->scale()}};
+  *out = decimal<R>{numeric::scaled_integer<R>{a->value() * b->value(),
+                                               numeric::scale_type{a->scale() + b->scale()}}};
   return errc::OK;
 }
 
@@ -280,9 +281,12 @@ __device__ inline errc ansi_div(T* out, T const* a, T const* b)
 template <typename R>
 __device__ inline errc ansi_div(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
-  if (numeric::division_overflow(a->value(), b->value())) { return errc::OVERFLOW; }
+  if (numeric::division_overflow<R>(a->value(), b->value()) || b->value() == 0) {
+    return errc::OVERFLOW;
+  }
 
-  *out = decimal<R>{numeric::scaled_integer<R>{a->value() / b->value(), a->scale() - b->scale()}};
+  *out = decimal<R>{numeric::scaled_integer<R>{a->value() / b->value(),
+                                               numeric::scale_type{a->scale() - b->scale()}}};
   return errc::OK;
 }
 
@@ -428,7 +432,7 @@ __device__ inline errc ansi_neg(decimal<R>* out, decimal<R> const* a)
 {
   if (a->value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
   auto rep = -a->value();
-  *out     = decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
+  *out     = decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a->scale()}}};
   return errc::OK;
 }
 
