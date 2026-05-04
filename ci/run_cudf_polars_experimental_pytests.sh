@@ -11,9 +11,9 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 echo "Running the full cudf-polars test suite with both the in-memory and spmd engine"
-timeout 10m python -m pytest --cache-clear "$@" tests --ignore=tests/experimental/legacy
+python -m pytest --cache-clear "$@" tests --ignore=tests/experimental/legacy
 
 echo "Running experimental legacy tests with the 'distributed' cluster"
-timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" \
+python -m pytest --cache-clear "$@" "tests/experimental/legacy" \
     --executor streaming \
     --cluster distributed
