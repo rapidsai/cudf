@@ -64,14 +64,20 @@ node::node(opcode op, std::optional<int32_t> target_scale, std::vector<std::uniq
 {
   CUDF_EXPECTS(op != opcode::GET_INPUT && op != opcode::SET_OUTPUT,
                std::format("Invalid opcode `{}` for operation node.", get_op_name(op)));
-  CUDF_EXPECTS(args_.size() == static_cast<size_t>(get_op_arity(op)),
-               std::format("Invalid number of arguments for operator `{}`. Expected {}, Got {}.",
-                           get_op_name(op),
-                           get_op_arity(op),
-                           args_.size()));
-  CUDF_EXPECTS(target_scale_.has_value() == (op == opcode::RESCALE),
-               std::format("Target scale must be provided for RESCALE operator and must be nullopt "
-                           "for other operators."));
+  if (op_ != opcode::RESCALE) {
+    CUDF_EXPECTS(args_.size() == static_cast<size_t>(get_op_arity(op)),
+                 std::format("Invalid number of arguments for operator `{}`. Expected {}, Got {}.",
+                             get_op_name(op),
+                             get_op_arity(op),
+                             args_.size()));
+  } else {
+    CUDF_EXPECTS(args_.size() == 1,
+                 std::format("RESCALE operator expects exactly 1 argument. Got {}.", args_.size()));
+    CUDF_EXPECTS(
+      target_scale_.has_value(),
+      std::format("Target scale must be provided for RESCALE operator and must be nullopt "
+                  "for other operators."));
+  }
 }
 
 node::node(input_reference input) : reference_{input}, op_{opcode::GET_INPUT} {}
@@ -321,7 +327,7 @@ data_type get_return_type(opcode op,
     return data_type{type, scale};
   } else {
     CUDF_EXPECTS(
-      op_type_match.output != type::NONE && (op_type_match.output & type::DECIMALS) == type::NONE,
+      op_type_match.output != type::NONE,
       std::format("Invalid type match rule for operator `{}` return type", get_op_name(op)),
       std::runtime_error);
     auto type  = as_type_id(op_type_match.output);

@@ -90,18 +90,18 @@ __device__ inline errc bit_xor(optional<T>* out, optional<T> const* a, optional<
 }
 
 template <typename T>
-__device__ inline errc shift_left(T* out, T const* a, T const* b)
+__device__ inline errc bit_shift_left(T* out, T const* a, T const* b)
 {
   *out = (*a << *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc shift_left(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc bit_shift_left(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
-    shift_left(&r, &a->value(), &b->value());
+    bit_shift_left(&r, &a->value(), &b->value());
     *out = r;
   } else {
     *out = nullopt;
@@ -110,18 +110,18 @@ __device__ inline errc shift_left(optional<T>* out, optional<T> const* a, option
 }
 
 template <typename T>
-__device__ inline errc shift_right(T* out, T const* a, T const* b)
+__device__ inline errc bit_shift_right(T* out, T const* a, T const* b)
 {
   *out = (*a >> *b);
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc shift_right(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc bit_shift_right(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
-    shift_right(&r, &a->value(), &b->value());
+    bit_shift_right(&r, &a->value(), &b->value());
     *out = r;
   } else {
     *out = nullopt;

@@ -1613,7 +1613,7 @@ TEST_F(JITExpressionTest, AnsiMod)
   auto a          = column_wrapper<int32_t>{3, 20, 1, 50};
   auto b          = column_wrapper<int32_t>{10, 7, 2, 1};
   auto b_fail     = column_wrapper<int32_t>{10, 1, 20, 0};
-  auto expected   = column_wrapper<int32_t>{10, 6, 2, 0};
+  auto expected   = column_wrapper<int32_t>{3, 6, 1, 0};
   auto table      = cudf::table_view{{a, b, b_fail}};
   auto a_ref      = cudf::ast::column_reference(0);
   auto b_ref      = cudf::ast::column_reference(1);
@@ -1635,7 +1635,7 @@ TEST_F(JITExpressionTest, AnsiMod_Decimal)
   auto b_fail =
     cudf::test::fixed_point_column_wrapper<int32_t>{{10, 1, 20, 0}, numeric::scale_type{0}};
   auto expected =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 6, 2, 0}, numeric::scale_type{0}};
+    cudf::test::fixed_point_column_wrapper<int32_t>{{3, 6, 1, 0}, numeric::scale_type{0}};
   auto table      = cudf::table_view{{a, b, b_fail}};
   auto a_ref      = cudf::ast::column_reference(0);
   auto b_ref      = cudf::ast::column_reference(1);
@@ -1655,7 +1655,7 @@ TEST_F(JITExpressionTest, AnsiAbs)
   constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a                 = column_wrapper<int32_t>{3, -20, 1, -50, I32_MAX, I32_MIN + 1, 0};
-  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 0};
+  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 1, 0};
   auto expected          = column_wrapper<int32_t>{3, 20, 1, 50, I32_MAX, std::abs(I32_MIN + 1), 0};
   auto table             = cudf::table_view{{a, a_fail}};
   auto a_ref             = cudf::ast::column_reference(0);
@@ -1676,7 +1676,7 @@ TEST_F(JITExpressionTest, AnsiAbs_Decimal)
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a                 = cudf::test::fixed_point_column_wrapper<int32_t>{
     {3, -20, 1, -50, I32_MAX, I32_MIN + 1, 0}, numeric::scale_type{0}};
-  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 0},
+  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 1, 0},
                                                                   numeric::scale_type{0}};
   auto expected = cudf::test::fixed_point_column_wrapper<int32_t>{
     {3, 20, 1, 50, I32_MAX, std::abs(I32_MIN + 1), 0}, numeric::scale_type{0}};
@@ -1698,7 +1698,7 @@ TEST_F(JITExpressionTest, AnsiNeg)
   constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a                 = column_wrapper<int32_t>{3, -20, 1, -50, I32_MAX, -I32_MAX, 0};
-  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 0};
+  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 1, 0};
   auto expected          = column_wrapper<int32_t>{-3, 20, -1, 50, -I32_MAX, I32_MAX, 0};
   auto table             = cudf::table_view{{a, a_fail}};
   auto a_ref             = cudf::ast::column_reference(0);
@@ -1719,7 +1719,7 @@ TEST_F(JITExpressionTest, AnsiNeg_Decimal)
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MAX, -I32_MAX, 0},
                                                            numeric::scale_type{0}};
-  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 0},
+  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 1, 0},
                                                                   numeric::scale_type{0}};
   auto expected = cudf::test::fixed_point_column_wrapper<int32_t>{
     {-3, 20, -1, 50, -I32_MAX, I32_MAX, 0}, numeric::scale_type{0}};
@@ -1758,39 +1758,290 @@ TEST_F(JITExpressionTest, AnsiPrecisionCheck)
                std::overflow_error);
 }
 
-TEST_F(JITExpressionTest, BitShiftLeft) {}
+TEST_F(JITExpressionTest, BitShiftLeft)
+{
+  auto a = cudf::test::fixed_width_column_wrapper<uint32_t>{
+    0b0011'1111, 0b0001'1111, 0b101111, 0b0000'001100};
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<uint32_t>{0b1111'1100, 0b01'11100, 0b1111, 0b110000};
+  auto shift         = cudf::numeric_scalar<uint32_t>(2);
+  auto table         = cudf::table_view{{a}};
+  auto a_ref         = cudf::ast::column_reference(0);
+  auto tree          = cudf::ast::tree{};
+  auto shift_literal = cudf::ast::literal(shift);
+  auto& shift_left   = cudf::ast::jit::bit_shift_left(tree, a_ref, shift_literal);
+  auto result        = cudf::compute_column_jit(table, shift_left);
 
-TEST_F(JITExpressionTest, BitShiftRight) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
 
-TEST_F(JITExpressionTest, CastToBool) {}
+TEST_F(JITExpressionTest, BitShiftRight)
+{
+  auto a = cudf::test::fixed_width_column_wrapper<uint32_t>{0b1111, 0b10111, 0b11100, 0b11110011};
+  auto expected = cudf::test::fixed_width_column_wrapper<uint32_t>{0b11, 0b101, 0b111, 0b111100};
+  auto shift    = cudf::numeric_scalar<uint32_t>(2);
+  auto table    = cudf::table_view{{a}};
+  auto a_ref    = cudf::ast::column_reference(0);
+  auto tree     = cudf::ast::tree{};
+  auto shift_literal = cudf::ast::literal(shift);
+  auto& shift_right  = cudf::ast::jit::bit_shift_right(tree, a_ref, shift_literal);
+  auto result        = cudf::compute_column_jit(table, shift_right);
 
-TEST_F(JITExpressionTest, CastToI8) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
 
-TEST_F(JITExpressionTest, CastToI16) {}
+template <typename From, typename To>
+void test_cast()
+{
+  auto a        = cudf::test::fixed_width_column_wrapper<From>{0, 1, 2, 3, 4, 5};
+  auto expected = cudf::test::fixed_width_column_wrapper<To>{0, 1, 2, 3, 4, 5};
+  auto table    = cudf::table_view{{a}};
+  auto a_ref    = cudf::ast::column_reference(0);
+  auto tree     = cudf::ast::tree{};
 
-TEST_F(JITExpressionTest, CastToI32) {}
+  cudf::ast::expression const* cast = nullptr;
 
-TEST_F(JITExpressionTest, CastToI64) {}
+  if constexpr (std::is_same_v<To, bool>) {
+    cast = &cudf::ast::jit::cast_to_b8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int8_t>) {
+    cast = &cudf::ast::jit::cast_to_i8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int16_t>) {
+    cast = &cudf::ast::jit::cast_to_i16(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int32_t>) {
+    cast = &cudf::ast::jit::cast_to_i32(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int64_t>) {
+    cast = &cudf::ast::jit::cast_to_i64(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint8_t>) {
+    cast = &cudf::ast::jit::cast_to_u8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint16_t>) {
+    cast = &cudf::ast::jit::cast_to_u16(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint32_t>) {
+    cast = &cudf::ast::jit::cast_to_u32(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint64_t>) {
+    cast = &cudf::ast::jit::cast_to_u64(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, float>) {
+    cast = &cudf::ast::jit::cast_to_f32(tree, a_ref);
+  } else {
+    static_assert(std::is_same_v<To, double>);
+    cast = &cudf::ast::jit::cast_to_f64(tree, a_ref);
+  }
 
-TEST_F(JITExpressionTest, CastToU8) {}
+  auto result = cudf::compute_column_jit(table, *cast);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
 
-TEST_F(JITExpressionTest, CastToU16) {}
+template <typename From, typename To>
+void test_from_decimal_cast()
+{
+  auto a        = cudf::test::fixed_point_column_wrapper<typename From::rep>{{0, 1, 2, 3, 4, 5},
+                                                                             numeric::scale_type{0}};
+  auto expected = cudf::test::fixed_width_column_wrapper<To>{0, 1, 2, 3, 4, 5};
+  auto table    = cudf::table_view{{a}};
+  auto a_ref    = cudf::ast::column_reference(0);
+  auto tree     = cudf::ast::tree{};
 
-TEST_F(JITExpressionTest, CastToU32) {}
+  cudf::ast::expression const* cast = nullptr;
 
-TEST_F(JITExpressionTest, CastToU64) {}
+  if constexpr (std::is_same_v<To, bool>) {
+    cast = &cudf::ast::jit::cast_to_b8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int8_t>) {
+    cast = &cudf::ast::jit::cast_to_i8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int16_t>) {
+    cast = &cudf::ast::jit::cast_to_i16(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int32_t>) {
+    cast = &cudf::ast::jit::cast_to_i32(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, int64_t>) {
+    cast = &cudf::ast::jit::cast_to_i64(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint8_t>) {
+    cast = &cudf::ast::jit::cast_to_u8(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint16_t>) {
+    cast = &cudf::ast::jit::cast_to_u16(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint32_t>) {
+    cast = &cudf::ast::jit::cast_to_u32(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, uint64_t>) {
+    cast = &cudf::ast::jit::cast_to_u64(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, float>) {
+    cast = &cudf::ast::jit::cast_to_f32(tree, a_ref);
+  } else {
+    static_assert(std::is_same_v<To, double>);
+    cast = &cudf::ast::jit::cast_to_f64(tree, a_ref);
+  }
 
-TEST_F(JITExpressionTest, CastToF32) {}
+  auto result = cudf::compute_column_jit(table, *cast);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
 
-TEST_F(JITExpressionTest, CastToF64) {}
+TEST_F(JITExpressionTest, CastToBool)
+{
+  test_cast<int32_t, bool>();
+  test_cast<uint32_t, bool>();
+  test_cast<float, bool>();
+  test_from_decimal_cast<numeric::decimal32, bool>();
+  test_from_decimal_cast<numeric::decimal64, bool>();
+  test_from_decimal_cast<numeric::decimal128, bool>();
+}
 
-TEST_F(JITExpressionTest, CastToDec32) {}
+TEST_F(JITExpressionTest, CastToI8)
+{
+  test_cast<int32_t, int8_t>();
+  test_cast<uint32_t, int8_t>();
+  test_cast<float, int8_t>();
+  test_from_decimal_cast<numeric::decimal32, int8_t>();
+  test_from_decimal_cast<numeric::decimal64, int8_t>();
+  test_from_decimal_cast<numeric::decimal128, int8_t>();
+}
 
-TEST_F(JITExpressionTest, CastToDec64) {}
+TEST_F(JITExpressionTest, CastToI16)
+{
+  test_cast<int32_t, int16_t>();
+  test_cast<uint32_t, int16_t>();
+  test_cast<float, int16_t>();
+  test_from_decimal_cast<numeric::decimal32, int16_t>();
+  test_from_decimal_cast<numeric::decimal64, int16_t>();
+  test_from_decimal_cast<numeric::decimal128, int16_t>();
+}
 
-TEST_F(JITExpressionTest, CastToDec128) {}
+TEST_F(JITExpressionTest, CastToI32)
+{
+  test_cast<int32_t, int32_t>();
+  test_cast<uint32_t, int32_t>();
+  test_cast<float, int32_t>();
+  test_from_decimal_cast<numeric::decimal32, int32_t>();
+  test_from_decimal_cast<numeric::decimal64, int32_t>();
+  test_from_decimal_cast<numeric::decimal128, int32_t>();
+}
 
-TEST_F(JITExpressionTest, Rescale) {}
+TEST_F(JITExpressionTest, CastToI64)
+{
+  test_cast<int32_t, int64_t>();
+  test_cast<uint32_t, int64_t>();
+  test_cast<float, int64_t>();
+  test_from_decimal_cast<numeric::decimal32, int64_t>();
+  test_from_decimal_cast<numeric::decimal64, int64_t>();
+  test_from_decimal_cast<numeric::decimal128, int64_t>();
+}
+
+TEST_F(JITExpressionTest, CastToU8)
+{
+  test_cast<int32_t, uint8_t>();
+  test_cast<uint32_t, uint8_t>();
+  test_cast<float, uint8_t>();
+  test_from_decimal_cast<numeric::decimal32, uint8_t>();
+  test_from_decimal_cast<numeric::decimal64, uint8_t>();
+  test_from_decimal_cast<numeric::decimal128, uint8_t>();
+}
+
+TEST_F(JITExpressionTest, CastToU16)
+{
+  test_cast<int32_t, uint16_t>();
+  test_cast<uint32_t, uint16_t>();
+  test_cast<float, uint16_t>();
+  test_from_decimal_cast<numeric::decimal32, uint16_t>();
+  test_from_decimal_cast<numeric::decimal64, uint16_t>();
+  test_from_decimal_cast<numeric::decimal128, uint16_t>();
+}
+
+TEST_F(JITExpressionTest, CastToU32)
+{
+  test_cast<int32_t, uint32_t>();
+  test_cast<uint32_t, uint32_t>();
+  test_cast<float, uint32_t>();
+  test_from_decimal_cast<numeric::decimal32, uint32_t>();
+  test_from_decimal_cast<numeric::decimal64, uint32_t>();
+  test_from_decimal_cast<numeric::decimal128, uint32_t>();
+}
+
+TEST_F(JITExpressionTest, CastToU64)
+{
+  test_cast<int32_t, uint64_t>();
+  test_cast<uint32_t, uint64_t>();
+  test_cast<float, uint64_t>();
+  test_from_decimal_cast<numeric::decimal32, uint64_t>();
+  test_from_decimal_cast<numeric::decimal64, uint64_t>();
+  test_from_decimal_cast<numeric::decimal128, uint64_t>();
+}
+
+TEST_F(JITExpressionTest, CastToF32)
+{
+  test_cast<int32_t, float>();
+  test_cast<uint32_t, float>();
+  test_cast<float, float>();
+  test_from_decimal_cast<numeric::decimal32, float>();
+  test_from_decimal_cast<numeric::decimal64, float>();
+  test_from_decimal_cast<numeric::decimal128, float>();
+}
+
+TEST_F(JITExpressionTest, CastToF64)
+{
+  test_cast<int32_t, double>();
+  test_cast<uint32_t, double>();
+  test_cast<float, double>();
+  test_from_decimal_cast<numeric::decimal32, double>();
+  test_from_decimal_cast<numeric::decimal64, double>();
+  test_from_decimal_cast<numeric::decimal128, double>();
+}
+
+template <typename From, typename To>
+void test_decimal_cast()
+{
+  auto a        = cudf::test::fixed_point_column_wrapper<typename From::rep>{{0, 1, 2, 3, 4, 5},
+                                                                             numeric::scale_type{0}};
+  auto expected = cudf::test::fixed_point_column_wrapper<typename To::rep>{{0, 1, 2, 3, 4, 5},
+                                                                           numeric::scale_type{0}};
+  auto table    = cudf::table_view{{a}};
+  auto a_ref    = cudf::ast::column_reference(0);
+  auto tree     = cudf::ast::tree{};
+
+  cudf::ast::expression const* cast = nullptr;
+
+  if constexpr (std::is_same_v<To, numeric::decimal32>) {
+    cast = &cudf::ast::jit::cast_to_dec32(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, numeric::decimal64>) {
+    cast = &cudf::ast::jit::cast_to_dec64(tree, a_ref);
+  } else if constexpr (std::is_same_v<To, numeric::decimal128>) {
+    static_assert(std::is_same_v<To, numeric::decimal128>);
+    cast = &cudf::ast::jit::cast_to_dec128(tree, a_ref);
+  }
+
+  auto result = cudf::compute_column_jit(table, *cast);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(JITExpressionTest, CastToDec32)
+{
+  test_decimal_cast<numeric::decimal32, numeric::decimal32>();
+  test_decimal_cast<numeric::decimal32, numeric::decimal64>();
+  test_decimal_cast<numeric::decimal32, numeric::decimal128>();
+}
+
+TEST_F(JITExpressionTest, CastToDec64)
+{
+  test_decimal_cast<numeric::decimal64, numeric::decimal32>();
+  test_decimal_cast<numeric::decimal64, numeric::decimal64>();
+  test_decimal_cast<numeric::decimal64, numeric::decimal128>();
+}
+
+TEST_F(JITExpressionTest, CastToDec128)
+{
+  test_decimal_cast<numeric::decimal128, numeric::decimal32>();
+  test_decimal_cast<numeric::decimal128, numeric::decimal64>();
+  test_decimal_cast<numeric::decimal128, numeric::decimal128>();
+}
+
+TEST_F(JITExpressionTest, Rescale)
+{
+  auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{123, 1234, 12345, 123456, 1234567},
+                                                           numeric::scale_type{0}};
+  auto expected = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {12300, 123400, 1234500, 12345600, 123456700}, numeric::scale_type{-2}};
+  auto table     = cudf::table_view{{a}};
+  auto a_ref     = cudf::ast::column_reference(0);
+  auto tree      = cudf::ast::tree{};
+  auto& rescaled = cudf::ast::jit::rescale(tree, a_ref, 2);
+  auto result    = cudf::compute_column_jit(table, rescaled);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
 
 // TODO: TEST ANSI op fusion
 

@@ -400,7 +400,8 @@ template <typename R>
 __device__ inline errc ansi_abs(decimal<R>* out, decimal<R> const* a)
 {
   if (a->value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
-  out->value() = (a->value() < 0) ? -a->value() : a->value();
+  auto rep = a->value() < 0 ? -a->value() : a->value();
+  *out  = decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a->scale()}}};
   return errc::OK;
 }
 

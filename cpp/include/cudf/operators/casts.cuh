@@ -247,11 +247,11 @@ __device__ inline errc cast_to_f64(optional<double>* out, optional<T> const* a)
 
 namespace detail {
 
-template <typename T, typename U, numeric::Radix Radix>
-__device__ inline errc decimal_cast(decimal<T>* out, decimal<U> const* a)
+template <typename To, typename From>
+__device__ inline errc decimal_cast(decimal<To>* out, decimal<From> const* a)
 {
-  auto rep = static_cast<T>(a->value());
-  *out     = decimal<T>{numeric::scaled_integer<T>{rep, a->scale()}};
+  auto rep = static_cast<To>(a->value());
+  *out     = decimal<To>{numeric::scaled_integer<To>{rep, a->scale()}};
   return errc::OK;
 }
 
@@ -322,7 +322,7 @@ __device__ inline errc cast_to_dec128(optional<numeric::decimal128>* out,
 template <typename R>
 __device__ inline errc rescale(decimal<R>* out, decimal<R> const* a, int32_t const* new_scale)
 {
-  *out = a->rescaled(new_scale);
+  *out = a->rescaled(numeric::scale_type{*new_scale});
   return errc::OK;
 }
 
