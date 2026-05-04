@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.config import Options
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -200,6 +201,66 @@ class StreamingEngine(pl.GPUEngine):
         are taken from rank 0.
         """
         return Statistics.merge(self.gather_statistics(clear=clear))
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine with new options, keeping cluster resources alive.
+
+        The following inputs are fixed at construction time and cannot change:
+          - ``num_ranks``
+          - ``num_py_executors`` (in ``executor_options``)
+          - ``hardware_binding`` (in ``engine_options``)
+          - ``memory_resource_config`` (in ``engine_options``)
+
+        Subclasses must override this method. The override should:
+          1. Raise :class:`RuntimeError` if the engine is already shut down.
+          2. Call ``super()._reset(...)`` to apply the universal option validation below.
+          3. Perform the backend-specific rebuild.
+
+        Parameters
+        ----------
+        rapidsmpf_options
+            New :class:`Options` for each rank's :class:`Context`.
+            ``None`` is treated as an empty dict.
+        executor_options
+            New executor options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+        engine_options
+            New engine options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+
+        Raises
+        ------
+        ValueError
+            If ``executor_options`` or ``engine_options`` contains a
+            construction-time-only key (see list above), or if a
+            reserved key is set (via :func:`check_reserved_keys`).
+        """
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        check_reserved_keys(executor_options, engine_options)
+
+        _disallowed_exec = {"num_py_executors"} & executor_options.keys()
+        if _disallowed_exec:
+            raise ValueError(
+                f"executor_options keys {sorted(_disallowed_exec)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
+        _disallowed_engine = {
+            "hardware_binding",
+            "memory_resource_config",
+        } & engine_options.keys()
+        if _disallowed_engine:
+            raise ValueError(
+                f"engine_options keys {sorted(_disallowed_engine)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
 
     def shutdown(self) -> None:
         """
