@@ -3441,6 +3441,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert targets.getType().equals(DType.STRING) : "targets column must be a string column";
     assert repls != null : "repls column may not be null";
     assert repls.getType().equals(DType.STRING) : "repls column must be a string column";
+    assert targets.getRowCount() == getRowCount() : "targets must have the same number of rows as this column";
+    assert repls.getRowCount() == getRowCount() : "repls must have the same number of rows as this column";
 
     return new ColumnVector(stringReplacePerRow(getNativeView(), targets.getNativeView(),
         repls.getNativeView()));
