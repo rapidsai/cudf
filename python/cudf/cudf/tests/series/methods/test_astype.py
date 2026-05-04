@@ -72,6 +72,46 @@ def test_series_typecast_to_object():
 @pytest.mark.parametrize(
     "dtype",
     [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.ArrowDtype(pa.string()),
+    ],
+)
+def test_string_astype_object_pd_na_pandas_compat(dtype):
+    sr = cudf.Series(["a", None, "b"], dtype=dtype)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(
+            NotImplementedError,
+            match="Casting nullable string columns with pd.NA to object",
+        ):
+            sr.astype(object)
+
+    with cudf.option_context("mode.pandas_compatible", False):
+        result = sr.astype(object)
+    assert result.dtype == np.dtype("object")
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.ArrowDtype(pa.string()),
+    ],
+)
+def test_string_astype_object_pd_na_pandas_compat_no_nulls(dtype):
+    sr = cudf.Series(["a", "b", "c"], dtype=dtype)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = sr.astype(object)
+    assert result.dtype == np.dtype("object")
+    assert result.to_arrow().to_pylist() == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
         pd.ArrowDtype(pa.int8()),
         pd.ArrowDtype(pa.int16()),
         pd.ArrowDtype(pa.int32()),

@@ -384,6 +384,18 @@ class StringColumn(ColumnBase, Scannable):
         if isinstance(dtype, np.dtype) and dtype.kind == "U":
             dtype = np.dtype("object")
         if dtype != self.dtype:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and self.null_count != 0
+                and isinstance(dtype, np.dtype)
+                and dtype == np.dtype("O")
+                and isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype))
+                and self.dtype.na_value is pd.NA
+            ):
+                raise NotImplementedError(
+                    "Casting nullable string columns with pd.NA to object "
+                    "is not supported."
+                )
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
 
