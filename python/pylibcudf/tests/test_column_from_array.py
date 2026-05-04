@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -59,7 +59,8 @@ def cp_array(request, shape):
         ).reshape(shape)
     else:
         np_arr = np.arange(size, dtype=dtype).reshape(shape)
-    return cp.asarray(np_arr), np_arr
+    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+        return cp.asarray(np_arr), np_arr
 
 
 @pytest.fixture(params=NUMPY_DTYPES, ids=repr)
@@ -109,11 +110,13 @@ def test_non_c_contiguous_raises(cp_array):
     if len(cp_arr.shape) == 1:
         return
 
+    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+        fortran_arr = cp.asfortranarray(cp_arr)
     with pytest.raises(
         ValueError,
         match="Data must be C-contiguous",
     ):
-        plc.Column.from_array(cp.asfortranarray(cp_arr))
+        plc.Column.from_array(fortran_arr)
 
 
 def test_row_limit_exceed_raises():
@@ -192,7 +195,8 @@ def test_from_zero_dimensional_array():
     ],
 )
 def test_empty_array(np_or_cp_array, arr, dtype, expect):
-    arr = np_or_cp_array(arr, dtype=dtype)
+    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+        arr = np_or_cp_array(arr, dtype=dtype)
     col = plc.Column.from_array(arr)
 
     assert_column_eq(expect, col)
