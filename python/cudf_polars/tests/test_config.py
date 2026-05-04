@@ -41,16 +41,6 @@ from cudf_polars.utils.cuda_stream import (
 )
 
 
-@pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
-def rapidsmpf_single_available(request, monkeypatch):
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_single_available",
-        lambda: request.param,
-    )
-    return request.param
-
-
 def test_polars_verbose_warns(monkeypatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
@@ -232,9 +222,7 @@ def test_parquet_options_from_none() -> None:
     assert config.parquet_options.chunked is True
 
 
-def test_validate_streaming_executor_shuffle_method(
-    *, rapidsmpf_single_available: bool
-) -> None:
+def test_validate_streaming_executor_shuffle_method() -> None:
     engine = pl.GPUEngine(
         executor="streaming",
         executor_options={"cluster": "single"},
@@ -615,8 +603,6 @@ def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -> None:
-    pytest.importorskip("rapidsmpf")
-
     # Default from engine
     config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
     assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)

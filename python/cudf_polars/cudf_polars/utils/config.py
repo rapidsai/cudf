@@ -111,15 +111,6 @@ def get_total_device_memory() -> int | None:
         return None
 
 
-@functools.cache
-def rapidsmpf_single_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a single-process shuffle method."""
-    try:
-        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
-    except (ImportError, ValueError):
-        return False
-
-
 class StreamingFallbackMode(enum.StrEnum):
     """
     How the streaming executor handles operations that don't support multiple partitions.

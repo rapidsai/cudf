@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import importlib.util
 from typing import TYPE_CHECKING
 
 import pytest
@@ -48,13 +47,6 @@ def clear_memory_resource_cache():
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
-    # Do not use `pytest.importorskip` here: this fixture is autouse, so an
-    # import-based skip would skip every test in the suite on environments
-    # without rapidsmpf (e.g. the coverage CI job), masking real coverage.
-    # We only want to gate the nranks>1 check on rapidsmpf being available.
-    if importlib.util.find_spec("rapidsmpf") is None:
-        return
-
     from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
 
     if (
@@ -73,7 +65,6 @@ def spmd_comm() -> Communicator:
     cause hangs when ``create_ucxx_comm()`` is called repeatedly in the same
     ``rrun`` session (stale barrier files / stale ``ucxx_root_address`` KV entry).
     """
-    pytest.importorskip("rapidsmpf")
     from rapidsmpf import bootstrap
     from rapidsmpf.communicator.single import new_communicator as single_communicator
     from rapidsmpf.config import Options, get_environment_variables
