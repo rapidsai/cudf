@@ -154,27 +154,32 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
     // Check if end of a column/row
     if (pos == row.size() - 1 || (!quotation && row[pos] == parse_opts.terminator) ||
         (!quotation && row[pos] == parse_opts.delimiter)) {
-      // This is the header, add the column name
-      if (header_row >= 0) {
-        // Include the current character, in case the line is not terminated
-        int col_name_len = pos - prev + 1;
-        // Exclude the delimiter/terminator is present
-        if (row[pos] == parse_opts.delimiter || row[pos] == parse_opts.terminator) {
-          --col_name_len;
-        }
-        // Also exclude '\r' character at the end of the column name if it's
-        // part of the terminator
-        if (col_name_len > 0 && parse_opts.terminator == '\n' && row[pos] == '\n' &&
-            row[pos - 1] == '\r') {
-          --col_name_len;
-        }
+      // Include the current character, in case the line is not terminated
+      int col_name_len = pos - prev + 1;
+      // Exclude the delimiter/terminator if present
+      if (row[pos] == parse_opts.delimiter || row[pos] == parse_opts.terminator) { --col_name_len; }
+      // Also exclude '\r' character at the end of the column name if it's
+      // part of the terminator
+      if (col_name_len > 0 && parse_opts.terminator == '\n' && row[pos] == '\n' &&
+          row[pos - 1] == '\r') {
+        --col_name_len;
+      }
 
-        col_names.emplace_back(
-          remove_quotes(std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
-                        parse_opts.quotechar));
-      } else {
-        // This is the first data row, add the automatically generated name
-        col_names.push_back(prefix + std::to_string(col_names.size()));
+      // In delim_whitespace mode, leading/trailing/internal whitespace runs must not produce
+      // empty fields (pandas behavior). Internal runs are collapsed by the adjacent-delimiter
+      // skip loop below; this flag handles the leading/trailing empty-field cases here.
+      bool const skip_empty_field = parse_opts.multi_delimiter && col_name_len == 0;
+
+      if (!skip_empty_field) {
+        if (header_row >= 0) {
+          // This is the header, add the column name
+          col_names.emplace_back(remove_quotes(
+            std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
+            parse_opts.quotechar));
+        } else {
+          // This is the first data row, add the automatically generated name
+          col_names.push_back(prefix + std::to_string(col_names.size()));
+        }
       }
 
       // Stop parsing when we hit the line terminator; relevant when there is

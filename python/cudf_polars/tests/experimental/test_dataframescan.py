@@ -12,6 +12,8 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
@@ -32,16 +34,12 @@ def df():
     )
 
 
-@pytest.mark.parametrize(
-    "max_rows_per_partition,streaming_engine",
-    [
-        (1_000, {"executor_options": {"max_rows_per_partition": 1_000}}),
-        (1_000_000, {"executor_options": {"max_rows_per_partition": 1_000_000}}),
-    ],
-    indirect=["streaming_engine"],
-)
-def test_parallel_dataframescan(df, max_rows_per_partition, streaming_engine):
-    total_row_count = len(df.collect())
+@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_partition):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=max_rows_per_partition),
+    )
+    total_row_count = len(df.collect(engine=streaming_engine))
     assert_gpu_result_equal(df, engine=streaming_engine)
 
     # Check partitioning (throwaway engine — no cluster/runtime needed)
@@ -51,7 +49,10 @@ def test_parallel_dataframescan(df, max_rows_per_partition, streaming_engine):
         executor_options={"max_rows_per_partition": max_rows_per_partition},
     )
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
-    ir, info, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(_engine))
+    config_options = ConfigOptions.from_polars_engine(_engine)
+    ir, info = lower_ir_graph(
+        qir, config_options, collect_statistics(qir, config_options)
+    )
     count = info[ir].count
     if max_rows_per_partition < total_row_count:
         assert count > 1
@@ -59,12 +60,10 @@ def test_parallel_dataframescan(df, max_rows_per_partition, streaming_engine):
         assert count == 1
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"max_rows_per_partition": 1_000}}],
-    indirect=True,
-)
-def test_dataframescan_concat(df, streaming_engine):
+def test_dataframescan_concat(df, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=1_000),
+    )
     df2 = pl.concat([df, df])
     assert_gpu_result_equal(df2, engine=streaming_engine)
 
@@ -75,12 +74,13 @@ def test_join_in_memory_lazy_stable_id_pickle():
         executor="streaming",
         executor_options={"max_rows_per_partition": 1_000},
     )
-    left = pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect().lazy()
-    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect().lazy()
-    ir, _, _ = lower_ir_graph(
-        Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir(),
-        ConfigOptions.from_polars_engine(engine),
+    left = (
+        pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect(engine=engine).lazy()
     )
+    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect(engine=engine).lazy()
+    qir = Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir()
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
     _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
@@ -91,7 +91,8 @@ def test_dataframescan_pickle(df):
         executor_options={"max_rows_per_partition": 1_000},
     )
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
-    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(_engine))
+    config_options = ConfigOptions.from_polars_engine(_engine)
+    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
 
     # Pickle and unpickle the IR (which contains DataFrameScan)
     pickled = pickle.dumps(ir)
