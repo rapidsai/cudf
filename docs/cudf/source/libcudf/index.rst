@@ -1,5 +1,5 @@
-libcudf documentation
-=====================
+libcudf
+=======
 
 .. toctree::
    :maxdepth: 2
