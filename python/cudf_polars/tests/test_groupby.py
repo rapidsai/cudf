@@ -501,7 +501,7 @@ def test_groupby_sum_decimal_null_group(engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.xfail(
-    raises=AssertionError,
+    raises=(AssertionError, pl.exceptions.SchemaError),
     reason="https://github.com/rapidsai/cudf/issues/19610",
 )
 def test_groupby_literal_agg(engine: pl.GPUEngine):

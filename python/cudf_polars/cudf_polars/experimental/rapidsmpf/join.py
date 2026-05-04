@@ -205,14 +205,30 @@ async def _collect_small_side_for_broadcast(
             for s_id in range(len(chunks)):
                 inserter.insert(s_id, chunks.pop(0))
         stream = ir_context.get_cuda_stream()
-        dfs = [
-            DataFrame.from_table(
-                await allgather.extract_concatenated(stream),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
-        ]
+        gathered = await allgather.extract_concatenated(stream)
+        # When every rank inserted zero chunks, the AllGather has no schema
+        # to infer and returns a 0-column table. Substitute a properly typed
+        # empty table for the small side so downstream joins still match the
+        # expected schema.
+        if gathered.num_columns() == 0 and len(ir.schema) > 0:
+            empty_chunk = empty_table_chunk(ir, context, stream)
+            dfs = [
+                DataFrame.from_table(
+                    empty_chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    stream,
+                )
+            ]
+        else:
+            dfs = [
+                DataFrame.from_table(
+                    gathered,
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    stream,
+                )
+            ]
     elif chunks:
         if can_concatenate:
             chunks, extra = await make_table_chunks_available_or_wait(

@@ -65,7 +65,12 @@ def test_dataframescan_concat(df, streaming_engine_factory):
         StreamingOptions(max_rows_per_partition=1_000),
     )
     df2 = pl.concat([df, df])
-    assert_gpu_result_equal(df2, engine=streaming_engine)
+    # Multi-rank distributed scan interleaves rank-local outputs differently
+    # from a single-rank ``pl.concat([df, df])``: the client receives
+    # ``[rank0_df1, rank0_df2, rank1_df1, rank1_df2]`` rather than the
+    # polars-CPU ``[df1, df2]``. The set of rows (and their values per
+    # group) is unchanged, so check correctness without ordering.
+    assert_gpu_result_equal(df2, engine=streaming_engine, check_row_order=False)
 
 
 def test_join_in_memory_lazy_stable_id_pickle():
