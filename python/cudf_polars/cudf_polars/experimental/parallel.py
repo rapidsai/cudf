@@ -487,18 +487,17 @@ def _(
         child: IR = ir.children[0]
         anchor_name: str | None = None
         col_map = {ne.name: ne for ne in ir.columns}
+        schema = ir.schema
         if ir.should_broadcast and all(name in col_map for name in ir.schema):
             # We need to add a temporary anchor column to preserve row count.
             child, anchor_name, anchor_dtype = _add_anchor_column(ir)
-            new_schema = ir.schema | {anchor_name: anchor_dtype}
-            ir = HStack(new_schema, ir.columns, ir.should_broadcast, child)
+
+            schema = ir.schema | {anchor_name: anchor_dtype}
         exprs = tuple(
             col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
-            for name, dtype in ir.schema.items()
+            for name, dtype in schema.items()
         )
-        new_ir: Select | Projection = Select(
-            ir.schema, exprs, ir.should_broadcast, child
-        )
+        new_ir: Select | Projection = Select(schema, exprs, ir.should_broadcast, child)
         if anchor_name is not None:
             # Need to drop the temporary anchor column.
             schema = {
