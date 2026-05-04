@@ -9,6 +9,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_sink_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
@@ -29,17 +30,17 @@ def df():
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_parquet_single_file(
-    df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
+    df,
+    streaming_engine_factory,
+    tmp_path,
+    mkdir,
+    data_page_size,
+    row_group_size,
+    max_rows_per_partition,
 ):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": max_rows_per_partition,
-            "sink_to_directory": False,
-        },
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=max_rows_per_partition),
     )
-
     assert_sink_result_equal(
         df,
         tmp_path / "test_sink.parquet",
@@ -48,7 +49,7 @@ def test_sink_parquet_single_file(
             "data_page_size": data_page_size,
             "row_group_size": row_group_size,
         },
-        engine=engine,
+        engine=streaming_engine,
     )
 
 
@@ -57,17 +58,20 @@ def test_sink_parquet_single_file(
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_parquet_directory(
-    df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
+    df,
+    streaming_engine_factory,
+    tmp_path,
+    mkdir,
+    data_page_size,
+    row_group_size,
+    max_rows_per_partition,
 ):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": max_rows_per_partition,
-            "sink_to_directory": True,
-        },
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=max_rows_per_partition,
+            sink_to_directory=True,
+        ),
     )
-
     assert_sink_result_equal(
         df,
         tmp_path / "test_sink.parquet",
@@ -76,17 +80,19 @@ def test_sink_parquet_directory(
             "data_page_size": data_page_size,
             "row_group_size": row_group_size,
         },
-        engine=engine,
+        engine=streaming_engine,
     )
 
     check_path = Path(tmp_path / "test_sink_gpu.parquet")
-    expected_file_count = df.collect().height // max_rows_per_partition
+    expected_file_count = (
+        df.collect(engine=streaming_engine).height // max_rows_per_partition
+    )
     assert check_path.is_dir()
     if expected_file_count > 1:
         assert len(list(check_path.iterdir())) == expected_file_count
 
 
-def test_sink_parquet_distributed_raises():
+def test_sink_parquet_raises_distributed() -> None:
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -96,6 +102,20 @@ def test_sink_parquet_distributed_raises():
         },
     )
     with pytest.raises(ValueError, match="distributed cluster"):
+        ConfigOptions.from_polars_engine(engine)
+
+
+def test_sink_parquet_raises_spmd(spmd_comm):
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    with (
+        pytest.raises(
+            ValueError, match="The spmd cluster requires sink_to_directory=True"
+        ),
+        SPMDEngine(
+            comm=spmd_comm, executor_options={"sink_to_directory": False}
+        ) as engine,
+    ):
         ConfigOptions.from_polars_engine(engine)
 
 
