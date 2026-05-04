@@ -51,28 +51,30 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   while (idx < n) {
     auto const key = keys[idx];
     if constexpr (cg_size == 1) {
-      auto const cnt = ref.count(key);
+      auto const match_count = ref.count(key);
       if constexpr (IsOuter) {
-        output[idx] = (cnt == 0) ? size_type{1} : cnt;
+        output[idx] = (match_count == 0) ? size_type{1} : match_count;
       } else {
-        output[idx] = cnt;
+        output[idx] = match_count;
       }
     } else {
       auto const tile =
         cooperative_groups::tiled_partition<cg_size>(cooperative_groups::this_thread_block());
       if constexpr (IsOuter) {
-        auto temp_count = static_cast<size_type>(ref.count(tile, key));
+        auto const temp_count = static_cast<size_type>(ref.count(tile, key));
         if (tile.all(temp_count == 0)) {
-          cooperative_groups::invoke_one(tile, [&]() { ++temp_count; });
+          cooperative_groups::invoke_one(tile, [&]() { output[idx] = size_type{1}; });
+        } else {
+          auto const match_count =
+            cooperative_groups::reduce(tile, temp_count, cooperative_groups::plus<size_type>());
+          cooperative_groups::invoke_one(tile, [&]() { output[idx] = match_count; });
         }
-        auto const cnt =
-          cooperative_groups::reduce(tile, temp_count, cooperative_groups::plus<size_type>());
-        cooperative_groups::invoke_one(tile, [&]() { output[idx] = cnt; });
       } else {
-        auto const cnt = cooperative_groups::reduce(tile,
-                                                    static_cast<size_type>(ref.count(tile, key)),
-                                                    cooperative_groups::plus<size_type>());
-        cooperative_groups::invoke_one(tile, [&]() { output[idx] = cnt; });
+        auto const match_count =
+          cooperative_groups::reduce(tile,
+                                     static_cast<size_type>(ref.count(tile, key)),
+                                     cooperative_groups::plus<size_type>());
+        cooperative_groups::invoke_one(tile, [&]() { output[idx] = match_count; });
       }
     }
     idx += stride;
