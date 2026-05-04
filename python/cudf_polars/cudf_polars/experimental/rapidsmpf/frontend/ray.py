@@ -136,18 +136,6 @@ def evaluate_pipeline_ray_mode(
     return pl.concat(dfs), metadata_collector or None
 
 
-def _build_mr(
-    memory_resource_config: MemoryResourceConfig | None,
-) -> RmmResourceAdaptor:
-    """Construct a new ``RmmResourceAdaptor`` from a memory-resource config."""
-    base_mr = (
-        memory_resource_config.create_memory_resource()
-        if memory_resource_config is not None
-        else rmm.mr.CudaAsyncMemoryResource()
-    )
-    return RmmResourceAdaptor(base_mr)
-
-
 @ray.remote(
     max_restarts=0,
     max_task_retries=0,
@@ -193,10 +181,12 @@ class RankActor:
         memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
         bind_to_gpu(hardware_binding)
-        self._memory_resource_config: MemoryResourceConfig | None = (
-            memory_resource_config
+        base_mr = (
+            memory_resource_config.create_memory_resource()
+            if memory_resource_config is not None
+            else rmm.mr.CudaAsyncMemoryResource()
         )
-        self._mr = _build_mr(self._memory_resource_config)
+        self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
@@ -262,34 +252,29 @@ class RankActor:
         # in libcudf also use the same memory resource.
         rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
 
-    def reset(
-        self,
-        *,
-        rapidsmpf_options_as_bytes: bytes,
-        memory_resource_config: MemoryResourceConfig | None,
-    ) -> None:
+    def reset(self, *, rapidsmpf_options_as_bytes: bytes) -> None:
         """
-        Rebuild the streaming Context and RMM resource with new options.
+        Rebuild the streaming Context with new options.
 
-        Keeps the UCXX communicator and Python thread-pool executor alive, replacing
-        only the rapidsmpf :class:`Context` and the :class:`RmmResourceAdaptor`. Used
-        by :meth:`RayEngine._reset` to amortize actor startup and UCX bootstrap costs
-        across engines that differ only in streaming options.
+        Keeps the UCXX communicator, the :class:`RmmResourceAdaptor`,
+        and the Python thread-pool executor alive — only the rapidsmpf
+        :class:`Context` is replaced. Used by :meth:`RayEngine._reset`
+        to amortize actor startup and UCX bootstrap costs across engines
+        that differ only in streaming options.
 
-        The memory resource is rebuilt from ``memory_resource_config``, dropping
-        any accumulated pool memory. Pass the same value to keep the configuration
-        stable, or a different one to replace it. ``None`` creates a fresh
-        ``rmm.mr.CudaAsyncMemoryResource``.
+        The RMM resource is *not* rebuilt: UCX maps CUDA IPC buffers
+        against it (notably for pool memory resources) and never
+        releases those mappings during the application lifetime, so a
+        rebuilt MR would silently leak pool memory. Construct a fresh
+        :class:`RayEngine` if you need to swap the memory resource.
 
-        Must be called collectively on all actors. A barrier ensures no rank tears
-        down its Context while peers may still be using it.
+        Must be called collectively on all actors. A barrier ensures no
+        rank tears down its Context while peers may still be using it.
 
         Parameters
         ----------
         rapidsmpf_options_as_bytes
             Serialized :class:`Options` to install.
-        memory_resource_config
-            Memory-resource configuration to apply.
         """
         if self._ctx is None:
             raise RuntimeError("reset() requires setup_worker() to have run")
@@ -298,8 +283,6 @@ class RankActor:
         barrier(self._comm)
         self._ctx.shutdown()
         self._ctx = None
-        self._memory_resource_config = memory_resource_config
-        self._mr = _build_mr(self._memory_resource_config)
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options
@@ -652,8 +635,12 @@ class RayEngine(StreamingEngine):
 
         The following inputs are fixed at construction time and cannot change:
           - ``num_ranks``
-          - ``num_py_executors``
-          - ``hardware_binding``
+          - ``num_py_executors`` (in ``executor_options``)
+          - ``hardware_binding`` (in ``engine_options``)
+          - ``memory_resource_config`` (in ``engine_options``) — the RMM
+            resource is kept alive across resets because UCX never
+            releases CUDA IPC buffer mappings, so a rebuilt MR would
+            silently leak pool memory
           - ``ray_init_options``
 
         Parameters
@@ -665,8 +652,8 @@ class RayEngine(StreamingEngine):
             Polars ``GPUEngine`` executor options. ``None`` is treated as
             an empty dict.
         engine_options
-            Polars ``GPUEngine`` options. ``memory_resource_config`` is
-            forwarded to actors. ``None`` is treated as an empty dict.
+            Polars ``GPUEngine`` options. ``None`` is treated as an empty
+            dict.
         """
         if self._rank_actors is None:
             raise RuntimeError("Cannot reset a shut-down engine")
@@ -682,16 +669,15 @@ class RayEngine(StreamingEngine):
                 f"executor_options keys {sorted(_disallowed_exec)} cannot be "
                 "changed via _reset(). Construct a fresh RayEngine instead."
             )
-        _disallowed_engine = {"hardware_binding"} & engine_options.keys()
+        _disallowed_engine = {
+            "hardware_binding",
+            "memory_resource_config",
+        } & engine_options.keys()
         if _disallowed_engine:
             raise ValueError(
                 f"engine_options keys {sorted(_disallowed_engine)} cannot be "
                 "changed via _reset(). Construct a fresh RayEngine instead."
             )
-
-        mr_config: MemoryResourceConfig | None = engine_options.get(
-            "memory_resource_config", None
-        )
 
         rapidsmpf_options = (
             rapidsmpf_options
@@ -704,11 +690,12 @@ class RayEngine(StreamingEngine):
         # Reset all actor Contexts collectively. ``ray.get`` blocks until
         # every actor's reset returns; the per-actor barrier inside
         # :meth:`RankActor.reset` synchronizes the teardown across ranks.
+        # Each actor rebuilds its MR from the ``memory_resource_config``
+        # it was constructed with — see :meth:`RankActor.reset`.
         ray.get(
             [
                 rank.reset.remote(
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-                    memory_resource_config=mr_config,
                 )
                 for rank in self._rank_actors
             ]

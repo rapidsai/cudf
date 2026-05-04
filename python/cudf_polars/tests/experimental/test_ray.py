@@ -313,6 +313,13 @@ def test_reset_rejects_construction_time_engine_options(
                 "hardware_binding": HardwareBindingPolicy(enabled=False),
             },
         )
+    with pytest.raises(ValueError, match="memory_resource_config"):
+        reset_engine._reset(
+            engine_options={
+                "allow_gpu_sharing": True,
+                "memory_resource_config": None,
+            },
+        )
 
 
 def test_shutdown_skips_when_ray_not_initialized() -> None:
