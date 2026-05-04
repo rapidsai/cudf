@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -106,7 +106,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
+  cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
 
   // build deleter to cleanup device memory
   auto deleter = [d_buffer](reprog_device* t) {
