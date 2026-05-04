@@ -635,17 +635,6 @@ class StreamingExecutor:
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
-    unique_fraction
-        A dictionary mapping column names to floats between 0 and 1 (inclusive
-        on the right).
-
-        Each factor estimates the fractional number of unique values in the
-        column. By default, ``1.0`` is used for any column not included in
-        ``unique_fraction``.
-
-        .. deprecated::
-            The ``unique_fraction`` option is deprecated and will be removed
-            in a future release.
     target_partition_size
         Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -751,11 +740,6 @@ class StreamingExecutor:
     max_rows_per_partition: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, default=1_000_000
-        )
-    )
-    unique_fraction: dict[str, float] = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, default={}
         )
     )
     target_partition_size: int = dataclasses.field(
@@ -900,13 +884,6 @@ class StreamingExecutor:
         elif self.sink_to_directory is None:
             object.__setattr__(self, "sink_to_directory", False)
 
-        if self.unique_fraction:
-            warnings.warn(
-                "Setting 'unique_fraction' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-                stacklevel=2,
-            )
         if self.rapidsmpf_spill is not None:
             warnings.warn(
                 "Setting 'rapidsmpf_spill' is deprecated and will be removed "
@@ -920,8 +897,6 @@ class StreamingExecutor:
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
-        if not isinstance(self.unique_fraction, dict):  # pragma: no cover
-            raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
         if not isinstance(self.broadcast_join_limit, int):
@@ -948,10 +923,9 @@ class StreamingExecutor:
             )
 
     def __hash__(self) -> int:  # noqa: D105
-        # cardinality factory, a dict, isn't natively hashable. We'll dump it
+        # dynamic_planning factory, a dataclass, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
-        d["unique_fraction"] = json.dumps(d["unique_fraction"])
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         return hash(tuple(sorted(d.items())))
 

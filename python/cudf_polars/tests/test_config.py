@@ -903,11 +903,6 @@ def test_shuffle_method_deprecation_warning() -> None:
         StreamingExecutor(shuffle_method=ShuffleMethod.RAPIDSMPF)
 
 
-def test_unique_fraction_deprecation_warning() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        StreamingExecutor(unique_fraction={"col": 0.5})
-
-
 def test_rapidsmpf_spill_deprecation_warning() -> None:
     with pytest.warns(FutureWarning, match="Setting 'rapidsmpf_spill' is deprecated"):
         StreamingExecutor(rapidsmpf_spill=False)

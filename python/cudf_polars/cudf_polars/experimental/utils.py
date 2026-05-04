@@ -114,32 +114,6 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return ()
 
 
-def _get_unique_fractions(
-    column_names: Sequence[str],
-    user_unique_fractions: dict[str, float],
-) -> dict[str, float]:
-    """
-    Return unique-fraction statistics subset.
-
-    Parameters
-    ----------
-    column_names
-        The column names to get unique-fractions for.
-    user_unique_fractions
-        The user-provided unique-fraction dictionary.
-
-    Returns
-    -------
-    unique_fractions
-        The final unique-fraction dictionary filtered to column_names.
-    """
-    return {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in user_unique_fractions.items()
-        if c in column_names
-    }
-
-
 def _contains_over(exprs: Sequence[Expr]) -> bool:
     """Return True if any expression contains a window expression."""
     return any(isinstance(e, GroupedWindow) for e in traversal(exprs))

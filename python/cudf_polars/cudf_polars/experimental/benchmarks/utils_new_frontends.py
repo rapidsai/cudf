@@ -638,23 +638,6 @@ def get_executor_options(
     )
     executor_options["max_io_threads"] = run_config.max_io_threads
 
-    # PDSHQueries: inject unique_fraction when dynamic planning is explicitly disabled
-    if (
-        benchmark
-        and benchmark.__name__ == "PDSHQueries"
-        and run_config.executor == "streaming"
-        and run_config.streaming_options.dynamic_planning is None
-    ):
-        executor_options.setdefault(
-            "unique_fraction",
-            {
-                "c_custkey": 0.05,
-                "l_orderkey": 1.0,
-                "l_partkey": 0.1,
-                "o_custkey": 0.25,
-            },
-        )
-
     return executor_options
 
 

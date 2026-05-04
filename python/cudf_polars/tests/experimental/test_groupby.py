@@ -270,17 +270,13 @@ def test_groupby_literal_key(df, streaming_engine):
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg_config_options(df, op, keys, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=4,
-            unique_fraction={"z": 0.5},
-        ),
+        StreamingOptions(max_rows_per_partition=4),
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
-    with pytest.warns(FutureWarning, match="Setting 'unique_fraction' is deprecated"):
-        assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 def test_groupby_count_type_mismatch(df, streaming_engine_factory):
