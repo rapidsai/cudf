@@ -46,6 +46,7 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
@@ -394,6 +395,12 @@ def determine_fanout_nodes(
             _mark_children_unbounded(node)
         elif isinstance(node, Join):
             # This may be a broadcast join
+            _mark_children_unbounded(node)
+        elif isinstance(node, Over):
+            # Over buffers all input before producing any output, so its
+            # input source needs unbounded fanout to avoid deadlock when
+            # that source also feeds passthrough branches consumed by a
+            # concurrent HConcat.
             _mark_children_unbounded(node)
         elif len(node.children) > 1:
             # Check if this node is doing any broadcasting.

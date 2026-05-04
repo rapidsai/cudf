@@ -14,9 +14,9 @@ from cudf_polars.dsl.ir import Distinct, GroupBy, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
+from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.over import Over
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

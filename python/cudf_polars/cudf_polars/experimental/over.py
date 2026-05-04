@@ -199,6 +199,15 @@ def _fuse_over_nodes(
     into its own ``Over`` node, this pass merges co-keyed nodes into a single
     ``Over`` node so the actor evaluates all window expressions in one pass.
 
+    Passthrough selections (simple Col references) that share the same input
+    IR as an Over group are absorbed into that Over node.  This ensures the
+    Over actor outputs *all* output columns in one shuffle pass without a
+    separate HConcat to combine Over output with passthrough channels.
+    Without this, the non-scalar shuffle path produces per-boundary chunks
+    whose row counts differ from the passthrough channels (after the hash
+    shuffle, each rank holds only a fraction of each input chunk), causing
+    HConcat's broadcast() to raise ``Mismatching column lengths``.
+
     The grouping key is ``(key_indices, is_scalar, id(input_ir))``.
     """
     # (key_indices, is_scalar, input_ir_id)
@@ -218,36 +227,56 @@ def _fuse_over_nodes(
     if not over_groups:
         return selections, partition_info
 
-    result: list[Select] = list(passthrough)
+    result: list[Select] = []
     for (key_indices, is_scalar, _), group in over_groups.items():
-        if len(group) == 1:
-            result.append(group[0])
-            continue
-
         first_over = cast("Over", group[0].children[0])
         input_ir = first_over.children[0]
         pi = partition_info[first_over]
 
-        combined_exprs: list[NamedExpr] = []
+        # Combine all window expressions from this Over group.
+        combined_window_exprs: list[NamedExpr] = []
         for sel in group:
             over = cast("Over", sel.children[0])
-            combined_exprs.extend(over.exprs)
+            combined_window_exprs.extend(over.exprs)
 
-        combined_schema = {ne.name: ne.value.dtype for ne in combined_exprs}
+        # Absorb passthrough selections that share the same input_ir into
+        # the Over node so it outputs all columns in one pass.
+        absorbed: list[Select] = []
+        remaining: list[Select] = []
+        for p_sel in passthrough:
+            if p_sel.children[0] is input_ir:
+                absorbed.append(p_sel)
+            else:
+                remaining.append(p_sel)
+        passthrough = remaining
+
+        passthrough_exprs: list[NamedExpr] = []
+        for p_sel in absorbed:
+            passthrough_exprs.extend(p_sel.exprs)
+
+        all_over_exprs = passthrough_exprs + combined_window_exprs
+        combined_schema = {ne.name: ne.value.dtype for ne in all_over_exprs}
         merged_over = Over(
-            combined_schema, key_indices, is_scalar, tuple(combined_exprs), input_ir
+            combined_schema, key_indices, is_scalar, tuple(all_over_exprs), input_ir
         )
         partition_info[merged_over] = pi
 
+        # Outer Select: reference each column from the merged Over output by
+        # name, applying final output names (renaming intermediate window names).
         outer_exprs: list[NamedExpr] = []
         outer_schema: Schema = {}
+        for p_sel in absorbed:
+            outer_exprs.extend(p_sel.exprs)
+            outer_schema |= p_sel.schema
         for sel in group:
             outer_exprs.extend(sel.exprs)
             outer_schema |= sel.schema
+
         merged_sel = Select(outer_schema, outer_exprs, True, merged_over)  # noqa: FBT003
         partition_info[merged_sel] = pi
         result.append(merged_sel)
 
+    result.extend(passthrough)  # passthrough not absorbed by any Over group
     return result, partition_info
 
 

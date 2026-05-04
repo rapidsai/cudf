@@ -407,7 +407,8 @@ async def over_actor(
     Selects one of three strategies at runtime based on partitioning metadata
     and whether all GroupedWindow nodes are scalar aggregations: chunkwise
     (already partitioned), scalar broadcast (tree-reduce + AllGather), or
-    non-scalar shuffle (hash-shuffle with optional row-index tracking for HStack).
+    non-scalar shuffle (hash-shuffle with row-index tracking for boundary
+    reconstruction).
 
     Parameters
     ----------
@@ -575,7 +576,7 @@ async def over_actor(
         row_counter = 0
         boundaries: list[tuple[int, int, int]] = []
 
-        # Phase 1: stamp each row with its absolute position and insert into the shuffle
+        # Phase 1: stamp each row with its local position and insert into the shuffle
         async with shuffle.inserting() as inserter:
             while (msg := await ch_in.recv(context)) is not None:
                 chunk = TableChunk.from_message(
