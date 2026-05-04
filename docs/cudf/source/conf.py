@@ -231,7 +231,7 @@ html_theme_options = {
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
-    "navbar_align": "right",
+    "navbar_align": "content",
     "navigation_with_keys": True,
 }
 include_pandas_compat = True
