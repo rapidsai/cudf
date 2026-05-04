@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import polars as pl
 
@@ -295,7 +295,6 @@ class SortedShuffleOptions(TypedDict):
     null_order: Sequence[plc.types.NullOrder]
     column_names: Sequence[str]
     column_dtypes: Sequence[DataType]
-    cluster_kind: Literal["dask", "single"]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -313,12 +312,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import split_and_pack
-
-        if options["cluster_kind"] == "dask":
-            from rapidsmpf.integrations.dask import get_worker_context
-
-        else:
-            from rapidsmpf.integrations.single import get_worker_context
+        from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
 
@@ -360,12 +354,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
             unpack_and_concat,
             unspill_partitions,
         )
-
-        if options["cluster_kind"] == "dask":
-            from rapidsmpf.integrations.dask import get_worker_context
-
-        else:
-            from rapidsmpf.integrations.single import get_worker_context
+        from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
 
@@ -646,41 +635,23 @@ def _(
     }
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
-    # keys, and the "shuffle_method" config is set to "rapidsmpf"
+    # keys, and the "shuffle_method" config is set to "rapidsmpf-single".
     shuffle_method = ir.shuffle_method
-    if shuffle_method in ("rapidsmpf", "rapidsmpf-single"):  # pragma: no cover
-        try:
-            if shuffle_method == "rapidsmpf-single":
-                from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
+    if shuffle_method == "rapidsmpf-single":  # pragma: no cover
+        from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
 
-                options["cluster_kind"] = "single"
-            else:
-                from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
-
-                options["cluster_kind"] = "dask"
-            graph.update(
-                rapidsmpf_shuffle_graph(
-                    get_key_name(child),
-                    get_key_name(ir),
-                    partition_info[child].count,
-                    partition_info[ir].count,
-                    RMPFIntegrationSortedShuffle,
-                    options,
-                    sort_boundaries_name,
-                )
+        graph.update(
+            rapidsmpf_shuffle_graph(
+                get_key_name(child),
+                get_key_name(ir),
+                partition_info[child].count,
+                partition_info[ir].count,
+                RMPFIntegrationSortedShuffle,
+                options,
+                sort_boundaries_name,
             )
-        except (ImportError, ValueError) as err:
-            # ImportError: rapidsmpf is not installed
-            # ValueError: rapidsmpf couldn't find a distributed client
-            if shuffle_method == "rapidsmpf":  # pragma: no cover
-                # Only raise an error if the user specifically
-                # set the shuffle method to "rapidsmpf"
-                raise ValueError(
-                    "Rapidsmpf is not installed correctly or the current "
-                    "Dask cluster does not support rapidsmpf shuffling."
-                ) from err
-        else:
-            return graph
+        )
+        return graph
 
     # Simple task-based fall-back
     graph.update(
