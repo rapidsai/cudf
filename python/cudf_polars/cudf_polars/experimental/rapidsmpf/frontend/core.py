@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import json
 import os
 import socket
 from typing import TYPE_CHECKING, Any, Self, TypeVar
@@ -21,8 +22,14 @@ import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.experimental.base import StatsCollector
+from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.core import generate_network
+from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
@@ -35,7 +42,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -121,12 +128,16 @@ class StreamingEngine(pl.GPUEngine):
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
+        # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
+        # accept it.
+        engine_options = dict(engine_options)
+        allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
             **engine_options,
         )
-        if nranks > 1 and engine_options.get("allow_gpu_sharing", False) is False:
+        if nranks > 1 and not allow_gpu_sharing:
             uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
@@ -407,3 +418,112 @@ def all_gather_host_data(
     allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
     return [r.to_host_bytes() for r in results]
+
+
+def allgather_stats(
+    comm: Communicator,
+    br: BufferResource,
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> StatsCollector:
+    """
+    Collect scan statistics on rank 0 and distribute to all ranks.
+
+    When ``comm.nranks == 1`` the allgather is skipped and statistics are
+    collected locally.
+
+    Parameters
+    ----------
+    comm
+        Communicator shared by all participating ranks.
+    br
+        Buffer resource for the allgather allocation.
+    ir
+        Root of the pre-lowered IR graph (same object on every rank).
+    config_options
+        Executor configuration.
+
+    Returns
+    -------
+    A :class:`StatsCollector` valid for the local rank's IR node objects.
+    """
+    if comm.nranks == 1:
+        return collect_statistics(ir, config_options)
+
+    if comm.rank == 0:
+        stats = collect_statistics(ir, config_options)
+        data = json.dumps(stats.serialize(ir)).encode()
+    else:
+        data = b""
+
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, br, op_id, data)
+
+    if comm.rank == 0:
+        return stats
+    return StatsCollector.deserialize(json.loads(all_data[0]), ir)
+
+
+def evaluate_on_rank(
+    ctx: Context,
+    comm: Communicator,
+    py_executor: ThreadPoolExecutor,
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    *,
+    collect_metadata: bool = False,
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+    """
+    Evaluate a polars IR plan on a single rank.
+
+    This is the main worker-side entry point for multi-rank execution.
+    It performs the following steps collectively across all ranks:
+
+    1. Collect statistics (on rank 0 and allgather)
+    2. Lower the IR graph
+    3. Reserve collective operation IDs
+    4. Execute the lowered pipeline
+
+    Parameters
+    ----------
+    ctx
+        The active RapidsMPF streaming context for this rank.
+    comm
+        The active RapidsMPF communicator for this rank.
+    py_executor
+        Thread-pool executor used to drive the actor network.
+    ir
+        Root of the **pre-lowered** IR graph.
+    config_options
+        Executor configuration forwarded from the client.
+    collect_metadata
+        Whether to collect channel metadata during execution.
+
+    Returns
+    -------
+    result
+        This rank's output fragment as a Polars DataFrame.
+    metadata
+        Collected channel metadata if *collect_metadata* is ``True``,
+        otherwise ``None``.
+    """
+    stats = allgather_stats(comm, ctx.br(), ir, config_options)
+    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+
+    if comm.rank == 0:
+        # At least for now, the query plan is identical on all ranks,
+        # so we only log it once.
+        log_query_plan(ir, config_options)
+
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
+        return execute_ir_on_rank(
+            ctx,
+            comm,
+            py_executor,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            collect_metadata=collect_metadata,
+        )

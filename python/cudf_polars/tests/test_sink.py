@@ -10,6 +10,7 @@ from cudf_polars.testing.asserts import (
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
@@ -29,7 +30,6 @@ def df():
 @pytest.mark.parametrize("separator", [",", "|"])
 def test_sink_csv(
     engine: pl.GPUEngine,
-    blocksize_mode,
     df,
     tmp_path,
     include_header,
@@ -37,7 +37,7 @@ def test_sink_csv(
     line_terminator,
     separator,
 ):
-    if line_terminator == "\n\n" and blocksize_mode == "small":
+    if line_terminator == "\n\n" and get_blocksize_mode(engine) == "small":
         # We end up with an extra row per partition.
         pytest.skip("Multi-line terminator not supported with small blocksize")
     assert_sink_result_equal(

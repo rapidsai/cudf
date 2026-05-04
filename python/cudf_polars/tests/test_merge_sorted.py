@@ -7,15 +7,14 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
 @pytest.mark.parametrize("descending", [True, False])
-def test_merge_sorted_without_nulls(
-    engine: pl.GPUEngine, descending, request, using_streaming_engine
-):
+def test_merge_sorted_without_nulls(engine: pl.GPUEngine, descending, request):
     request.applymarker(
         pytest.mark.xfail(
-            not using_streaming_engine and descending,
+            not is_streaming_engine(engine) and descending,
             reason="https://github.com/pola-rs/polars/issues/21511",
         )
     )

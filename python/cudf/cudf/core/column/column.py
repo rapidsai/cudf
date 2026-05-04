@@ -3515,7 +3515,27 @@ def as_column(
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
-            if inferred_dtype in {"string", "empty"} and dtype is None:
+
+            if dtype is None and (
+                inferred_dtype in {"string", "empty"}
+                or (
+                    inferred_dtype == "mixed"
+                    and pa.types.is_string(pyarrow_array.type)
+                    and isinstance(arbitrary, (pd.Series, pd.Index))
+                )
+            ):
+                # The Series/Index restriction in (2) is load-bearing. Consider:
+                #
+                #   pd.Series(["a", None], dtype=object)
+                #     -> user explicitly chose object; preserve it
+                #        (test_grouping_grouper, test_to_numpy depend on this).
+                #
+                #   pd.arrays.NumpyExtensionArray(np.array(["a", None], dtype=object))
+                #     -> by this point ``arbitrary`` has been unwrapped to a raw
+                #        np.ndarray whose ``dtype=object`` is incidental (numpy's
+                #        default for arrays containing None), not user intent.
+                #        We want it to fall through to string inference, matching
+                #        pandas (test_from_numpyextensionarray_string_object_pandas_compat_mode).
                 dtype = arbitrary.dtype
             return as_column(
                 pyarrow_array,
