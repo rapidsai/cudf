@@ -637,10 +637,7 @@ class RayEngine(StreamingEngine):
           - ``num_ranks``
           - ``num_py_executors`` (in ``executor_options``)
           - ``hardware_binding`` (in ``engine_options``)
-          - ``memory_resource_config`` (in ``engine_options``) — the RMM
-            resource is kept alive across resets because UCX never
-            releases CUDA IPC buffer mappings, so a rebuilt MR would
-            silently leak pool memory
+          - ``memory_resource_config`` (in ``engine_options``)
           - ``ray_init_options``
 
         Parameters
