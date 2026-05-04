@@ -34,6 +34,7 @@ struct noinline_adapter_fn {
   noinline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
   [[nodiscard]] __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
+    -> decltype(f(std::forward<Args>(args)...))
   {
     return f(std::forward<Args>(args)...);
   }

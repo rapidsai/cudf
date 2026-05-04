@@ -5195,6 +5195,39 @@ void testExtractReWithMultiLineDelimiters() {
   }
 
   @Test
+  void testStringReplacePerRow() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello world", "foo bar", "aaa", "");
+         ColumnVector targets = ColumnVector.fromStrings("o", "bar", "a", "x");
+         ColumnVector repls = ColumnVector.fromStrings("0", "BAR", "X", "y");
+         ColumnVector expected = ColumnVector.fromStrings("hell0 w0rld", "foo BAR", "XXX", "");
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringReplacePerRowNulls() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello", null, "foo", "bar");
+         ColumnVector targets = ColumnVector.fromStrings("l", "o", null, "a");
+         ColumnVector repls = ColumnVector.fromStrings("L", "0", "0", null);
+         ColumnVector expected = ColumnVector.fromStrings("heLLo", null, null, null);
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringReplacePerRowEmptyTarget() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello", "world", "foo");
+         ColumnVector targets = ColumnVector.fromStrings("l", "", "o");
+         ColumnVector repls = ColumnVector.fromStrings("L", "X", "0");
+         ColumnVector expected = ColumnVector.fromStrings("heLLo", "world", "f00");
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testReplaceRegex() {
     try (ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
          Scalar repl = Scalar.fromString("Repl")) {
