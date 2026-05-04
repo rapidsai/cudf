@@ -1760,10 +1760,9 @@ TEST_F(JITExpressionTest, AnsiPrecisionCheck)
 
 TEST_F(JITExpressionTest, BitShiftLeft)
 {
-  auto a = cudf::test::fixed_width_column_wrapper<uint32_t>{
-    0b0011'1111, 0b0001'1111, 0b101111, 0b0000'001100};
+  auto a = cudf::test::fixed_width_column_wrapper<uint32_t>{0b111111, 0b111110, 0b101111, 0b1100};
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>{0b1111'1100, 0b01'11100, 0b1111, 0b110000};
+    cudf::test::fixed_width_column_wrapper<uint32_t>{0b11111100, 0b11111000, 0b10111100, 0b110000};
   auto shift         = cudf::numeric_scalar<uint32_t>(2);
   auto table         = cudf::table_view{{a}};
   auto a_ref         = cudf::ast::column_reference(0);
@@ -1871,114 +1870,37 @@ void test_from_decimal_cast()
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(JITExpressionTest, CastToBool)
+template <typename To>
+void test_cast_to()
 {
-  test_cast<int32_t, bool>();
-  test_cast<uint32_t, bool>();
-  test_cast<float, bool>();
-  test_from_decimal_cast<numeric::decimal32, bool>();
-  test_from_decimal_cast<numeric::decimal64, bool>();
-  test_from_decimal_cast<numeric::decimal128, bool>();
+  test_cast<uint8_t, To>();
+  test_cast<uint16_t, To>();
+  test_cast<uint32_t, To>();
+  test_cast<uint64_t, To>();
+  test_cast<int8_t, To>();
+  test_cast<int16_t, To>();
+  test_cast<int32_t, To>();
+  test_cast<int64_t, To>();
+  test_cast<float, To>();
+  test_cast<double, To>();
+  test_from_decimal_cast<numeric::decimal32, To>();
+  test_from_decimal_cast<numeric::decimal64, To>();
+  test_from_decimal_cast<numeric::decimal128, To>();
 }
 
-TEST_F(JITExpressionTest, CastToI8)
+TEST_F(JITExpressionTest, Cast)
 {
-  test_cast<int32_t, int8_t>();
-  test_cast<uint32_t, int8_t>();
-  test_cast<float, int8_t>();
-  test_from_decimal_cast<numeric::decimal32, int8_t>();
-  test_from_decimal_cast<numeric::decimal64, int8_t>();
-  test_from_decimal_cast<numeric::decimal128, int8_t>();
-}
-
-TEST_F(JITExpressionTest, CastToI16)
-{
-  test_cast<int32_t, int16_t>();
-  test_cast<uint32_t, int16_t>();
-  test_cast<float, int16_t>();
-  test_from_decimal_cast<numeric::decimal32, int16_t>();
-  test_from_decimal_cast<numeric::decimal64, int16_t>();
-  test_from_decimal_cast<numeric::decimal128, int16_t>();
-}
-
-TEST_F(JITExpressionTest, CastToI32)
-{
-  test_cast<int32_t, int32_t>();
-  test_cast<uint32_t, int32_t>();
-  test_cast<float, int32_t>();
-  test_from_decimal_cast<numeric::decimal32, int32_t>();
-  test_from_decimal_cast<numeric::decimal64, int32_t>();
-  test_from_decimal_cast<numeric::decimal128, int32_t>();
-}
-
-TEST_F(JITExpressionTest, CastToI64)
-{
-  test_cast<int32_t, int64_t>();
-  test_cast<uint32_t, int64_t>();
-  test_cast<float, int64_t>();
-  test_from_decimal_cast<numeric::decimal32, int64_t>();
-  test_from_decimal_cast<numeric::decimal64, int64_t>();
-  test_from_decimal_cast<numeric::decimal128, int64_t>();
-}
-
-TEST_F(JITExpressionTest, CastToU8)
-{
-  test_cast<int32_t, uint8_t>();
-  test_cast<uint32_t, uint8_t>();
-  test_cast<float, uint8_t>();
-  test_from_decimal_cast<numeric::decimal32, uint8_t>();
-  test_from_decimal_cast<numeric::decimal64, uint8_t>();
-  test_from_decimal_cast<numeric::decimal128, uint8_t>();
-}
-
-TEST_F(JITExpressionTest, CastToU16)
-{
-  test_cast<int32_t, uint16_t>();
-  test_cast<uint32_t, uint16_t>();
-  test_cast<float, uint16_t>();
-  test_from_decimal_cast<numeric::decimal32, uint16_t>();
-  test_from_decimal_cast<numeric::decimal64, uint16_t>();
-  test_from_decimal_cast<numeric::decimal128, uint16_t>();
-}
-
-TEST_F(JITExpressionTest, CastToU32)
-{
-  test_cast<int32_t, uint32_t>();
-  test_cast<uint32_t, uint32_t>();
-  test_cast<float, uint32_t>();
-  test_from_decimal_cast<numeric::decimal32, uint32_t>();
-  test_from_decimal_cast<numeric::decimal64, uint32_t>();
-  test_from_decimal_cast<numeric::decimal128, uint32_t>();
-}
-
-TEST_F(JITExpressionTest, CastToU64)
-{
-  test_cast<int32_t, uint64_t>();
-  test_cast<uint32_t, uint64_t>();
-  test_cast<float, uint64_t>();
-  test_from_decimal_cast<numeric::decimal32, uint64_t>();
-  test_from_decimal_cast<numeric::decimal64, uint64_t>();
-  test_from_decimal_cast<numeric::decimal128, uint64_t>();
-}
-
-TEST_F(JITExpressionTest, CastToF32)
-{
-  test_cast<int32_t, float>();
-  test_cast<uint32_t, float>();
-  test_cast<float, float>();
-  test_from_decimal_cast<numeric::decimal32, float>();
-  test_from_decimal_cast<numeric::decimal64, float>();
-  test_from_decimal_cast<numeric::decimal128, float>();
-}
-
-TEST_F(JITExpressionTest, CastToF64)
-{
-  test_cast<int32_t, double>();
-  test_cast<uint32_t, double>();
-  test_cast<float, double>();
-  test_from_decimal_cast<numeric::decimal32, double>();
-  test_from_decimal_cast<numeric::decimal64, double>();
-  test_from_decimal_cast<numeric::decimal128, double>();
+  test_cast_to<bool>();
+  test_cast_to<int8_t>();
+  test_cast_to<int16_t>();
+  test_cast_to<int32_t>();
+  test_cast_to<int64_t>();
+  test_cast_to<uint8_t>();
+  test_cast_to<uint16_t>();
+  test_cast_to<uint32_t>();
+  test_cast_to<uint64_t>();
+  test_cast_to<float>();
+  test_cast_to<double>();
 }
 
 template <typename From, typename To>
@@ -2037,7 +1959,7 @@ TEST_F(JITExpressionTest, Rescale)
   auto table     = cudf::table_view{{a}};
   auto a_ref     = cudf::ast::column_reference(0);
   auto tree      = cudf::ast::tree{};
-  auto& rescaled = cudf::ast::jit::rescale(tree, a_ref, 2);
+  auto& rescaled = cudf::ast::jit::rescale(tree, a_ref, -2);
   auto result    = cudf::compute_column_jit(table, rescaled);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
