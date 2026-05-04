@@ -715,8 +715,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
-  rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<size_t> d_temp_cost =
+    cudf::detail::make_device_uvector(temp_cost, stream, cudf::get_current_device_resource_ref());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,
