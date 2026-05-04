@@ -88,7 +88,9 @@ def test_csv_roundtrip_filepath(tmp_path):
 
 def test_read_csv(tmp_path):
     df = dask.datasets.timeseries(
-        dtypes={"x": int, "y": int}, freq="120s"
+        dtypes={"x": int, "y": int},
+        freq="120s",
+        seed=1,
     ).reset_index(drop=True)
 
     csv_path = str(tmp_path / "data-*.csv")
@@ -117,7 +119,9 @@ def test_raises_FileNotFoundError():
 
 def test_read_csv_w_bytes(tmp_path):
     df = dask.datasets.timeseries(
-        dtypes={"x": int, "y": int}, freq="120s"
+        dtypes={"x": int, "y": int},
+        freq="120s",
+        seed=1,
     ).reset_index(drop=True)
     df = pd.DataFrame(dict(x=np.arange(20), y=np.arange(20)))
     df.to_csv(tmp_path / "data-*.csv", index=False)

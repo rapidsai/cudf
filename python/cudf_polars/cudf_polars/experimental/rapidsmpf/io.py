@@ -185,7 +185,7 @@ async def dataframescan_node(
     distributed_scan
         If ``True``, the DataFrame is treated as a shared object and divided
         across workers so each rank reads a disjoint subset. This is normally
-        used in ``Cluster.DISTRIBUTED`` mode.
+        used in ``Cluster.RAY`` and ``Cluster.DASK`` modes.
 
         If ``False``, the DataFrame is treated as rank-local and each rank
         scans its local DataFrame in full. This is normally used in
@@ -814,7 +814,9 @@ async def sink_node(
             rank_width = math.ceil(math.log10(comm.nranks))
             rank_str = str(comm.rank).zfill(rank_width)
             path_root = f"{path_root}.{rank_str}"
-        count_width = math.ceil(math.log10(metadata.local_count))
+        # local_count may be 0 when a rank receives no partitions
+        # (e.g. more ranks than input files); log10(0) is undefined.
+        count_width = math.ceil(math.log10(max(metadata.local_count, 1)))
         count_width = max(count_width, 6)
 
         if ir.sink_to_directory:

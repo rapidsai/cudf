@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -18,6 +20,7 @@ from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -26,10 +29,13 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
+    all_gather_host_data,
     check_reserved_keys,
-    execute_ir_on_rank,
+    evaluate_on_rank,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -40,24 +46,21 @@ from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -72,20 +75,17 @@ def evaluate_pipeline_spmd_mode(
     all-gathers, etc.) coordinate across ranks to produce a globally
     consistent result.
 
+    IR lowering is performed collectively on the workers: rank 0
+    collects scan statistics and allgathers them, then every rank
+    lowers the graph independently.
+
     Parameters
     ----------
     ir
-        The IR node.
-    partition_info
-        The partition information.
+        The pre-lowered IR node.
     config_options
         Executor configuration, including the rapidsmpf context and the
         Python thread-pool executor used to drive the actor network.
-    stats
-        The statistics collector.
-    collective_id_map
-        Mapping from IR nodes to their pre-allocated collective operation
-        IDs.
     collect_metadata
         Whether to collect runtime metadata.
     query_id
@@ -104,15 +104,12 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
-    return execute_ir_on_rank(
+    return evaluate_on_rank(
         context,
         comm,
         py_executor,
         ir,
-        partition_info,
         config_options,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 
@@ -373,7 +370,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
+            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -491,6 +488,45 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        This is a collective operation, every rank must call it.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return [ClusterInfo(**json.loads(r)) for r in results]
+
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via an all-gather.
+
+        This is a collective operation, every rank must call it.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        # Serialize before the optional clear so the returned stats still carry data.
+        data = self.context.statistics().serialize()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        if clear:
+            self.context.statistics().clear()
+        return [Statistics.deserialize(r) for r in results]
+
     def shutdown(self) -> None:
         """
         Shut down the engine and release all owned resources.
@@ -503,3 +539,10 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        data = json.dumps(func(*args, **kwargs)).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+
+        return [json.loads(r) for r in results]
