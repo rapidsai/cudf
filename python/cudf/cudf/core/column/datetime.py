@@ -36,6 +36,7 @@ from cudf.core.column.temporal_base import (
     TemporalBaseColumn,
     _raise_on_invalid_ordering_scalar,
 )
+from cudf.core.dtype.validators import is_dtype_obj_datetime_tz
 from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
@@ -670,8 +671,8 @@ class DatetimeColumn(TemporalBaseColumn):
         # datetime-datetime operation (subtraction, ordering comparison)
         # that mixes a tz-aware and a tz-naive operand, and preserves the
         # tz when adding/subtracting a timedelta.
-        self_is_tz = isinstance(self.dtype, pd.DatetimeTZDtype)
-        other_is_tz = isinstance(other_dtype, pd.DatetimeTZDtype)
+        self_is_tz = is_dtype_obj_datetime_tz(self.dtype)
+        other_is_tz = is_dtype_obj_datetime_tz(other_dtype)
         if (
             other_is_datetime64
             and self_is_tz != other_is_tz
@@ -679,20 +680,14 @@ class DatetimeColumn(TemporalBaseColumn):
             and op in {"__sub__", "__lt__", "__le__", "__gt__", "__ge__"}
         ):
             raise TypeError(
-                "Cannot subtract tz-naive and tz-aware datetime-like objects."
-                if op == "__sub__"
-                else "Invalid comparison between tz-naive and tz-aware "
+                "Invalid comparison between tz-naive and tz-aware "
                 "datetime-like objects."
             )
 
-        def _preserve_tz(result_dtype: DtypeObj) -> DtypeObj:
+        def _preserve_tz(result_dtype: np.dtype) -> DtypeObj:
             # When the operation should yield another datetime and self
             # is tz-aware, carry the tz forward with the resolved unit.
-            if (
-                self_is_tz
-                and isinstance(result_dtype, np.dtype)
-                and result_dtype.kind == "M"
-            ):
+            if self_is_tz and result_dtype.kind == "M":
                 tz_dtype = cast(pd.DatetimeTZDtype, self.dtype)
                 unit = np.datetime_data(
                     cast(np.dtype[np.datetime64], result_dtype)

@@ -17,7 +17,10 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.dtype.validators import is_dtype_obj_string
+from cudf.core.dtype.validators import (
+    is_dtype_obj_datetime_tz,
+    is_dtype_obj_string,
+)
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -160,8 +163,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     arrow_type = cudf_dtype_to_pa_type(self.dtype)
                 return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
-                if other.tz is not None and not isinstance(
-                    self.dtype, pd.DatetimeTZDtype
+                if other.tz is not None and not is_dtype_obj_datetime_tz(
+                    self.dtype
                 ):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
@@ -176,10 +179,14 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     ts = pd.Timestamp(other)
                 except ValueError:
                     return NotImplemented
-                if isinstance(self.dtype, pd.DatetimeTZDtype):
+                if is_dtype_obj_datetime_tz(self.dtype):
                     # pandas parses the string and interprets it in the
                     # column's tz for comparison, so localize here.
-                    other = ts.tz_localize(self.dtype.tz)
+                    if isinstance(self.dtype, pd.DatetimeTZDtype):
+                        tz = self.dtype.tz
+                    else:
+                        tz = cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.tz
+                    other = ts.tz_localize(tz)
                 else:
                     other = ts
             elif self.dtype.kind == "m" and isinstance(other, pd.Timedelta):
@@ -210,8 +217,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
-                if scalar.type.tz is not None and not isinstance(
-                    self.dtype, pd.DatetimeTZDtype
+                if scalar.type.tz is not None and not is_dtype_obj_datetime_tz(
+                    self.dtype
                 ):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."

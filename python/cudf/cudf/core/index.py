@@ -1484,15 +1484,7 @@ class Index(SingleColumnFrame):
             and self.freq is not None
             and op in {"__add__", "__sub__"}
             and isinstance(ret, DatetimeIndex)
-            and isinstance(
-                other,
-                (
-                    pd.Timedelta,
-                    np.timedelta64,
-                    datetime.timedelta,
-                    pd.tseries.offsets.Tick,
-                ),
-            )
+            and is_scalar(other)
         ):
             ret._freq = self._freq
 
