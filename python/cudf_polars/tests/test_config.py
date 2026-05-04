@@ -850,8 +850,3 @@ def test_runtime_deprecation_warning() -> None:
 def test_shuffle_method_deprecation_warning() -> None:
     with pytest.warns(FutureWarning, match="Setting 'shuffle_method' is deprecated"):
         StreamingExecutor(shuffle_method=ShuffleMethod.RAPIDSMPF)
-
-
-def test_rapidsmpf_spill_deprecation_warning() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'rapidsmpf_spill' is deprecated"):
-        StreamingExecutor(rapidsmpf_spill=False)

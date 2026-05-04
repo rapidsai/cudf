@@ -847,16 +847,6 @@ class StreamingExecutor:
         elif self.sink_to_directory is None:
             object.__setattr__(self, "sink_to_directory", False)
 
-        if self.rapidsmpf_spill is not None:
-            warnings.warn(
-                "Setting 'rapidsmpf_spill' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-                stacklevel=2,
-            )
-        else:
-            object.__setattr__(self, "rapidsmpf_spill", False)
-
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
