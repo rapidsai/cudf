@@ -455,7 +455,8 @@ async def concat_batch(
             ],
             context=ir_context,
         )
-        del batch
+        if len(batch) > 1:
+            del batch
     return TableChunk.from_pylibcudf_table(
         df.table, df.stream, exclusive_view=True, br=context.br()
     )
