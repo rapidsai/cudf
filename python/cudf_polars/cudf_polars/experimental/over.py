@@ -4,17 +4,28 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING, ClassVar, cast
 
-from cudf_polars.dsl.expr import Col, GroupedWindow, NamedExpr
-from cudf_polars.dsl.ir import IR, GroupBy, HStack, Select
+from cudf_polars.dsl.expr import Agg, Col, Len, NamedExpr
+from cudf_polars.dsl.ir import IR, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.groupby import combine, decompose
-from cudf_polars.experimental.utils import _all_over_scalar_and_top_level
 
 if TYPE_CHECKING:
-    from cudf_polars.dsl.ir import HStack
+    from collections.abc import Generator, MutableMapping
+
+    from cudf_polars.dsl.expr import GroupedWindow
+    from cudf_polars.dsl.expressions.base import Expr
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
+
+
+# Aggregation names that can be decomposed across partitions (see groupby.decompose)
+_DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
+    ("sum", "count", "mean", "min", "max", "n_unique")
+)
 
 
 def _build_over_groupby_irs(
@@ -115,131 +126,160 @@ def _build_over_groupby_irs(
 
 
 class Over(IR):
-    """
-    Window over() IR node for the streaming runtime.
+    """Window over() IR node for the streaming runtime."""
 
-    Wraps a Select or HStack containing GroupedWindow expressions and carries
-    pre-computed metadata for the over_actor: group key indices, scalar/non-scalar
-    classification, and (for scalar) decomposed aggregation IRs.
-    """
-
-    __slots__ = (
-        "agg_select_ir",
-        "gw_nodes",
-        "is_scalar",
-        "key_indices",
-        "key_names",
-        "piecewise_ir",
-        "reduction_ir",
-        "row_idx_col",
-    )
-    _non_child: ClassVar[tuple[str, ...]] = (
-        "schema",
-        "key_indices",
-        "is_scalar",
-        "gw_nodes",
-        "key_names",
-        "piecewise_ir",
-        "reduction_ir",
-        "agg_select_ir",
-        "row_idx_col",
-    )
-    _n_non_child_args: ClassVar[int] = 0
+    __slots__ = ("exprs", "is_scalar", "key_indices")
+    _n_non_child_args: ClassVar[int] = 3
 
     key_indices: tuple[int, ...]
     is_scalar: bool
-    gw_nodes: tuple[GroupedWindow, ...] | None
-    key_names: tuple[str, ...] | None
-    piecewise_ir: GroupBy | None
-    reduction_ir: GroupBy | None
-    agg_select_ir: Select | None
-    row_idx_col: str | None
+    exprs: tuple[NamedExpr, ...]
 
     def __init__(
         self,
         schema: Schema,
         key_indices: tuple[int, ...],
         is_scalar: bool,  # noqa: FBT001
-        gw_nodes: tuple[GroupedWindow, ...] | None,
-        key_names: tuple[str, ...] | None,
-        piecewise_ir: GroupBy | None,
-        reduction_ir: GroupBy | None,
-        agg_select_ir: Select | None,
-        row_idx_col: str | None,
-        ir: Select | HStack,
+        exprs: tuple[NamedExpr, ...],
+        input_ir: IR,
     ):
         self.schema = schema
         self.key_indices = key_indices
         self.is_scalar = is_scalar
-        self.gw_nodes = gw_nodes
-        self.key_names = key_names
-        self.piecewise_ir = piecewise_ir
-        self.reduction_ir = reduction_ir
-        self.agg_select_ir = agg_select_ir
-        self.row_idx_col = row_idx_col
-        self._non_child_args = ()
-        self.children = (ir,)
+        self.exprs = exprs
+        self._non_child_args = (key_indices, is_scalar, exprs)
+        self.children = (input_ir,)
 
 
-def make_over_node(
-    ir: Select | HStack,
-    child: IR,
-    key_indices: tuple[int, ...],
-) -> Over:
+def _is_scalar_grouped_window(expr: GroupedWindow) -> bool:
+    """Return True if this GroupedWindow can use the scalar broadcast path."""
+    reductions, unary_ops = expr._split_named_expr()
+    if any(ops for ops in unary_ops.values()):
+        return False
+    if not all(isinstance(c, Col) for c in expr.children[: expr.by_count]):
+        return False
+    return all(
+        isinstance(ne.value, Len)
+        or (isinstance(ne.value, Agg) and ne.value.name in _DECOMPOSABLE_AGG_NAMES)
+        for ne in reductions
+    )
+
+
+def _extract_over_shuffle_indices(
+    expr: GroupedWindow, child_schema: Schema
+) -> tuple[int, ...] | None:
     """
-    Construct an Over node wrapping a Select or HStack with GroupedWindow expressions.
-
-    Parameters
-    ----------
-    ir
-        The original Select or HStack IR node (before child replacement).
-    child
-        The lowered child IR to attach.
-    key_indices
-        Column indices of the group-by keys in the child schema.
+    Return column indices for hash-shuffling a window over() operation.
 
     Returns
     -------
-    Over
-        A new Over node with pre-computed aggregation IRs (scalar path) or
-        a unique row-index column name (non-scalar path).
+    tuple[int, ...]
+        Non-empty: indices of the partition-by keys in ``child_schema``.
+    None
+        Any partition-by expression is not a plain column reference.
     """
-    exprs = [e.value for e in (ir.exprs if isinstance(ir, Select) else ir.columns)]
-    is_scalar = _all_over_scalar_and_top_level(exprs)
-    gw_nodes: tuple[GroupedWindow, ...] | None
-    key_names: tuple[str, ...] | None
-    piecewise_ir: GroupBy | None
-    reduction_ir: GroupBy | None
-    agg_select_ir: Select | None
-    row_idx_col: str | None
-    if is_scalar:
-        gw_nodes = tuple(e for e in exprs if isinstance(e, GroupedWindow))
-        key_names = tuple(
-            e.name
-            for e in gw_nodes[0].children[: gw_nodes[0].by_count]
-            if isinstance(e, Col)
-        )
-        piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
-            gw_nodes, child
-        )
-        row_idx_col = None
-    else:
-        gw_nodes = None
-        key_names = None
-        piecewise_ir = None
-        reduction_ir = None
-        agg_select_ir = None
-        row_idx_col = next(unique_names(child.schema.keys()))
-    wrapped_ir = ir.reconstruct([child])
-    return Over(
-        wrapped_ir.schema,
-        key_indices,
-        is_scalar,
-        gw_nodes,
-        key_names,
-        piecewise_ir,
-        reduction_ir,
-        agg_select_ir,
-        row_idx_col,
-        wrapped_ir,
+    by_children = expr.children[: expr.by_count]
+    if not all(isinstance(c, Col) for c in by_children):
+        return None
+    schema_keys = list(child_schema.keys())
+    try:
+        return tuple(schema_keys.index(cast("Col", c).name) for c in by_children)
+    except ValueError:
+        return None
+
+
+def _fuse_over_nodes(
+    selections: list[Select],
+    partition_info: MutableMapping[IR, PartitionInfo],
+) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
+    """
+    Fuse per-expression Over nodes that share the same grouping key and kind.
+
+    After ``decompose_select`` decomposes each ``GroupedWindow`` expression
+    into its own ``Over`` node, this pass merges co-keyed nodes into a single
+    ``Over`` node so the actor evaluates all window expressions in one pass.
+
+    The grouping key is ``(key_indices, is_scalar, id(input_ir))``.
+    """
+    # (key_indices, is_scalar, input_ir_id)
+    over_groups: defaultdict[tuple[tuple[int, ...], bool, int], list[Select]] = (
+        defaultdict(list)
     )
+    passthrough: list[Select] = []
+
+    for sel in selections:
+        child = sel.children[0]
+        if isinstance(child, Over):
+            input_ir = child.children[0]
+            over_groups[(child.key_indices, child.is_scalar, id(input_ir))].append(sel)
+        else:
+            passthrough.append(sel)
+
+    if not over_groups:
+        return selections, partition_info
+
+    result: list[Select] = list(passthrough)
+    for (key_indices, is_scalar, _), group in over_groups.items():
+        if len(group) == 1:
+            result.append(group[0])
+            continue
+
+        first_over = cast("Over", group[0].children[0])
+        input_ir = first_over.children[0]
+        pi = partition_info[first_over]
+
+        combined_exprs: list[NamedExpr] = []
+        for sel in group:
+            over = cast("Over", sel.children[0])
+            combined_exprs.extend(over.exprs)
+
+        combined_schema = {ne.name: ne.value.dtype for ne in combined_exprs}
+        merged_over = Over(
+            combined_schema, key_indices, is_scalar, tuple(combined_exprs), input_ir
+        )
+        partition_info[merged_over] = pi
+
+        outer_exprs: list[NamedExpr] = []
+        outer_schema: Schema = {}
+        for sel in group:
+            outer_exprs.extend(sel.exprs)
+            outer_schema |= sel.schema
+        merged_sel = Select(outer_schema, outer_exprs, True, merged_over)  # noqa: FBT003
+        partition_info[merged_sel] = pi
+        result.append(merged_sel)
+
+    return result, partition_info
+
+
+def _decompose_grouped_window_node(
+    expr: GroupedWindow,
+    input_ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    names: Generator[str, None, None],
+) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a single GroupedWindow expression into an Over IR node.
+
+    Creates a minimal single-expression Over node for this GroupedWindow.
+    Co-keyed Over nodes from the same Select are later fused by
+    ``_fuse_over_nodes`` in ``select.py``.
+    """
+    indices = _extract_over_shuffle_indices(expr, input_ir.schema)
+    if not indices:
+        raise NotImplementedError(
+            "GroupedWindow with non-Col or empty partition-by keys "
+            "is not supported for multiple partitions."
+        )
+    is_scalar = _is_scalar_grouped_window(expr)
+    col_name = next(names)
+    over_node = Over(
+        {col_name: expr.dtype},
+        indices,
+        is_scalar,
+        (NamedExpr(col_name, expr),),
+        input_ir,
+    )
+    partition_info[over_node] = partition_info[input_ir]
+    return Col(expr.dtype, col_name), over_node, partition_info

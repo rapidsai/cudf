@@ -20,11 +20,11 @@ from cudf_polars.experimental.expressions import (
     decompose_expr_graph,
     make_expr_decomposer,
 )
+from cudf_polars.experimental.over import _fuse_over_nodes
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
     _dynamic_planning_on,
-    _extract_over_shuffle_indices,
     _lower_ir_fallback,
 )
 
@@ -167,6 +167,7 @@ def decompose_select(
 
     # Concatenate partial selections
     new_ir: Select | HConcat
+    selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
@@ -372,58 +373,6 @@ def _fuse_simple_reductions(
     return list(decomposed_select_irs), pi
 
 
-def _decompose_mixed_over_select(
-    ir: Select,
-    child: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    pi: PartitionInfo,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]] | None:
-    """
-    Decompose a Select with multiple distinct over() key groups into per-key Over nodes.
-
-    Returns None if decomposition is not possible (e.g. non-Col partition keys).
-    Each distinct key group becomes its own Over node; pass-through expressions
-    (no GroupedWindow) become a plain Select.  The results are combined with HConcat.
-    """
-    from cudf_polars.experimental.over import make_over_node
-
-    key_groups: dict[tuple[int, ...], list[expr.NamedExpr]] = defaultdict(list)
-    for ne in ir.exprs:
-        indices = _extract_over_shuffle_indices([ne.value], child.schema)
-        if indices is None:
-            return None  # non-Col key or mixed keys within a single expression
-        key_groups[indices].append(ne)
-
-    if len(key_groups) <= 1:
-        return None
-
-    selections: list[IR] = []
-    for indices, group_exprs in key_groups.items():
-        sub_select = Select(
-            {ne.name: ne.value.dtype for ne in group_exprs},
-            group_exprs,
-            ir.should_broadcast,
-            child,
-        )
-        if indices:
-            node: IR = make_over_node(sub_select, child, indices)
-            partition_info[node] = pi
-            # Over wraps a reconstructed Select/HStack at children[0];
-            # register it too so tree walks (e.g. explain) don't KeyError.
-            partition_info[node.children[0]] = pi
-        else:
-            node = sub_select  # passthrough: no GroupedWindow
-            partition_info[node] = pi
-        selections.append(node)
-
-    if len(selections) == 1:
-        return selections[0], partition_info
-
-    new_ir = HConcat(ir.schema, True, *selections)  # noqa: FBT003
-    partition_info[new_ir] = pi
-    return new_ir, partition_info
-
-
 @lower_ir_node.register(Select)
 def _(
     ir: Select, rec: LowerIRTransformer
@@ -523,23 +472,6 @@ def _(
                 config_options,
             )
         except NotImplementedError:
-            if _dynamic_planning_on(config_options):
-                indices = _extract_over_shuffle_indices(
-                    [e.value for e in ir.exprs], child.schema
-                )
-                if indices:
-                    from cudf_polars.experimental.over import make_over_node
-
-                    new_node = make_over_node(ir, child, indices)
-                    partition_info[new_node] = pi
-                    # Over wraps a reconstructed Select/HStack at children[0];
-                    # register it too so tree walks (e.g. explain) don't KeyError.
-                    partition_info[new_node.children[0]] = pi
-                    return new_node, partition_info
-                if indices is None:
-                    result = _decompose_mixed_over_select(ir, child, partition_info, pi)
-                    if result is not None:
-                        return result
             return _lower_ir_fallback(
                 ir, rec, msg="This selection is not supported for multiple partitions."
             )
