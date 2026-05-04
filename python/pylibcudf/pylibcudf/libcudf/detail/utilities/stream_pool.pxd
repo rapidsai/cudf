@@ -5,13 +5,25 @@ from cuda.bindings.cyruntime cimport cudaStream_t
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.utilities.span cimport host_span
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-
-ctypedef const cuda_stream_view const_cuda_stream_view
+ctypedef const cudaStream_t const_cudaStream_t
 
 
-cdef extern from "cudf/detail/utilities/stream_pool.hpp" namespace "cudf::detail" nogil:
-    cdef void join_streams(
-        host_span[const_cuda_stream_view] streams,
+cdef extern from * nogil:
+    """
+    #include <cudf/detail/utilities/stream_pool.hpp>
+    #include <cudf/utilities/span.hpp>
+    #include <rmm/cuda_stream_view.hpp>
+    #include <vector>
+
+    void join_streams_wrapper(
+        cudf::host_span<cudaStream_t const> streams,
+        cudaStream_t stream
+    ) {
+        std::vector<rmm::cuda_stream_view> stream_views(streams.begin(), streams.end());
+        cudf::detail::join_streams(stream_views, stream);
+    }
+    """
+    cdef void join_streams "join_streams_wrapper"(
+        host_span[const_cudaStream_t] streams,
         cudaStream_t stream
     ) except +libcudf_exception_handler
