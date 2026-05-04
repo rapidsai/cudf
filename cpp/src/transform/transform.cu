@@ -314,7 +314,7 @@ auto to_args(std::span<input_column_view const> inputs,
       out);
   }
 
-  auto d_args = detail::make_device_uvector_async(h_args, stream, mr);
+  auto d_args = detail::make_device_uvector(h_args, stream, mr);
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
