@@ -21,11 +21,12 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.dsl.expr import GroupedWindow
+from cudf_polars.dsl.expr import Col, GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import HStack, Select
+from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.experimental.over import Over
+from cudf_polars.experimental.over import Over, _build_over_groupby_irs
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
@@ -428,7 +429,8 @@ async def over_actor(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
-        wrapped_ir: Select | HStack = ir.children[0]  # type: ignore[assignment]
+        input_ir = ir.children[0]
+        eval_ir = Select(ir.schema, ir.exprs, True, input_ir)  # noqa: FBT003
         metadata_in = await recv_metadata(ch_in, context)
 
         key_indices = ir.key_indices
@@ -444,13 +446,13 @@ async def over_actor(
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
                 partitioning=maybe_remap_partitioning(
-                    wrapped_ir, metadata_in.partitioning
+                    eval_ir, metadata_in.partitioning
                 ),
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
                 context,
-                wrapped_ir,
+                eval_ir,
                 ir_context,
                 ch_out,
                 ch_in,
@@ -460,15 +462,17 @@ async def over_actor(
             return
 
         if ir.is_scalar:
-            gw_nodes = ir.gw_nodes
-            key_names = ir.key_names
-            piecewise_ir = ir.piecewise_ir
-            reduction_ir = ir.reduction_ir
-            agg_select_ir = ir.agg_select_ir
-            assert gw_nodes is not None
-            assert key_names is not None
-            assert piecewise_ir is not None
-            assert reduction_ir is not None
+            gw_nodes = tuple(
+                ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow)
+            )
+            key_names = tuple(
+                c.name
+                for c in gw_nodes[0].children[: gw_nodes[0].by_count]
+                if isinstance(c, Col)
+            )
+            piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
+                gw_nodes, input_ir
+            )
 
             # make_table_chunks_available_or_wait releases the original chunk,
             # so we make each chunk available once and reuse it for both buffering
@@ -534,7 +538,7 @@ async def over_actor(
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
                 partitioning=maybe_remap_partitioning(
-                    wrapped_ir, metadata_in.partitioning
+                    eval_ir, metadata_in.partitioning
                 ),
                 duplicated=metadata_in.duplicated,
             )
@@ -544,7 +548,7 @@ async def over_actor(
                 result = await _evaluate_broadcast_chunk(
                     context,
                     chunk,
-                    wrapped_ir,
+                    eval_ir,
                     ir_context,
                     global_agg_df,
                     key_names,
@@ -557,13 +561,12 @@ async def over_actor(
             await ch_out.drain(context)
             return
 
-        row_idx_col = ir.row_idx_col
-        assert row_idx_col is not None
+        row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
 
         modulus = max(comm.nranks, metadata_in.local_count)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(wrapped_ir, metadata_in.partitioning),
+            partitioning=maybe_remap_partitioning(eval_ir, metadata_in.partitioning),
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
@@ -626,7 +629,7 @@ async def over_actor(
             result_df = await asyncio.to_thread(
                 _evaluate_with_row_idx_sync,
                 partition_chunk,
-                wrapped_ir,
+                eval_ir,
                 ir_context,
                 row_idx_col,
             )
@@ -700,8 +703,7 @@ async def over_actor(
 def _(
     ir: Over, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    wrapped_ir = ir.children[0]
-    actors, channels = process_children(wrapped_ir, rec)
+    actors, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
     actors[ir] = [
@@ -711,7 +713,7 @@ def _(
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
-            channels[wrapped_ir.children[0]].reserve_output_slot(),
+            channels[ir.children[0]].reserve_output_slot(),
             collective_ids.pop(),
         )
     ]
