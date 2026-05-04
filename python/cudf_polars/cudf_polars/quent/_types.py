@@ -30,6 +30,7 @@ class EventName(enum.Enum):
     OPERATOR = "Operator"
     PORT = "Port"
     TASK = "Task"
+    MEMORY = "Memory"
 
 
 if sys.version_info >= (3, 14):
@@ -404,4 +405,72 @@ class QueryGroup:
                     }
                 }
             },
+        )
+
+
+# Resource Types
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class Memory:
+    """A Quent Memory resource."""
+
+    # {"id":"019de44d-d401-7070-9e35-a2364739bac6","timestamp":1777651799041845664,"data":{"Memory":{"seq":0,"state":{"MemoryInitializing":{"instance_name":"Filesystem","parent_group_id":"019de44d-d401-7070-9e35-a21dbbdd3753","resource_type_name":"memory"}}}}}
+    # {"id":"019de44d-d401-7070-9e35-a2364739bac6","timestamp":1777651799041846094,"data":{"Memory":{"seq":1,"state":{"MemoryOperating":{"capacity_bytes":0}}}}}
+    # {"id":"019de44d-d401-7070-9e35-a2364739bac6","timestamp":1777651800284861100,"data":{"Memory":{"seq":2,"state":{"MemoryFinalizing":null}}}}
+    # {"id":"019de44d-d401-7070-9e35-a2364739bac6","timestamp":1777651800284861215,"data":{"Memory":{"seq":3,"state":"Exit"}}}
+    # TODO: I think we'll want multiple of these (host / pinned / device memory)
+    id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
+    instance_name: str
+    resource_type_name: str  # TODO: see if this is static.
+    parent_group_id: uuid.UUID
+
+    def initializing(self, timestamp: int | None = None) -> Event:
+        """Build a Quent Memory Initializing event."""
+        return Event(
+            id=self.id,
+            timestamp=timestamp or time.time_ns(),
+            data={
+                EventName.MEMORY.value: {
+                    "seq": 0,
+                    "state": {
+                        "MemoryInitializing": {
+                            "instance_name": self.instance_name,
+                            "parent_group_id": str(self.parent_group_id),
+                            "resource_type_name": self.resource_type_name,
+                        }
+                    },
+                }
+            },
+        )
+
+    def operating(self, capacity_bytes: int, timestamp: int | None = None) -> Event:
+        """Build a Quent Memory Operating event."""
+        return Event(
+            id=self.id,
+            timestamp=timestamp or time.time_ns(),
+            data={
+                EventName.MEMORY.value: {
+                    "seq": 1,
+                    "state": {"MemoryOperating": {"capacity_bytes": capacity_bytes}},
+                }
+            },
+        )
+
+    def finalizing(self, timestamp: int | None = None) -> Event:
+        """Build a Quent Memory Finalizing event."""
+        return Event(
+            id=self.id,
+            timestamp=timestamp or time.time_ns(),
+            data={
+                EventName.MEMORY.value: {"seq": 2, "state": {"MemoryFinalizing": None}}
+            },
+        )
+
+    def exit(self, timestamp: int | None = None) -> Event:
+        """Build a Quent Memory Exit event."""
+        return Event(
+            id=self.id,
+            timestamp=timestamp or time.time_ns(),
+            data={EventName.MEMORY.value: {"seq": 3, "state": "Exit"}},
         )

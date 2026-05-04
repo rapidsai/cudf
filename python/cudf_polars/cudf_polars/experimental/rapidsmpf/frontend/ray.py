@@ -216,6 +216,7 @@ class RankActor:
         self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
         self._rank: int = rank
         self._quent_worker: cudf_polars.quent._types.Worker | None = None
+        self._quent_memory: cudf_polars.quent._types.Memory | None = None
         if worker_id is not None:
             self._quent_worker = cudf_polars.quent._types.Worker(
                 id=worker_id,
@@ -223,6 +224,15 @@ class RankActor:
                 instance_name=f"rank-{rank}",
             )
             cudf_polars.quent._logging.emit(self._quent_worker.init())
+
+            # Emit the Memory Initializing event.
+            self._quent_memory = cudf_polars.quent._types.Memory(
+                instance_name="Host Memory",
+                resource_type_name="memory",
+                parent_group_id=self._quent_worker.id,
+            )
+            cudf_polars.quent._logging.emit(self._quent_memory.initializing())
+            cudf_polars.quent._logging.emit(self._quent_memory.operating(1024))
 
     def setup_root(self) -> bytes:
         """
@@ -320,6 +330,9 @@ class RankActor:
         # followed by framework (ray) level things.
         if self._quent_worker is not None:
             cudf_polars.quent._logging.emit(self._quent_worker.exit())
+            if self._quent_memory is not None:
+                cudf_polars.quent._logging.emit(self._quent_memory.finalizing())
+                cudf_polars.quent._logging.emit(self._quent_memory.exit())
             return self._drain_quent_events()
         return []
 
