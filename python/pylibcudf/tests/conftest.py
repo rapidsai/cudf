@@ -10,7 +10,6 @@ import sys
 import numpy as np
 import pyarrow as pa
 import pytest
-from packaging.version import Version
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
@@ -371,7 +370,7 @@ def patch_cupy_stream(request):
     import cupy as cp
 
     # TODO: Remove this version conditional once we require CuPy 14
-    if Version(cp.__version__) >= Version("14.0.0"):
+    if hasattr(cp.cuda.Stream, "from_external"):
         return cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM)
     else:
         version, stream_ptr = plc.utils.CUDF_DEFAULT_STREAM.__cuda_stream__()
