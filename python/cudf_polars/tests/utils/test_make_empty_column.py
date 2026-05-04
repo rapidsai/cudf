@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for _make_empty_column supporting nested types."""
+"""Tests for make_empty_column, including nested types."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataType
-from cudf_polars.experimental.rapidsmpf.utils import _make_empty_column
+from cudf_polars.utils.dtypes import make_empty_column
 
 
 @pytest.mark.parametrize(
@@ -28,7 +28,7 @@ from cudf_polars.experimental.rapidsmpf.utils import _make_empty_column
 )
 def test_flat_types(polars_dtype):
     dtype = DataType(polars_dtype)
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
     assert col.size() == 0
     assert col.null_count() == 0
     assert col.type() == dtype.plc_type
@@ -40,7 +40,7 @@ def test_flat_types(polars_dtype):
 )
 def test_list_type(inner):
     dtype = DataType(pl.List(inner))
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
 
     assert col.size() == 0
     assert col.null_count() == 0
@@ -57,7 +57,7 @@ def test_list_type(inner):
 
 def test_nested_list_type():
     dtype = DataType(pl.List(pl.List(pl.Int32())))
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
 
     assert col.size() == 0
     assert col.type().id() == plc.TypeId.LIST
@@ -73,7 +73,7 @@ def test_nested_list_type():
 
 def test_struct_type():
     dtype = DataType(pl.Struct({"a": pl.Int64, "b": pl.String}))
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
 
     assert col.size() == 0
     assert col.null_count() == 0
@@ -88,7 +88,7 @@ def test_struct_type():
 
 def test_struct_with_list_field():
     dtype = DataType(pl.Struct({"x": pl.Int64, "y": pl.List(pl.String)}))
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
 
     assert col.size() == 0
     assert col.type().id() == plc.TypeId.STRUCT
@@ -104,7 +104,7 @@ def test_struct_with_list_field():
 
 def test_list_of_struct():
     dtype = DataType(pl.List(pl.Struct({"a": pl.Int32, "b": pl.Float64})))
-    col = _make_empty_column(dtype, DEFAULT_STREAM)
+    col = make_empty_column(dtype, DEFAULT_STREAM)
 
     assert col.size() == 0
     assert col.type().id() == plc.TypeId.LIST

@@ -250,6 +250,7 @@ class stats_caster_base {
       auto d_chars   = cudf::detail::make_device_uvector_async(host_chars, stream, mr);
       auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
       auto d_sizes   = cudf::detail::make_device_uvector_async(sizes, stream, mr);
+      stream.synchronize();  // ensures the vectors are not destroyed before the copy is completed
       return {std::move(d_chars), std::move(d_offsets), std::move(d_sizes)};
     }
 
