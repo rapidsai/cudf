@@ -407,9 +407,13 @@ def _decompose_mixed_over_select(
         )
         if indices:
             node: IR = make_over_node(sub_select, child, indices)
+            partition_info[node] = pi
+            # Over wraps a reconstructed Select/HStack at children[0];
+            # register it too so tree walks (e.g. explain) don't KeyError.
+            partition_info[node.children[0]] = pi
         else:
             node = sub_select  # passthrough: no GroupedWindow
-        partition_info[node] = pi
+            partition_info[node] = pi
         selections.append(node)
 
     if len(selections) == 1:
@@ -480,13 +484,17 @@ def _(
         )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
+        # Use Empty as the input so the streaming network's metadata flows
+        # `duplicated=True` end-to-end. Without that, every rank emits the
+        # literal once and the client concatenates N copies.
+        input_ir: IR = Empty({})
         new_node = Select(
             {named_expr.name: named_expr.value.dtype},
             [named_expr],
             should_broadcast=True,
-            df=child,
+            df=input_ir,
         )
-        partition_info[new_node] = PartitionInfo(count=1)
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
     if not any(
@@ -524,6 +532,9 @@ def _(
 
                     new_node = make_over_node(ir, child, indices)
                     partition_info[new_node] = pi
+                    # Over wraps a reconstructed Select/HStack at children[0];
+                    # register it too so tree walks (e.g. explain) don't KeyError.
+                    partition_info[new_node.children[0]] = pi
                     return new_node, partition_info
                 if indices is None:
                     result = _decompose_mixed_over_select(ir, child, partition_info, pi)

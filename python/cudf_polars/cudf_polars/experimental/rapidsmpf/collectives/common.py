@@ -16,6 +16,7 @@ from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.over import Over
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -101,17 +102,12 @@ class ReserveOpIDs:
                 Sort,
                 GroupBy,
                 Distinct,
+                Over,
             )
 
         self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, collective_types)
         ]
-        if self.dynamic_planning_enabled:
-            from cudf_polars.experimental.over import Over
-
-            for node in traversal([ir]):
-                if isinstance(node, Over):
-                    self.collective_nodes.append(node)
         self.collective_id_map: dict[IR, list[int]] = {}
 
     def __enter__(self) -> dict[IR, list[int]]:

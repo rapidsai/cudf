@@ -434,7 +434,7 @@ async def over_actor(
         key_indices = ir.key_indices
         assert len(key_indices) > 0
 
-        partitioning = NormalizedPartitioning.from_indices(
+        partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             comm.nranks,
             indices=key_indices,
