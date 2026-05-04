@@ -141,7 +141,8 @@ def test_flat_size_exceeds_size_type_limit():
     nrows = 2**16
     ncols = (SIZE_TYPE_LIMIT // nrows) + 1
 
-    arr = cp.zeros((nrows, ncols), dtype=np.int32)
+    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+        arr = cp.zeros((nrows, ncols), dtype=np.int32)
 
     with pytest.raises(
         ValueError,
