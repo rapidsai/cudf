@@ -908,11 +908,6 @@ def test_unique_fraction_deprecation_warning() -> None:
         StreamingExecutor(unique_fraction={"col": 0.5})
 
 
-def test_groupby_n_ary_deprecation_warning() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'groupby_n_ary' is deprecated"):
-        StreamingExecutor(groupby_n_ary=16)
-
-
 def test_rapidsmpf_spill_deprecation_warning() -> None:
     with pytest.warns(FutureWarning, match="Setting 'rapidsmpf_spill' is deprecated"):
         StreamingExecutor(rapidsmpf_spill=False)

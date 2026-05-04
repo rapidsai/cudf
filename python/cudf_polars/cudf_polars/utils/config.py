@@ -669,16 +669,6 @@ class StreamingExecutor:
 
         NOTE: If this configuration is changed manually, it is recommended to set
         `broadcast_join_limit` manually as well.
-    groupby_n_ary
-        The factor by which the number of partitions is decreased when performing
-        a groupby on a partitioned column. For example, if a column has 64 partitions,
-        it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
-
-        This is useful when the absolute number of partitions is large.
-
-        .. deprecated::
-            The ``groupby_n_ary`` option is deprecated and will be removed
-            in a future release.
     broadcast_join_limit
         The maximum number of partitions to allow for the smaller table in
         a broadcast join. For example, if the target partition size is 1GB and the
@@ -771,11 +761,6 @@ class StreamingExecutor:
     target_partition_size: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
-        )
-    )
-    groupby_n_ary: int | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__GROUPBY_N_ARY", int, default=None
         )
     )
     broadcast_join_limit: int = dataclasses.field(
@@ -922,15 +907,6 @@ class StreamingExecutor:
                 FutureWarning,
                 stacklevel=2,
             )
-        if self.groupby_n_ary is not None:
-            warnings.warn(
-                "Setting 'groupby_n_ary' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-                stacklevel=2,
-            )
-        else:
-            object.__setattr__(self, "groupby_n_ary", 32)
         if self.rapidsmpf_spill is not None:
             warnings.warn(
                 "Setting 'rapidsmpf_spill' is deprecated and will be removed "
@@ -948,8 +924,6 @@ class StreamingExecutor:
             raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-        if not isinstance(self.groupby_n_ary, int):  # pragma: no cover
-            raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):
             raise TypeError("broadcast_join_limit must be an int")
         if not isinstance(self.rapidsmpf_spill, bool):  # pragma: no cover

@@ -490,13 +490,12 @@ def _(
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        n_ary = config_options.executor.groupby_n_ary
+        n_ary = 32
         count = child_count
         gb_inter = gb_pwise
         while count > post_aggregation_count:
             gb_inter = Repartition(gb_inter.schema, gb_inter)
-            # Validated in StreamingExecutor.__post_init__ to not be None
-            count = max(math.ceil(count / n_ary), post_aggregation_count)  # type: ignore[operator]
+            count = max(math.ceil(count / n_ary), post_aggregation_count)
             partition_info[gb_inter] = PartitionInfo(count=count)
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
