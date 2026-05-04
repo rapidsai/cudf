@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -68,5 +68,6 @@ def test_table_to_array(dtype, type_id):
         got.nbytes,
     )
 
-    expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
-    cp.testing.assert_array_equal(expect, got)
+    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+        expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
+        cp.testing.assert_array_equal(expect, got)
