@@ -32,7 +32,6 @@ from cudf_polars.utils.config import (
     Cluster,
     ConfigOptions,
     MemoryResourceConfig,
-    Runtime,
     StreamingExecutor,
     _default_cuda_stream_policy,
 )
@@ -445,12 +444,6 @@ def test_default_executor() -> None:
     assert config.executor.name == "streaming"
 
 
-def test_default_runtime() -> None:
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.executor.name == "streaming"
-    assert config.executor.runtime == "rapidsmpf"
-
-
 @pytest.mark.parametrize(
     "memory_resource, memory_resource_config",
     [
@@ -484,13 +477,7 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
-            if _is_concurrent_managed_access_supported() and not (
-                config.executor.name == "streaming"
-                and config.executor.runtime == "rapidsmpf"
-            ):
-                assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
-            else:
-                assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
+            assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
 
         elif memory_resource is None:
             # Configured through memory_resource_config
@@ -827,8 +814,3 @@ def test_dask_sink_to_directory_false_raises() -> None:
 def test_get_dask_cuda_stream() -> None:
     stream = get_dask_cuda_stream()
     assert stream is not None
-
-
-def test_runtime_deprecation_warning() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'runtime' is deprecated"):
-        StreamingExecutor(runtime=Runtime.RAPIDSMPF)

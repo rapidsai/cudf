@@ -17,12 +17,11 @@ from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR, Slice, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
-from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import (
     _concat,
@@ -41,6 +40,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ShuffleMethod
@@ -296,7 +296,6 @@ class SortedShuffleOptions(TypedDict):
     column_dtypes: Sequence[DataType]
 
 
-# Experimental rapidsmpf shuffler integration
 class RMPFIntegrationSortedShuffle:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
@@ -516,26 +515,7 @@ def _(
             msg="sort currently only supports column names as `by` keys.",
         )
 
-    config_options = rec.state["config_options"]
-    executor = config_options.executor
-    runtime = executor.runtime
-
-    # Special handling for slicing
-    # (May be a top- or bottom-k operation)
-    simple_zlice = _has_simple_zlice(ir.zlice)
-    if simple_zlice and runtime == "tasks":
-        from cudf_polars.experimental.parallel import _lower_ir_pwise
-
-        new_node, partition_info = _lower_ir_pwise(ir, rec)
-        if partition_info[new_node].count > 1:
-            # Collapse down to single partition
-            inter = Repartition(new_node.schema, new_node)
-            partition_info[inter] = PartitionInfo(count=1)
-            # Sort reduced partition
-            new_node = ir.reconstruct([inter])
-            partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
-    elif ir.zlice is not None and not simple_zlice:
+    if ir.zlice is not None and not _has_simple_zlice(ir.zlice):
         # Pull "complex" slices out of the Sort node altogether.
         return rec(
             Slice(

@@ -97,8 +97,6 @@ def evaluate_pipeline_spmd_mode(
     The concatenated output DataFrame and, if ``collect_metadata`` is
     True, the list of channel metadata objects; otherwise ``None``.
     """
-    if config_options.executor.runtime != "rapidsmpf":
-        raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.spmd_context is None:
         raise RuntimeError("spmd_context must be set for SPMD mode")
     comm = config_options.executor.spmd_context.comm

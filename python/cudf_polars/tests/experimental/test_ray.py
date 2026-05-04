@@ -53,7 +53,7 @@ pytestmark = [
 
 def test_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd_context", "ray_context"):
+    for key in ("cluster", "spmd_context", "ray_context"):
         with pytest.raises(TypeError, match="reserved"):
             RayEngine(executor_options={key: "anything"})
 
@@ -109,7 +109,6 @@ def test_executor_options_forwarded(
 ) -> None:
     """Reserved executor_options keys are injected into the engine config."""
     opts = engine.config["executor_options"]
-    assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "ray"
     assert isinstance(opts["ray_context"], RayContext)
     assert engine.rank_actors == opts["ray_context"].rank_actors
@@ -258,7 +257,6 @@ def test_reset_updates_executor_options(reset_engine: RayEngine) -> None:
     opts = reset_engine.config["executor_options"]
     assert opts["max_rows_per_partition"] == 42
     # Reserved keys are still injected by ``_reset``.
-    assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "ray"
     assert isinstance(opts["ray_context"], RayContext)
     assert opts["ray_context"].rank_actors == reset_engine.rank_actors

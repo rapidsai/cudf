@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import itertools
 import math
@@ -24,7 +23,6 @@ from cudf_polars.dsl.ir import (
     Empty,
     Scan,
     Sink,
-    Union,
 )
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
@@ -62,36 +60,9 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
-
-        return lower_dataframescan_rapidsmpf(ir, rec)
-
-    rows_per_partition = config_options.executor.max_rows_per_partition
-    nrows = max(ir.df.shape()[0], 1)
-    count = math.ceil(nrows / rows_per_partition)
-
-    if count > 1:
-        length = math.ceil(nrows / count)
-        slices = [
-            DataFrameScan(
-                ir.schema,
-                ir.df.slice(offset, length),
-                ir.projection,
-            )
-            for offset in range(0, nrows, length)
-        ]
-        new_node = Union(ir.schema, None, *slices)
-        return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
-            new_node: PartitionInfo(count=count)
-        }
-
-    return ir, {ir: PartitionInfo(count=1)}
+    return lower_dataframescan_rapidsmpf(ir, rec)
 
 
 def scan_partition_plan(
@@ -285,84 +256,9 @@ def _(
 def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    partition_info: MutableMapping[IR, PartitionInfo]
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
-
-        return lower_scan_rapidsmpf(ir, rec)
-
-    if (
-        ir.typ in ("csv", "parquet", "ndjson")
-        and ir.n_rows == -1
-        and ir.skip_rows == 0
-        and ir.row_index is None
-    ):
-        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
-        paths = list(ir.paths)
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            # Disable chunked reader when splitting files
-            parquet_options = dataclasses.replace(
-                config_options.parquet_options,
-                chunked=False,
-            )
-
-            slices: list[SplitScan] = []
-            for path in paths:
-                base_scan = Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    [path],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    parquet_options,
-                )
-                slices.extend(
-                    SplitScan(
-                        ir.schema, base_scan, sindex, plan.factor, parquet_options
-                    )
-                    for sindex in range(plan.factor)
-                )
-            new_node = Union(ir.schema, None, *slices)
-            partition_info = {slice: PartitionInfo(count=1) for slice in slices} | {
-                new_node: PartitionInfo(count=len(slices))
-            }
-        else:
-            groups: list[Scan] = [
-                Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    paths[i : i + plan.factor],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    config_options.parquet_options,
-                )
-                for i in range(0, len(paths), plan.factor)
-            ]
-            new_node = Union(ir.schema, None, *groups)
-            partition_info = {group: PartitionInfo(count=1) for group in groups} | {
-                new_node: PartitionInfo(count=len(groups))
-            }
-        return new_node, partition_info
-
-    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+    return lower_scan_rapidsmpf(ir, rec)
 
 
 class StreamingSink(IR):

@@ -37,7 +37,6 @@ from cudf_polars.experimental.dispatch import (
 )
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import (
     _concat,
     _contains_over,
@@ -208,21 +207,7 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-        # Using the RapidsMPF streaming runtime.
-        return evaluate_rapidsmpf(ir, config_options)
-    else:
-        # Using the default task engine.
-        from cudf_polars.experimental.scheduler import synchronous_scheduler
-
-        stats = collect_statistics(ir, config_options)
-        ir, partition_info = lower_ir_graph(ir, config_options, stats)
-
-        graph, key = task_graph(ir, partition_info)
-
-        return synchronous_scheduler(graph, key).to_polars()
+    return evaluate_rapidsmpf(ir, config_options)
 
 
 @generate_ir_tasks.register(IR)

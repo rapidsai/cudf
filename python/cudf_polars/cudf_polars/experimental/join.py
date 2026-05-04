@@ -146,45 +146,7 @@ def _make_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-    shuffle_method: ShuffleMethod,
-    *,
-    streaming_runtime: str,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if ir.options[0] != "Inner":
-        left_count = partition_info[left].count
-        right_count = partition_info[right].count
-
-        # Shuffle the smaller table (if necessary) - Notes:
-        # - We need to shuffle the smaller table if
-        #   (1) we are not doing an "inner" join,
-        #   and (2) the small table contains multiple
-        #   partitions.
-        # - We cannot simply join a large-table partition
-        #   to each small-table partition, and then
-        #   concatenate the partial-join results, because
-        #   a non-"inner" join does NOT commute with
-        #   concatenation.
-        # - In some cases, we can perform the partial joins
-        #   sequentially. However, we are starting with a
-        #   catch-all algorithm that works for all cases.
-        if streaming_runtime == "tasks":
-            if left_count >= right_count:
-                right = _maybe_shuffle_frame(
-                    right,
-                    ir.right_on,
-                    partition_info,
-                    shuffle_method,
-                    right_count,
-                )
-            else:
-                left = _maybe_shuffle_frame(
-                    left,
-                    ir.left_on,
-                    partition_info,
-                    shuffle_method,
-                    left_count,
-                )
-
     new_node = ir.reconstruct([left, right])
     partition_info[new_node] = PartitionInfo(count=output_count)
     return new_node, partition_info
@@ -301,9 +263,6 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
-            # Validated in StreamingExecutor.__post_init__ to not be None
-            streaming_runtime=config_options.executor.runtime.value,  # type: ignore[union-attr]
         )
     else:
         # Create a hash join

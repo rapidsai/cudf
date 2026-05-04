@@ -56,7 +56,7 @@ def test_single_communicator_outside_rrun() -> None:
 
 def test_reserved_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd_context"):
+    for key in ("cluster", "spmd_context"):
         with (
             pytest.raises(TypeError, match="reserved"),
             SPMDEngine(executor_options={key: "anything"}),

@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -56,7 +55,6 @@ __all__ = [
     "InMemoryExecutor",
     "ParquetOptions",
     "RayContext",
-    "Runtime",
     "SPMDContext",
     "ShuffleMethod",
     "StreamingExecutor",
@@ -137,22 +135,6 @@ class StreamingFallbackMode(enum.StrEnum):
     WARN = "warn"
     RAISE = "raise"
     SILENT = "silent"
-
-
-class Runtime(enum.StrEnum):
-    """
-    The runtime to use for the streaming executor.
-
-    .. deprecated::
-        The ``runtime`` option is deprecated. The rapidsmpf will be the only
-        streaming runtime. This enum will be removed in a future release.
-
-    * ``Runtime.TASKS`` : Use the task-based runtime.
-    * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
-    """
-
-    TASKS = "tasks"
-    RAPIDSMPF = "rapidsmpf"
 
 
 class Cluster(enum.StrEnum):
@@ -251,7 +233,7 @@ class ParquetOptions:
         will also be skipped if ``max_footer_samples`` is 0.
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
-        This option is only used when the rapidsmpf runtime is enabled.
+        This option is only used by the streaming executor.
         Default is False.
     """
 
@@ -312,49 +294,32 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-def default_target_partition_size(cluster: str, runtime: Runtime) -> int:
+@functools.cache
+def default_target_partition_size() -> int:
     """Return the default blocksize."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
 
-    if (
-        cluster == "single"
-        and runtime == "tasks"
-        and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
-    ):
-        # We can use a larger blocksize when UVM is enabled
-        blocksize = int(device_size * 0.0625)  # pragma: no cover
-    else:
-        # Otherwise, use a conservative default
-        blocksize = int(device_size * 0.025)
+    blocksize = int(device_size * 0.025)
 
     # Use lower and upper bounds of 1GB and 10GB
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
-def default_broadcast_join_limit(cluster: str, runtime: Runtime) -> int:
+@functools.cache
+def default_broadcast_join_limit() -> int:
     """Return the default broadcast join limit."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # We probably want to broadcast in most cases.
         return 32
 
-    if runtime == "rapidsmpf":
-        # Target about 12.5% of the device memory when
-        # default_target_partition_size is used to set the
-        # target partition size (i.e. 5x the 2.5% default).
-        return min(5, int(max(1, (device_size * 0.125) // 1e9)))
-    elif _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1:
-        # The "tasks" runtime always runs single-GPU; we can lean on UVM
-        # to support most broadcast joins.
-        return 32
-    else:
-        # Extra-conservative default for the "tasks" runtime without UVM.
-        # We cannot spill outside a rapidsmpf shuffle within this runtime,
-        # so shuffling is usually preferred.
-        return 2
+    # Target about 12.5% of the device memory when
+    # default_target_partition_size is used to set the
+    # target partition size (i.e. 5x the 2.5% default).
+    return min(5, int(max(1, (device_size * 0.125) // 1e9)))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -596,21 +561,14 @@ class StreamingExecutor:
 
     Parameters
     ----------
-    runtime
-        The runtime to use for the streaming executor.
-        ``Runtime.RAPIDSMPF`` by default.
-
-        .. deprecated::
-            The ``runtime`` option is deprecated. The rapidsmpf will be the only
-            streaming runtime. This argument will be removed in a future release.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
 
         * ``Cluster.SINGLE``: Single-GPU execution
-        * ``Cluster.SPMD``: Multi-GPU SPMD execution (rapidsmpf runtime)
-        * ``Cluster.RAY``: Multi-GPU Ray execution (rapidsmpf runtime)
-        * ``Cluster.DASK``: Multi-GPU Dask execution (rapidsmpf runtime)
+        * ``Cluster.SPMD``: Multi-GPU SPMD execution
+        * ``Cluster.RAY``: Multi-GPU Ray execution
+        * ``Cluster.DASK``: Multi-GPU Dask execution
 
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
@@ -633,11 +591,8 @@ class StreamingExecutor:
         - keyword argument to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
-        By default, cudf-polars uses a target partition size that's a fraction
-        of the device memory, where the fraction depends on the cluster and runtime:
-
-        - rapidsmpf runtime: 1/40th of the device memory
-        - single cluster and tasks runtime: 1/16th of the device memory
+        By default, cudf-polars uses a target partition size of 1/40th of the
+        device memory.
 
         The pynvml library is used to query the total device memory on the first
         visible GPU. If the device size is not available, the default target
@@ -649,11 +604,10 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join. For example, if the target partition size is 1GB and the
         broadcast join limit is 5, then the smaller table will be broadcasted
-        if it is smaller than 5GB. The default depends on the cluster and runtime.
+        if it is smaller than 5GB.
     client_device_threshold
-        Threshold for spilling data from device memory in rapidsmpf.
+        Threshold for spilling data from device memory.
         Default is 50% of device memory on the client process.
-        This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
         Whether multi-partition sink operations write to a directory rather
         than a single file. For the spmd, ray, and dask clusters this is
@@ -663,7 +617,7 @@ class StreamingExecutor:
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
     max_io_threads
-        Maximum number of IO threads for the rapidsmpf runtime. Default is 4.
+        Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
@@ -671,8 +625,8 @@ class StreamingExecutor:
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
     num_py_executors
-        Maximum number of workers for the Python ThreadPoolExecutor used by
-        the rapidsmpf runtime. Default is 8.
+        Maximum number of workers for the Python ThreadPoolExecutor.
+        Default is 8.
 
     Notes
     -----
@@ -683,13 +637,6 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    runtime: Runtime | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__RUNTIME",
-            Runtime.__call__,
-            default=None,
-        )
-    )
     cluster: Cluster | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
@@ -750,21 +697,9 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    shuffle_method: ShuffleMethod = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:  # noqa: D105
-        if self.runtime is not None:
-            warnings.warn(
-                "Setting 'runtime' is deprecated and will be removed "
-                "in a future release. Do not pass a value to use the rapidsmpf runtime."
-                "The streaming executor will always use the rapidsmpf runtime "
-                "in a future release.",
-                FutureWarning,
-                stacklevel=2,
-            )
-        else:
-            object.__setattr__(self, "runtime", Runtime.RAPIDSMPF)
-        assert self.runtime is not None, "Expected runtime to be set"
-
         if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
@@ -784,13 +719,13 @@ class StreamingExecutor:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_target_partition_size(self.cluster, self.runtime),
+                default_target_partition_size(),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
-                default_broadcast_join_limit(self.cluster, self.runtime),
+                default_broadcast_join_limit(),
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
 
@@ -1041,7 +976,7 @@ class ConfigOptions(Generic[ExecutorType]):
         }
 
         # Handle "cuda-stream-policy".
-        # The default will depend on the runtime and executor.
+        # The default will depend on the executor.
         user_cuda_stream_policy = engine.config.get(
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
@@ -1049,24 +984,18 @@ class ConfigOptions(Generic[ExecutorType]):
         cuda_stream_policy: CUDAStreamPoolConfig | None
 
         if user_cuda_stream_policy is None:
-            if (
-                executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
-            ):  # pragma: no cover; requires rapidsmpf runtime
-                # the rapidsmpf runtime defaults to using a stream pool
+            if executor.name == "streaming":
                 cuda_stream_policy = CUDAStreamPoolConfig()
             else:
-                # everything else defaults to the default stream
                 cuda_stream_policy = None
         else:
             cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
-        # Pool policy is only supported by the rapidsmpf runtime.
         if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
-            (executor.name != "streaming")
-            or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
+            executor.name != "streaming"
         ):
             raise ValueError(
-                "A stream pool is only supported by the rapidsmpf runtime."
+                "A stream pool is only supported by the streaming executor."
             )
 
         kwargs["cuda_stream_policy"] = cuda_stream_policy

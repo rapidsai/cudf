@@ -32,10 +32,6 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ShuffleMethod
 
 
-# Supported shuffle methods
-_SHUFFLE_METHODS = ("rapidsmpf", "tasks")
-
-
 class ShuffleOptions(TypedDict):
     """RapidsMPF shuffling options."""
 
@@ -44,7 +40,6 @@ class ShuffleOptions(TypedDict):
     dtypes: Sequence[DataType]
 
 
-# Experimental rapidsmpf shuffler integration
 class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
@@ -317,8 +312,7 @@ def _(
     # Extract "shuffle_method" configuration
     shuffle_method = ir.shuffle_method
 
-    # Try using rapidsmpf shuffler if we have "simple" shuffle
-    # keys, and the "shuffle_method" config is set to "rapidsmpf-single".
+    # Try using rapidsmpf shuffler if we have "simple" shuffle keys
     _keys: list[Col]
     if shuffle_method == "rapidsmpf-single" and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
