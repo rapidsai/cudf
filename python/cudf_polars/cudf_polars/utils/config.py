@@ -114,10 +114,10 @@ def get_total_device_memory() -> int | None:
 
 
 @functools.cache
-def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a distributed shuffle method."""
+def rapidsmpf_single_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a single-process shuffle method."""
     try:
-        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
+        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
     except (ImportError, ValueError):
         return False
 
@@ -159,15 +159,17 @@ class Cluster(enum.StrEnum):
     """
     The cluster configuration for the streaming executor.
 
-    * ``Cluster.SINGLE`` : Single-GPU execution. Currently uses a zero-dependency,
+    * ``Cluster.SINGLE`` : Single-GPU execution. Uses a zero-dependency,
       synchronous, single-threaded task scheduler.
-    * ``Cluster.DISTRIBUTED`` : Multi-GPU distributed execution. Currently
-      uses a Dask-based distributed scheduler and requires an
-      active Dask cluster.
+    * ``Cluster.SPMD`` : Multi-GPU SPMD execution via the rapidsmpf streaming
+      runtime.
+    * ``Cluster.RAY`` : Multi-GPU execution via Ray actors and the rapidsmpf
+      streaming runtime.
+    * ``Cluster.DASK`` : Multi-GPU execution via Dask workers and the rapidsmpf
+      streaming runtime.
     """
 
     SINGLE = "single"
-    DISTRIBUTED = "distributed"
     SPMD = "spmd"
     RAY = "ray"
     DASK = "dask"
@@ -187,8 +189,7 @@ class ShuffleMethod(enum.StrEnum):
     * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
 
     With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
-    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for a distributed cluster,
-    but will fall back to ``ShuffleMethod.TASKS`` if rapidsmpf is not installed.
+    resolves to ``ShuffleMethod.TASKS``.
 
     The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
     A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
@@ -356,16 +357,14 @@ def default_broadcast_join_limit(cluster: str, runtime: Runtime) -> int:
         # default_target_partition_size is used to set the
         # target partition size (i.e. 5x the 2.5% default).
         return min(5, int(max(1, (device_size * 0.125) // 1e9)))
-    elif (  # pragma: no cover
-        cluster == "single"
-        and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
-    ):
-        # We can lean on UVM to support most broadcast joins.
+    elif _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1:
+        # The "tasks" runtime always runs single-GPU; we can lean on UVM
+        # to support most broadcast joins.
         return 32
-    else:  # pragma: no cover
-        # Extra-conservative default for the "tasks" runtime.
-        # We cannot spill outside a rapidsmpf shuffle within
-        # this runtime. So, shuffling is usually preferred.
+    else:
+        # Extra-conservative default for the "tasks" runtime without UVM.
+        # We cannot spill outside a rapidsmpf shuffle within this runtime,
+        # so shuffling is usually preferred.
         return 2
 
 
@@ -619,11 +618,10 @@ class StreamingExecutor:
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
 
-        This setting applies to both task-based and rapidsmpf execution modes:
-
         * ``Cluster.SINGLE``: Single-GPU execution
-        * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
-          an active Dask cluster)
+        * ``Cluster.SPMD``: Multi-GPU SPMD execution (rapidsmpf runtime)
+        * ``Cluster.RAY``: Multi-GPU Ray execution (rapidsmpf runtime)
+        * ``Cluster.DASK``: Multi-GPU Dask execution (rapidsmpf runtime)
 
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
@@ -649,7 +647,7 @@ class StreamingExecutor:
         By default, cudf-polars uses a target partition size that's a fraction
         of the device memory, where the fraction depends on the cluster and runtime:
 
-        - distributed cluster or rapidsmpf runtime: 1/40th of the device memory
+        - rapidsmpf runtime: 1/40th of the device memory
         - single cluster and tasks runtime: 1/16th of the device memory
 
         The pynvml library is used to query the total device memory on the first
@@ -667,29 +665,16 @@ class StreamingExecutor:
         on the cluster and runtime.
     shuffle_method
         The method to use for shuffling data between workers. Defaults to
-        'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
-        and 'tasks' for single-GPU cluster.
-
-        .. deprecated::
-            The ``shuffle_method`` option is deprecated. The shuffle method is now
-            determined automatically based on the cluster configuration. This argument
-            will be removed in a future release.
-    rapidsmpf_spill
-        Whether to wrap task arguments and output in objects that are
-        spillable by 'rapidsmpf'.
-
-        .. deprecated::
-            The ``rapidsmpf_spill`` option is deprecated and will be removed
-            in a future release.
+        'tasks' for the single-GPU cluster.
     client_device_threshold
         Threshold for spilling data from device memory in rapidsmpf.
         Default is 50% of device memory on the client process.
         This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
         Whether multi-partition sink operations write to a directory rather
-        than a single file. For the distributed, spmd, ray, and dask clusters
-        this is always True; setting it to False raises a ValueError.
-        Defaults to False for the single-GPU cluster.
+        than a single file. For the spmd, ray, and dask clusters this is
+        always True; setting it to False raises a ValueError. Defaults to
+        False for the single-GPU cluster.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -708,9 +693,7 @@ class StreamingExecutor:
     Notes
     -----
     The streaming executor does not currently support profiling a query via
-    the ``.profile()`` method. We recommend using nsys to profile queries
-    with single-GPU execution and Dask's built-in profiling tools
-    with distributed execution.
+    the ``.profile()`` method. We recommend using nsys to profile queries.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR"
@@ -757,11 +740,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=None,
-        )
-    )
-    rapidsmpf_spill: bool | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=None
         )
     )
     client_device_threshold: float = dataclasses.field(
@@ -814,36 +792,21 @@ class StreamingExecutor:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
-        if self.shuffle_method is not None:
-            warnings.warn(
-                "Setting 'shuffle_method' is deprecated and will be removed "
-                "in a future release. The shuffle method will be determined "
-                "automatically based on the cluster configuration in a future release.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            if self.shuffle_method == "rapidsmpf-single":  # pragma: no cover
-                raise ValueError("rapidsmpf-single is not a supported shuffle method.")
-            elif self.shuffle_method == "rapidsmpf":
-                if (
-                    self.cluster == "distributed"
-                    and not rapidsmpf_distributed_available()
-                ):
-                    raise ValueError(  # pragma: no cover
-                        "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
-                    )
-                if self.cluster == "single":
-                    object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
-
         # Resolve shuffle_method from cluster when not explicitly set
         if self.shuffle_method is None:
-            if self.cluster == "distributed":
-                if not rapidsmpf_distributed_available():
-                    raise ValueError(
-                        "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
-                    )
-                object.__setattr__(self, "shuffle_method", "rapidsmpf")
-            else:
+            # Use task-based shuffle by default.
+            # TODO: Evaluate single-process shuffle by default.
+            object.__setattr__(self, "shuffle_method", "tasks")
+        elif self.shuffle_method == "rapidsmpf-single":
+            # The user should NOT specify "rapidsmpf-single" directly.
+            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
+        elif self.shuffle_method == "rapidsmpf":
+            if self.cluster == "single" and not rapidsmpf_single_available():
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
+                )
+            # Select "rapidsmpf-single" for single-GPU
+            if self.cluster == "single":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
         assert self.shuffle_method is not None, "Expected shuffle_method to be set"
 
@@ -875,7 +838,7 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if self.cluster in ("distributed", "spmd", "ray", "dask"):
+        if self.cluster in ("spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
                     f"The {self.cluster} cluster requires sink_to_directory=True"
@@ -901,8 +864,6 @@ class StreamingExecutor:
             raise TypeError("target_partition_size must be an int")
         if not isinstance(self.broadcast_join_limit, int):
             raise TypeError("broadcast_join_limit must be an int")
-        if not isinstance(self.rapidsmpf_spill, bool):  # pragma: no cover
-            raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
@@ -913,14 +874,6 @@ class StreamingExecutor:
             raise TypeError("spill_to_pinned_memory must be bool")
         if not isinstance(self.num_py_executors, int):
             raise TypeError("num_py_executors must be an int")
-
-        # RapidsMPF spill is only supported for distributed clusters for now.
-        # This is because the spilling API is still within the RMPF-Dask integration.
-        # (See https://github.com/rapidsai/rapidsmpf/issues/439)
-        if self.cluster == "single" and self.rapidsmpf_spill:  # pragma: no cover
-            raise ValueError(
-                "rapidsmpf_spill is not supported for single-GPU execution."
-            )
 
     def __hash__(self) -> int:  # noqa: D105
         # dynamic_planning factory, a dataclass, isn't natively hashable. We'll dump it

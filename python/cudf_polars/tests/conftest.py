@@ -229,7 +229,7 @@ def pytest_addoption(parser):
         "--cluster",
         action="store",
         default="single",
-        choices=("single", "distributed"),
+        choices=("single",),
         help="Cluster to use for 'streaming' executor.",
     )
 
@@ -255,11 +255,14 @@ def pytest_configure(config):
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
 
-    if (
-        config.getoption("--cluster") == "distributed"
-        and config.getoption("--executor") != "streaming"
-    ):
-        raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
+    if config.getoption("--runtime") == "rapidsmpf":
+        if config.getoption("--executor") == "in-memory":
+            raise pytest.UsageError("Rapidsmpf runtime requires --executor='streaming'")
+
+        if importlib.util.find_spec("rapidsmpf") is None:
+            raise pytest.UsageError(
+                "Rapidsmpf runtime requires the 'rapidsmpf' package"
+            )
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
     cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
