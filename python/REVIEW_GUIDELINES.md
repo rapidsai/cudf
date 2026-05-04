@@ -61,6 +61,7 @@
 - Exceptions not handled correctly across Python/C++ boundary (missing `+libcudf_exception_handler` if not `noexcept`)
 - Incorrect GIL handling for CUDA operations
 - Cython bindings not matching the C++ API
+- Use of Polars or pylibcudf APIs that require pyarrow (like `to_arrow` in pylibcudf)
 
 ### cudf_polars (Polars GPU Executor)
 - Missing coverage of Polars expression types (silent fallback to CPU without warning)
