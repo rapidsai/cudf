@@ -32,7 +32,10 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -2991,18 +2994,111 @@ class GroupBy(Serializable, Reducible, Scannable):
     def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("any is currently not implemented")
+        return self._bool_reduce("any", skipna=skipna, min_count=min_count)
 
     def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("all is currently not implemented")
+        return self._bool_reduce("all", skipna=skipna, min_count=min_count)
+
+    def _bool_reduce(self, op: str, *, skipna: bool, min_count: int):
+        """Implement all/any as min/max on bool-coerced value columns."""
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
+
+        agg_name = {"all": "min", "any": "max"}[op]
+        # Empty-group fill value: vacuously True for all, vacuously False for any
+        fill_value = op == "all"
+
+        is_series = isinstance(self.obj, Series)
+
+        # Coerce each value column to a (nullable) bool column so that
+        # nulls are preserved through the aggregation (min/max skip
+        # nulls). For ``skipna=False``, nulls are replaced with True so
+        # they don't flip ``all`` to False and always make ``any`` True.
+        def _to_bool_col(col):
+            from cudf.core.column import ColumnBase
+
+            if isinstance(col.dtype, pd.StringDtype) or is_dtype_obj_string(
+                col.dtype
+            ):
+                counts_plc = plc.strings.attributes.count_characters(
+                    col.plc_column
+                )
+                gt_plc = plc.binaryop.binary_operation(
+                    counts_plc,
+                    plc.Scalar.from_py(0),
+                    plc.binaryop.BinaryOperator.GREATER,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                bool_col = ColumnBase.create(gt_plc, np.dtype(np.bool_))
+            else:
+                # For numeric/bool inputs, cast to bool preserving nulls.
+                ne_plc = plc.binaryop.binary_operation(
+                    col.plc_column,
+                    plc.Scalar.from_py(0),
+                    plc.binaryop.BinaryOperator.NOT_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                bool_col = ColumnBase.create(ne_plc, np.dtype(np.bool_))
+            if not skipna:
+                bool_col = bool_col.fillna(True)
+            return bool_col
+
+        if is_series:
+            new_obj = Series._from_column(
+                _to_bool_col(self.obj._column), name=self.obj.name
+            )
+        else:
+            new_data = {
+                col_name: _to_bool_col(self.obj._data[col_name])
+                for col_name in self.grouping._values_column_names
+            }
+            new_obj = DataFrame._from_data(new_data, index=self.obj.index)
+
+        # Reuse the same grouping so key columns match ``new_obj`` exactly,
+        # avoiding label-based lookup when the key column was excluded.
+        bool_gb = type(self)(
+            new_obj,
+            by=self.grouping,
+            level=None,
+            sort=self._sort,
+            as_index=self._as_index,
+            dropna=self._dropna,
+        )
+        result = bool_gb.agg(agg_name)
+
+        # Empty groups (skipna=True with all-NA values) yield NA from
+        # min/max — pandas treats these as ``True`` for ``all`` and
+        # ``False`` for ``any``.
+        bool_np = np.dtype(np.bool_)
+        if isinstance(result, Series):
+            result = result.fillna(fill_value).astype(bool_np)
+        else:
+            for col_name in result._column_names:
+                result[col_name] = (
+                    result[col_name].fillna(fill_value).astype(bool_np)
+                )
+
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            if isinstance(result, Series):
+                count_series = (
+                    counts if isinstance(counts, Series) else counts.iloc[:, 0]
+                )
+                result = result.where(count_series >= min_count, None)
+            else:
+                for col_name in result._column_names:
+                    if col_name not in counts._column_names:
+                        continue
+                    count_col = counts._data[col_name]
+                    mask = count_col < min_count
+                    result[col_name] = result[col_name].where(
+                        ~Series._from_column(mask), None
+                    )
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
