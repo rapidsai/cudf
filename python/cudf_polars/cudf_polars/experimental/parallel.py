@@ -490,7 +490,7 @@ def _(
                 child, partition_info = rec(ir.children[0])
                 from cudf_polars.experimental.over import make_over_node
 
-                new_node = make_over_node(ir, child, indices)
+                new_node: IR = make_over_node(ir, child, indices)
                 partition_info[new_node] = partition_info[child]
                 return new_node, partition_info
         return _lower_ir_fallback(ir, rec)

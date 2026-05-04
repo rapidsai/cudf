@@ -167,6 +167,8 @@ def decompose_select(
 
     # Concatenate partial selections
     new_ir: Select | HConcat
+    # TODO: Add step to fuse common `over` operations
+    # selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
@@ -184,6 +186,82 @@ def decompose_select(
         new_ir = selections[0]
 
     return new_ir, partition_info
+
+
+# def _fuse_over_nodes(
+#     selections: list[Select],
+#     partition_info: MutableMapping[IR, PartitionInfo],
+# ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
+#     """
+#     Fuse per-expression Over nodes that share the same grouping key and kind.
+
+#     After ``decompose_select`` decomposes each ``GroupedWindow`` expression
+#     into its own ``Over`` node, this pass merges co-keyed nodes into a single
+#     ``Over`` node so the actor evaluates all window expressions in one pass.
+
+#     The grouping key is ``(key_names, is_scalar, id(input_ir))`` — nodes with
+#     the same partition-by columns, scalar/non-scalar kind, and shared input IR
+#     are safe to merge.
+#     """
+#     from cudf_polars.experimental.over import Over, make_over_node
+
+#     # Identify partial Selects whose immediate child is an Over node.
+#     # Group by (key_names, is_scalar, input_ir identity).
+#     OverKey = tuple  # (key_names, is_scalar, input_ir_id)
+#     over_groups: defaultdict[OverKey, list[Select]] = defaultdict(list)
+#     passthrough: list[Select] = []
+
+#     for sel in selections:
+#         child = sel.children[0]
+#         if isinstance(child, Over):
+#             input_ir = child.children[0].children[0]  # wrapped_select.children[0]
+#             key: OverKey = (child.key_names, child.is_scalar, id(input_ir))
+#             over_groups[key].append(sel)
+#         else:
+#             passthrough.append(sel)
+
+#     if not over_groups:
+#         return selections, partition_info
+
+#     result: list[Select] = list(passthrough)
+#     for (_key_names, _is_scalar, _), group in over_groups.items():
+#         if len(group) == 1:
+#             result.append(group[0])
+#             continue
+
+#         # All members share the same Over structure: same input_ir and key_indices.
+#         first_over: Over = group[0].children[0]
+#         input_ir = first_over.children[0].children[0]
+#         key_indices = first_over.key_indices
+#         pi = partition_info[first_over]
+
+#         # Collect the NamedExprs from every wrapped Select.
+#         combined_exprs: list[expr.NamedExpr] = []
+#         for sel in group:
+#             over: Over = sel.children[0]
+#             combined_exprs.extend(over.children[0].exprs)
+
+#         combined_schema = {ne.name: ne.value.dtype for ne in combined_exprs}
+#         combined_sub = Select(
+#             combined_schema,
+#             combined_exprs,
+#             True,
+#             input_ir,
+#         )
+#         merged_over = make_over_node(combined_sub, input_ir, key_indices)
+#         partition_info[merged_over] = pi
+
+#         # Outer Select renames temp cols to their final output names.
+#         outer_exprs: list[expr.NamedExpr] = []
+#         outer_schema: Schema = {}
+#         for sel in group:
+#             outer_exprs.extend(sel.exprs)
+#             outer_schema |= sel.schema
+#         merged_sel = Select(outer_schema, outer_exprs, True, merged_over)
+#         partition_info[merged_sel] = pi
+#         result.append(merged_sel)
+
+#     return result, partition_info
 
 
 def _fuse_simple_reductions(
@@ -515,20 +593,6 @@ def _(
                 config_options,
             )
         except NotImplementedError:
-            if _dynamic_planning_on(config_options):
-                indices = _extract_over_shuffle_indices(
-                    [e.value for e in ir.exprs], child.schema
-                )
-                if indices:
-                    from cudf_polars.experimental.over import make_over_node
-
-                    new_node = make_over_node(ir, child, indices)
-                    partition_info[new_node] = pi
-                    return new_node, partition_info
-                if indices is None:
-                    result = _decompose_mixed_over_select(ir, child, partition_info, pi)
-                    if result is not None:
-                        return result
             return _lower_ir_fallback(
                 ir, rec, msg="This selection is not supported for multiple partitions."
             )

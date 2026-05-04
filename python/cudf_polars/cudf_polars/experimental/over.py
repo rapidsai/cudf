@@ -10,11 +10,19 @@ from cudf_polars.dsl.expr import Col, GroupedWindow, NamedExpr
 from cudf_polars.dsl.ir import IR, GroupBy, HStack, Select
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.groupby import combine, decompose
-from cudf_polars.experimental.utils import _all_over_scalar_and_top_level
+from cudf_polars.experimental.utils import (
+    _all_over_scalar_and_top_level,
+    _extract_over_shuffle_indices,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, MutableMapping
+
+    from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import HStack
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
 
 
 def _build_over_groupby_irs(
@@ -229,7 +237,7 @@ def make_over_node(
         piecewise_ir = None
         reduction_ir = None
         agg_select_ir = None
-        row_idx_col = next(unique_names(child.schema.keys()))
+        row_idx_col = next(unique_names((*child.schema.keys(), *ir.schema.keys())))
     wrapped_ir = ir.reconstruct([child])
     return Over(
         wrapped_ir.schema,
@@ -243,3 +251,36 @@ def make_over_node(
         row_idx_col,
         wrapped_ir,
     )
+
+
+def _decompose_grouped_window_node(
+    expr: GroupedWindow,
+    input_ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    names: Generator[str, None, None],
+) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a single GroupedWindow expression into an Over IR node.
+
+    Creates a minimal single-expression Over node for this GroupedWindow.
+    Co-keyed Over nodes from the same Select are later fused by
+    ``_fuse_over_nodes`` in ``select.py``.
+    """
+    indices = _extract_over_shuffle_indices([expr], input_ir.schema)
+    if not indices:
+        raise NotImplementedError(
+            "GroupedWindow with non-Col or empty partition-by keys "
+            "is not supported for multiple partitions."
+        )
+    col_name = next(names)
+    sub_select = Select(
+        {col_name: expr.dtype},
+        (NamedExpr(col_name, expr),),
+        True,  # noqa: FBT003
+        input_ir,
+    )
+    over_node = make_over_node(sub_select, input_ir, indices)
+    partition_info[over_node] = partition_info[input_ir]
+    return Col(expr.dtype, col_name), over_node, partition_info
