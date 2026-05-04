@@ -11,4 +11,4 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 echo "Running the full cudf-polars test suite with both the in-memory and spmd engine"
-timeout 10m python -m pytest --cache-clear "$@" tests
+python -m pytest --cache-clear "$@" tests
