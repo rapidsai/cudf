@@ -13,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
@@ -87,12 +88,10 @@ def test_dataframescan_with_decimals(engine: pl.GPUEngine):
     POLARS_VERSION_LT_138,
     reason="height parameter added in Polars 1.38",
 )
-def test_dataframescan_zero_width_with_rows(
-    engine: pl.GPUEngine, request, using_streaming_engine
-):
+def test_dataframescan_zero_width_with_rows(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine,
+            is_streaming_engine(engine),
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )

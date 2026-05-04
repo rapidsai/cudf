@@ -14,6 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
@@ -661,8 +662,8 @@ def test_string_zfill_forbidden_chars():
         ),
     ],
 )
-def test_string_pad_start(engine: pl.GPUEngine, width, char, using_streaming_engine):
-    if using_streaming_engine:
+def test_string_pad_start(engine: pl.GPUEngine, width, char):
+    if is_streaming_engine(engine):
         pytest.skip(
             "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
         )
