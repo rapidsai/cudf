@@ -143,8 +143,8 @@ def test_round_trip_dlpack_plc_table():
 
 
 @pytest.mark.parametrize("array", [np.array, cp.array])
-def test_round_trip_dlpack_array(array):
-    with cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM):
+def test_round_trip_dlpack_array(array, patch_cupy_stream):
+    with patch_cupy_stream:
         arr = array([1, 2, 3])
     result = plc.interop.from_dlpack(arr.__dlpack__())
     expected = pa.table({"a": [1, 2, 3]})

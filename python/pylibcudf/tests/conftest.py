@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # Tell ruff it's OK that some imports occur after the sys.path.insert
 # ruff: noqa: E402
@@ -10,6 +10,7 @@ import sys
 import numpy as np
 import pyarrow as pa
 import pytest
+from packaging.version import Version
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
@@ -363,3 +364,16 @@ def has_nulls(request):
 )
 def has_nans(request):
     return request.param
+
+
+@pytest.fixture(scope="session")
+def patch_cupy_stream(request):
+    import cupy as cp
+
+    # TODO: Remove this version conditional once we require CuPy 14
+    if Version(cp.__version__) >= Version("14.0.0"):
+        return cp.cuda.Stream.from_external(plc.utils.CUDF_DEFAULT_STREAM)
+    else:
+        version, stream_ptr = plc.utils.CUDF_DEFAULT_STREAM.__cuda_stream__()
+        assert version == 0
+        return cp.cuda.ExternalStream(stream_ptr)
