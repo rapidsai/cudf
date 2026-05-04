@@ -1481,7 +1481,7 @@ class Index(SingleColumnFrame):
         # constant timedelta / Tick offset (vector shifts drop the freq).
         if (
             isinstance(self, DatetimeIndex)
-            and getattr(self, "_freq", None) is not None
+            and self.freq is not None
             and op in {"__add__", "__sub__"}
             and isinstance(ret, DatetimeIndex)
             and isinstance(
