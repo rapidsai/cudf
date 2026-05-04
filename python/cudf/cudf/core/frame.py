@@ -828,7 +828,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
             and (
                 dtype is None
-                or is_dtype_equal(dtype, self._columns[0].dtype)
+                or dtype == self._columns[0].dtype
             )
             and all(
                 not col.nullable and col.dtype == self._columns[0].dtype
