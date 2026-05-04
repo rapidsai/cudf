@@ -126,7 +126,9 @@ class StreamingEngine(pl.GPUEngine):
         executor_options: dict[str, Any],
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
+        quent_context: cudf_polars.quent.QuentContext | None = None,
     ):
+        quent_context = quent_context or cudf_polars.quent.QuentContext()
         self._nranks = nranks
         self._worker_quent_events: list[dict[str, Any]] = []
         self._exit_stack: contextlib.ExitStack | None = (
@@ -136,6 +138,7 @@ class StreamingEngine(pl.GPUEngine):
         # accept it.
         engine_options = dict(engine_options)
         allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
+        executor_options = {**executor_options, "quent_context": quent_context}
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
@@ -148,6 +151,15 @@ class StreamingEngine(pl.GPUEngine):
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
+
+    @property
+    def quent_context(self) -> cudf_polars.quent.QuentContext:
+        """The Quent telemetry context for this engine."""
+        return self.config["executor_options"]["quent_context"]
+
+    @quent_context.setter
+    def quent_context(self, value: cudf_polars.quent.QuentContext) -> None:
+        self.config["executor_options"]["quent_context"] = value
 
     @property
     def nranks(self) -> int:
@@ -577,13 +589,6 @@ def evaluate_on_rank(
     # pass that in.
     logical_plan_id = uuid.UUID(int=ir.get_stable_id())
     physical_plan_id = uuid.uuid4()
-
-    # So... quent context is a *process* global.
-    # How in the world do we synchronize this?
-    # quent_context = cudf_polars.quent.quent_context.get()
-
-    # Do we dare set it here on the worker? I think this is an awful idea.
-    cudf_polars.quent.quent_context.set(quent_context)
 
     if worker_id is not None:
         # TODO: split out build from emit.

@@ -417,13 +417,10 @@ def test_quent_events_ray() -> None:
 
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
 
-    quent_context = cudf_polars.quent.quent_context.get()
-    cudf_polars.quent.quent_context.set(
-        dataclasses.replace(
-            quent_context,
-            query_group=cudf_polars.quent.QueryGroup(id=uuid.uuid4()),
-            query=cudf_polars.quent.Query(id=uuid.uuid4()),
-        ),
+    engine.quent_context = dataclasses.replace(
+        engine.quent_context,
+        query_group=cudf_polars.quent.QueryGroup(),
+        query=cudf_polars.quent.Query(),
     )
 
     with engine:

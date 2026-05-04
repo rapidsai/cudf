@@ -105,7 +105,6 @@ def evaluate_pipeline_spmd_mode(
     comm = config_options.executor.spmd_context.comm
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
-    quent_context = cudf_polars.quent.quent_context.get()
 
     return evaluate_on_rank(
         context,
@@ -114,7 +113,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
-        quent_context=quent_context,
+        quent_context=config_options.executor.quent_context,
     )
 
 
@@ -336,6 +335,7 @@ class SPMDEngine(StreamingEngine):
         engine_options: dict[str, Any] | None = None,
         engine_id: uuid.UUID | None = None,
         worker_id: uuid.UUID | None = None,
+        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -409,6 +409,7 @@ class SPMDEngine(StreamingEngine):
                     "memory_resource": ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
+                quent_context=quent_context,
             )
 
             # TODO: ranks need to choose the same engine ID!

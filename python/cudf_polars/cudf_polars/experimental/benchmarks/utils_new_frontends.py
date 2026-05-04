@@ -962,15 +962,13 @@ def run_polars_query(
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
 
-            # Up:ate the query name for the current iteration.
-            quent_context = cudf_polars.quent.quent_context.get()
-            new_context = dataclasses.replace(
-                quent_context,
-                query=cudf_polars.quent.Query(
-                    instance_name=f"Iteration {i + 1}",
-                ),
-            )
-            cudf_polars.quent.quent_context.set(new_context)
+            if engine is not None:
+                engine.quent_context = dataclasses.replace(
+                    engine.quent_context,
+                    query=cudf_polars.quent.Query(
+                        instance_name=f"Iteration {i + 1}",
+                    ),
+                )
 
             if engine is not None:
                 engine._run(setup_logging, q_id, i)
@@ -1047,17 +1045,11 @@ def _run_query_loop(
 
     for q_id in run_config.queries:
         if engine is not None:
-            # Set the query group for the current query.
-            # this is so easy to misuse...
-            quent_context = cudf_polars.quent.quent_context.get()
-
-            cudf_polars.quent.quent_context.set(
-                dataclasses.replace(
-                    quent_context,
-                    query_group=cudf_polars.quent.QueryGroup(
-                        instance_name=f"PDSH Query {q_id}",
-                    ),
-                )
+            engine.quent_context = dataclasses.replace(
+                engine.quent_context,
+                query_group=cudf_polars.quent.QueryGroup(
+                    instance_name=f"PDSH Query {q_id}",
+                ),
             )
 
         try:
@@ -1211,14 +1203,11 @@ def run_polars_ray(
     if run_config.num_gpus is not None:
         ray_init_options["num_gpus"] = run_config.num_gpus
 
-    quent_context = cudf_polars.quent.quent_context.get()
-
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
         engine_options=engine_options,
         ray_init_options=ray_init_options,
-        engine_id=quent_context.engine.id,
     ) as engine:
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1253,9 +1242,6 @@ def run_polars_dask(
 
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
-    # TODO: refactor up
-    quent_context = cudf_polars.quent.quent_context.get()
-
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — DaskEngine sets them
     executor_options.pop("runtime", None)
@@ -1282,7 +1268,6 @@ def run_polars_dask(
             executor_options=executor_options,
             engine_options=engine_options,
             dask_client=dask_client,
-            engine_id=quent_context.engine.id,
         ) as engine:
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
             records, plans, validation_failures, query_failures = _run_query_loop(

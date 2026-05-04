@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     import rmm.mr
 
     from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
+    from cudf_polars.quent._context import QuentContext
 
 
 __all__ = [
@@ -602,6 +603,13 @@ class DaskContext:
     owned_cluster: Any | None = None
 
 
+def default_quent_context() -> QuentContext:
+    # Just avoiding a circular import
+    from cudf_polars.quent._context import QuentContext
+
+    return QuentContext()
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -809,7 +817,9 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
-    # quent_context: QuentContext = dataclasses.field(default_factory=QuentContext)
+    quent_context: QuentContext = dataclasses.field(
+        default_factory=default_quent_context
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime

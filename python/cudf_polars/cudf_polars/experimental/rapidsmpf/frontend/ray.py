@@ -115,8 +115,7 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
-    quent_context = cudf_polars.quent.quent_context.get()
-    # Emit the QueryGroup and Query events on the client.
+    quent_context = config_options.executor.quent_context
     quent_context.emit_query_group_events()
     quent_context.emit_query_events()
 
@@ -581,13 +580,14 @@ class RayEngine(StreamingEngine):
         ray_init_options: dict[str, Any] | None = None,
         num_ranks: int | None = None,
         engine_id: uuid.UUID | None = None,
+        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
         ray_init_options = dict(ray_init_options or {})
-        # ray_init_options.setdefault("logging_config", ray.LoggingConfig(encoding="JSON", log_level="INFO"))
-        # TODO: this is probably not the right way to do things.
-        self._engine_id = engine_id or cudf_polars.quent.quent_context.get().engine.id
+        if quent_context is None:
+            quent_context = cudf_polars.quent.QuentContext()
+        self._engine_id = engine_id or quent_context.engine.id
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -691,6 +691,7 @@ class RayEngine(StreamingEngine):
                 },
                 engine_options=engine_options,
                 exit_stack=exit_stack,
+                quent_context=quent_context,
             )
         except Exception:
             exit_stack.close()

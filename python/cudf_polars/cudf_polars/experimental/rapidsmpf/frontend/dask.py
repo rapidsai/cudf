@@ -483,7 +483,7 @@ def evaluate_pipeline_dask_mode(
 
     dask_context = config_options.executor.dask_context
 
-    quent_context = cudf_polars.quent.quent_context.get()
+    quent_context = config_options.executor.quent_context
     quent_context.emit_query_group_events()
     quent_context.emit_query_events()
 
@@ -610,6 +610,7 @@ class DaskEngine(StreamingEngine):
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
         engine_id: uuid.UUID | None = None,
+        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -740,6 +741,7 @@ class DaskEngine(StreamingEngine):
                 "dask_context": dask_ctx,
             },
             engine_options={**engine_options, "memory_resource": None},
+            quent_context=quent_context,
         )
 
     @classmethod
