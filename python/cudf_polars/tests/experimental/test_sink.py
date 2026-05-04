@@ -28,14 +28,7 @@ def df():
 @pytest.mark.parametrize("mkdir", [True, False])
 @pytest.mark.parametrize("data_page_size", [None, 256_000])
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {"executor_options": {"max_rows_per_partition": 1_000}},
-        {"executor_options": {"max_rows_per_partition": 1_000_000}},
-    ],
-    indirect=True,
-)
+@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_parquet_single_file(
     df,
     streaming_engine_factory,
