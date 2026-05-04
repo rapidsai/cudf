@@ -911,8 +911,14 @@ def test_group_by_empty_reduction(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=all_supported_types_as_str in {"str", "category"}
-            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            condition=(
+                all_supported_types_as_str in {"str", "category"}
+                and groupby_reduction_methods in {"prod", "mean"}
+            )
+            or (
+                all_supported_types_as_str == "category"
+                and groupby_reduction_methods == "sum"
+            ),
             raises=TypeError,
             reason=f"{all_supported_types_as_str} raises TypeError with {groupby_reduction_methods}",
         )
@@ -1189,3 +1195,26 @@ def test_string_groupby_key_index():
     got = gdf.groupby("a", sort=True).count()
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+def test_groupby_string_sum(string_dtype):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3],
+            "b": pd.array(["x", "y", "", "z", "q"], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby("a").sum()
+    expect = pdf.groupby("a").sum()
+    assert_eq(expect, got)
