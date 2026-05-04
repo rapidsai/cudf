@@ -287,7 +287,6 @@ class RankActor:
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options
         )
-        rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
 
     def shutdown(self) -> None:
         """
@@ -687,8 +686,8 @@ class RayEngine(StreamingEngine):
         # Reset all actor Contexts collectively. ``ray.get`` blocks until
         # every actor's reset returns; the per-actor barrier inside
         # :meth:`RankActor.reset` synchronizes the teardown across ranks.
-        # Each actor rebuilds its MR from the ``memory_resource_config``
-        # it was constructed with — see :meth:`RankActor.reset`.
+        # The per-actor RMM resource is kept alive across resets — see
+        # :meth:`RankActor.reset`.
         ray.get(
             [
                 rank.reset.remote(
