@@ -179,24 +179,13 @@ class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
 
-    .. deprecated::
-        The ``shuffle_method`` option is deprecated. The shuffle method is now
-        determined automatically based on the cluster configuration. This enum
-        will be removed in a future release.
-
-    * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
     * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
 
-    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
-    resolves to ``ShuffleMethod.TASKS``.
-
-    The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
-    A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
-    shuffler automatically when using single-GPU execution.
+    The user should **not** use this enum directly.
+    StreamingExecutor.shuffle_method will be set to the appropriate value automatically.
     """
 
-    TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
@@ -660,12 +649,7 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join. For example, if the target partition size is 1GB and the
         broadcast join limit is 5, then the smaller table will be broadcasted
-        if it is smaller than 5GB (within the "rapidsmpf" runtime) or contains
-        fewer than 5 partitions (within the "tasks" runtime). The default depends
-        on the cluster and runtime.
-    shuffle_method
-        The method to use for shuffling data between workers. Defaults to
-        'tasks' for the single-GPU cluster.
+        if it is smaller than 5GB. The default depends on the cluster and runtime.
     client_device_threshold
         Threshold for spilling data from device memory in rapidsmpf.
         Default is 50% of device memory on the client process.
@@ -735,13 +719,6 @@ class StreamingExecutor:
             f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
         )
     )
-    shuffle_method: ShuffleMethod | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SHUFFLE_METHOD",
-            ShuffleMethod.__call__,
-            default=None,
-        )
-    )
     client_device_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
@@ -792,23 +769,12 @@ class StreamingExecutor:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
-        # Resolve shuffle_method from cluster when not explicitly set
-        if self.shuffle_method is None:
-            # Use task-based shuffle by default.
-            # TODO: Evaluate single-process shuffle by default.
-            object.__setattr__(self, "shuffle_method", "tasks")
-        elif self.shuffle_method == "rapidsmpf-single":
-            # The user should NOT specify "rapidsmpf-single" directly.
-            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
-        elif self.shuffle_method == "rapidsmpf":
-            if self.cluster == "single" and not rapidsmpf_single_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
-                )
-            # Select "rapidsmpf-single" for single-GPU
-            if self.cluster == "single":
-                object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
-        assert self.shuffle_method is not None, "Expected shuffle_method to be set"
+        # Select "rapidsmpf-single" for single-GPU
+        if self.cluster == "single":
+            shuffle_method = "rapidsmpf-single"
+        else:
+            shuffle_method = "rapidsmpf"
+        object.__setattr__(self, "shuffle_method", ShuffleMethod(shuffle_method))
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
@@ -827,7 +793,6 @@ class StreamingExecutor:
                 default_broadcast_join_limit(self.cluster, self.runtime),
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
-        object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
         # Handle dynamic_planning.
         # Can be None, dict, or DynamicPlanningOptions

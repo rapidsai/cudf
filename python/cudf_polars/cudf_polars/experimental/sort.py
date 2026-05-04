@@ -26,10 +26,8 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import (
     _concat,
-    _fallback_inform,
     _lower_ir_fallback,
 )
-from cudf_polars.utils.config import ShuffleMethod
 from cudf_polars.utils.cuda_stream import (
     get_dask_cuda_stream,
     get_joined_cuda_stream,
@@ -45,6 +43,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 def find_sort_splits(
@@ -557,52 +556,9 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
-    # The "rapidsmpf" runtime uses the sort_actor to handle everything else
-    if runtime == "rapidsmpf":
-        sort_node = ir.reconstruct([child])
-        partition_info[sort_node] = partition_info[child]
-        return sort_node, partition_info
-
-    # TODO: Remove everything below here when "tasks" is removed.
-
-    # Avoid rapidsmpf shuffle with maintain_order=True (for now)
-    shuffle_method = (
-        ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method
-    )
-    assert isinstance(shuffle_method, ShuffleMethod)
-    if (
-        shuffle_method != config_options.executor.shuffle_method
-    ):  # pragma: no cover; Requires rapidsmpf
-        _fallback_inform(
-            f"shuffle_method={config_options.executor.shuffle_method} does not support maintain_order=True. "
-            f"Falling back to shuffle_method={shuffle_method}.",
-            config_options,
-        )
-
-    if partition_info[child].count == 1:
-        single_part_node = ir.reconstruct([child])
-        partition_info[single_part_node] = partition_info[child]
-        return single_part_node, partition_info
-
-    local_sort_node = ir.reconstruct([child])
-    partition_info[local_sort_node] = partition_info[child]
-
-    shuffle = ShuffleSorted(
-        ir.schema,
-        ir.by,
-        ir.order,
-        ir.null_order,
-        shuffle_method,
-        local_sort_node,
-    )
-    partition_info[shuffle] = partition_info[child]
-
-    # We sort again locally.
-    assert ir.zlice is None  # zlice handling would be incorrect without adjustment
-    final_sort_node = ir.reconstruct([shuffle])
-    partition_info[final_sort_node] = partition_info[shuffle]
-
-    return final_sort_node, partition_info
+    sort_node = ir.reconstruct([child])
+    partition_info[sort_node] = partition_info[child]
+    return sort_node, partition_info
 
 
 @generate_ir_tasks.register(ShuffleSorted)

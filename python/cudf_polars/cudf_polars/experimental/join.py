@@ -301,8 +301,7 @@ def _(
             partition_info,
             left,
             right,
-            # Validated in StreamingExecutor.__post_init__ to not be None
-            config_options.executor.shuffle_method,  # type: ignore[arg-type]
+            config_options.executor.shuffle_method,
             # Validated in StreamingExecutor.__post_init__ to not be None
             streaming_runtime=config_options.executor.runtime.value,  # type: ignore[union-attr]
         )
@@ -314,8 +313,7 @@ def _(
             partition_info,
             left,
             right,
-            # Validated in StreamingExecutor.__post_init__ to not be None
-            config_options.executor.shuffle_method,  # type: ignore[arg-type]
+            config_options.executor.shuffle_method,
         )
 
 

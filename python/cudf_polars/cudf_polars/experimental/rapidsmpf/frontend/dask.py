@@ -10,7 +10,6 @@ import functools
 import logging
 import os
 import uuid
-import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -426,15 +425,10 @@ def evaluate_pipeline_dask_mode(
     dask_context = config_options.executor.dask_context
 
     # Strip dask_context before pickling config_options for remote calls.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        # This "re-sets" deprecated fields which raises a FutureWarning.
-        worker_config = dataclasses.replace(
-            config_options,
-            executor=dataclasses.replace(
-                config_options.executor, dask_context=None, shuffle_method=None
-            ),
-        )
+    worker_config = dataclasses.replace(
+        config_options,
+        executor=dataclasses.replace(config_options.executor, dask_context=None),
+    )
 
     result_map = dask_context.client.run(
         functools.partial(_worker_evaluate, uid=dask_context.rapidsmpf_id),

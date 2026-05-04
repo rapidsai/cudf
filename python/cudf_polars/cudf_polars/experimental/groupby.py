@@ -419,8 +419,7 @@ def _(
         child = Shuffle(
             child.schema,
             ir.keys,
-            # Validated in StreamingExecutor.__post_init__ to not be None
-            config_options.executor.shuffle_method,  # type: ignore[arg-type]
+            config_options.executor.shuffle_method,
             child,
         )
         partition_info[child] = PartitionInfo(

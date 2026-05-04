@@ -33,7 +33,6 @@ from cudf_polars.utils.config import (
     ConfigOptions,
     MemoryResourceConfig,
     Runtime,
-    ShuffleMethod,
     StreamingExecutor,
     _default_cuda_stream_policy,
 )
@@ -237,16 +236,6 @@ def test_parquet_options_from_none() -> None:
 def test_validate_streaming_executor_shuffle_method(
     *, rapidsmpf_single_available: bool
 ) -> None:
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-            executor_options={"shuffle_method": "tasks"},
-        )
-    )
-    assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method == "tasks"
-
-    # rapidsmpf with single cluster
     engine = pl.GPUEngine(
         executor="streaming",
         executor_options={"cluster": "single"},
@@ -375,7 +364,6 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
-        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         engine = pl.GPUEngine()
@@ -386,7 +374,6 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
         assert config.executor.broadcast_join_limit == 44
-        assert config.executor.shuffle_method == "tasks"
         assert config.cuda_stream_policy is None
 
 
@@ -845,8 +832,3 @@ def test_get_dask_cuda_stream() -> None:
 def test_runtime_deprecation_warning() -> None:
     with pytest.warns(FutureWarning, match="Setting 'runtime' is deprecated"):
         StreamingExecutor(runtime=Runtime.RAPIDSMPF)
-
-
-def test_shuffle_method_deprecation_warning() -> None:
-    with pytest.warns(FutureWarning, match="Setting 'shuffle_method' is deprecated"):
-        StreamingExecutor(shuffle_method=ShuffleMethod.RAPIDSMPF)
