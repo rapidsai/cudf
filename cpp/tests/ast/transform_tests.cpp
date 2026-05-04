@@ -1426,45 +1426,51 @@ TEST_F(JITExpressionTest, Coalesce)
 
 TEST_F(JITExpressionTest, Predicate) {}
 
+// TODO: try variants
 TEST_F(JITExpressionTest, AnsiAdd_Int)
 {
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a                 = column_wrapper<int32_t>{3, 20, 1, 50};
-  auto b_success         = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto b                 = column_wrapper<int32_t>{10, 7, 20, 0};
   auto b_fail            = column_wrapper<int32_t>{10, I32_MAX, 20, 0};
   auto expected          = column_wrapper<int32_t>{13, 27, 21, 50};
-  auto table             = cudf::table_view{{a, b_success, b_fail}};
+  auto expected_null     = column_wrapper<int32_t>{{13, 0, 21, 50}, {1, 0, 1, 1}};
+  auto table             = cudf::table_view{{a, b, b_fail}};
   auto tree              = cudf::ast::tree{};
   auto a_ref             = cudf::ast::column_reference(0);
-  auto b_success_ref     = cudf::ast::column_reference(1);
+  auto b_ref             = cudf::ast::column_reference(1);
   auto b_fail_ref        = cudf::ast::column_reference(2);
-  auto& add_success      = cudf::ast::jit::ansi_add(tree, a_ref, b_success_ref);
+  auto& add              = cudf::ast::jit::ansi_add(tree, a_ref, b_ref);
   auto& add_fail         = cudf::ast::jit::ansi_add(tree, a_ref, b_fail_ref);
-  auto result            = cudf::compute_column_jit(table, add_success);
+  auto& try_add_fail     = cudf::ast::jit::ansi_try_add(tree, a_ref, b_fail_ref);
+  auto result            = cudf::compute_column_jit(table, add);
+  auto result_null       = cudf::compute_column_jit(table, try_add_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
   EXPECT_THROW(result = cudf::compute_column_jit(table, add_fail), std::overflow_error);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_null, result_null->view(), verbosity);
 }
 
+// TODO: parametrizie on decimal types and float types
 TEST_F(JITExpressionTest, AnsiAdd_Decimal)
 {
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, 20, 1, 50}, numeric::scale_type{0}};
-  auto b_success =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 20, 0}, numeric::scale_type{0}};
+  auto b = cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 20, 0}, numeric::scale_type{0}};
   auto b_fail =
     cudf::test::fixed_point_column_wrapper<int32_t>{{10, I32_MAX, 20, 0}, numeric::scale_type{0}};
   auto expected =
     cudf::test::fixed_point_column_wrapper<int32_t>{{13, 27, 21, 50}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b_success, b_fail}};
-  auto tree          = cudf::ast::tree{};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_success_ref = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto& add_success  = cudf::ast::jit::ansi_add(tree, a_ref, b_success_ref);
-  auto& add_fail     = cudf::ast::jit::ansi_add(tree, a_ref, b_fail_ref);
-  auto result        = cudf::compute_column_jit(table, add_success);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto tree       = cudf::ast::tree{};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto& add       = cudf::ast::jit::ansi_add(tree, a_ref, b_ref);
+  auto& add_fail  = cudf::ast::jit::ansi_add(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, add);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1475,18 +1481,18 @@ TEST_F(JITExpressionTest, AnsiSub)
 {
   constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
   auto a                 = column_wrapper<int32_t>{3, 20, 1, 50};
-  auto b_success         = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto b                 = column_wrapper<int32_t>{10, 7, 20, 0};
   auto b_fail            = column_wrapper<int32_t>{10, I32_MIN, 20, 0};
   auto expected          = column_wrapper<int32_t>{-7, 13, -19, 50};
-  auto table             = cudf::table_view{{a, b_success, b_fail}};
+  auto table             = cudf::table_view{{a, b, b_fail}};
   auto tree              = cudf::ast::tree{};
   auto a_ref             = cudf::ast::column_reference(0);
-  auto b_success_ref     = cudf::ast::column_reference(1);
+  auto b_ref             = cudf::ast::column_reference(1);
   auto b_fail_ref        = cudf::ast::column_reference(2);
-  auto& sub_success      = cudf::ast::jit::ansi_sub(tree, a_ref, b_success_ref);
+  auto& sub              = cudf::ast::jit::ansi_sub(tree, a_ref, b_ref);
   auto& sub_fail         = cudf::ast::jit::ansi_sub(tree, a_ref, b_fail_ref);
 
-  auto result = cudf::compute_column_jit(table, sub_success);
+  auto result = cudf::compute_column_jit(table, sub);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1497,20 +1503,19 @@ TEST_F(JITExpressionTest, AnsiSub_Decimal)
 {
   constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
   auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, 20, 1, 50}, numeric::scale_type{0}};
-  auto b_success =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 20, 0}, numeric::scale_type{0}};
+  auto b = cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 20, 0}, numeric::scale_type{0}};
   auto b_fail =
     cudf::test::fixed_point_column_wrapper<int32_t>{{10, I32_MIN, 20, 0}, numeric::scale_type{0}};
   auto expected =
     cudf::test::fixed_point_column_wrapper<int32_t>{{-7, 13, -19, 50}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b_success, b_fail}};
-  auto tree          = cudf::ast::tree{};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_success_ref = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto& sub_success  = cudf::ast::jit::ansi_sub(tree, a_ref, b_success_ref);
-  auto& sub_fail     = cudf::ast::jit::ansi_sub(tree, a_ref, b_fail_ref);
-  auto result        = cudf::compute_column_jit(table, sub_success);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto tree       = cudf::ast::tree{};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto& sub       = cudf::ast::jit::ansi_sub(tree, a_ref, b_ref);
+  auto& sub_fail  = cudf::ast::jit::ansi_sub(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, sub);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1521,17 +1526,17 @@ TEST_F(JITExpressionTest, AnsiMul)
 {
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a                 = column_wrapper<int32_t>{3, 20, 2, 50};
-  auto b_success         = column_wrapper<int32_t>{10, 7, 1, 0};
+  auto b                 = column_wrapper<int32_t>{10, 7, 1, 0};
   auto b_fail            = column_wrapper<int32_t>{10, I32_MAX, 1, 0};
   auto expected          = column_wrapper<int32_t>{30, 140, 2, 0};
-  auto table             = cudf::table_view{{a, b_success, b_fail}};
+  auto table             = cudf::table_view{{a, b, b_fail}};
   auto a_ref             = cudf::ast::column_reference(0);
-  auto b_success_ref     = cudf::ast::column_reference(1);
+  auto b_ref             = cudf::ast::column_reference(1);
   auto b_fail_ref        = cudf::ast::column_reference(2);
   auto tree              = cudf::ast::tree{};
-  auto& mul_success      = cudf::ast::jit::ansi_mul(tree, a_ref, b_success_ref);
+  auto& mul              = cudf::ast::jit::ansi_mul(tree, a_ref, b_ref);
   auto& mul_fail         = cudf::ast::jit::ansi_mul(tree, a_ref, b_fail_ref);
-  auto result            = cudf::compute_column_jit(table, mul_success);
+  auto result            = cudf::compute_column_jit(table, mul);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1542,20 +1547,19 @@ TEST_F(JITExpressionTest, AnsiMul_Decimal)
 {
   constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
   auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, 20, 2, 50}, numeric::scale_type{0}};
-  auto b_success =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 1, 0}, numeric::scale_type{0}};
+  auto b = cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 1, 0}, numeric::scale_type{0}};
   auto b_fail =
     cudf::test::fixed_point_column_wrapper<int32_t>{{10, I32_MAX, 1, 0}, numeric::scale_type{0}};
   auto expected =
     cudf::test::fixed_point_column_wrapper<int32_t>{{30, 140, 2, 0}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b_success, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_success_ref = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& mul_success  = cudf::ast::jit::ansi_mul(tree, a_ref, b_success_ref);
-  auto& mul_fail     = cudf::ast::jit::ansi_mul(tree, a_ref, b_fail_ref);
-  auto result        = cudf::compute_column_jit(table, mul_success);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& mul       = cudf::ast::jit::ansi_mul(tree, a_ref, b_ref);
+  auto& mul_fail  = cudf::ast::jit::ansi_mul(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, mul);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1564,18 +1568,18 @@ TEST_F(JITExpressionTest, AnsiMul_Decimal)
 
 TEST_F(JITExpressionTest, AnsiDiv)
 {
-  auto a             = column_wrapper<int32_t>{3, 20, 1, 50};
-  auto b_success     = column_wrapper<int32_t>{10, 7, 2, 1};
-  auto b_fail        = column_wrapper<int32_t>{10, 1, 20, 0};
-  auto expected      = column_wrapper<int32_t>{0, 2, 0, 50};
-  auto table         = cudf::table_view{{a, b_success, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_success_ref = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& div_success  = cudf::ast::jit::ansi_div(tree, a_ref, b_success_ref);
-  auto& div_fail     = cudf::ast::jit::ansi_div(tree, a_ref, b_fail_ref);
-  auto result        = cudf::compute_column_jit(table, div_success);
+  auto a          = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto b          = column_wrapper<int32_t>{10, 7, 2, 1};
+  auto b_fail     = column_wrapper<int32_t>{10, 1, 20, 0};
+  auto expected   = column_wrapper<int32_t>{0, 2, 0, 50};
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& div       = cudf::ast::jit::ansi_div(tree, a_ref, b_ref);
+  auto& div_fail  = cudf::ast::jit::ansi_div(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, div);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
@@ -1585,49 +1589,174 @@ TEST_F(JITExpressionTest, AnsiDiv)
 TEST_F(JITExpressionTest, AnsiDiv_Decimal)
 {
   auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, 20, 1, 50}, numeric::scale_type{0}};
-  auto b_success =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 2, 1}, numeric::scale_type{0}};
+  auto b = cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 2, 1}, numeric::scale_type{0}};
   auto b_fail =
     cudf::test::fixed_point_column_wrapper<int32_t>{{10, 1, 20, 0}, numeric::scale_type{0}};
   auto expected =
     cudf::test::fixed_point_column_wrapper<int32_t>{{0, 2, 0, 50}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b_success, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_success_ref = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& div_success  = cudf::ast::jit::ansi_div(tree, a_ref, b_success_ref);
-  auto& div_fail     = cudf::ast::jit::ansi_div(tree, a_ref, b_fail_ref);
-  auto result        = cudf::compute_column_jit(table, div_success);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& div       = cudf::ast::jit::ansi_div(tree, a_ref, b_ref);
+  auto& div_fail  = cudf::ast::jit::ansi_div(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, div);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
   EXPECT_THROW(result = cudf::compute_column_jit(table, div_fail), std::overflow_error);
 }
 
-TEST_F(JITExpressionTest, AnsiMod) {}
+TEST_F(JITExpressionTest, AnsiMod)
+{
+  auto a          = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto b          = column_wrapper<int32_t>{10, 7, 2, 1};
+  auto b_fail     = column_wrapper<int32_t>{10, 1, 20, 0};
+  auto expected   = column_wrapper<int32_t>{10, 6, 2, 0};
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& mod       = cudf::ast::jit::ansi_mod(tree, a_ref, b_ref);
+  auto& mod_fail  = cudf::ast::jit::ansi_mod(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, mod);
 
-TEST_F(JITExpressionTest, AnsiAbs) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
-TEST_F(JITExpressionTest, AnsiNeg) {}
+  EXPECT_THROW(result = cudf::compute_column_jit(table, mod_fail), std::overflow_error);
+}
 
-TEST_F(JITExpressionTest, AnsiPrecisionCheck) {}
+TEST_F(JITExpressionTest, AnsiMod_Decimal)
+{
+  auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, 20, 1, 50}, numeric::scale_type{0}};
+  auto b = cudf::test::fixed_point_column_wrapper<int32_t>{{10, 7, 2, 1}, numeric::scale_type{0}};
+  auto b_fail =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 1, 20, 0}, numeric::scale_type{0}};
+  auto expected =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{10, 6, 2, 0}, numeric::scale_type{0}};
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& mod       = cudf::ast::jit::ansi_mod(tree, a_ref, b_ref);
+  auto& mod_fail  = cudf::ast::jit::ansi_mod(tree, a_ref, b_fail_ref);
+  auto result     = cudf::compute_column_jit(table, mod);
 
-TEST_F(JITExpressionTest, AnsiTryAdd) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
-TEST_F(JITExpressionTest, AnsiTrySub) {}
+  EXPECT_THROW(result = cudf::compute_column_jit(table, mod_fail), std::overflow_error);
+}
 
-TEST_F(JITExpressionTest, AnsiTryMul) {}
+TEST_F(JITExpressionTest, AnsiAbs)
+{
+  constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
+  constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
+  auto a                 = column_wrapper<int32_t>{3, -20, 1, -50, I32_MAX, I32_MIN + 1, 0};
+  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 0};
+  auto expected          = column_wrapper<int32_t>{3, 20, 1, 50, I32_MAX, std::abs(I32_MIN + 1), 0};
+  auto table             = cudf::table_view{{a, a_fail}};
+  auto a_ref             = cudf::ast::column_reference(0);
+  auto a_fail_ref        = cudf::ast::column_reference(1);
+  auto tree              = cudf::ast::tree{};
+  auto& abs              = cudf::ast::jit::ansi_abs(tree, a_ref);
+  auto& abs_fail         = cudf::ast::jit::ansi_abs(tree, a_fail_ref);
+  auto result            = cudf::compute_column_jit(table, abs);
 
-TEST_F(JITExpressionTest, AnsiTryDiv) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
-TEST_F(JITExpressionTest, AnsiTryMod) {}
+  EXPECT_THROW(result = cudf::compute_column_jit(table, abs_fail), std::overflow_error);
+}
 
-TEST_F(JITExpressionTest, AnsiTryAbs) {}
+TEST_F(JITExpressionTest, AnsiAbs_Decimal)
+{
+  constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
+  constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
+  auto a                 = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {3, -20, 1, -50, I32_MAX, I32_MIN + 1, 0}, numeric::scale_type{0}};
+  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 0},
+                                                                  numeric::scale_type{0}};
+  auto expected = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {3, 20, 1, 50, I32_MAX, std::abs(I32_MIN + 1), 0}, numeric::scale_type{0}};
+  auto table      = cudf::table_view{{a, a_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto a_fail_ref = cudf::ast::column_reference(1);
+  auto tree       = cudf::ast::tree{};
+  auto& abs       = cudf::ast::jit::ansi_abs(tree, a_ref);
+  auto& abs_fail  = cudf::ast::jit::ansi_abs(tree, a_fail_ref);
+  auto result     = cudf::compute_column_jit(table, abs);
 
-TEST_F(JITExpressionTest, AnsiTryNeg) {}
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
-TEST_F(JITExpressionTest, AnsiTryPrecisionCheck) {}
+  EXPECT_THROW(result = cudf::compute_column_jit(table, abs_fail), std::overflow_error);
+}
+
+TEST_F(JITExpressionTest, AnsiNeg)
+{
+  constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
+  constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
+  auto a                 = column_wrapper<int32_t>{3, -20, 1, -50, I32_MAX, -I32_MAX, 0};
+  auto a_fail            = column_wrapper<int32_t>{3, -20, 1, -50, I32_MIN, 0};
+  auto expected          = column_wrapper<int32_t>{-3, 20, -1, 50, -I32_MAX, I32_MAX, 0};
+  auto table             = cudf::table_view{{a, a_fail}};
+  auto a_ref             = cudf::ast::column_reference(0);
+  auto a_fail_ref        = cudf::ast::column_reference(1);
+  auto tree              = cudf::ast::tree{};
+  auto& neg              = cudf::ast::jit::ansi_neg(tree, a_ref);
+  auto& neg_fail         = cudf::ast::jit::ansi_neg(tree, a_fail_ref);
+  auto result            = cudf::compute_column_jit(table, neg);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  EXPECT_THROW(result = cudf::compute_column_jit(table, neg_fail), std::overflow_error);
+}
+
+TEST_F(JITExpressionTest, AnsiNeg_Decimal)
+{
+  constexpr auto I32_MIN = std::numeric_limits<int32_t>::min();
+  constexpr auto I32_MAX = std::numeric_limits<int32_t>::max();
+  auto a = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MAX, -I32_MAX, 0},
+                                                           numeric::scale_type{0}};
+  auto a_fail   = cudf::test::fixed_point_column_wrapper<int32_t>{{3, -20, 1, -50, I32_MIN, 0},
+                                                                  numeric::scale_type{0}};
+  auto expected = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {-3, 20, -1, 50, -I32_MAX, I32_MAX, 0}, numeric::scale_type{0}};
+  auto table      = cudf::table_view{{a, a_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto a_fail_ref = cudf::ast::column_reference(1);
+  auto tree       = cudf::ast::tree{};
+  auto& neg       = cudf::ast::jit::ansi_neg(tree, a_ref);
+  auto& neg_fail  = cudf::ast::jit::ansi_neg(tree, a_fail_ref);
+  auto result     = cudf::compute_column_jit(table, neg);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  EXPECT_THROW(result = cudf::compute_column_jit(table, neg_fail), std::overflow_error);
+}
+
+TEST_F(JITExpressionTest, AnsiPrecisionCheck)
+{
+  auto a =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{3, 200, 250, 200}, numeric::scale_type{0}};
+  auto a_fail =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{3, 200, 250, 20000}, numeric::scale_type{0}};
+  auto expected =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{3, 200, 250, 200}, numeric::scale_type{0}};
+  auto max_precision    = cudf::numeric_scalar<int32_t>(3);
+  auto table            = cudf::table_view{{a}};
+  auto a_ref            = cudf::ast::column_reference(0);
+  auto tree             = cudf::ast::tree{};
+  auto precision        = cudf::ast::literal(max_precision);
+  auto& precision_check = cudf::ast::jit::ansi_precision_check(tree, a_ref, precision);
+  auto result           = cudf::compute_column_jit(table, precision_check);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  EXPECT_THROW(result = cudf::compute_column_jit(cudf::table_view{{a_fail}}, precision_check),
+               std::overflow_error);
+}
 
 TEST_F(JITExpressionTest, BitShiftLeft) {}
 

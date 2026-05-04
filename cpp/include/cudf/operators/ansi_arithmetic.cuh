@@ -328,12 +328,14 @@ __device__ inline errc ansi_mod(T* out, T const* a, T const* b)
 
 __device__ inline errc ansi_mod(float* out, float const* a, float const* b)
 {
+  if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   *out = (*a) - (*b) * ::floorf((*a) / (*b));
   return errc::OK;
 }
 
 __device__ inline errc ansi_mod(double* out, double const* a, double const* b)
 {
+  if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   *out = (*a) - (*b) * ::floor((*a) / (*b));
   return errc::OK;
 }
