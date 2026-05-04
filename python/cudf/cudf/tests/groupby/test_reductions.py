@@ -1189,3 +1189,59 @@ def test_string_groupby_key_index():
     got = gdf.groupby("a", sort=True).count()
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["count", "nunique", "size"])
+def test_groupby_string_int_returning_aggs_dtype(string_dtype, op):
+    psr = pd.Series(
+        ["x", "y", "x", None, "z"],
+        dtype=string_dtype,
+        name="b",
+    )
+    pkeys = pd.Series([1, 1, 2, 2, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gsr.groupby(gkeys), op)()
+    expect = getattr(psr.groupby(pkeys), op)()
+    assert_eq(expect, got)
+
+
+def test_groupby_series_identity_column_exclusion():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby(gdf["a"]).sum()
+    expect = pdf.groupby(pdf["a"]).sum()
+    assert_eq(expect, got)
+
+
+def test_groupby_series_copy_no_column_exclusion():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby(gdf["a"].copy()).sum()
+    expect = pdf.groupby(pdf["a"].copy()).sum()
+    assert_eq(expect, got)
+
+
+def test_groupby_series_self_does_not_exclude():
+    psr = pd.Series([1, 1, 2, 2, 3, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gsr.groupby(gsr).count()
+    expect = psr.groupby(psr).count()
+    assert_eq(expect, got)
