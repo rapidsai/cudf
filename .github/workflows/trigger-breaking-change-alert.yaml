@@ -13,8 +13,9 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'breaking')
     permissions:
       contents: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@main
+    secrets:
+      NV_SLACK_BREAKING_CHANGE_ALERT: ${{ secrets.NV_SLACK_BREAKING_CHANGE_ALERT }}
     with:
       sender_login: ${{ github.event.sender.login }}
       sender_avatar: ${{ github.event.sender.avatar_url }}

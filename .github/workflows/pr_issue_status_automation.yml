@@ -14,8 +14,9 @@ permissions: {}
 jobs:
     get-project-id:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@main
+      secrets:
+        ADD_TO_PROJECT_GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}
       if: github.event.pull_request.state == 'open'
-      secrets: inherit # zizmor: ignore[secrets-inherit]
       permissions:
         contents: read
       with:
@@ -25,6 +26,8 @@ jobs:
     update-status:
       # This job sets the PR and its linked issues to "In Progress" status
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      secrets:
+        ADD_TO_PROJECT_GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       permissions:
@@ -39,7 +42,6 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit # zizmor: ignore[secrets-inherit]
 
     get-release:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
@@ -65,6 +67,8 @@ jobs:
     update-release:
       # This job sets the PR and its linked issues to the release they are targeting
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      secrets:
+        ADD_TO_PROJECT_GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: [get-project-id, get-release]
       permissions:
@@ -79,4 +83,3 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit # zizmor: ignore[secrets-inherit]
