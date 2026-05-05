@@ -21,6 +21,7 @@ def test_join_streams(streams: list[Stream], stream: Stream):
     plc.experimental.join_streams(streams, stream)
 
 
+@pytest.mark.uses_custom_stream
 def test_join_streams_type_error():
     """Test that join_streams raises appropriate errors for invalid inputs."""
     main_stream = Stream()
