@@ -401,7 +401,7 @@ __device__ inline errc ansi_abs(decimal<R>* out, decimal<R> const* a)
 {
   if (a->value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
   auto rep = a->value() < 0 ? -a->value() : a->value();
-  *out  = decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a->scale()}}};
+  *out     = decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a->scale()}}};
   return errc::OK;
 }
 
@@ -568,7 +568,7 @@ __device__ inline errc ansi_try_abs(optional<T>* out, optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
-    if (errc e = ansi_abs(&r, a); e != errc::OK) {
+    if (errc e = ansi_abs(&r, &a->value()); e != errc::OK) {
       *out = nullopt;
     } else {
       *out = r;

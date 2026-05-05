@@ -303,7 +303,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   EXPECT_EQ(transform_args.source_type, cudf::udf_source_type::CUDA);
   EXPECT_EQ(transform_args.is_null_aware, cudf::null_aware::NO);
   EXPECT_EQ(transform_args.outputs.size(), 1);
-  EXPECT_EQ(transform_args.outputs[0].nullability, cudf::output_nullability::ALL_VALID);
+  EXPECT_EQ(transform_args.outputs[0].nullability, cudf::output_nullability::PRESERVE);
   EXPECT_EQ(transform_args.outputs[0].type, cudf::data_type{cudf::type_id::INT32});
   ASSERT_EQ(transform_args.inputs.size(), 2);
 

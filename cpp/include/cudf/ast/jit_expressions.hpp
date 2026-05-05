@@ -113,7 +113,7 @@ struct operation : public ast::expression {
  * @param condition The condition under which to nullify the value
  * @return An expression representing the nullified value
  */
-expression const& nullify_if(ast::tree& tree, expression const& a,  expression const& condition);
+expression const& nullify_if(ast::tree& tree, expression const& a, expression const& condition);
 
 /**
  * @brief Creates an expression that evaluates to the first non-null value among its arguments.

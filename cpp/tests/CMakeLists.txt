@@ -682,6 +682,10 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 
 # ##################################################################################################
+# * jit-ast tests -------------------------------------------------------------------------------------
+ConfigureTest(JIT_AST_TEST ast/jit_ast_tests.cpp)
+
+# ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST

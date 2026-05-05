@@ -45,7 +45,9 @@ __device__ inline errc null_logical_or(bool* out, T const* a, T const* b)
 }
 
 template <typename T>
-__device__ inline errc null_logical_or(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ inline errc null_logical_or(optional<bool>* out,
+                                       optional<T> const* a,
+                                       optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
