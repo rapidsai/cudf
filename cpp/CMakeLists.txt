@@ -327,9 +327,6 @@ rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 set(_rapids_logger_args BUILD_EXPORT_SET cudf-exports)
-if(CUDF_INSTALL_LIBRARY_DEPS)
-  list(APPEND _rapids_logger_args INSTALL_EXPORT_SET cudf-exports)
-endif()
 if(NOT CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
   list(APPEND _rapids_logger_args ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG} CPM_ARGS OPTIONS
        "BUILD_SHARED_LIBS OFF"
@@ -337,20 +334,22 @@ if(NOT CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
 endif()
 rapids_cpm_rapids_logger(${_rapids_logger_args})
 
-# If rapids_logger was found as a pre-existing shared library (e.g. conda), we need
-# find_dependency(rapids_logger) in the installed config even when CUDF_INSTALL_LIBRARY_DEPS is OFF.
-if(NOT CUDF_INSTALL_LIBRARY_DEPS)
-  get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
-  if(NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
-    include("${rapids-cmake-dir}/export/package.cmake")
-    rapids_export_package(INSTALL rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
-  endif()
+# If dynamically linking to a preexisting rapids_logger library then find_dependency(rapids_logger)
+# must be in the installed config when CUDF_INSTALL_LIBRARY_DEPS is OFF. If it's ON then we always
+# export
+get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
+if(CUDF_INSTALL_LIBRARY_DEPS OR NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
+  include("${rapids-cmake-dir}/export/package.cmake")
+  rapids_export_package(INSTALL rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
 endif()
 
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+
+# find NVTX
+include(cmake/thirdparty/get_nvtx.cmake)
 
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
@@ -360,9 +359,6 @@ include(cmake/thirdparty/get_cccl.cmake)
 
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
-
-# find NVTX, after rmm so we defer to rmm to decide the interface since nvtx is private for cudf
-include(cmake/thirdparty/get_nvtx.cmake)
 
 # find croaring
 include(cmake/thirdparty/get_croaring.cmake)
