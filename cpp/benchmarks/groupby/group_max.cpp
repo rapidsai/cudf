@@ -11,6 +11,8 @@
 
 #include <nvbench/nvbench.cuh>
 
+NVBENCH_DECLARE_TYPE_STRINGS(numeric::decimal128, "decimal128", "decimal128");
+
 template <typename Type>
 void groupby_max_helper(nvbench::state& state,
                         cudf::size_type num_rows,
