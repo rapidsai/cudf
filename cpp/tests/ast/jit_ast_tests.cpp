@@ -447,8 +447,7 @@ TEST_F(JITExpressionTest, AnsiNeg_Decimal)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_fail, result_fail->view(), verbosity);
 }
 
-// TODO: some device malloc failure happens in this test, need to investigate and re-enable
-TEST_F(JITExpressionTest, DISABLED_AnsiPrecisionCheck)
+TEST_F(JITExpressionTest, AnsiPrecisionCheck)
 {
   auto a =
     cudf::test::fixed_point_column_wrapper<int32_t>{{3, 200, 250, 200}, numeric::scale_type{0}};
@@ -458,20 +457,21 @@ TEST_F(JITExpressionTest, DISABLED_AnsiPrecisionCheck)
     cudf::test::fixed_point_column_wrapper<int32_t>{{3, 200, 250, 200}, numeric::scale_type{0}};
   auto expected_fail = cudf::test::fixed_point_column_wrapper<int32_t>{
     {3, 200, 250, 200}, {1, 1, 1, 0}, numeric::scale_type{0}};
-  auto max_precision        = cudf::numeric_scalar<int32_t>(3);
-  auto table                = cudf::table_view{{a}};
-  auto a_ref                = cudf::ast::column_reference(0);
-  auto tree                 = cudf::ast::tree{};
-  auto precision            = cudf::ast::literal(max_precision);
-  auto& precision_check     = cudf::ast::jit::ansi_precision_check(tree, a_ref, precision);
-  auto& try_precision_check = cudf::ast::jit::ansi_try_precision_check(tree, a_ref, precision);
+  auto max_precision         = cudf::numeric_scalar<int32_t>(3);
+  auto table                 = cudf::table_view{{a, a_fail}};
+  auto a_ref                 = cudf::ast::column_reference(0);
+  auto a_fail_ref            = cudf::ast::column_reference(1);
+  auto tree                  = cudf::ast::tree{};
+  auto precision             = cudf::ast::literal(max_precision);
+  auto& precision_check      = cudf::ast::jit::ansi_precision_check(tree, a_ref, precision);
+  auto& precision_check_fail = cudf::ast::jit::ansi_precision_check(tree, a_fail_ref, precision);
+  auto& try_precision_check = cudf::ast::jit::ansi_try_precision_check(tree, a_fail_ref, precision);
   auto result               = cudf::compute_column_jit(table, precision_check);
   auto result_fail          = cudf::compute_column_jit(table, try_precision_check);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
-  EXPECT_THROW(result = cudf::compute_column_jit(cudf::table_view{{a_fail}}, precision_check),
-               std::overflow_error);
+  EXPECT_THROW(result = cudf::compute_column_jit(table, precision_check_fail), std::overflow_error);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_fail, result_fail->view(), verbosity);
 }

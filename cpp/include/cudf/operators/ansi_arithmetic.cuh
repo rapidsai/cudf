@@ -462,9 +462,12 @@ __device__ inline errc ansi_precision_check(decimal<R>* out,
 {
   if (*precision <= 0) { return errc::OVERFLOW; }
 
-  if (a->value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
+  auto value = a->value();
+  if (value == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
 
-  if (::abs(a->value()) >= detail::ipow10(static_cast<R>(*precision))) { return errc::OVERFLOW; }
+  auto abs_value = value < 0 ? -value : value;
+
+  if (abs_value >= detail::ipow10(static_cast<R>(*precision))) { return errc::OVERFLOW; }
 
   *out = *a;
   return errc::OK;
@@ -476,7 +479,14 @@ __device__ inline errc ansi_precision_check(optional<T>* out,
                                             optional<int32_t> const* precision)
 {
   if (a->has_value()) {
-    return ansi_precision_check(&out->value(), &a->value(), &precision->value());
+    T r;
+    if (errc e = ansi_precision_check(&r, &a->value(), &precision->value()); e != errc::OK) {
+      *out = nullopt;
+      return e;
+    } else {
+      *out = r;
+      return errc::OK;
+    }
   } else {
     *out = nullopt;
     return errc::OK;
@@ -601,11 +611,11 @@ __device__ inline errc ansi_try_precision_check(optional<decimal<R>>* out,
                                                 optional<int32_t> const* precision)
 {
   if (a->has_value() && precision->has_value()) {
-    if (errc e = ansi_precision_check(&out->value(), &a->value(), &precision->value());
-        e != errc::OK) {
+    decimal<R> r;
+    if (errc e = ansi_precision_check(&r, &a->value(), &precision->value()); e != errc::OK) {
       *out = nullopt;
     } else {
-      *out = a->value();
+      *out = r;
     }
   } else {
     *out = nullopt;
