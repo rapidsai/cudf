@@ -40,5 +40,5 @@ for bench in *_NVBENCH; do
   fi
 done
 
-rapids-logger "Test script exiting with value: $EXITCODE"
+echo "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
