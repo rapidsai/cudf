@@ -3635,4 +3635,65 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
   }
 }
 
+TEST_F(JsonReaderTest, MalformedFieldNameWithBrace)
+{
+  // Garbled field name containing '{' creates structural ambiguity in the
+  // token tree.  Combined with an invalid byte in a sibling row, the parser
+  // may produce column-tree nodes that are never materialised as columns.
+  // Recovery mode must handle this without accessing uninitialised memory.
+  std::string json_string =
+    R"({"name":"Alice","address":{"city":"NYC","zip":"1"},"score{":[95,2]})"
+    "\n"
+    R"({"name":"Bob","address":{"city":"LA","zip":"1"},"scores":[)"
+    "\xbf"
+    R"(8,82]})"
+    "\n"
+    R"({"name":"C","address":{"city":"Chi","zip":"60601"},"scores":[1,97]})";
+
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(options));
+}
+
+TEST_F(JsonReaderTest, MalformedStructuralCharsInValues)
+{
+  // Stray structural characters inside values cause the tokenizer to create
+  // phantom column-tree entries.  The reader must not dereference uninitialised
+  // column data for those entries during offset scattering.
+  {
+    std::string json_string = R"({"a":1,"b":{"c":"ok"},"d":[10,20]})"
+                              "\n"
+                              R"({"a":2,"b":{"c":"x}y"},"d{":[30]})"
+                              "\n"
+                              R"({"a":3,"b":{"c":"ok"},"d":[40,50]})";
+
+    cudf::io::json_reader_options options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+        .lines(true)
+        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+    CUDF_EXPECT_NO_THROW(cudf::io::read_json(options));
+  }
+  {
+    std::string json_string = R"({"x":[1,2],"y":{"k":1}})"
+                              "\n"
+                              R"({"x":["a]b"],"y":{"k":2}})"
+                              "\n"
+                              R"({"x":[3,4],"y{":{})";
+
+    cudf::io::json_reader_options options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+        .lines(true)
+        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+    CUDF_EXPECT_NO_THROW(cudf::io::read_json(options));
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
