@@ -4,101 +4,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR
-from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import log_do_evaluate
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.utils import _dynamic_planning_on
-from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import MutableMapping
 
-    from cudf_polars.containers import DataType
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
-
-
-class ShuffleOptions(TypedDict):
-    """RapidsMPF shuffling options."""
-
-    on: Sequence[str]
-    column_names: Sequence[str]
-    dtypes: Sequence[DataType]
-
-
-class RMPFIntegration:  # pragma: no cover
-    """cuDF-Polars protocol for rapidsmpf shuffler."""
-
-    @staticmethod
-    @nvtx_annotate_cudf_polars(message="RMPFIntegration.insert_partition")
-    def insert_partition(
-        df: DataFrame,
-        partition_id: int,  # Not currently used
-        partition_count: int,
-        shuffler: Any,
-        options: ShuffleOptions,
-        *other: Any,
-    ) -> None:
-        """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.integrations.cudf.partition import partition_and_pack
-        from rapidsmpf.integrations.single import get_worker_context
-
-        context = get_worker_context()
-
-        on = options["on"]
-        assert not other, f"Unexpected arguments: {other}"
-        columns_to_hash = tuple(df.column_names.index(val) for val in on)
-        packed_inputs = partition_and_pack(
-            df.table,
-            columns_to_hash=columns_to_hash,
-            num_partitions=partition_count,
-            br=context.br,
-            stream=DEFAULT_STREAM,
-        )
-
-        shuffler.insert_chunks(packed_inputs)
-
-    @staticmethod
-    @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
-    def extract_partition(
-        partition_id: int,
-        shuffler: Any,
-        options: ShuffleOptions,
-    ) -> DataFrame:
-        """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.integrations.cudf.partition import (
-            unpack_and_concat,
-            unspill_partitions,
-        )
-        from rapidsmpf.integrations.single import get_worker_context
-
-        context = get_worker_context()
-
-        shuffler.wait()
-        column_names = options["column_names"]
-        dtypes = options["dtypes"]
-        return DataFrame.from_table(
-            unpack_and_concat(
-                unspill_partitions(
-                    shuffler.extract(partition_id),
-                    br=context.br,
-                    allow_overbooking=True,
-                ),
-                br=context.br,
-                stream=DEFAULT_STREAM,
-            ),
-            column_names,
-            dtypes,
-            get_dask_cuda_stream(),
-        )
 
 
 class Shuffle(IR):

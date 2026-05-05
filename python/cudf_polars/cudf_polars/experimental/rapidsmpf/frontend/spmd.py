@@ -154,7 +154,7 @@ def allgather_polars_dataframe(
     col_names = local_df.columns
     dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
-    plc_table = plc.Table.from_arrow(local_df)
+    plc_table = plc.Table.from_arrow(local_df, stream)
 
     packed_data = PackedData.from_cudf_packed_columns(
         pack(plc_table, stream),
