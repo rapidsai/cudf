@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ShuffleMethod
 
 
 class ShuffleOptions(TypedDict):
@@ -111,25 +110,24 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("keys", "shuffle_method")
-    _non_child = ("schema", "keys", "shuffle_method")
-    _n_non_child_args = 3
+    __slots__ = ("keys",)
+    _non_child = (
+        "schema",
+        "keys",
+    )
+    _n_non_child_args = 2
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    shuffle_method: ShuffleMethod
-    """Shuffle method to use."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        shuffle_method: ShuffleMethod,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.shuffle_method = shuffle_method
-        self._non_child_args = (schema, keys, shuffle_method)
+        self._non_child_args = (schema, keys)
         self.children = (df,)
 
     # the type-ignore is for
@@ -142,7 +140,6 @@ class Shuffle(IR):
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        shuffle_method: ShuffleMethod,
         df: DataFrame,
         *,
         context: IRExecutionContext,

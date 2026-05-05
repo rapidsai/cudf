@@ -56,7 +56,6 @@ __all__ = [
     "ParquetOptions",
     "RayContext",
     "SPMDContext",
-    "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -146,21 +145,6 @@ class Cluster(enum.StrEnum):
     SPMD = "spmd"
     RAY = "ray"
     DASK = "dask"
-
-
-class ShuffleMethod(enum.StrEnum):
-    """
-    The method to use for shuffling data between workers with the streaming executor.
-
-    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
-    * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
-
-    The user should **not** use this enum directly.
-    StreamingExecutor.shuffle_method will be set to the appropriate value automatically.
-    """
-
-    RAPIDSMPF = "rapidsmpf"
-    _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
 T = TypeVar("T")
@@ -688,19 +672,11 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
-    shuffle_method: ShuffleMethod = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
-
-        # Select "rapidsmpf-single" for single-GPU
-        if self.cluster == "single":
-            shuffle_method = "rapidsmpf-single"
-        else:
-            shuffle_method = "rapidsmpf"
-        object.__setattr__(self, "shuffle_method", ShuffleMethod(shuffle_method))
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(

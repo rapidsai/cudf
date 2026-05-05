@@ -25,14 +25,12 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.utils.config import ShuffleMethod
 
 
 def _maybe_shuffle_frame(
     frame: IR,
     on: tuple[NamedExpr, ...],
     partition_info: MutableMapping[IR, PartitionInfo],
-    shuffle_method: ShuffleMethod,
     output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
@@ -47,7 +45,6 @@ def _maybe_shuffle_frame(
         frame = Shuffle(
             frame.schema,
             on,
-            shuffle_method,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -63,21 +60,18 @@ def _make_hash_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-    shuffle_method: ShuffleMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
-        shuffle_method,
         output_count,
     )
     right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
-        shuffle_method,
         output_count,
     )
     # Always reconstruct in case children contain Cache nodes
@@ -271,5 +265,4 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
         )

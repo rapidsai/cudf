@@ -222,17 +222,6 @@ def test_parquet_options_from_none() -> None:
     assert config.parquet_options.chunked is True
 
 
-def test_validate_streaming_executor_shuffle_method() -> None:
-    engine = pl.GPUEngine(
-        executor="streaming",
-        executor_options={"cluster": "single"},
-    )
-
-    config = ConfigOptions.from_polars_engine(engine)
-    assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method == "rapidsmpf-single"
-
-
 @pytest.mark.parametrize("executor", ["in-memory", "streaming"])
 def test_hashable(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(

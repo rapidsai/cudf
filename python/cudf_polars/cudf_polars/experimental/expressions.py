@@ -330,7 +330,6 @@ def _decompose_agg_node(
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
-                config_options.executor.shuffle_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(

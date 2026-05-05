@@ -120,7 +120,6 @@ def _(
             child = Shuffle(
                 child.schema,
                 distinct_keys,
-                config_options.executor.shuffle_method,
                 child,
             )
             partition_info[child] = PartitionInfo(
