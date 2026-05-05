@@ -882,10 +882,8 @@ class RayEngine(StreamingEngine):
         """
         Shut down all rank actors and release resources.
 
-        Drains buffered Quent events from all actors before teardown,
-        then emits ``Engine.exit`` on the driver. If Ray was initialized
-        by this engine, also calls :func:`ray.shutdown`. Safe to call
-        more than once.
+        If Ray was initialized by this engine, also calls :func:`ray.shutdown`.
+        Safe to call more than once.
 
         Raises
         ------
@@ -908,7 +906,7 @@ class RayEngine(StreamingEngine):
                 try:
                     exit_events = ray.get(ref)
                 except ray.exceptions.RayActorError:
-                    pass  # expected: exit_actor() terminates the process
+                    pass  # expected: exit_actor() terminates the process immediately
                 except Exception as e:
                     exceptions.append(e)
                 else:
