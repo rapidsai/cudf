@@ -7,9 +7,11 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, ClassVar, cast
 
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Agg, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import IR, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.groupby import combine, decompose
 
 if TYPE_CHECKING:
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expr import GroupedWindow
     from cudf_polars.dsl.expressions.base import Expr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
@@ -157,6 +160,21 @@ class Over(IR):
         self.exprs = exprs
         self._non_child_args = (key_indices, is_scalar, exprs)
         self.children = (input_ir,)
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        key_indices: tuple[int, ...],
+        is_scalar: bool,  # noqa: FBT001
+        exprs: tuple[NamedExpr, ...],
+        df: DataFrame,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Evaluate window expressions against df."""
+        columns = [ne.evaluate(df) for ne in exprs]
+        columns = broadcast(*columns, stream=df.stream)
+        return DataFrame(columns, stream=df.stream)
 
 
 def _is_scalar_grouped_window(expr: GroupedWindow) -> bool:

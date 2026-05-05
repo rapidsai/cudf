@@ -93,13 +93,13 @@ def _broadcast_gw_sync(
 
 def _evaluate_ir_broadcast_sync(
     chunk: TableChunk,
-    ir: Select | HStack,
+    ir: Select | HStack | Over,
     ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
 ) -> DataFrame:
-    """Evaluate Select/HStack using a pre-computed global aggregate for each GroupedWindow."""
+    """Evaluate Select/HStack/Over using a pre-computed global aggregate for each GroupedWindow."""
     child_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
     chunk_df = DataFrame.from_table(
@@ -115,7 +115,7 @@ def _evaluate_ir_broadcast_sync(
     }
 
     is_hstack = isinstance(ir, HStack)
-    exprs = ir.exprs if isinstance(ir, Select) else ir.columns
+    exprs = ir.columns if isinstance(ir, HStack) else ir.exprs
     result_cols = []
     for ne in exprs:
         if isinstance(ne.value, GroupedWindow) and id(ne.value) in gw_results:
@@ -133,7 +133,7 @@ def _evaluate_ir_broadcast_sync(
 async def _evaluate_broadcast_chunk(
     context: Context,
     chunk: TableChunk,
-    ir: Select | HStack,
+    ir: Select | HStack | Over,
     ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
@@ -191,7 +191,7 @@ def _add_row_idx_sync(
 
 def _evaluate_with_row_idx_sync(
     chunk: TableChunk,
-    ir: Select | HStack,
+    ir: Select | HStack | Over,
     ir_context: IRExecutionContext,
     row_idx_col: str,
 ) -> DataFrame:
@@ -431,7 +431,6 @@ async def over_actor(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
         input_ir = ir.children[0]
-        eval_ir = Select(ir.schema, ir.exprs, True, input_ir)  # noqa: FBT003
         metadata_in = await recv_metadata(ch_in, context)
 
         key_indices = ir.key_indices
@@ -445,13 +444,13 @@ async def over_actor(
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
                 partitioning=maybe_remap_partitioning(
-                    eval_ir, metadata_in.partitioning
+                    ir, metadata_in.partitioning
                 ),
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
                 context,
-                eval_ir,
+                ir,
                 ir_context,
                 ch_out,
                 ch_in,
@@ -537,7 +536,7 @@ async def over_actor(
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
                 partitioning=maybe_remap_partitioning(
-                    eval_ir, metadata_in.partitioning
+                    ir, metadata_in.partitioning
                 ),
                 duplicated=metadata_in.duplicated,
             )
@@ -547,7 +546,7 @@ async def over_actor(
                 result = await _evaluate_broadcast_chunk(
                     context,
                     chunk,
-                    eval_ir,
+                    ir,
                     ir_context,
                     global_agg_df,
                     key_names,
@@ -566,7 +565,7 @@ async def over_actor(
         # After hash-shuffle, each row lives on exactly one rank — never duplicated.
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(eval_ir, metadata_in.partitioning),
+            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
             duplicated=False,
         )
         await send_metadata(ch_out, context, metadata_out)
@@ -634,7 +633,7 @@ async def over_actor(
             result_df = await asyncio.to_thread(
                 _evaluate_with_row_idx_sync,
                 partition_chunk,
-                eval_ir,
+                ir,
                 ir_context,
                 row_idx_col,
             )
