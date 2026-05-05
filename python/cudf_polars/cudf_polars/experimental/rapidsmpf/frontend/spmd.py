@@ -582,8 +582,8 @@ class SPMDEngine(StreamingEngine):
         )
 
         # TODO: Figure out multi-rank handling.
-        self._quent_events.extend(self._quent_logger.drain())
-        self._quent_events.sort(key=lambda x: x["timestamp"])
+        self._quent_events_raw.extend(self._quent_logger.drain())
+        self._quent_events_raw.sort(key=lambda x: x["timestamp"])
 
         super().shutdown()
 

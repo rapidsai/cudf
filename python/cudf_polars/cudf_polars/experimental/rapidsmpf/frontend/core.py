@@ -131,7 +131,7 @@ class StreamingEngine(pl.GPUEngine):
         exit_stack: contextlib.ExitStack | None = None,
     ):
         self._nranks = nranks
-        self._quent_events: list[dict[str, Any]] = []  # populated on shutdown
+        self._quent_events_raw: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -240,9 +240,10 @@ class StreamingEngine(pl.GPUEngine):
         self.shutdown()
 
     @property
-    def quent_events(self) -> list[dict[str, Any]]:
+    def _quent_events(self) -> list[dict[str, Any]]:
         """Return all Quent telemetry events collected during the engine's lifecycle."""
-        return [x["event"] for x in self._quent_events]
+        # Not ready to make this public yet.
+        return [x["event"] for x in self._quent_events_raw]
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """

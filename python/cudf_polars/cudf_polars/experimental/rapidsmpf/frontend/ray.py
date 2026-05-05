@@ -907,7 +907,7 @@ class RayEngine(StreamingEngine):
                 except Exception as e:
                     exceptions.append(e)
                 else:
-                    self._quent_events.extend(exit_events)
+                    self._quent_events_raw.extend(exit_events)
 
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:
@@ -928,9 +928,9 @@ class RayEngine(StreamingEngine):
             super().shutdown()
 
         # gather the client-side events.
-        self._quent_events.extend(self._quent_logger.drain())
+        self._quent_events_raw.extend(self._quent_logger.drain())
         # final inplace sort of the events.
-        self._quent_events.sort(key=lambda x: x["timestamp"])
+        self._quent_events_raw.sort(key=lambda x: x["timestamp"])
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         return ray.get(

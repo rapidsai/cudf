@@ -861,7 +861,7 @@ class DaskEngine(StreamingEngine):
             )
 
             for traces in traces_map.values():
-                self._quent_events.extend(traces)
+                self._quent_events_raw.extend(traces)
 
         except Exception as e:
             exceptions.append(e)
@@ -876,9 +876,9 @@ class DaskEngine(StreamingEngine):
             super().shutdown()
 
         # gather the client-side events.
-        self._quent_events.extend(self._quent_logger.drain())
+        self._quent_events_raw.extend(self._quent_logger.drain())
         # final inplace sort of the events.
-        self._quent_events.sort(key=lambda x: x["timestamp"])
+        self._quent_events_raw.sort(key=lambda x: x["timestamp"])
 
         if exceptions:
             raise ExceptionGroup("Worker teardown failed", exceptions)

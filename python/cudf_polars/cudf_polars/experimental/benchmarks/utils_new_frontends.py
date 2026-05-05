@@ -1391,7 +1391,7 @@ def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
     engine
         The (already shut down) engine instance.
     """
-    quent_logs = list(engine.quent_events)
+    quent_logs = list(engine._quent_events)
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)

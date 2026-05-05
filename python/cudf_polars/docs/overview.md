@@ -692,6 +692,56 @@ quent_context = cudf_polars.quent.QuentContext(
     query=cudf_polars.quent.Query(instance_name="test_query"),
 )
 
-with StreamingEngine(executor_options={"quent_context": quent_context}):
+with StreamingEngine(executor_options={"quent_context": quent_context}) as engine:
     q.collect(engine=engine)
 ```
+
+### Implementation Notes
+
+Quent tracing is currently implemented manually.
+
+`cudf_polars.quent._types` defines one dataclass per `Entity` from the quent
+data processing domain (e.g.  `Engine`, `Worker`, etc.).  To avoid too many
+circular references we prefer that these entities maintain references to other
+entities just via ID, rather than an instance of the entity. For example, a
+`Worker` accepts an `engine_id` rather than an `Engine`.
+
+All IDs in `cudf_polars.quent` are UUIDs rather than integers or strings.
+
+Currently, we don't implement the finite state machines discussed in quent. Our
+instrumentation is very-much bolted on, rather than integrated into the
+functioning of cudf-polars. Instead of FSMs, our entities have a method for the
+various phases they move through:
+
+```python
+class Worker:
+    def init(self, ...) -> Event: ...
+    def exit(self, ...) -> Event: ...
+
+class Plan:
+    def declare(self, ...) -> Event: ...
+```
+
+Each of those returns an `Event`, another in-memory data structure representing the event.
+cudf-polars just manually calls those methods at the appropriate places.
+
+Ranks need to coordinate on the creation of some entities. For example, each
+actor in a `RayEngine` needs to use the same `engine_id` so that plans can be
+associated with the engine correctly. We store these types of worker-independent
+entities on a new `QuentContext` class, which is provided to the engine via
+`StreamingExecutor.quent_context`.
+
+`cudf_polars.quent._logging.QuentLogger` connects the `Event` objects to the
+actual events. When we want record something, we call
+`quent_logger.emit(event)`. For now, these events are just buffered in-memory
+but that could be adapted (and likely will in the future, to directly send these
+events to some collector). At the moment, we build on structlog, but this could
+probably be relaxed pretty easily. We aren't currently relying on any advanced
+features from structlog.
+
+Each rank has its own `QuentLogger`, which is constructed upon initialization of
+that rank's "worker" (`RankActor`, `_WorkerContext`). Each `StreamingEngine` subclass
+also has a `_quent_logger` attribute for "client-side" logs that records thigs like
+the engine start and exit events.
+
+The different streaming engines now have
