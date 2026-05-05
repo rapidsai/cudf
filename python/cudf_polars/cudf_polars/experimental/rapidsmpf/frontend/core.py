@@ -21,7 +21,6 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
-import cudf_polars.quent
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.base import StatsCollector
@@ -44,6 +43,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
+    import cudf_polars.quent
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
@@ -126,9 +126,7 @@ class StreamingEngine(pl.GPUEngine):
         executor_options: dict[str, Any],
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
-        quent_context: cudf_polars.quent.QuentContext | None = None,
     ):
-        quent_context = quent_context or cudf_polars.quent.QuentContext()
         self._nranks = nranks
         self._worker_quent_events: list[dict[str, Any]] = []
         self._exit_stack: contextlib.ExitStack | None = (
@@ -138,7 +136,6 @@ class StreamingEngine(pl.GPUEngine):
         # accept it.
         engine_options = dict(engine_options)
         allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
-        executor_options = {**executor_options, "quent_context": quent_context}
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
@@ -151,15 +148,6 @@ class StreamingEngine(pl.GPUEngine):
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
-
-    @property
-    def quent_context(self) -> cudf_polars.quent.QuentContext:
-        """The Quent telemetry context for this engine."""
-        return self.config["executor_options"]["quent_context"]
-
-    @quent_context.setter
-    def quent_context(self, value: cudf_polars.quent.QuentContext) -> None:
-        self.config["executor_options"]["quent_context"] = value
 
     @property
     def nranks(self) -> int:

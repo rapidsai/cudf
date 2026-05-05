@@ -48,6 +48,14 @@ class QuentContext:
         default_factory=set, init=False
     )
 
+    def emit_engine_init_events(self) -> None:
+        """Emit a Quent Engine init event."""
+        emit(self.engine.init())
+
+    def emit_engine_exit_events(self) -> None:
+        """Emit a Quent Engine exit event."""
+        emit(self.engine.exit())
+
     def emit_query_group_events(self) -> None:
         """Emit a Quent QueryGroup declaration event."""
         if self.query_group.id in self._query_group_cache:

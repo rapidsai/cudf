@@ -215,7 +215,6 @@ class RankActor:
         self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
         self._rank: int = rank
         self._quent_worker: cudf_polars.quent._types.Worker | None = None
-        self._quent_memory: cudf_polars.quent._types.Memory | None = None
         if worker_id is not None:
             self._quent_worker = cudf_polars.quent._types.Worker(
                 id=worker_id,
@@ -223,15 +222,6 @@ class RankActor:
                 instance_name=f"rank-{rank}",
             )
             cudf_polars.quent._logging.emit(self._quent_worker.init())
-
-            # Emit the Memory Initializing event.
-            self._quent_memory = cudf_polars.quent._types.Memory(
-                instance_name="Host Memory",
-                resource_type_name="memory",
-                parent_group_id=self._quent_worker.id,
-            )
-            cudf_polars.quent._logging.emit(self._quent_memory.initializing())
-            cudf_polars.quent._logging.emit(self._quent_memory.operating(1024))
 
     def setup_root(self) -> bytes:
         """
@@ -329,9 +319,6 @@ class RankActor:
         # followed by framework (ray) level things.
         if self._quent_worker is not None:
             cudf_polars.quent._logging.emit(self._quent_worker.exit())
-            if self._quent_memory is not None:
-                cudf_polars.quent._logging.emit(self._quent_memory.finalizing())
-                cudf_polars.quent._logging.emit(self._quent_memory.exit())
             return self._drain_quent_events()
         return []
 
@@ -579,15 +566,10 @@ class RayEngine(StreamingEngine):
         engine_options: dict[str, Any] | None = None,
         ray_init_options: dict[str, Any] | None = None,
         num_ranks: int | None = None,
-        engine_id: uuid.UUID | None = None,
-        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
         ray_init_options = dict(ray_init_options or {})
-        if quent_context is None:
-            quent_context = cudf_polars.quent.QuentContext()
-        self._engine_id = engine_id or quent_context.engine.id
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -631,13 +613,14 @@ class RayEngine(StreamingEngine):
             # Ensure Ray is shut down when RayEngine shuts down.
             exit_stack.callback(ray.shutdown)
 
-        self._quent_engine = cudf_polars.quent._types.Engine(
-            id=self._engine_id,
-            implementation=cudf_polars.quent._types.Implementation(
-                implementation_id=self._engine_id, name="cudf-polars-ray"
-            ),
-        )
-        cudf_polars.quent._logging.emit(self._quent_engine.init())
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
+        quent_context: cudf_polars.quent.QuentContext = executor_options[
+            "quent_context"
+        ]
+        print(f"{quent_context=}")
+        quent_context.emit_engine_init_events()
+        # cudf_polars.quent._logging.emit(self._quent_engine.init())
 
         try:
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
@@ -663,7 +646,7 @@ class RayEngine(StreamingEngine):
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                     worker_id=worker_id,
-                    engine_id=self._engine_id,
+                    engine_id=quent_context.engine.id,
                     rank=i,
                 )
                 for i, worker_id in enumerate(worker_ids)
@@ -691,7 +674,6 @@ class RayEngine(StreamingEngine):
                 },
                 engine_options=engine_options,
                 exit_stack=exit_stack,
-                quent_context=quent_context,
             )
         except Exception:
             exit_stack.close()
@@ -944,7 +926,8 @@ class RayEngine(StreamingEngine):
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
-            cudf_polars.quent._logging.emit(self._quent_engine.exit())
+            # cudf_polars.quent._logging.emit(self._quent_engine.exit())
+            self.config["executor_options"]["quent_context"].emit_engine_exit_events()
             self._rank_actors = None
             super().shutdown()
 

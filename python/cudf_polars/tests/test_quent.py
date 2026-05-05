@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import uuid
 from typing import TYPE_CHECKING
 
@@ -358,7 +357,7 @@ def test_lower_ir_graph_with_node_map() -> None:
 
 def test_engine_lifecycle() -> None:
     engine_id = uuid.uuid4()
-    impl = Implementation(implementation_id=engine_id)
+    impl = Implementation()
     engine = Engine(id=engine_id, implementation=impl)
 
     init_event = engine.init()
@@ -406,34 +405,49 @@ def test_quent_events_ray() -> None:
     # We need to create the engine, to ensure the lifecycle events are emitted properly.
     import cudf_polars.experimental.rapidsmpf.frontend.ray
     import cudf_polars.quent
-    # import cudf_polars.quent._logging
 
-    # Configure the logging...
-    # TODO: this should be automatic?
-
-    # cudf_polars.quent._logging.worker_setup_logging()
-
-    engine = cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine()
+    quent_context = cudf_polars.quent.QuentContext()
+    engine = cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine(
+        executor_options={"quent_context": quent_context}
+    )
 
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
-
-    engine.quent_context = dataclasses.replace(
-        engine.quent_context,
-        query_group=cudf_polars.quent.QueryGroup(),
-        query=cudf_polars.quent.Query(),
-    )
 
     with engine:
         q.collect(engine=engine)
 
     quent_events = engine.quent_events
     engine_init, engine_exit = [x for x in quent_events if "Engine" in x["data"]]
+    print(f"test {quent_context=}")
+    assert engine_init["id"] == str(quent_context.engine.id)
+    assert engine_exit["id"] == str(quent_context.engine.id)
+    assert engine_exit["data"]["Engine"]["Exit"] is None
+    assert (
+        engine_init["data"]["Engine"]["Init"]["implementation"]["name"] == "cudf-polars"
+    )
 
-    # TODO: assert worker things
-    # TODO: test multiple q.collect() calls, just one QueryGroup thing
-    # TODO: generate new query ID per .collect() call?
+    worker_events = [x for x in quent_events if "Worker" in x["data"]]
+    worker_init_events = sorted(
+        [x for x in worker_events if "Init" in x["data"]["Worker"]],
+        key=lambda x: x["id"],
+    )
+    worker_exit_events = sorted(
+        [x for x in worker_events if "Exit" in x["data"]["Worker"]],
+        key=lambda x: x["id"],
+    )
+    assert len(worker_init_events) == len(worker_exit_events)
+    for worker_init, worker_exit in zip(
+        worker_init_events, worker_exit_events, strict=True
+    ):
+        assert worker_init["id"] == worker_exit["id"]
+        assert (
+            worker_init["data"]["Worker"]["Init"]["parent_engine_id"]
+            == engine_init["id"]
+        )
+        assert worker_exit["data"]["Worker"]["Exit"] is None
 
     (query_group_declaration,) = [x for x in quent_events if "QueryGroup" in x["data"]]
+    assert query_group_declaration["id"] == str(quent_context.query_group.id)
     assert (
         query_group_declaration["data"]["QueryGroup"]["Declaration"]["engine_id"]
         == engine_init["id"]
@@ -441,6 +455,7 @@ def test_quent_events_ray() -> None:
     query_init, query_planning, query_executing, query_exit = [
         x for x in quent_events if "Query" in x["data"]
     ]
+    assert query_init["id"] == str(quent_context.query.id)
     assert (
         query_init["data"]["Query"]["state"]["Init"]["query_group_id"]
         == query_group_declaration["id"]

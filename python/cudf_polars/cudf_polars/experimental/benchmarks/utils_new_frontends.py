@@ -638,6 +638,7 @@ def get_executor_options(
     )
     executor_options["runtime"] = "rapidsmpf"
     executor_options["max_io_threads"] = run_config.max_io_threads
+    executor_options["quent_context"] = cudf_polars.quent.QuentContext()
 
     # PDSHQueries: inject unique_fraction when dynamic planning is explicitly disabled
     if (
@@ -963,14 +964,15 @@ def run_polars_query(
             setup_logging(q_id, i)
 
             if engine is not None:
-                engine.quent_context = dataclasses.replace(
-                    engine.quent_context,
-                    query=cudf_polars.quent.Query(
-                        instance_name=f"Iteration {i + 1}",
-                    ),
+                quent_context = engine.config["executor_options"]["quent_context"]
+                engine.config["executor_options"]["quent_context"] = (
+                    dataclasses.replace(
+                        quent_context,
+                        query=cudf_polars.quent.Query(
+                            instance_name=f"Iteration {i + 1}",
+                        ),
+                    )
                 )
-
-            if engine is not None:
                 engine._run(setup_logging, q_id, i)
 
         try:
@@ -1045,8 +1047,9 @@ def _run_query_loop(
 
     for q_id in run_config.queries:
         if engine is not None:
-            engine.quent_context = dataclasses.replace(
-                engine.quent_context,
+            quent_context = engine.config["executor_options"]["quent_context"]
+            engine.config["executor_options"]["quent_context"] = dataclasses.replace(
+                quent_context,
                 query_group=cudf_polars.quent.QueryGroup(
                     instance_name=f"PDSH Query {q_id}",
                 ),

@@ -106,6 +106,10 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
+    quent_context = config_options.executor.quent_context
+    quent_context.emit_query_group_events()
+    quent_context.emit_query_events()
+
     return evaluate_on_rank(
         context,
         comm,
@@ -409,14 +413,13 @@ class SPMDEngine(StreamingEngine):
                     "memory_resource": ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
-                quent_context=quent_context,
             )
 
             # TODO: ranks need to choose the same engine ID!
             self._quent_engine = cudf_polars.quent._types.Engine(
                 id=self._engine_id,
                 implementation=cudf_polars.quent._types.Implementation(
-                    implementation_id=self._engine_id, name="cudf-polars-spmd"
+                    name="cudf-polars-spmd"
                 ),
             )
             self._quent_worker = cudf_polars.quent._types.Worker(

@@ -644,7 +644,7 @@ class DaskEngine(StreamingEngine):
         self._quent_engine = cudf_polars.quent._types.Engine(
             id=engine_id,
             implementation=cudf_polars.quent._types.Implementation(
-                implementation_id=engine_id, name="cudf-polars-dask"
+                name="cudf-polars-dask"
             ),
         )
 
@@ -741,7 +741,6 @@ class DaskEngine(StreamingEngine):
                 "dask_context": dask_ctx,
             },
             engine_options={**engine_options, "memory_resource": None},
-            quent_context=quent_context,
         )
 
     @classmethod

@@ -66,7 +66,6 @@ class Event:
 class Implementation:
     """Engine implementation metadata."""
 
-    implementation_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     name: str = "cudf-polars"
     version: str = __version__
     custom_attributes: list[Any] = dataclasses.field(default_factory=list)
@@ -150,7 +149,7 @@ class Engine:
         {"id":"019dd571-105a-7c53-a15b-713cbdd7666b","timestamp":1777402450018164995,"data":{"Engine":{"Init":{"implementation":{"name":"Simulator","version":"0.0.0-PoC","custom_attributes":[]},"instance_name":"holodeck-9dfbdcf7"}}}}
         """
         return Event(
-            id=self.implementation.implementation_id,
+            id=self.id,
             timestamp=timestamp or time.time_ns(),
             data={
                 EventName.ENGINE.value: {
