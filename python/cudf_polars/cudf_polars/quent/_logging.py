@@ -17,17 +17,16 @@ if TYPE_CHECKING:
 QUENT_SCOPE = "QUENT"
 
 
-# This buffer is awkward to use. *Especially* during cleanup.
-# At the end of the day, we want the client to be able to collect all
-# of the events as a flat list[dict]. To enable that, we need to
-# gather all the rank-local events and merge.
-# Each rank will have logs from their own Worker, and the "client"
-# process will also have the client-only events.
-#
-# How should we design this?
-
-
 class QuentLogger:
+    """
+    An in-memory buffer for Quent events.
+
+    Parameters
+    ----------
+    maxlen
+        The maximum number of events to buffer.
+    """
+
     def __init__(self, maxlen: int = 100_000) -> None:
         self._buffer: collections.deque[dict[str, Any]] = collections.deque(
             maxlen=maxlen
