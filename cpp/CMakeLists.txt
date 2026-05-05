@@ -1093,8 +1093,8 @@ target_link_libraries(
 )
 
 # Public deps with conditional WHOLE_ARCHIVE for shared builds. --whole-archive ensures all symbols
-# from static rmm/rapids_logger are exported from shared libcudf. This is a no-op when those deps
-# are themselves shared libraries.
+# from static rmm/rapids_logger are exported from shared libcudf. WHOLE_ARCHIVE is only applied when
+# the dep is actually a static library to avoid CMake warnings for shared library targets.
 #
 # When building a shared libcudf with static deps that are absorbed via whole-archive, the deps
 # should not appear in the installed interface -- consumers link only to libcudf.so. However, if we
@@ -1103,17 +1103,15 @@ target_link_libraries(
 set(_rmm_link rmm::rmm)
 set(_rapids_logger_link rapids_logger::rapids_logger)
 if(BUILD_SHARED_LIBS)
-  set(_rmm_link $<LINK_LIBRARY:WHOLE_ARCHIVE,${_rmm_link}>)
-  set(_rapids_logger_link $<LINK_LIBRARY:WHOLE_ARCHIVE,${_rapids_logger_link}>)
-  # Only hide from install interface if the dep is actually a static library absorbed into cudf. If
-  # it's a shared library (found pre-installed), it must remain in the public interface.
   get_target_property(_rmm_type rmm::rmm TYPE)
   get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
   if(_rmm_type STREQUAL "STATIC_LIBRARY")
-    set(_rmm_link $<BUILD_INTERFACE:${_rmm_link}>)
+    set(_rmm_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,rmm::rmm>>)
   endif()
   if(_rapids_logger_type STREQUAL "STATIC_LIBRARY")
-    set(_rapids_logger_link $<BUILD_INTERFACE:${_rapids_logger_link}>)
+    set(_rapids_logger_link
+        $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,rapids_logger::rapids_logger>>
+    )
   endif()
 endif()
 
