@@ -14,12 +14,6 @@ permissions: {}
 jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
     needs:
       - check-nightly-ci
       - changed-files
@@ -55,6 +49,8 @@ jobs:
       - streams-test-matrix
       - streams-test
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
+    permissions:
+      contents: read
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
@@ -90,7 +86,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      id-token: write
       packages: read
       pull-requests: read
     needs: telemetry-setup
@@ -343,11 +338,7 @@ jobs:
 
   checks:
     permissions:
-      actions: read
       contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
     with:
