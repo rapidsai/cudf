@@ -435,8 +435,6 @@ async def over_actor(
         metadata_in = await recv_metadata(ch_in, context)
 
         key_indices = ir.key_indices
-        assert len(key_indices) > 0
-
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             comm.nranks,
@@ -564,7 +562,7 @@ async def over_actor(
 
         row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
 
-        modulus = max(comm.nranks, metadata_in.local_count)
+        modulus = comm.nranks
         # After hash-shuffle, each row lives on exactly one rank — never duplicated.
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
