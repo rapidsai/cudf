@@ -236,7 +236,7 @@ def pytest_addoption(parser):
         "--cluster",
         action="store",
         default="single",
-        choices=("single", "distributed"),
+        choices=("single",),
         help="Cluster to use for 'streaming' executor.",
     )
 
@@ -261,12 +261,6 @@ def pytest_configure(config):
     # test that shares a worker with a ray/dask test, so the suppression must
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
-
-    if (
-        config.getoption("--cluster") == "distributed"
-        and config.getoption("--executor") != "streaming"
-    ):
-        raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
 
     if config.getoption("--runtime") == "rapidsmpf":
         if config.getoption("--executor") == "in-memory":

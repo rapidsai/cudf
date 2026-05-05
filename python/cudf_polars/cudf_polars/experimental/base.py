@@ -118,9 +118,9 @@ class StatsCollector:
         traversal of *ir* so that the result is independent of object
         identity.
         """
-        node_to_idx = {id(node): i for i, node in enumerate(traversal([ir]))}
+        node_to_idx = {node: i for i, node in enumerate(traversal([ir]))}
         return [
-            {"index": node_to_idx[id(node)], "info": info.serialize()}
+            {"index": node_to_idx[node], "info": info.serialize()}
             for node, info in self.scan_stats.items()
         ]
 
