@@ -45,7 +45,6 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
@@ -55,7 +54,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
-from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.utils.config import CUDAStreamPoolConfig
 
@@ -70,7 +68,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import StatsCollector
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -109,33 +107,6 @@ def evaluate_logical_plan(
         cudf_polars_query_id=str(query_id),
     ):
         match config_options.executor.cluster:
-            case "distributed":  # pragma: no cover; block depends on executor type and Distributed cluster
-                # Legacy distributed execution: lower on the client,
-                # ship the lowered plan to workers.
-                from cudf_polars.experimental.rapidsmpf.dask import (
-                    evaluate_pipeline_dask,
-                )
-
-                stats = collect_statistics(ir, config_options)
-                ir, partition_info = lower_ir_graph(ir, config_options, stats)
-
-                # Dask may return chunks in arbitrary order.
-                if not isinstance(ir, Repartition):
-                    ir = Repartition(ir.schema, ir)
-                    partition_info[ir] = PartitionInfo(count=1)
-
-                with ReserveOpIDs(ir, config_options) as collective_id_map:
-                    log_query_plan(ir, config_options)
-                    result, metadata_collector = evaluate_pipeline_dask(
-                        evaluate_pipeline,
-                        ir,
-                        partition_info,
-                        config_options,
-                        stats,
-                        collective_id_map,
-                        collect_metadata=collect_metadata,
-                        query_id=query_id,
-                    )
             case "spmd":
                 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
                     evaluate_pipeline_spmd_mode,
