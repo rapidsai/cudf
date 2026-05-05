@@ -167,8 +167,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNull)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNullMatch)
 {
-  auto odd_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto odd_valid = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> match_col({1, 2, 3, 4, 5}, odd_valid);
   cudf::column_view match_view = match_col;
@@ -254,8 +253,7 @@ TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNull)
 
 TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNullMatch)
 {
-  auto odd_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto odd_valid = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::strings_column_wrapper match_col({"a", "string", "", "test", "for", "nulls"},
                                                odd_valid);

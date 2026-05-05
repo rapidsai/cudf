@@ -21,6 +21,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_136,
@@ -489,6 +490,14 @@ class StringFunction(Expr):
             child, arg = self.children
             plc_column = child.evaluate(df, context=context).obj
             plc_targets = arg.evaluate(df, context=context).obj
+            if plc_column.size() == 0:
+                # contains_multiple launches a kernel with grid_1d sized
+                # against the input rows, which asserts num_blocks > 0.
+                # Skip the kernel call on empty input.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             if ascii_case_insensitive:
                 plc_column = plc.strings.case.to_lower(plc_column, stream=df.stream)
                 plc_targets = plc.strings.case.to_lower(plc_targets, stream=df.stream)
@@ -574,6 +583,14 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
+            if plc_column.size() == 0:
+                # read_json_from_string_column raises
+                # "Generated token count exceeds the expected token count"
+                # on empty input. Return a typed empty struct column directly.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             plc_table_with_metadata = plc.io.json.read_json_from_string_column(
                 plc_column,
                 plc.Scalar.from_py("\n", stream=df.stream),

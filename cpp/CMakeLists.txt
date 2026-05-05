@@ -304,7 +304,7 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 include(cmake/thirdparty/get_zstd.cmake)
 
 # JIT Embedding helper functions
-include(src/librtcx/embed.cmake)
+include(librtcx/embed.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -326,120 +326,7 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-set(CUDF_LTO_JIT_ARCHITECTURES "80;90;100;120")
-
-macro(add_fragment)
-  set(TARGET ${ARGV0})
-  set(ONE_VALUE_ARGS FRAGMENT SOURCE)
-  set(MULTI_VALUE_ARGS "DEFINITIONS")
-  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
-
-  set(TARGET_ID "${TARGET}_${ARG_FRAGMENT}")
-  add_library(${TARGET_ID} OBJECT ${ARG_SOURCE})
-  target_compile_options(
-    ${TARGET_ID} PRIVATE --compress-mode=none --gen-opt-lto --relaxed-constexpr --extended-lambda
-  )
-  target_compile_definitions(${TARGET_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
-  set_target_properties(
-    ${TARGET_ID}
-    PROPERTIES CUDA_ARCHITECTURES "${CUDF_LTO_JIT_ARCHITECTURES}"
-               CUDA_SEPARABLE_COMPILATION ON
-               CUDA_FATBIN_COMPILATION ON
-               POSITION_INDEPENDENT_CODE ON
-               INTERPROCEDURAL_OPTIMIZATION ON
-               CXX_STANDARD ${CUDF_CUDA_STANDARD}
-               CXX_STANDARD_REQUIRED ON
-               CXX_EXTENSIONS ON
-               CXX_VISIBILITY_PRESET hidden
-               CUDA_STANDARD ${CUDF_CUDA_STANDARD}
-               CUDA_STANDARD_REQUIRED ON
-               CUDA_VISIBILITY_PRESET hidden
-  )
-  target_link_libraries(${TARGET_ID} PRIVATE CCCL::CCCL)
-  target_include_directories(
-    ${TARGET_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  )
-
-  embed_blob(
-    ${TARGET} FILE $<TARGET_OBJECTS:${TARGET_ID}> DEST fragments/sm_${ARCH}_${ARG_FRAGMENT}.fatbin
-  )
-endmacro()
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnonulls_32
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=0
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=4
-)
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnulls_32
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=1
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=4
-)
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnonulls_64
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=0
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=8
-)
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnulls_64
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=1
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=8
-)
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnonulls_128
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=0
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=16
-)
-
-add_fragment(
-  cudf_jit_embed
-  FRAGMENT
-  compute_columns_kernel_hasnulls_128
-  SOURCE
-  src/transform/jit/compute_columns_kernel.cu
-  DEFINITIONS
-  COMPUTE_COLUMNS_HAS_NULLS=1
-  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=16
-)
-
-add_fragment(cudf_jit_embed FRAGMENT operators SOURCE src/jit/lite/operators.cu)
-
-add_fragment(
-  cudf_test_jit_embed FRAGMENT compute_columns_profit_operator SOURCE
-  tests/transform/compute_columns_profit_operator.cu
-)
-
-embed_includes(
+jit_add_include_directory(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
@@ -689,6 +576,7 @@ add_library(
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/deletion_vectors.cu
+  src/io/parquet/experimental/deletion_vectors_helpers.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -946,6 +834,7 @@ add_library(
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/contains_multiple.cu
+  src/strings/search/count.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_instance.cu
@@ -1013,18 +902,16 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
+  src/utilities/roaring_bitmap.cu
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
-  src/librtcx/rtcx.cpp
+  librtcx/rtcx.cpp
   ${cudf_jit_embed_SOURCE_DIR}/cudf_jit_embed.s
 )
 
 add_dependencies(cudf cudf_jit_embed)
-target_include_directories(
-  cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/src/librtcx
-)
 
 foreach(incbin_dir IN LISTS cudf_jit_embed_INCLUDE_DIRS)
   target_compile_options(cudf PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,-I${incbin_dir}>)
@@ -1108,6 +995,9 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
+          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
+          "$<BUILD_INTERFACE:${cudf_jit_embed_INCLUDE_DIRS}>"
+          "$<BUILD_INTERFACE:${CUDAToolkit_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1146,12 +1036,11 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Specify the target module library dependencies
-
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink CUDA::nvrtc CUDA::cuda_driver
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
+          nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1229,8 +1118,8 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
-                           $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+                           cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -1310,6 +1199,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
+                 BUILD_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
@@ -1386,8 +1277,16 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 )
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
-  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
+  install(
+    TARGETS cudf_identify_stream_usage_mode_cudf
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
+  install(
+    TARGETS cudf_identify_stream_usage_mode_testing
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
 endif()
 
 set(doc_string

@@ -77,10 +77,10 @@ CUDF_KERNEL void binaryop_kernel(cudf::size_type size,
 }  // namespace binops
 }  // namespace cudf
 
-extern "C" __global__ void kernel(cudf::size_type size,
-                                  void* out_data,
-                                  void* lhs_data,
-                                  void* rhs_data)
+extern "C" __global__ void cudf_kernel(cudf::size_type size,
+                                       void* out_data,
+                                       void* lhs_data,
+                                       void* rhs_data)
 {
-  KERNEL_INSTANCE(size, out_data, lhs_data, rhs_data);
+  CUDF_KERNEL_INSTANCE(size, out_data, lhs_data, rhs_data);
 }

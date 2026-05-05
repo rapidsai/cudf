@@ -1,4 +1,3 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
@@ -10,18 +9,13 @@
 #include <cuda_runtime.h>
 
 #include <cudf_jit_embed.hpp>
-#include <fcntl.h>
 #include <jit/jit.hpp>
-#include <librtcx/rtcx.hpp>
+#include <rtcx.hpp>
 #include <runtime/context.hpp>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <zstd.h>
 
-#include <cerrno>
-#include <cstring>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <future>
 
 namespace CUDF_EXPORT cudf {
@@ -47,34 +41,6 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
   rtcx::sha256_context ctx;
   for (auto const* input : inputs) {
     ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
-  }
-  return ctx.finalize();
-}
-
-rtcx::sha256 hash(std::span<std::string const> inputs)
-{
-  rtcx::sha256_context ctx;
-  for (auto const& input : inputs) {
-    ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
-  }
-  return ctx.finalize();
-}
-
-rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments)
-{
-  rtcx::sha256_context ctx;
-  for (auto const& fragment : file_fragments) {
-    ctx.update(
-      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
-  }
-  return ctx.finalize();
-}
-
-rtcx::sha256 hash(std::span<rtcx::memory_fragment const> memory_fragments)
-{
-  rtcx::sha256_context ctx;
-  for (auto const& fragment : memory_fragments) {
-    ctx.update(fragment.data);
   }
   return ctx.finalize();
 }
@@ -179,33 +145,56 @@ void install_file_set(std::string_view target_dir,
                       std::span<char const* const> destinations,
                       std::string_view compression)
 {
-  auto decompressed = decompress_blob(compressed_binary, uncompressed_size, compression);
-  auto files_data   = decompressed.data();
-
+  auto decompressed = rtcx::decompress_blob(compressed_binary, uncompressed_size, compression);
   for (size_t i = 0; i < file_ranges.size(); ++i) {
     auto file_data_range = file_ranges[i];
-    auto file_data       = std::span{files_data + file_data_range.offset, file_data_range.size};
-    auto dst_path        = destinations[i];
-    auto target_path     = std::format("{}/{}", target_dir, dst_path);
+    auto file_data = std::span{decompressed.data() + file_data_range.offset, file_data_range.size};
+    auto dst_path  = destinations[i];
+    auto target_path = std::format("{}/{}", target_dir, dst_path);
 
     std::filesystem::create_directories(std::filesystem::path{target_path}.parent_path());
-    install_file(target_path.c_str(), file_data);
+
+    std::ofstream file(target_path, std::ios::binary);
+    if (!file) {
+      throw std::runtime_error(
+        std::format("Failed to open file for writing at path: {}", target_path));
+    }
+
+    file.write(reinterpret_cast<char const*>(file_data.data()), file_data.size());
+    if (!file) {
+      throw std::runtime_error(std::format("Failed to write file at path: {}", target_path));
+    }
   }
+}
+
+std::string read_file_string(char const* path)
+{
+  std::ifstream file(std::string{path}, std::ios::binary | std::ios::ate);
+  if (!file) { throw std::runtime_error(std::format("Failed to open file at path: {}", path)); }
+
+  auto size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  std::string contents(size, '\0');
+  if (!file.read(contents.data(), size)) {
+    throw std::runtime_error(std::format("Failed to read file at path: {}", path));
+  }
+
+  return contents;
 }
 
 void install_cudf_jit_files(std::string const& target_dir, std::string const& tmp_dir)
 {
   // directory does not exist, so create it
-  auto tmp_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
-  (void)tmp_path_str.c_str();  // ensure null-terminated string for mkdtemp
-  char* tmp_path = mkdtemp(tmp_path_str.data());
-  if (tmp_path == nullptr) {
-    throw_posix(
-      std::format("Failed to create temporary JIT install directory for ({})", target_dir),
-      "mkdtemp");
-  }
+  auto tmp_dir_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
+  char* tmp_dir_path    = ::mkdtemp(tmp_dir_path_str.data());
+  CUDF_EXPECTS(
+    tmp_dir_path != nullptr,
+    std::format("Failed to create temporary directory for JIT file installation in tmp dir: {}",
+                tmp_dir),
+    std::runtime_error);
 
-  install_file_set(tmp_path,
+  install_file_set(tmp_dir_path,
                    rtcx_embed::cudf_jit_embed_files,
                    rtcx_embed::cudf_jit_embed_files_uncompressed_size,
                    rtcx_embed::cudf_jit_embed_file_ranges,
@@ -213,15 +202,18 @@ void install_cudf_jit_files(std::string const& target_dir, std::string const& tm
                    rtcx_embed::cudf_jit_embed_files_compression);
 
   // rename the temporary directory to the target install directory
-  if (rename(tmp_path, target_dir.c_str()) == -1) {
+  if (::rename(tmp_dir_path, target_dir.c_str()) == -1) {
     auto errc = errno;
     // another process created it
     if (errc == ENOTEMPTY || errc == EEXIST) {
-      std::filesystem::remove_all(tmp_path);
+      std::filesystem::remove_all(tmp_dir_path);
     } else {
-      throw_posix(
-        std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
-        "rename");
+      CUDF_FAIL(
+        std::format("Failed to install JIT files to target directory: {} with error ({}): {}",
+                    target_dir,
+                    errc,
+                    std::strerror(errc)),
+        std::runtime_error);
     }
   }
 }
@@ -241,19 +233,13 @@ void jit_bundle_t::ensure_installed() const
   auto expected_hash = get_hash();
   auto expected_path = std::format("{}/{}", install_dir_, expected_hash);
 
-  struct stat path_info;
-
-  if (lstat(expected_path.c_str(), &path_info) == -1) {
-    if (errno != ENOENT) {
-      throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
-    } else {
-      // ensure base install directory exists
-      std::filesystem::create_directories(install_dir_);
-      install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
-    }
+  if (!std::filesystem::exists(expected_path)) {
+    // ensure base install directory exists
+    std::filesystem::create_directories(install_dir_);
+    install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
   } else {
     // directory exists, perform minor sanity check
-    CUDF_EXPECTS(S_ISDIR(path_info.st_mode),
+    CUDF_EXPECTS(std::filesystem::is_directory(expected_path),  // throws if path does not exist
                  std::format("JIT install path ({}) exists but is not a directory", expected_path),
                  std::runtime_error);
   }
@@ -333,18 +319,6 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   for (auto const& include_dir : include_dirs) {
     options.emplace_back(std::format("-I{}", include_dir));
   }
-
-  // TODO: experiment with:
-  // --fdevice-time-trace=jit_comp_trace.json
-  // --time=compile_trace.json
-  // --restrict
-  // --relocatable-device-code
-  // --extensible-whole-program
-  // --dlink-time-opt
-  // --gen-opt-lto
-  // --create-pch
-  // --use-pch
-  // --pch-dir
 
   options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
 
@@ -616,14 +590,14 @@ kernel_instance={}
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
-    auto source     = read_blob_cstring(source_file.c_str());
+    auto source     = read_file_string(source_file.c_str());
     std::vector<char const*> extra_options_cstr;
     for (auto const& option : extra_options) {
       extra_options_cstr.emplace_back(option.c_str());
     }
 
     return compile_library_uncached(name.c_str(),
-                                    reinterpret_cast<char const*>(source.data()),
+                                    source.c_str(),
                                     header_include_names,
                                     headers,
                                     extra_options_cstr,
@@ -635,14 +609,14 @@ kernel_instance={}
 
   if (!use_cache) {
     auto [lib, blob] = compile();
-    return kernel{lib, lib->get_kernel("kernel")};
+    return kernel{lib, lib->get_kernel("cudf_kernel")};
   }
 
   auto fut =
     cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
 
   auto lib = fut.get();
-  return kernel{lib, lib->get_kernel("kernel")};
+  return kernel{lib, lib->get_kernel("cudf_kernel")};
 }
 
 kernel get_linked_kernel(std::string const& name,

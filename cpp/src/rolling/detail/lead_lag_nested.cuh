@@ -75,7 +75,7 @@ is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type in
  * @param[in] row_offset Lead/Lag offset, indicating which row after/before
  *                       the current row is to be returned
  * @param[in] stream CUDA stream for device memory operations/allocations
- * @param[in] mr device_memory_resource for device memory allocations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  */
 template <typename PrecedingIter, typename FollowingIter>
 std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
@@ -133,7 +133,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   auto const input_size = input.size();
   auto const null_index = input.size();
   if (op == aggregation::LEAD) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       gather_map.begin<size_type>(),
@@ -142,7 +142,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                           return (row_offset > following[i]) ? null_index : (i + row_offset);
                         }));
   } else {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       gather_map.begin<size_type>(),

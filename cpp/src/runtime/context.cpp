@@ -8,7 +8,7 @@
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "jit/jit.hpp"
-#include "librtcx/rtcx.hpp"
+#include "rtcx.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
@@ -38,8 +38,7 @@ void context::ensure_jit_cache_initialized()
     rtcx::initialize();
 
     auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
-                                     .num_mem_libraries = _config.kernel_cache_limit_process,
-                                     .num_disk_entries  = _config.kernel_cache_limit_disk};
+                                     .num_mem_libraries = _config.kernel_cache_limit_process};
 
     _rtcx_cache = std::make_unique<rtcx::cache_t>(_config.rtcx_cache_dir,
                                                   _config.jit_tmp_dir,
@@ -88,9 +87,9 @@ static std::optional<context> _context{std::nullopt};
 static std::optional<std::once_flag> _context_init_flag{std::in_place};
 static std::optional<std::once_flag> _context_deinit_flag{std::in_place};
 
-std::filesystem::path get_cudf_root_dir()
+std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  if (auto cudf = getenv_optional<std::string>("LIBCUDF_ROOT_DIR"); cudf.has_value()) {
+  if (auto cudf = getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH"); cudf.has_value()) {
     return std::filesystem::path(*cudf);
   }
 
@@ -99,8 +98,9 @@ std::filesystem::path get_cudf_root_dir()
   }
 
   CUDF_FAIL(
-    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_ROOT_DIR`, "
-    "`HOME` or `LIBCUDF_ROOT_DIR` environment variables to allow automatic resolution of the root "
+    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_KERNEL_CACHE_PATH` or "
+    "`HOME` "
+    "environment variables to allow automatic resolution of the root "
     "directory.",
     std::runtime_error);
 }
@@ -114,19 +114,18 @@ void initialize(init_flags flags)
   std::call_once(*_context_init_flag, [&]() {
     bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
     bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
-    bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
+    bool preload_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
+    bool disable_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
     bool clear_jit_cache   = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
-    auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
-    auto jit_bundle_dir = get_cudf_root_dir() / "jit" / "bundle";
-    auto rtcx_cache_dir = get_cudf_root_dir() / "jit" / "rtcx_cache";
-    auto jit_pch_dir    = get_cudf_root_dir() / "jit" / "pch";
-    auto jit_tmp_dir    = get_cudf_root_dir() / "jit" / "tmp";
+    auto jit_bundle_dir = get_cudf_kernel_cache_dir() / "bundle";
+    auto rtcx_cache_dir = get_cudf_kernel_cache_dir() / "rtcx_cache";
+    auto jit_pch_dir    = get_cudf_kernel_cache_dir() / "pch";
+    auto jit_tmp_dir    = get_cudf_kernel_cache_dir() / "tmp";
 
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,
@@ -137,8 +136,7 @@ void initialize(init_flags flags)
                        .jit_bundle_dir             = jit_bundle_dir,
                        .jit_pch_dir                = jit_pch_dir,
                        .jit_tmp_dir                = jit_tmp_dir,
-                       .kernel_cache_limit_process = kernel_cache_limit_process,
-                       .kernel_cache_limit_disk    = kernel_cache_limit_disk};
+                       .kernel_cache_limit_process = kernel_cache_limit_process};
 
     _context.emplace(cfg, flags);
   });

@@ -16,6 +16,7 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -24,7 +25,7 @@ from cudf_polars.dsl.ir import (
     HStack,
     IRExecutionContext,
     MapFunction,
-    Projection,
+    Select,
     Slice,
     Union,
 )
@@ -66,8 +67,10 @@ def _(
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions[StreamingExecutor]
-) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -77,13 +80,14 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        Pre-computed statistics collector.
 
     Returns
     -------
-    new_ir, partition_info, stats
-        The rewritten graph, a mapping from unique nodes
-        in the new graph to associated partitioning information,
-        and the statistics collector.
+    new_ir, partition_info
+        The rewritten graph and a mapping from unique nodes
+        in the new graph to associated partitioning information.
 
     Notes
     -----
@@ -96,16 +100,15 @@ def lower_ir_graph(
     """
     state: State = {
         "config_options": config_options,
-        "stats": collect_statistics(ir, config_options),
+        "stats": stats,
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return *mapper(ir), state["stats"]
+    return mapper(ir)
 
 
 def task_graph(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
 ) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
     """
     Construct a task graph for evaluation of an IR graph.
@@ -117,25 +120,19 @@ def task_graph(
     partition_info
         A mapping from all unique IR nodes to the
         associated partitioning information.
-    config_options
-        GPUEngine configuration options.
-    context
-        Runtime context for IR node execution.
 
     Returns
     -------
     graph
-        A Dask-compatible task graph for the entire
-        IR graph with root `ir`.
+        A task graph for the entire IR graph with root `ir`,
+        in dict-of-tuples form consumed by
+        :func:`~cudf_polars.experimental.scheduler.synchronous_scheduler`.
 
     Notes
     -----
     This function traverses the unique nodes of the
     graph with root `ir`, and extracts the tasks for
     each node with :func:`generate_ir_tasks`.
-
-    The output is passed into :func:`post_process_task_graph` to
-    add any additional processing that is specific to the executor.
 
     See Also
     --------
@@ -163,65 +160,7 @@ def task_graph(
     else:
         key = (key_name, 0)
 
-    graph = post_process_task_graph(graph, key, config_options)
     return graph, key
-
-
-# The true type signature for get_scheduler() needs an overload. Not worth it.
-
-
-def get_scheduler(config_options: ConfigOptions[StreamingExecutor]) -> Any:
-    """Get appropriate task scheduler."""
-    cluster = config_options.executor.cluster
-
-    if (
-        cluster == "distributed"
-    ):  # pragma: no cover; block depends on executor type and Distributed cluster
-        from distributed import get_client
-
-        from cudf_polars.experimental.dask_registers import DaskRegisterManager
-
-        client = get_client()
-        DaskRegisterManager.register_once()
-        DaskRegisterManager.run_on_cluster(client)
-        return client.get
-    elif cluster == "single":
-        from cudf_polars.experimental.scheduler import synchronous_scheduler
-
-        return synchronous_scheduler
-    else:  # pragma: no cover
-        raise ValueError(f"{cluster} not a supported cluster option.")
-
-
-def post_process_task_graph(
-    graph: MutableMapping[Any, Any],
-    key: str | tuple[str, int],
-    config_options: ConfigOptions[StreamingExecutor],
-) -> MutableMapping[Any, Any]:
-    """
-    Post-process the task graph.
-
-    Parameters
-    ----------
-    graph
-        Task graph to post-process.
-    key
-        Output key for the graph.
-    config_options
-        GPUEngine configuration options.
-
-    Returns
-    -------
-    graph
-        A Dask-compatible task graph.
-    """
-    if config_options.executor.rapidsmpf_spill:  # pragma: no cover
-        from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
-
-        return wrap_dataframe_in_spillable(
-            graph, ignore_key=key, config_options=config_options
-        )
-    return graph
 
 
 def evaluate_rapidsmpf(
@@ -276,11 +215,14 @@ def evaluate_streaming(
         return evaluate_rapidsmpf(ir, config_options)
     else:
         # Using the default task engine.
-        ir, partition_info, _ = lower_ir_graph(ir, config_options)
+        from cudf_polars.experimental.scheduler import synchronous_scheduler
 
-        graph, key = task_graph(ir, partition_info, config_options)
+        stats = collect_statistics(ir, config_options)
+        ir, partition_info = lower_ir_graph(ir, config_options, stats)
 
-        return get_scheduler(config_options)(graph, key).to_polars()
+        graph, key = task_graph(ir, partition_info)
+
+        return synchronous_scheduler(graph, key).to_polars()
 
 
 @generate_ir_tasks.register(IR)
@@ -393,7 +335,6 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
@@ -460,13 +401,23 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(
-        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
-    ):  # pragma: no cover
-        # TODO: Avoid fallback if/when possible
-        return _lower_ir_fallback(
-            ir, rec, msg="This HStack not supported for multiple partitions."
-        )
+    if not all(e.is_pointwise for e in traversal([ne.value for ne in ir.columns])):
+        # Redirect non-pointwise HStack to Select so the Select handler can
+        # attempt decomposition (or fall back gracefully via decompose_select).
+        col_map = {ne.name: ne for ne in ir.columns}
+        has_passthrough = any(name not in col_map for name in ir.schema)
+        if has_passthrough or not ir.should_broadcast:
+            exprs = tuple(
+                col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+                for name, dtype in ir.schema.items()
+            )
+            return lower_ir_node(
+                Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
+                rec,
+            )
+        # All output columns are aggregations: no N-row passthrough to anchor
+        # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
+        return _lower_ir_fallback(ir, rec)
 
     child, partition_info = rec(ir.children[0])
     new_node = ir.reconstruct([child])

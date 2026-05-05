@@ -29,7 +29,6 @@
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <librtcx/rtcx.hpp>
 
 #include <span>
 #include <variant>
@@ -188,17 +187,18 @@ cudf::kernel instantiate(null_aware is_null_aware,
 void launch(cudf::kernel const& kernel,
             size_type row_size,
             bitmask_type const* stencil,
-            bool stencil_has_nulls,
             void* user_data,
             column_device_view_core const* input_cols,
             mutable_column_device_view_core const* output_cols,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
+  void* args[]    = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
   auto kernel_ref = kernel.get();
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
-  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
+  CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
+               "Expected block size to be a multiple of warp size",
+               std::runtime_error);
   kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
@@ -327,7 +327,7 @@ auto to_args(std::span<input_column_view const> inputs,
       out);
   }
 
-  auto d_args = detail::make_device_uvector_async(h_args, stream, mr);
+  auto d_args = detail::make_device_uvector(h_args, stream, mr);
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
@@ -336,7 +336,6 @@ void run(null_aware is_null_aware,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
-         bool stencil_has_nulls,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
@@ -358,8 +357,7 @@ void run(null_aware is_null_aware,
   auto* input_cols = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  return launch(
-    kernel, row_size, d_stencil, stencil_has_nulls, user_data, input_cols, output_cols, stream);
+  return launch(kernel, row_size, d_stencil, user_data, input_cols, output_cols, stream);
 }
 
 }  // namespace jit_transform
@@ -837,8 +835,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
   jit_transform::run(is_null_aware,
                      user_data.has_value(),
                      row_size,
-                     stencil_arg,
-                     stencil_has_nulls,
+                     stencil_has_nulls ? stencil_arg : nullptr,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,

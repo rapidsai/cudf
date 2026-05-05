@@ -17,14 +17,13 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
     make_spill_function,
 )
 
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
-
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 
 def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
@@ -37,24 +36,27 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 
 @pytest.mark.parametrize(
-    "engine,spilled_host_mem_type",
+    "pinned_memory,spilled_host_mem_type",
     [
         pytest.param(
-            {"rapidsmpf_options": {"pinned_memory": "true"}},
+            True,
             MemoryType.PINNED_HOST,
             marks=pytest.mark.skipif(
                 not is_pinned_memory_resources_supported(),
                 reason="Pinned memory requires CUDA 12.6+ driver and runtime",
             ),
         ),
-        ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
+        (False, MemoryType.HOST),
     ],
-    indirect=["engine"],
 )
 def test_make_spill_function(
-    engine: SPMDEngine, spilled_host_mem_type: MemoryType
+    streaming_engine_factory,
+    *,
+    pinned_memory: bool,
+    spilled_host_mem_type: MemoryType,
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
+    engine = streaming_engine_factory(StreamingOptions(pinned_memory=pinned_memory))
     context = engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
@@ -68,7 +70,7 @@ def test_make_spill_function(
     # Buffer 0: Fast consumer (2 messages)
     # Buffer 1: Slow consumer (5 messages) <- should spill from here first
     # Buffer 2: Medium consumer (3 messages)
-    buffers = [SpillableMessages() for _ in range(3)]
+    buffers = [SpillableMessages(context.br()) for _ in range(3)]
     messages_per_buffer = [2, 5, 3]
 
     # Track message IDs for each buffer

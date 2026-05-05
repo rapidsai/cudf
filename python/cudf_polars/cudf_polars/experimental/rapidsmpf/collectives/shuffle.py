@@ -29,7 +29,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    NormalizedPartitioning,
+    _is_already_partitioned,
     recv_metadata,
     send_metadata,
 )
@@ -67,6 +67,55 @@ class ShuffleManager:
         partition IDs and concatenation order matches global order.
     """
 
+    class Inserter:
+        """
+        Context manager for the insert phase of a shuffle operation.
+
+        Obtained via :meth:`ShuffleManager.inserting`. On exit, signals
+        the end of insertion to all ranks by calling ``insert_finished()``.
+
+        Parameters
+        ----------
+        manager: ShuffleManager
+            The shuffle manager to insert into.
+        """
+
+        def __init__(self, manager: ShuffleManager):
+            self._manager = manager
+
+        def insert_hash(
+            self, chunk: TableChunk, columns_to_hash: tuple[int, ...]
+        ) -> None:
+            """Partition chunk by hash and insert into the shuffler."""
+            self._manager.shuffler.insert(
+                py_partition_and_pack(
+                    table=chunk.table_view(),
+                    columns_to_hash=columns_to_hash,
+                    num_partitions=self._manager.num_partitions,
+                    stream=chunk.stream,
+                    br=self._manager.context.br(),
+                )
+            )
+
+        def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
+            """Split chunk at the given indices and insert into the shuffler."""
+            self._manager.shuffler.insert(
+                py_split_and_pack(
+                    table=chunk.table_view(),
+                    splits=splits,
+                    stream=chunk.stream,
+                    br=self._manager.context.br(),
+                )
+            )
+
+        async def __aenter__(self) -> ShuffleManager.Inserter:
+            """Enter the context manager."""
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            """Exit the context manager, calling ``insert_finished()``."""
+            await self._manager.shuffler.insert_finished(self._manager.context)
+
     def __init__(
         self,
         context: Context,
@@ -86,36 +135,13 @@ class ShuffleManager:
             partition_assignment=partition_assignment,
         )
 
+    def inserting(self) -> ShuffleManager.Inserter:
+        """Return a context manager for the insert phase."""
+        return ShuffleManager.Inserter(self)
+
     def local_partitions(self) -> list[int]:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
-
-    def insert_hash(self, chunk: TableChunk, columns_to_hash: tuple[int, ...]) -> None:
-        """Partition chunk by hash and insert into the shuffler."""
-        self.shuffler.insert(
-            py_partition_and_pack(
-                table=chunk.table_view(),
-                columns_to_hash=columns_to_hash,
-                num_partitions=self.num_partitions,
-                stream=chunk.stream,
-                br=self.context.br(),
-            )
-        )
-
-    def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
-        """Split chunk at the given indices and insert into the shuffler."""
-        self.shuffler.insert(
-            py_split_and_pack(
-                table=chunk.table_view(),
-                splits=splits,
-                stream=chunk.stream,
-                br=self.context.br(),
-            )
-        )
-
-    async def insert_finished(self) -> None:
-        """Insert finished into the ShuffleManager."""
-        await self.shuffler.insert_finished(self.context)
 
     def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
@@ -143,28 +169,6 @@ class ShuffleManager:
             stream=stream,
             br=self.context.br(),
         )
-
-
-def _is_already_partitioned(
-    metadata: ChannelMetadata,
-    columns_to_hash: tuple[int, ...],
-    num_partitions: int,
-    nranks: int,
-) -> bool:
-    """Check if data is already partitioned on the required keys."""
-    partitioning = NormalizedPartitioning.from_indices(
-        metadata.partitioning,
-        nranks,
-        indices=columns_to_hash,
-        allow_subset=False,
-    )
-    partitioning_desired = NormalizedPartitioning(
-        inter_rank_modulus=num_partitions,
-        inter_rank_indices=columns_to_hash,
-        local_modulus=None,
-        local_indices=(),
-    )
-    return bool(partitioning and partitioning == partitioning_desired)
 
 
 async def _global_shuffle(
@@ -222,22 +226,20 @@ async def _global_shuffle(
     )
     await send_metadata(ch_out, context, output_metadata)
 
-    # Create ShuffleManager instance
-    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
     # When input is duplicated, only rank 0 should contribute data.
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    while (msg := await ch_in.recv(context)) is not None:
-        if not skip_insert:
-            shuffle.insert_hash(
-                TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                ),
-                columns_to_hash,
-            )
-
-    await shuffle.insert_finished()
+    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
+    async with shuffle.inserting() as inserter:
+        while (msg := await ch_in.recv(context)) is not None:
+            if not skip_insert:
+                inserter.insert_hash(
+                    TableChunk.from_message(
+                        msg, br=context.br()
+                    ).make_available_and_spill(context.br(), allow_overbooking=True),
+                    columns_to_hash,
+                )
 
     for partition_id in shuffle.shuffler.local_partitions():
         stream = ir_context.get_cuda_stream()

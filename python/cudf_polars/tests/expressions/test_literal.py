@@ -40,12 +40,12 @@ def float(request):
     return pl.lit(1.0, dtype=request.param)
 
 
-def test_numeric_literal(integer, float):
+def test_numeric_literal(engine: pl.GPUEngine, integer, float):
     df = pl.LazyFrame({})
 
     q = df.select(integer=integer, float_=float, sum_=integer + float)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.fixture(
@@ -60,7 +60,7 @@ def timedelta(request):
     return pl.lit(9_000, dtype=request.param)
 
 
-def test_timelike_literal(timestamp, timedelta):
+def test_timelike_literal(engine: pl.GPUEngine, timestamp, timedelta):
     df = pl.LazyFrame({})
 
     q = df.select(
@@ -81,12 +81,12 @@ def test_timelike_literal(timestamp, timedelta):
         schema["delta"],
         plc.binaryop.BinaryOperator.ADD,
     ):
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_select_literal_series():
+def test_select_literal_series(engine: pl.GPUEngine):
     df = pl.LazyFrame({})
 
     q = df.select(
@@ -95,7 +95,7 @@ def test_select_literal_series():
         c=pl.Series([[[1]], [], [[1, 2, 3, 4]]], dtype=pl.List(pl.List(pl.Float32()))),
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

@@ -10,7 +10,6 @@
 
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
-#include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
@@ -118,9 +117,7 @@ struct floating_converter {
   CUDF_HOST_DEVICE inline static IntegralType bit_cast_to_integer(FloatingType floating)
   {
     // Convert floating to integer
-    IntegralType integer_rep;
-    cuda::std::memcpy(&integer_rep, &floating, sizeof(floating));
-    return integer_rep;
+    return cuda::std::bit_cast<IntegralType>(floating);
   }
 
   /**
@@ -132,9 +129,7 @@ struct floating_converter {
   CUDF_HOST_DEVICE inline static FloatingType bit_cast_to_floating(IntegralType integer)
   {
     // Convert back to float
-    FloatingType floating;
-    cuda::std::memcpy(&floating, &integer, sizeof(floating));
-    return floating;
+    return cuda::std::bit_cast<FloatingType>(integer);
   }
 
   /**

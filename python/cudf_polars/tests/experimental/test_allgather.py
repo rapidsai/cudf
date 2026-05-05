@@ -30,14 +30,14 @@ async def _test_allgather(engine) -> None:
 
     # Insert tables into AllGatherManager
     allgather = AllGatherManager(context, comm, 0)
-    for i, table in enumerate(tables):
-        allgather.insert(
-            i,
-            TableChunk.from_pylibcudf_table(
-                table, stream, exclusive_view=True, br=context.br()
-            ),
-        )
-    allgather.insert_finished()
+    with allgather.inserting() as inserter:
+        for i, table in enumerate(tables):
+            inserter.insert(
+                i,
+                TableChunk.from_pylibcudf_table(
+                    table, stream, exclusive_view=True, br=context.br()
+                ),
+            )
 
     # Extract concatenated result
     result = await allgather.extract_concatenated(stream, ordered=True)
@@ -52,8 +52,8 @@ async def _test_allgather(engine) -> None:
     assert col.type().id().value == plc.types.TypeId.INT32.value
 
 
-def test_allgather(engine) -> None:
-    asyncio.run(_test_allgather(engine))
+def test_allgather(spmd_engine) -> None:
+    asyncio.run(_test_allgather(spmd_engine))
 
 
 async def _test_allgather_reduce(engine) -> None:
@@ -70,5 +70,5 @@ async def _test_allgather_reduce(engine) -> None:
     assert results == (10, 20, 30)  # Single rank, so sums are just the local values
 
 
-def test_allgather_reduce(engine) -> None:
-    asyncio.run(_test_allgather_reduce(engine))
+def test_allgather_reduce(spmd_engine) -> None:
+    asyncio.run(_test_allgather_reduce(spmd_engine))

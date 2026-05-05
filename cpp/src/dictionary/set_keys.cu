@@ -90,8 +90,11 @@ struct set_keys_dispatch_fn {
     auto indices_map = rmm::device_uvector<size_type>(old_keys.size(), stream);
     create_indices_map_fn<T, decltype(keys_itr)> map_fn{
       *d_old_keys, keys_itr, keys_itr + new_keys.size(), d_sorted_indices};
-    thrust::transform(
-      rmm::exec_policy_nosync(stream), iota, iota + old_keys.size(), indices_map.begin(), map_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      iota,
+                      iota + old_keys.size(),
+                      indices_map.begin(),
+                      map_fn);
 
     // map the old indices to the new set
     auto indices_column = cudf::make_numeric_column(
@@ -100,8 +103,11 @@ struct set_keys_dispatch_fn {
       cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
     auto d_input = cudf::column_device_view::create(input.parent(), stream);
     apply_indices_map_fn apply_fn{*d_input, indices_map.data()};
-    thrust::transform(
-      rmm::exec_policy_nosync(stream), iota, iota + input.size(), d_new_indices, apply_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      iota,
+                      iota + input.size(),
+                      d_new_indices,
+                      apply_fn);
 
     // compute the nulls (any indices < 0)
     auto d_indices = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());

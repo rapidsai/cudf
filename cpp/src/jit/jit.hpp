@@ -8,7 +8,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <librtcx/rtcx.hpp>
+#include <rtcx.hpp>
 
 namespace CUDF_EXPORT cudf {
 
@@ -66,7 +66,7 @@ struct [[nodiscard]] kernel {
                    rmm::cuda_stream_view stream,
                    Args&&... args)
   {
-    void const* params[] = {&args...};
+    void const* params[] = {&args...};  // NOLINT(modernize-avoid-c-arrays)
     launch(grid_dim, block_dim, shared_mem_bytes, stream, const_cast<void**>(params));
   }
 };

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
-"""Rolling DSL nodes."""
+"""Rolling and Window DSL nodes."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import ClosedInterval, Duration
 
-__all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
+__all__ = ["GroupedWindow", "RollingWindow", "to_request"]
 
 
 @dataclass(frozen=True)
@@ -206,7 +206,7 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
         return Column(result, dtype=self.dtype)
 
 
-class GroupedRollingWindow(Expr):
+class GroupedWindow(Expr):
     """
     Compute a window ``.over(...)`` aggregation and broadcast to rows.
 
@@ -845,7 +845,7 @@ class GroupedRollingWindow(Expr):
                     rank_by_cols_for_scan = self._gather_columns(
                         by_cols, order_index, stream=df.stream
                     )
-                    local = GroupedRollingWindow._sorted_grouper(rank_by_cols_for_scan)
+                    local = GroupedWindow._sorted_grouper(rank_by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],

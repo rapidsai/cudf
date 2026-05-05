@@ -190,7 +190,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     // build strings into gather input form
     auto d_indices =
       rmm::device_uvector<cudf::strings::detail::string_index_pair>(size, stream, mr);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<cudf::size_type>{offset},
                       cuda::counting_iterator<cudf::size_type>{offset + size},
                       d_indices.begin(),

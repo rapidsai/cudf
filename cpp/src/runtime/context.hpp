@@ -12,16 +12,12 @@
 #include <mutex>
 
 namespace rtcx {
-class cache_t;
+struct cache_t;
 }  // namespace rtcx
 
 namespace cudf {
 
-namespace jit {
-class program_cache;
-}
-
-class jit_bundle_t;
+struct jit_bundle_t;
 
 struct [[nodiscard]] context_config {
   bool dump_codegen      : 1          = false;
@@ -34,7 +30,6 @@ struct [[nodiscard]] context_config {
   std::string jit_pch_dir             = {};
   std::string jit_tmp_dir             = {};
   uint32_t kernel_cache_limit_process = 0;
-  uint32_t kernel_cache_limit_disk    = 0;
 };
 
 /// @brief The context object contains global state internal to CUDF.

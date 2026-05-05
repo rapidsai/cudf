@@ -5,13 +5,19 @@ from __future__ import annotations
 
 import contextlib
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+import pylibcudf as plc
+
+from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.ir import HStack, Projection, Select
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -21,25 +27,12 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_134,
 )
 
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-
 
 @pytest.fixture
-def engine(
-    request: pytest.FixtureRequest,
-) -> Generator[StreamingEngine, None, None]:
-    params: dict[str, Any] = getattr(request, "param", {})
-    executor_options = {
-        "max_rows_per_partition": 3,
-        "fallback_mode": "warn",
-        "dynamic_planning": {},
-        **params.get("executor_options", {}),
-    }
-    with SPMDEngine(executor_options=executor_options) as engine:
-        yield engine
+def engine(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -60,17 +53,11 @@ def test_select(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "fallback_mode,engine",
-    [
-        ("silent", {"executor_options": {"fallback_mode": "silent"}}),
-        ("raise", {"executor_options": {"fallback_mode": "raise"}}),
-        ("warn", {"executor_options": {"fallback_mode": "warn"}}),
-        ("foo", {"executor_options": {"fallback_mode": "foo"}}),
-    ],
-    indirect=["engine"],
-)
-def test_select_reduce_fallback(df, fallback_mode, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode=fallback_mode),
+    )
     match = "This selection is not supported for multiple partitions."
 
     query = df.select(
@@ -148,6 +135,7 @@ def test_select_aggs(df, engine, aggs):
         (pl.col("a").drop_nulls().min(),),
         (pl.col("a").drop_nulls().max(),),
         (pl.col("a").drop_nulls().mean(),),
+        (pl.col("a").null_count(),),
     ],
 )
 def test_select_drop_nulls_aggs(engine, aggs):
@@ -206,6 +194,68 @@ def test_select_with_len(engine):
         UserWarning, match="Cross join not support for multiple partitions"
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_sub_expr_replaces_col():
+    dt = DataType(pl.Int64())
+    b = expr.Col(dt, "b")
+    assert _sub_expr(expr.Col(dt, "a"), {"a": b}) is b
+
+
+def test_sub_expr_reconstructs_when_nested_col_substituted():
+    dt = DataType(pl.Int8())
+    a = expr.Col(dt, "a")
+    b = expr.Col(dt, "b")
+    c = expr.Col(dt, "c")
+    add = expr.BinOp(dt, plc.binaryop.BinaryOperator.ADD, a, c)
+    out = _sub_expr(add, {"a": b})
+    assert out.children[0] is b
+    assert out.children[1] is c
+
+
+def test_inline_hstack_false_noop_scan():
+    ir = Translator(
+        pl.LazyFrame({"a": [1]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    assert _inline_hstack_false(ir) is ir
+
+
+def test_inline_hstack_false_inlines_hstack_false_chain():
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    dt = base.schema["a"]
+    inner = HStack(
+        {**base.schema, "s": dt},
+        (expr.NamedExpr("s", expr.Col(dt, "a")),),
+        should_broadcast=False,
+        df=base,
+    )
+    ir = Select(
+        {"t": dt},
+        (expr.NamedExpr("t", expr.Col(dt, "s")),),
+        should_broadcast=True,
+        df=inner,
+    )
+    out = _inline_hstack_false(ir)
+    assert out.children[0] is base
+    assert isinstance(out.exprs[0].value, expr.Col)
+    assert out.exprs[0].value.name == "a"
+
+
+def test_inline_hstack_false_non_select_hstack_parent_unchanged():
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    dt = base.schema["a"]
+    inner = HStack(
+        {**base.schema, "s": dt},
+        (expr.NamedExpr("s", expr.Col(dt, "a")),),
+        should_broadcast=False,
+        df=base,
+    )
+    proj = Projection(inner.schema, inner)
+    assert _inline_hstack_false(proj) is proj
 
 
 def test_select_with_mixed_fusable_non_fusable_exprs(df, engine):
