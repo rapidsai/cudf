@@ -1088,88 +1088,52 @@ target_link_libraries(
           ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
 )
 
-# Public deps with conditional WHOLE_ARCHIVE for shared builds. --whole-archive ensures all symbols
-# from static rmm/rapids_logger are exported from shared libcudf. WHOLE_ARCHIVE is only applied when
-# the dep is actually a static library to avoid CMake warnings for shared library targets.
-#
-# When building a shared libcudf with static deps that are absorbed via whole-archive, the deps
-# should not appear in the installed interface -- consumers link only to libcudf.so. However, if we
-# found a pre-existing shared library (e.g. in conda), it is NOT absorbed and must remain in the
-# installed interface so consumers can link it at runtime.
-set(_rmm_link rmm::rmm)
-set(_rapids_logger_link rapids_logger::rapids_logger)
+# When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
+# their symbols are available to downstream users linking to libcudf.so without needing to link
+# against them directly. In this scenario, its public transitive dependencies must be promoted into
+# cudf's installed interface (consumers still need them at link time), and its export set metadata
+# (find_dependency calls, global targets) is merged into cudf-exports.
+set(_absorbed_deps rmm rapids_logger)
+foreach(_dep IN LISTS _absorbed_deps)
+  set(_${_dep}_link ${_dep}::${_dep})
+endforeach()
 if(BUILD_SHARED_LIBS)
-  get_target_property(_rmm_type rmm::rmm TYPE)
-  get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
-  if(_rmm_type STREQUAL "STATIC_LIBRARY")
-    set(_rmm_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,rmm::rmm>>)
-  endif()
-  if(_rapids_logger_type STREQUAL "STATIC_LIBRARY")
-    set(_rapids_logger_link
-        $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,rapids_logger::rapids_logger>>
-    )
-  endif()
-endif()
+  foreach(_dep IN LISTS _absorbed_deps)
+    get_target_property(_target_type ${_dep}::${_dep} TYPE)
+    if(NOT _target_type STREQUAL "STATIC_LIBRARY")
+      continue()
+    endif()
 
-# When a static library is absorbed into shared libcudf via whole-archive, its own public transitive
-# dependencies must be promoted into cudf's installed interface. The absorbed library itself is
-# hidden (BUILD_INTERFACE), but consumers still need its deps at link time. For example, rmm's
-# public deps include CUDA::cudart, nvtx3, etc. We also merge the absorbed library's export set
-# metadata (find_dependency calls, global targets) into cudf-exports so the installed config can
-# locate those transitive deps.
-foreach(_absorbed_target rmm::rmm rapids_logger::rapids_logger)
-  get_target_property(_target_type ${_absorbed_target} TYPE)
-  if(BUILD_SHARED_LIBS AND _target_type STREQUAL "STATIC_LIBRARY")
-    get_target_property(_iface_libs ${_absorbed_target} INTERFACE_LINK_LIBRARIES)
+    # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
+    # hidden from the installed interface.
+    set(_${_dep}_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
+
+    # Promote the absorbed library's public transitive deps into cudf's public interface.
+    get_target_property(_iface_libs ${_dep}::${_dep} INTERFACE_LINK_LIBRARIES)
     if(_iface_libs)
       target_link_libraries(cudf PUBLIC ${_iface_libs})
     endif()
-  endif()
-endforeach()
 
-# Merge absorbed libraries' export sets into cudf-exports so installed config has find_dependency()
-# calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm-exports).
-if(BUILD_SHARED_LIBS)
-  foreach(_src_export_set rmm-exports rapids_logger-exports)
-    foreach(_mode build install)
-      set(_src_target rapids_export_${_mode}_${_src_export_set})
-      set(_dst_target rapids_export_${_mode}_cudf-exports)
-      if(TARGET ${_src_target} AND TARGET ${_dst_target})
-        get_property(
-          _pkg_names
-          TARGET ${_src_target}
-          PROPERTY "PACKAGE_NAMES"
-        )
-        foreach(_pkg IN LISTS _pkg_names)
-          # Copy the per-package cmake file into cudf-exports directory
-          set(_src_file
-              "${CMAKE_BINARY_DIR}/rapids-cmake/${_src_export_set}/${_mode}/package_${_pkg}.cmake"
-          )
-          set(_dst_file
-              "${CMAKE_BINARY_DIR}/rapids-cmake/cudf-exports/${_mode}/package_${_pkg}.cmake"
-          )
-          if(EXISTS "${_src_file}" AND NOT EXISTS "${_dst_file}")
-            configure_file("${_src_file}" "${_dst_file}" COPYONLY)
-          endif()
-          set_property(
-            TARGET ${_dst_target}
-            APPEND
-            PROPERTY "PACKAGE_NAMES" "${_pkg}"
-          )
-        endforeach()
-        get_property(
-          _global_tgts
-          TARGET ${_src_target}
-          PROPERTY "GLOBAL_TARGETS"
-        )
-        if(_global_tgts)
-          set_property(
-            TARGET ${_dst_target}
-            APPEND
-            PROPERTY "GLOBAL_TARGETS" ${_global_tgts}
-          )
-        endif()
+    # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
+    # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
+    foreach(_mode BUILD INSTALL)
+      set(_src_target rapids_export_${_mode}_${_dep}-exports)
+      if(NOT TARGET ${_src_target})
+        continue()
       endif()
+      get_property(
+        _pkg_names
+        TARGET ${_src_target}
+        PROPERTY "PACKAGE_NAMES"
+      )
+      get_property(
+        _global_tgts
+        TARGET ${_src_target}
+        PROPERTY "GLOBAL_TARGETS"
+      )
+      foreach(_pkg IN LISTS _pkg_names)
+        rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
+      endforeach()
     endforeach()
   endforeach()
 endif()
