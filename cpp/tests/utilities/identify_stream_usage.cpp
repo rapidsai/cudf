@@ -167,6 +167,16 @@ void sanitizer_subscriber::check_stream_arg(const Sanitizer_CallbackData* cbdata
   check_stream_and_error(args->*Field);
 }
 
+// `generated_cuda_runtime_api_meta.h` is provided by the CUDA Toolkit/Compute Sanitizer.
+// It defines versioned callback parameter structs named like
+// `cudaMemcpyAsync_v3020_params`, where the numeric suffix identifies the CUDA runtime
+// API version associated with that parameter layout.
+#define CHECK_STREAM_ARG(call, version, field)                \
+  case SANITIZER_CBID_RUNTIME_API_##call: {                   \
+    using args_t = call##_v##version##_params;                \
+    check_stream_arg<args_t, &args_t::field>(runtime_cbdata); \
+  } break
+
 void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
                                     Sanitizer_CallbackId cbid,
                                     const void* cbdata)
@@ -177,16 +187,6 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
 
       if (runtime_cbdata->callbackSite == SANITIZER_API_ENTER) {
         switch (cbid) {
-          // `generated_cuda_runtime_api_meta.h` is provided by the CUDA Toolkit/Compute Sanitizer.
-          // It defines versioned callback parameter structs named like
-          // `cudaMemcpyAsync_v3020_params`, where the numeric suffix identifies the CUDA runtime
-          // API version associated with that parameter layout.
-#define CHECK_STREAM_ARG(call, version, field)                \
-  case SANITIZER_CBID_RUNTIME_API_##call: {                   \
-    using args_t = call##_v##version##_params;                \
-    check_stream_arg<args_t, &args_t::field>(runtime_cbdata); \
-  } break
-
           CHECK_STREAM_ARG(cudaEventRecord, 3020, stream);
           CHECK_STREAM_ARG(cudaEventRecord_ptsz, 7000, stream);
           CHECK_STREAM_ARG(cudaEventRecordWithFlags, 11010, stream);
@@ -234,13 +234,13 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
           CHECK_STREAM_ARG(cudaMallocAsync_ptsz, 11020, hStream);
           CHECK_STREAM_ARG(cudaMallocFromPoolAsync, 11020, stream);
           CHECK_STREAM_ARG(cudaMallocFromPoolAsync_ptsz, 11020, stream);
-
-#undef CHECK_STREAM_ARG
         }
       }
     } break;
     default: break;
   }
 }
+
+#undef CHECK_STREAM_ARG
 
 sanitizer_subscriber subscriber;
