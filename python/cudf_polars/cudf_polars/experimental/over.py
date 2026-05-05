@@ -22,9 +22,11 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-# Aggregation names that can be decomposed across partitions (see groupby.decompose)
+# Aggregation names that can be decomposed across partitions (see groupby.decompose).
+# n_unique is excluded: its decomposition requires a pre-shuffle (need_preshuffle=True),
+# which the scalar AllGather path does not perform — use the non-scalar shuffle path instead.
 _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
-    ("sum", "count", "mean", "min", "max", "n_unique")
+    ("sum", "count", "mean", "min", "max", "std", "var")
 )
 
 
@@ -71,7 +73,12 @@ def _build_over_groupby_irs(
     decompositions = [
         decompose(ne.name, ne.value, names=name_gen) for ne in all_scalar_named
     ]
-    selection_exprs, piecewise_exprs, reduction_exprs, _ = combine(*decompositions)
+    selection_exprs, piecewise_exprs, reduction_exprs, need_preshuffle = combine(
+        *decompositions
+    )
+    assert not need_preshuffle, (
+        "Scalar AllGather path does not support aggregations requiring pre-shuffle"
+    )
 
     pwise_schema = dict(key_schema) | {
         ne.name: ne.value.dtype for ne in piecewise_exprs
@@ -143,6 +150,7 @@ class Over(IR):
         exprs: tuple[NamedExpr, ...],
         input_ir: IR,
     ):
+        assert len(key_indices) > 0, "Over node requires at least one partition-by key"
         self.schema = schema
         self.key_indices = key_indices
         self.is_scalar = is_scalar
@@ -296,9 +304,14 @@ def _decompose_grouped_window_node(
     ``_fuse_over_nodes`` in ``select.py``.
     """
     indices = _extract_over_shuffle_indices(expr, input_ir.schema)
-    if not indices:
+    if indices is None:
         raise NotImplementedError(
-            "GroupedWindow with non-Col or empty partition-by keys "
+            "GroupedWindow with non-Col partition-by keys "
+            "is not supported for multiple partitions."
+        )
+    if len(indices) == 0:
+        raise NotImplementedError(
+            "GroupedWindow with empty partition-by keys "
             "is not supported for multiple partitions."
         )
     is_scalar = _is_scalar_grouped_window(expr)
