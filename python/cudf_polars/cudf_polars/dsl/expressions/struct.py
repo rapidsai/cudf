@@ -16,6 +16,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
     from typing import Self
@@ -109,6 +110,14 @@ class StructFunction(Expr):
         elif self.name == StructFunction.Name.JsonEncode:
             # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
             # we can use do this conversion on host.
+            if column.size == 0:
+                # write_json emits no lines for an empty input, which makes
+                # from_iterable_of_py unable to infer a dtype. Skip the
+                # round-trip and return a typed empty column.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             buff = StringIO()
             target = plc.io.SinkInfo([buff])
             table = plc.Table(column.obj.children())
