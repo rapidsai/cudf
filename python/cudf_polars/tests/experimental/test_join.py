@@ -14,6 +14,7 @@ from cudf_polars.dsl.ir import Cache, Join
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.join import _use_pwise_join
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import collect_statistics
@@ -45,27 +46,25 @@ def right():
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full"])
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 2}},
+        StreamingOptions(max_rows_per_partition=3, broadcast_join_limit=2),
+        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=2),
     ],
-    indirect=True,
 )
-def test_dynamic_join_how(left, right, streaming_engine, how):
+def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
     """Dynamic join path: all join types including Right and Full."""
+    streaming_engine = streaming_engine_factory(options)
     q = left.join(right, on="y", how=how)
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("how", ["right", "full"])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}}],
-    indirect=True,
-)
-def test_dynamic_join_right_full_reverse(left, right, streaming_engine, how):
+def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, broadcast_join_limit=2),
+    )
     # Reverse so "right" frame is larger; exercises right-side preservation
     q = right.join(left, on="y", how=how)
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
@@ -76,12 +75,10 @@ def test_dynamic_join_right_full_reverse(left, right, streaming_engine, how):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"max_rows_per_partition": 2, "broadcast_join_limit": 1}}],
-    indirect=True,
-)
-def test_join_then_shuffle(left, right, streaming_engine):
+def test_join_then_shuffle(left, right, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, broadcast_join_limit=1),
+    )
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
         pl.col("xx").mean(),
@@ -92,33 +89,15 @@ def test_join_then_shuffle(left, right, streaming_engine):
 
 
 @pytest.mark.parametrize("reverse", [True, False])
-@pytest.mark.parametrize(
-    "max_rows_per_partition,streaming_engine",
-    [
-        (
-            3,
-            {
-                "executor_options": {
-                    "max_rows_per_partition": 3,
-                    "fallback_mode": "warn",
-                    "dynamic_planning": None,
-                }
-            },
+@pytest.mark.parametrize("max_rows_per_partition", [3, 9])
+def test_join_conditional(reverse, max_rows_per_partition, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=max_rows_per_partition,
+            fallback_mode="warn",
+            dynamic_planning=None,
         ),
-        (
-            9,
-            {
-                "executor_options": {
-                    "max_rows_per_partition": 9,
-                    "fallback_mode": "warn",
-                    "dynamic_planning": None,
-                }
-            },
-        ),
-    ],
-    indirect=["streaming_engine"],
-)
-def test_join_conditional(reverse, max_rows_per_partition, streaming_engine):
+    )
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
     right = pl.LazyFrame({"xx": range(9), "yy": [2, 4, 3] * 3})
     if reverse:
@@ -141,35 +120,20 @@ def test_join_conditional(reverse, max_rows_per_partition, streaming_engine):
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 1}},
-        {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 16}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 1}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 16}},
-        {"executor_options": {"max_rows_per_partition": 10, "broadcast_join_limit": 1}},
-        {
-            "executor_options": {
-                "max_rows_per_partition": 10,
-                "broadcast_join_limit": 16,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 15,
-                "broadcast_join_limit": 1,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 15,
-                "broadcast_join_limit": 16,
-            }
-        },
+        StreamingOptions(max_rows_per_partition=1, broadcast_join_limit=1),
+        StreamingOptions(max_rows_per_partition=1, broadcast_join_limit=16),
+        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=1),
+        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=16),
+        StreamingOptions(max_rows_per_partition=10, broadcast_join_limit=1),
+        StreamingOptions(max_rows_per_partition=10, broadcast_join_limit=16),
+        StreamingOptions(max_rows_per_partition=15, broadcast_join_limit=1),
+        StreamingOptions(max_rows_per_partition=15, broadcast_join_limit=16),
     ],
-    indirect=True,
 )
-def test_join(left, right, how, reverse, streaming_engine):
+def test_join(left, right, how, reverse, streaming_engine_factory, options):
+    streaming_engine = streaming_engine_factory(options)
     if reverse:
         left, right = right, left
 
@@ -192,20 +156,14 @@ def test_join(left, right, how, reverse, streaming_engine):
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 3,
-                "broadcast_join_limit": 100,
-                "fallback_mode": "warn",
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_join_and_slice(zlice, streaming_engine):
+def test_join_and_slice(zlice, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            broadcast_join_limit=100,
+            fallback_mode="warn",
+        ),
+    )
     left = pl.LazyFrame(
         {
             "a": [1, 2, 3, 1, None],
@@ -244,20 +202,14 @@ def test_join_and_slice(zlice, streaming_engine):
 
 
 @pytest.mark.parametrize("how", ["inner", "semi", "left", "right"])
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 2,
-                "broadcast_join_limit": 1,
-                "target_partition_size": 10,
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_bloom_filter_join(how, streaming_engine):
+def test_bloom_filter_join(how, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            broadcast_join_limit=1,
+            target_partition_size=10,
+        ),
+    )
     dim = pl.LazyFrame({"key": range(10), "val": range(10)})
     fact = pl.LazyFrame({"key": range(200), "data": range(200)})
     left, right = (dim, fact) if how == "right" else (fact, dim)
@@ -268,22 +220,16 @@ def test_bloom_filter_join(how, streaming_engine):
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 3,
-                "broadcast_join_limit": 1,
-                "fallback_mode": "warn",
-            }
-        }
-    ],
-    indirect=True,
-)
 def test_join_maintain_order_fallback_streaming(
-    left, right, maintain_order, streaming_engine
+    left, right, maintain_order, streaming_engine_factory
 ):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            broadcast_join_limit=1,
+            fallback_mode="warn",
+        ),
+    )
     q = left.join(right, on="y", how="inner", maintain_order=maintain_order)
 
     with pytest.warns(

@@ -1223,6 +1223,67 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), type_id::STRING);
 }
 
+TEST_F(CsvReaderTest, DelimWhitespaceNoHeaderLeadingTrailingDelimiter)
+{
+  std::string buffer = "  1   2  \n  3   4  \n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+// Exercises whitespace-shape variations (no padding, leading-only, trailing-only,
+// internal-runs-only, leading+trailing+internal, and quoted header names with and
+// without surrounding whitespace) that should all yield the same `(col_a, col_b)`
+// schema and `[(1,2),(3,4)]` data under `delim_whitespace=true` (pandas parity).
+class CsvDelimWhitespaceShapeTest : public CsvReaderTest,
+                                    public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(CsvDelimWhitespaceShapeTest, ProducesTwoColumns)
+{
+  auto const buffer = GetParam();
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(0);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col_a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col_b");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+INSTANTIATE_TEST_SUITE_P(CsvReaderTest,
+                         CsvDelimWhitespaceShapeTest,
+                         ::testing::Values(std::string{"col_a col_b\n1 2\n3 4\n"},
+                                           std::string{"  col_a col_b\n  1 2\n  3 4\n"},
+                                           std::string{"col_a col_b  \n1 2  \n3 4  \n"},
+                                           std::string{"col_a   col_b\n1   2\n3   4\n"},
+                                           std::string{"  col_a   col_b  \n  1   2  \n  3   4  \n"},
+                                           std::string{"\"col_a\" \"col_b\"\n1 2\n3 4\n"},
+                                           std::string{"  \"col_a\"   \"col_b\"  \n1 2\n3 4\n"}));
+
 TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
 {
   std::string const buffer = "1,,3\n4,,6\n";
