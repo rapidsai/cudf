@@ -11,14 +11,14 @@ __device__ inline bool strcontains(cudf::string_view text, cudf::string_view tok
 }
 
 template <typename T>
-__device__ inline T load(void const* inputs, int input_stride, int arg)
+__device__ T load(void const* inputs, int input_stride, int arg)
 {
   auto p = reinterpret_cast<T const*>(static_cast<char const*>(inputs) + arg * input_stride);
   return *p;
 }
 
 template <typename T>
-__device__ inline void store(void* outputs, int output_stride, int arg, T value)
+__device__ void store(void* outputs, int output_stride, int arg, T value)
 {
   auto p = reinterpret_cast<T*>(static_cast<char*>(outputs) + arg * output_stride);
   *p     = value;
