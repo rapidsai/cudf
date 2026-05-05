@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING
 
 from cudf_polars.experimental.explain import SerializablePlan
@@ -14,9 +13,12 @@ from cudf_polars.quent._types import (
     Operator,
     Plan,
     Port,
+    new_quent_id,
 )
 
 if TYPE_CHECKING:
+    import uuid
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.explain import SerializableIRNode
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
@@ -71,7 +73,7 @@ def build_plan(
     for node_id in sorted(serializable_plan.nodes.keys(), key=int):
         serializable_node = serializable_plan.nodes[node_id]
 
-        operator_id = uuid.uuid4()
+        operator_id = new_quent_id()
         operator = Operator(
             id=operator_id,
             plan_id=plan_id,
@@ -83,7 +85,7 @@ def build_plan(
         operators.append(operator)
 
         for port_name in port_names_for_node(serializable_node):
-            port = Port(id=uuid.uuid4(), operator=operator, instance_name=port_name)
+            port = Port(new_quent_id(), operator=operator, instance_name=port_name)
             all_ports.append(port)
             port_lookup[(operator_id, port_name)] = port
 
