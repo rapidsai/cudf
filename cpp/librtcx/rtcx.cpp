@@ -26,77 +26,77 @@
 #include <numeric>
 #include <source_location>
 
-#define RTCX_EXPECTS(_condition, _reason, _exception_type)                               \
+#define RTCX_EXPECTS(condition_, reason_, exception_type_)                               \
   do {                                                                                   \
-    if (!(_condition)) {                                                                 \
-      throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
+    if (!(condition_)) {                                                                 \
+      throw exception_type_{::std::format("RTCX failure at: {}:{}: {}",                  \
                                           ::std::source_location::current().file_name(), \
                                           ::std::source_location::current().line(),      \
-                                          (_reason))};                                   \
+                                          (reason_))};                                   \
     }                                                                                    \
   } while (0)
 
-#define RTCX_FAIL(_reason, _exception_type)                                            \
+#define RTCX_FAIL(reason_, exception_type_)                                            \
   do {                                                                                 \
-    throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
+    throw exception_type_{::std::format("RTCX failure at: {}:{}: {}",                  \
                                         ::std::source_location::current().file_name(), \
                                         ::std::source_location::current().line(),      \
-                                        (_reason))};                                   \
+                                        (reason_))};                                   \
   } while (0)
 
-#define RTCX_CHECK_CUDA(...)                                                              \
+#define RTCX_CHECK_CUDA(...)                                                             \
+  do {                                                                                   \
+    ::CUresult result_ = (__VA_ARGS__);                                                  \
+    if (result_ != ::CUDA_SUCCESS) {                                                     \
+      char const* enum_str_;                                                             \
+      RTCX_EXPECTS(::rtcx::cu->GetErrorString(result_, &enum_str_) == ::CUDA_SUCCESS,    \
+                   "Unable to get CUDA error string",                                    \
+                   std::runtime_error);                                                  \
+      auto errstr_ = ::std::format("(cuda) expression `{}` failed, with error ({}): {}", \
+                                   #__VA_ARGS__,                                         \
+                                   static_cast<::std::int64_t>(result_),                 \
+                                   enum_str_);                                           \
+      RTCX_FAIL(errstr_, ::std::runtime_error);                                          \
+    }                                                                                    \
+  } while (0)
+
+#define RTCX_CHECK_CUDART(...)                                                                 \
+  do {                                                                                         \
+    ::cudaError_t result_ = (__VA_ARGS__);                                                     \
+    if (result_ != ::cudaSuccess) {                                                            \
+      char const* enum_name_ = ::cudaGetErrorName(result_);                                    \
+      char const* enum_msg_  = ::cudaGetErrorString(result_);                                  \
+      auto errstr_ = ::std::format("(cudart) expression `{}` failed, with error ({}: {}): {}", \
+                                   #__VA_ARGS__,                                               \
+                                   static_cast<::std::int64_t>(result_),                       \
+                                   enum_name_,                                                 \
+                                   enum_msg_);                                                 \
+      RTCX_FAIL(errstr_, ::std::runtime_error);                                                \
+    }                                                                                          \
+  } while (0)
+
+#define RTCX_CHECK_NVRTC(...)                                                             \
   do {                                                                                    \
-    ::CUresult __result = (__VA_ARGS__);                                                  \
-    if (__result != ::CUDA_SUCCESS) {                                                     \
-      char const* __enum_str;                                                             \
-      RTCX_EXPECTS(::rtcx::cu->GetErrorString(__result, &__enum_str) == ::CUDA_SUCCESS,   \
-                   "Unable to get CUDA error string",                                     \
-                   std::runtime_error);                                                   \
-      auto __errstr = ::std::format("(cuda) expression `{}` failed, with error ({}): {}", \
-                                    #__VA_ARGS__,                                         \
-                                    static_cast<::std::int64_t>(__result),                \
-                                    __enum_str);                                          \
-      RTCX_FAIL(__errstr, ::std::runtime_error);                                          \
+    ::nvrtcResult result_ = (__VA_ARGS__);                                                \
+    if (result_ != ::NVRTC_SUCCESS) {                                                     \
+      auto errstr_ = ::std::format("(nvrtc) expression `{}` failed, with error ({}): {}", \
+                                   #__VA_ARGS__,                                          \
+                                   static_cast<::std::int64_t>(result_),                  \
+                                   ::rtcx::nvrtc->GetErrorString(result_));               \
+      RTCX_FAIL(errstr_, ::std::runtime_error);                                           \
     }                                                                                     \
   } while (0)
 
-#define RTCX_CHECK_CUDART(...)                                                                  \
-  do {                                                                                          \
-    ::cudaError_t __result = (__VA_ARGS__);                                                     \
-    if (__result != ::cudaSuccess) {                                                            \
-      char const* __enum_name = ::cudaGetErrorName(__result);                                   \
-      char const* __enum_msg  = ::cudaGetErrorString(__result);                                 \
-      auto __errstr = ::std::format("(cudart) expression `{}` failed, with error ({}: {}): {}", \
-                                    #__VA_ARGS__,                                               \
-                                    static_cast<::std::int64_t>(__result),                      \
-                                    __enum_name,                                                \
-                                    __enum_msg);                                                \
-      RTCX_FAIL(__errstr, ::std::runtime_error);                                                \
-    }                                                                                           \
-  } while (0)
-
-#define RTCX_CHECK_NVRTC(...)                                                              \
-  do {                                                                                     \
-    ::nvrtcResult __result = (__VA_ARGS__);                                                \
-    if (__result != ::NVRTC_SUCCESS) {                                                     \
-      auto __errstr = ::std::format("(nvrtc) expression `{}` failed, with error ({}): {}", \
-                                    #__VA_ARGS__,                                          \
-                                    static_cast<::std::int64_t>(__result),                 \
-                                    ::rtcx::nvrtc->GetErrorString(__result));              \
-      RTCX_FAIL(__errstr, ::std::runtime_error);                                           \
-    }                                                                                      \
-  } while (0)
-
-#define RTCX_CHECK_NVJITLINK(...)                                                              \
-  do {                                                                                         \
-    ::nvJitLinkResult __result = (__VA_ARGS__);                                                \
-    if (__result != ::NVJITLINK_SUCCESS) {                                                     \
-      auto __errstr = ::std::format("(nvJitLink) expression `{}` failed, with error ({}): {}", \
-                                    #__VA_ARGS__,                                              \
-                                    static_cast<::std::int64_t>(__result),                     \
-                                    ::rtcx::nvJitLinkResult_string(__result));                 \
-      RTCX_FAIL(__errstr, ::std::runtime_error);                                               \
-    }                                                                                          \
+#define RTCX_CHECK_NVJITLINK(...)                                                             \
+  do {                                                                                        \
+    ::nvJitLinkResult result_ = (__VA_ARGS__);                                                \
+    if (result_ != ::NVJITLINK_SUCCESS) {                                                     \
+      auto errstr_ = ::std::format("(nvJitLink) expression `{}` failed, with error ({}): {}", \
+                                   #__VA_ARGS__,                                              \
+                                   static_cast<::std::int64_t>(result_),                      \
+                                   ::rtcx::nvJitLinkResult_string(result_));                  \
+      RTCX_FAIL(errstr_, ::std::runtime_error);                                               \
+    }                                                                                         \
   } while (0)
 
 namespace rtcx {
@@ -286,8 +286,6 @@ void* get_symbol(char const* lib_name, void* handle, char const* sym_name)
 
 inline constexpr std::int32_t major_version(std::int32_t version) { return version / 1000; }
 
-inline constexpr std::int32_t minor_version(std::int32_t version) { return (version % 1000) / 10; }
-
 struct LibCuda {
   void* _handle = nullptr;
 
@@ -304,7 +302,7 @@ struct LibCuda {
 
   static void* _load()
   {
-    std::string lib_names[] = {"libcuda.so", "libcuda.so.1"};  // NOLINT(modernize-avoid-c-arrays)
+    std::string lib_names[] = {"libcuda.so.1"};  // NOLINT(modernize-avoid-c-arrays)
     return load_dll("libcuda.so", lib_names);
   }
 
@@ -334,15 +332,19 @@ struct LibNVRTC {
 
   static void* _load()
   {
+    auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
     RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
     std::int32_t major = major_version(cuda_version);
-    std::int32_t minor = minor_version(cuda_version);
+    RTCX_EXPECTS(expected_major_version == major,
+                 std::format("LibNVRTC Compatibility Error: CUDA major version mismatch. Expected "
+                             "major runtime version: {}, got major runtime version: {})",
+                             expected_major_version,
+                             major),
+                 std::runtime_error);
 
     std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
-      {std::format("libnvrtc.so.{}.{}", major, minor),
-       std::format("libnvrtc.so.{}", major),
-       "libnvrtc.so"};
+      {std::format("libnvrtc.so.{}", major)};
 
     return load_dll("libnvrtc.so", lib_names);
   }
@@ -374,15 +376,20 @@ struct LibNVJitLink {
 
   static void* _load()
   {
+    auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
     RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
     std::int32_t major = major_version(cuda_version);
-    std::int32_t minor = minor_version(cuda_version);
+    RTCX_EXPECTS(
+      expected_major_version == major,
+      std::format("LibNVJitLink Compatibility Error: CUDA major version mismatch. Expected "
+                  "major runtime version: {}, got major runtime version: {})",
+                  expected_major_version,
+                  major),
+      std::runtime_error);
 
     std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
-      {std::format("libnvJitLink.so.{}.{}", major, minor),
-       std::format("libnvJitLink.so.{}", major),
-       "libnvJitLink.so"};
+      {std::format("libnvJitLink.so.{}", major), "libnvJitLink.so"};
 
     return load_dll("libnvJitLink.so", lib_names);
   }

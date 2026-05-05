@@ -521,7 +521,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
 };
 
 struct cache_stats_counter {
-  struct alignas(CACHELINE_ALIGNMENT) entry {
+  struct entry {
     std::uint64_t value_ = 0;
 
     void incr()
@@ -812,7 +812,6 @@ inline std::string reflect_bool(bool value) { return std::format("(bool){}", val
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -823,7 +822,6 @@ inline std::string reflect_int(std::uint8_t value)
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -834,7 +832,6 @@ inline std::string reflect_int(std::uint16_t value)
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -845,7 +842,6 @@ inline std::string reflect_int(std::uint32_t value)
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -856,7 +852,6 @@ inline std::string reflect_int(std::uint64_t value)
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -864,7 +859,6 @@ inline std::string reflect_int(std::int8_t value) { return std::format("(signed 
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -875,7 +869,6 @@ inline std::string reflect_int(std::int16_t value)
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -883,7 +876,6 @@ inline std::string reflect_int(std::int32_t value) { return std::format("(signed
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
- * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
@@ -894,7 +886,6 @@ inline std::string reflect_int(std::int64_t value)
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
- * @tparam T A floating-point type (e.g., float, double)
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
@@ -902,7 +893,6 @@ inline std::string reflect_float(float value) { return std::format("(float){}F",
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
- * @tparam T A floating-point type (e.g., float, double)
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
