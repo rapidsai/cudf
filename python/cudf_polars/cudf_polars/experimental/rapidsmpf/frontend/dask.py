@@ -508,6 +508,7 @@ def evaluate_pipeline_dask_mode(
         if md is not None:
             metadata_collector.extend(md)
 
+    quent_context.emit_query_exit_events()
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -609,8 +610,6 @@ class DaskEngine(StreamingEngine):
         rapidsmpf_options: Options | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
-        engine_id: uuid.UUID | None = None,
-        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -637,16 +636,12 @@ class DaskEngine(StreamingEngine):
         rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
         rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
 
-        # Unique identifier for this cluster instance; namespaces the per-worker
-        # attribute so multiple DaskEngine contexts can coexist on the same workers.
-        # self._engine_id = engine_id if engine_id is not None else uuid.uuid4()
-        engine_id = engine_id or uuid.uuid4()
-        self._quent_engine = cudf_polars.quent._types.Engine(
-            id=engine_id,
-            implementation=cudf_polars.quent._types.Implementation(
-                name="cudf-polars-dask"
-            ),
-        )
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
+        quent_context: cudf_polars.quent.QuentContext = executor_options[
+            "quent_context"
+        ]
+        quent_context.emit_engine_init_events()
 
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None
@@ -690,14 +685,11 @@ class DaskEngine(StreamingEngine):
         # self._engine_id = uuid.uuid4()
         worker_ids = [uuid.uuid4() for _ in range(nranks)]
 
-        # Emit Engine.init on the driver.
-        cudf_polars.quent._logging.emit(self._quent_engine.init())
-
         # Phase 1: initialize root communicator on one worker.
         root_result = dask_client.run(
             functools.partial(
                 _setup_root,
-                uid=str(self._quent_engine.id),
+                uid=str(quent_context.engine.id),
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
             ),
@@ -713,11 +705,11 @@ class DaskEngine(StreamingEngine):
         dask_client.run(
             functools.partial(
                 _setup_worker,
-                uid=str(self._quent_engine.id),
+                uid=str(quent_context.engine.id),
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_ids=worker_ids,
-                engine_id=self._quent_engine.id,
+                engine_id=quent_context.engine.id,
             ),
             root_ucxx_address_as_bytes,
             nranks,
@@ -727,7 +719,7 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
-            rapidsmpf_id=str(self._quent_engine.id),
+            rapidsmpf_id=str(quent_context.engine.id),
             owned_client=owned_client,
             owned_cluster=owned_cluster,
         )
@@ -846,9 +838,6 @@ class DaskEngine(StreamingEngine):
         ctx = self._dask_context
         self._dask_context = None
 
-        # First emit the exit events
-        # cudf_polars.quent._logging.emit(self._quent_engine.exit())
-
         exceptions: list[Exception] = []
         try:
             # Teardown emits Worker.exit, then we drain all buffered events
@@ -863,7 +852,7 @@ class DaskEngine(StreamingEngine):
         except Exception as e:
             exceptions.append(e)
         finally:
-            cudf_polars.quent._logging.emit(self._quent_engine.exit())
+            self.config["executor_options"]["quent_context"].emit_engine_exit_events()
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:

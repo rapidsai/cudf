@@ -618,9 +618,7 @@ class RayEngine(StreamingEngine):
         quent_context: cudf_polars.quent.QuentContext = executor_options[
             "quent_context"
         ]
-        print(f"{quent_context=}")
         quent_context.emit_engine_init_events()
-        # cudf_polars.quent._logging.emit(self._quent_engine.init())
 
         try:
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
@@ -926,7 +924,6 @@ class RayEngine(StreamingEngine):
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
-            # cudf_polars.quent._logging.emit(self._quent_engine.exit())
             self.config["executor_options"]["quent_context"].emit_engine_exit_events()
             self._rank_actors = None
             super().shutdown()
