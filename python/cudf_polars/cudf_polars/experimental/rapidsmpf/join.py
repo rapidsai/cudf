@@ -210,25 +210,19 @@ async def _collect_small_side_for_broadcast(
         # to infer and returns a 0-column table. Substitute a properly typed
         # empty table for the small side so downstream joins still match the
         # expected schema.
-        if gathered.num_columns() == 0 and len(ir.schema) > 0:
-            empty_chunk = empty_table_chunk(ir, context, stream)
-            dfs = [
-                DataFrame.from_table(
-                    empty_chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    stream,
-                )
-            ]
-        else:
-            dfs = [
-                DataFrame.from_table(
-                    gathered,
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    stream,
-                )
-            ]
+        table = (
+            empty_table_chunk(ir, context, stream).table_view()
+            if gathered.num_columns() == 0 and len(ir.schema) > 0
+            else gathered
+        )
+        dfs = [
+            DataFrame.from_table(
+                table,
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                stream,
+            )
+        ]
     elif chunks:
         if can_concatenate:
             chunks, extra = await make_table_chunks_available_or_wait(

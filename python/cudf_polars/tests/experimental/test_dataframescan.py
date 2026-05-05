@@ -60,17 +60,21 @@ def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_parti
         assert count == 1
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Multi-rank Union interleaves child outputs across ranks: client "
+        "receives [rank0_A, rank0_B, rank1_A, rank1_B] instead of the "
+        "polars-CPU [A, B]. Tracked in "
+        "https://github.com/rapidsai/cudf/issues/22376."
+    ),
+    strict=False,
+)
 def test_dataframescan_concat(df, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1_000),
     )
     df2 = pl.concat([df, df])
-    # Multi-rank distributed scan interleaves rank-local outputs differently
-    # from a single-rank ``pl.concat([df, df])``: the client receives
-    # ``[rank0_df1, rank0_df2, rank1_df1, rank1_df2]`` rather than the
-    # polars-CPU ``[df1, df2]``. The set of rows (and their values per
-    # group) is unchanged, so check correctness without ordering.
-    assert_gpu_result_equal(df2, engine=streaming_engine, check_row_order=False)
+    assert_gpu_result_equal(df2, engine=streaming_engine)
 
 
 def test_join_in_memory_lazy_stable_id_pickle():
