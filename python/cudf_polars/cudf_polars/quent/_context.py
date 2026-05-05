@@ -56,7 +56,12 @@ class QuentContext:
         logger.emit(self.engine.exit())
 
     def emit_query_group_events(self, logger: QuentLogger) -> None:
-        """Emit a Quent QueryGroup declaration event."""
+        """
+        Emit a Quent QueryGroup declaration event.
+
+        This ensures that a declaration event is only emitted once per
+        query group.
+        """
         if self.query_group.id in self._query_group_cache:
             return
         self._query_group_cache.add(self.query_group.id)
