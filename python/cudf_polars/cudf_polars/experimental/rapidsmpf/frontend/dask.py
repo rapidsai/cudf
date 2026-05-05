@@ -118,10 +118,8 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
-    worker_id: uuid.UUID
     quent_logger: cudf_polars.quent._logging.QuentLogger
-    engine_id: uuid.UUID | None = None
-    quent_worker: cudf_polars.quent._types.Worker | None = None
+    quent_worker: cudf_polars.quent._types.Worker
 
 
 def _setup_root(
@@ -132,6 +130,7 @@ def _setup_root(
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
     dask_worker: distributed.Worker | None = None,
+    engine_id: uuid.UUID,
     worker_id: uuid.UUID,
 ) -> bytes:
     """
@@ -157,6 +156,8 @@ def _setup_root(
         :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    engine_id
+        Unique identifier for the engine this worker belongs to.
     worker_id
         Unique identifier for this worker.
 
@@ -180,6 +181,13 @@ def _setup_root(
         options=options,
         progress_thread=ProgressThread(),
     )
+
+    quent_worker = cudf_polars.quent._types.Worker(
+        id=worker_id,
+        engine_id=engine_id,
+        instance_name=f"rank-{comm.rank}",
+    )
+
     setattr(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
@@ -188,7 +196,7 @@ def _setup_root(
             ctx=None,
             py_executor=None,
             mr=mr,
-            worker_id=worker_id,
+            quent_worker=quent_worker,
             quent_logger=cudf_polars.quent._logging.QuentLogger(),
         ),
     )
@@ -205,7 +213,7 @@ def _setup_worker(
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
     worker_ids: list[uuid.UUID],
-    engine_id: uuid.UUID | None = None,
+    engine_id: uuid.UUID,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -273,12 +281,11 @@ def _setup_worker(
 
     worker_id = worker_ids[comm.rank]
 
-    if worker_id is not None and engine_id is not None:
-        quent_worker = cudf_polars.quent._types.Worker(
-            id=worker_id,
-            engine_id=engine_id,
-            instance_name=f"rank-{comm.rank}",
-        )
+    quent_worker = cudf_polars.quent._types.Worker(
+        id=worker_id,
+        engine_id=engine_id,
+        instance_name=f"rank-{comm.rank}",
+    )
 
     ctx = Context.from_options(comm.logger, mr, options)
     # Set the current RMM device resource so all temporary allocations
@@ -297,8 +304,6 @@ def _setup_worker(
         ctx=ctx,
         py_executor=py_executor,
         mr=mr,
-        worker_id=worker_id,
-        engine_id=engine_id,
         quent_worker=quent_worker,
         quent_logger=cudf_polars.quent._logging.QuentLogger(),
     )
@@ -433,7 +438,7 @@ def _worker_evaluate(
         config_options,
         collect_metadata=collect_metadata,
         logical_plan_id=logical_plan_id,
-        worker_id=mp_ctx.worker_id,
+        worker_id=mp_ctx.quent_worker.id,
         quent_context=quent_context,
         quent_logger=mp_ctx.quent_logger,
     )
@@ -702,7 +707,6 @@ class DaskEngine(StreamingEngine):
         worker_addresses = list(workers_info.keys())
         root_worker = worker_addresses[0]
 
-        # self._engine_id = uuid.uuid4()
         worker_ids = [uuid.uuid4() for _ in range(nranks)]
 
         # Phase 1: initialize root communicator on one worker.
@@ -713,6 +717,7 @@ class DaskEngine(StreamingEngine):
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_id=worker_ids[0],
+                engine_id=quent_context.engine.id,
             ),
             nranks,
             rapidsmpf_options_as_bytes,
