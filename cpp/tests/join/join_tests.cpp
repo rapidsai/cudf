@@ -2401,7 +2401,7 @@ TEST_F(JoinTest, HashJoinFullMatchContext)
   }
 }
 
-TEST_F(JoinTest, HashJoinMatchContextEmptyBuild)
+TEST_F(JoinTest, HashJoinMatchContextEmptyRight)
 {
   // Test match context with empty right table
   column_wrapper<int32_t> col0_0{{3, 1, 2}};

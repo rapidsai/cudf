@@ -357,7 +357,7 @@ TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
   this->compare_to_reference(right.view(), left.view(), result, gold.view());
 }
 
-TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
+TEST_F(DistinctJoinTest, EmptyRightTableInnerJoin)
 {
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
@@ -380,7 +380,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
   this->compare_to_reference(right.view(), left.view(), result, right.view());
 }
 
-TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
+TEST_F(DistinctJoinTest, EmptyRightTableLeftJoin)
 {
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
@@ -405,7 +405,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
     right.view(), left.view(), gather_map, left.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
-TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
+TEST_F(DistinctJoinTest, EmptyLeftTableInnerJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
@@ -428,7 +428,7 @@ TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
   this->compare_to_reference(right.view(), left.view(), result, left.view());
 }
 
-TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
+TEST_F(DistinctJoinTest, EmptyLeftTableLeftJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
