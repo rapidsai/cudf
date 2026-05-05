@@ -4,9 +4,9 @@
 from enum import IntEnum
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
+from pylibcudf.utils import CudaStreamLike
 
 class Inclusive(IntEnum):
     YES = ...
@@ -18,6 +18,6 @@ def label_bins(
     left_inclusive: Inclusive,
     right_edges: Column,
     right_inclusive: Inclusive,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

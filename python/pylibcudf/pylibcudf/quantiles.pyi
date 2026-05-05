@@ -4,11 +4,11 @@
 from collections.abc import Iterable
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.table import Table
 from pylibcudf.types import Interpolation, NullOrder, Order, Sorted
+from pylibcudf.utils import CudaStreamLike
 
 def quantile(
     input: Column,
@@ -16,7 +16,7 @@ def quantile(
     interp: Interpolation = Interpolation.LINEAR,
     ordered_indices: Column | None = None,
     exact: bool = True,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def quantiles(
@@ -26,6 +26,6 @@ def quantiles(
     is_input_sorted: Sorted = Sorted.NO,
     column_order: list[Order] | None = None,
     null_precedence: list[NullOrder] | None = None,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...

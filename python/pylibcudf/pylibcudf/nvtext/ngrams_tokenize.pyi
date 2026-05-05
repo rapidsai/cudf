@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
+from pylibcudf.utils import CudaStreamLike
 
 def ngrams_tokenize(
     input: Column,
     ngrams: int,
     delimiter: Scalar,
     separator: Scalar,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
