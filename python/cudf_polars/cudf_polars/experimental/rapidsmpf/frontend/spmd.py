@@ -110,7 +110,7 @@ def evaluate_pipeline_spmd_mode(
     quent_context.emit_query_group_events()
     quent_context.emit_query_events()
 
-    return evaluate_on_rank(
+    result = evaluate_on_rank(
         context,
         comm,
         py_executor,
@@ -119,6 +119,8 @@ def evaluate_pipeline_spmd_mode(
         collect_metadata=collect_metadata,
         quent_context=config_options.executor.quent_context,
     )
+    quent_context.emit_query_exit_events()
+    return result
 
 
 def allgather_polars_dataframe(
@@ -337,9 +339,6 @@ class SPMDEngine(StreamingEngine):
         rapidsmpf_options: Options | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
-        engine_id: uuid.UUID | None = None,
-        worker_id: uuid.UUID | None = None,
-        quent_context: cudf_polars.quent.QuentContext | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -384,6 +383,14 @@ class SPMDEngine(StreamingEngine):
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
+
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
+        quent_context: cudf_polars.quent.QuentContext = executor_options[
+            "quent_context"
+        ]
+        quent_context.emit_engine_init_events()
+
         try:
             exit_stack.callback(py_executor.shutdown, wait=False)
             exit_stack.enter_context(set_memory_resource(mr))
@@ -392,8 +399,12 @@ class SPMDEngine(StreamingEngine):
             )
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx
-            self._engine_id = engine_id or uuid.uuid4()
-            self._worker_id = worker_id or uuid.uuid4()
+            self._quent_worker = cudf_polars.quent.Worker(
+                id=uuid.uuid4(),
+                engine_id=quent_context.engine.id,
+                instance_name=f"rank-{self.rank}",  # relies on self.comm
+            )
+
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
@@ -404,8 +415,8 @@ class SPMDEngine(StreamingEngine):
                         comm=comm,
                         context=ctx,
                         py_executor=py_executor,
-                        engine_id=self._engine_id,
-                        worker_id=self._worker_id,
+                        engine_id=quent_context.engine.id,
+                        worker_id=self._quent_worker.id,
                     ),
                 },
                 engine_options={
@@ -416,18 +427,6 @@ class SPMDEngine(StreamingEngine):
             )
 
             # TODO: ranks need to choose the same engine ID!
-            self._quent_engine = cudf_polars.quent._types.Engine(
-                id=self._engine_id,
-                implementation=cudf_polars.quent._types.Implementation(
-                    name="cudf-polars-spmd"
-                ),
-            )
-            self._quent_worker = cudf_polars.quent._types.Worker(
-                id=self._worker_id,
-                engine_id=self._engine_id,
-                instance_name=f"rank-{self.rank}",
-            )
-            cudf_polars.quent._logging.emit(self._quent_engine.init())
             cudf_polars.quent._logging.emit(self._quent_worker.init())
         except Exception:
             exit_stack.close()
@@ -570,7 +569,7 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         cudf_polars.quent._logging.emit(self._quent_worker.exit())
-        cudf_polars.quent._logging.emit(self._quent_engine.exit())
+        self.config["executor_options"]["quent_context"].emit_engine_exit_events()
         super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:

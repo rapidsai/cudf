@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 from cudf_polars.quent._context import QuentContext
-from cudf_polars.quent._types import Engine, Query, QueryGroup
+from cudf_polars.quent._types import Engine, Query, QueryGroup, Worker
 
 __all__ = [
     "Engine",
     "QuentContext",
     "Query",
     "QueryGroup",
+    "Worker",
 ]

@@ -12,6 +12,10 @@ import pytest
 
 import polars as pl
 
+import cudf_polars.experimental.rapidsmpf.frontend.dask
+import cudf_polars.experimental.rapidsmpf.frontend.ray
+import cudf_polars.experimental.rapidsmpf.frontend.spmd
+import cudf_polars.quent
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
@@ -26,6 +30,8 @@ from cudf_polars.quent._types import (
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.quent._context import QuentContext
@@ -405,7 +411,9 @@ def test_query_lifecycle() -> None:
 
 def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> None:
     quent_events = engine.quent_events
-    engine_init, engine_exit = [x for x in quent_events if "Engine" in x["data"]]
+    engine_events = [x for x in quent_events if "Engine" in x["data"]]
+    assert len(engine_events) == 2
+    engine_init, engine_exit = engine_events
     assert engine_init["id"] == str(quent_context.engine.id)
     assert engine_exit["id"] == str(quent_context.engine.id)
     assert engine_exit["data"]["Engine"]["Exit"] is None
@@ -433,15 +441,19 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
         )
         assert worker_exit["data"]["Worker"]["Exit"] is None
 
-    (query_group_declaration,) = [x for x in quent_events if "QueryGroup" in x["data"]]
+    query_group_events = [x for x in quent_events if "QueryGroup" in x["data"]]
+    assert len(query_group_events) == 1
+    query_group_declaration = query_group_events[0]
     assert query_group_declaration["id"] == str(quent_context.query_group.id)
     assert (
         query_group_declaration["data"]["QueryGroup"]["Declaration"]["engine_id"]
         == engine_init["id"]
     )
-    query_init, query_planning, query_executing, query_exit = [
-        x for x in quent_events if "Query" in x["data"]
-    ]
+
+    query_events = [x for x in quent_events if "Query" in x["data"]]
+    assert len(query_events) == 4
+
+    query_init, query_planning, query_executing, query_exit = query_events
     assert query_init["id"] == str(quent_context.query.id)
     assert (
         query_init["data"]["Query"]["state"]["Init"]["query_group_id"]
@@ -449,51 +461,39 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
     )
 
 
-def test_quent_events_ray() -> None:
+@pytest.fixture
+def quent_context() -> QuentContext:
+    return cudf_polars.quent.QuentContext()
+
+
+@pytest.fixture(params=["ray", "dask", "spmd"])
+def engine_with_quent_context(
+    request: pytest.FixtureRequest, quent_context: QuentContext, spmd_comm: Communicator
+) -> StreamingEngine:
+    backend = request.param
+    if backend == "ray":
+        return cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine(
+            executor_options={"quent_context": quent_context}
+        )
+    elif backend == "dask":
+        return cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine(
+            executor_options={"quent_context": quent_context}
+        )
+    elif backend == "spmd":
+        return cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine(
+            executor_options={"quent_context": quent_context}, comm=spmd_comm
+        )
+    else:
+        raise ValueError(f"Invalid backend: {backend}")
+
+
+def test_quent_events(
+    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
+) -> None:
     # We need to create the engine, to ensure the lifecycle events are emitted properly.
-    import cudf_polars.experimental.rapidsmpf.frontend.ray
-    import cudf_polars.quent
-
-    quent_context = cudf_polars.quent.QuentContext()
-    engine = cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine(
-        executor_options={"quent_context": quent_context}
-    )
-
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
 
-    with engine:
-        q.collect(engine=engine)
+    with engine_with_quent_context:
+        q.collect(engine=engine_with_quent_context)
 
-    check_quent_events(engine, quent_context)
-
-
-def test_quent_events_dask() -> None:
-    import cudf_polars.experimental.rapidsmpf.frontend.dask
-    import cudf_polars.quent
-
-    quent_context = cudf_polars.quent.QuentContext()
-    engine = cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine(
-        executor_options={"quent_context": quent_context}
-    )
-
-    q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
-
-    with engine:
-        q.collect(engine=engine)
-
-    check_quent_events(engine, quent_context)
-
-
-def test_quent_events_spmd() -> None:
-    import cudf_polars.experimental.rapidsmpf.frontend.spmd
-    import cudf_polars.quent
-
-    quent_context = cudf_polars.quent.QuentContext()
-    engine = cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine(
-        executor_options={"quent_context": quent_context}
-    )
-
-    q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
-
-    with engine:
-        q.collect(engine=engine)
+    check_quent_events(engine_with_quent_context, quent_context)

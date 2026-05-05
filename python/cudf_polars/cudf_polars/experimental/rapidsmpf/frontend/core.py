@@ -242,7 +242,15 @@ class StreamingEngine(pl.GPUEngine):
         """Return all Quent telemetry events collected during the engine's lifecycle."""
         import cudf_polars.quent._logging
 
-        events = list(cudf_polars.quent._logging.log_buffer)
+        # TODO: this global log_buffer is messing things up.
+        # This whole things needs to be rewritten.
+        # we need to clear it at some point
+        # but right now this function isn't idempotent; the second call won't include events from the client.
+        events = []
+        with cudf_polars.quent._logging.buffer_lock:
+            events = list(cudf_polars.quent._logging.log_buffer)
+            cudf_polars.quent._logging.log_buffer.clear()
+
         events.extend(self.worker_quent_events)
         return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
 
