@@ -117,6 +117,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        worker_id=config_options.executor.spmd_context.worker_id,
         quent_context=config_options.executor.quent_context,
     )
     quent_context.emit_query_exit_events()

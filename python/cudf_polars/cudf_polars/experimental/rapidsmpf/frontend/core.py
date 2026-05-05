@@ -223,7 +223,6 @@ class StreamingEngine(pl.GPUEngine):
         try:
             self._exit_stack.close()
         finally:
-            # self._worker_quent_events.extend(drain_buffered_events())
             self._exit_stack = None
             self.device = None
             self.memory_resource = None
@@ -253,17 +252,6 @@ class StreamingEngine(pl.GPUEngine):
 
         events.extend(self.worker_quent_events)
         return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
-
-    # def gather_quent_events(self) -> list[dict[str, Any]]:
-    #     """Drain Quent events collected from workers during shutdown."""
-    #     # Get any client logs from this process
-    #     import cudf_polars.quent._logging
-    #     client_logs = cudf_polars.quent._logging.drain_buffered_events()
-    #     # Get any worker logs from the remote workers.
-    #     worker_logs = self._run(cudf_polars.quent._logging.drain_buffered_events)
-    #     self._worker_quent_events.extend(client_logs)
-    #     for logs in worker_logs:
-    #         self._worker_quent_events.extend(log)
 
     @property
     def worker_quent_events(self) -> list[dict[str, Any]]:
@@ -527,7 +515,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    worker_id: uuid.UUID | None = None,
+    worker_id: uuid.UUID,
     quent_context: cudf_polars.quent.QuentContext,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -572,14 +560,8 @@ def evaluate_on_rank(
         Collected channel metadata if *collect_metadata* is ``True``,
         otherwise ``None``.
     """
-    if worker_id is None:
-        spmd_context = config_options.executor.spmd_context
-        if spmd_context is not None:
-            worker_id = spmd_context.worker_id
-
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
 
-    # logical_plan_id = uuid.uuid4()
     # TODO: this logical_plan_id is probably wrong. We need this ID to summarize the *entire* logical plan.
     # not just the last node. We should just generate a random ID on the client and
     # pass that in.

@@ -189,7 +189,7 @@ class RankActor:
         num_py_executors: int,
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
-        worker_id: uuid.UUID | None = None,
+        worker_id: uuid.UUID,
         engine_id: uuid.UUID | None = None,
         rank: int = 0,
     ) -> None:
@@ -211,7 +211,7 @@ class RankActor:
         )
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
-        self._worker_id: uuid.UUID | None = worker_id
+        self._worker_id: uuid.UUID = worker_id
         self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
         self._rank: int = rank
         self._quent_worker: cudf_polars.quent._types.Worker | None = None

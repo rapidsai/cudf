@@ -118,7 +118,7 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
-    worker_id: uuid.UUID | None = None
+    worker_id: uuid.UUID
     engine_id: uuid.UUID | None = None
     quent_worker: cudf_polars.quent._types.Worker | None = None
 
@@ -131,6 +131,7 @@ def _setup_root(
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
     dask_worker: distributed.Worker | None = None,
+    worker_id: uuid.UUID,
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -155,6 +156,8 @@ def _setup_root(
         :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    worker_id
+        Unique identifier for this worker.
 
     Returns
     -------
@@ -179,7 +182,9 @@ def _setup_root(
     setattr(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
-        _WorkerContext(comm=comm, ctx=None, py_executor=None, mr=mr),
+        _WorkerContext(
+            comm=comm, ctx=None, py_executor=None, mr=mr, worker_id=worker_id
+        ),
     )
     return get_root_ucxx_address(comm)
 
@@ -193,7 +198,7 @@ def _setup_worker(
     uid: str,
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
-    worker_ids: list[uuid.UUID] | None = None,
+    worker_ids: list[uuid.UUID],
     engine_id: uuid.UUID | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
@@ -230,7 +235,6 @@ def _setup_worker(
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
     """
-    # cudf_polars.quent._logging.worker_setup_logging()
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
     attr = f"_cudf_polars_mp_context_{uid}"
@@ -261,7 +265,7 @@ def _setup_worker(
 
     barrier(comm)
 
-    worker_id = worker_ids[comm.rank] if worker_ids is not None else None
+    worker_id = worker_ids[comm.rank]
 
     if worker_id is not None and engine_id is not None:
         quent_worker = cudf_polars.quent._types.Worker(
@@ -277,7 +281,7 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            "int",
+            int,
             executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",
@@ -692,6 +696,7 @@ class DaskEngine(StreamingEngine):
                 uid=str(quent_context.engine.id),
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
+                worker_id=worker_ids[0],
             ),
             nranks,
             rapidsmpf_options_as_bytes,

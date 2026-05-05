@@ -59,6 +59,7 @@ except ImportError:
     pynvml = None
 
 try:
+    import cudf_polars.dsl.tracing
     import cudf_polars.quent
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
@@ -1296,8 +1297,6 @@ def run_polars_dask(
 
 
 def setup_logging(query_id: int, iteration: int) -> None:
-    import cudf_polars.dsl.tracing
-
     if not cudf_polars.dsl.tracing.LOG_TRACES:
         msg = (
             "Tracing requested via --collect-traces, but tracking is not enabled. "
