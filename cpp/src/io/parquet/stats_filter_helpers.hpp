@@ -20,9 +20,10 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
-#include <array>
 #include <bit>
+#include <climits>
 #include <string_view>
+#include <type_traits>
 
 namespace cudf::io::parquet::detail {
 
@@ -30,6 +31,19 @@ namespace {
 
 /// Initial capacity for the chars host vector in host_column
 constexpr size_t initial_chars_capacity = 1024;
+
+template <typename T>
+struct unsigned_stats_rep {
+  using type = std::make_unsigned_t<T>;
+};
+
+template <>
+struct unsigned_stats_rep<__int128_t> {
+  using type = unsigned __int128;
+};
+
+template <typename T>
+using unsigned_stats_rep_t = typename unsigned_stats_rep<T>::type;
 
 }  // namespace
 
@@ -41,18 +55,24 @@ constexpr size_t initial_chars_capacity = 1024;
  */
 class stats_caster_base {
  protected:
-  static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
+  template <typename T>
+  static inline T decode_byte_array_decimal(uint8_t const* stats_val, size_t stats_size)
+    requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
   {
-    auto constexpr endianness = std::endian::native;
-    static_assert(endianness == std::endian::little or endianness == std::endian::big,
-                  "Encountered unsupported endianness while decoding decimal128 from FLBA");
-    using RepType = numeric::decimal128::rep;
-    auto value    = RepType{};
-    std::memcpy(&value, stats_val, sizeof(RepType));
-    auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(value);
-    // byte-swap to native representation on little-endian platforms
-    if constexpr (endianness == std::endian::little) { std::ranges::reverse(value_rep); }
-    return std::bit_cast<RepType>(value_rep);
+    CUDF_EXPECTS(stats_size > 0, "Parquet reader encountered an empty decimal statistics vector");
+    CUDF_EXPECTS(stats_size <= sizeof(T),
+                 "Parquet reader encountered a statistics vector larger than the type's size");
+
+    using UnsignedT = unsigned_stats_rep_t<T>;
+    auto value      = UnsignedT{0};
+    for (size_t i = 0; i < stats_size; ++i) {
+      value = static_cast<UnsignedT>((value << CHAR_BIT) | static_cast<UnsignedT>(stats_val[i]));
+    }
+
+    if (stats_size < sizeof(T) and (stats_val[0] & uint8_t{0x80}) != 0) {
+      value = static_cast<UnsignedT>(value | (~UnsignedT{0} << (stats_size * CHAR_BIT)));
+    }
+    return std::bit_cast<T>(value);
   }
 
   template <typename T>
@@ -126,19 +146,16 @@ class stats_caster_base {
           ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
-        if (stats_size == sizeof(T)) {
-          if constexpr (cudf::is_chrono<T>()) {
+        if constexpr (cudf::is_integral<T>() and !cudf::is_boolean<T>()) {
+          // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
+          // signed two's-complement values using big-endian byte order. The physical width may be
+          // smaller than the selected cudf storage width, so sign extend while decoding.
+          return stats_caster_base::target_type<T>(
+            decode_byte_array_decimal<T>(stats_val, stats_size), ts_scale);
+        } else if constexpr (cudf::is_chrono<T>()) {
+          if (stats_size == sizeof(T)) {
             return stats_caster_base::target_type<T>(
               decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
-          } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
-            // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
-            // big-endian.
-            return stats_caster_base::target_type<T>(decode_flba_decimal128(stats_val));
-          } else {
-            // TODO(mh): We may need to add support for `decimal256` (two's complement using
-            // big-endian) and `UUID` types (big-endian)
-            return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<T>(stats_val, stats_size));
           }
         }
         [[fallthrough]];
