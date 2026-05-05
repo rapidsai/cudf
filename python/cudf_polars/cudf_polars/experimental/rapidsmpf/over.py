@@ -391,6 +391,285 @@ def _concat_sort_boundary_sync(
     )
 
 
+async def _allgather_and_broadcast(
+    context: Context,
+    comm: Communicator,
+    ir: Over,
+    ir_context: IRExecutionContext,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    metadata_in: ChannelMetadata,
+    input_ir: IR,
+    tracer: Any,
+    collective_id: int,
+) -> None:
+    """
+    Compute partial aggregates per chunk, AllGather across ranks to get a
+    global aggregate, then broadcast it back to each buffered chunk row-by-row.
+
+    Buffers all incoming chunks while computing per-chunk partial aggregates,
+    tree-reduces via AllGather, then broadcasts the global aggregate back to
+    each buffered chunk using the pre-computed GroupedWindow lookup.
+    """
+    gw_nodes = tuple(
+        ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow)
+    )
+    key_names = tuple(
+        c.name
+        for c in gw_nodes[0].children[: gw_nodes[0].by_count]
+        if isinstance(c, Col)
+    )
+    piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
+        gw_nodes, input_ir
+    )
+
+    # make_table_chunks_available_or_wait releases the original chunk,
+    # so we make each chunk available once and reuse it for both buffering
+    # and piecewise evaluation.
+    buffered: list[tuple[int, TableChunk]] = []
+    partial_aggs: list[TableChunk] = []
+
+    while (msg := await ch_in.recv(context)) is not None:
+        raw_chunk = TableChunk.from_message(msg, br=context.br())
+        avail_chunk, extra = await make_table_chunks_available_or_wait(
+            context,
+            raw_chunk,
+            reserve_extra=raw_chunk.data_alloc_size(),
+            net_memory_delta=0,
+        )
+        buffered.append((msg.sequence_number, avail_chunk))
+        with opaque_memory_usage(extra):
+            partial = await asyncio.to_thread(
+                _evaluate_chunk_sync,
+                avail_chunk,
+                piecewise_ir,
+                ir_context,
+                context.br(),
+            )
+        partial_aggs.append(partial)
+
+    if partial_aggs:
+        local_agg = await evaluate_batch(
+            partial_aggs, context, reduction_ir, ir_context=ir_context
+        )
+    else:
+        local_agg = empty_table_chunk(
+            reduction_ir, context, ir_context.get_cuda_stream()
+        )
+
+    # AllGather the unreduced form so the final reduction operates over
+    # all ranks' partial results; agg_select_ir is applied only once after.
+    if comm.nranks > 1 and not metadata_in.duplicated:
+        allgather = AllGatherManager(context, comm, collective_id)
+        with allgather.inserting() as inserter:
+            inserter.insert(0, local_agg)
+        stream = ir_context.get_cuda_stream()
+        concat_chunk = TableChunk.from_pylibcudf_table(
+            await allgather.extract_concatenated(stream),
+            stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
+        global_agg = await evaluate_chunk(
+            context, concat_chunk, reduction_ir, ir_context=ir_context
+        )
+    else:
+        global_agg = local_agg
+
+    if agg_select_ir is not None:
+        global_agg = await evaluate_chunk(
+            context, global_agg, agg_select_ir, ir_context=ir_context
+        )
+
+    final_agg_ir = agg_select_ir if agg_select_ir is not None else reduction_ir
+    global_agg_df = chunk_to_frame(global_agg, final_agg_ir)
+
+    metadata_out = ChannelMetadata(
+        local_count=metadata_in.local_count,
+        partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+        duplicated=metadata_in.duplicated,
+    )
+    await send_metadata(ch_out, context, metadata_out)
+
+    for seq_num, chunk in buffered:
+        result = await _evaluate_broadcast_chunk(
+            context,
+            chunk,
+            ir,
+            ir_context,
+            global_agg_df,
+            key_names,
+            gw_nodes,
+        )
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+
+    await ch_out.drain(context)
+
+
+async def _shuffle_and_reassemble(
+    context: Context,
+    comm: Communicator,
+    ir: Over,
+    ir_context: IRExecutionContext,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    metadata_in: ChannelMetadata,
+    input_ir: IR,
+    tracer: Any,
+    collective_id: int,
+) -> None:
+    """
+    Hash-shuffle rows by partition keys so each rank owns its groups, evaluate
+    window expressions, then reassemble output chunks in original input order
+    using a three-phase sort-and-split strategy.
+    """
+    row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
+    key_indices = ir.key_indices
+
+    modulus = comm.nranks
+    # After hash-shuffle, each row lives on exactly one rank — never duplicated.
+    metadata_out = ChannelMetadata(
+        local_count=metadata_in.local_count,
+        partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+        duplicated=False,
+    )
+    await send_metadata(ch_out, context, metadata_out)
+
+    # When input is duplicated, only rank 0 inserts to avoid N-fold overcounting.
+    skip_insert = metadata_in.duplicated and comm.rank != 0
+
+    shuffle = ShuffleManager(context, comm, modulus, collective_id)
+    row_counter = 0
+    boundaries: list[tuple[int, int, int]] = []
+
+    # Phase 1: stamp each row with its local position and insert into the shuffle
+    async with shuffle.inserting() as inserter:
+        while (msg := await ch_in.recv(context)) is not None:
+            chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
+            stream = ir_context.get_cuda_stream()
+            n_rows = chunk.table_view().num_rows()
+            boundaries.append(
+                (msg.sequence_number, row_counter, row_counter + n_rows)
+            )
+            if not skip_insert:
+                chunk = await asyncio.to_thread(
+                    _add_row_idx_sync, chunk, row_counter, stream, context.br()
+                )
+            row_counter += n_rows
+            if not skip_insert:
+                inserter.insert_hash(chunk, key_indices)
+
+    if not boundaries:
+        await ch_out.drain(context)
+        return
+
+    # Three-phase sort-and-split.
+    #
+    # Phase 1 (insert): stamp each row with its absolute position and insert
+    #   into the shuffle (see the inserting() block above).
+    # Phase 2 (per partition): extract, evaluate, sort by row_idx, then
+    #   immediately slice into per-boundary sub-chunks and materialise each
+    #   as an independent TableChunk registered with br.  The sorted
+    #   partition is freed as soon as its sub-chunks are accumulated, so the
+    #   SpillManager can evict earlier sub-chunks to host if memory is tight.
+    # Phase 3 (per boundary): bring sub-chunks back to device if spilled
+    #   (make_available_or_wait), concat + sort + output.
+    #
+    # This keeps total working memory proportional to one boundary's output
+    # at a time (not all sorted partitions simultaneously).
+    col_names: list[str] | None = None
+    col_types: list[DataType] | None = None
+    idx_col_idx: int = -1
+    keep_col_indices: list[int] = []
+    split_values: list[int] = [start for _, start, _ in boundaries[1:]]
+    accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
+
+    # Phase 2
+    for partition_id in shuffle.local_partitions():
+        stream = ir_context.get_cuda_stream()
+        partition_chunk = TableChunk.from_pylibcudf_table(
+            shuffle.extract_chunk(partition_id, stream),
+            stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
+        result_df = await asyncio.to_thread(
+            _evaluate_with_row_idx_sync,
+            partition_chunk,
+            ir,
+            ir_context,
+            row_idx_col,
+        )
+        if col_names is None:
+            col_names = [c.name for c in result_df.columns]
+            col_types = [c.dtype for c in result_df.columns]
+            idx_col_idx = col_names.index(row_idx_col)
+            keep_col_indices = [
+                i for i, n in enumerate(col_names) if n != row_idx_col
+            ]
+        assert col_types is not None
+        sorted_df = await asyncio.to_thread(
+            _sort_df_by_row_idx_sync,
+            result_df,
+            col_names,
+            col_types,
+            row_idx_col,
+        )
+        await asyncio.to_thread(
+            _slice_and_accumulate_sync,
+            sorted_df,
+            split_values,
+            len(boundaries),
+            col_names,
+            col_types,
+            idx_col_idx,
+            context.br(),
+            accumulated,
+        )
+        del sorted_df  # Free; sub-views are in accumulated as spill-eligible chunks
+
+    # Sync pool streams so memory freed during Phase 2 is available
+    for _ in range(context.stream_pool_size()):
+        context.get_stream_from_pool().synchronize()
+
+    # Phase 3: per-boundary output
+    # TODO: if all input rows were shuffled to other ranks, accumulated is
+    # all-empty while boundaries is non-empty (seq-num gap).  Revisit once
+    # rapidsmpf empty-partition handling is clearer.
+    if col_names is not None:
+        assert col_types is not None
+        for k, (seq_num, _start, _end) in enumerate(boundaries):
+            # Bring sub-chunks to device if spilled (async wait).
+            available: list[TableChunk] = []
+            for chunk in accumulated[k]:
+                avail = await chunk.make_available_or_wait(
+                    context, net_memory_delta=0
+                )
+                available.append(avail)
+            accumulated[k] = []  # drop refs to now-consumed originals
+
+            result = await asyncio.to_thread(
+                _concat_sort_boundary_sync,
+                available,
+                col_names,
+                col_types,
+                idx_col_idx,
+                keep_col_indices,
+                ir_context,
+                context.br(),
+            )
+            if tracer is not None:
+                tracer.add_chunk(table=result.table_view())
+            await ch_out.send(context, Message(seq_num, result))
+            del available
+
+    await ch_out.drain(context)
+
+
 @define_actor()
 async def over_actor(
     context: Context,
@@ -417,7 +696,7 @@ async def over_actor(
     comm
         The communicator.
     ir
-        The Over IR node carrying the wrapped Select/HStack and pre-computed metadata.
+        The Over IR node.
     ir_context
         The IR execution context.
     ch_out
@@ -433,11 +712,10 @@ async def over_actor(
         input_ir = ir.children[0]
         metadata_in = await recv_metadata(ch_in, context)
 
-        key_indices = ir.key_indices
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             comm.nranks,
-            indices=key_indices,
+            indices=ir.key_indices,
             allow_subset=False,
         )
         if partitioning:
@@ -459,248 +737,19 @@ async def over_actor(
             )
             return
 
-        if ir.is_scalar:
-            gw_nodes = tuple(
-                ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow)
-            )
-            key_names = tuple(
-                c.name
-                for c in gw_nodes[0].children[: gw_nodes[0].by_count]
-                if isinstance(c, Col)
-            )
-            piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
-                gw_nodes, input_ir
-            )
-
-            # make_table_chunks_available_or_wait releases the original chunk,
-            # so we make each chunk available once and reuse it for both buffering
-            # and piecewise evaluation.
-            buffered: list[tuple[int, TableChunk]] = []
-            partial_aggs: list[TableChunk] = []
-
-            while (msg := await ch_in.recv(context)) is not None:
-                raw_chunk = TableChunk.from_message(msg, br=context.br())
-                avail_chunk, extra = await make_table_chunks_available_or_wait(
-                    context,
-                    raw_chunk,
-                    reserve_extra=raw_chunk.data_alloc_size(),
-                    net_memory_delta=0,
-                )
-                buffered.append((msg.sequence_number, avail_chunk))
-                with opaque_memory_usage(extra):
-                    partial = await asyncio.to_thread(
-                        _evaluate_chunk_sync,
-                        avail_chunk,
-                        piecewise_ir,
-                        ir_context,
-                        context.br(),
-                    )
-                partial_aggs.append(partial)
-
-            if partial_aggs:
-                local_agg = await evaluate_batch(
-                    partial_aggs, context, reduction_ir, ir_context=ir_context
-                )
-            else:
-                local_agg = empty_table_chunk(
-                    reduction_ir, context, ir_context.get_cuda_stream()
-                )
-
-            # AllGather the unreduced form so the final reduction operates over
-            # all ranks' partial results; agg_select_ir is applied only once after.
-            if comm.nranks > 1 and not metadata_in.duplicated:
-                allgather = AllGatherManager(context, comm, collective_id)
-                with allgather.inserting() as inserter:
-                    inserter.insert(0, local_agg)
-                stream = ir_context.get_cuda_stream()
-                concat_chunk = TableChunk.from_pylibcudf_table(
-                    await allgather.extract_concatenated(stream),
-                    stream,
-                    exclusive_view=True,
-                    br=context.br(),
-                )
-                global_agg = await evaluate_chunk(
-                    context, concat_chunk, reduction_ir, ir_context=ir_context
-                )
-            else:
-                global_agg = local_agg
-
-            if agg_select_ir is not None:
-                global_agg = await evaluate_chunk(
-                    context, global_agg, agg_select_ir, ir_context=ir_context
-                )
-
-            final_agg_ir = agg_select_ir if agg_select_ir is not None else reduction_ir
-            global_agg_df = chunk_to_frame(global_agg, final_agg_ir)
-
-            metadata_out = ChannelMetadata(
-                local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(
-                    ir, metadata_in.partitioning
-                ),
-                duplicated=metadata_in.duplicated,
-            )
-            await send_metadata(ch_out, context, metadata_out)
-
-            for seq_num, chunk in buffered:
-                result = await _evaluate_broadcast_chunk(
-                    context,
-                    chunk,
-                    ir,
-                    ir_context,
-                    global_agg_df,
-                    key_names,
-                    gw_nodes,
-                )
-                if tracer is not None:
-                    tracer.add_chunk(table=result.table_view())
-                await ch_out.send(context, Message(seq_num, result))
-
-            await ch_out.drain(context)
-            return
-
-        row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
-
-        modulus = comm.nranks
-        # After hash-shuffle, each row lives on exactly one rank — never duplicated.
-        metadata_out = ChannelMetadata(
-            local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
-            duplicated=False,
+        path = _allgather_and_broadcast if ir.is_scalar else _shuffle_and_reassemble
+        await path(
+            context,
+            comm,
+            ir,
+            ir_context,
+            ch_in,
+            ch_out,
+            metadata_in,
+            input_ir,
+            tracer,
+            collective_id,
         )
-        await send_metadata(ch_out, context, metadata_out)
-
-        # When input is duplicated, only rank 0 inserts to avoid N-fold overcounting.
-        skip_insert = metadata_in.duplicated and comm.rank != 0
-
-        shuffle = ShuffleManager(context, comm, modulus, collective_id)
-        row_counter = 0
-        boundaries: list[tuple[int, int, int]] = []
-
-        # Phase 1: stamp each row with its local position and insert into the shuffle
-        async with shuffle.inserting() as inserter:
-            while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(
-                    msg, br=context.br()
-                ).make_available_and_spill(context.br(), allow_overbooking=True)
-                stream = ir_context.get_cuda_stream()
-                n_rows = chunk.table_view().num_rows()
-                boundaries.append(
-                    (msg.sequence_number, row_counter, row_counter + n_rows)
-                )
-                if not skip_insert:
-                    chunk = await asyncio.to_thread(
-                        _add_row_idx_sync, chunk, row_counter, stream, context.br()
-                    )
-                row_counter += n_rows
-                if not skip_insert:
-                    inserter.insert_hash(chunk, key_indices)
-
-        if not boundaries:
-            await ch_out.drain(context)
-            return
-
-        # Three-phase sort-and-split.
-        #
-        # Phase 1 (insert): stamp each row with its absolute position and insert
-        #   into the shuffle (see the inserting() block above).
-        # Phase 2 (per partition): extract, evaluate, sort by row_idx, then
-        #   immediately slice into per-boundary sub-chunks and materialise each
-        #   as an independent TableChunk registered with br.  The sorted
-        #   partition is freed as soon as its sub-chunks are accumulated, so the
-        #   SpillManager can evict earlier sub-chunks to host if memory is tight.
-        # Phase 3 (per boundary): bring sub-chunks back to device if spilled
-        #   (make_available_or_wait), concat + sort + output.
-        #
-        # This keeps total working memory proportional to one boundary's output
-        # at a time (not all sorted partitions simultaneously).
-        col_names: list[str] | None = None
-        col_types: list[DataType] | None = None
-        idx_col_idx: int = -1
-        keep_col_indices: list[int] = []
-        split_values: list[int] = [start for _, start, _ in boundaries[1:]]
-        accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
-
-        # Phase 2
-        for partition_id in shuffle.local_partitions():
-            stream = ir_context.get_cuda_stream()
-            partition_chunk = TableChunk.from_pylibcudf_table(
-                shuffle.extract_chunk(partition_id, stream),
-                stream,
-                exclusive_view=True,
-                br=context.br(),
-            )
-            result_df = await asyncio.to_thread(
-                _evaluate_with_row_idx_sync,
-                partition_chunk,
-                ir,
-                ir_context,
-                row_idx_col,
-            )
-            if col_names is None:
-                col_names = [c.name for c in result_df.columns]
-                col_types = [c.dtype for c in result_df.columns]
-                idx_col_idx = col_names.index(row_idx_col)
-                keep_col_indices = [
-                    i for i, n in enumerate(col_names) if n != row_idx_col
-                ]
-            assert col_types is not None
-            sorted_df = await asyncio.to_thread(
-                _sort_df_by_row_idx_sync,
-                result_df,
-                col_names,
-                col_types,
-                row_idx_col,
-            )
-            await asyncio.to_thread(
-                _slice_and_accumulate_sync,
-                sorted_df,
-                split_values,
-                len(boundaries),
-                col_names,
-                col_types,
-                idx_col_idx,
-                context.br(),
-                accumulated,
-            )
-            del sorted_df  # Free; sub-views are in accumulated as spill-eligible chunks
-
-        # Sync pool streams so memory freed during Phase 2 is available
-        for _ in range(context.stream_pool_size()):
-            context.get_stream_from_pool().synchronize()
-
-        # Phase 3: per-boundary output
-        # TODO: if all input rows were shuffled to other ranks, accumulated is
-        # all-empty while boundaries is non-empty (seq-num gap).  Revisit once
-        # rapidsmpf empty-partition handling is clearer.
-        if col_names is not None:
-            assert col_types is not None
-            for k, (seq_num, _start, _end) in enumerate(boundaries):
-                # Bring sub-chunks to device if spilled (async wait).
-                available: list[TableChunk] = []
-                for chunk in accumulated[k]:
-                    avail = await chunk.make_available_or_wait(
-                        context, net_memory_delta=0
-                    )
-                    available.append(avail)
-                accumulated[k] = []  # drop refs to now-consumed originals
-
-                result = await asyncio.to_thread(
-                    _concat_sort_boundary_sync,
-                    available,
-                    col_names,
-                    col_types,
-                    idx_col_idx,
-                    keep_col_indices,
-                    ir_context,
-                    context.br(),
-                )
-                if tracer is not None:
-                    tracer.add_chunk(table=result.table_view())
-                await ch_out.send(context, Message(seq_num, result))
-                del available
-
-        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Over)
