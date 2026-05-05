@@ -580,6 +580,11 @@ class SPMDEngine(StreamingEngine):
         self.config["executor_options"]["quent_context"].emit_engine_exit_events(
             self._quent_logger
         )
+
+        # TODO: Figure out multi-rank handling.
+        self._quent_events.extend(self._quent_logger.drain())
+        self._quent_events.sort(key=lambda x: x["timestamp"])
+
         super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
