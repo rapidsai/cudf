@@ -2894,7 +2894,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
             cudf::out_of_bounds_policy oob_policy)
   {
     auto const right_tv = cudf::table_view{{right}};
-    auto const left_tv = cudf::table_view{{left}};
+    auto const left_tv  = cudf::table_view{{left}};
 
     auto const [left_result_map, right_result_map] =
       join_func(right_tv,

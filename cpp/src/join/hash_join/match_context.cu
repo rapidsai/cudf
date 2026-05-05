@@ -36,8 +36,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto match_counts =
-    std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
+  auto match_counts = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
 
   if (is_empty) {
     thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),

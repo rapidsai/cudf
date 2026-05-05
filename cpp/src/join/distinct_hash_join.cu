@@ -268,7 +268,7 @@ distinct_hash_join::inner_join(cudf::table_view const& left,
 
     auto const left_row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_left};
     auto const d_left_hasher   = left_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
-    auto const iter             = cudf::detail::make_counting_transform_iterator(
+    auto const iter            = cudf::detail::make_counting_transform_iterator(
       0, build_keys_fn<lhs_index_type>{d_left_hasher});
 
     if (_has_nested_columns) {
@@ -371,7 +371,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
 
       auto const left_row_hasher = cudf::detail::row::hash::row_hasher{preprocessed_left};
       auto const d_left_hasher   = left_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
-      auto const iter             = cudf::detail::make_counting_transform_iterator(
+      auto const iter            = cudf::detail::make_counting_transform_iterator(
         0, build_keys_fn<lhs_index_type>{d_left_hasher});
 
       if (_has_nested_columns) {

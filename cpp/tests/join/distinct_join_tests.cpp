@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,10 +77,10 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   auto const init = cudf::numeric_scalar<int32_t>{0};
 
   auto right = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
-  auto left = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
+  auto left  = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
 
   auto right_table = cudf::table_view{{right->view()}};
-  auto left_table = cudf::table_view{{left->view()}};
+  auto left_table  = cudf::table_view{{left->view()}};
 
   auto distinct_join = cudf::distinct_hash_join{right_table};
 
