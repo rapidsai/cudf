@@ -28,18 +28,53 @@ namespace CUDF_EXPORT cudf {
 
 namespace {
 
-rtcx::sha256 hash_string(std::span<char const> input)
+rtcx::sha256 hash(char const* input)
+{
+  rtcx::sha256_context ctx;
+  ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
+  return ctx.finalize();
+}
+
+rtcx::sha256 hash(std::span<char const> input)
 {
   rtcx::sha256_context ctx;
   ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
   return ctx.finalize();
 }
 
-rtcx::sha256 hash_strings(std::span<char const* const> inputs)
+rtcx::sha256 hash(std::span<char const* const> inputs)
 {
   rtcx::sha256_context ctx;
   for (auto const* input : inputs) {
     ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
+  }
+  return ctx.finalize();
+}
+
+rtcx::sha256 hash(std::span<std::string const> inputs)
+{
+  rtcx::sha256_context ctx;
+  for (auto const& input : inputs) {
+    ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
+  }
+  return ctx.finalize();
+}
+
+rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments)
+{
+  rtcx::sha256_context ctx;
+  for (auto const& fragment : file_fragments) {
+    ctx.update(
+      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
+  }
+  return ctx.finalize();
+}
+
+rtcx::sha256 hash(std::span<rtcx::memory_fragment const> memory_fragments)
+{
+  rtcx::sha256_context ctx;
+  for (auto const& fragment : memory_fragments) {
+    ctx.update(fragment.data);
   }
   return ctx.finalize();
 }
@@ -357,6 +392,178 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
 }
 
+rtcx::byte_buffer compile_fragment_uncached(char const* name,
+                                            char const* cuda_code,
+                                            std::span<char const* const> extra_header_include_names,
+                                            std::span<char const* const> extra_headers,
+                                            std::span<char const* const> extra_options,
+                                            std::span<char const* const> name_expressions,
+                                            bool use_pch,
+                                            bool use_minimal,
+                                            bool log_pch)
+{
+  CUDF_FUNC_RANGE();
+
+  auto& bundle = cudf::get_context().jit_bundle();
+  auto sm      = get_current_device_physical_model();
+
+  auto include_dirs = bundle.get_include_directories();
+  auto pch_dir      = cudf::get_context().get_jit_pch_dir();
+
+  std::vector<std::string> options;
+
+  for (auto const& include_dir : include_dirs) {
+    options.emplace_back(std::format("-I{}", include_dir));
+  }
+
+  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+
+  options.emplace_back("--diag-suppress=47");
+  options.emplace_back("--device-int128");
+
+  if (sm >= 100) { options.emplace_back("--device-float128"); }
+
+  options.emplace_back("-std=c++20");
+  options.emplace_back("--device-as-default-execution-space");
+  options.emplace_back("--generate-line-info");
+  options.emplace_back("--dopt=on");
+
+  if (use_minimal) { options.emplace_back("--minimal"); }
+
+  if (use_pch) {
+    options.emplace_back("--pch");
+
+    if (log_pch) {
+      options.emplace_back("--pch-verbose=true");
+      options.emplace_back("--pch-messages=true");
+    }
+  }
+
+  options.emplace_back("--relocatable-device-code=true");
+  options.emplace_back("--gen-opt-lto");
+  options.emplace_back("--dlink-time-opt");
+
+  std::vector<char const*> options_cstr;
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+  for (auto* option : extra_options) {
+    options_cstr.emplace_back(option);
+  }
+
+  auto params = rtcx::compile_params{.name                 = name,
+                                     .source               = cuda_code,
+                                     .header_include_names = extra_header_include_names,
+                                     .headers              = extra_headers,
+                                     .options              = options_cstr,
+                                     .name_expressions     = name_expressions,
+                                     .target_type          = rtcx::binary_type::LTO_IR};
+
+  return rtcx::compile(params);
+}
+
+std::variant<rtcx::byte_buffer, rtcx::blob> get_cuda_udf_fragment(
+  char const* name,
+  char const* cuda_code,
+  std::span<char const* const> extra_header_include_names,
+  std::span<char const* const> extra_headers,
+  std::span<char const* const> extra_options,
+  std::span<char const* const> name_expressions,
+  bool use_pch,
+  bool use_minimal,
+  bool log_pch,
+  bool use_cache)
+{
+  auto& cache  = cudf::get_context().rtcx_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
+
+  auto runtime                   = get_runtime_version();
+  auto driver                    = get_driver_version();
+  auto sm                        = get_current_device_physical_model();
+  auto header_include_names_hash = hash(extra_header_include_names).to_hex_string();
+  auto headers_hash              = hash(extra_headers).to_hex_string();
+  auto bundle_hash               = bundle.get_hash();
+  auto source_hash               = hash(cuda_code).to_hex_string();
+
+  auto cache_key = std::format(R"***(cudaFragment
+binary_type=LTO_IR
+name={}
+cuda_runtime={}
+cuda_driver={}
+arch={}
+header_include_names={},
+headers={},
+bundle={},
+source_file={}
+)***",
+                               name,
+                               runtime,
+                               driver,
+                               sm,
+                               header_include_names_hash.view(),
+                               headers_hash.view(),
+                               bundle_hash,
+                               source_hash.view());
+
+  auto cache_key_sha256 = hash(cache_key);
+
+  auto compile = [&] {
+    return compile_fragment_uncached(name,
+                                     cuda_code,
+                                     extra_header_include_names,
+                                     extra_headers,
+                                     extra_options,
+                                     name_expressions,
+                                     use_pch,
+                                     use_minimal,
+                                     log_pch);
+  };
+
+  if (!use_cache) { return compile(); }
+
+  auto fut =
+    cache.get_or_add_blob(cache_key_sha256, rtcx::blob_compile_func::from_functor(compile));
+  return fut.get();
+}
+
+std::tuple<rtcx::library, rtcx::blob> link_library_uncached(
+  char const* name,
+  std::span<rtcx::file_fragment const> file_fragments,
+  std::span<rtcx::memory_fragment const> memory_fragments,
+  std::span<char const* const> extra_options)
+{
+  CUDF_FUNC_RANGE();
+
+  auto sm = get_current_device_physical_model();
+
+  std::vector<std::string> options;
+
+  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+  options.emplace_back("-lto");
+
+  std::vector<char const*> options_cstr;
+
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+
+  for (auto* option : extra_options) {
+    options_cstr.emplace_back(option);
+  }
+
+  auto params = rtcx::link_params{.name             = name,
+                                  .output_type      = rtcx::binary_type::CUBIN,
+                                  .file_fragments   = file_fragments,
+                                  .memory_fragments = memory_fragments,
+                                  .link_options     = options_cstr};
+
+  auto cubin   = rtcx::link_library(params);
+  auto library = rtcx::load_library(cubin);
+  auto blob    = rtcx::blob_t::from_buffer(std::move(cubin));
+
+  return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
+}
+
 }  // namespace
 
 kernel get_kernel(std::string const& name,
@@ -378,8 +585,8 @@ kernel get_kernel(std::string const& name,
   auto runtime                   = get_runtime_version();
   auto driver                    = get_driver_version();
   auto sm                        = get_current_device_physical_model();
-  auto header_include_names_hash = hash_strings(header_include_names).to_hex_string();
-  auto headers_hash              = hash_strings(headers).to_hex_string();
+  auto header_include_names_hash = hash(header_include_names).to_hex_string();
+  auto headers_hash              = hash(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
   auto source_file = std::format("{}/cudf/cpp/src/{}", bundle.get_directory(), source_file_id);
 
@@ -405,7 +612,7 @@ kernel_instance={}
                                headers_hash.view(),
                                kernel_instance);
 
-  auto cache_key_sha256 = hash_string(cache_key);
+  auto cache_key_sha256 = hash(cache_key);
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
@@ -436,6 +643,132 @@ kernel_instance={}
 
   auto lib = fut.get();
   return kernel{lib, lib->get_kernel("kernel")};
+}
+
+kernel get_linked_kernel(std::string const& name,
+                         std::string const& fragment_file_id,
+                         std::span<rtcx::file_fragment const> file_fragments,
+                         std::span<rtcx::memory_fragment const> memory_fragments,
+                         bool use_cache,
+                         std::span<std::string const> extra_options)
+{
+  CUDF_FUNC_RANGE();
+
+  auto& cache  = cudf::get_context().rtcx_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
+
+  auto runtime               = get_runtime_version();
+  auto driver                = get_driver_version();
+  auto sm                    = get_current_device_physical_model();
+  auto file_fragments_hash   = hash(file_fragments).to_hex_string();
+  auto memory_fragments_hash = hash(memory_fragments).to_hex_string();
+  auto bundle_hash           = bundle.get_hash();
+  auto fragment_file = std::format("{}/fragments/{}", bundle.get_directory(), fragment_file_id);
+  // TODO: resolve file fragment IDs
+
+  auto cache_key = std::format(R"***(cuLibrary
+name={}
+binary_type=CUBIN
+cuda_runtime={}
+cuda_driver={}
+arch={}
+bundle={}
+fragment_file={}
+file_fragments={}
+memory_fragments={}
+)***",
+                               name,
+                               runtime,
+                               driver,
+                               sm,
+                               bundle_hash,
+                               fragment_file,
+                               file_fragments_hash.view(),
+                               memory_fragments_hash.view());
+
+  auto cache_key_sha256 = hash(cache_key);
+
+  auto compile = [&] {
+    std::vector<char const*> extra_options_cstr;
+    for (auto const& option : extra_options) {
+      extra_options_cstr.emplace_back(option.c_str());
+    }
+
+    return link_library_uncached(
+      name.c_str(), file_fragments, memory_fragments, extra_options_cstr);
+  };
+
+  if (!use_cache) {
+    auto [lib, blob] = compile();
+    return kernel{lib, lib->get_kernel("kernel")};
+  }
+
+  auto fut =
+    cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
+
+  auto lib = fut.get();
+  return kernel{lib, lib->get_kernel("kernel")};
+}
+
+kernel get_cuda_linked_kernel(std::string const& kernel_name,
+                              std::string const& kernel_fragment_file_id,
+                              std::string const& cuda_udf_name,
+                              std::string const& cuda_udf_source,
+                              std::span<char const* const> header_include_names,
+                              std::span<char const* const> headers,
+                              std::span<rtcx::file_fragment const> file_fragments,
+                              std::span<rtcx::memory_fragment const> memory_fragments,
+                              bool use_cache,
+                              bool use_pch,
+                              bool use_minimal,
+                              bool log_pch,
+                              std::span<std::string const> extra_compile_options,
+                              std::span<std::string const> extra_link_options)
+{
+  CUDF_FUNC_RANGE();
+
+  std::vector<char const*> extra_compile_options_cstr;
+  for (auto const& option : extra_compile_options) {
+    extra_compile_options_cstr.emplace_back(option.c_str());
+  }
+
+  std::vector<char const*> extra_link_options_cstr;
+  for (auto const& option : extra_link_options) {
+    extra_link_options_cstr.emplace_back(option.c_str());
+  }
+
+  auto udf_fragment = get_cuda_udf_fragment(cuda_udf_name.c_str(),
+                                            cuda_udf_source.c_str(),
+                                            header_include_names,
+                                            headers,
+                                            extra_compile_options_cstr,
+                                            {},
+                                            use_pch,
+                                            use_minimal,
+                                            log_pch,
+                                            use_cache);
+
+  auto fragment_name = std::format("{}_udf_fragment", cuda_udf_name);
+
+  std::vector<rtcx::memory_fragment> all_fragments;
+  all_fragments.insert(all_fragments.end(), memory_fragments.begin(), memory_fragments.end());
+
+  if (std::holds_alternative<rtcx::blob>(udf_fragment)) {
+    auto& udf_blob = std::get<rtcx::blob>(udf_fragment);
+    all_fragments.push_back(rtcx::memory_fragment{
+      .data = udf_blob->view(), .type = rtcx::binary_type::LTO_IR, .name = fragment_name.c_str()});
+  } else {
+    auto& udf_buffer = std::get<rtcx::byte_buffer>(udf_fragment);
+    all_fragments.push_back(rtcx::memory_fragment{
+      .data = udf_buffer, .type = rtcx::binary_type::LTO_IR, .name = fragment_name.c_str()});
+  }
+
+  return get_linked_kernel(kernel_name,
+                           kernel_fragment_file_id,
+                           file_fragments,
+                           all_fragments,
+                           use_cache,
+                           extra_link_options);
 }
 
 }  // namespace CUDF_EXPORT cudf

@@ -334,40 +334,36 @@ macro(add_fragment)
   set(MULTI_VALUE_ARGS "DEFINITIONS")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  foreach(ARCH IN LISTS CUDF_LTO_JIT_ARCHITECTURES)
-    set(TARGET_ID "sm${ARCH}_${TARGET}_${ARG_FRAGMENT}")
-    add_library(${TARGET_ID} OBJECT ${ARG_SOURCE})
-    target_compile_options(
-      ${TARGET_ID} PRIVATE --compress-mode=none --gen-opt-lto --relaxed-constexpr --extended-lambda
-    )
-    target_compile_definitions(${TARGET_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
-    set_target_properties(
-      ${TARGET_ID}
-      PROPERTIES CUDA_ARCHITECTURES "${ARCH}-real"
-                 CUDA_SEPARABLE_COMPILATION ON
-                 CUDA_FATBIN_COMPILATION ON
-                 POSITION_INDEPENDENT_CODE ON
-                 INTERPROCEDURAL_OPTIMIZATION ON
-                 CXX_STANDARD ${CUDF_CUDA_STANDARD}
-                 CXX_STANDARD_REQUIRED ON
-                 CXX_EXTENSIONS ON
-                 CXX_VISIBILITY_PRESET hidden
-                 CUDA_STANDARD ${CUDF_CUDA_STANDARD}
-                 CUDA_STANDARD_REQUIRED ON
-                 CUDA_VISIBILITY_PRESET hidden
-    )
-    target_link_libraries(${TARGET_ID} PRIVATE CCCL::CCCL)
-    target_include_directories(
-      ${TARGET_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-    )
+  set(TARGET_ID "${TARGET}_${ARG_FRAGMENT}")
+  add_library(${TARGET_ID} OBJECT ${ARG_SOURCE})
+  target_compile_options(
+    ${TARGET_ID} PRIVATE --compress-mode=none --gen-opt-lto --relaxed-constexpr --extended-lambda
+  )
+  target_compile_definitions(${TARGET_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
+  set_target_properties(
+    ${TARGET_ID}
+    PROPERTIES CUDA_ARCHITECTURES "${CUDF_LTO_JIT_ARCHITECTURES}"
+               CUDA_SEPARABLE_COMPILATION ON
+               CUDA_FATBIN_COMPILATION ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERPROCEDURAL_OPTIMIZATION ON
+               CXX_STANDARD ${CUDF_CUDA_STANDARD}
+               CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS ON
+               CXX_VISIBILITY_PRESET hidden
+               CUDA_STANDARD ${CUDF_CUDA_STANDARD}
+               CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
+  )
+  target_link_libraries(${TARGET_ID} PRIVATE CCCL::CCCL)
+  target_include_directories(
+    ${TARGET_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+  )
 
-    embed_blob(
-      ${TARGET} FILE $<TARGET_OBJECTS:${TARGET_ID}> DEST
-      fragments/sm_${ARCH}_${ARG_FRAGMENT}.fatbin
-    )
-  endforeach()
-
+  embed_blob(
+    ${TARGET} FILE $<TARGET_OBJECTS:${TARGET_ID}> DEST fragments/sm_${ARCH}_${ARG_FRAGMENT}.fatbin
+  )
 endmacro()
 
 add_fragment(
@@ -437,6 +433,11 @@ add_fragment(
 )
 
 add_fragment(cudf_jit_embed FRAGMENT operators SOURCE src/jit/lite/operators.cu)
+
+add_fragment(
+  cudf_test_jit_embed FRAGMENT compute_columns_profit_operator SOURCE
+  tests/transform/compute_columns_profit_operator.cu
+)
 
 embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
@@ -987,6 +988,7 @@ add_library(
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
+  src/transform/compute_columns_jit.cu
   src/transform/compute_column_kernel_complex.cu
   src/transform/compute_column_kernel_null_complex.cu
   src/transform/compute_column_kernel_null_primitive.cu

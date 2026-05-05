@@ -680,6 +680,11 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 
 # ##################################################################################################
+# * compute columns tests
+#   -------------------------------------------------------------------------------------
+ConfigureTest(COMPUTE_COLUMNS_TEST transform/compute_columns_test.cpp)
+
+# ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST

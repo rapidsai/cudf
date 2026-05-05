@@ -178,7 +178,11 @@ function(embed)
   set(EMBED_SCRIPT__OUTPUT_DIR "${OUTPUT_DIR}")
 
   configure_file(${EMBED_SCRIPT_TEMPLATE} ${CONFIGURED_EMBED_SCRIPT} @ONLY)
-  file(GENERATE OUTPUT "${EMBED_SCRIPT}" INPUT "${CONFIGURED_EMBED_SCRIPT}")
+  file(
+    GENERATE
+    OUTPUT "${EMBED_SCRIPT}"
+    INPUT "${CONFIGURED_EMBED_SCRIPT}"
+  )
 
   add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
   target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${ZSTD_INCLUDE_DIR})
