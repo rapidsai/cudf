@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.config import Options
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -49,6 +49,39 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
+
+
+def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
+    """
+    Resolve ``rapidsmpf_options`` and apply cross-frontend defaults.
+
+    If ``None`` is passed, constructs an ``Options`` instance from
+    environment variables. Then applies defaults that should be consistent
+    across SPMD, Ray, and Dask. Defaults are set via
+    ``Options.insert_if_absent``, so explicit values or environment
+    variables always take precedence.
+
+    Defaults applied:
+
+    - ``num_streaming_threads=4``: moderate worker count for the rapidsmpf
+      streaming runtime, shared across frontends.
+
+    Parameters
+    ----------
+    rapidsmpf_options
+        Existing options to resolve, or ``None`` to construct from environment
+        variables.
+
+    Returns
+    -------
+    Options
+        Resolved options with cross-frontend defaults applied.
+    """
+    if rapidsmpf_options is None:
+        rapidsmpf_options = Options(get_environment_variables())
+
+    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+    return rapidsmpf_options
 
 
 @dataclasses.dataclass(frozen=True)

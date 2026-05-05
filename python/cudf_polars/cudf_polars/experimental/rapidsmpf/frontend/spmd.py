@@ -16,7 +16,6 @@ from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
 from rapidsmpf.communicator.ucxx import barrier
-from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
@@ -37,6 +36,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     all_gather_host_data,
     check_reserved_keys,
     evaluate_on_rank,
+    resolve_rapidsmpf_options,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.config import Options
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -342,11 +343,7 @@ class SPMDEngine(StreamingEngine):
         )
         bind_to_gpu(hw_binding)
 
-        rapidsmpf_options = (
-            rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
-        )
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
         )
@@ -476,12 +473,7 @@ class SPMDEngine(StreamingEngine):
         )
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-
-        rapidsmpf_options = (
-            rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
-        )
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
         # Collective: synchronize all ranks before tearing down the Context.
         # ``barrier`` is UCXX-specific; for the non-rrun path
