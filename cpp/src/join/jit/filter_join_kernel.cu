@@ -11,8 +11,9 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 
-#include <jit/accessors.cuh>
+#include <jit/join_column_accessor.cuh>
 #include <jit/span.cuh>
+#include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we

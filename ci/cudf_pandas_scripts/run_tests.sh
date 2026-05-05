@@ -16,6 +16,7 @@ export JUPYTER_PLATFORM_DIRS=1
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Download the cudf, libcudf, and pylibcudf built in the previous step
+source rapids-prompt-local-repo-config
 CUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
 PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
@@ -97,7 +98,17 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
         # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
         # downgrade cupy here to avoid an import failure when cupy tries
         # to load against the older numpy.
-        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        set +e
+        # We're iterating over a range of versions that might not all have
+        # supported wheels, so our best bet for now is to disallow source
+        # distributions.
+        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14" --only-binary=:all:
+        INSTALL_SUCCESS=$?
+        set -e
+        if [[ ${INSTALL_SUCCESS} -ne 0 ]]; then
+            echo "Failed to install pandas ${version} with numpy<2 for Python ${RAPIDS_PY_VERSION}. Skipping tests for this version."
+            continue
+        fi
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=8 \

@@ -567,6 +567,28 @@ def test_orc_reader_boolean_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
+def test_orc_read_decompress_overflow(datadir):
+    # PostScript declares compressionBlockSize over reader maximum (1 GiB).
+    path = datadir / "decompress_overflow.orc"
+    with pytest.raises(IndexError):
+        cudf.read_orc(path)
+
+
+def test_orc_read_footer_underflow(datadir):
+    # Crafted ORC with huge footerLength that used to underflow host_read offsets.
+    path = datadir / "footer_underflow.orc"
+    with pytest.raises(IndexError):
+        cudf.read_orc(path)
+
+
+def test_orc_read_incorrect_ps_length():
+    # File is only 10 bytes, but the last byte claims a 255-byte PostScript.
+    # Bounds check should catch this and raise an IndexError.
+    buf = BytesIO(b"\x00" * 9 + b"\xff")
+    with pytest.raises(IndexError):
+        cudf.read_orc(buf)
+
+
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times

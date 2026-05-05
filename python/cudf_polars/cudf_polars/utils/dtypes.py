@@ -1,9 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Datatype utilities."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 from pylibcudf.traits import (
@@ -13,10 +15,48 @@ from pylibcudf.traits import (
     is_numeric_not_bool,
 )
 
+if TYPE_CHECKING:
+    from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.containers import DataType
+
 __all__ = [
     "can_cast",
     "is_order_preserving_cast",
+    "make_empty_column",
 ]
+
+
+def make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
+    """
+    Create an empty (0-row) column, including for nested types.
+
+    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT,
+    so we build those by hand with the correct child structure.
+
+    Parameters
+    ----------
+    dtype
+        The cudf-polars DataType (carries child-type metadata for nested types).
+    stream
+        CUDA stream for any device allocations.
+    """
+    if dtype.id() == plc.TypeId.LIST:
+        offsets = plc.Column.from_scalar(
+            plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+            1,
+            stream=stream,
+        )
+        child = make_empty_column(dtype.children[0], stream)
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, [offsets, child])
+
+    if dtype.id() == plc.TypeId.STRUCT:
+        children = [
+            make_empty_column(child_dtype, stream) for child_dtype in dtype.children
+        ]
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, children)
+
+    return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
 
 
 def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:

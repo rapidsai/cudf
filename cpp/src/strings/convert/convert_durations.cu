@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "utilities/time_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -425,9 +427,6 @@ struct dispatch_from_durations_fn {
   }
 };
 
-static const __device__ __constant__ int32_t powers_of_ten[10] = {
-  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-
 // this parses duration string into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
@@ -471,7 +470,8 @@ struct parse_duration {
     }
     auto parsed_length = ptr - str;
     // compensate for missing trailing zeros
-    if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
+    if (parsed_length < fixed_width)
+      value *= cudf::detail::powers_of_ten[fixed_width - parsed_length];
     actual_length += parsed_length;
     return value;
   }

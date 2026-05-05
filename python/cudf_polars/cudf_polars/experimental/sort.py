@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import polars as pl
 
@@ -14,16 +14,18 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import IR, Sort
+from cudf_polars.dsl.ir import IR, Slice, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.dispatch import (
+    generate_ir_tasks,
+    lower_ir_node,
+)
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import (
     _concat,
-    _dynamic_planning_on,
     _fallback_inform,
     _lower_ir_fallback,
 )
@@ -293,7 +295,6 @@ class SortedShuffleOptions(TypedDict):
     null_order: Sequence[plc.types.NullOrder]
     column_names: Sequence[str]
     column_dtypes: Sequence[DataType]
-    cluster_kind: Literal["dask", "single"]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -311,12 +312,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import split_and_pack
-
-        if options["cluster_kind"] == "dask":
-            from rapidsmpf.integrations.dask import get_worker_context
-
-        else:
-            from rapidsmpf.integrations.single import get_worker_context
+        from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
 
@@ -358,12 +354,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
             unpack_and_concat,
             unspill_partitions,
         )
-
-        if options["cluster_kind"] == "dask":
-            from rapidsmpf.integrations.dask import get_worker_context
-
-        else:
-            from rapidsmpf.integrations.single import get_worker_context
+        from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
 
@@ -502,44 +493,20 @@ class ShuffleSorted(IR):
         return df
 
 
+def _has_simple_zlice(zlice: tuple[int, int | None] | None) -> bool:
+    """Check if a zlice is a simple top-k/bottom-k operation."""
+    if zlice is None:
+        return False
+    has_offset = zlice[0] > 0 or (
+        zlice[0] < 0 and zlice[1] is not None and zlice[0] + zlice[1] < 0
+    )
+    return not has_offset
+
+
 @lower_ir_node.register(Sort)
 def _(
     ir: Sort, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Special handling for slicing
-    # (May be a top- or bottom-k operation)
-
-    if ir.zlice is not None:
-        # TODO: Handle large slices (e.g. 1m+ rows), this should go into the branch
-        # below, but will require additional logic there.
-
-        # Check if zlice has an offset, i.e. includes the start or reaches the end.
-        # If an offset exists it would be incorrect to apply in the first pwise sort.
-        has_offset = ir.zlice[0] > 0 or (
-            ir.zlice[0] < 0
-            and ir.zlice[1] is not None
-            and ir.zlice[0] + ir.zlice[1] < 0
-        )
-        if has_offset:
-            return _lower_ir_fallback(
-                ir,
-                rec,
-                msg="Sort does not support a multi-partition slice with an offset.",
-            )
-
-        from cudf_polars.experimental.parallel import _lower_ir_pwise
-
-        # Sort input partitions
-        new_node, partition_info = _lower_ir_pwise(ir, rec)
-        if partition_info[new_node].count > 1:
-            # Collapse down to single partition
-            inter = Repartition(new_node.schema, new_node)
-            partition_info[inter] = PartitionInfo(count=1)
-            # Sort reduced partition
-            new_node = ir.reconstruct([inter])
-            partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
-
     # Check sort keys
     if not all(
         isinstance(expr, Col) for expr in traversal([e.value for e in ir.by])
@@ -550,18 +517,57 @@ def _(
             msg="sort currently only supports column names as `by` keys.",
         )
 
+    config_options = rec.state["config_options"]
+    executor = config_options.executor
+    runtime = executor.runtime
+
+    # Special handling for slicing
+    # (May be a top- or bottom-k operation)
+    simple_zlice = _has_simple_zlice(ir.zlice)
+    if simple_zlice and runtime == "tasks":
+        from cudf_polars.experimental.parallel import _lower_ir_pwise
+
+        new_node, partition_info = _lower_ir_pwise(ir, rec)
+        if partition_info[new_node].count > 1:
+            # Collapse down to single partition
+            inter = Repartition(new_node.schema, new_node)
+            partition_info[inter] = PartitionInfo(count=1)
+            # Sort reduced partition
+            new_node = ir.reconstruct([inter])
+            partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+    elif ir.zlice is not None and not simple_zlice:
+        # Pull "complex" slices out of the Sort node altogether.
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Sort(
+                    ir.schema,
+                    ir.by,
+                    ir.order,
+                    ir.null_order,
+                    ir.stable,
+                    None,
+                    ir.children[0],
+                ),
+            )
+        )
+
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
-    # Extract shuffle method
-    config_options = rec.state["config_options"]
-    executor = config_options.executor
+    # The "rapidsmpf" runtime uses the sort_actor to handle everything else
+    if runtime == "rapidsmpf":
+        sort_node = ir.reconstruct([child])
+        partition_info[sort_node] = partition_info[child]
+        return sort_node, partition_info
+
+    # TODO: Remove everything below here when "tasks" is removed.
 
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (
-        ShuffleMethod("tasks")
-        if (ir.stable and executor.runtime == "tasks")
-        else config_options.executor.shuffle_method
+        ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method
     )
     if (
         shuffle_method != config_options.executor.shuffle_method
@@ -572,7 +578,7 @@ def _(
             config_options,
         )
 
-    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
+    if partition_info[child].count == 1:
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -629,41 +635,23 @@ def _(
     }
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
-    # keys, and the "shuffle_method" config is set to "rapidsmpf"
+    # keys, and the "shuffle_method" config is set to "rapidsmpf-single".
     shuffle_method = ir.shuffle_method
-    if shuffle_method in ("rapidsmpf", "rapidsmpf-single"):  # pragma: no cover
-        try:
-            if shuffle_method == "rapidsmpf-single":
-                from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
+    if shuffle_method == "rapidsmpf-single":  # pragma: no cover
+        from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
 
-                options["cluster_kind"] = "single"
-            else:
-                from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
-
-                options["cluster_kind"] = "dask"
-            graph.update(
-                rapidsmpf_shuffle_graph(
-                    get_key_name(child),
-                    get_key_name(ir),
-                    partition_info[child].count,
-                    partition_info[ir].count,
-                    RMPFIntegrationSortedShuffle,
-                    options,
-                    sort_boundaries_name,
-                )
+        graph.update(
+            rapidsmpf_shuffle_graph(
+                get_key_name(child),
+                get_key_name(ir),
+                partition_info[child].count,
+                partition_info[ir].count,
+                RMPFIntegrationSortedShuffle,
+                options,
+                sort_boundaries_name,
             )
-        except (ImportError, ValueError) as err:
-            # ImportError: rapidsmpf is not installed
-            # ValueError: rapidsmpf couldn't find a distributed client
-            if shuffle_method == "rapidsmpf":  # pragma: no cover
-                # Only raise an error if the user specifically
-                # set the shuffle method to "rapidsmpf"
-                raise ValueError(
-                    "Rapidsmpf is not installed correctly or the current "
-                    "Dask cluster does not support rapidsmpf shuffling."
-                ) from err
-        else:
-            return graph
+        )
+        return graph
 
     # Simple task-based fall-back
     graph.update(
