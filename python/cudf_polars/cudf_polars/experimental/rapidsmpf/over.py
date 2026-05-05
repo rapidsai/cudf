@@ -565,12 +565,16 @@ async def over_actor(
         row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
 
         modulus = max(comm.nranks, metadata_in.local_count)
+        # After hash-shuffle, each row lives on exactly one rank — never duplicated.
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
             partitioning=maybe_remap_partitioning(eval_ir, metadata_in.partitioning),
-            duplicated=metadata_in.duplicated,
+            duplicated=False,
         )
         await send_metadata(ch_out, context, metadata_out)
+
+        # When input is duplicated, only rank 0 inserts to avoid N-fold overcounting.
+        skip_insert = metadata_in.duplicated and comm.rank != 0
 
         shuffle = ShuffleManager(context, comm, modulus, collective_id)
         row_counter = 0
@@ -587,11 +591,13 @@ async def over_actor(
                 boundaries.append(
                     (msg.sequence_number, row_counter, row_counter + n_rows)
                 )
-                chunk = await asyncio.to_thread(
-                    _add_row_idx_sync, chunk, row_counter, stream, context.br()
-                )
+                if not skip_insert:
+                    chunk = await asyncio.to_thread(
+                        _add_row_idx_sync, chunk, row_counter, stream, context.br()
+                    )
                 row_counter += n_rows
-                inserter.insert_hash(chunk, key_indices)
+                if not skip_insert:
+                    inserter.insert_hash(chunk, key_indices)
 
         if not boundaries:
             await ch_out.drain(context)

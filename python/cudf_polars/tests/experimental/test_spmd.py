@@ -393,3 +393,63 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [sum(expected_xs)] * 3
             else:
                 assert grp["result"].to_list() == [1, 2, 3]
+
+
+def test_over_nonscalar_duplicated_input(
+    request: pytest.FixtureRequest,
+    spmd_comm: Communicator,
+) -> None:
+    """Non-scalar over() on duplicated=True input produces correct row count and values.
+
+    group_by() AllGathers its result onto all ranks (duplicated=True).  The
+    non-scalar over() path must output duplicated=False and only insert rows on
+    rank 0, otherwise all ranks insert the same rows (N-fold overcounting) and
+    the downstream Repartition skips AllGather.
+
+    max_rows_per_partition=10 keeps all 3 rows in one chunk (local_count=1),
+    so modulus=max(nranks=2, 1)=2, matching the _SAME_RANK_KEYS assignments.
+    """
+    with SPMDEngine(
+        comm=spmd_comm,
+        executor_options={"max_rows_per_partition": 10, "dynamic_planning": {}},
+    ) as engine:
+        rank = engine.rank
+        nranks = engine.nranks
+        if nranks < 2:
+            request.applymarker(
+                pytest.mark.skip(reason="multirank test requires at least 2 ranks")
+            )
+        if nranks > 2:
+            request.applymarker(
+                pytest.mark.skip(
+                    reason="key assignments only probed for exactly 2 ranks"
+                )
+            )
+
+        coarse_g = _SAME_RANK_KEYS[rank]
+        fine_gs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        xs = [rank * 30 + 10, rank * 30 + 20, rank * 30 + 30]
+        lf = pl.LazyFrame({"fine_g": fine_gs, "coarse_g": [coarse_g] * 3, "x": xs})
+        local_result = (
+            lf.group_by("fine_g", "coarse_g")
+            .agg(pl.col("x").first())
+            .with_columns(
+                pl.col("x").rank(method="dense").over("coarse_g").alias("rank_x")
+            )
+            .collect(engine=engine)
+        )
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            )
+
+        assert global_result.shape == (3 * nranks, 4)
+        for r in range(nranks):
+            cg = _SAME_RANK_KEYS[r]
+            grp = global_result.filter(pl.col("coarse_g") == cg).sort("x")
+            assert grp.shape == (3, 4), f"coarse_g={cg}: wrong row count"
+            assert grp["rank_x"].to_list() == [1, 2, 3], (
+                f"coarse_g={cg}: expected dense ranks [1, 2, 3] "
+                f"but got {grp['rank_x'].to_list()}"
+            )
