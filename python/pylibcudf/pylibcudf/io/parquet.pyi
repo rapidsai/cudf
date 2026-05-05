@@ -112,7 +112,8 @@ class ChunkedParquetWriter:
     def write(self, table: Table, partitions_info: object = None) -> None: ...
     @staticmethod
     def from_options(
-        options: ChunkedParquetWriterOptions, stream: CudaStreamLike | None = None
+        options: ChunkedParquetWriterOptions,
+        stream: CudaStreamLike | None = None,
     ) -> ChunkedParquetWriter: ...
 
 class ChunkedParquetWriterOptions:

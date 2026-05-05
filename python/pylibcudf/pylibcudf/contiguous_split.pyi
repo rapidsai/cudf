@@ -19,7 +19,9 @@ def pack(
     stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> PackedColumns: ...
-def unpack(input: PackedColumns, stream: CudaStreamLike | None = None) -> Table: ...
+def unpack(
+    input: PackedColumns, stream: CudaStreamLike | None = None
+) -> Table: ...
 def unpack_from_memoryviews(
     metadata: memoryview[bytes],
     gpu_data: Span,

@@ -24,7 +24,9 @@ def sequence(
     size: int, init: Scalar, step: Scalar, stream: CudaStreamLike | None = None
 ) -> Column: ...
 def repeat(
-    input_table: Table, count: Column | int, stream: CudaStreamLike | None = None
+    input_table: Table,
+    count: Column | int,
+    stream: CudaStreamLike | None = None,
 ) -> Table: ...
 def calendrical_month_sequence(
     n: int, init: Scalar, months: int, stream: CudaStreamLike | None = None

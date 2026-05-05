@@ -3,4 +3,6 @@
 
 from pylibcudf.utils import CudaStreamLike
 
-def join_streams(streams: list[CudaStreamLike], stream: CudaStreamLike) -> None: ...
+def join_streams(
+    streams: list[CudaStreamLike], stream: CudaStreamLike
+) -> None: ...

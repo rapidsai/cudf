@@ -73,10 +73,14 @@ def shift(
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def slice(
-    input: ColumnOrTable, indices: list[int], stream: CudaStreamLike | None = None
+    input: ColumnOrTable,
+    indices: list[int],
+    stream: CudaStreamLike | None = None,
 ) -> list[ColumnOrTable]: ...
 def split(
-    input: ColumnOrTable, splits: list[int], stream: CudaStreamLike | None = None
+    input: ColumnOrTable,
+    splits: list[int],
+    stream: CudaStreamLike | None = None,
 ) -> list[ColumnOrTable]: ...
 def copy_if_else(
     lhs: Column | Scalar,

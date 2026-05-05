@@ -5,12 +5,9 @@ from typing import Protocol
 
 from rmm.pylibrmm.stream import Stream
 
-
 class HasCudaStream(Protocol):
     def __cuda_stream__(self) -> tuple[int, int]: ...
 
-
 CudaStreamLike = Stream | HasCudaStream
-
 
 def _get_stream(stream: CudaStreamLike | None = None) -> Stream: ...
