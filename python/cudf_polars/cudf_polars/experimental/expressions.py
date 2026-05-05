@@ -41,12 +41,12 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
-from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
+from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )

@@ -35,10 +35,7 @@ from cudf_polars.utils.config import (
     StreamingExecutor,
     _default_cuda_stream_policy,
 )
-from cudf_polars.utils.cuda_stream import (
-    get_cuda_stream,
-    get_dask_cuda_stream,
-)
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
 def test_polars_verbose_warns(monkeypatch):
@@ -784,8 +781,3 @@ def test_dask_sink_to_directory_false_raises() -> None:
         ValueError, match="The dask cluster requires sink_to_directory=True"
     ):
         StreamingExecutor(cluster=Cluster.DASK, sink_to_directory=False)
-
-
-def test_get_dask_cuda_stream() -> None:
-    stream = get_dask_cuda_stream()
-    assert stream is not None

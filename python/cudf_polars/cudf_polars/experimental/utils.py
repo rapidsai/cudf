@@ -10,7 +10,7 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
+from cudf_polars.dsl.expr import Col, GroupedWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
