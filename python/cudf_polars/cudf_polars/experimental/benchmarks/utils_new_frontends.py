@@ -1295,7 +1295,7 @@ def run_polars_dask(
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
-def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
+def setup_logging(query_id: int, iteration: int) -> None:
     import cudf_polars.dsl.tracing
 
     if not cudf_polars.dsl.tracing.LOG_TRACES:
