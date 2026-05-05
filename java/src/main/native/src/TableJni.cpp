@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "MultiInputAggregation.hpp"
 #include "csv_chunked_writer.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -55,6 +56,8 @@
 #include <arrow/ipc/api.h>
 
 #include <algorithm>
+#include <tuple>
+#include <unordered_map>
 
 namespace cudf {
 namespace jni {
@@ -1091,6 +1094,8 @@ void set_nullable(ArrowSchema* schema)
 }  // namespace cudf
 
 using cudf::jni::convert_table_for_return;
+using cudf::jni::multi_input_aggregation;
+using cudf::jni::multi_input_role;
 using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
 
@@ -3896,38 +3901,106 @@ Java_ai_rapids_cudf_Table_groupByAggregate(JNIEnv* env,
     // as we go.
     std::vector<cudf::groupby::aggregation_request> requests;
 
+    struct min_by_group {
+      cudf::column_view ordering_col;
+      cudf::column_view value_col;
+      int ordering_slot = -1;
+      int value_slot    = -1;
+      int request_index = -1;
+    };
+
+    std::unordered_map<int64_t, min_by_group> min_by_groups;
+    std::vector<std::tuple<int, int, int>> regular_result_slots;
+
     int previous_index = -1;
     for (int i = 0; i < n_values.size(); i++) {
-      cudf::groupby::aggregation_request req;
-      int col_index = n_values[i];
-
       cudf::groupby_aggregation* agg = dynamic_cast<cudf::groupby_aggregation*>(n_agg_instances[i]);
       JNI_ARG_CHECK(
         env, agg != nullptr, "aggregation is not an instance of groupby_aggregation", nullptr);
+
+      if (auto* multi_agg = dynamic_cast<multi_input_aggregation*>(agg)) {
+        auto& group = min_by_groups[multi_agg->multi_input_id];
+        if (multi_agg->role == multi_input_role::ORDERING_FOR_MIN_BY) {
+          JNI_ARG_CHECK(env,
+                        group.ordering_slot == -1,
+                        "multiple ordering columns for min_by multi-input id",
+                        nullptr);
+          group.ordering_col  = n_input_table->column(n_values[i]);
+          group.ordering_slot = i;
+        } else if (multi_agg->role == multi_input_role::VALUE_FOR_MIN_BY) {
+          JNI_ARG_CHECK(env,
+                        group.value_slot == -1,
+                        "multiple value columns for min_by multi-input id",
+                        nullptr);
+          group.value_col  = n_input_table->column(n_values[i]);
+          group.value_slot = i;
+        } else {
+          JNI_ARG_CHECK(env, false, "unsupported multi-input aggregation role", nullptr);
+        }
+        continue;
+      }
+
+      int col_index = n_values[i];
       std::unique_ptr<cudf::groupby_aggregation> cloned(
         dynamic_cast<cudf::groupby_aggregation*>(agg->clone().release()));
 
-      if (col_index == previous_index) {
-        requests.back().aggregations.push_back(std::move(cloned));
-      } else {
+      if (requests.empty() || col_index != previous_index) {
+        cudf::groupby::aggregation_request req;
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(std::move(cloned));
         requests.push_back(std::move(req));
+        previous_index = col_index;
       }
-      previous_index = col_index;
+
+      int const request_index     = static_cast<int>(requests.size() - 1);
+      int const aggregation_index = static_cast<int>(requests.back().aggregations.size());
+      requests.back().aggregations.push_back(std::move(cloned));
+      regular_result_slots.emplace_back(i, request_index, aggregation_index);
+    }
+
+    for (auto& group_entry : min_by_groups) {
+      auto& group = group_entry.second;
+      JNI_ARG_CHECK(env,
+                    group.ordering_slot != -1,
+                    "missing ordering column for min_by multi-input id",
+                    nullptr);
+      JNI_ARG_CHECK(
+        env, group.value_slot != -1, "missing value column for min_by multi-input id", nullptr);
+
+      cudf::groupby::aggregation_request req;
+      req.values = group.ordering_col;
+      req.aggregations.push_back(cudf::make_argmin_aggregation<cudf::groupby_aggregation>());
+      group.request_index = static_cast<int>(requests.size());
+      requests.push_back(std::move(req));
     }
 
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::groupby::aggregation_result>> result =
       grouper.aggregate(requests);
 
-    std::vector<std::unique_ptr<cudf::column>> result_columns;
-    int agg_result_size = result.second.size();
-    for (int agg_result_index = 0; agg_result_index < agg_result_size; agg_result_index++) {
-      int col_agg_size = result.second[agg_result_index].results.size();
-      for (int col_agg_index = 0; col_agg_index < col_agg_size; col_agg_index++) {
-        result_columns.push_back(std::move(result.second[agg_result_index].results[col_agg_index]));
-      }
+    std::vector<std::unique_ptr<cudf::column>> result_columns(n_values.size());
+
+    for (auto const& [slot, request_index, aggregation_index] : regular_result_slots) {
+      result_columns[slot] = std::move(result.second[request_index].results[aggregation_index]);
     }
+
+    for (auto const& group_entry : min_by_groups) {
+      auto const& group  = group_entry.second;
+      auto const indices = result.second[group.request_index].results.front()->view();
+      cudf::column_view indices_no_nulls(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                         indices.size(),
+                                         static_cast<void const*>(indices.data<cudf::size_type>()),
+                                         nullptr,
+                                         0);
+
+      auto gathered = cudf::gather(cudf::table_view{{group.value_col, group.ordering_col}},
+                                   indices_no_nulls,
+                                   indices.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
+                                   cudf::negative_index_policy::NOT_ALLOWED);
+      auto cols     = gathered->release();
+      result_columns[group.value_slot]    = std::move(cols[0]);
+      result_columns[group.ordering_slot] = std::move(cols[1]);
+    }
+
     return convert_table_for_return(env, result.first, std::move(result_columns));
   }
   JNI_CATCH(env, NULL);

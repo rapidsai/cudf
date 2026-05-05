@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -61,7 +61,9 @@ abstract class Aggregation {
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
         MERGE_HISTOGRAM(35),
-        BITWISE_AGG(36);
+        BITWISE_AGG(36),
+        ORDERING_FOR_MIN_BY(37),
+        VALUE_FOR_MIN_BY(38);
 
         final int nativeId;
 
@@ -1047,11 +1049,90 @@ abstract class Aggregation {
         return new BitXorAggregation();
     }
 
+    static Aggregation orderingForMinBy(long multiInputId) {
+        return new OrderingForMinByAgg(multiInputId);
+    }
+
+    static Aggregation valueForMinBy(long multiInputId) {
+        return new ValueForMinByAgg(multiInputId);
+    }
+
+    /**
+     * Multi-input aggregation for ordering column in min_by operation.
+     */
+    private static final class OrderingForMinByAgg extends Aggregation {
+        private final long multiInputId;
+
+        OrderingForMinByAgg(long multiInputId) {
+            super(Kind.ORDERING_FOR_MIN_BY);
+            this.multiInputId = multiInputId;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createMultiInputAgg(kind.nativeId, multiInputId);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + Long.hashCode(multiInputId);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof OrderingForMinByAgg) {
+                OrderingForMinByAgg o = (OrderingForMinByAgg) other;
+                return o.multiInputId == this.multiInputId;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Multi-input aggregation for value column in min_by operation.
+     */
+    private static final class ValueForMinByAgg extends Aggregation {
+        private final long multiInputId;
+
+        ValueForMinByAgg(long multiInputId) {
+            super(Kind.VALUE_FOR_MIN_BY);
+            this.multiInputId = multiInputId;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createMultiInputAgg(kind.nativeId, multiInputId);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + Long.hashCode(multiInputId);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof ValueForMinByAgg) {
+                ValueForMinByAgg o = (ValueForMinByAgg) other;
+                return o.multiInputId == this.multiInputId;
+            }
+            return false;
+        }
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
      */
     private static native long createNoParamAgg(int kind);
+
+    /**
+     * Create a multi-input aggregation with a correlation ID.
+     */
+    private static native long createMultiInputAgg(int kind, long multiInputId);
 
     /**
      * Create an nth aggregation.

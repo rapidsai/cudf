@@ -1,8 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "MultiInputAggregation.hpp"
 #include "cudf_jni_apis.hpp"
 
 #include <cudf/aggregation.hpp>
@@ -297,6 +298,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
     std::unique_ptr<cudf::aggregation> ret =
       cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
+  }
+  JNI_CATCH(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMultiInputAgg(JNIEnv* env,
+                                                                            jclass class_object,
+                                                                            jint kind,
+                                                                            jlong multi_input_id)
+{
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    JNI_ARG_CHECK(
+      env, cudf::jni::is_multi_input_role(kind), "invalid multi-input aggregation kind", 0);
+    auto agg = std::make_unique<cudf::jni::multi_input_aggregation>(
+      static_cast<cudf::jni::multi_input_role>(kind), multi_input_id);
+    return reinterpret_cast<jlong>(agg.release());
   }
   JNI_CATCH(env, 0);
 }
