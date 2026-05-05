@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
     _evaluate_chunk_sync,
+    allgather_reduce,
     chunk_to_frame,
     chunkwise_evaluate,
     empty_table_chunk,
@@ -518,7 +519,9 @@ async def _shuffle_and_reassemble(
     metadata_in: ChannelMetadata,
     input_ir: IR,
     tracer: Any,
-    collective_id: int,
+    size_collective_id: int,
+    shuffle_collective_id: int,
+    target_partition_size: int,
 ) -> None:
     """
     Hash-shuffle rows by partition keys so each rank owns its groups, evaluate
@@ -528,7 +531,6 @@ async def _shuffle_and_reassemble(
     row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
     key_indices = ir.key_indices
 
-    modulus = comm.nranks
     # After hash-shuffle, each row lives on exactly one rank — never duplicated.
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
@@ -540,20 +542,37 @@ async def _shuffle_and_reassemble(
     # When input is duplicated, only rank 0 inserts to avoid N-fold overcounting.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    shuffle = ShuffleManager(context, comm, modulus, collective_id)
+    # Phase 0: buffer all incoming chunks and measure local data size so we can
+    # AllGather total size and chunk count before creating the ShuffleManager.
+    raw_chunks: list[tuple[int, TableChunk]] = []  # (seq_num, chunk)
+    local_size = 0
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = TableChunk.from_message(
+            msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
+        local_size += chunk.data_alloc_size()
+        raw_chunks.append((msg.sequence_number, chunk))
+
+    local_count = len(raw_chunks)
+    total_size, total_count = await allgather_reduce(
+        context, comm, size_collective_id, local_size, local_count
+    )
+    modulus = min(
+        max(comm.nranks, total_size // max(1, target_partition_size)),
+        max(1, total_count),
+    )
+
+    shuffle = ShuffleManager(context, comm, modulus, shuffle_collective_id)
     row_counter = 0
     boundaries: list[tuple[int, int, int]] = []
 
     # Phase 1: stamp each row with its local position and insert into the shuffle
     async with shuffle.inserting() as inserter:
-        while (msg := await ch_in.recv(context)) is not None:
-            chunk = TableChunk.from_message(
-                msg, br=context.br()
-            ).make_available_and_spill(context.br(), allow_overbooking=True)
+        for seq_num, chunk in raw_chunks:
             stream = ir_context.get_cuda_stream()
             n_rows = chunk.table_view().num_rows()
             boundaries.append(
-                (msg.sequence_number, row_counter, row_counter + n_rows)
+                (seq_num, row_counter, row_counter + n_rows)
             )
             if not skip_insert:
                 chunk = await asyncio.to_thread(
@@ -566,6 +585,15 @@ async def _shuffle_and_reassemble(
     if not boundaries:
         await ch_out.drain(context)
         return
+
+    # Over.do_evaluate outputs ir.exprs columns; _evaluate_with_row_idx_sync
+    # appends row_idx_col at the end since it is not in ir.schema.
+    col_names = [ne.name for ne in ir.exprs] + [row_idx_col]
+    col_types = [ne.value.dtype for ne in ir.exprs] + [_INT64_DTYPE]
+    idx_col_idx = len(ir.exprs)  # row_idx_col is always last
+    keep_col_indices = list(range(len(ir.exprs)))
+    split_values: list[int] = [start for _, start, _ in boundaries[1:]]
+    accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
 
     # Three-phase sort-and-split.
     #
@@ -581,12 +609,6 @@ async def _shuffle_and_reassemble(
     #
     # This keeps total working memory proportional to one boundary's output
     # at a time (not all sorted partitions simultaneously).
-    col_names: list[str] | None = None
-    col_types: list[DataType] | None = None
-    idx_col_idx: int = -1
-    keep_col_indices: list[int] = []
-    split_values: list[int] = [start for _, start, _ in boundaries[1:]]
-    accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
 
     # Phase 2
     for partition_id in shuffle.local_partitions():
@@ -604,14 +626,6 @@ async def _shuffle_and_reassemble(
             ir_context,
             row_idx_col,
         )
-        if col_names is None:
-            col_names = [c.name for c in result_df.columns]
-            col_types = [c.dtype for c in result_df.columns]
-            idx_col_idx = col_names.index(row_idx_col)
-            keep_col_indices = [
-                i for i, n in enumerate(col_names) if n != row_idx_col
-            ]
-        assert col_types is not None
         sorted_df = await asyncio.to_thread(
             _sort_df_by_row_idx_sync,
             result_df,
@@ -640,32 +654,30 @@ async def _shuffle_and_reassemble(
     # TODO: if all input rows were shuffled to other ranks, accumulated is
     # all-empty while boundaries is non-empty (seq-num gap).  Revisit once
     # rapidsmpf empty-partition handling is clearer.
-    if col_names is not None:
-        assert col_types is not None
-        for k, (seq_num, _start, _end) in enumerate(boundaries):
-            # Bring sub-chunks to device if spilled (async wait).
-            available: list[TableChunk] = []
-            for chunk in accumulated[k]:
-                avail = await chunk.make_available_or_wait(
-                    context, net_memory_delta=0
-                )
-                available.append(avail)
-            accumulated[k] = []  # drop refs to now-consumed originals
-
-            result = await asyncio.to_thread(
-                _concat_sort_boundary_sync,
-                available,
-                col_names,
-                col_types,
-                idx_col_idx,
-                keep_col_indices,
-                ir_context,
-                context.br(),
+    for k, (seq_num, _start, _end) in enumerate(boundaries):
+        # Bring sub-chunks to device if spilled (async wait).
+        available: list[TableChunk] = []
+        for chunk in accumulated[k]:
+            avail = await chunk.make_available_or_wait(
+                context, net_memory_delta=0
             )
-            if tracer is not None:
-                tracer.add_chunk(table=result.table_view())
-            await ch_out.send(context, Message(seq_num, result))
-            del available
+            available.append(avail)
+        accumulated[k] = []  # drop refs to now-consumed originals
+
+        result = await asyncio.to_thread(
+            _concat_sort_boundary_sync,
+            available,
+            col_names,
+            col_types,
+            idx_col_idx,
+            keep_col_indices,
+            ir_context,
+            context.br(),
+        )
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+        del available
 
     await ch_out.drain(context)
 
@@ -678,7 +690,8 @@ async def over_actor(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    collective_id: int,
+    collective_ids: list[int],
+    target_partition_size: int,
 ) -> None:
     """
     Streaming actor for window ``over()`` expressions.
@@ -703,8 +716,13 @@ async def over_actor(
         The output channel.
     ch_in
         The input channel.
-    collective_id
-        Collective ID reserved for this operation (AllGather or Shuffle).
+    collective_ids
+        Collective IDs reserved for this operation. Scalar Over nodes receive
+        one ID (AllGather); non-scalar nodes receive two (size AllGather +
+        Shuffle).
+    target_partition_size
+        Target output partition size in bytes, used to compute the shuffle
+        modulus for the non-scalar path.
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
@@ -737,25 +755,41 @@ async def over_actor(
             )
             return
 
-        path = _allgather_and_broadcast if ir.is_scalar else _shuffle_and_reassemble
-        await path(
-            context,
-            comm,
-            ir,
-            ir_context,
-            ch_in,
-            ch_out,
-            metadata_in,
-            input_ir,
-            tracer,
-            collective_id,
-        )
+        if ir.is_scalar:
+            await _allgather_and_broadcast(
+                context,
+                comm,
+                ir,
+                ir_context,
+                ch_in,
+                ch_out,
+                metadata_in,
+                input_ir,
+                tracer,
+                collective_ids[0],
+            )
+        else:
+            await _shuffle_and_reassemble(
+                context,
+                comm,
+                ir,
+                ir_context,
+                ch_in,
+                ch_out,
+                metadata_in,
+                input_ir,
+                tracer,
+                size_collective_id=collective_ids[0],
+                shuffle_collective_id=collective_ids[1],
+                target_partition_size=target_partition_size,
+            )
 
 
 @generate_ir_sub_network.register(Over)
 def _(
     ir: Over, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    config_options = rec.state["config_options"]
     actors, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
@@ -767,7 +801,8 @@ def _(
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
-            collective_ids.pop(),
+            collective_ids,
+            config_options.executor.target_partition_size,
         )
     ]
     return actors, channels
