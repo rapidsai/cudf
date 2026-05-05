@@ -417,6 +417,7 @@ class SPMDEngine(StreamingEngine):
         """
         if self._ctx is not None:
             self._ctx.shutdown()
+            self._ctx = None
 
     @classmethod
     def from_options(cls, options: StreamingOptions) -> SPMDEngine:
@@ -488,7 +489,7 @@ class SPMDEngine(StreamingEngine):
         # no-op so we skip the call rather than risk a type mismatch.
         if self._comm.nranks > 1:
             barrier(self._comm)
-        # Same-thread shutdow, _reset runs on the thread that built the
+        # Same-thread shutdown, _reset runs on the thread that built the
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
