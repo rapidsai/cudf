@@ -909,6 +909,7 @@ sort_merge_join::left_join(table_view const& left,
         sizes[1]   = preprocessed_right_indices->size();
 
         batched_copy(input_iterators.begin(), output_iterators.begin(), sizes.begin(), 2, stream);
+        stream.synchronize();  // ensures the vectors are not destroyed before the copy is completed
       }
 
       // Append filtered null rows with JoinNoMatch for right side
