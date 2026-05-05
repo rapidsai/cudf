@@ -20,4 +20,6 @@ function(find_and_configure_rmm BUILD_SHARED EXCLUDE_FROM_ALL)
 
 endfunction()
 
-find_and_configure_rmm(${CUDF_DEPS_BUILD_SHARED})
+# The EXCLUDE_FROM_ALL functionality is not leveraged for RMM since it is a public dependency.
+# Future work will add more granular handling of exclusion for public dependencies.
+find_and_configure_rmm(${CUDF_DEPS_BUILD_SHARED} OFF)
