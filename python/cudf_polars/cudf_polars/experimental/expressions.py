@@ -482,7 +482,7 @@ def _decompose_expr_node(
         )
         (expr,) = columns
         return expr, input_ir, partition_info
-    elif isinstance(expr, GroupedWindow):
+    elif isinstance(expr, GroupedWindow) and _dynamic_planning_on(config_options):
         return _decompose_grouped_window_node(
             expr, input_ir, partition_info, config_options, names=names
         )
