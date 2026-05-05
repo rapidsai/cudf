@@ -14,7 +14,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     all_gather_host_data,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 pytestmark = pytest.mark.spmd
 
@@ -36,15 +35,14 @@ def _struct(rank: int) -> bytes:
 
 
 @pytest.mark.parametrize("make_data", [_empty, _text, _bytearray, _struct])
-def test_all_gather_host_data(spmd_comm, make_data) -> None:
+def test_all_gather_host_data(spmd_engine, make_data) -> None:
     """Each rank sends rank-specific data; results are correct and ordered."""
-    with SPMDEngine(comm=spmd_comm) as spmd_engine:
-        comm = spmd_engine.comm
-        br = spmd_engine.context.br()
-        result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
-        assert len(result) == comm.nranks
-        for i, item in enumerate(result):
-            assert item == bytes(make_data(i))
+    comm = spmd_engine.comm
+    br = spmd_engine.context.br()
+    result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
+    assert len(result) == comm.nranks
+    for i, item in enumerate(result):
+        assert item == bytes(make_data(i))
 
 
 def test_gather_cluster_info(streaming_engine) -> None:
