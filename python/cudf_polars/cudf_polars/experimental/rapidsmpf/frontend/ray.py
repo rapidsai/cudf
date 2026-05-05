@@ -63,7 +63,6 @@ def evaluate_pipeline_ray_mode(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    query_id: uuid.UUID,
     logical_plan_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -84,8 +83,6 @@ def evaluate_pipeline_ray_mode(
         Python thread-pool executor used to drive the actor network.
     collect_metadata
         Whether to collect runtime metadata.
-    query_id
-        A unique identifier for the query.
     logical_plan_id
         Client-generated UUID identifying the entire logical plan.
 

@@ -128,7 +128,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    query_id=query_id,
                     logical_plan_id=logical_plan_id,
                 )
             case "dask":
@@ -140,7 +139,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    query_id=query_id,
                     logical_plan_id=logical_plan_id,
                 )
             case "single":
