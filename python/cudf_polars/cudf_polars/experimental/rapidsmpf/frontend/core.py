@@ -491,6 +491,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
+    logical_plan_id: uuid.UUID,
     worker_id: uuid.UUID,
     quent_context: cudf_polars.quent.QuentContext,
     quent_logger: cudf_polars.quent._logging.QuentLogger,
@@ -520,6 +521,9 @@ def evaluate_on_rank(
         Executor configuration forwarded from the client.
     collect_metadata
         Whether to collect channel metadata during execution.
+    logical_plan_id
+        Client-generated UUID identifying the entire logical plan.
+        Used to associate logical and physical plan telemetry events.
     worker_id
         Quent worker ID for this rank. When provided, rank 0 emits
         plan-level Quent telemetry (logical and physical plan
@@ -541,21 +545,7 @@ def evaluate_on_rank(
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
 
-    # TODO: this logical_plan_id is probably wrong. We need this ID to summarize the *entire* logical plan.
-    # not just the last node. We should just generate a random ID on the client and
-    # pass that in.
-    logical_plan_id = uuid.UUID(int=ir.get_stable_id())
     physical_plan_id = uuid.uuid4()
-
-    # # TODO: Make context a Union[SPMDContext, RayContext, DaskContext]
-    # streaming_context = (
-    #     config_options.executor.spmd_context
-    #     or config_options.executor.ray_context
-    #     or config_options.executor.dask_context
-    # )
-    # assert streaming_context is not None, (
-    #     f"No streaming context provided, worker_id={worker_id}"
-    # )
 
     if worker_id is not None:
         # TODO: split out build from emit.

@@ -1149,6 +1149,8 @@ def run_polars_spmd(
             allgather_polars_dataframe,
         )
 
+        is_rank_0 = engine.rank == 0
+
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
@@ -1168,14 +1170,15 @@ def run_polars_spmd(
             validation_files,
             prepare_validation_result=_allgather_result,
         )
+        if engine.rank > 0:
+            sys.exit(1 if (query_failures or validation_failures) else 0)
+
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
-        if engine.rank > 0:
-            sys.exit(1 if (query_failures or validation_failures) else 0)
 
-    if _HAS_STRUCTLOG and run_config.collect_traces:
+    if _HAS_STRUCTLOG and run_config.collect_traces and is_rank_0:
         _write_quent_traces(run_config.run_id, engine=engine)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
@@ -1344,8 +1347,6 @@ def setup_logging(query_id: int, iteration: int) -> None:
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
         ]
 
-        # For logging to an in-memory buffer
-
         # For logging to a file
         json_renderer = structlog.processors.JSONRenderer()
 
@@ -1372,25 +1373,7 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 
 def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
-    """
-    Write collected Quent events to logs/{run_id}.ndjson.
-
-    Reads ``engine.worker_quent_events`` which is populated during
-    :meth:`~StreamingEngine.shutdown` — the base class drains the local
-    relay buffer (driver-side events like Engine init/exit) and each
-    subclass extends it with remote worker events (Worker init/exit,
-    Plan declarations, etc.).
-
-    Call this *after* engine shutdown (i.e. after the ``with engine:``
-    block exits).
-
-    Parameters
-    ----------
-    run_id
-        Unique run identifier, used for the output filename.
-    engine
-        The (already shut down) engine instance.
-    """
+    """Write collected Quent events to logs/{run_id}.ndjson."""
     quent_logs = list(engine._quent_events)
 
     logs_dir = Path("logs")
