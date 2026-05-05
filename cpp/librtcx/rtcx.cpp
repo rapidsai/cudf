@@ -1241,8 +1241,8 @@ std::string reflect_template(std::string_view template_name,
   return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
 }
 
-rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
-                                  size_t uncompressed_size,
+rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binary,
+                                  std::size_t uncompressed_size,
                                   std::string_view compression)
 {
   RTCX_EXPECTS(compression == "none" || compression == "zstd",
@@ -1251,14 +1251,14 @@ rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
   auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
 
   if (compression == "zstd") {
-    size_t errc = ZSTD_decompress(
+    std::size_t errc = ::ZSTD_decompress(
       decompressed.data(), uncompressed_size, compressed_binary.data(), compressed_binary.size());
 
     RTCX_EXPECTS(
-      !ZSTD_isError(errc) && errc == uncompressed_size,
+      !::ZSTD_isError(errc) && errc == uncompressed_size,
       std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
                   errc,
-                  ZSTD_getErrorName(errc)),
+                  ::ZSTD_getErrorName(errc)),
       std::runtime_error);
   } else {
     // compression is "none", so just copy the data

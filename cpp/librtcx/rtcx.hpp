@@ -981,8 +981,8 @@ std::string reflect_template(std::string_view template_name, TemplateArgs&&... t
  * invalid compressed data, or if the decompressed data size does not match the expected
  * uncompressed size
  */
-rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
-                                  size_t uncompressed_size,
+rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binary,
+                                  std::size_t uncompressed_size,
                                   std::string_view compression);
 
 }  // namespace rtcx
