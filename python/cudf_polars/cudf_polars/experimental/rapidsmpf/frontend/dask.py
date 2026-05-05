@@ -321,7 +321,8 @@ def _reset_worker(
     assert mp_ctx.comm is not None
     assert mp_ctx.ctx is not None
     # Collective: all ranks idle before any rank tears down its Context.
-    barrier(mp_ctx.comm)
+    if mp_ctx.comm.nranks > 1:
+        barrier(mp_ctx.comm)
     # Explicit shutdown is thread-affine. ``distributed.worker.run``
     # dispatches sync work onto the worker's event-loop thread, which is
     # the same thread that built the Context in ``_setup_worker``.

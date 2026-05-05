@@ -476,9 +476,6 @@ class SPMDEngine(StreamingEngine):
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
         # Collective: synchronize all ranks before tearing down the Context.
-        # ``barrier`` is UCXX-specific; for the non-rrun path
-        # (single_communicator with ``nranks=1``) it's semantically a
-        # no-op so we skip the call rather than risk a type mismatch.
         if self._comm.nranks > 1:
             barrier(self._comm)
         # Same-thread shutdown, _reset runs on the thread that built the

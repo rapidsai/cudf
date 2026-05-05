@@ -266,7 +266,8 @@ class RankActor:
             raise RuntimeError("reset() requires setup_worker() to have run")
         assert self._comm is not None
         # Collective: all ranks idle before any rank tears down its Context.
-        barrier(self._comm)
+        if self._comm.nranks > 1:
+            barrier(self._comm)
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
