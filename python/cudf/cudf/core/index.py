@@ -3216,7 +3216,15 @@ class DatetimeIndex(Index):
                 data = data.astype(dtype)
         elif data.dtype.kind != "M":
             if is_dtype_obj_string(data.dtype):
-                data = data.astype(np.dtype("datetime64[us]"))
+                # Pandas's array_to_datetime falls back to [s] when no
+                # concrete (non-NaT) datetime is observed — empty input or
+                # an all-NaT/None array (pandas-dev/pandas#55901). Otherwise
+                # parsed strings land on [us].
+                if len(data) == 0 or data.null_count == len(data):
+                    target_unit = "s"
+                else:
+                    target_unit = "us"
+                data = data.astype(np.dtype(f"datetime64[{target_unit}]"))
             else:
                 data = data.astype(np.dtype("datetime64[ns]"))
 
@@ -4040,11 +4048,20 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            # Re-infer from the result's values rather than trusting the cached
-            # self._freq, which (e.g. via deserialization or external assignment)
-            # may not conform. Pandas validates on assignment and raises when
-            # values don't match, so inferring keeps the proxy round-trip robust.
-            result.freq = result.inferred_freq
+            # Prefer pandas's inferred_freq because the cached self._freq may
+            # not conform (e.g. after deserialization or external assignment)
+            # and pandas validates the assignment against the index values.
+            # Fall back to the cached freq when inference is impossible
+            # (empty / single-element indexes), so resample round-trips
+            # preserve `freq` to match pandas.
+            inferred = result.inferred_freq
+            if inferred is None:
+                try:
+                    result.freq = self._freq._maybe_as_fast_pandas_offset()
+                except ValueError:
+                    pass
+            else:
+                result.freq = inferred
         return result
 
     @_performance_tracking

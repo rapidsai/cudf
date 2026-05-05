@@ -884,6 +884,7 @@ BooleanDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -910,6 +911,7 @@ Int8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -923,6 +925,7 @@ Int16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -935,6 +938,7 @@ Int32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -947,6 +951,7 @@ Int64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -959,6 +964,7 @@ UInt8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -971,6 +977,7 @@ UInt16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -983,6 +990,7 @@ UInt32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -995,6 +1003,7 @@ UInt64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -1076,6 +1085,7 @@ Float32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -1088,6 +1098,7 @@ Float64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )

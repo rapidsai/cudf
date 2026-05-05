@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -166,7 +166,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
   .set_name("mixed_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join_complex_ast,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -176,7 +177,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join_complex_ast,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("ast_levels", {1, 5, 10});
+  .add_int64_axis("ast_levels", {1, 5, 10})
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -185,7 +187,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
   .set_name("mixed_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -194,7 +197,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
   .set_name("mixed_full_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -203,7 +207,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
   .set_name("mixed_left_semi_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -212,4 +217,5 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
   .set_name("mixed_left_anti_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});

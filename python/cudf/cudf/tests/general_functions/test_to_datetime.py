@@ -308,3 +308,102 @@ def test_to_datetime_errors_non_scalar_not_implemented(errors):
 def test_to_datetime_errors_ignore_deprecated():
     with pytest.warns(FutureWarning):
         cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # all-None object inputs land on [s] in pandas 3 — see
+        # pandas-dev/pandas#55901 (NPY_FR_GENERIC fallback to "s").
+        pd.Series([None, None, None]),
+        pd.Series([None] * 5),
+        pd.Series([], dtype="object"),
+    ],
+)
+def test_to_datetime_all_null_object_returns_seconds(data):
+    expected = pd.to_datetime(data)
+    actual = cudf.to_datetime(cudf.from_pandas(data))
+    assert actual.dtype == expected.dtype
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    ["1/1/2000", "2020-01-01", "2020-01-01 12:34:56"],
+)
+def test_to_datetime_scalar_string_returns_us(scalar):
+    # Scalar string parsing should land on [us] (pandas 3 default).
+    expected = pd.to_datetime(scalar)
+    actual = cudf.to_datetime(scalar)
+    assert actual.unit == expected.unit
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [19801222, 20010112, None],
+        [19801222, 20010112, np.nan],
+        [19801222, 20010112],
+    ],
+)
+def test_to_datetime_int_with_format_us(values):
+    # Float-with-format path (triggered when a None/nan widens int -> float)
+    # must land on [us] regardless of whether the format contains "%f".
+    expected = pd.to_datetime(values, format="%Y%m%d")
+    actual = cudf.to_datetime(values, format="%Y%m%d")
+    assert actual.dtype == expected.dtype
+    assert_eq(actual, expected, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+            }
+        ).astype("int16"),
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+                "hour": [6, 7],
+                "minute": [58, 59],
+                "second": [10, 11],
+            }
+        ),
+    ],
+)
+def test_to_datetime_dataframe_default_us(df):
+    # DataFrame -> datetime defaults to [us] in pandas 3 (was [s] in cuDF).
+    expected = pd.to_datetime(df)
+    actual = cudf.to_datetime(cudf.from_pandas(df))
+    assert actual.dtype == expected.dtype
+    assert_eq(actual, expected)
+
+
+def test_to_datetime_dataframe_with_ns_field_widens_to_ns():
+    # When a ns field is explicitly present, the result must widen to [ns]
+    # (and the integer factor arithmetic must not lose the trailing ns).
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2016],
+            "month": [2, 3],
+            "day": [4, 5],
+            "hour": [6, 7],
+            "minute": [58, 59],
+            "second": [10, 11],
+            "ms": [1, 1],
+            "us": [2, 2],
+            "ns": [3, 3],
+        }
+    )
+    expected = pd.to_datetime(df)
+    actual = cudf.to_datetime(cudf.from_pandas(df))
+    assert actual.dtype == expected.dtype
+    assert_eq(actual, expected)
