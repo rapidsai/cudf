@@ -213,6 +213,14 @@ class _SeriesIlocIndexer(_FrameIndexer):
             if not (value is None or value is cudf.NA or value is np.nan):
                 tmp_value = as_column(value)
                 if (
+                    self._frame.dtype.kind in "uifb"
+                    and tmp_value.dtype.kind == "O"
+                ):
+                    raise TypeError(
+                        f"Invalid value '{value!s}' for dtype "
+                        f"'{self._frame.dtype}'"
+                    )
+                if (
                     not tmp_value.can_cast_safely(self._frame.dtype)
                     and not is_pandas_nullable_extension_dtype(
                         self._frame.dtype
@@ -522,8 +530,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         if dtype is not None:
             dtype = cudf.dtype(dtype)
         attrs = None
+        allows_duplicate_labels = True
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             attrs = deepcopy(getattr(data, "attrs", None))
+            if isinstance(data, (pd.Series, Series)):
+                allows_duplicate_labels = data.flags.allows_duplicate_labels
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if not isinstance(data, (pd.Series, pd.Index)):
@@ -598,7 +609,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             first_index = index
             second_index = None
 
-        super().__init__({name: column}, index=first_index, attrs=attrs)
+        super().__init__(
+            {name: column},
+            index=first_index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -625,8 +641,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         index: Index | None = None,
         name: Any = no_default,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ) -> Series:
-        out = super()._from_data(data=data, index=index, attrs=attrs)
+        out = super()._from_data(
+            data=data,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if name is not no_default:
             out.name = name
         return out
@@ -1021,7 +1043,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
-        res._attrs = self.attrs  # type: ignore[has-type]
+        self._propagate_metadata(res)
         return res
 
     @_performance_tracking
@@ -2027,6 +2049,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             name=self.name,
         )
         res.attrs = self.attrs
+        res.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels  # type: ignore[has-type]
+        )
         return res
 
     @_performance_tracking
@@ -3575,9 +3600,9 @@ class Series(SingleColumnFrame, IndexedFrame):
                 ".rename does not currently support relabeling the index."
             )
         out_data = self._data.copy(deep=copy)
-        return Series._from_data(
-            out_data, self.index, name=index, attrs=self.attrs
-        )
+        out = Series._from_data(out_data, self.index, name=index)
+        self._propagate_metadata(out)
+        return out
 
     @_performance_tracking
     def add_prefix(self, prefix, axis=None):

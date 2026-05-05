@@ -184,6 +184,21 @@ CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
 }
 
 namespace gpu {
+
+/**
+ * @brief Advances past a run of delimiter characters at the start of a field.
+ */
+__device__ __inline__ char const* skip_leading_delimiter_run(char const* begin,
+                                                             char const* end,
+                                                             parse_options_view const& opts)
+{
+  if (!opts.multi_delimiter) { return begin; }
+  while (begin < end && *begin == opts.delimiter) {
+    ++begin;
+  }
+  return begin;
+}
+
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *

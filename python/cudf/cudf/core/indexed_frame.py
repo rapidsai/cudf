@@ -234,19 +234,37 @@ class _FrameIndexer:
                     name=idx.name,
                 )
             else:
-                idx_copy = idx._as_int_index()
-                _append_new_row_inplace(idx_copy._column, key_val)
+                int_idx = idx._as_int_index()
+                new_index_col = _append_new_row(int_idx._column, key_val)
+                idx_copy = cudf.Index._from_column(
+                    new_index_col, name=int_idx.name
+                )
         else:
-            idx_copy = idx.copy(deep=True)
-            _append_new_row_inplace(idx_copy._column, key_val)
+            new_index_col = _append_new_row(idx._column, key_val)
+            idx_copy = cudf.Index._from_column(new_index_col, name=idx.name)
 
-        # Append value(s) to column(s)
+        # Append value(s) to column(s) without mutating the existing
+        # column object. Column objects can be shared between Series
+        # and DataFrame views, so in-place mutation would corrupt views.
+        # Bypass ColumnAccessor's length-validation by writing to the
+        # underlying mapping directly; both `nrows` and the cached
+        # `columns` tuple are invalidated so the frame's view of its
+        # columns reflects the new lengths.
+        old_ncols = len(self._frame._data)
         if columns_df is not None:
             for col in columns_df._column_names:
-                _append_new_row_inplace(self._frame._data[col], value)
+                self._frame._data._data[col] = _append_new_row(
+                    self._frame._data[col], value
+                )
         elif column is not None:
-            _append_new_row_inplace(self._frame._column, value)
+            new_col = _append_new_row(self._frame._column, value)
+            self._frame._data._data[self._frame.name] = new_col
 
+        try:
+            del self._frame._data.nrows
+        except AttributeError:
+            pass
+        self._frame._data._clear_cache(old_ncols, len(self._frame._data))
         self._frame._index = idx_copy
 
 
@@ -295,6 +313,7 @@ class IndexedFrame(Frame):
         data: ColumnAccessor | MutableMapping[Any, ColumnBase],
         index: Index,
         attrs: dict[Hashable, Any] | None = None,
+        allows_duplicate_labels: bool = True,
     ):
         super().__init__(data=data)
         if not isinstance(index, Index):
@@ -311,6 +330,9 @@ class IndexedFrame(Frame):
             self._attrs = {}
         else:
             self._attrs = attrs
+        self._flags = pd.Flags(
+            self, allows_duplicate_labels=allows_duplicate_labels
+        )
 
     @property
     def _num_rows(self) -> int:
@@ -356,12 +378,100 @@ class IndexedFrame(Frame):
     def attrs(self, value: Mapping[Hashable, Any]) -> None:
         self._attrs = dict(value)
 
+    @property
+    def flags(self) -> pd.Flags:
+        """
+        Get the properties associated with this cudf object.
+
+        The available flags are
+
+        * :attr:`pandas.Flags.allows_duplicate_labels`
+
+        See Also
+        --------
+        pandas.Flags : Flags that apply to cudf objects.
+        DataFrame.attrs : Global metadata applying to this dataset.
+
+        Notes
+        -----
+        "Flags" differ from "metadata". Flags reflect properties of the
+        :class:`Series` or :class:`DataFrame` (e.g. whether it allows
+        duplicate labels). Metadata refer to properties of the dataset,
+        and should be stored in ``DataFrame.attrs``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2]})
+        >>> df.flags
+        <Flags(allows_duplicate_labels=True)>
+
+        Flags can be set via ``set_flags`` or by directly mutating the
+        ``pandas.Flags`` object:
+
+        >>> df.flags.allows_duplicate_labels = False
+        >>> df.flags
+        <Flags(allows_duplicate_labels=False)>
+        """
+        return self._flags
+
+    def set_flags(
+        self,
+        *,
+        copy: bool = False,
+        allows_duplicate_labels: bool | None = None,
+    ) -> Self:
+        """
+        Return a new object with updated flags.
+
+        Parameters
+        ----------
+        copy : bool, default False
+            Specify if a copy of the object should be made. The default
+            value is preserved for compatibility with pandas.
+        allows_duplicate_labels : bool, optional
+            Whether the returned object allows duplicate labels.
+
+        Returns
+        -------
+        Series or DataFrame
+            The same type as the caller.
+
+        See Also
+        --------
+        DataFrame.attrs : Global metadata applying to this dataset.
+        DataFrame.flags : Global flags applying to this object.
+
+        Notes
+        -----
+        This method returns a new object that's a view on the same data.
+        The returned object will have ``flags.allows_duplicate_labels``
+        set to the value passed. Unlike the pandas version, the default
+        of ``copy=False`` does not share memory between the two objects
+        because cudf backs all operations with copy-on-write buffers.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2]})
+        >>> df.flags.allows_duplicate_labels
+        True
+        >>> df2 = df.set_flags(allows_duplicate_labels=False)
+        >>> df2.flags.allows_duplicate_labels
+        False
+        """
+        df = self.copy(deep=copy)
+        if allows_duplicate_labels is not None:
+            df.flags["allows_duplicate_labels"] = allows_duplicate_labels
+        return df
+
     @classmethod
     def _from_data(
         cls,
         data: MutableMapping,
         index: Index | None = None,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ):
         out = super()._from_data(data)
         if index is None:
@@ -373,7 +483,26 @@ class IndexedFrame(Frame):
             )
         out._index = index
         out._attrs = {} if attrs is None else attrs
+        out._flags = pd.Flags(
+            out, allows_duplicate_labels=allows_duplicate_labels
+        )
         return out
+
+    def _propagate_metadata(self, result: "IndexedFrame") -> "IndexedFrame":
+        """Copy ``attrs`` and ``flags`` from ``self`` onto ``result``.
+
+        Mirrors pandas' ``__finalize__``: ``attrs`` are deep-copied and
+        ``allows_duplicate_labels`` is propagated unchanged. The
+        :class:`~pandas.errors.DuplicateLabelError` check is performed by
+        :class:`pandas.Flags` when setting ``allows_duplicate_labels`` to
+        ``False``.
+        """
+        result._attrs = copy.deepcopy(self._attrs)
+        result._flags = pd.Flags(result, allows_duplicate_labels=True)
+        result.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels
+        )
+        return result
 
     @_performance_tracking
     def _get_columns_by_label(self, labels) -> Self:
@@ -382,17 +511,21 @@ class IndexedFrame(Frame):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data(
+        out = self._from_data(
             self._data.select_by_label(labels),
             index=self.index,
-            attrs=self.attrs,
         )
+        self._propagate_metadata(out)
+        return out
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
         out = super()._from_data_like_self(data)
         out.index = self.index
         out._attrs = copy.deepcopy(self._attrs)
+        out._flags = pd.Flags(
+            out, allows_duplicate_labels=self._flags.allows_duplicate_labels
+        )
         return out
 
     @_performance_tracking
@@ -439,7 +572,9 @@ class IndexedFrame(Frame):
                 index._freq = self.index._freq
 
         data = dict(zip(column_names, data_columns, strict=True))
-        return type(self)._from_data(data, index, attrs=self.attrs)
+        out = type(self)._from_data(data, index)
+        self._propagate_metadata(out)
+        return out
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
@@ -453,6 +588,10 @@ class IndexedFrame(Frame):
         if inplace:
             self._index = result.index
             self._attrs = result._attrs
+            self._flags = pd.Flags(
+                self,
+                allows_duplicate_labels=result._flags.allows_duplicate_labels,
+            )
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
@@ -647,6 +786,7 @@ class IndexedFrame(Frame):
             self._data.copy(deep=deep),
             self.index.copy(deep=deep),
             attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
+            allows_duplicate_labels=self._flags.allows_duplicate_labels,
         )
 
     @_performance_tracking
@@ -4761,13 +4901,26 @@ class IndexedFrame(Frame):
         )
         if operands is NotImplemented:
             return NotImplemented
+        # Mirror pandas' `__finalize__(self).__finalize__(other)` for binary
+        # ops: `other`'s attrs override `self`'s when non-empty, and
+        # `allows_duplicate_labels` is the AND of both inputs.
+        attrs = self.attrs
+        allows_duplicate_labels = self._flags.allows_duplicate_labels
+        if isinstance(other, IndexedFrame):
+            if other.attrs:
+                attrs = other.attrs
+            allows_duplicate_labels = (
+                allows_duplicate_labels
+                and other._flags.allows_duplicate_labels
+            )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
                 **ca_attributes,
             ),
             index=out_index,
-            attrs=self.attrs,
+            attrs=copy.deepcopy(attrs),
+            allows_duplicate_labels=allows_duplicate_labels,
         )
 
     def _make_operands_and_index_for_binop(
@@ -6852,8 +7005,8 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return False
 
 
-def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
-    """Append a scalar `value` to the end of `col` inplace.
+def _append_new_row(col: ColumnBase, value: ScalarLike) -> ColumnBase:
+    """Return a new column with a scalar `value` appended to the end of `col`.
     Cast to common type if possible
     """
     val_col = as_column(
@@ -6906,4 +7059,4 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             "Cannot append mixed types: "
             f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
         )
-    col._mimic_inplace(res_col, inplace=True)
+    return res_col

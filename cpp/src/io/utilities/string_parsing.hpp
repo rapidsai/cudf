@@ -6,18 +6,21 @@
 
 #include "io/utilities/trie.hpp"
 
-#include <cudf/strings/string_view.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
+#include <cuda/std/optional>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <functional>
+#include <memory>
 #include <optional>
 
 namespace cudf::io {
@@ -53,11 +56,12 @@ struct parse_options_view {
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
   bool multi_delimiter;
-  /// Device pointer to 24 locale-aware month name string_views:
-  /// indices  0-11 = abbreviated names (ABMON_1 .. ABMON_12, e.g. "Jan")
-  /// indices 12-23 = full names        (MON_1   .. MON_12,   e.g. "January")
-  /// nullptr means named-month parsing is disabled (numeric-only dates still parse).
-  cudf::string_view const* month_names{nullptr};
+  /// Locale month names used by named-month parsing. The 24-entry strings column
+  /// mirrors the month-name subset used by cudf::strings timestamp formatting:
+  /// indices  0-11 = full names        (MON_1   .. MON_12,   e.g. "January")
+  /// indices 12-23 = abbreviated names (ABMON_1 .. ABMON_12, e.g. "Jan")
+  /// nullopt means named-month parsing is disabled (numeric-only dates still parse).
+  cuda::std::optional<cudf::column_device_view> month_names{cuda::std::nullopt};
 };
 
 struct parse_options {
@@ -78,12 +82,11 @@ struct parse_options {
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
-  /// Owning flat device buffer for locale month-name characters.
-  std::optional<rmm::device_uvector<char>> month_names_data;
-  /// Owning device array of 24 string_views into month_names_data:
-  ///   indices  0-11 = abbreviated (ABMON_1 .. ABMON_12)
-  ///   indices 12-23 = full        (MON_1   .. MON_12)
-  std::optional<rmm::device_uvector<cudf::string_view>> month_names_sv;
+  /// Owning strings column for the locale month names used by named-month parsing.
+  std::unique_ptr<cudf::column> month_names;
+  /// Device view of month_names, copied into parse_options_view when present.
+  std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>>
+    month_names_device_view;
 
   [[nodiscard]] json_inference_options_view json_view() const
   {
@@ -112,7 +115,9 @@ struct parse_options {
             cudf::detail::make_trie_view(trie_false),
             cudf::detail::make_trie_view(trie_na),
             multi_delimiter,
-            (month_names_sv && !month_names_sv->is_empty()) ? month_names_sv->data() : nullptr};
+            month_names_device_view
+              ? cuda::std::optional<cudf::column_device_view>{*month_names_device_view}
+              : cuda::std::nullopt};
   }
 };
 

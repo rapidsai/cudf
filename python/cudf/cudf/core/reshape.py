@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
 from typing import TYPE_CHECKING, Literal
 
@@ -134,6 +135,30 @@ def _normalize_series_and_dataframe(
                     sr_name += 1
 
             objs[idx] = obj.to_frame(name=name)
+
+
+def _finalize_concat_metadata(result, inputs):
+    """Propagate ``attrs`` and ``flags`` onto a concat result.
+
+    Mirrors pandas' ``__finalize__`` with ``input_objs``: ``attrs`` are
+    propagated only when all inputs carry identical non-empty ``attrs``,
+    and ``allows_duplicate_labels`` is the AND across inputs. The
+    :class:`~pandas.errors.DuplicateLabelError` check is performed by
+    :class:`pandas.Flags` when setting ``allows_duplicate_labels`` to
+    ``False``.
+    """
+    inputs = [
+        obj for obj in inputs if isinstance(obj, (cudf.Series, cudf.DataFrame))
+    ]
+    if not inputs or not isinstance(result, (cudf.Series, cudf.DataFrame)):
+        return result
+    if all(bool(obj.attrs) for obj in inputs):
+        first_attrs = inputs[0].attrs
+        if all(obj.attrs == first_attrs for obj in inputs[1:]):
+            result._attrs = copy.deepcopy(first_attrs)
+    allows = all(obj.flags.allows_duplicate_labels for obj in inputs)
+    result.flags.allows_duplicate_labels = allows
+    return result
 
 
 def concat(
@@ -286,6 +311,38 @@ def concat(
     0      a       1       c       3
     1      b       2       d       4
     """
+    # Materialize the input sequence so both `concat`'s implementation and
+    # `_finalize_concat_metadata` see identical objects (concat consumes
+    # dicts/iterators).
+    if isinstance(objs, dict):
+        inputs = list(objs.values())
+    else:
+        inputs = list(objs)
+    result = _concat_impl(
+        objs,
+        axis=axis,
+        join=join,
+        ignore_index=ignore_index,
+        keys=keys,
+        levels=levels,
+        names=names,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+    return _finalize_concat_metadata(result, inputs)
+
+
+def _concat_impl(
+    objs,
+    axis=0,
+    join="outer",
+    ignore_index=False,
+    keys=None,
+    levels=None,
+    names=None,
+    verify_integrity=False,
+    sort=None,
+):
     if keys is not None:
         raise NotImplementedError("keys is currently not supported")
     if levels is not None:

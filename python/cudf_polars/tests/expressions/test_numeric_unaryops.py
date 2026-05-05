@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -71,25 +71,25 @@ def ldf(with_nulls, dtype):
     )
 
 
-def test_unary(ldf, op):
+def test_unary(engine: pl.GPUEngine, ldf, op):
     expr = getattr(pl.col("a"), op)()
     q = ldf.select(expr)
-    assert_gpu_result_equal(q, check_exact=False)
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
 @pytest.mark.parametrize("base_literal", [False, True])
 @pytest.mark.parametrize("exponent_literal", [False, True])
-def test_pow(ldf, base_literal, exponent_literal):
+def test_pow(engine: pl.GPUEngine, ldf, base_literal, exponent_literal):
     base = pl.lit(2) if base_literal else pl.col("a")
     exponent = pl.lit(-3, dtype=pl.Float32) if exponent_literal else pl.col("b")
 
     q = ldf.select(base.pow(exponent))
 
-    assert_gpu_result_equal(q, check_exact=False)
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
 @pytest.mark.parametrize("natural", [True, False])
-def test_log(ldf, natural):
+def test_log(engine: pl.GPUEngine, ldf, natural):
     if natural:
         expr = pl.col("a").log()
     else:
@@ -97,16 +97,16 @@ def test_log(ldf, natural):
 
     q = ldf.select(expr)
 
-    assert_gpu_result_equal(q, check_exact=False)
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
 @pytest.mark.parametrize("col", ["a", "b", "c"])
-def test_negate(ldf, col):
+def test_negate(engine: pl.GPUEngine, ldf, col):
     q = ldf.select(-pl.col(col))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_null_count():
+def test_null_count(engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
             "foo": [1, None, 3],
@@ -119,27 +119,38 @@ def test_null_count():
         pl.col("bar").is_null().sum(),
         pl.col("baz").is_null().sum(),
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 def test_rank_supported(
-    request, ldf: pl.LazyFrame, method: RankMethod, *, descending: bool
+    engine: pl.GPUEngine,
+    request,
+    ldf: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
 ):
     request.applymarker(
         pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
     )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("test", ["with_nulls", "with_ties"])
 def test_rank_methods_with_nulls_or_ties(
-    request, ldf: pl.LazyFrame, method: RankMethod, *, descending: bool, test: str
+    engine: pl.GPUEngine,
+    request,
+    ldf: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
+    test: str,
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
@@ -152,7 +163,7 @@ def test_rank_methods_with_nulls_or_ties(
         expr = pl.when((base % 2) == 0).then(pl.lit(-5)).otherwise(base)
 
     q = ldf.select(expr.rank(method=method, descending=descending))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("seed", [42])
@@ -164,6 +175,6 @@ def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> N
 
 
 @pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
-def test_round(ldf: pl.LazyFrame, mode: RoundMethod) -> None:
+def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> None:
     q = ldf.select(pl.col("a").sin().round(2, mode=mode))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

@@ -1552,6 +1552,18 @@ class Index(SingleColumnFrame):
     def is_unique(self) -> bool:
         return self._column.is_unique
 
+    def _maybe_check_unique(self) -> None:
+        """Raise :class:`~pandas.errors.DuplicateLabelError` if non-unique.
+
+        Mirrors ``pandas.Index._maybe_check_unique``. Used by
+        ``NDFrame.flags.allows_duplicate_labels`` (``pandas.Flags``)
+        when setting the flag to ``False``.
+        """
+        if not self.is_unique:
+            from pandas.errors import DuplicateLabelError
+
+            raise DuplicateLabelError(f"Index has duplicates.\n{self}")
+
     @_performance_tracking
     def equals(self, other) -> bool:
         if not isinstance(other, Index) or len(self) != len(other):
@@ -3194,7 +3206,15 @@ class DatetimeIndex(Index):
                 data = data.astype(dtype)
         elif data.dtype.kind != "M":
             if is_dtype_obj_string(data.dtype):
-                data = data.astype(np.dtype("datetime64[us]"))
+                # Pandas's array_to_datetime falls back to [s] when no
+                # concrete (non-NaT) datetime is observed — empty input or
+                # an all-NaT/None array (pandas-dev/pandas#55901). Otherwise
+                # parsed strings land on [us].
+                if len(data) == 0 or data.null_count == len(data):
+                    target_unit = "s"
+                else:
+                    target_unit = "us"
+                data = data.astype(np.dtype(f"datetime64[{target_unit}]"))
             else:
                 data = data.astype(np.dtype("datetime64[ns]"))
 
@@ -3253,9 +3273,11 @@ class DatetimeIndex(Index):
         columns: list[ColumnBase],
         column_names: Iterable[str] | None = None,
     ):
-        result = super()._from_columns_like_self(columns, column_names)
-        result._freq = _validate_freq(self._freq)
-        return result
+        # Callers (e.g. _gather, sort_values) reorder or filter values, so we
+        # cannot assume self._freq still applies to the result. Leave _freq
+        # unset (None) and let callers that know the freq is preserved set it
+        # explicitly. Matches pandas, which drops freq on these operations.
+        return super()._from_columns_like_self(columns, column_names)
 
     @classmethod
     def _from_data(
@@ -3518,7 +3540,7 @@ class DatetimeIndex(Index):
             self._column.to_julian_date(), name=self.name
         )
 
-    def to_period(self, freq) -> pd.PeriodIndex:
+    def to_period(self, freq=None) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
 
     def normalize(self) -> Self:
@@ -4016,7 +4038,20 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            # Prefer pandas's inferred_freq because the cached self._freq may
+            # not conform (e.g. after deserialization or external assignment)
+            # and pandas validates the assignment against the index values.
+            # Fall back to the cached freq when inference is impossible
+            # (empty / single-element indexes), so resample round-trips
+            # preserve `freq` to match pandas.
+            inferred = result.inferred_freq
+            if inferred is None:
+                try:
+                    result.freq = self._freq._maybe_as_fast_pandas_offset()
+                except ValueError:
+                    pass
+            else:
+                result.freq = inferred
         return result
 
     @_performance_tracking
@@ -4209,11 +4244,6 @@ class DatetimeIndex(Index):
         """
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_column(result_col, name=self.name)
-
-    def repeat(self, repeats, axis=None) -> Self:
-        res = super().repeat(repeats, axis=axis)
-        res._freq = None
-        return res
 
 
 class TimedeltaIndex(Index):

@@ -266,7 +266,10 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  public:
   equality_literals_collector() = default;
 
-  equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+  equality_literals_collector(ast::expression const& expr,
+                              cudf::host_span<cudf::data_type const> output_dtypes,
+                              cudf::host_span<cudf::size_type const> output_column_schemas = {},
+                              cudf::host_span<SchemaElement const> schema_tree             = {});
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -300,8 +303,12 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
-  size_type _num_input_columns;
+  cudf::host_span<cudf::data_type const> _output_dtypes;
   std::vector<std::vector<ast::literal*>> _literals;
+
+ private:
+  cudf::host_span<cudf::size_type const> _output_column_schemas;
+  cudf::host_span<SchemaElement const> _schema_tree;
 };
 
 /**

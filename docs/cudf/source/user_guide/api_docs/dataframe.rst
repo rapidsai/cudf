@@ -247,6 +247,8 @@ Metadata
    :toctree: api/
 
    DataFrame.attrs
+   DataFrame.flags
+   DataFrame.set_flags
 
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

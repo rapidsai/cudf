@@ -6,11 +6,12 @@
 #pragma once
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/time_utils.cuh"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/strings/string_view.hpp>
+#include <cudf/wrappers/durations.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
@@ -44,51 +45,53 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
   return value;
 }
 
+__inline__ __device__ char lowercase_ascii(char c)
+{
+  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+}
+
 /**
  * @brief Converts a month name token to its numeric value 1–12, or 0 if not recognized.
  *
  * Supports abbreviated names (e.g. "Jan") and full names (e.g. "January"). Matching is
  * case-insensitive for ASCII characters.
  *
- * @p locale_names must point to a device array of 24 `cudf::string_view` objects laid
- * out as follows (matching the order returned by `nl_langinfo`):
- *   - indices  0–11 : abbreviated month names (ABMON_1 .. ABMON_12)
- *   - indices 12–23 : full month names        (MON_1   .. MON_12)
+ * @p locale_names must contain a 24-row strings column device view laid out as follows:
+ *   - indices  0-11 : full month names        (MON_1   .. MON_12)
+ *   - indices 12-23 : abbreviated month names (ABMON_1 .. ABMON_12)
  *
  * This locale-aware path mirrors the behaviour of the `cudf::strings::to_timestamps` API
  * which accepts names derived from `nl_langinfo(ABMON_*)` / `nl_langinfo(MON_*)` on the
- * host and passes them into the GPU kernel — see `cudf/strings/convert/convert_datetime.hpp`.
+ * host and passes them into the GPU kernel; see `cudf/strings/convert/convert_datetime.hpp`.
  *
- * When @p locale_names is null the token is treated as unrecognized and 0 is returned;
+ * When @p locale_names is empty the token is treated as unrecognized and 0 is returned;
  * callers that need named-month support are expected to pre-fill @p locale_names in host
  * code (e.g. via `nl_langinfo`).
  *
  * @param begin        Pointer to the first character of the month-name token
  * @param end          Pointer one past the last character of the token
- * @param locale_names Device pointer to 24 locale `string_view`s, or nullptr
+ * @param locale_names Optional 24-row strings column device view
  * @return Month number 1–12, or 0 if the token is not recognised
  */
-__inline__ __device__ int month_from_name(char const* begin,
-                                          char const* end,
-                                          cudf::string_view const* locale_names)
+__inline__ __device__ int month_from_name(
+  char const* begin,
+  char const* end,
+  cuda::std::optional<cudf::column_device_view> const& locale_names)
 {
-  if (locale_names == nullptr) { return 0; }
+  if (!locale_names.has_value() || locale_names->size() < 24) { return 0; }
 
-  auto const len = static_cast<cudf::size_type>(end - begin);
+  auto const len    = static_cast<cudf::size_type>(end - begin);
+  auto const& names = *locale_names;
 
-  // Locale-aware path: compare the token case-insensitively against every abbreviated
-  // (indices 0–11) and full (indices 12–23) locale month name.
+  // Locale-aware path: compare the token case-insensitively against every full
+  // (indices 0-11) and abbreviated (indices 12-23) locale month name.
   for (int i = 0; i < 12; ++i) {
-    // Check abbreviated name first (shorter, so try first to avoid a prefix match
-    // of, e.g., "Mar" matching the full name "March").
     for (int pass = 0; pass < 2; ++pass) {
-      auto const& sv = locale_names[(pass == 0) ? i : (12 + i)];
+      auto const sv = names.element<cudf::string_view>((pass == 0) ? i : (12 + i));
       if (sv.size_bytes() == 0 || sv.size_bytes() != len) { continue; }
       bool match = true;
       for (cudf::size_type j = 0; j < len && match; ++j) {
-        // Case-insensitive ASCII comparison via | 0x20 (works for ASCII A-Z only;
-        // locale names that require multi-byte case-folding are compared as-is).
-        match = ((begin[j] | 0x20) == (sv.data()[j] | 0x20));
+        match = (lowercase_ascii(begin[j]) == lowercase_ascii(sv.data()[j]));
       }
       if (match) { return i + 1; }
     }
@@ -117,7 +120,7 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(
   char const* begin,
   char const* end,
   bool dayfirst,
-  cudf::string_view const* locale_names = nullptr)
+  cuda::std::optional<cudf::column_device_view> const& locale_names)
 {
   using namespace cuda::std::chrono;
 
@@ -332,10 +335,11 @@ __device__ constexpr bool is_digit(char c) { return c >= '0' and c <= '9'; }
  * @return Timestamp converted to `timestamp_type`
  */
 template <typename timestamp_type>
-__inline__ __device__ timestamp_type to_timestamp(char const* begin,
-                                                  char const* end,
-                                                  bool dayfirst,
-                                                  cudf::string_view const* locale_names = nullptr)
+__inline__ __device__ timestamp_type
+to_timestamp(char const* begin,
+             char const* end,
+             bool dayfirst,
+             cuda::std::optional<cudf::column_device_view> const& locale_names)
 {
   using duration_type = typename timestamp_type::duration;
 

@@ -9,14 +9,11 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../polars/
 
 DESELECTED_TESTS=(
-    "tests/unit/test_polars_import.py::test_polars_import" # relies on a polars built in place
+    "tests/unit/meta/test_polars_import.py::test_polars_import" # relies on a polars built in place
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort[True]" # relies on polars built in debug mode
-    "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags" # Mock library error
     "tests/docs/test_user_guide.py" # No dot binary in CI image
-    "tests/unit/test_polars_import.py::test_fork_safety" # test started to hang in polars-1.14
     "tests/unit/operations/test_join.py::test_join_4_columns_with_validity" # fails in some systems, see https://github.com/pola-rs/polars/issues/19870
     "tests/unit/io/test_csv.py::test_read_web_file" # fails in rockylinux8 due to SSL CA issues
-    "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async" # Will fail until we have https://github.com/pola-rs/polars/pull/26616
     # TODO: Debug and re-enable the following tests
     "tests/unit/sql/test_distinct.py::test_distinct_with_full_outer_join" # SQLite in CI doesn't support FULL OUTER JOIN
     "tests/unit/sql/test_distinct.py::test_distinct_basic_single_column"
@@ -62,14 +59,12 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
-echo "Run polars tests with the streaming executor"
-CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
-CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
-    python -m pytest \
+echo "Run polars tests with injected in-memory GPU engine"
+python -m pytest \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
-       -p cudf_polars.testing.plugin \
+       -p cudf_polars.testing.inject_gpu_engine \
        -n 8 \
        --dist=worksteal \
        -vv \
@@ -77,18 +72,17 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
-       --executor streaming
-
+       --inject-gpu-engine in-memory
 
 # TODO(ResourceWarning): https://github.com/rapidsai/cudf/issues/22181
-echo "Run polars tests with the streaming executor and rapidsmpf runtime"
+echo "Run polars tests with injected SPMD GPU engine, small blocksize"
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
-       -p cudf_polars.testing.plugin \
+       -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
        -n 8 \
        --dist=worksteal \
@@ -97,21 +91,5 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
-       --executor streaming \
-       --blocksize-mode small \
-       --runtime rapidsmpf
-
-echo "Run polars tests with the in-memory executor"
-python -m pytest \
-       --import-mode=importlib \
-       --cache-clear \
-       -m "" \
-       -p cudf_polars.testing.plugin \
-       -n 8 \
-       --dist=worksteal \
-       -vv \
-       --tb=native \
-       $DESELECTED_TESTS_STR \
-       "$@" \
-       py-polars/tests \
-       --executor in-memory
+       --inject-gpu-engine spmd \
+       --inject-gpu-engine-blocksize small

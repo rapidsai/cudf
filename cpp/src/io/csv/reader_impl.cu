@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <future>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -156,27 +157,32 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
     // Check if end of a column/row
     if (pos == row.size() - 1 || (!quotation && row[pos] == parse_opts.terminator) ||
         (!quotation && row[pos] == parse_opts.delimiter)) {
-      // This is the header, add the column name
-      if (header_row >= 0) {
-        // Include the current character, in case the line is not terminated
-        int col_name_len = pos - prev + 1;
-        // Exclude the delimiter/terminator is present
-        if (row[pos] == parse_opts.delimiter || row[pos] == parse_opts.terminator) {
-          --col_name_len;
-        }
-        // Also exclude '\r' character at the end of the column name if it's
-        // part of the terminator
-        if (col_name_len > 0 && parse_opts.terminator == '\n' && row[pos] == '\n' &&
-            row[pos - 1] == '\r') {
-          --col_name_len;
-        }
+      // Include the current character, in case the line is not terminated
+      int col_name_len = pos - prev + 1;
+      // Exclude the delimiter/terminator if present
+      if (row[pos] == parse_opts.delimiter || row[pos] == parse_opts.terminator) { --col_name_len; }
+      // Also exclude '\r' character at the end of the column name if it's
+      // part of the terminator
+      if (col_name_len > 0 && parse_opts.terminator == '\n' && row[pos] == '\n' &&
+          row[pos - 1] == '\r') {
+        --col_name_len;
+      }
 
-        col_names.emplace_back(
-          remove_quotes(std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
-                        parse_opts.quotechar));
-      } else {
-        // This is the first data row, add the automatically generated name
-        col_names.push_back(prefix + std::to_string(col_names.size()));
+      // In delim_whitespace mode, leading/trailing/internal whitespace runs must not produce
+      // empty fields (pandas behavior). Internal runs are collapsed by the adjacent-delimiter
+      // skip loop below; this flag handles the leading/trailing empty-field cases here.
+      bool const skip_empty_field = parse_opts.multi_delimiter && col_name_len == 0;
+
+      if (!skip_empty_field) {
+        if (header_row >= 0) {
+          // This is the header, add the column name
+          col_names.emplace_back(remove_quotes(
+            std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
+            parse_opts.quotechar));
+        } else {
+          // This is the first data row, add the automatically generated name
+          col_names.push_back(prefix + std::to_string(col_names.size()));
+        }
       }
 
       // Stop parsing when we hit the line terminator; relevant when there is
@@ -186,8 +192,8 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
       if (!quotation && row[pos] == parse_opts.terminator) { break; }
 
       // Skip adjacent delimiters if delim_whitespace is set
-      while (parse_opts.multi_delimiter && pos < row.size() && row[pos] == parse_opts.delimiter &&
-             row[pos + 1] == parse_opts.delimiter) {
+      while (parse_opts.multi_delimiter && pos + 1 < row.size() &&
+             row[pos] == parse_opts.delimiter && row[pos + 1] == parse_opts.delimiter) {
         ++pos;
       }
       prev = pos + 1;
@@ -213,6 +219,32 @@ constexpr std::array<uint8_t, 3> UTF8_BOM = {0xEF, 0xBB, 0xBF};
 {
   return data.size() >= UTF8_BOM.size() &&
          memcmp(data.data(), UTF8_BOM.data(), UTF8_BOM.size()) == 0;
+}
+
+std::unique_ptr<cudf::column> make_strings_column_from_host(
+  host_span<std::string const> host_strings, rmm::cuda_stream_view stream)
+{
+  auto const host_chars = std::accumulate(host_strings.begin(), host_strings.end(), std::string{});
+  auto d_chars          = cudf::detail::make_device_uvector_async(
+    host_span<char const>{host_chars}, stream, cudf::get_current_device_resource_ref());
+
+  std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
+  std::transform_inclusive_scan(
+    host_strings.begin(),
+    host_strings.end(),
+    offsets.begin() + 1,
+    std::plus<cudf::size_type>{},
+    [](auto const& str) { return static_cast<cudf::size_type>(str.size()); });
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector(offsets, stream, cudf::get_current_device_resource_ref()),
+    rmm::device_buffer{},
+    0);
+
+  return cudf::make_strings_column(static_cast<cudf::size_type>(host_strings.size()),
+                                   std::move(d_offsets),
+                                   d_chars.release(),
+                                   0,
+                                   {});
 }
 
 /**
@@ -1195,12 +1227,12 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
   // Handle user-defined N/A values, whereby field data is treated as null
   parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts, stream);
 
-  // Build locale-aware month name table (mirrors the approach used by
-  // cudf::strings::to_timestamps, which accepts names derived from nl_langinfo).
-  // Query abbreviated (ABMON_1..12) and full (MON_1..12) month names from the
-  // current LC_TIME locale and copy them to device memory so the GPU kernel can
-  // match them case-insensitively.  The 24-entry layout matches parse_options_view::month_names.
+  // Build locale-aware month name table. This uses the same nl_langinfo month-name
+  // source as the strings timestamp APIs, stored as a strings column and passed to
+  // the GPU parser as a column_device_view.
   {
+    static constexpr nl_item k_mon_ids[12] = {
+      MON_1, MON_2, MON_3, MON_4, MON_5, MON_6, MON_7, MON_8, MON_9, MON_10, MON_11, MON_12};
     static constexpr nl_item k_abmon_ids[12] = {ABMON_1,
                                                 ABMON_2,
                                                 ABMON_3,
@@ -1213,44 +1245,20 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
                                                 ABMON_10,
                                                 ABMON_11,
                                                 ABMON_12};
-    static constexpr nl_item k_mon_ids[12]   = {
-      MON_1, MON_2, MON_3, MON_4, MON_5, MON_6, MON_7, MON_8, MON_9, MON_10, MON_11, MON_12};
 
-    // Collect all 24 names on the host
     std::vector<std::string> host_names;
     host_names.reserve(24);
-    for (auto id : k_abmon_ids) {
-      host_names.emplace_back(nl_langinfo(id));
-    }
     for (auto id : k_mon_ids) {
       host_names.emplace_back(nl_langinfo(id));
     }
-
-    // Pack names into a single flat host buffer and record offsets/lengths
-    std::string flat;
-    for (auto const& s : host_names) {
-      flat += s;
+    for (auto id : k_abmon_ids) {
+      host_names.emplace_back(nl_langinfo(id));
     }
 
-    // Copy flat char buffer to device
-    parse_opts.month_names_data = rmm::device_uvector<char>(flat.size(), stream);
-    cudf::detail::cuda_memcpy_async<char>(
-      cudf::device_span<char>{parse_opts.month_names_data->data(), flat.size()},
-      cudf::host_span<char const>{flat.data(), flat.size()},
-      stream);
-
-    // Build host-side string_views pointing into the device char buffer, then
-    // copy the view array to device.
-    std::vector<cudf::string_view> host_svs;
-    host_svs.reserve(24);
-    cudf::size_type offset = 0;
-    for (auto const& s : host_names) {
-      host_svs.emplace_back(parse_opts.month_names_data->data() + offset,
-                            static_cast<cudf::size_type>(s.size()));
-      offset += static_cast<cudf::size_type>(s.size());
-    }
-    parse_opts.month_names_sv = cudf::detail::make_device_uvector_async(
-      host_svs, stream, cudf::get_current_device_resource_ref());
+    parse_opts.month_names =
+      make_strings_column_from_host(host_span<std::string const>{host_names}, stream);
+    parse_opts.month_names_device_view =
+      cudf::column_device_view::create(parse_opts.month_names->view(), stream);
   }
 
   return parse_opts;
