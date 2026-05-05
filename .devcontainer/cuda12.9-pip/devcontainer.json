@@ -27,7 +27,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda12.9-venvs} && if [ ! -d ${localWorkspaceFolder}/../rapidsmpf ]; then git clone https://github.com/rapidsai/rapidsmpf.git ${localWorkspaceFolder}/../rapidsmpf; fi"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda12.9-venvs} ${localWorkspaceFolder}/../rapidsmpf"
   ],
   "postAttachCommand": [
     "/bin/bash",
