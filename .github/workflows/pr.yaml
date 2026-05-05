@@ -76,8 +76,7 @@ jobs:
         with:
           repo: ${{ github.repository }}
           target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
-          # TODO: Fix nightly CI and remove this line
-          max-days-without-success: 40
+          max-days-without-success: 14
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -86,6 +85,8 @@ jobs:
       files_yaml: |
         build_docs:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -111,6 +112,8 @@ jobs:
           - '!codecov.yml'
         test_cpp:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
           - '!.github/ISSUE_TEMPLATE/**'
@@ -144,6 +147,8 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -170,6 +175,8 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -202,6 +209,8 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -228,6 +237,8 @@ jobs:
           - '!java/**'
         test_python_conda:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -259,6 +270,8 @@ jobs:
           - '!notebooks/**'
         test_python_wheels:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'

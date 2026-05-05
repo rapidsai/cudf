@@ -3,33 +3,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
 import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture
-def engine(
-    request: pytest.FixtureRequest,
-) -> Generator[StreamingEngine, None, None]:
-    params: dict[str, Any] = getattr(request, "param", {})
-    executor_options = {
-        "max_rows_per_partition": 3,
-        "dynamic_planning": {},
-        **params.get("executor_options", {}),
-    }
-    with SPMDEngine(executor_options=executor_options) as engine:
-        yield engine
+def engine(streaming_engine_factory):
+    # ``fallback_mode="warn"`` overrides the small-blocksize baseline (which
+    # sets SILENT) so ``test_filter_non_pointwise`` can assert on the warning.
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
 
 
 @pytest.fixture(scope="module")

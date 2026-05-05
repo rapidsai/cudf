@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 
-def test_cache(request):
+def test_cache(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_1323,
@@ -30,7 +30,7 @@ def test_cache(request):
     df2 = pl.LazyFrame({"a": [7, 8], "b": [12, 13]})
 
     q = pl.concat([df1, df2, df1, df2, df1])
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
     t = Translator(q._ldf.visit(), pl.GPUEngine())
     qir = t.translate_ir()

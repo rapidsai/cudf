@@ -21,6 +21,7 @@
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/per_device_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
@@ -260,10 +261,12 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
       cudf::teardown();                                                                          \
+      rmm::mr::reset_current_device_resource();                                                  \
       return rc;                                                                                 \
     } else {                                                                                     \
       auto rc = RUN_ALL_TESTS();                                                                 \
       cudf::teardown();                                                                          \
+      rmm::mr::reset_current_device_resource();                                                  \
       return rc;                                                                                 \
     }                                                                                            \
   }
