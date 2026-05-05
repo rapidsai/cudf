@@ -107,8 +107,10 @@ def evaluate_pipeline_spmd_mode(
     py_executor = config_options.executor.spmd_context.py_executor
 
     quent_context = config_options.executor.quent_context
-    quent_context.emit_query_group_events()
-    quent_context.emit_query_events()
+    quent_context.emit_query_group_events(
+        config_options.executor.spmd_context.quent_logger
+    )
+    quent_context.emit_query_events(config_options.executor.spmd_context.quent_logger)
 
     result = evaluate_on_rank(
         context,
@@ -119,8 +121,11 @@ def evaluate_pipeline_spmd_mode(
         collect_metadata=collect_metadata,
         worker_id=config_options.executor.spmd_context.worker_id,
         quent_context=config_options.executor.quent_context,
+        quent_logger=config_options.executor.spmd_context.quent_logger,
     )
-    quent_context.emit_query_exit_events()
+    quent_context.emit_query_exit_events(
+        config_options.executor.spmd_context.quent_logger
+    )
     return result
 
 
@@ -343,6 +348,7 @@ class SPMDEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
+        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
@@ -390,7 +396,7 @@ class SPMDEngine(StreamingEngine):
         quent_context: cudf_polars.quent.QuentContext = executor_options[
             "quent_context"
         ]
-        quent_context.emit_engine_init_events()
+        quent_context.emit_engine_init_events(self._quent_logger)
 
         try:
             exit_stack.callback(py_executor.shutdown, wait=False)
@@ -418,6 +424,7 @@ class SPMDEngine(StreamingEngine):
                         py_executor=py_executor,
                         engine_id=quent_context.engine.id,
                         worker_id=self._quent_worker.id,
+                        quent_logger=self._quent_logger,
                     ),
                 },
                 engine_options={
@@ -428,7 +435,7 @@ class SPMDEngine(StreamingEngine):
             )
 
             # TODO: ranks need to choose the same engine ID!
-            cudf_polars.quent._logging.emit(self._quent_worker.init())
+            self._quent_logger.emit(self._quent_worker.init())
         except Exception:
             exit_stack.close()
             raise
@@ -569,7 +576,7 @@ class SPMDEngine(StreamingEngine):
             return  # already shut down
         self._comm = None
         self._ctx = None
-        cudf_polars.quent._logging.emit(self._quent_worker.exit())
+        self._quent_logger.emit(self._quent_worker.exit())
         self.config["executor_options"]["quent_context"].emit_engine_exit_events()
         super().shutdown()
 

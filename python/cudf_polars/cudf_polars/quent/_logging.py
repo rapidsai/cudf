@@ -16,41 +16,57 @@ if TYPE_CHECKING:
 
 QUENT_SCOPE = "QUENT"
 
-# TODO: encapsulate this in a class?
 
-# buffer_lock protects concurrent access to log_buffer
-# This enables exactly-once read semantics from the client.
-# All writers and readers must acquire the lock before accessing the buffer.
-buffer_lock = threading.Lock()
-# TODO: configurable maxlen?
-log_buffer: collections.deque[dict[str, Any]] = collections.deque(maxlen=100_000)
-
-
-def _get_logger(**initial_values: Any) -> Any:
-    return structlog.wrap_logger(
-        DequeLogger(log_buffer),
-        processors=[
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            collect_to_deque,
-        ],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        **initial_values,
-    )
+# This buffer is awkward to use. *Especially* during cleanup.
+# At the end of the day, we want the client to be able to collect all
+# of the events as a flat list[dict]. To enable that, we need to
+# gather all the rank-local events and merge.
+# Each rank will have logs from their own Worker, and the "client"
+# process will also have the client-only events.
+#
+# How should we design this?
 
 
-def emit(event: Event) -> None:
-    """Emit a Quent event."""
-    logger = _get_logger()
-    logger.info(event.to_dict(), scope=QUENT_SCOPE)
+class QuentLogger:
+    def __init__(self, maxlen: int = 100_000) -> None:
+        self._buffer: collections.deque[dict[str, Any]] = collections.deque(
+            maxlen=maxlen
+        )
+        self._lock = threading.Lock()
+
+    def _get_logger(self, **initial_values: Any) -> Any:
+        return structlog.wrap_logger(
+            DequeLogger(self._buffer, self._lock),
+            processors=[
+                structlog.processors.add_log_level,
+                structlog.processors.TimeStamper(fmt="iso"),
+                collect_to_deque,
+            ],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            **initial_values,
+        )
+
+    def emit(self, event: Event) -> None:
+        logger = self._get_logger()
+        logger.info(event.to_dict(), scope=QUENT_SCOPE)
+
+    def drain(self) -> list[dict[str, Any]]:
+        with self._lock:
+            events = list(self._buffer)
+            self._buffer.clear()
+        return events
+
+    def collect(self) -> list[dict[str, Any]]:
+        return list(self._buffer)
 
 
 class DequeLogger:
-    def __init__(self, deque: collections.deque[dict[str, Any]]):
+    def __init__(self, deque: collections.deque[dict[str, Any]], lock: threading.Lock):
         self._deque = deque
+        self._lock = lock
 
     def msg(self, **kwargs: Any) -> None:
-        with buffer_lock:
+        with self._lock:
             self._deque.append(kwargs)
 
     # aliases for log levels
@@ -63,11 +79,3 @@ def collect_to_deque(
     event_dict: structlog.types.EventDict,
 ) -> structlog.types.EventDict:
     return event_dict
-
-
-def drain_buffered_events() -> list[dict[str, Any]]:
-    """Drain the buffered events."""
-    with buffer_lock:
-        events = list(log_buffer)
-        log_buffer.clear()
-    return events

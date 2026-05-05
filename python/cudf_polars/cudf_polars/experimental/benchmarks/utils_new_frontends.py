@@ -1391,19 +1391,7 @@ def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
     engine
         The (already shut down) engine instance.
     """
-    import cudf_polars.quent._logging
-
-    client_logs = cudf_polars.quent._logging.drain_buffered_events()
-    engine_logs = engine.worker_quent_events
-
-    quent_logs = sorted(
-        [
-            log["event"]
-            for log in client_logs + engine_logs
-            if log.get("scope") == "QUENT"
-        ],
-        key=lambda x: x["timestamp"],
-    )
+    quent_logs = [log["event"] for log in engine._quent_events]
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)

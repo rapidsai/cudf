@@ -8,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from cudf_polars.quent._logging import emit
 from cudf_polars.quent._plan import (
     build_parent_operators_map,
     build_plan,
@@ -23,13 +22,13 @@ if TYPE_CHECKING:
     import uuid
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
         Operator,
         Plan,
         Port,
     )
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
-
 
 __all__ = [
     "QuentContext",
@@ -48,47 +47,52 @@ class QuentContext:
         default_factory=set, init=False
     )
 
-    def emit_engine_init_events(self) -> None:
+    def emit_engine_init_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine init event."""
-        emit(self.engine.init())
+        logger.emit(self.engine.init())
 
-    def emit_engine_exit_events(self) -> None:
+    def emit_engine_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine exit event."""
-        emit(self.engine.exit())
+        logger.emit(self.engine.exit())
 
-    def emit_query_group_events(self) -> None:
+    def emit_query_group_events(self, logger: QuentLogger) -> None:
         """Emit a Quent QueryGroup declaration event."""
         if self.query_group.id in self._query_group_cache:
             return
         self._query_group_cache.add(self.query_group.id)
-        emit(self.query_group.declare(engine_id=self.engine.id))
+        logger.emit(self.query_group.declare(engine_id=self.engine.id))
 
-    def emit_query_events(self) -> None:
+    def emit_query_events(self, logger: QuentLogger) -> None:
         """
         Emit Quent Query events.
 
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
-        emit(self.query.init(query_group_id=self.query_group.id))
-        emit(self.query.planning())
-        emit(self.query.executing())
+        logger.emit(self.query.init(query_group_id=self.query_group.id))
+        logger.emit(self.query.planning())
+        logger.emit(self.query.executing())
 
-    def emit_query_exit_events(self) -> None:
+    def emit_query_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Query exit event."""
-        emit(self.query.exit())
+        logger.emit(self.query.exit())
 
     def emit_plan_declarations(
-        self, plan: Plan, operators: list[Operator], ports: list[Port]
+        self,
+        logger: QuentLogger,
+        plan: Plan,
+        operators: list[Operator],
+        ports: list[Port],
     ) -> None:
         """Emit declaration events for a plan and all its operators and ports."""
-        emit(plan.declare())
+        logger.emit(plan.declare())
         for operator in operators:
-            emit(operator.declare())
+            logger.emit(operator.declare())
         for port in ports:
-            emit(port.declare())
+            logger.emit(port.declare())
 
     def emit_plan_events(
         self,
+        logger: QuentLogger,
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
@@ -107,6 +111,8 @@ class QuentContext:
 
         Parameters
         ----------
+        logger: QuentLogger
+            The quent logger, which buffers the events in memory.
         ir
             Root of the IR graph for this plan.
         config_options
@@ -141,11 +147,12 @@ class QuentContext:
             parent_plan_id=parent_plan_id,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
-        self.emit_plan_declarations(plan, ops, ports)
+        self.emit_plan_declarations(logger, plan, ops, ports)
         return op_by_id
 
     def emit_physical_plan_events(
         self,
+        logger: QuentLogger,
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
@@ -163,6 +170,8 @@ class QuentContext:
 
         Parameters
         ----------
+        logger: QuentLogger
+            The quent logger, which buffers the events in memory.
         ir
             Root of the **lowered** IR graph.
         config_options
@@ -190,6 +199,7 @@ class QuentContext:
             node_map, logical_op_by_id
         )
         return self.emit_plan_events(
+            logger,
             ir,
             config_options,
             plan_id,

@@ -116,8 +116,10 @@ def evaluate_pipeline_ray_mode(
     )
 
     quent_context = config_options.executor.quent_context
-    quent_context.emit_query_group_events()
-    quent_context.emit_query_events()
+    quent_context.emit_query_group_events(
+        config_options.executor.ray_context.quent_logger
+    )
+    quent_context.emit_query_events(config_options.executor.ray_context.quent_logger)
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
@@ -142,7 +144,9 @@ def evaluate_pipeline_ray_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    quent_context.emit_query_exit_events()
+    quent_context.emit_query_exit_events(
+        config_options.executor.ray_context.quent_logger
+    )
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -215,13 +219,14 @@ class RankActor:
         self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
         self._rank: int = rank
         self._quent_worker: cudf_polars.quent._types.Worker | None = None
+        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         if worker_id is not None:
             self._quent_worker = cudf_polars.quent._types.Worker(
                 id=worker_id,
                 engine_id=self._engine_id,
                 instance_name=f"rank-{rank}",
             )
-            cudf_polars.quent._logging.emit(self._quent_worker.init())
+            self._quent_logger.emit(self._quent_worker.init())
 
     def setup_root(self) -> bytes:
         """
@@ -318,7 +323,7 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None:
-            cudf_polars.quent._logging.emit(self._quent_worker.exit())
+            self._quent_logger.emit(self._quent_worker.exit())
             return self._drain_quent_events()
         return []
 
@@ -426,9 +431,10 @@ class RankActor:
             collect_metadata=collect_metadata,
             worker_id=self._worker_id,
             quent_context=quent_context,
+            quent_logger=self._quent_logger,
         )
 
-    def _drain_quent_events(self) -> list[dict]:
+    def _drain_quent_events(self) -> list[dict[str, Any]]:
         """
         Return and clear all buffered Quent events from this actor.
 
@@ -438,7 +444,7 @@ class RankActor:
             If True, emit Worker.exit before draining so that the exit
             event is included in the returned buffer.
         """
-        return cudf_polars.quent._logging.drain_buffered_events()
+        return self._quent_logger.drain()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
@@ -571,6 +577,8 @@ class RayEngine(StreamingEngine):
         engine_options = engine_options or {}
         ray_init_options = dict(ray_init_options or {})
 
+        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
                 "RayEngine must not be created from within an rrun cluster. Instead "
@@ -618,7 +626,7 @@ class RayEngine(StreamingEngine):
         quent_context: cudf_polars.quent.QuentContext = executor_options[
             "quent_context"
         ]
-        quent_context.emit_engine_init_events()
+        quent_context.emit_engine_init_events(self._quent_logger)
 
         try:
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
@@ -668,7 +676,7 @@ class RayEngine(StreamingEngine):
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "ray",
-                    "ray_context": RayContext(rank_actors),
+                    "ray_context": RayContext(rank_actors, self._quent_logger),
                 },
                 engine_options=engine_options,
                 exit_stack=exit_stack,
@@ -773,7 +781,7 @@ class RayEngine(StreamingEngine):
                 **executor_options,
                 "runtime": "rapidsmpf",
                 "cluster": "ray",
-                "ray_context": RayContext(self._rank_actors),
+                "ray_context": RayContext(self._rank_actors, self._quent_logger),
             },
             engine_options=engine_options,
             exit_stack=self._exit_stack,
@@ -889,17 +897,6 @@ class RayEngine(StreamingEngine):
             # and start a new cluster.
             if not ray.is_initialized():
                 return
-            # Drain all buffered Quent events (including Worker.exit) before
-            # actors terminate. emit_exit=True ensures the exit event is
-            # emitted and captured before the buffer is drained.
-            try:
-                event_lists = ray.get(
-                    [a._drain_quent_events.remote() for a in self._rank_actors]
-                )
-                for events in event_lists:
-                    self._worker_quent_events.extend(events)
-            except Exception as e:
-                exceptions.append(e)
 
             exit_refs = [a._exit.remote() for a in self._rank_actors]
             for ref in exit_refs:
@@ -910,7 +907,7 @@ class RayEngine(StreamingEngine):
                 except Exception as e:
                     exceptions.append(e)
                 else:
-                    self._worker_quent_events.extend(exit_events)
+                    self._quent_events.extend(exit_events)
 
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:
@@ -924,9 +921,16 @@ class RayEngine(StreamingEngine):
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
-            self.config["executor_options"]["quent_context"].emit_engine_exit_events()
+            self.config["executor_options"]["quent_context"].emit_engine_exit_events(
+                self._quent_logger
+            )
             self._rank_actors = None
             super().shutdown()
+
+        # gather the client-side events.
+        self._quent_events.extend(self._quent_logger.drain())
+        # final inplace sort of the events.
+        self._quent_events.sort(key=lambda x: x["timestamp"])
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         return ray.get(

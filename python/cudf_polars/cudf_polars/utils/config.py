@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
     from cudf_polars.quent._context import QuentContext
-
+    from cudf_polars.quent._logging import QuentLogger
 
 __all__ = [
     "Cluster",
@@ -537,6 +537,7 @@ class SPMDContext:
     py_executor: ThreadPoolExecutor
     engine_id: uuid.UUID
     worker_id: uuid.UUID
+    quent_logger: QuentLogger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -560,6 +561,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
+    quent_logger: QuentLogger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -589,6 +591,7 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
+    quent_logger: QuentLogger
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 

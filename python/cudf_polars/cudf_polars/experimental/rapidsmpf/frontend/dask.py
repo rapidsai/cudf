@@ -119,6 +119,7 @@ class _WorkerContext:
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
     worker_id: uuid.UUID
+    quent_logger: cudf_polars.quent._logging.QuentLogger
     engine_id: uuid.UUID | None = None
     quent_worker: cudf_polars.quent._types.Worker | None = None
 
@@ -183,7 +184,12 @@ def _setup_root(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
         _WorkerContext(
-            comm=comm, ctx=None, py_executor=None, mr=mr, worker_id=worker_id
+            comm=comm,
+            ctx=None,
+            py_executor=None,
+            mr=mr,
+            worker_id=worker_id,
+            quent_logger=cudf_polars.quent._logging.QuentLogger(),
         ),
     )
     return get_root_ucxx_address(comm)
@@ -267,13 +273,13 @@ def _setup_worker(
 
     worker_id = worker_ids[comm.rank]
 
-    if worker_id is not None and engine_id is not None:
+    if worker_id is not None and engine_id is not None and mp_ctx is not None:
         quent_worker = cudf_polars.quent._types.Worker(
             id=worker_id,
             engine_id=engine_id,
             instance_name=f"rank-{comm.rank}",
         )
-        cudf_polars.quent._logging.emit(quent_worker.init())
+        mp_ctx.quent_logger.emit(quent_worker.init())
 
     ctx = Context.from_options(comm.logger, mr, options)
     # Set the current RMM device resource so all temporary allocations
@@ -297,6 +303,7 @@ def _setup_worker(
             worker_id=worker_id,
             engine_id=engine_id,
             quent_worker=quent_worker,
+            quent_logger=cudf_polars.quent._logging.QuentLogger(),
         ),
     )
 
@@ -323,9 +330,9 @@ def _teardown_worker(
     traces = []
     if mp_ctx is not None:
         if mp_ctx.quent_worker is not None:
-            cudf_polars.quent._logging.emit(mp_ctx.quent_worker.exit())
+            mp_ctx.quent_logger.emit(mp_ctx.quent_worker.exit())
 
-            traces = cudf_polars.quent._logging.drain_buffered_events()
+            traces = mp_ctx.quent_logger.drain()
 
         if mp_ctx.py_executor is not None:
             mp_ctx.py_executor.shutdown(wait=True, cancel_futures=True)
@@ -425,6 +432,7 @@ def _worker_evaluate(
         collect_metadata=collect_metadata,
         worker_id=mp_ctx.worker_id,
         quent_context=quent_context,
+        quent_logger=mp_ctx.quent_logger,
     )
 
 
@@ -438,7 +446,7 @@ def drain_quent_events(
 
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.quent_worker is not None:
-        return cudf_polars.quent._logging.drain_buffered_events()
+        return mp_ctx.quent_logger.drain()
     return []
 
 
@@ -488,8 +496,8 @@ def evaluate_pipeline_dask_mode(
     dask_context = config_options.executor.dask_context
 
     quent_context = config_options.executor.quent_context
-    quent_context.emit_query_group_events()
-    quent_context.emit_query_events()
+    quent_context.emit_query_group_events(dask_context.quent_logger)
+    quent_context.emit_query_events(dask_context.quent_logger)
 
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
@@ -512,7 +520,7 @@ def evaluate_pipeline_dask_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    quent_context.emit_query_exit_events()
+    quent_context.emit_query_exit_events(dask_context.quent_logger)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -617,6 +625,7 @@ class DaskEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
+        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -645,7 +654,7 @@ class DaskEngine(StreamingEngine):
         quent_context: cudf_polars.quent.QuentContext = executor_options[
             "quent_context"
         ]
-        quent_context.emit_engine_init_events()
+        quent_context.emit_engine_init_events(self._quent_logger)
 
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None
@@ -724,6 +733,7 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
+            quent_logger=self._quent_logger,
             rapidsmpf_id=str(quent_context.engine.id),
             owned_client=owned_client,
             owned_cluster=owned_cluster,
@@ -852,7 +862,7 @@ class DaskEngine(StreamingEngine):
             )
 
             for traces in traces_map.values():
-                self._worker_quent_events.extend(traces)
+                self._quent_events.extend(traces)
 
         except Exception as e:
             exceptions.append(e)
@@ -863,6 +873,12 @@ class DaskEngine(StreamingEngine):
             if ctx.owned_cluster is not None:
                 ctx.owned_cluster.close()
             super().shutdown()
+
+        # gather the client-side events.
+        self._quent_events.extend(self._quent_logger.drain())
+        # final inplace sort of the events.
+        self._quent_events.sort(key=lambda x: x["timestamp"])
+
         if exceptions:
             raise ExceptionGroup("Worker teardown failed", exceptions)
 

@@ -21,6 +21,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
+import cudf_polars.quent._logging
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.base import StatsCollector
@@ -119,6 +120,8 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    _quent_logger: cudf_polars.quent._logging.QuentLogger
+
     def __init__(
         self,
         *,
@@ -128,7 +131,7 @@ class StreamingEngine(pl.GPUEngine):
         exit_stack: contextlib.ExitStack | None = None,
     ):
         self._nranks = nranks
-        self._worker_quent_events: list[dict[str, Any]] = []
+        self._quent_events: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -236,38 +239,38 @@ class StreamingEngine(pl.GPUEngine):
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
 
-    @property
-    def quent_events(self) -> list[dict[str, Any]]:
-        """Return all Quent telemetry events collected during the engine's lifecycle."""
-        import cudf_polars.quent._logging
+    # @property
+    # def quent_events(self) -> list[dict[str, Any]]:
+    #     """Return all Quent telemetry events collected during the engine's lifecycle."""
+    #     import cudf_polars.quent._logging
 
-        # TODO: this global log_buffer is messing things up.
-        # This whole things needs to be rewritten.
-        # we need to clear it at some point
-        # but right now this function isn't idempotent; the second call won't include events from the client.
-        events = []
-        with cudf_polars.quent._logging.buffer_lock:
-            events = list(cudf_polars.quent._logging.log_buffer)
-            cudf_polars.quent._logging.log_buffer.clear()
+    #     # TODO: this global log_buffer is messing things up.
+    #     # This whole things needs to be rewritten.
+    #     # we need to clear it at some point
+    #     # but right now this function isn't idempotent; the second call won't include events from the client.
+    #     events = []
+    #     with cudf_polars.quent._logging.buffer_lock:
+    #         events = list(cudf_polars.quent._logging.log_buffer)
+    #         cudf_polars.quent._logging.log_buffer.clear()
 
-        events.extend(self.worker_quent_events)
-        return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
+    #     events.extend(self.worker_quent_events)
+    #     return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
 
-    @property
-    def worker_quent_events(self) -> list[dict[str, Any]]:
-        """
-        Quent telemetry events collected from workers during shutdown.
+    # @property
+    # def worker_quent_events(self) -> list[dict[str, Any]]:
+    #     """
+    #     Quent telemetry events collected from workers during shutdown.
 
-        Empty until :meth:`shutdown` is called. For distributed engines
-        (Ray, Dask) this contains events that were buffered on remote
-        workers and drained back to the driver. Events are sorted by
-        timestamp.
+    #     Empty until :meth:`shutdown` is called. For distributed engines
+    #     (Ray, Dask) this contains events that were buffered on remote
+    #     workers and drained back to the driver. Events are sorted by
+    #     timestamp.
 
-        Returns
-        -------
-        List of serialized Quent event dicts, sorted by timestamp.
-        """
-        return sorted(self._worker_quent_events, key=lambda e: e.get("timestamp", 0))
+    #     Returns
+    #     -------
+    #     List of serialized Quent event dicts, sorted by timestamp.
+    #     """
+    #     return sorted(self._worker_quent_events, key=lambda e: e.get("timestamp", 0))
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """
@@ -517,6 +520,7 @@ def evaluate_on_rank(
     collect_metadata: bool = False,
     worker_id: uuid.UUID,
     quent_context: cudf_polars.quent.QuentContext,
+    quent_logger: cudf_polars.quent._logging.QuentLogger,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -551,6 +555,8 @@ def evaluate_on_rank(
         a specific context type.
     quent_context
         The quent context to use for this query.
+    quent_logger
+        The logger collecting Quent events for this rank.
 
     Returns
     -------
@@ -568,6 +574,16 @@ def evaluate_on_rank(
     logical_plan_id = uuid.UUID(int=ir.get_stable_id())
     physical_plan_id = uuid.uuid4()
 
+    # # TODO: Make context a Union[SPMDContext, RayContext, DaskContext]
+    # streaming_context = (
+    #     config_options.executor.spmd_context
+    #     or config_options.executor.ray_context
+    #     or config_options.executor.dask_context
+    # )
+    # assert streaming_context is not None, (
+    #     f"No streaming context provided, worker_id={worker_id}"
+    # )
+
     if worker_id is not None:
         # TODO: split out build from emit.
         plan, ops, ports, logical_op_by_id = build_plan(
@@ -581,7 +597,7 @@ def evaluate_on_rank(
             parent_operators_by_node_id=None,
         )
         if comm.rank == 0:
-            quent_context.emit_plan_declarations(plan, ops, ports)
+            quent_context.emit_plan_declarations(quent_logger, plan, ops, ports)
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
@@ -594,6 +610,7 @@ def evaluate_on_rank(
         # We would need to pass the plan ID in along with the IR...
         log_query_plan(ir, config_options)
         quent_context.emit_physical_plan_events(
+            quent_logger,
             ir,
             config_options,
             plan_id=physical_plan_id,
