@@ -410,17 +410,17 @@ def _(
     if (
         Path(ir.path).exists()
         and executor_options.sink_to_directory
-        and executor_options.cluster in (Cluster.SINGLE, Cluster.DISTRIBUTED)
+        and executor_options.cluster == Cluster.SINGLE
     ):
-        # This lowering-time check can't be performed with the new spmd / ray / dask
+        # This lowering-time check can't be performed with the spmd / ray / dask
         # clusters, which lower on each worker independently. There's a race condition
         # between each worker performing this check that the path doesn't yet exist,
         # and the sink operation creating the directory at the start of execution.
         raise NotImplementedError(
-            f"Trying to sink to an existing directory: {ir.path}."
+            f"Trying to sink to an existing directory: {ir.path}. "
             "Writing to an existing path is not supported when sinking "
-            "to a directory. If you are using the 'distributed' scheduler, "
-            "please remove the target directory before calling 'collect'. "
+            "to a directory. Please remove the target directory before "
+            "calling 'collect'."
         )
 
     sink_to_directory = executor_options.sink_to_directory
