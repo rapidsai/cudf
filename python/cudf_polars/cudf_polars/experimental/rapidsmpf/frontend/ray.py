@@ -198,10 +198,9 @@ class RankActor:
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
         worker_id: uuid.UUID,
-        engine_id: uuid.UUID | None = None,
+        engine_id: uuid.UUID,
         rank: int = 0,
     ) -> None:
-        # cudf_polars.quent._logging.worker_setup_logging()
         bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
@@ -220,17 +219,16 @@ class RankActor:
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
         self._worker_id: uuid.UUID = worker_id
-        self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
+        self._engine_id: uuid.UUID = engine_id
         self._rank: int = rank
         self._quent_worker: cudf_polars.quent._types.Worker | None = None
         self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-        if worker_id is not None:
-            self._quent_worker = cudf_polars.quent._types.Worker(
-                id=worker_id,
-                engine_id=self._engine_id,
-                instance_name=f"rank-{rank}",
-            )
-            self._quent_logger.emit(self._quent_worker.init())
+        self._quent_worker = cudf_polars.quent._types.Worker(
+            id=worker_id,
+            engine_id=self._engine_id,
+            instance_name=f"rank-{rank}",
+        )
+        self._quent_logger.emit(self._quent_worker.init())
 
     def setup_root(self) -> bytes:
         """
@@ -583,7 +581,7 @@ class RayEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        ray_init_options = dict(ray_init_options or {})
+        ray_init_options = ray_init_options or {}
 
         self._quent_logger = cudf_polars.quent._logging.QuentLogger()
 
@@ -647,7 +645,6 @@ class RayEngine(StreamingEngine):
                 num_ranks if num_ranks is not None else get_num_gpus_in_ray_cluster()
             )
             worker_ids = [uuid.uuid4() for _ in range(nranks)]
-            self._worker_ids = worker_ids
 
             rank_actors: list[ActorHandle[RankActor]] = [
                 RankActor.options(**actor_options).remote(  # type: ignore[attr-defined]
