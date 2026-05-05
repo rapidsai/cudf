@@ -618,7 +618,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
 def test_cuda_stream_policy_pool_in_memory_unsupported() -> None:
     with pytest.raises(
         ValueError,
-        match="A stream pool is only supported by the rapidsmpf runtime.",
+        match="A stream pool is only supported by the streaming executor.",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
