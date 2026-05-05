@@ -154,6 +154,7 @@ files:
       - build_base
       - cuda
       - cuda_version
+      - depends_on_rapids_logger
   docs:
     output: none
     includes:
