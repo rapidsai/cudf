@@ -58,8 +58,31 @@ option(CUDA_ENABLE_LINEINFO
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 
+# CUDF_BUILD_STATIC_DEPS should almost never be set to OFF since there is no reason to prefer
+# building shared libraries for dependencies under normal circumstances. FORCE is a necessary
+# setting for building a standalone binary with no external dependencies.
+set(CUDF_BUILD_STATIC_DEPS
+    "ON"
+    CACHE
+      STRING
+      "Three-state control for static library dependencies. ON (default) = use static when a CPM build is triggered, OFF = prefer shared (rarely useful), FORCE = guarantee using a static build by rebuilding or downloading even when local copies of a library exist"
+)
+set_property(CACHE CUDF_BUILD_STATIC_DEPS PROPERTY STRINGS "ON" "OFF" "FORCE")
+
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+# FORCE mode implies static CUDA runtime
+if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
+  set(CUDA_STATIC_RUNTIME
+      ON
+      CACHE BOOL "Statically link the CUDA runtime" FORCE
+  )
+else()
+  set(CUDA_STATIC_RUNTIME
+      OFF
+      CACHE BOOL "Statically link the CUDA runtime" FORCE
+  )
+endif()
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 
@@ -101,6 +124,44 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 message(VERBOSE
         "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
 )
+
+# CUDF_INSTALL_LIBRARY_DEPS: Derived variable indicating whether to install library dependencies
+if(NOT BUILD_SHARED_LIBS)
+  # A static libcudf.a will not contain the code for its dependencies, so we must install them to
+  # ensure downstream projects can find them
+  set(CUDF_INSTALL_LIBRARY_DEPS ON)
+elseif(CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
+  # If dependencies are built as shared they will be needed at runtime
+  set(CUDF_INSTALL_LIBRARY_DEPS ON)
+else()
+  # If dependencies are statically linked into a libcudf shared library they aren't needed at
+  # runtime
+  set(CUDF_INSTALL_LIBRARY_DEPS OFF)
+endif()
+
+# Derived flags for EXCLUDE_FROM_ALL handling across dependency fetching.
+# CUDF_EXCLUDE_DEPS_FROM_ALL: ON/OFF value for rapids_cpm_find() calls (key-value style)
+# CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG: "EXCLUDE_FROM_ALL" or "" for rapids_cpm_* wrapper calls (flag
+# style) We need both because of https://github.com/cpm-cmake/CPM.cmake/issues/693
+if(CUDF_INSTALL_LIBRARY_DEPS)
+  set(CUDF_EXCLUDE_DEPS_FROM_ALL OFF)
+  set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG)
+else()
+  set(CUDF_EXCLUDE_DEPS_FROM_ALL ON)
+  set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG EXCLUDE_FROM_ALL)
+endif()
+
+# CUDF_DEPS_BUILD_SHARED: Boolean reduction of the 3-state CUDF_BUILD_STATIC_DEPS for passing to
+# dependency configuration functions that accept a BUILD_SHARED parameter.
+if(CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
+  set(CUDF_DEPS_BUILD_SHARED ON)
+else()
+  set(CUDF_DEPS_BUILD_SHARED OFF)
+endif()
+
+message(VERBOSE "CUDF: Build static library dependencies: ${CUDF_BUILD_STATIC_DEPS}")
+message(VERBOSE "CUDF: Install library dependencies: ${CUDF_INSTALL_LIBRARY_DEPS}")
+message(VERBOSE "CUDF: Build dependencies as shared libraries: ${CUDF_DEPS_BUILD_SHARED}")
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -257,18 +318,21 @@ if(CUDF_BUILD_TESTUTIL)
   )
 endif()
 
+# Set CPM_DOWNLOAD_ALL if CUDF_BUILD_STATIC_DEPS is FORCE to skip find_package for all CPM packages
+if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
+  set(CPM_DOWNLOAD_ALL ON)
+endif()
+
 # add third party dependencies using CPM
 rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 rapids_cpm_rapids_logger(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
-
-# find NVTX
-include(cmake/thirdparty/get_nvtx.cmake)
 
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
@@ -278,6 +342,9 @@ include(cmake/thirdparty/get_cccl.cmake)
 
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
+
+# find NVTX, after rmm so we defer to rmm to decide the interface since nvtx is private for cudf
+include(cmake/thirdparty/get_nvtx.cmake)
 
 # find croaring
 include(cmake/thirdparty/get_croaring.cmake)
@@ -1004,7 +1071,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
+          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
 )
 
 # Add Conda library, and include paths if specified
