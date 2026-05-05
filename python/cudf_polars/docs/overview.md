@@ -677,3 +677,21 @@ The structured schema has three top-level fields:
 
 Note that all integers are stored as strings to make round-tripping
 to JSON easier.
+
+
+## Quent Traces
+
+cudf-polars emits Quent Traces. Users can control some aspects of the traces,
+like the Query Group and Query names:
+
+```python
+import cudf_polars.quent
+
+quent_context = cudf_polars.quent.QuentContext(
+    query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
+    query=cudf_polars.quent.Query(instance_name="test_query"),
+)
+
+with StreamingEngine(executor_options={"quent_context": quent_context}):
+    q.collect(engine=engine)
+```

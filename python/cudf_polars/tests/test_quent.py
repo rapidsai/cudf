@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent import QuentContext
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -463,7 +463,10 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
 
 @pytest.fixture
 def quent_context() -> QuentContext:
-    return cudf_polars.quent.QuentContext()
+    return cudf_polars.quent.QuentContext(
+        query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
+        query=cudf_polars.quent.Query(instance_name="test_query"),
+    )
 
 
 @pytest.fixture(params=["ray", "dask", "spmd"])
