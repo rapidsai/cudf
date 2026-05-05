@@ -9,7 +9,6 @@ import itertools
 import math
 import statistics
 from collections import defaultdict
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -29,9 +28,8 @@ from cudf_polars.experimental.base import (
     IOPartitionPlan,
     PartitionInfo,
     SerializedDataSourceInfo,
-    get_key_name,
 )
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
@@ -337,22 +335,6 @@ def _prepare_sink_directory(path: str) -> None:
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def _sink_to_directory(
-    schema: Schema,
-    kind: str,
-    path: str,
-    parquet_options: ParquetOptions,
-    options: dict[str, Any],
-    df: DataFrame,
-    ready: None,
-    context: IRExecutionContext,
-) -> DataFrame:
-    """Sink a partition to a new file."""
-    return Sink.do_evaluate(
-        schema, kind, path, parquet_options, options, df, context=context
-    )
-
-
 def _sink_to_parquet_file(
     path: str,
     options: dict[str, Any],
@@ -439,106 +421,6 @@ def _sink_to_file(
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
     return True
-
-
-def _finalize_file_sink(
-    kind: str,
-    writer_state: Any,
-    df: DataFrame,
-) -> DataFrame:
-    """Finalize the file sink by closing the writer."""
-    if kind == "Parquet" and writer_state is not None:
-        writer_state.close([])
-    return df.slice((0, 0))
-
-
-def _file_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a single file."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-    if count == 1:
-        return {
-            (name, 0): (
-                partial(sink.do_evaluate, context=context),
-                *sink._non_child_args,
-                (child_name, 0),
-            )
-        }
-
-    sink_name = get_key_name(sink)
-    graph: MutableMapping[Any, Any] = {
-        (sink_name, i): (
-            _sink_to_file,
-            sink.kind,
-            sink.path,
-            sink.options,
-            None if i == 0 else (sink_name, i - 1),  # Writer state
-            (child_name, i),
-        )
-        for i in range(count)
-    }
-
-    # Finalize task closes the writer after all chunks are written
-    graph[(sink_name, "finalize")] = (
-        _finalize_file_sink,
-        sink.kind,
-        (sink_name, count - 1),  # Writer state from last task
-        (child_name, count - 1),  # Last source df for creating empty result
-    )
-
-    # Make sure final tasks point to finalize task
-    graph.update({(name, i): (sink_name, "finalize") for i in range(count)})
-    return graph
-
-
-def _directory_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a directory of files."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-
-    setup_name = f"setup-{name}"
-    suffix = sink.kind.lower()
-    width = math.ceil(math.log10(count))
-    graph: MutableMapping[Any, Any] = {
-        (name, i): (
-            _sink_to_directory,
-            sink.schema,
-            sink.kind,
-            f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
-            sink.parquet_options,
-            sink.options,
-            (child_name, i),
-            setup_name,
-            context,
-        )
-        for i in range(count)
-    }
-    graph[setup_name] = (_prepare_sink_directory, sink.path)
-    return graph
-
-
-@generate_ir_tasks.register(StreamingSink)
-def _(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    if ir.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info, context=context)
-    else:
-        return _file_sink_graph(ir, partition_info, context=context)
 
 
 class ParquetMetadata:
