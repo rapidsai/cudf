@@ -15,12 +15,14 @@ cdef extern from * nogil:
     #include <rmm/cuda_stream_view.hpp>
     #include <vector>
 
+    namespace {
     void join_streams_wrapper(
         cudf::host_span<cudaStream_t const> streams,
         cudaStream_t stream
     ) {
         std::vector<rmm::cuda_stream_view> stream_views(streams.begin(), streams.end());
         cudf::detail::join_streams(stream_views, stream);
+    }
     }
     """
     cdef void join_streams "join_streams_wrapper"(
