@@ -334,6 +334,9 @@ create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 
+# find NVTX
+include(cmake/thirdparty/get_nvtx.cmake)
+
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
@@ -342,9 +345,6 @@ include(cmake/thirdparty/get_cccl.cmake)
 
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
-
-# find NVTX, after rmm so we defer to rmm to decide the interface since nvtx is private for cudf
-include(cmake/thirdparty/get_nvtx.cmake)
 
 # find croaring
 include(cmake/thirdparty/get_croaring.cmake)
