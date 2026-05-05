@@ -951,6 +951,12 @@ template std::pair<thrust::host_vector<numeric::decimal64>, std::vector<bitmask_
   column_view c);
 template std::pair<thrust::host_vector<numeric::decimal128>, std::vector<bitmask_type>> to_host(
   column_view c);
+template std::pair<thrust::host_vector<numeric::decimal32_safe>, std::vector<bitmask_type>>
+to_host(column_view c);
+template std::pair<thrust::host_vector<numeric::decimal64_safe>, std::vector<bitmask_type>>
+to_host(column_view c);
+template std::pair<thrust::host_vector<numeric::decimal128_safe>, std::vector<bitmask_type>>
+to_host(column_view c);
 
 namespace {
 struct strings_to_host_fn {

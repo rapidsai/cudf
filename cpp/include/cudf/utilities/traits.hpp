@@ -441,9 +441,21 @@ CUDF_HOST_DEVICE constexpr inline bool is_fixed_point()
   return cuda::std::is_same_v<numeric::decimal32, T> ||
          cuda::std::is_same_v<numeric::decimal64, T> ||
          cuda::std::is_same_v<numeric::decimal128, T> ||
+         cuda::std::is_same_v<numeric::decimal32_safe, T> ||
+         cuda::std::is_same_v<numeric::decimal64_safe, T> ||
+         cuda::std::is_same_v<numeric::decimal128_safe, T> ||
          cuda::std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
          cuda::std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
-         cuda::std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
+         cuda::std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T> ||
+         cuda::std::is_same_v<
+           numeric::fixed_point<int32_t, numeric::Radix::BASE_2, numeric::overflow_tracking::on>,
+           T> ||
+         cuda::std::is_same_v<
+           numeric::fixed_point<int64_t, numeric::Radix::BASE_2, numeric::overflow_tracking::on>,
+           T> ||
+         cuda::std::is_same_v<
+           numeric::fixed_point<__int128_t, numeric::Radix::BASE_2, numeric::overflow_tracking::on>,
+           T>;
 }
 
 /**

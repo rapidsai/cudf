@@ -193,6 +193,9 @@ typename fixed_point_scalar<T>::rep_type const* fixed_point_scalar<T>::data() co
 template class fixed_point_scalar<numeric::decimal32>;
 template class fixed_point_scalar<numeric::decimal64>;
 template class fixed_point_scalar<numeric::decimal128>;
+template class fixed_point_scalar<numeric::decimal32_safe>;
+template class fixed_point_scalar<numeric::decimal64_safe>;
+template class fixed_point_scalar<numeric::decimal128_safe>;
 
 namespace CUDF_HIDDEN detail {
 

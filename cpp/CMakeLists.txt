@@ -76,8 +76,6 @@ mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
 option(CUDF_IWYU "Enable IWYU during compilation" OFF)
 option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
-option(CUDF_TRACK_FIXED_POINT_OVERFLOW "Enable tracking of fixed point overflow" OFF)
-
 option(
   CUDF_KVIKIO_REMOTE_IO
   "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
@@ -102,8 +100,6 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 message(VERBOSE
         "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
 )
-message(VERBOSE "CUDF: Track fixed point overflow: ${CUDF_TRACK_FIXED_POINT_OVERFLOW}")
-
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
@@ -979,10 +975,6 @@ endif()
 # Disable NVTX if necessary
 if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
-endif()
-
-if(CUDF_TRACK_FIXED_POINT_OVERFLOW)
-  target_compile_definitions(cudf PUBLIC CUDF_TRACK_FIXED_POINT_OVERFLOW)
 endif()
 
 # Disable large strings support

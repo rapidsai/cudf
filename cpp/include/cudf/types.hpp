@@ -219,6 +219,9 @@ enum class type_id : int32_t {
   DECIMAL64,               ///< Fixed-point type with int64_t
   DECIMAL128,              ///< Fixed-point type with __int128_t
   STRUCT,                  ///< Struct elements
+  DECIMAL32_SAFE,   ///< Fixed-point type with int32_t and sticky overflow tracking
+  DECIMAL64_SAFE,   ///< Fixed-point type with int64_t and sticky overflow tracking
+  DECIMAL128_SAFE,  ///< Fixed-point type with __int128_t and sticky overflow tracking
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };
@@ -310,7 +313,9 @@ class data_type {
    */
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
-    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128);
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128 ||
+           id == type_id::DECIMAL32_SAFE || id == type_id::DECIMAL64_SAFE ||
+           id == type_id::DECIMAL128_SAFE);
   }
 
   /**

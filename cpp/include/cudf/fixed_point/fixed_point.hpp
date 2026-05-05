@@ -44,6 +44,24 @@ enum scale_type : int32_t {};
 enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 
 /**
+ * @brief Compile-time switch that enables sticky overflow tracking on a `fixed_point`
+ *
+ * When `Track == overflow_tracking::on`, the `fixed_point` value carries an extra `bool`
+ * that is set whenever an arithmetic operation (or scale-change) on the value would
+ * overflow the underlying integer representation. The flag is sticky: it propagates
+ * through `+`, `-`, `*`, `/`, `%` and `rescaled()` so a downstream consumer can ask
+ * whether any overflow has occurred along the entire chain of operations that
+ * produced the value.
+ *
+ * The default, `overflow_tracking::off`, leaves `fixed_point` byte-for-byte identical
+ * to the historical layout — there is zero runtime or storage overhead. The
+ * `decimal32_safe` / `decimal64_safe` / `decimal128_safe` aliases instantiate the
+ * `on` variant for callers (e.g. velox-cudf) that need overflow detection without
+ * requiring a separate libcudf build.
+ */
+enum class overflow_tracking : bool { off = false, on = true };
+
+/**
  * @brief Returns `true` if the representation type is supported by `fixed_point`
  *
  * @tparam T The representation type
@@ -196,21 +214,54 @@ struct scaled_integer {
  * Currently, only binary and decimal `fixed_point` numbers are supported.
  * Binary operations can only be performed with other `fixed_point` numbers
  *
- * @tparam Rep The representation type (either `int32_t` or `int64_t`)
- * @tparam Rad The radix/base (either `Radix::BASE_2` or `Radix::BASE_10`)
+ * @tparam Rep   The representation type (either `int32_t` or `int64_t`)
+ * @tparam Rad   The radix/base (either `Radix::BASE_2` or `Radix::BASE_10`)
+ * @tparam Track Whether to carry a sticky overflow flag through arithmetic and
+ *               scale-change operations. Defaults to `overflow_tracking::off`,
+ *               which keeps the layout and runtime behavior identical to a
+ *               non-tracking `fixed_point`.
+ *
+ * @note Sticky overflow tracking lives at the **value-type** level. The flag
+ *       propagates automatically through every operator that takes a
+ *       `fixed_point` value (`+`, `-`, `*`, `/`, `%`, comparisons, `rescaled()`),
+ *       which means binaryops, transforms, scans and any reduction expressed
+ *       on top of the value-level operators carry it for free. Aggregations
+ *       that bypass the value layer and atomically update the **raw integer
+ *       storage** (e.g. `cudf::detail::atomic_add(&target.element<DeviceTarget>(...), ...)`
+ *       in `cudf/detail/aggregation/device_aggregators.cuh`) do **not**
+ *       propagate the per-element bool. For groupby/reduce overflow detection,
+ *       use the existing `aggregation::SUM_WITH_OVERFLOW` pattern, which
+ *       maintains a sidecar overflow column rather than relying on the
+ *       per-element flag.
  */
-template <typename Rep, Radix Rad>
+template <typename Rep, Radix Rad, overflow_tracking Track = overflow_tracking::off>
 class fixed_point {
   Rep _value{};
   scale_type _scale;
 
-  #ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-  bool _overflow_flag;
-  #endif
+  // Storage helpers used to keep `sizeof(fixed_point<..., off>)` identical to the
+  // original non-tracking layout. When `Track == on`, `_overflow` carries a bool;
+  // otherwise it is an empty type and `[[no_unique_address]]` collapses it to zero
+  // bytes (no ABI change for `decimal32`/`decimal64`/`decimal128`).
+  struct _no_overflow_flag {};
+  struct _overflow_flag_storage {
+    bool value{false};
+  };
+
+  static constexpr bool _tracks_overflow = (Track == overflow_tracking::on);
+  using _overflow_storage_t =
+    cuda::std::conditional_t<_tracks_overflow, _overflow_flag_storage, _no_overflow_flag>;
+  [[no_unique_address]] _overflow_storage_t _overflow{};
+
+  // Grant matching same-Rep/Rad/Track instantiations access to `_overflow` so the
+  // free-function operators below can read and update the sticky flag.
+  template <typename, Radix, overflow_tracking>
+  friend class fixed_point;
 
  public:
-  using rep                 = Rep;  ///< The representation type
-  static constexpr auto rad = Rad;  ///< The base
+  using rep                       = Rep;     ///< The representation type
+  static constexpr auto rad       = Rad;     ///< The base
+  static constexpr auto track     = Track;   ///< The overflow-tracking mode
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately (from integral
@@ -226,13 +277,11 @@ class fixed_point {
   CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     // `value` is cast to `Rep` to avoid overflow in cases where
     // constructing to `Rep` that is wider than `T`
-    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)},
-      _scale{scale}
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-      ,
-      _overflow_flag{detail::shift_overflows<Rep, Rad>(static_cast<Rep>(value), scale)}
-#endif
+    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)}, _scale{scale}
   {
+    if constexpr (_tracks_overflow) {
+      _overflow.value = detail::shift_overflows<Rep, Rad>(static_cast<Rep>(value), scale);
+    }
   }
 
   /**
@@ -242,10 +291,6 @@ class fixed_point {
    */
   CUDF_HOST_DEVICE inline explicit fixed_point(scaled_integer<Rep> s)
     : _value{s.value}, _scale{s.scale}
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-      ,
-      _overflow_flag{}
-#endif
   {
   }
 
@@ -259,10 +304,6 @@ class fixed_point {
   template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline fixed_point(T const& value)
     : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-      ,
-      _overflow_flag{}
-#endif
   {
   }
 
@@ -270,14 +311,7 @@ class fixed_point {
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
-  CUDF_HOST_DEVICE inline fixed_point()
-    : _scale{scale_type{0}}
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-      ,
-      _overflow_flag{}
-#endif
-  {
-  }
+  CUDF_HOST_DEVICE inline fixed_point() : _scale{scale_type{0}} {}
 
   /**
    * @brief Explicit conversion operator for casting to integral types
@@ -319,18 +353,24 @@ class fixed_point {
    */
   CUDF_HOST_DEVICE [[nodiscard]] inline scale_type scale() const { return _scale; }
 
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
   /**
    * @brief Whether fixed-point overflow was detected while producing this value
    *
-   * Only available when libcudf is built with `CUDF_TRACK_FIXED_POINT_OVERFLOW` enabled.
+   * Only callable when `Track == overflow_tracking::on` (e.g. `decimal*_safe` aliases).
    * Sticky: once set, propagates through operations that combine this value with others.
+   *
+   * Note: the per-element flag is propagated by the value-level `+`, `-`, `*`, `/`,
+   * `%` and `rescaled()` operations on `fixed_point`. Aggregations that bypass the
+   * value-level operators (e.g. atomic adds on the raw integer storage in
+   * `cudf::detail::atomic_add(&target.element<DeviceTarget>(...), ...)`) do not
+   * carry the flag through; for groupby/reduce overflow detection see the
+   * `aggregation::SUM_WITH_OVERFLOW` pattern in `device_aggregators.cuh`.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool overflow_occurred() const noexcept
+    requires(Track == overflow_tracking::on)
   {
-    return _overflow_flag;
+    return _overflow.value;
   }
-#endif
 
   /**
    * @brief Explicit conversion operator to `bool`
@@ -345,13 +385,15 @@ class fixed_point {
   /**
    * @brief operator +=
    *
-   * @tparam Rep1 Representation type of the operand `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @tparam Rep1   Representation type of the operand `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `rhs`
+   * @tparam Track1 Overflow-tracking mode of the operand `rhs` (must match this)
    * @param rhs The number being added to `this`
    * @return The sum
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs)
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1>& operator+=(
+    fixed_point<Rep1, Rad1, Track1> const& rhs)
   {
     *this = *this + rhs;
     return *this;
@@ -360,13 +402,15 @@ class fixed_point {
   /**
    * @brief operator *=
    *
-   * @tparam Rep1 Representation type of the operand `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @tparam Rep1   Representation type of the operand `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `rhs`
+   * @tparam Track1 Overflow-tracking mode of the operand `rhs` (must match this)
    * @param rhs The number being multiplied to `this`
    * @return The product
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs)
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1>& operator*=(
+    fixed_point<Rep1, Rad1, Track1> const& rhs)
   {
     *this = *this * rhs;
     return *this;
@@ -375,13 +419,15 @@ class fixed_point {
   /**
    * @brief operator -=
    *
-   * @tparam Rep1 Representation type of the operand `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @tparam Rep1   Representation type of the operand `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `rhs`
+   * @tparam Track1 Overflow-tracking mode of the operand `rhs` (must match this)
    * @param rhs The number being subtracted from `this`
    * @return The difference
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs)
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1>& operator-=(
+    fixed_point<Rep1, Rad1, Track1> const& rhs)
   {
     *this = *this - rhs;
     return *this;
@@ -390,13 +436,15 @@ class fixed_point {
   /**
    * @brief operator /=
    *
-   * @tparam Rep1 Representation type of the operand `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @tparam Rep1   Representation type of the operand `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `rhs`
+   * @tparam Track1 Overflow-tracking mode of the operand `rhs` (must match this)
    * @param rhs The number being divided from `this`
    * @return The quotient
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs)
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1>& operator/=(
+    fixed_point<Rep1, Rad1, Track1> const& rhs)
   {
     *this = *this / rhs;
     return *this;
@@ -407,9 +455,9 @@ class fixed_point {
    *
    * @return The incremented result
    */
-  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad>& operator++()
+  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad, Track>& operator++()
   {
-    *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
+    *this = *this + fixed_point<Rep, Rad, Track>{1, scale_type{_scale}};
     return *this;
   }
 
@@ -420,15 +468,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are added.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return The resulting `fixed_point` sum
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator+(
-    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1, Track1> operator+(
+    fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator - (for subtracting two `fixed_point` numbers)
@@ -437,45 +486,48 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are subtracted.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return The resulting `fixed_point` difference
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator-(
-    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1, Track1> operator-(
+    fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator * (for multiplying two `fixed_point` numbers)
    *
    * `_scale`s are added and `_value`s are multiplied.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return The resulting `fixed_point` product
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator*(
-    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1, Track1> operator*(
+    fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator / (for dividing two `fixed_point` numbers)
    *
    * `_scale`s are subtracted and `_value`s are divided.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return The resulting `fixed_point` quotient
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator/(
-    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1, Track1> operator/(
+    fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator % (for computing the modulo operation of two `fixed_point` numbers)
@@ -484,15 +536,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with larger `_scale` is shifted to the
    * smaller `_scale`, and then the modulus is computed.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return The resulting `fixed_point` number
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator%(
-    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1, Track1> operator%(
+    fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator == (for comparing two `fixed_point` numbers)
@@ -501,15 +554,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` and `rhs` are equal, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                                                 fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator==(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                 fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator != (for comparing two `fixed_point` numbers)
@@ -518,15 +572,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` and `rhs` are not equal, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
-                                                 fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator!=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                 fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
@@ -535,15 +590,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` less than or equal to `rhs`, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
-                                                 fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator<=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                 fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator >= (for comparing two `fixed_point` numbers)
@@ -552,15 +608,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` greater than or equal to `rhs`, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
-                                                 fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator>=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                 fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator < (for comparing two `fixed_point` numbers)
@@ -569,15 +626,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` less than `rhs`, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator<(fixed_point<Rep1, Rad1> const& lhs,
-                                                fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator<(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief operator > (for comparing two `fixed_point` numbers)
@@ -586,15 +644,16 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
-   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Rep1   Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1   Radix (base) type of the operand `lhs` and `rhs`
+   * @tparam Track1 Overflow-tracking mode of `lhs` and `rhs`
    * @param lhs The left hand side operand
    * @param rhs The right hand side operand
    * @return true if `lhs` greater than `rhs`, false if not
    */
-  template <typename Rep1, Radix Rad1>
-  CUDF_HOST_DEVICE inline friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
-                                                fixed_point<Rep1, Rad1> const& rhs);
+  template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+  CUDF_HOST_DEVICE inline friend bool operator>(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                                fixed_point<Rep1, Rad1, Track1> const& rhs);
 
   /**
    * @brief Method for creating a `fixed_point` number with a new `scale`
@@ -605,16 +664,17 @@ class fixed_point {
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
    */
-  CUDF_HOST_DEVICE [[nodiscard]] inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
+  CUDF_HOST_DEVICE [[nodiscard]] inline fixed_point<Rep, Rad, Track> rescaled(
+    scale_type scale) const
   {
     if (scale == _scale) { return *this; }
     auto const scale_delta = scale_type{scale - _scale};
-    Rep const value = detail::shift<Rep, Rad>(_value, scale_delta);
-    fixed_point<Rep, Rad> result{scaled_integer<Rep>{value, scale}};
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-    result._overflow_flag =
-      _overflow_flag || detail::shift_overflows<Rep, Rad>(_value, scale_delta);
-#endif
+    Rep const value        = detail::shift<Rep, Rad>(_value, scale_delta);
+    fixed_point<Rep, Rad, Track> result{scaled_integer<Rep>{value, scale}};
+    if constexpr (_tracks_overflow) {
+      result._overflow.value =
+        _overflow.value || detail::shift_overflows<Rep, Rad>(_value, scale_delta);
+    }
     return result;
   }
 
@@ -721,9 +781,12 @@ CUDF_HOST_DEVICE inline constexpr bool shift_overflows(T const& val, scale_type 
   return multiplication_overflow<Rep>(v, multiplier);
 }
 
-#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW) || defined(__CUDACC_DEBUG__)
 /**
  * @brief Run binary integer-overflow predicate once; assert under `__CUDACC_DEBUG__`.
+ *
+ * Unconditionally defined: only the call sites in `fixed_point` operator overloads
+ * decide (via `if constexpr (Track == overflow_tracking::on)` / under
+ * `__CUDACC_DEBUG__`) whether to instantiate it. Unused instantiations are free.
  *
  * @tparam Rep1 Representation type
  * @tparam F Function type `bool (Rep1, Rep1)` (e.g. `&addition_overflow<Rep1, Rep1>`)
@@ -738,174 +801,204 @@ CUDF_HOST_DEVICE inline bool fixed_point_op_overflow_check(F overflow_fn,
                                                            Rep1 rhs_value)
 {
   bool const op_overflow = static_cast<bool>(overflow_fn(lhs_value, rhs_value));
-#  if defined(__CUDACC_DEBUG__)
+#if defined(__CUDACC_DEBUG__)
   assert(!op_overflow && "fixed_point overflow");
-#  endif
+#endif
   return op_overflow;
 }
-#endif
 
 }  // namespace detail
 
 // PLUS Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
-                                                          fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1> operator+(
+  fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
-  auto const scale  = cuda::std::min(lhs._scale, rhs._scale);
-  auto const lhs_r  = lhs.rescaled(scale);
-  auto const rhs_r  = rhs.rescaled(scale);
-  auto const sum    = lhs_r._value + rhs_r._value;
-  auto result = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{sum, scale}};
+  auto const scale = cuda::std::min(lhs._scale, rhs._scale);
+  auto const lhs_r = lhs.rescaled(scale);
+  auto const rhs_r = rhs.rescaled(scale);
+  auto const sum   = lhs_r._value + rhs_r._value;
+  auto result      = fixed_point<Rep1, Rad1, Track1>{scaled_integer<Rep1>{sum, scale}};
 
-#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
-  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
-    &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
-  result._overflow_flag = op_overflow || lhs_r._overflow_flag || rhs_r._overflow_flag;
-#elif defined(__CUDACC_DEBUG__)
-  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
-    &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
+  if constexpr (Track1 == overflow_tracking::on) {
+    bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+      &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
+    result._overflow.value = op_overflow || lhs_r._overflow.value || rhs_r._overflow.value;
+  } else {
+#if defined(__CUDACC_DEBUG__)
+    static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+      &addition_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
 #endif
+  }
   return result;
 }
 
 // MINUS Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
-                                                          fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1> operator-(
+  fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
-  auto const scale  = cuda::std::min(lhs._scale, rhs._scale);
-  auto const lhs_r  = lhs.rescaled(scale);
-  auto const rhs_r  = rhs.rescaled(scale);
-  auto const diff   = lhs_r._value - rhs_r._value;
-  auto result = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{diff, scale}};
+  auto const scale = cuda::std::min(lhs._scale, rhs._scale);
+  auto const lhs_r = lhs.rescaled(scale);
+  auto const rhs_r = rhs.rescaled(scale);
+  auto const diff  = lhs_r._value - rhs_r._value;
+  auto result      = fixed_point<Rep1, Rad1, Track1>{scaled_integer<Rep1>{diff, scale}};
 
-#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
-  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
-    &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
-  result._overflow_flag = op_overflow || lhs_r._overflow_flag || rhs_r._overflow_flag;
-#elif defined(__CUDACC_DEBUG__)
-  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
-    &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
+  if constexpr (Track1 == overflow_tracking::on) {
+    bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+      &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value);
+    result._overflow.value = op_overflow || lhs_r._overflow.value || rhs_r._overflow.value;
+  } else {
+#if defined(__CUDACC_DEBUG__)
+    static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+      &subtraction_overflow<Rep1, Rep1>, lhs_r._value, rhs_r._value));
 #endif
+  }
   return result;
 }
 
 // MULTIPLIES Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
-                                                          fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1> operator*(
+  fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
-#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
-  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
-    &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value);
-#elif defined(__CUDACC_DEBUG__)
-  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
-    &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value));
-#endif
-
-  auto result = fixed_point<Rep1, Rad1>{
+  auto result = fixed_point<Rep1, Rad1, Track1>{
     scaled_integer<Rep1>(lhs._value * rhs._value, scale_type{lhs._scale + rhs._scale})};
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-  result._overflow_flag = op_overflow || lhs._overflow_flag || rhs._overflow_flag;
+
+  if constexpr (Track1 == overflow_tracking::on) {
+    bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+      &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value);
+    result._overflow.value = op_overflow || lhs._overflow.value || rhs._overflow.value;
+  } else {
+#if defined(__CUDACC_DEBUG__)
+    static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+      &multiplication_overflow<Rep1, Rep1>, lhs._value, rhs._value));
 #endif
+  }
   return result;
 }
 
 // DIVISION Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
-                                                          fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1> operator/(
+  fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
-#if defined(CUDF_TRACK_FIXED_POINT_OVERFLOW)
-  bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
-    &division_overflow<Rep1, Rep1>, lhs._value, rhs._value);
-#elif defined(__CUDACC_DEBUG__)
-  static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
-    &division_overflow<Rep1, Rep1>, lhs._value, rhs._value));
-#endif
-
-  auto result = fixed_point<Rep1, Rad1>{
+  auto result = fixed_point<Rep1, Rad1, Track1>{
     scaled_integer<Rep1>(lhs._value / rhs._value, scale_type{lhs._scale - rhs._scale})};
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-  result._overflow_flag = op_overflow || lhs._overflow_flag || rhs._overflow_flag;
+
+  if constexpr (Track1 == overflow_tracking::on) {
+    bool const op_overflow = detail::fixed_point_op_overflow_check<Rep1>(
+      &division_overflow<Rep1, Rep1>, lhs._value, rhs._value);
+    result._overflow.value = op_overflow || lhs._overflow.value || rhs._overflow.value;
+  } else {
+#if defined(__CUDACC_DEBUG__)
+    static_cast<void>(detail::fixed_point_op_overflow_check<Rep1>(
+      &division_overflow<Rep1, Rep1>, lhs._value, rhs._value));
 #endif
+  }
   return result;
 }
 
 // EQUALITY COMPARISON Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                                        fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator==(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                        fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value == rhs.rescaled(scale)._value;
 }
 
 // EQUALITY NOT COMPARISON Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
-                                        fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator!=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                        fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value != rhs.rescaled(scale)._value;
 }
 
 // LESS THAN OR EQUAL TO Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
-                                        fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator<=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                        fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value <= rhs.rescaled(scale)._value;
 }
 
 // GREATER THAN OR EQUAL TO Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
-                                        fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator>=(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                        fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value >= rhs.rescaled(scale)._value;
 }
 
 // LESS THAN Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator<(fixed_point<Rep1, Rad1> const& lhs,
-                                       fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator<(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                       fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value < rhs.rescaled(scale)._value;
 }
 
 // GREATER THAN Operation
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
-                                       fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1, Track1> const& lhs,
+                                       fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale = cuda::std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
 // MODULO OPERATION
-template <typename Rep1, Radix Rad1>
-CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1> const& lhs,
-                                                          fixed_point<Rep1, Rad1> const& rhs)
+template <typename Rep1, Radix Rad1, overflow_tracking Track1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1, Track1> operator%(
+  fixed_point<Rep1, Rad1, Track1> const& lhs, fixed_point<Rep1, Rad1, Track1> const& rhs)
 {
   auto const scale     = cuda::std::min(lhs._scale, rhs._scale);
   auto const lhs_r     = lhs.rescaled(scale);
   auto const rhs_r     = rhs.rescaled(scale);
   auto const remainder = lhs_r._value % rhs_r._value;
-  auto result          = fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
-#ifdef CUDF_TRACK_FIXED_POINT_OVERFLOW
-  result._overflow_flag = lhs_r._overflow_flag || rhs_r._overflow_flag;
-#endif
+  auto result          = fixed_point<Rep1, Rad1, Track1>{scaled_integer<Rep1>{remainder, scale}};
+  if constexpr (Track1 == overflow_tracking::on) {
+    result._overflow.value = lhs_r._overflow.value || rhs_r._overflow.value;
+  }
   return result;
 }
 
 using decimal32  = fixed_point<int32_t, Radix::BASE_10>;     ///<  32-bit decimal fixed point
 using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decimal fixed point
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
+
+// -----------------------------------------------------------------------------
+// Overflow-tracking aliases
+// -----------------------------------------------------------------------------
+// These instantiate the same `fixed_point` class template with `Track == on`
+// and so participate in every operator overload above. They are wired into the
+// runtime type system as `type_id::DECIMAL{32,64,128}_SAFE`, which means they
+// flow through `binary_operation`, `transform`, scans and any code path that
+// dispatches via `cudf::type_dispatcher`. The on-device storage of a
+// `column<decimal*_safe>` is still the raw signed integer (see
+// `cudf::device_storage_type_t<>`); the sticky bit is purely a value-type
+// concept used inside element-wise kernels.
+//
+// Aggregations whose update step bypasses the value-level operators (e.g.
+// atomic adds on the raw integer storage in
+// `cudf::detail::atomic_add(&target.element<DeviceTarget>(...), ...)`) will
+// **not** carry the sticky bit through. Use the existing
+// `aggregation::SUM_WITH_OVERFLOW` pattern in
+// `cpp/include/cudf/detail/aggregation/device_aggregators.cuh` for groupby and
+// reduce overflow detection.
+
+/// 32-bit decimal fixed point with sticky overflow tracking
+using decimal32_safe = fixed_point<int32_t, Radix::BASE_10, overflow_tracking::on>;
+/// 64-bit decimal fixed point with sticky overflow tracking
+using decimal64_safe = fixed_point<int64_t, Radix::BASE_10, overflow_tracking::on>;
+/// 128-bit decimal fixed point with sticky overflow tracking
+using decimal128_safe = fixed_point<__int128_t, Radix::BASE_10, overflow_tracking::on>;
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT numeric
