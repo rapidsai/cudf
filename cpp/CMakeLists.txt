@@ -326,15 +326,31 @@ endif()
 rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
-rapids_cpm_rapids_logger(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+set(_rapids_logger_args BUILD_EXPORT_SET cudf-exports)
+if(CUDF_INSTALL_LIBRARY_DEPS)
+  list(APPEND _rapids_logger_args INSTALL_EXPORT_SET cudf-exports)
+endif()
+if(NOT CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
+  list(APPEND _rapids_logger_args ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG} CPM_ARGS OPTIONS
+       "BUILD_SHARED_LIBS OFF"
+  )
+endif()
+rapids_cpm_rapids_logger(${_rapids_logger_args})
+
+# If rapids_logger was found as a pre-existing shared library (e.g. conda), we need
+# find_dependency(rapids_logger) in the installed config even when CUDF_INSTALL_LIBRARY_DEPS is OFF.
+if(NOT CUDF_INSTALL_LIBRARY_DEPS)
+  get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
+  if(NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
+    include("${rapids-cmake-dir}/export/package.cmake")
+    rapids_export_package(INSTALL rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
+  endif()
+endif()
 
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
-
-# find NVTX
-include(cmake/thirdparty/get_nvtx.cmake)
 
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
@@ -344,6 +360,9 @@ include(cmake/thirdparty/get_cccl.cmake)
 
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
+
+# find NVTX, after rmm so we defer to rmm to decide the interface since nvtx is private for cudf
+include(cmake/thirdparty/get_nvtx.cmake)
 
 # find croaring
 include(cmake/thirdparty/get_croaring.cmake)
@@ -1068,10 +1087,99 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
           ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
 )
+
+# Public deps with conditional WHOLE_ARCHIVE for shared builds. --whole-archive ensures all symbols
+# from static rmm/rapids_logger are exported from shared libcudf. This is a no-op when those deps
+# are themselves shared libraries.
+#
+# When building a shared libcudf with static deps that are absorbed via whole-archive, the deps
+# should not appear in the installed interface -- consumers link only to libcudf.so. However, if we
+# found a pre-existing shared library (e.g. in conda), it is NOT absorbed and must remain in the
+# installed interface so consumers can link it at runtime.
+set(_rmm_link rmm::rmm)
+set(_rapids_logger_link rapids_logger::rapids_logger)
+if(BUILD_SHARED_LIBS)
+  set(_rmm_link $<LINK_LIBRARY:WHOLE_ARCHIVE,${_rmm_link}>)
+  set(_rapids_logger_link $<LINK_LIBRARY:WHOLE_ARCHIVE,${_rapids_logger_link}>)
+  # Only hide from install interface if the dep is actually a static library absorbed into cudf. If
+  # it's a shared library (found pre-installed), it must remain in the public interface.
+  get_target_property(_rmm_type rmm::rmm TYPE)
+  get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
+  if(_rmm_type STREQUAL "STATIC_LIBRARY")
+    set(_rmm_link $<BUILD_INTERFACE:${_rmm_link}>)
+  endif()
+  if(_rapids_logger_type STREQUAL "STATIC_LIBRARY")
+    set(_rapids_logger_link $<BUILD_INTERFACE:${_rapids_logger_link}>)
+  endif()
+endif()
+
+# When a static library is absorbed into shared libcudf via whole-archive, its own public transitive
+# dependencies must be promoted into cudf's installed interface. The absorbed library itself is
+# hidden (BUILD_INTERFACE), but consumers still need its deps at link time. For example, rmm's
+# public deps include CUDA::cudart, nvtx3, etc. We also merge the absorbed library's export set
+# metadata (find_dependency calls, global targets) into cudf-exports so the installed config can
+# locate those transitive deps.
+foreach(_absorbed_target rmm::rmm rapids_logger::rapids_logger)
+  get_target_property(_target_type ${_absorbed_target} TYPE)
+  if(BUILD_SHARED_LIBS AND _target_type STREQUAL "STATIC_LIBRARY")
+    get_target_property(_iface_libs ${_absorbed_target} INTERFACE_LINK_LIBRARIES)
+    if(_iface_libs)
+      target_link_libraries(cudf PUBLIC ${_iface_libs})
+    endif()
+  endif()
+endforeach()
+
+# Merge absorbed libraries' export sets into cudf-exports so installed config has find_dependency()
+# calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm-exports).
+if(BUILD_SHARED_LIBS)
+  foreach(_src_export_set rmm-exports rapids_logger-exports)
+    foreach(_mode build install)
+      set(_src_target rapids_export_${_mode}_${_src_export_set})
+      set(_dst_target rapids_export_${_mode}_cudf-exports)
+      if(TARGET ${_src_target} AND TARGET ${_dst_target})
+        get_property(
+          _pkg_names
+          TARGET ${_src_target}
+          PROPERTY "PACKAGE_NAMES"
+        )
+        foreach(_pkg IN LISTS _pkg_names)
+          # Copy the per-package cmake file into cudf-exports directory
+          set(_src_file
+              "${CMAKE_BINARY_DIR}/rapids-cmake/${_src_export_set}/${_mode}/package_${_pkg}.cmake"
+          )
+          set(_dst_file
+              "${CMAKE_BINARY_DIR}/rapids-cmake/cudf-exports/${_mode}/package_${_pkg}.cmake"
+          )
+          if(EXISTS "${_src_file}" AND NOT EXISTS "${_dst_file}")
+            configure_file("${_src_file}" "${_dst_file}" COPYONLY)
+          endif()
+          set_property(
+            TARGET ${_dst_target}
+            APPEND
+            PROPERTY "PACKAGE_NAMES" "${_pkg}"
+          )
+        endforeach()
+        get_property(
+          _global_tgts
+          TARGET ${_src_target}
+          PROPERTY "GLOBAL_TARGETS"
+        )
+        if(_global_tgts)
+          set_property(
+            TARGET ${_dst_target}
+            APPEND
+            PROPERTY "GLOBAL_TARGETS" ${_global_tgts}
+          )
+        endif()
+      endif()
+    endforeach()
+  endforeach()
+endif()
+target_link_libraries(cudf PUBLIC ${_rapids_logger_link} ${_rmm_link})
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
@@ -1301,6 +1409,22 @@ endif()
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+
+# In standalone DSO mode, rmm and rapids_logger are absorbed into libcudf via whole-archive. Their
+# headers are still needed by consumers, so install them manually.
+if(NOT CUDF_INSTALL_LIBRARY_DEPS)
+  # rmm uses SOURCE_SUBDIR cpp, so headers are at ${rmm_SOURCE_DIR}/cpp/include/rmm/ Generated
+  # headers (version_config.hpp, logger_macros.hpp) are at ${rmm_BINARY_DIR}/include/rmm/
+  if(rmm_SOURCE_DIR)
+    install(DIRECTORY ${rmm_SOURCE_DIR}/cpp/include/rmm DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(DIRECTORY ${rmm_BINARY_DIR}/include/rmm DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  endif()
+  if(rapids_logger_SOURCE_DIR)
+    install(DIRECTORY ${rapids_logger_SOURCE_DIR}/include/rapids_logger
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+  endif()
+endif()
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   install(
