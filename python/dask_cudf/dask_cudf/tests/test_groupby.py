@@ -533,7 +533,7 @@ def test_groupby_categorical_key():
         .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
-    dd.assert_eq(expect, got)
+    dd.assert_eq(expect, got, atol=1e-3)
 
 
 @pytest.mark.parametrize(

@@ -1,18 +1,13 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
 
 # Use CPM to find or clone flatbuffers
 function(find_and_configure_flatbuffers VERSION)
-
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+  set(_exclude_from_all EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS})
 
   rapids_cpm_find(
     flatbuffers ${VERSION}
