@@ -410,7 +410,7 @@ def test_query_lifecycle() -> None:
 
 
 def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> None:
-    quent_events = engine._quent_events
+    quent_events = engine.quent_events
     engine_events = [x for x in quent_events if "Engine" in x["data"]]
     assert len(engine_events) == 2
     engine_init, engine_exit = engine_events

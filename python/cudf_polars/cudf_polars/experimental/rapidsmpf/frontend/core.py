@@ -239,38 +239,10 @@ class StreamingEngine(pl.GPUEngine):
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
 
-    # @property
-    # def quent_events(self) -> list[dict[str, Any]]:
-    #     """Return all Quent telemetry events collected during the engine's lifecycle."""
-    #     import cudf_polars.quent._logging
-
-    #     # TODO: this global log_buffer is messing things up.
-    #     # This whole things needs to be rewritten.
-    #     # we need to clear it at some point
-    #     # but right now this function isn't idempotent; the second call won't include events from the client.
-    #     events = []
-    #     with cudf_polars.quent._logging.buffer_lock:
-    #         events = list(cudf_polars.quent._logging.log_buffer)
-    #         cudf_polars.quent._logging.log_buffer.clear()
-
-    #     events.extend(self.worker_quent_events)
-    #     return [x["event"] for x in sorted(events, key=lambda e: e.get("timestamp", 0))]
-
-    # @property
-    # def worker_quent_events(self) -> list[dict[str, Any]]:
-    #     """
-    #     Quent telemetry events collected from workers during shutdown.
-
-    #     Empty until :meth:`shutdown` is called. For distributed engines
-    #     (Ray, Dask) this contains events that were buffered on remote
-    #     workers and drained back to the driver. Events are sorted by
-    #     timestamp.
-
-    #     Returns
-    #     -------
-    #     List of serialized Quent event dicts, sorted by timestamp.
-    #     """
-    #     return sorted(self._worker_quent_events, key=lambda e: e.get("timestamp", 0))
+    @property
+    def quent_events(self) -> list[dict[str, Any]]:
+        """Return all Quent telemetry events collected during the engine's lifecycle."""
+        return [x["event"] for x in self._quent_events]
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """

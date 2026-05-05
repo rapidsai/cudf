@@ -273,13 +273,12 @@ def _setup_worker(
 
     worker_id = worker_ids[comm.rank]
 
-    if worker_id is not None and engine_id is not None and mp_ctx is not None:
+    if worker_id is not None and engine_id is not None:
         quent_worker = cudf_polars.quent._types.Worker(
             id=worker_id,
             engine_id=engine_id,
             instance_name=f"rank-{comm.rank}",
         )
-        mp_ctx.quent_logger.emit(quent_worker.init())
 
     ctx = Context.from_options(comm.logger, mr, options)
     # Set the current RMM device resource so all temporary allocations
@@ -292,20 +291,20 @@ def _setup_worker(
         ),
         thread_name_prefix="dask-executor",
     )
-    setattr(
-        dask_worker,
-        attr,
-        _WorkerContext(
-            comm=comm,
-            ctx=ctx,
-            py_executor=py_executor,
-            mr=mr,
-            worker_id=worker_id,
-            engine_id=engine_id,
-            quent_worker=quent_worker,
-            quent_logger=cudf_polars.quent._logging.QuentLogger(),
-        ),
+
+    mp_ctx = _WorkerContext(
+        comm=comm,
+        ctx=ctx,
+        py_executor=py_executor,
+        mr=mr,
+        worker_id=worker_id,
+        engine_id=engine_id,
+        quent_worker=quent_worker,
+        quent_logger=cudf_polars.quent._logging.QuentLogger(),
     )
+
+    setattr(dask_worker, attr, mp_ctx)
+    mp_ctx.quent_logger.emit(quent_worker.init())
 
 
 def _teardown_worker(
@@ -867,7 +866,9 @@ class DaskEngine(StreamingEngine):
         except Exception as e:
             exceptions.append(e)
         finally:
-            self.config["executor_options"]["quent_context"].emit_engine_exit_events()
+            self.config["executor_options"]["quent_context"].emit_engine_exit_events(
+                self._quent_logger
+            )
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:

@@ -577,7 +577,9 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         self._quent_logger.emit(self._quent_worker.exit())
-        self.config["executor_options"]["quent_context"].emit_engine_exit_events()
+        self.config["executor_options"]["quent_context"].emit_engine_exit_events(
+            self._quent_logger
+        )
         super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
