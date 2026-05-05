@@ -69,6 +69,23 @@ def test_json_encode(engine: pl.GPUEngine, request, ldf):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_json_encode_empty(engine: pl.GPUEngine, request):
+    # ``write_json`` emits no lines for a zero-row input, so the
+    # ``from_iterable_of_py(buff.split())`` round-trip cannot infer a
+    # dtype. The expression short-circuits to an empty string column.
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_131,
+            reason="not supported until polars 1.31",
+        )
+    )
+    ldf = pl.LazyFrame(
+        {"a": pl.Series([], dtype=pl.Struct({"b": pl.String, "d": pl.String}))}
+    )
+    q = ldf.select(pl.col("a").struct.json_encode())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_rename_fields(engine: pl.GPUEngine, request, ldf):
     request.applymarker(
         pytest.mark.xfail(
