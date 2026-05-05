@@ -5,9 +5,11 @@ ARG PYTHON_PACKAGE_MANAGER=conda
 
 FROM ${BASE} as pip-base
 
+# libnuma-dev is required for pip devcontainers for cucascade from rapidsmpf
 RUN apt update -y \
  && DEBIAN_FRONTEND=noninteractive apt install -y \
     librdkafka-dev \
+    libnuma-dev \
  && rm -rf /tmp/* /var/tmp/* /var/cache/apt/* /var/lib/apt/lists/*;
 
 ENV DEFAULT_VIRTUAL_ENV=rapids
