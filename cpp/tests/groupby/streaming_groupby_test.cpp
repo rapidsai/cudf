@@ -1230,7 +1230,7 @@ TEST_F(StreamingGroupbyTest, MultiColumnKeys)
 }
 
 // A single batch larger than `max_distinct_keys` cannot be encoded because transient
-// batch values (`max_distinct_keys + batch_idx`) would collide with stored dense IDs.
+// batch values (`max_distinct_keys + row_idx`) would collide with stored dense IDs.
 TEST_F(StreamingGroupbyTest, BatchExceedingMaxDistinctKeysThrows)
 {
   using K = int32_t;

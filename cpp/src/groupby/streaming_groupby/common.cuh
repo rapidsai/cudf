@@ -93,11 +93,11 @@ struct n_table_comparator {
 
 /*
  * insert_and_find on the main set for each batch row.  Returns the resident slot's
- * value (consumed by `thrust::transform` as `target_indices[batch_idx]`) and writes
+ * value (consumed by `thrust::transform` as `target_indices[row_idx]`) and writes
  * two side-output arrays:
- *   inserted_flags[batch_idx] = whether this row won the CAS (used as the stencil
+ *   inserted_flags[row_idx] = whether this row won the CAS (used as the stencil
  *                               for the subsequent count + copy_if of winners)
- *   slot_offsets[batch_idx]   = offset of the resident slot from `base`, or
+ *   slot_offsets[row_idx]   = offset of the resident slot from `base`, or
  *                               CUDF_SIZE_TYPE_SENTINEL for null/excluded rows
  *
  * If the batch produces no new keys, target_indices is already final and no further
@@ -113,16 +113,16 @@ struct insert_and_map_fn {
   bool* inserted_flags;
   size_type* slot_offsets;
 
-  __device__ size_type operator()(size_type batch_idx) const
+  __device__ size_type operator()(size_type row_idx) const
   {
-    if (row_bitmask && !cudf::bit_is_set(row_bitmask, batch_idx)) {
-      inserted_flags[batch_idx] = false;
-      slot_offsets[batch_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+    if (row_bitmask && !cudf::bit_is_set(row_bitmask, row_idx)) {
+      inserted_flags[row_idx] = false;
+      slot_offsets[row_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
-    auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + batch_idx);
-    inserted_flags[batch_idx]   = inserted;
-    slot_offsets[batch_idx]     = static_cast<size_type>(iter - base);
+    auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + row_idx);
+    inserted_flags[row_idx]   = inserted;
+    slot_offsets[row_idx]     = static_cast<size_type>(iter - base);
     return *iter;
   }
 };
@@ -149,7 +149,7 @@ struct conditional_hash_fn {
 /*
  * Hasher backed by a precomputed cache, indexed by `idx - offset`.
  * In streaming_groupby `offset = max_distinct_keys`, so transient batch values
- * `max_distinct_keys + batch_idx` resolve to `cache[batch_idx]`.  Caching is faster
+ * `max_distinct_keys + row_idx` resolve to `cache[row_idx]`.  Caching is faster
  * than inlining the row_hasher inside cuco's probe at high cardinality
  * (measured: ~10% throughput drop without the cache) — the row_hasher's
  * dispatch + nullable check inflates the cuco insert kernel.

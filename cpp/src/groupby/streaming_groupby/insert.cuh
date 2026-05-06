@@ -72,7 +72,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto set_ref =
     _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(comparator).rebind_hash_function(hasher);
 
-  // Pass 1 — insert_and_find with transient encoding `_max_distinct_keys + batch_idx`.
+  // Pass 1 — insert_and_find with transient encoding `_max_distinct_keys + row_idx`.
   // Returns *iter into target_indices and writes inserted_flags + slot_offsets
   // as side outputs.  slot_offsets stores 4-byte slot offsets (vs. 8-byte raw
   // pointers) to halve temp memory.
