@@ -23,7 +23,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.dsl.ir import HStack, Select
+from cudf_polars.dsl.ir import HStack
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.over import Over, _build_over_groupby_irs
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IR, IRExecutionContext, Select
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
@@ -192,7 +192,7 @@ def _add_row_idx_sync(
 
 def _evaluate_with_row_idx_sync(
     chunk: TableChunk,
-    ir: Select | HStack | Over,
+    ir: Over,
     ir_context: IRExecutionContext,
     row_idx_col: str,
 ) -> DataFrame:
@@ -206,7 +206,9 @@ def _evaluate_with_row_idx_sync(
         chunk.table_view(), augmented_keys, augmented_vals, stream
     )
 
-    result_df = ir.do_evaluate(*ir._non_child_args, augmented_df, context=ir_context)
+    result_df = ir.do_evaluate(
+        ir.key_indices, ir.is_scalar, ir.exprs, augmented_df, context=ir_context
+    )
 
     # HStack passes row_idx_col through; Select does not — attach it from augmented_df.
     if row_idx_col not in result_df.column_map:
@@ -405,16 +407,13 @@ async def _allgather_and_broadcast(
     collective_id: int,
 ) -> None:
     """
-    Compute partial aggregates per chunk, AllGather across ranks to get a
-    global aggregate, then broadcast it back to each buffered chunk row-by-row.
+    Compute partial aggregates per chunk, AllGather globally, then broadcast to each chunk.
 
     Buffers all incoming chunks while computing per-chunk partial aggregates,
     tree-reduces via AllGather, then broadcasts the global aggregate back to
     each buffered chunk using the pre-computed GroupedWindow lookup.
     """
-    gw_nodes = tuple(
-        ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow)
-    )
+    gw_nodes = tuple(ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow))
     key_names = tuple(
         c.name
         for c in gw_nodes[0].children[: gw_nodes[0].by_count]
@@ -524,9 +523,9 @@ async def _shuffle_and_reassemble(
     target_partition_size: int,
 ) -> None:
     """
-    Hash-shuffle rows by partition keys so each rank owns its groups, evaluate
-    window expressions, then reassemble output chunks in original input order
-    using a three-phase sort-and-split strategy.
+    Hash-shuffle by partition keys, evaluate window expressions, reassemble in input order.
+
+    Uses a three-phase sort-and-split strategy.
     """
     row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
     key_indices = ir.key_indices
@@ -547,9 +546,9 @@ async def _shuffle_and_reassemble(
     raw_chunks: list[tuple[int, TableChunk]] = []  # (seq_num, chunk)
     local_size = 0
     while (msg := await ch_in.recv(context)) is not None:
-        chunk = TableChunk.from_message(
-            msg, br=context.br()
-        ).make_available_and_spill(context.br(), allow_overbooking=True)
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
         local_size += chunk.data_alloc_size()
         raw_chunks.append((msg.sequence_number, chunk))
 
@@ -571,16 +570,13 @@ async def _shuffle_and_reassemble(
         for seq_num, chunk in raw_chunks:
             stream = ir_context.get_cuda_stream()
             n_rows = chunk.table_view().num_rows()
-            boundaries.append(
-                (seq_num, row_counter, row_counter + n_rows)
-            )
+            boundaries.append((seq_num, row_counter, row_counter + n_rows))
             if not skip_insert:
-                chunk = await asyncio.to_thread(
+                stamped = await asyncio.to_thread(
                     _add_row_idx_sync, chunk, row_counter, stream, context.br()
                 )
+                inserter.insert_hash(stamped, key_indices)
             row_counter += n_rows
-            if not skip_insert:
-                inserter.insert_hash(chunk, key_indices)
 
     if not boundaries:
         await ch_out.drain(context)
@@ -658,9 +654,7 @@ async def _shuffle_and_reassemble(
         # Bring sub-chunks to device if spilled (async wait).
         available: list[TableChunk] = []
         for chunk in accumulated[k]:
-            avail = await chunk.make_available_or_wait(
-                context, net_memory_delta=0
-            )
+            avail = await chunk.make_available_or_wait(context, net_memory_delta=0)
             available.append(avail)
         accumulated[k] = []  # drop refs to now-consumed originals
 
@@ -739,9 +733,7 @@ async def over_actor(
         if partitioning:
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(
-                    ir, metadata_in.partitioning
-                ),
+                partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
