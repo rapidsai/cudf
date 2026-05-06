@@ -185,7 +185,7 @@ def test_rapidsmpf_join_metadata(
 def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) -> None:
     """from_keys(..., allow_subset=False) matches expected NormalizedPartitioning."""
     state = NormalizedPartitioning.from_keys(
-        partitioning, nranks, indices=key_indices, allow_subset=False
+        partitioning, nranks, keys=key_indices, allow_subset=False
     )
     assert state == expected
 
@@ -252,7 +252,7 @@ def test_get_partitioning_moduli_allow_subset(
 ) -> None:
     """from_keys(..., allow_subset=True) matches expected NormalizedPartitioning."""
     state = NormalizedPartitioning.from_keys(
-        partitioning, nranks, indices=key_indices, allow_subset=True
+        partitioning, nranks, keys=key_indices, allow_subset=True
     )
     assert state == expected
 
@@ -490,24 +490,36 @@ def rapidsmpf_context():
 
 
 @pytest.mark.parametrize(
-    "order,null_order,strict,should_match",
+    "keys,strict,should_match",
     [
-        ((plc.types.Order.ASCENDING,), (plc.types.NullOrder.BEFORE,), True, True),
-        ((plc.types.Order.ASCENDING,), (plc.types.NullOrder.BEFORE,), False, True),
-        ((plc.types.Order.DESCENDING,), (plc.types.NullOrder.BEFORE,), True, False),
-        ((plc.types.Order.ASCENDING,), (plc.types.NullOrder.AFTER,), True, False),
-        (None, None, True, False),
+        (
+            (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),),
+            True,
+            True,
+        ),
+        (
+            (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),),
+            False,
+            True,
+        ),
+        (
+            (OrderKey(0, plc.types.Order.DESCENDING, plc.types.NullOrder.BEFORE),),
+            True,
+            False,
+        ),
+        (
+            (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.AFTER),),
+            True,
+            False,
+        ),
+        ((0,), True, False),  # plain int → hash-only, won't match OrderScheme
     ],
 )
-def test_from_keys_order_scheme(
-    rapidsmpf_context, order, null_order, strict, should_match
-):
+def test_from_keys_order_scheme(rapidsmpf_context, keys, strict, should_match):
     part = Partitioning(
         inter_rank=_make_order_scheme(rapidsmpf_context, strict=strict), local="inherit"
     )
-    result = NormalizedPartitioning.from_keys(
-        part, nranks=4, indices=(0,), order=order, null_order=null_order
-    )
+    result = NormalizedPartitioning.from_keys(part, nranks=4, keys=keys)
     assert isinstance(result.inter_rank_scheme, OrderScheme) == should_match
 
 
@@ -538,20 +550,15 @@ def test_is_aligned_with_order_scheme(rapidsmpf_context):
 
 
 def test_from_keys_order_scheme_single_rank(rapidsmpf_context):
-    asc = (plc.types.Order.ASCENDING,)
-    before = (plc.types.NullOrder.BEFORE,)
+    keys = (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),)
     local_scheme = _make_order_scheme(rapidsmpf_context, strict=True)
     # Single-rank: local OrderScheme promoted to inter-rank
     part = Partitioning(inter_rank=None, local=local_scheme)
-    result = NormalizedPartitioning.from_keys(
-        part, nranks=1, indices=(0,), order=asc, null_order=before
-    )
+    result = NormalizedPartitioning.from_keys(part, nranks=1, keys=keys)
     assert isinstance(result.inter_rank_scheme, OrderScheme)
     assert result.local_scheme == "inherit"
     # Multi-rank without inter-rank OrderScheme → no partitioning
-    result_multi = NormalizedPartitioning.from_keys(
-        part, nranks=4, indices=(0,), order=asc, null_order=before
-    )
+    result_multi = NormalizedPartitioning.from_keys(part, nranks=4, keys=keys)
     assert result_multi.inter_rank_scheme is None
 
 

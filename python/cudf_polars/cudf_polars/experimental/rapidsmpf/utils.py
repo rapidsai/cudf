@@ -13,7 +13,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
@@ -43,7 +43,7 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -57,6 +57,10 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import Schema
+
+
+InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
+PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
 
 
 @contextlib.contextmanager
@@ -198,8 +202,8 @@ def _update_scheme_indices(
 
 
 def _remap_scheme_select(
-    select: Select, scheme: HashScheme | OrderScheme | None | str
-) -> HashScheme | OrderScheme | None | str:
+    select: Select, scheme: PartitioningScheme
+) -> PartitioningScheme:
     if isinstance(scheme, (HashScheme, OrderScheme)):
         old_to_new_names = {
             ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
@@ -219,8 +223,8 @@ def _remap_scheme_select(
 
 
 def _remap_scheme_simple(
-    ir: IR, scheme: HashScheme | OrderScheme | None | str, child: IR
-) -> HashScheme | OrderScheme | None | str:
+    ir: IR, scheme: PartitioningScheme, child: IR
+) -> PartitioningScheme:
     if isinstance(scheme, (HashScheme, OrderScheme)):
         old_key_names = indices_to_names(_scheme_column_indices(scheme), child.schema)
         try:
@@ -678,8 +682,8 @@ class NormalizedPartitioning:
     "inherit" when local layout follows from inter-rank.
     """
 
-    inter_rank_scheme: HashScheme | OrderScheme | None
-    local_scheme: HashScheme | OrderScheme | None | Literal["inherit"]
+    inter_rank_scheme: InterRankScheme
+    local_scheme: PartitioningScheme
 
     def __bool__(self) -> bool:
         """True when both inter-rank and local schemes are present."""
@@ -709,8 +713,8 @@ class NormalizedPartitioning:
         """True when both sides share identical inter-rank and local chunk layouts."""
 
         def _schemes_aligned(
-            lhs: HashScheme | OrderScheme | None,
-            rhs: HashScheme | OrderScheme | None,
+            lhs: PartitioningScheme,
+            rhs: PartitioningScheme,
         ) -> bool:
             if isinstance(lhs, OrderScheme):
                 return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(
@@ -737,9 +741,7 @@ class NormalizedPartitioning:
         partitioning_metadata: Partitioning | None,
         nranks: int,
         *,
-        indices: tuple[int, ...],
-        order: tuple[plc.types.Order, ...] | None = None,
-        null_order: tuple[plc.types.NullOrder, ...] | None = None,
+        keys: Sequence[int | OrderKey],
         allow_subset: bool = True,
     ) -> NormalizedPartitioning:
         """
@@ -751,14 +753,12 @@ class NormalizedPartitioning:
             The channel partitioning metadata.
         nranks
             Number of ranks.
-        indices
-            Key column indices for the operation.
-        order
-            Sort directions per key column (required to match an OrderScheme).
-        null_order
-            Null placement per key column (required to match an OrderScheme).
+        keys
+            Key column descriptors. Pass sequence of ``int`` values
+            (column indices) for hash-only matching. Pass a sequence of
+            ``OrderKey`` instances for ordered matching.
         allow_subset
-            If True, the metadata keys may be a prefix of indices/order/null_order.
+            If True, the metadata keys may be a prefix of ``keys``.
 
         Returns
         -------
@@ -767,10 +767,8 @@ class NormalizedPartitioning:
         """
         inter_rank_scheme, local_scheme = NormalizedPartitioning._normalize_schemes(
             partitioning_metadata,
-            indices,
+            keys,
             nranks,
-            order=order,
-            null_order=null_order,
             allow_subset=allow_subset,
         )
         return cls(inter_rank_scheme=inter_rank_scheme, local_scheme=local_scheme)
@@ -778,22 +776,33 @@ class NormalizedPartitioning:
     @staticmethod
     def _normalize_schemes(
         partitioning_metadata: Partitioning | None,
-        key_indices: tuple[int, ...],
+        keys: Sequence[int | OrderKey],
         nranks: int,
         *,
-        order: tuple[plc.types.Order, ...] | None = None,
-        null_order: tuple[plc.types.NullOrder, ...] | None = None,
         allow_subset: bool = False,
     ) -> tuple[
-        HashScheme | OrderScheme | None,
-        HashScheme | OrderScheme | None | Literal["inherit"],
+        InterRankScheme,
+        PartitioningScheme,
     ]:
         """Translate Partitioning metadata into normalized partitioning schemes."""
+        if not keys:
+            raise ValueError("keys must not be empty")
+        order_based = isinstance(keys[0], OrderKey)
+        if order_based:
+            if not all(isinstance(k, OrderKey) for k in keys):
+                raise TypeError("keys must be all int or all OrderKey")
+            key_indices: tuple[int, ...] = tuple(
+                k.column_index for k in cast("Sequence[OrderKey]", keys)
+            )
+        else:
+            if not all(isinstance(k, int) for k in keys):
+                raise TypeError("keys must be all int or all OrderKey")
+            key_indices = tuple(keys)
         # On a single rank, hash queries are trivially partitioned into one bucket.
         # For order queries, single-rank does not imply sorted — we rely on local
         # scheme promotion below to handle that case.
         trivial = (
-            HashScheme(key_indices, 1) if (nranks == 1 and order is None) else None
+            HashScheme(key_indices, 1) if (nranks == 1 and not order_based) else None
         )
         if partitioning_metadata is None:
             return trivial, None
@@ -804,28 +813,21 @@ class NormalizedPartitioning:
             return target == current
 
         def _order_keys_match(scheme: OrderScheme) -> bool:
-            if order is None or null_order is None:
+            if not order_based:
                 return False  # hash-only caller; ORDER metadata is a mismatch
             if allow_subset:
-                n = min(len(scheme.keys), len(key_indices), len(order), len(null_order))
+                n = min(len(scheme.keys), len(keys))
             else:
-                if len(scheme.keys) != len(key_indices):
+                if len(scheme.keys) != len(keys):
                     return False
-                n = len(key_indices)
+                n = len(keys)
             return all(
-                ok.column_index == i and ok.order == o and ok.null_order == nu
-                for ok, i, o, nu in zip(
-                    scheme.keys[:n],
-                    key_indices[:n],
-                    order[:n],
-                    null_order[:n],
-                    strict=True,
-                )
+                ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=False)
             )
 
         def _keys_match(
             scheme: object,
-        ) -> HashScheme | OrderScheme | None:
+        ) -> InterRankScheme:
             if isinstance(scheme, HashScheme) and _hash_keys_match(scheme):
                 return scheme
             if isinstance(scheme, OrderScheme) and _order_keys_match(scheme):
@@ -834,15 +836,13 @@ class NormalizedPartitioning:
 
         inter_rank = partitioning_metadata.inter_rank
         strict_inter_rank = _keys_match(inter_rank)
-        inter_rank_scheme: HashScheme | OrderScheme | None = (
-            strict_inter_rank or trivial
-        )
+        inter_rank_scheme: InterRankScheme = strict_inter_rank or trivial
         if inter_rank_scheme is None and nranks > 1:
             # Partitioning is meaningless without inter-rank partitioning
             return None, None
 
         local = partitioning_metadata.local
-        local_scheme: HashScheme | OrderScheme | None | Literal["inherit"]
+        local_scheme: PartitioningScheme
         matched_local = _keys_match(local)
         if matched_local is not None:
             local_scheme = matched_local
@@ -1013,7 +1013,7 @@ def _is_already_partitioned(
     partitioning = NormalizedPartitioning.from_keys(
         metadata.partitioning,
         nranks,
-        indices=columns_to_hash,
+        keys=columns_to_hash,
         allow_subset=False,
     )
     return (
