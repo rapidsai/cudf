@@ -18,6 +18,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
     maybe_remap_partitioning,
@@ -48,30 +49,27 @@ def right() -> pl.LazyFrame:
 
 
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "broadcast_join_limit": 2,
-                "dynamic_planning": None,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "broadcast_join_limit": 10,
-                "dynamic_planning": None,
-            }
-        },
+        StreamingOptions(
+            max_rows_per_partition=1,
+            broadcast_join_limit=2,
+            dynamic_planning=None,
+        ),
+        StreamingOptions(
+            max_rows_per_partition=1,
+            broadcast_join_limit=10,
+            dynamic_planning=None,
+        ),
     ],
-    indirect=True,
 )
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    streaming_engine,
+    streaming_engine_factory,
+    options,
 ) -> None:
+    streaming_engine = streaming_engine_factory(options)
     config_options = ConfigOptions.from_polars_engine(streaming_engine)
     broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
@@ -80,8 +78,8 @@ def test_rapidsmpf_join_metadata(
         how="left",
     ).filter(pl.col("x") > pl.col("zz"))
     ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
-    left_count = left.collect().height
-    right_count = right.collect().height
+    left_count = left.collect(engine=streaming_engine).height
+    right_count = right.collect(engine=streaming_engine).height
 
     metadata_collector = evaluate_logical_plan(
         ir, config_options, collect_metadata=True

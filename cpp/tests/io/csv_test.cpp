@@ -12,9 +12,12 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -1223,6 +1226,67 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), type_id::STRING);
 }
 
+TEST_F(CsvReaderTest, DelimWhitespaceNoHeaderLeadingTrailingDelimiter)
+{
+  std::string buffer = "  1   2  \n  3   4  \n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+// Exercises whitespace-shape variations (no padding, leading-only, trailing-only,
+// internal-runs-only, leading+trailing+internal, and quoted header names with and
+// without surrounding whitespace) that should all yield the same `(col_a, col_b)`
+// schema and `[(1,2),(3,4)]` data under `delim_whitespace=true` (pandas parity).
+class CsvDelimWhitespaceShapeTest : public CsvReaderTest,
+                                    public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(CsvDelimWhitespaceShapeTest, ProducesTwoColumns)
+{
+  auto const buffer = GetParam();
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(0);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col_a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col_b");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+INSTANTIATE_TEST_SUITE_P(CsvReaderTest,
+                         CsvDelimWhitespaceShapeTest,
+                         ::testing::Values(std::string{"col_a col_b\n1 2\n3 4\n"},
+                                           std::string{"  col_a col_b\n  1 2\n  3 4\n"},
+                                           std::string{"col_a col_b  \n1 2  \n3 4  \n"},
+                                           std::string{"col_a   col_b\n1   2\n3   4\n"},
+                                           std::string{"  col_a   col_b  \n  1   2  \n  3   4  \n"},
+                                           std::string{"\"col_a\" \"col_b\"\n1 2\n3 4\n"},
+                                           std::string{"  \"col_a\"   \"col_b\"  \n1 2\n3 4\n"}));
+
 TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
 {
   std::string const buffer = "1,,3\n4,,6\n";
@@ -1244,6 +1308,49 @@ TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
   expect_column_data_equal(std::vector<int64_t>{1, 4}, result_view.column(0));
   expect_column_data_equal(std::vector<std::string>{"", ""}, result_view.column(1));
   expect_column_data_equal(std::vector<int64_t>{3, 6}, result_view.column(2));
+}
+
+TEST_F(CsvReaderTest, MultiChunkRowCount)
+{
+  // TODO: add reader option to set chunk size and use it here
+  constexpr size_t chunk_threshold = 64ull * 1024 * 1024;
+  std::string const row            = "123,456,789\n";
+  size_t const num_rows            = (chunk_threshold / row.size()) + 1024;
+
+  std::string buffer;
+  buffer.reserve(num_rows * row.size());
+  for (size_t i = 0; i < num_rows; ++i) {
+    buffer.append(row);
+  }
+
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(static_cast<size_t>(result_view.num_rows()), num_rows);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(2).type().id(), type_id::INT64);
+
+  // All rows are identical, so verifying min == max == expected
+  auto const i64       = cudf::data_type{cudf::type_id::INT64};
+  auto const min_agg   = cudf::make_min_aggregation<cudf::reduce_aggregation>();
+  auto const max_agg   = cudf::make_max_aggregation<cudf::reduce_aggregation>();
+  auto const all_equal = [&](cudf::column_view const& col, int64_t expected) {
+    using scalar_t = cudf::numeric_scalar<int64_t>;
+    auto const min = cudf::reduce(col, *min_agg, i64);
+    auto const max = cudf::reduce(col, *max_agg, i64);
+    return static_cast<scalar_t const&>(*min).value() == expected &&
+           static_cast<scalar_t const&>(*max).value() == expected;
+  };
+  EXPECT_TRUE(all_equal(result_view.column(0), 123));
+  EXPECT_TRUE(all_equal(result_view.column(1), 456));
+  EXPECT_TRUE(all_equal(result_view.column(2), 789));
 }
 
 TEST_F(CsvReaderTest, TypeInferenceThousands)
