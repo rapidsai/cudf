@@ -58,9 +58,6 @@ option(CUDA_ENABLE_LINEINFO
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 
 if(NOT BUILD_SHARED_LIBS)
@@ -97,7 +94,6 @@ message(
   VERBOSE
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
-message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE
         "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
 )
@@ -1012,7 +1008,7 @@ if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
 endif()
 
-rapids_cuda_set_runtime(cudf USE_STATIC ${CUDA_STATIC_RUNTIME})
+rapids_cuda_set_runtime(cudf USE_STATIC ON)
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -1059,7 +1055,7 @@ if(CUDF_BUILD_TESTUTIL)
     PUBLIC cudf
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
-  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ON)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
@@ -1090,7 +1086,7 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil INTERFACE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                            "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-  rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(cudftestutil USE_STATIC ON)
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
   add_library(cudftestutil_impl INTERFACE)
@@ -1151,7 +1147,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     endif()
 
     set(sanitizer_relative_genex
-        "$<PATH:RELATIVE_PATH,$<TARGET_FILE_DIR:CUDA::sanitizer>,$<TARGET_FILE_DIR:CUDA::cudart>>"
+        "$<PATH:RELATIVE_PATH,$<TARGET_FILE_DIR:CUDA::sanitizer>,$<TARGET_FILE_DIR:CUDA::cudart_static>>"
     )
     set_target_properties(
       ${_tgt}
@@ -1166,9 +1162,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm CUDA::sanitizer)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart_static rmm::rmm CUDA::sanitizer)
 
-    rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
+    rapids_cuda_set_runtime(${_tgt} USE_STATIC ON)
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")
