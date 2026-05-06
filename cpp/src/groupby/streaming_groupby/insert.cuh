@@ -91,8 +91,11 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   // Count newly inserted keys.  Sequential reads over inserted_flags are cheaper
   // than the alternative (re-deriving winner status via two random loads per row).
-  auto const new_distinct_keys = static_cast<size_type>(thrust::count(
-    rmm::exec_policy_nosync(stream, temp_mr), inserted_flags.begin(), inserted_flags.end(), true));
+  auto const new_distinct_keys = static_cast<size_type>(
+    thrust::count_if(rmm::exec_policy_nosync(stream, temp_mr),
+                     inserted_flags.begin(),
+                     inserted_flags.end(),
+                     cuda::std::identity{}));
 
   if (new_distinct_keys > 0) {
     // Stream compact: get the batch-local indices of newly inserted keys.

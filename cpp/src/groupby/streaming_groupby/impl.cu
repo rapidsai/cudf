@@ -79,7 +79,8 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
   // Slot values use [0, max_distinct_keys) for stored dense IDs and [max_distinct_keys, 2*max_distinct_keys)
   // for transient batch encoding within a single insert; the upper bound 2*max_distinct_keys
   // must fit in size_type.
-  CUDF_EXPECTS(static_cast<int64_t>(max_distinct_keys) * 2 <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(static_cast<int64_t>(max_distinct_keys) * 2 <=
+                 static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "max_distinct_keys is too large: transient encoding overflows size_type.",
                std::invalid_argument);
   if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
@@ -200,9 +201,7 @@ void streaming_groupby::impl::update_nullable_state(table_view const& batch_keys
 std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
-  // Dense IDs are already row indices into _agg_results, so the meaningful
-  // result rows are exactly [0, _distinct_keys).  A slice + table copy
-  // replaces what used to be a gather-by-identity-indices kernel.
+  // The results we care about are dense in `[0, _distinct_keys)` and can be extracted by slice+copy.
   auto const sliced =
     cudf::detail::slice(_agg_results->view(), {0, _distinct_keys}, stream).front();
   return std::make_unique<table>(sliced, stream, mr);
