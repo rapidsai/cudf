@@ -736,7 +736,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
-      if (cur <= end && cur == data_end) {
+      bool const is_last_chunk = data_end_off <= data.size();
+      if (is_last_chunk && cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
       } else {
