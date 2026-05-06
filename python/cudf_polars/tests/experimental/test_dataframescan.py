@@ -60,6 +60,15 @@ def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_parti
         assert count == 1
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Multi-rank Union interleaves child outputs across ranks: client "
+        "receives [rank0_A, rank0_B, rank1_A, rank1_B] instead of the "
+        "polars-CPU [A, B]. Tracked in "
+        "https://github.com/rapidsai/cudf/issues/22376."
+    ),
+    strict=False,
+)
 def test_dataframescan_concat(df, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1_000),
