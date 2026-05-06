@@ -1138,9 +1138,9 @@ if(BUILD_SHARED_LIBS)
         PROPERTY "GLOBAL_TARGETS"
       )
       foreach(_pkg IN LISTS _pkg_names)
-        # Skip packages that are themselves absorbed into libcudf — they won't be installed or
-        # findable at install time.
-        if(_mode STREQUAL "install" AND _pkg IN_LIST _absorbed_deps)
+        # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
+        # be installed as separate findable packages.
+        if(_mode STREQUAL "install" AND (_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3"))
           continue()
         endif()
         rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
@@ -1392,6 +1392,10 @@ if(NOT CUDF_INSTALL_LIBRARY_DEPS)
     install(DIRECTORY ${rapids_logger_SOURCE_DIR}/include/rapids_logger
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
+  endif()
+  # nvtx3 uses SOURCE_SUBDIR c, so headers are at ${nvtx3_SOURCE_DIR}/include/nvtx3/
+  if(nvtx3_SOURCE_DIR)
+    install(DIRECTORY ${nvtx3_SOURCE_DIR}/include/nvtx3 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
   endif()
 endif()
 
