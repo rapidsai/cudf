@@ -785,7 +785,9 @@ class NormalizedPartitioning:
         PartitioningScheme,
     ]:
         """Translate Partitioning metadata into normalized partitioning schemes."""
-        order_based = bool(keys) and isinstance(keys[0], OrderKey)
+        if not keys:
+            return None, None
+        order_based = isinstance(keys[0], OrderKey)
         if order_based:
             if not all(isinstance(k, OrderKey) for k in keys):
                 raise TypeError("keys must be all int or all OrderKey")
