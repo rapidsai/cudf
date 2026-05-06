@@ -195,7 +195,6 @@ def test_reset_updates_executor_options(reset_engine: DaskEngine) -> None:
     opts = reset_engine.config["executor_options"]
     assert opts["max_rows_per_partition"] == 42
     # Reserved keys are still injected by ``_reset``.
-    assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "dask"
     assert isinstance(opts["dask_context"], DaskContext)
 

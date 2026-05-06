@@ -320,7 +320,6 @@ def test_reset_updates_executor_options(comm: Communicator) -> None:
         opts = engine.config["executor_options"]
         assert opts["max_rows_per_partition"] == 42
         # Reserved keys are still injected by ``_reset``.
-        assert opts["runtime"] == "rapidsmpf"
         assert opts["cluster"] == "spmd"
         assert isinstance(opts["spmd_context"], SPMDContext)
 
