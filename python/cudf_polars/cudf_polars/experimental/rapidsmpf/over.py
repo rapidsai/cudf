@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.shuffler import PartitionAssignment
@@ -167,10 +167,6 @@ async def _evaluate_broadcast_chunk(
     )
 
 
-_INT32_DTYPE = DataType(pl.Int32())
-_INT64_DTYPE = DataType(pl.Int64())
-
-
 @dataclass(frozen=True)
 class OriginStamps:
     """
@@ -184,21 +180,22 @@ class OriginStamps:
     chunks — *not* the upstream message ``sequence_number``, which is not
     guaranteed unique (e.g., when the input is the output of a shuffle whose
     partition IDs collide across chunks).
+
+    All three stamps share :attr:`dtype` (``INT32``): chunk_index is bounded
+    by chunks-per-rank, position by cudf's per-table row limit, and rank by
+    ``comm.nranks`` — none come close to overflowing INT32.
     """
 
     chunk_index: str
     position: str
     rank: str
 
+    dtype: ClassVar[DataType] = DataType(pl.Int32())
+
     @property
     def names(self) -> tuple[str, str, str]:
         """Stamp column names, in the order they are appended to the table."""
         return (self.chunk_index, self.position, self.rank)
-
-    @property
-    def dtypes(self) -> tuple[DataType, DataType, DataType]:
-        """Stamp column dtypes, parallel to :attr:`names`."""
-        return (_INT32_DTYPE, _INT64_DTYPE, _INT32_DTYPE)
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
@@ -218,24 +215,19 @@ def _append_origin_stamps(
     table = chunk.table_view()
     n_rows = table.num_rows()
     int32 = plc.types.DataType(plc.TypeId.INT32)
-    int64 = plc.types.DataType(plc.TypeId.INT64)
-    zero_step = plc.Scalar.from_py(0, int32, stream=stream)
+    zero = plc.Scalar.from_py(0, int32, stream=stream)
+    one = plc.Scalar.from_py(1, int32, stream=stream)
     chunk_index_col = plc.filling.sequence(
         n_rows,
         plc.Scalar.from_py(chunk_index, int32, stream=stream),
-        zero_step,
+        zero,
         stream=stream,
     )
-    position_col = plc.filling.sequence(
-        n_rows,
-        plc.Scalar.from_py(0, int64, stream=stream),
-        plc.Scalar.from_py(1, int64, stream=stream),
-        stream=stream,
-    )
+    position_col = plc.filling.sequence(n_rows, zero, one, stream=stream)
     rank_col = plc.filling.sequence(
         n_rows,
         plc.Scalar.from_py(origin_rank, int32, stream=stream),
-        zero_step,
+        zero,
         stream=stream,
     )
     return TableChunk.from_pylibcudf_table(
@@ -259,7 +251,7 @@ def _evaluate_window_with_stamps(
     augmented = DataFrame.from_table(
         chunk.table_view(),
         [*child_schema.keys(), *stamps.names],
-        [*child_schema.values(), *stamps.dtypes],
+        [*child_schema.values(), *([stamps.dtype] * len(stamps.names))],
         stream,
     )
     result = ir.do_evaluate(
@@ -350,7 +342,10 @@ def _split_by_chunk_index(
     )
     split_positions = (
         DataFrame.from_table(
-            plc.Table([split_position_col]), ["p"], [_INT32_DTYPE], stream=stream
+            plc.Table([split_position_col]),
+            ["p"],
+            [DataType(pl.Int32())],
+            stream=stream,
         )
         .to_polars()["p"]
         .to_list()
