@@ -431,13 +431,17 @@ def _(
         )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
+        # Use Empty as the input so the streaming network's metadata flows
+        # `duplicated=True` end-to-end. Without that, every rank emits the
+        # literal once and the client concatenates N copies.
+        input_ir: IR = Empty({})
         new_node = Select(
             {named_expr.name: named_expr.value.dtype},
             [named_expr],
             should_broadcast=True,
-            df=child,
+            df=input_ir,
         )
-        partition_info[new_node] = PartitionInfo(count=1)
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
     if not any(

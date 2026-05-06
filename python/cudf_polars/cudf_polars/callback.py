@@ -313,10 +313,8 @@ def _callback(
             if timer is not None:
                 msg = textwrap.dedent("""\
                     LazyFrame.profile() is not supported with the streaming executor.
-                    To profile execution with the streaming executor, use:
-
-                    - NVIDIA NSight Systems with the 'streaming' scheduler.
-                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    To profile execution with the streaming executor, use NVIDIA
+                    NSight Systems with the 'streaming' scheduler.
                     """)
                 raise NotImplementedError(msg)
 
@@ -368,12 +366,6 @@ def execute_with_cudf(
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
 
-        if (
-            memory_resource is None
-            and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; Requires distributed cluster
-            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
