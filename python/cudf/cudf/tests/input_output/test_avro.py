@@ -1,10 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
 import io
 import pathlib
+import subprocess
+import sys
+import textwrap
 
 import fastavro
 import numpy as np
@@ -644,3 +647,32 @@ def test_avro_reader_multiblock(
     actual_df = cudf.read_avro(buffer, skiprows=skip_rows, num_rows=num_rows)
 
     assert_eq(expected_df, actual_df)
+
+
+def test_avro_reader_no_hang_on_truncated_schema(datadir):
+    path = datadir / "avro" / "hang_input.avro"
+    assert path.is_file(), path
+
+    script = textwrap.dedent(
+        f"""
+        import cudf
+        try:
+            cudf.read_avro({str(path)!r})
+        except Exception:
+            pass
+        """
+    )
+
+    timeout_s = 10
+    try:
+        subprocess.run(
+            [sys.executable, "-c", script],
+            timeout=timeout_s,
+            check=False,
+            capture_output=True,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(
+            f"cudf.read_avro hung on malformed input {path.name!r} "
+            f"(no completion within {timeout_s}s)"
+        )
