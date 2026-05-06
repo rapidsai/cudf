@@ -14,6 +14,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 
+#include <limits>
+
 using namespace cudf::test::iterators;
 
 namespace {
@@ -92,6 +94,8 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
 template <class T>
 struct GroupbyMergeM2TypedTest : public cudf::test::BaseFixture {};
 
+struct GroupbyMergeM2ExtremeTest : public cudf::test::BaseFixture {};
+
 using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
                                      cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(GroupbyMergeM2TypedTest, TestTypes);
@@ -143,6 +147,38 @@ TYPED_TEST(GroupbyMergeM2TypedTest, EmptyInput)
   auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(vals, *out_vals, verbosity);
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteFirstPartial)
+{
+  auto const key  = keys_col<int32_t>{1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<int64_t>{1};
+  auto means      = means_col<double>{std::numeric_limits<double>::max()};
+  auto m2s        = M2s_col<double>{0.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_key, out_vals] = merge_M2({key}, {vals});
+
+  auto const expected_keys = keys_col<int32_t>{1};
+  auto const expected_m2s  = M2s_col<double>{0.0};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_key, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_m2s, out_vals->child(2), verbosity);
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartials)
+{
+  auto const keys = keys_col<int32_t>{1, 1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<int64_t>{1, 1};
+  auto means      = means_col<double>{std::numeric_limits<double>::max(), 0.0};
+  auto m2s        = M2s_col<double>{0.0, 0.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
+
+  auto const expected_keys = keys_col<int32_t>{1};
+  auto const expected_m2s  = M2s_col<double>{std::numeric_limits<double>::infinity()};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_m2s, out_vals->child(2), verbosity);
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
