@@ -11,7 +11,7 @@ import operator
 import struct
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -659,6 +659,73 @@ def names_to_indices(
     keys = list(schema.keys())
     str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
     return tuple(keys.index(n) for n in str_names)
+
+
+@dataclass(frozen=True)
+class TableSizeStats:
+    """Sampled chunks and aggregate size/row stats for a table channel."""
+
+    chunks: dict[int, TableChunk] = field(default_factory=dict)
+    """The sampled chunks, keyed by sequence number."""
+    total_size: int = 0
+    """The total estimated size of the table in bytes."""
+    total_rows: int = 0
+    """The total estimated number of rows in the table."""
+    total_chunks: int = 0
+    """The total estimated number of chunks in the table."""
+
+
+async def _sample_chunks(
+    context: Context,
+    ch: Channel[TableChunk],
+    max_sample_chunks: int,
+    max_sample_bytes: int,
+    local_count: int,
+) -> TableSizeStats:
+    """
+    Sample chunks from a channel and extrapolate to a per-rank size estimate.
+
+    Parameters
+    ----------
+    context
+        The context.
+    ch
+        The channel to sample from.
+    max_sample_chunks
+        The maximum number of chunks to sample.
+    max_sample_bytes
+        The maximum number of bytes to sample.
+    local_count
+        The expected number of local chunks (used for extrapolation).
+
+    Returns
+    -------
+    Sampled chunks and the extrapolated total size/rows for this rank.
+    """
+    sampled_chunks: dict[int, TableChunk] = {}
+    total_size = 0
+    total_rows = 0
+    for _ in range(max_sample_chunks):
+        msg = await ch.recv(context)
+        if msg is None:
+            break
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        sampled_chunks[msg.sequence_number] = chunk
+        total_size += chunk.data_alloc_size()
+        total_rows += chunk.shape[0]
+        if total_size >= max_sample_bytes:
+            break
+    if sampled_chunks:
+        total_size = int((total_size / len(sampled_chunks)) * local_count)
+        total_rows = int((total_rows / len(sampled_chunks)) * local_count)
+    return TableSizeStats(
+        chunks=sampled_chunks,
+        total_size=total_size,
+        total_rows=total_rows,
+        total_chunks=local_count,
+    )
 
 
 async def replay_buffered_channel(

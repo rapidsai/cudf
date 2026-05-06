@@ -36,15 +36,18 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
     _evaluate_chunk_sync,
+    _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
     chunkwise_evaluate,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    gather_in_task_group,
     maybe_remap_partitioning,
     process_children,
     recv_metadata,
+    replay_buffered_channel,
     send_metadata,
     shutdown_on_error,
 )
@@ -58,6 +61,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Select
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import TableSizeStats
 
 
 def _broadcast_gw_sync(
@@ -503,63 +507,71 @@ async def _allgather_and_broadcast(
     await ch_out.drain(context)
 
 
-async def _collect_input_chunks(
-    context: Context,
-    ch_in: Channel[TableChunk],
-) -> tuple[list[tuple[int, TableChunk]], int]:
-    """Drain *ch_in* into spillable chunks, returning them with the byte total."""
-    chunks: list[tuple[int, TableChunk]] = []
-    local_bytes = 0
-    while (msg := await ch_in.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        local_bytes += chunk.data_alloc_size()
-        chunks.append((msg.sequence_number, chunk))
-    return chunks, local_bytes
-
-
-async def _negotiate_forward_modulus(
+async def _choose_modulus(
     context: Context,
     comm: Communicator,
+    ch_in: Channel[TableChunk],
+    metadata_in: ChannelMetadata,
     collective_id: int,
-    local_bytes: int,
-    local_count: int,
     target_partition_size: int,
-) -> int:
-    """AllGather global size+count and pick a partition count for the forward shuffle."""
-    total_bytes, total_count = await allgather_reduce(
-        context, comm, collective_id, local_bytes, local_count
+    sample_chunk_count: int,
+) -> tuple[TableSizeStats, int]:
+    """
+    Sample input, AllGather size estimates, and derive the forward-shuffle modulus.
+
+    Returns the sample (whose chunks must be replayed back to the consumer)
+    and the chosen number of forward-shuffle partitions.
+    """
+    sample = await _sample_chunks(
+        context,
+        ch_in,
+        sample_chunk_count,
+        target_partition_size,
+        metadata_in.local_count,
     )
-    return min(
+    total_bytes, total_count = await allgather_reduce(
+        context, comm, collective_id, sample.total_size, sample.total_chunks
+    )
+    modulus = min(
         max(comm.nranks, total_bytes // max(1, target_partition_size)),
         max(1, total_count),
     )
+    return sample, modulus
 
 
 async def _distribute_by_group(
     context: Context,
     comm: Communicator,
     forward_shuffle: ShuffleManager,
-    inputs: list[tuple[int, TableChunk]],
+    ch_in: Channel[TableChunk],
     key_indices: tuple[int, ...],
     ir_context: IRExecutionContext,
     skip_insert: bool,  # noqa: FBT001
-) -> None:
-    """Stamp each chunk with origin metadata and hash-shuffle by partition keys."""
+) -> list[int]:
+    """Stream chunks from *ch_in* into the forward shuffle with origin stamps."""
+    # The replay channel re-sends metadata; we already have it, so discard.
+    await recv_metadata(ch_in, context)
+
+    sequence_numbers: list[int] = []
+    chunk_index = 0
     async with forward_shuffle.inserting() as inserter:
-        for chunk_index, (_, chunk) in enumerate(inputs):
-            if skip_insert:
-                continue
-            stamped = await asyncio.to_thread(
-                _append_origin_stamps,
-                chunk,
-                chunk_index,
-                comm.rank,
-                ir_context.get_cuda_stream(),
-                context.br(),
-            )
-            inserter.insert_hash(stamped, key_indices)
+        while (msg := await ch_in.recv(context)) is not None:
+            chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
+            sequence_numbers.append(msg.sequence_number)
+            if not skip_insert:
+                stamped = await asyncio.to_thread(
+                    _append_origin_stamps,
+                    chunk,
+                    chunk_index,
+                    comm.rank,
+                    ir_context.get_cuda_stream(),
+                    context.br(),
+                )
+                inserter.insert_hash(stamped, key_indices)
+            chunk_index += 1
+    return sequence_numbers
 
 
 async def _evaluate_and_route_to_origin(
@@ -652,11 +664,9 @@ async def _reassemble_input_chunks(
 
     stream = ir_context.get_cuda_stream()
     for chunk_index, sequence_number in enumerate(sequence_numbers):
-        chunk = by_chunk_index.get(chunk_index)
-        if chunk is None:
-            chunk = await asyncio.to_thread(
-                _empty_output_chunk, output_dtypes, stream, context.br()
-            )
+        chunk = by_chunk_index.get(chunk_index) or _empty_output_chunk(
+            output_dtypes, stream, context.br()
+        )
         if tracer is not None:
             tracer.add_chunk(table=chunk.table_view())
         await ch_out.send(context, Message(sequence_number, chunk))
@@ -676,15 +686,20 @@ async def _shuffle_and_reassemble(
     forward_shuffle_collective_id: int,
     return_shuffle_collective_id: int,
     target_partition_size: int,
+    sample_chunk_count: int,
 ) -> None:
     """
     Evaluate non-decomposable window expressions across ranks via a return-shuffle.
 
-    Each row is stamped with (origin rank, input sequence number, position in
+    Each row is stamped with (origin rank, input chunk index, position in
     chunk). A hash shuffle by the partition-by keys co-locates each group on
     one rank for window evaluation; a second shuffle routes rows back to their
     origin so the rank that received an input chunk can also emit its output.
-    Sorting the returned rows by (sequence, position) recovers input order.
+    Sorting the returned rows by (chunk_index, position) recovers input order.
+
+    Input chunks are sampled to size the forward shuffle, then replayed back
+    via ``replay_buffered_channel`` so the insert phase can stream rather than
+    holding every input chunk in device memory at once.
     """
     stamps = _origin_stamps_for(input_ir, ir)
 
@@ -697,14 +712,14 @@ async def _shuffle_and_reassemble(
 
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    inputs, local_bytes = await _collect_input_chunks(context, ch_in)
-    forward_modulus = await _negotiate_forward_modulus(
+    sample, forward_modulus = await _choose_modulus(
         context,
         comm,
+        ch_in,
+        metadata_in,
         size_collective_id,
-        local_bytes,
-        len(inputs),
         target_partition_size,
+        sample_chunk_count,
     )
 
     forward_shuffle = ShuffleManager(
@@ -718,16 +733,22 @@ async def _shuffle_and_reassemble(
         partition_assignment=PartitionAssignment.CONTIGUOUS,
     )
 
-    sequence_numbers = [seq for seq, _ in inputs]
-    await _distribute_by_group(
-        context,
-        comm,
-        forward_shuffle,
-        inputs,
-        ir.key_indices,
-        ir_context,
-        skip_insert,
+    ch_replay = context.create_channel()
+    sequence_numbers, _ = await gather_in_task_group(
+        _distribute_by_group(
+            context,
+            comm,
+            forward_shuffle,
+            ch_replay,
+            ir.key_indices,
+            ir_context,
+            skip_insert,
+        ),
+        replay_buffered_channel(
+            context, ch_replay, ch_in, sample.chunks, metadata_in, trace_ir=ir
+        ),
     )
+
     await _evaluate_and_route_to_origin(
         context,
         ir,
@@ -755,6 +776,7 @@ async def over_actor(
     ch_in: Channel[TableChunk],
     collective_ids: list[int],
     target_partition_size: int,
+    sample_chunk_count: int,
 ) -> None:
     """
     Streaming actor for window ``over()`` expressions.
@@ -786,6 +808,9 @@ async def over_actor(
     target_partition_size
         Target output partition size in bytes, used to compute the shuffle
         modulus for the non-scalar path.
+    sample_chunk_count
+        Maximum number of input chunks to sample when estimating the shuffle
+        modulus on the non-scalar path.
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
@@ -844,6 +869,7 @@ async def over_actor(
                 forward_shuffle_collective_id=collective_ids[1],
                 return_shuffle_collective_id=collective_ids[2],
                 target_partition_size=target_partition_size,
+                sample_chunk_count=sample_chunk_count,
             )
 
 
@@ -851,10 +877,21 @@ async def over_actor(
 def _(
     ir: Over, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    config_options = rec.state["config_options"]
+    executor = rec.state["config_options"].executor
     actors, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
+    if not ir.is_scalar and executor.dynamic_planning is None:
+        raise ValueError(
+            "Non-scalar over() requires dynamic planning to size the forward "
+            "shuffle. Enable it via StreamingExecutor(dynamic_planning=...) "
+            "or the --dynamic-planning CLI flag."
+        )
+    sample_chunk_count = (
+        executor.dynamic_planning.sample_chunk_count
+        if executor.dynamic_planning is not None
+        else 0
+    )
     actors[ir] = [
         over_actor(
             rec.state["context"],
@@ -864,7 +901,8 @@ def _(
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             collective_ids,
-            config_options.executor.target_partition_size,
+            executor.target_partition_size,
+            sample_chunk_count,
         )
     ]
     return actors, channels
