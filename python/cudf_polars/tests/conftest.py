@@ -98,6 +98,21 @@ def streaming_engines() -> Generator[StreamingEngines, None, None]:
         )
 
     engines: dict[str, StreamingEngine] = {"spmd": SPMDEngine(comm=comm)}
+
+    if "dask" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+        engines["dask"] = DaskEngine(engine_options={"allow_gpu_sharing": True})
+
+    if "ray" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+        engines["ray"] = RayEngine(
+            num_ranks=4,
+            engine_options={"allow_gpu_sharing": True},
+            ray_init_options={"include_dashboard": False},
+        )
+
     try:
         yield engines
     finally:

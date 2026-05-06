@@ -21,6 +21,14 @@ if TYPE_CHECKING:
 STREAMING_ENGINE_FIXTURE_PARAMS: list[str] = []
 if importlib.util.find_spec("rapidsmpf") is not None:
     STREAMING_ENGINE_FIXTURE_PARAMS.extend(["spmd", "spmd-small"])
+    from rapidsmpf.bootstrap import is_running_with_rrun as _is_running_with_rrun
+
+    if not _is_running_with_rrun():  # pragma: no cover
+        if importlib.util.find_spec("distributed") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("dask")
+        if importlib.util.find_spec("ray") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("ray")
+    del _is_running_with_rrun
 ALL_ENGINE_FIXTURE_PARAMS = ["in-memory", *STREAMING_ENGINE_FIXTURE_PARAMS]
 
 
@@ -94,6 +102,7 @@ def create_streaming_options(
                 dynamic_planning={},
                 target_partition_size=1_000_000,
                 raise_on_fail=True,
+                allow_gpu_sharing=True,
             )
         case "small":
             baseline = StreamingOptions(
@@ -102,6 +111,7 @@ def create_streaming_options(
                 target_partition_size=10,
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
+                allow_gpu_sharing=True,
             )
         case _:  # pragma: no cover
             raise ValueError(f"Unknown blocksize_mode: {blocksize_mode!r}")

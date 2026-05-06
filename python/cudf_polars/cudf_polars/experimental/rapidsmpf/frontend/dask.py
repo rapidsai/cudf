@@ -408,14 +408,20 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    return evaluate_on_rank(
+    # Always collect the final metadata so we can suppress duplicated outputs
+    # on non-root ranks. The client concatenates per-rank results, so without
+    # this dedup an output marked ``duplicated=True`` would be N-counted.
+    df, metadata = evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
         ir,
         config_options,
-        collect_metadata=collect_metadata,
+        collect_metadata=True,
     )
+    if mp_ctx.comm.rank != 0 and metadata and metadata[-1].duplicated:
+        df = df.clear()
+    return df, metadata if collect_metadata else None
 
 
 def evaluate_pipeline_dask_mode(

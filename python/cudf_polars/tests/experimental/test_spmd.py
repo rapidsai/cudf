@@ -294,6 +294,25 @@ def test_run(spmd_engine: SPMDEngine) -> None:
     assert result == [os.getpid()]
 
 
+def test_sort_slice_over_union_of_duplicated_streams(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """Sort+head over a concat of two group-by branches returns the global result on every rank."""
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf = pl.concat([lf1, lf2]).sort("score").head(10)
+    result = lf.collect(engine=spmd_engine)
+    assert sorted(result["name"].to_list()) == ["alice", "bob"]
+
+
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:
     """``_reset`` must not rebuild the communicator."""
     with SPMDEngine(

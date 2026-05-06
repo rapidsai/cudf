@@ -367,14 +367,26 @@ class RankActor:
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        return evaluate_on_rank(
+        # Always collect the final metadata so we can suppress duplicated
+        # outputs on non-root ranks. The client concatenates per-rank results,
+        # so without this dedup an output marked ``duplicated=True`` would be
+        # N-counted.
+        df, metadata = evaluate_on_rank(
             self._ctx,
             self._comm,
             self._py_executor,
             ir,
             config_options,
-            collect_metadata=collect_metadata,
+            collect_metadata=True,
         )
+        if (
+            self._comm is not None
+            and self._comm.rank != 0
+            and metadata
+            and metadata[-1].duplicated
+        ):
+            df = df.clear()
+        return df, metadata if collect_metadata else None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
