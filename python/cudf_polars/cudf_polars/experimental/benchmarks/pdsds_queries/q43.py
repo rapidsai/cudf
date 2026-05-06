@@ -91,10 +91,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
     gmt = params["gmt"]
 
-    # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    # Pre-filter lookup tables before joining against store_sales [58 partitions].
+    # d_year not needed after filter; d_day_name drives the conditional agg columns.
+    filtered_dates = date_dim.filter(pl.col("d_year") == year).select(
+        ["d_date_sk", "d_day_name"]
+    )
+    # s_gmt_offset not needed after filter; keep group-by output columns.
+    filtered_store = store.filter(pl.col("s_gmt_offset") == gmt).select(
+        ["s_store_sk", "s_store_name", "s_store_id"]
+    )
+
     sort_by = {
         "s_store_name": False,
         "s_store_id": False,
@@ -107,15 +117,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "sat_sales": False,
     }
     limit = 100
-    # Main query with joins and conditional aggregations
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-            .filter((pl.col("s_gmt_offset") == gmt) & (pl.col("d_year") == year))
+            store_sales.select(["ss_sold_date_sk", "ss_store_sk", "ss_sales_price"])
+            .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(filtered_store, left_on="ss_store_sk", right_on="s_store_sk")
             .with_columns(
                 [
-                    # Pre-compute conditional sales amounts for each day
                     pl.when(pl.col("d_day_name") == "Sunday")
                     .then(pl.col("ss_sales_price"))
                     .otherwise(0)
