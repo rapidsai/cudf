@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Mapping
@@ -8,12 +8,12 @@ from typing import Any, overload
 import pyarrow as pa
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 @dataclass
 class ColumnMetadata:
@@ -33,14 +33,14 @@ def from_arrow(
     obj: pa.Array[Any],
     *,
     data_type: DataType | None = None,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 @overload
 def from_arrow(
     obj: pa.Table,
     *,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 @overload
@@ -67,11 +67,11 @@ def to_arrow(
 ) -> pa.Scalar[Any]: ...
 def from_dlpack(
     managed_tensor: Any,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def to_dlpack(
     input: Table,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Any: ...

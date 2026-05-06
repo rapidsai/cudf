@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -9,10 +9,11 @@ from pylibcudf.libcudf.strings cimport reverse as cpp_reverse
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["reverse"]
 
-cpdef Column reverse(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column reverse(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Reverses the characters within each string.
 
     Any null string entries return corresponding null output column entries.
@@ -32,9 +33,10 @@ cpdef Column reverse(Column input, Stream stream=None, DeviceMemoryResource mr=N
         New strings column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_reverse.reverse(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_reverse.reverse(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
