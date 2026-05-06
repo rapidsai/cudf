@@ -146,7 +146,7 @@ sanitizer_subscriber::sanitizer_subscriber()
   };
   check_result(sanitizerSubscribe(&this->handle, cb, this));
 
-  check_result(sanitizerEnableDomain(1, this->handle, SANITIZER_CB_DOMAIN_RUNTIME_API));
+  // check_result(sanitizerEnableDomain(1, this->handle, SANITIZER_CB_DOMAIN_RUNTIME_API));
 }
 
 sanitizer_subscriber::~sanitizer_subscriber() { check_result(sanitizerUnsubscribe(this->handle)); }
