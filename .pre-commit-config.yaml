@@ -146,6 +146,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -157,6 +161,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -213,6 +221,7 @@ repos:
             pytest[.]ini$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
@@ -226,7 +235,8 @@ repos:
             cpp/src/io/comp/unbz2[.]hpp$|
             cpp/src/io/comp/gpuinflate[.]cu$|
             cpp/src/io/utilities/base64_utilities[.]cpp$|
-            cpp/src/io/utilities/base64_utilities[.]hpp$
+            cpp/src/io/utilities/base64_utilities[.]hpp$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-copyright
         name: verify-copyright-brotli
