@@ -1116,7 +1116,7 @@ if(BUILD_SHARED_LIBS)
 
     # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
     # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
-    foreach(_mode BUILD INSTALL)
+    foreach(_mode build install)
       set(_src_target rapids_export_${_mode}_${_dep}-exports)
       if(NOT TARGET ${_src_target})
         continue()
