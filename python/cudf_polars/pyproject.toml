@@ -47,6 +47,7 @@ test = [
     "pytest-cov",
     "pytest-httpserver",
     "pytest-xdist",
+    "rapidsmpf==26.6.*,>=0.0.0a0",
     "rich",
     "structlog",
     "zstandard",

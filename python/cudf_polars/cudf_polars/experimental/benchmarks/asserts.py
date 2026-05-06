@@ -177,8 +177,8 @@ def assert_tpch_result_equal(
             "expected_columns": right.columns,
             "result_columns": left.columns,
             "mismatched_columns": {
-                "extra": extra,
-                "missing": missing,
+                "extra": sorted(extra),
+                "missing": sorted(missing),
             },
         }
         raise ValidationError(message="Column names mismatch", details=detail)
