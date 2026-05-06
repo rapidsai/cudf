@@ -430,7 +430,9 @@ def test_over_multirank(
         nranks = engine.nranks
         if nranks != 2:
             request.applymarker(
-                pytest.mark.skip(reason="key assignments are probed for exactly 2 ranks")
+                pytest.mark.skip(
+                    reason="key assignments are probed for exactly 2 ranks"
+                )
             )
         keys = _CROSS_RANK_KEYS if cross_rank else _SAME_RANK_KEYS
         g = keys[rank]
@@ -484,7 +486,9 @@ def test_over_nonscalar_duplicated_input(
         nranks = engine.nranks
         if nranks != 2:
             request.applymarker(
-                pytest.mark.skip(reason="key assignments are probed for exactly 2 ranks")
+                pytest.mark.skip(
+                    reason="key assignments are probed for exactly 2 ranks"
+                )
             )
 
         coarse_g = _SAME_RANK_KEYS[rank]

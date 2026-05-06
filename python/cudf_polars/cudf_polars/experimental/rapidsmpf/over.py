@@ -315,7 +315,7 @@ def _split_by_chunk_index(
     br: Any,
 ) -> dict[int, TableChunk]:
     """
-    Sort by ``(chunk_index, position)`` and split at chunk-index boundaries.
+    Sort by ``(chunk_index, position)`` and split at chunk-index transitions.
 
     Returns a mapping from chunk index in ``[0, n_chunks)`` to its rows.
     Chunk indices with no rows are absent from the result.
@@ -341,23 +341,23 @@ def _split_by_chunk_index(
         plc.types.DataType(plc.TypeId.INT32),
         stream=stream,
     )
-    boundary_col = plc.search.lower_bound(
+    split_position_col = plc.search.lower_bound(
         plc.Table([sorted_table.columns()[chunk_index_column]]),
         plc.Table([needles]),
         [plc.types.Order.ASCENDING],
         [plc.types.NullOrder.AFTER],
         stream=stream,
     )
-    boundaries = (
+    split_positions = (
         DataFrame.from_table(
-            plc.Table([boundary_col]), ["p"], [_INT32_DTYPE], stream=stream
+            plc.Table([split_position_col]), ["p"], [_INT32_DTYPE], stream=stream
         )
         .to_polars()["p"]
         .to_list()
     )
 
     output_table = plc.Table([sorted_table.columns()[i] for i in output_indices])
-    pieces = plc.copying.split(output_table, boundaries, stream=stream)
+    pieces = plc.copying.split(output_table, split_positions, stream=stream)
 
     by_chunk_index: dict[int, TableChunk] = {}
     for chunk_index, piece in enumerate(pieces):
@@ -781,8 +781,8 @@ async def over_actor(
     Selects one of three strategies at runtime based on partitioning metadata
     and whether all GroupedWindow nodes are scalar aggregations: chunkwise
     (already partitioned), scalar broadcast (tree-reduce + AllGather), or
-    non-scalar shuffle (hash-shuffle with row-index tracking for boundary
-    reconstruction).
+    non-scalar shuffle (forward-shuffle by partition keys, evaluate, then
+    return-shuffle to origin rank for in-order reassembly).
 
     Parameters
     ----------
