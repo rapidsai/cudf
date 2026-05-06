@@ -24,7 +24,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_set.cuh>
-#include <cuda/atomic>
 #include <cuda/std/functional>
 #include <cuda/std/utility>
 
@@ -167,7 +166,7 @@ struct offset_cache_hasher {
  * For each newly discovered key (dense rank `r` within this batch):
  *   1. Rewrite its slot from transient encoding to its dense ID.  Pass 2 runs
  *      after Pass 1's kernel completes and each slot has a single writer, so a
- *      relaxed atomic store is sufficient (no CAS needed).
+ *      plain store is sufficient.
  *   2. Write the (batch_id, row) pair to the companion vector at the dense ID.
  */
 struct finalize_new_key_fn {
@@ -184,10 +183,8 @@ struct finalize_new_key_fn {
     auto const dense_id    = distinct_keys_before + r;
     auto const batch_local = batch_local_indices[r];
 
-    cuda::atomic_ref<size_type, cuda::thread_scope_device>{*(base + slot_offsets[batch_local])}
-      .store(dense_id, cuda::std::memory_order_relaxed);
-
-    key_loc[dense_id] = key_location_t{batch_id, r};
+    *(base + slot_offsets[batch_local]) = dense_id;
+    *(key_loc + dense_id) = key_location_t{batch_id, r};
   }
 };
 
