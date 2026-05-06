@@ -12,6 +12,8 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import Empty, Projection
 from cudf_polars.experimental.base import SerializedDataSourceInfo, StatsCollector
 from cudf_polars.experimental.io import (
     DataFrameSourceInfo,
@@ -266,3 +268,20 @@ def test_serialize_stats_roundtrip_parquet(
         assert rt.row_count == info.row_count
         for col in ("x", "y", "z"):
             assert rt.column_storage_size(col) == info.column_storage_size(col)
+
+
+def test_serialize_uses_value_equality() -> None:
+    schema = {"x": DataType(pl.Int64())}
+    scan_x = Empty(schema)
+    scan_y = Empty(schema)
+    assert scan_x == scan_y
+    assert scan_x is not scan_y
+
+    root = Projection(schema, scan_y)
+
+    stats = StatsCollector()
+    stats.scan_stats[scan_x] = DataFrameSourceInfo(100)
+
+    result = stats.serialize(root)
+    assert len(result) == 1
+    assert result[0]["index"] >= 0
