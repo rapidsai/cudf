@@ -252,6 +252,42 @@ class RankActor:
         # in libcudf also use the same memory resource.
         rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
 
+    def reset(self, *, rapidsmpf_options_as_bytes: bytes) -> None:
+        """
+        Rebuild the streaming Context with new options.
+
+        Keeps the UCXX communicator, the :class:`RmmResourceAdaptor`,
+        and the Python thread-pool executor alive — only the rapidsmpf
+        :class:`Context` is replaced. Used by :meth:`RayEngine._reset`
+        to amortize actor startup and UCX bootstrap costs across engines
+        that differ only in streaming options.
+
+        The RMM resource is *not* rebuilt: UCX maps CUDA IPC buffers
+        against it (notably for pool memory resources) and never
+        releases those mappings during the application lifetime, so a
+        rebuilt MR would silently leak pool memory. Construct a fresh
+        :class:`RayEngine` if you need to swap the memory resource.
+
+        Must be called collectively on all actors. A barrier ensures no
+        rank tears down its Context while peers may still be using it.
+
+        Parameters
+        ----------
+        rapidsmpf_options_as_bytes
+            Serialized :class:`Options` to install.
+        """
+        if self._ctx is None:
+            raise RuntimeError("reset() requires setup_worker() to have run")
+        assert self._comm is not None
+        # Collective: all ranks idle before any rank tears down its Context.
+        barrier(self._comm)
+        self._ctx.shutdown()
+        self._ctx = None
+        self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, self._rapidsmpf_options
+        )
+
     def shutdown(self) -> None:
         """
         Release actor-owned resources and exit the process.
@@ -418,17 +454,44 @@ class RayEngine(StreamingEngine):
     ray_init_options
         Keyword arguments forwarded to :func:`ray.init` when Ray is not
         already initialized.
+    num_ranks
+        Number of ranks (Ray actors) to create. When ``None`` (the default),
+        one rank is created per available GPU using Ray's GPU scheduling,
+        which provides placement guarantees and topology-aware hardware
+        binding.
+        When set, bypasses Ray's GPU resource accounting
+        so that actors do not contend for GPU resource slots. This allows
+        multiple ``RayEngine`` instances to share a single Ray cluster
+        and enables oversubscribed execution on limited GPU hardware.
+        Hardware binding is disabled implicitly but the caller must
+        pass ``engine_options={"allow_gpu_sharing": True}`` explicitly
+        to acknowledge the multi-tenant GPU semantics.
+        .. note::
+            Oversubscription does not increase throughput. When multiple
+            ranks share a GPU, they compete for the same compute and
+            memory resources, which may increase memory pressure and
+            reduce overall performance. This option is primarily useful
+            for testing multi-rank code paths on machines with fewer
+            GPUs than ranks, and for downstream projects that need to
+            validate distributed logic in resource-constrained CI
+            environments.
 
     Raises
     ------
     RuntimeError
         If called from within an ``rrun`` cluster.
     RuntimeError
-        If not all GPUs in the Ray cluster are free at startup.
+        If not all GPUs in the Ray cluster are free at startup
+        (only when ``num_ranks`` is ``None``).
     RuntimeError
-        If no GPUs are available in the Ray cluster.
+        If no GPUs are available in the Ray cluster
+        (only when ``num_ranks`` is ``None``).
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
+    ValueError
+        If ``num_ranks`` is set but ``engine_options["allow_gpu_sharing"] == False``
+    ValueError
+        If ``num_ranks`` is set to a value less than 1.
 
     Examples
     --------
@@ -451,6 +514,7 @@ class RayEngine(StreamingEngine):
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
         ray_init_options: dict[str, Any] | None = None,
+        num_ranks: int | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -464,7 +528,17 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
-        hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
+
+        if num_ranks is not None:
+            if num_ranks < 1:
+                raise ValueError(f"num_ranks must be >= 1 (got {num_ranks})")
+            if not engine_options.get("allow_gpu_sharing", False):
+                raise ValueError(
+                    "num_ranks requires engine_options['allow_gpu_sharing']=True"
+                )
+            hw_binding = HardwareBindingPolicy(enabled=False)
+        else:
+            hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
@@ -489,12 +563,19 @@ class RayEngine(StreamingEngine):
             exit_stack.callback(ray.shutdown)
 
         try:
-            num_gpus = get_num_gpus_in_ray_cluster()
+            # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
+            # actor scheduling on GPU resources; .options() with no overrides
+            # is a no-op for the default path.
+            actor_options: dict[str, Any] = (
+                {"num_gpus": 0} if num_ranks is not None else {}
+            )
+            nranks = (
+                num_ranks if num_ranks is not None else get_num_gpus_in_ray_cluster()
+            )
 
-            # Create one actor per GPU.
             rank_actors: list[ActorHandle[RankActor]] = [
-                RankActor.remote(  # type: ignore[attr-defined]
-                    nranks=num_gpus,
+                RankActor.options(**actor_options).remote(  # type: ignore[attr-defined]
+                    nranks=nranks,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
                         int,
@@ -503,7 +584,7 @@ class RayEngine(StreamingEngine):
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                 )
-                for _ in range(num_gpus)
+                for _ in range(nranks)
             ]
 
             root_ucxx_address_as_bytes = ray.get(rank_actors[0].setup_root.remote())
@@ -519,7 +600,7 @@ class RayEngine(StreamingEngine):
 
             self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
             super().__init__(
-                nranks=num_gpus,
+                nranks=nranks,
                 executor_options={
                     **executor_options,
                     "runtime": "rapidsmpf",
@@ -532,6 +613,108 @@ class RayEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine with new options.
+
+        Fast path for consecutive ``RayEngine`` uses that differ only in
+        streaming options. Avoids Ray actor startup and UCX bootstrap.
+
+        Replaces engine state in full, similar to :meth:`__init__`.
+        ``StreamingEngine`` revalidates invariants on each reset, so callers
+        must pass required options (for example, ``allow_gpu_sharing=True``
+        when ``num_ranks > 1``).
+
+        The following inputs are fixed at construction time and cannot change:
+          - ``num_ranks``
+          - ``num_py_executors`` (in ``executor_options``)
+          - ``hardware_binding`` (in ``engine_options``)
+          - ``memory_resource_config`` (in ``engine_options``)
+          - ``ray_init_options``
+
+        Parameters
+        ----------
+        rapidsmpf_options
+            New :class:`Options` for each actor's ``Context``. Defaults to
+            ``Options(get_environment_variables())`` if ``None``.
+        executor_options
+            Polars ``GPUEngine`` executor options. ``None`` is treated as
+            an empty dict.
+        engine_options
+            Polars ``GPUEngine`` options. ``None`` is treated as an empty
+            dict.
+        """
+        if self._rank_actors is None:
+            raise RuntimeError("Cannot reset a shut-down engine")
+
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        check_reserved_keys(executor_options, engine_options)
+
+        # Reject keys that cannot be changed.
+        _disallowed_exec = {"num_py_executors"} & executor_options.keys()
+        if _disallowed_exec:
+            raise ValueError(
+                f"executor_options keys {sorted(_disallowed_exec)} cannot be "
+                "changed via _reset(). Construct a fresh RayEngine instead."
+            )
+        _disallowed_engine = {
+            "hardware_binding",
+            "memory_resource_config",
+        } & engine_options.keys()
+        if _disallowed_engine:
+            raise ValueError(
+                f"engine_options keys {sorted(_disallowed_engine)} cannot be "
+                "changed via _reset(). Construct a fresh RayEngine instead."
+            )
+
+        rapidsmpf_options = (
+            rapidsmpf_options
+            if rapidsmpf_options is not None
+            else Options(get_environment_variables())
+        )
+        rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+        rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
+
+        # Reset all actor Contexts collectively. ``ray.get`` blocks until
+        # every actor's reset returns; the per-actor barrier inside
+        # :meth:`RankActor.reset` synchronizes the teardown across ranks.
+        # The per-actor RMM resource is kept alive across resets — see
+        # :meth:`RankActor.reset`.
+        ray.get(
+            [
+                rank.reset.remote(
+                    rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+                )
+                for rank in self._rank_actors
+            ]
+        )
+
+        # Re-run ``StreamingEngine.__init__`` on the existing instance to
+        # reconfigure the polars ``GPUEngine`` layer (``self.config``,
+        # ``self.device``, etc.) with the new options. Pass the existing
+        # ``self._exit_stack`` so any registered shutdown callbacks
+        # (e.g. ``ray.shutdown`` if this engine bootstrapped Ray itself)
+        # remain registered.
+        StreamingEngine.__init__(
+            self,
+            nranks=len(self._rank_actors),
+            executor_options={
+                **executor_options,
+                "runtime": "rapidsmpf",
+                "cluster": "ray",
+                "ray_context": RayContext(self._rank_actors),
+            },
+            engine_options=engine_options,
+            exit_stack=self._exit_stack,
+        )
 
     @classmethod
     def from_options(
@@ -635,6 +818,12 @@ class RayEngine(StreamingEngine):
             return  # already shut down; idempotent
         exceptions: list[Exception] = []
         try:
+            # If Ray is no longer initialized (for example, if ``ray.shutdown()`` was
+            # called before ``RayEngine.shutdown()``), the actors are gone as well.
+            # Calling ``.remote()`` in this state would trigger Ray's ``auto_init_hook``
+            # and start a new cluster.
+            if not ray.is_initialized():
+                return
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:
                 try:

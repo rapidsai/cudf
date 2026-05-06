@@ -5,34 +5,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
 import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture
-def engine(
-    request: pytest.FixtureRequest,
-) -> Generator[StreamingEngine, None, None]:
+def engine(streaming_engine_factory):
     """StreamingEngine with empty-channel-specific defaults (small partitions)."""
-    params: dict[str, Any] = getattr(request, "param", {})
-    executor_options = {
-        "max_rows_per_partition": 2,
-        "dynamic_planning": {},
-        **params.get("executor_options", {}),
-    }
-    with SPMDEngine(executor_options=executor_options) as engine:
-        yield engine
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2),
+    )
 
 
 def test_empty_dataframe_source(engine):

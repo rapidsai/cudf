@@ -104,7 +104,7 @@ def test_sink_parquet_empty_rank(engine: StreamingEngine, tmp_path: Path) -> Non
 
 @pytest.mark.parametrize(
     "cluster",
-    [Cluster.SPMD, Cluster.RAY, Cluster.DASK, Cluster.DISTRIBUTED],
+    [Cluster.SPMD, Cluster.RAY, Cluster.DASK],
 )
 def test_sink_to_directory_false_raises(cluster: Cluster) -> None:
     """Explicit ``sink_to_directory=False`` is rejected for every multi-rank cluster."""
