@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -46,7 +48,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -162,235 +163,229 @@ async def _evaluate_broadcast_chunk(
     )
 
 
+_INT32_DTYPE = DataType(pl.Int32())
 _INT64_DTYPE = DataType(pl.Int64())
 
 
-def _add_row_idx_sync(
+@dataclass(frozen=True)
+class OriginStamps:
+    """
+    Per-row metadata appended before shuffling so output can be reassembled.
+
+    The forward shuffle distributes rows by group, breaking input order. After
+    window evaluation we route rows back to their origin rank using ``rank``,
+    then sort by ``(chunk_index, position)`` to recover the input chunking.
+
+    ``chunk_index`` is a rank-local 0-based index into the stream of input
+    chunks — *not* the upstream message ``sequence_number``, which is not
+    guaranteed unique (e.g., when the input is the output of a shuffle whose
+    partition IDs collide across chunks).
+    """
+
+    chunk_index: str
+    position: str
+    rank: str
+
+    @property
+    def names(self) -> tuple[str, str, str]:
+        """Stamp column names, in the order they are appended to the table."""
+        return (self.chunk_index, self.position, self.rank)
+
+    @property
+    def dtypes(self) -> tuple[DataType, DataType, DataType]:
+        """Stamp column dtypes, parallel to :attr:`names`."""
+        return (_INT32_DTYPE, _INT64_DTYPE, _INT32_DTYPE)
+
+
+def _origin_stamps_for(input_ir: IR, ir: Over) -> OriginStamps:
+    """Pick three stamp column names that do not collide with the schema."""
+    names = unique_names((*input_ir.schema.keys(), *ir.schema.keys()))
+    return OriginStamps(next(names), next(names), next(names))
+
+
+def _append_origin_stamps(
     chunk: TableChunk,
-    row_start: int,
+    chunk_index: int,
+    origin_rank: int,
     stream: Stream,
     br: Any,
 ) -> TableChunk:
-    """Append a row-index column to *chunk* (chunk must be available)."""
-    tbl = chunk.table_view()
-    n_rows = tbl.num_rows()
-    row_idx = plc.filling.sequence(
+    """Append (chunk_index, position, rank) stamp columns to *chunk*."""
+    table = chunk.table_view()
+    n_rows = table.num_rows()
+    int32 = plc.types.DataType(plc.TypeId.INT32)
+    int64 = plc.types.DataType(plc.TypeId.INT64)
+    zero_step = plc.Scalar.from_py(0, int32, stream=stream)
+    chunk_index_col = plc.filling.sequence(
         n_rows,
-        plc.Scalar.from_py(
-            row_start, plc.types.DataType(plc.TypeId.INT64), stream=stream
-        ),
-        plc.Scalar.from_py(1, plc.types.DataType(plc.TypeId.INT64), stream=stream),
+        plc.Scalar.from_py(chunk_index, int32, stream=stream),
+        zero_step,
+        stream=stream,
+    )
+    position_col = plc.filling.sequence(
+        n_rows,
+        plc.Scalar.from_py(0, int64, stream=stream),
+        plc.Scalar.from_py(1, int64, stream=stream),
+        stream=stream,
+    )
+    rank_col = plc.filling.sequence(
+        n_rows,
+        plc.Scalar.from_py(origin_rank, int32, stream=stream),
+        zero_step,
         stream=stream,
     )
     return TableChunk.from_pylibcudf_table(
-        plc.Table([*tbl.columns(), row_idx]),
+        plc.Table([*table.columns(), chunk_index_col, position_col, rank_col]),
         stream,
         exclusive_view=True,
         br=br,
     )
 
 
-def _evaluate_with_row_idx_sync(
+def _evaluate_window_with_stamps(
     chunk: TableChunk,
     ir: Over,
     ir_context: IRExecutionContext,
-    row_idx_col: str,
+    stamps: OriginStamps,
 ) -> DataFrame:
-    """Evaluate ir on *chunk* augmented with *row_idx_col*; return result with row_idx attached."""
+    """Evaluate *ir* on a stamped chunk; the stamps ride through to the result."""
     child_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
 
-    augmented_keys = [*child_schema.keys(), row_idx_col]
-    augmented_vals = [*child_schema.values(), _INT64_DTYPE]
-    augmented_df = DataFrame.from_table(
-        chunk.table_view(), augmented_keys, augmented_vals, stream
+    augmented = DataFrame.from_table(
+        chunk.table_view(),
+        [*child_schema.keys(), *stamps.names],
+        [*child_schema.values(), *stamps.dtypes],
+        stream,
+    )
+    result = ir.do_evaluate(
+        ir.key_indices, ir.is_scalar, ir.exprs, augmented, context=ir_context
     )
 
-    result_df = ir.do_evaluate(
-        ir.key_indices, ir.is_scalar, ir.exprs, augmented_df, context=ir_context
+    # ``do_evaluate`` returns only ir.exprs; reattach stamps from the input.
+    missing = [
+        augmented.column_map[name]
+        for name in stamps.names
+        if name not in result.column_map
+    ]
+    if missing:
+        return DataFrame([*result.columns, *missing], stream=stream)
+    return result
+
+
+def _partition_by_origin_rank(
+    result: DataFrame,
+    num_ranks: int,
+    br: Any,
+) -> tuple[TableChunk | None, list[int]]:
+    """
+    Rearrange rows so partition i contains rows whose origin rank is i.
+
+    Returns a chunk with the rank stamp dropped plus the split indices that
+    feed straight into ``ShuffleManager.Inserter.insert_split``.
+    """
+    if result.table.num_rows() == 0:
+        return None, []
+
+    stream = result.stream
+    columns = result.table.columns()
+    rank_column = columns[-1]
+    payload = plc.Table(columns[:-1])
+
+    rearranged, offsets = plc.partitioning.partition(
+        payload, rank_column, num_ranks, stream=stream
+    )
+    return (
+        TableChunk.from_pylibcudf_table(rearranged, stream, exclusive_view=True, br=br),
+        list(offsets[1:-1]),
     )
 
-    # HStack passes row_idx_col through; Select does not — attach it from augmented_df.
-    if row_idx_col not in result_df.column_map:
-        idx_col = augmented_df.column_map[row_idx_col]
-        return DataFrame([*result_df.columns, idx_col], stream=stream)
-    return result_df
 
+def _split_by_chunk_index(
+    chunk: TableChunk,
+    n_chunks: int,
+    output_indices: list[int],
+    chunk_index_column: int,
+    position_column: int,
+    ir_context: IRExecutionContext,
+    br: Any,
+) -> dict[int, TableChunk]:
+    """
+    Sort by ``(chunk_index, position)`` and split at chunk-index boundaries.
 
-def _sort_df_by_row_idx_sync(
-    result_df: DataFrame,
-    col_names: list[str],
-    col_types: list[DataType],
-    row_idx_col: str,
-) -> DataFrame:
-    """Sort *result_df* by its row_idx column and return a sorted DataFrame."""
-    idx_col_idx = col_names.index(row_idx_col)
-    stream = result_df.stream
+    Returns a mapping from chunk index in ``[0, n_chunks)`` to its rows.
+    Chunk indices with no rows are absent from the result.
+    """
+    table = chunk.table_view()
+    if table.num_rows() == 0:
+        return {}
+
+    stream = ir_context.get_cuda_stream()
+    columns = table.columns()
     sort_order = plc.sorting.stable_sorted_order(
-        plc.Table([result_df.table.columns()[idx_col_idx]]),
+        plc.Table([columns[chunk_index_column], columns[position_column]]),
+        [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
+        [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+        stream=stream,
+    )
+    sorted_table = plc.copying.gather(
+        table, sort_order, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
+    )
+
+    needles = plc.Column.from_iterable_of_py(
+        list(range(1, n_chunks)),
+        plc.types.DataType(plc.TypeId.INT32),
+        stream=stream,
+    )
+    boundary_col = plc.search.lower_bound(
+        plc.Table([sorted_table.columns()[chunk_index_column]]),
+        plc.Table([needles]),
         [plc.types.Order.ASCENDING],
         [plc.types.NullOrder.AFTER],
         stream=stream,
     )
-    sorted_tbl = plc.copying.gather(
-        result_df.table,
-        sort_order,
-        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-        stream=stream,
+    boundaries = (
+        DataFrame.from_table(
+            plc.Table([boundary_col]), ["p"], [_INT32_DTYPE], stream=stream
+        )
+        .to_polars()["p"]
+        .to_list()
     )
-    return DataFrame.from_table(sorted_tbl, col_names, col_types, stream)
 
+    output_table = plc.Table([sorted_table.columns()[i] for i in output_indices])
+    pieces = plc.copying.split(output_table, boundaries, stream=stream)
 
-def _slice_and_accumulate_sync(
-    sorted_df: DataFrame,
-    split_values: list[int],
-    n_boundaries: int,
-    col_names: list[str],
-    col_types: list[DataType],
-    idx_col_idx: int,
-    br: Any,
-    accumulated: list[list[TableChunk]],
-) -> None:
-    """
-    Slice *sorted_df* into per-boundary sub-chunks and append to *accumulated*.
-
-    Uses ``lower_bound`` to find all split positions in one GPU call, then
-    ``plc.copying.split`` for zero-copy views.  Each non-empty sub-view is
-    materialised into an independent ``TableChunk`` (registered with *br* so
-    the SpillManager can move it to host under memory pressure).
-
-    Parameters
-    ----------
-    sorted_df
-        One partition sorted by row_idx.
-    split_values
-        Start row_idx of each boundary except the first; len = n_boundaries - 1.
-    n_boundaries
-        Total number of output boundaries.
-    col_names, col_types
-        Column names/types for the result DataFrame.
-    idx_col_idx
-        Column index of the row_idx column.
-    br
-        RapidsMPF BufferResource for spill registration.
-    accumulated
-        Output list-of-lists; accumulated[k] receives sub-chunks for boundary k.
-    """
-    n_rows = sorted_df.table.num_rows()
-    if n_rows == 0:
-        return
-
-    stream = sorted_df.stream
-
-    if split_values:
-        needles_col = plc.Column.from_iterable_of_py(
-            split_values,
-            plc.types.DataType(plc.TypeId.INT64),
-            stream=stream,
-        )
-        split_pos_col = plc.search.lower_bound(
-            plc.Table([sorted_df.table.columns()[idx_col_idx]]),
-            plc.Table([needles_col]),
-            [plc.types.Order.ASCENDING],
-            [plc.types.NullOrder.AFTER],
-            stream=stream,
-        )
-        split_pts = (
-            DataFrame.from_table(
-                plc.Table([split_pos_col]),
-                ["p"],
-                [DataType(pl.Int32())],
-                stream=stream,
-            )
-            .to_polars()["p"]
-            .to_list()
-        )
-    else:
-        split_pts = []
-
-    sub_views = plc.copying.split(sorted_df.table, split_pts, stream=stream)
-
-    for k, sv in enumerate(sub_views):
-        if sv.num_rows() > 0:
-            # Materialise: plc.copying.split returns zero-copy views into sorted_df.
-            # We need an independent buffer so sorted_df can be freed and the
-            # sub-chunk remains valid (and spill-eligible).
-            chunk = TableChunk.from_pylibcudf_table(
-                plc.concatenate.concatenate([sv], stream=stream),
-                stream,
-                exclusive_view=True,
-                br=br,
-            )
-            accumulated[k].append(chunk)
-
-
-def _concat_sort_boundary_sync(
-    sub_chunks: list[TableChunk],
-    col_names: list[str],
-    col_types: list[DataType],
-    idx_col_idx: int,
-    keep_col_indices: list[int],
-    ir_context: IRExecutionContext,
-    br: Any,
-) -> TableChunk:
-    """
-    Concatenate and sort *sub_chunks* for one boundary, stripping the row_idx column.
-
-    Parameters
-    ----------
-    sub_chunks
-        Per-partition sub-chunks for this boundary, already made available on device.
-    col_names, col_types
-        Column names/types (including row_idx).
-    idx_col_idx
-        Column index of the row_idx column.
-    keep_col_indices
-        Column indices to keep in the output (excludes row_idx).
-    ir_context
-        Execution context (provides CUDA stream and memory resource).
-    br
-        RapidsMPF BufferResource for output chunk registration.
-    """
-    stream = ir_context.get_cuda_stream()
-    if not sub_chunks:
-        return TableChunk.from_pylibcudf_table(
-            plc.Table(
-                [
-                    plc.column_factories.make_empty_column(
-                        col_types[i].plc_type, stream=stream
-                    )
-                    for i in keep_col_indices
-                ]
-            ),
+    by_chunk_index: dict[int, TableChunk] = {}
+    for chunk_index, piece in enumerate(pieces):
+        if piece.num_rows() == 0:
+            continue
+        # ``split`` returns zero-copy views into ``output_table``; concatenate
+        # to materialise an independent buffer.
+        by_chunk_index[chunk_index] = TableChunk.from_pylibcudf_table(
+            plc.concatenate.concatenate([piece], stream=stream),
             stream,
             exclusive_view=True,
             br=br,
         )
+    return by_chunk_index
 
-    sub_dfs = [
-        DataFrame.from_table(chunk.table_view(), col_names, col_types, chunk.stream)
-        for chunk in sub_chunks
-    ]
-    merged_df = (
-        _concat(*sub_dfs, context=ir_context) if len(sub_dfs) > 1 else sub_dfs[0]
-    )
-    merged = merged_df.table
-    stream = merged_df.stream
 
-    sort_order = plc.sorting.stable_sorted_order(
-        plc.Table([merged.columns()[idx_col_idx]]),
-        [plc.types.Order.ASCENDING],
-        [plc.types.NullOrder.AFTER],
-        stream=stream,
-    )
-    sorted_tbl = plc.copying.gather(
-        plc.Table([merged.columns()[i] for i in keep_col_indices]),
-        sort_order,
-        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-        stream=stream,
-    )
+def _empty_output_chunk(
+    output_dtypes: list[DataType],
+    stream: Stream,
+    br: Any,
+) -> TableChunk:
+    """Build an empty chunk with the given column dtypes."""
     return TableChunk.from_pylibcudf_table(
-        sorted_tbl, stream, exclusive_view=True, br=br
+        plc.Table(
+            [
+                plc.column_factories.make_empty_column(dt.plc_type, stream=stream)
+                for dt in output_dtypes
+            ]
+        ),
+        stream,
+        exclusive_view=True,
+        br=br,
     )
 
 
@@ -508,6 +503,165 @@ async def _allgather_and_broadcast(
     await ch_out.drain(context)
 
 
+async def _collect_input_chunks(
+    context: Context,
+    ch_in: Channel[TableChunk],
+) -> tuple[list[tuple[int, TableChunk]], int]:
+    """Drain *ch_in* into spillable chunks, returning them with the byte total."""
+    chunks: list[tuple[int, TableChunk]] = []
+    local_bytes = 0
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        local_bytes += chunk.data_alloc_size()
+        chunks.append((msg.sequence_number, chunk))
+    return chunks, local_bytes
+
+
+async def _negotiate_forward_modulus(
+    context: Context,
+    comm: Communicator,
+    collective_id: int,
+    local_bytes: int,
+    local_count: int,
+    target_partition_size: int,
+) -> int:
+    """AllGather global size+count and pick a partition count for the forward shuffle."""
+    total_bytes, total_count = await allgather_reduce(
+        context, comm, collective_id, local_bytes, local_count
+    )
+    return min(
+        max(comm.nranks, total_bytes // max(1, target_partition_size)),
+        max(1, total_count),
+    )
+
+
+async def _distribute_by_group(
+    context: Context,
+    comm: Communicator,
+    forward_shuffle: ShuffleManager,
+    inputs: list[tuple[int, TableChunk]],
+    key_indices: tuple[int, ...],
+    ir_context: IRExecutionContext,
+    skip_insert: bool,  # noqa: FBT001
+) -> None:
+    """Stamp each chunk with origin metadata and hash-shuffle by partition keys."""
+    async with forward_shuffle.inserting() as inserter:
+        for chunk_index, (_, chunk) in enumerate(inputs):
+            if skip_insert:
+                continue
+            stamped = await asyncio.to_thread(
+                _append_origin_stamps,
+                chunk,
+                chunk_index,
+                comm.rank,
+                ir_context.get_cuda_stream(),
+                context.br(),
+            )
+            inserter.insert_hash(stamped, key_indices)
+
+
+async def _evaluate_and_route_to_origin(
+    context: Context,
+    ir: Over,
+    ir_context: IRExecutionContext,
+    forward_shuffle: ShuffleManager,
+    return_shuffle: ShuffleManager,
+    num_ranks: int,
+    stamps: OriginStamps,
+) -> None:
+    """Window-evaluate each local forward partition, then ship rows back to their origin."""
+    async with return_shuffle.inserting() as inserter:
+        for partition_id in forward_shuffle.local_partitions():
+            stream = ir_context.get_cuda_stream()
+            extracted = forward_shuffle.extract_chunk(partition_id, stream)
+            if extracted.num_rows() == 0:
+                continue
+            partition = TableChunk.from_pylibcudf_table(
+                extracted, stream, exclusive_view=True, br=context.br()
+            )
+            evaluated = await asyncio.to_thread(
+                _evaluate_window_with_stamps, partition, ir, ir_context, stamps
+            )
+            routed, splits = await asyncio.to_thread(
+                _partition_by_origin_rank, evaluated, num_ranks, context.br()
+            )
+            if routed is not None:
+                inserter.insert_split(routed, splits)
+
+
+async def _collect_returned_rows(
+    context: Context,
+    return_shuffle: ShuffleManager,
+    ir_context: IRExecutionContext,
+) -> TableChunk | None:
+    """Concatenate the local partitions of the return shuffle into a single chunk."""
+    partition_ids = return_shuffle.local_partitions()
+    if not partition_ids:
+        return None
+    stream = ir_context.get_cuda_stream()
+    chunks = [
+        TableChunk.from_pylibcudf_table(
+            return_shuffle.extract_chunk(pid, stream),
+            stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
+        for pid in partition_ids
+    ]
+    if len(chunks) == 1:
+        return chunks[0]
+    return TableChunk.from_pylibcudf_table(
+        plc.concatenate.concatenate([c.table_view() for c in chunks], stream=stream),
+        stream,
+        exclusive_view=True,
+        br=context.br(),
+    )
+
+
+async def _reassemble_input_chunks(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ir_context: IRExecutionContext,
+    received: TableChunk | None,
+    sequence_numbers: list[int],
+    ir: Over,
+    tracer: Any,
+) -> None:
+    """Split received rows by chunk index and emit one output chunk per input chunk."""
+    n_exprs = len(ir.exprs)
+    output_indices = list(range(n_exprs))
+    chunk_index_column = n_exprs
+    position_column = n_exprs + 1
+    output_dtypes = [ne.value.dtype for ne in ir.exprs]
+    n_chunks = len(sequence_numbers)
+
+    by_chunk_index: dict[int, TableChunk] = {}
+    if received is not None and received.table_view().num_rows() > 0:
+        by_chunk_index = await asyncio.to_thread(
+            _split_by_chunk_index,
+            received,
+            n_chunks,
+            output_indices,
+            chunk_index_column,
+            position_column,
+            ir_context,
+            context.br(),
+        )
+
+    stream = ir_context.get_cuda_stream()
+    for chunk_index, sequence_number in enumerate(sequence_numbers):
+        chunk = by_chunk_index.get(chunk_index)
+        if chunk is None:
+            chunk = await asyncio.to_thread(
+                _empty_output_chunk, output_dtypes, stream, context.br()
+            )
+        if tracer is not None:
+            tracer.add_chunk(table=chunk.table_view())
+        await ch_out.send(context, Message(sequence_number, chunk))
+
+
 async def _shuffle_and_reassemble(
     context: Context,
     comm: Communicator,
@@ -519,18 +673,21 @@ async def _shuffle_and_reassemble(
     input_ir: IR,
     tracer: Any,
     size_collective_id: int,
-    shuffle_collective_id: int,
+    forward_shuffle_collective_id: int,
+    return_shuffle_collective_id: int,
     target_partition_size: int,
 ) -> None:
     """
-    Hash-shuffle by partition keys, evaluate window expressions, reassemble in input order.
+    Evaluate non-decomposable window expressions across ranks via a return-shuffle.
 
-    Uses a three-phase sort-and-split strategy.
+    Each row is stamped with (origin rank, input sequence number, position in
+    chunk). A hash shuffle by the partition-by keys co-locates each group on
+    one rank for window evaluation; a second shuffle routes rows back to their
+    origin so the rank that received an input chunk can also emit its output.
+    Sorting the returned rows by (sequence, position) recovers input order.
     """
-    row_idx_col = next(unique_names((*input_ir.schema.keys(), *ir.schema.keys())))
-    key_indices = ir.key_indices
+    stamps = _origin_stamps_for(input_ir, ir)
 
-    # After hash-shuffle, each row lives on exactly one rank — never duplicated.
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
         partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
@@ -538,140 +695,52 @@ async def _shuffle_and_reassemble(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    # When input is duplicated, only rank 0 inserts to avoid N-fold overcounting.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    # Phase 0: buffer all incoming chunks and measure local data size so we can
-    # AllGather total size and chunk count before creating the ShuffleManager.
-    raw_chunks: list[tuple[int, TableChunk]] = []  # (seq_num, chunk)
-    local_size = 0
-    while (msg := await ch_in.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        local_size += chunk.data_alloc_size()
-        raw_chunks.append((msg.sequence_number, chunk))
-
-    local_count = len(raw_chunks)
-    total_size, total_count = await allgather_reduce(
-        context, comm, size_collective_id, local_size, local_count
-    )
-    modulus = min(
-        max(comm.nranks, total_size // max(1, target_partition_size)),
-        max(1, total_count),
+    inputs, local_bytes = await _collect_input_chunks(context, ch_in)
+    forward_modulus = await _negotiate_forward_modulus(
+        context,
+        comm,
+        size_collective_id,
+        local_bytes,
+        len(inputs),
+        target_partition_size,
     )
 
-    shuffle = ShuffleManager(context, comm, modulus, shuffle_collective_id)
-    row_counter = 0
-    boundaries: list[tuple[int, int, int]] = []
+    forward_shuffle = ShuffleManager(
+        context, comm, forward_modulus, forward_shuffle_collective_id
+    )
+    return_shuffle = ShuffleManager(
+        context,
+        comm,
+        comm.nranks,
+        return_shuffle_collective_id,
+        partition_assignment=PartitionAssignment.CONTIGUOUS,
+    )
 
-    # Phase 1: stamp each row with its local position and insert into the shuffle
-    async with shuffle.inserting() as inserter:
-        for seq_num, chunk in raw_chunks:
-            stream = ir_context.get_cuda_stream()
-            n_rows = chunk.table_view().num_rows()
-            boundaries.append((seq_num, row_counter, row_counter + n_rows))
-            if not skip_insert:
-                stamped = await asyncio.to_thread(
-                    _add_row_idx_sync, chunk, row_counter, stream, context.br()
-                )
-                inserter.insert_hash(stamped, key_indices)
-            row_counter += n_rows
-
-    if not boundaries:
-        await ch_out.drain(context)
-        return
-
-    # Over.do_evaluate outputs ir.exprs columns; _evaluate_with_row_idx_sync
-    # appends row_idx_col at the end since it is not in ir.schema.
-    col_names = [ne.name for ne in ir.exprs] + [row_idx_col]
-    col_types = [ne.value.dtype for ne in ir.exprs] + [_INT64_DTYPE]
-    idx_col_idx = len(ir.exprs)  # row_idx_col is always last
-    keep_col_indices = list(range(len(ir.exprs)))
-    split_values: list[int] = [start for _, start, _ in boundaries[1:]]
-    accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
-
-    # Three-phase sort-and-split.
-    #
-    # Phase 1 (insert): stamp each row with its absolute position and insert
-    #   into the shuffle (see the inserting() block above).
-    # Phase 2 (per partition): extract, evaluate, sort by row_idx, then
-    #   immediately slice into per-boundary sub-chunks and materialise each
-    #   as an independent TableChunk registered with br.  The sorted
-    #   partition is freed as soon as its sub-chunks are accumulated, so the
-    #   SpillManager can evict earlier sub-chunks to host if memory is tight.
-    # Phase 3 (per boundary): bring sub-chunks back to device if spilled
-    #   (make_available_or_wait), concat + sort + output.
-    #
-    # This keeps total working memory proportional to one boundary's output
-    # at a time (not all sorted partitions simultaneously).
-
-    # Phase 2
-    for partition_id in shuffle.local_partitions():
-        stream = ir_context.get_cuda_stream()
-        partition_chunk = TableChunk.from_pylibcudf_table(
-            shuffle.extract_chunk(partition_id, stream),
-            stream,
-            exclusive_view=True,
-            br=context.br(),
-        )
-        result_df = await asyncio.to_thread(
-            _evaluate_with_row_idx_sync,
-            partition_chunk,
-            ir,
-            ir_context,
-            row_idx_col,
-        )
-        sorted_df = await asyncio.to_thread(
-            _sort_df_by_row_idx_sync,
-            result_df,
-            col_names,
-            col_types,
-            row_idx_col,
-        )
-        await asyncio.to_thread(
-            _slice_and_accumulate_sync,
-            sorted_df,
-            split_values,
-            len(boundaries),
-            col_names,
-            col_types,
-            idx_col_idx,
-            context.br(),
-            accumulated,
-        )
-        del sorted_df  # Free; sub-views are in accumulated as spill-eligible chunks
-
-    # Sync pool streams so memory freed during Phase 2 is available
-    for _ in range(context.stream_pool_size()):
-        context.get_stream_from_pool().synchronize()
-
-    # Phase 3: per-boundary output
-    # TODO: if all input rows were shuffled to other ranks, accumulated is
-    # all-empty while boundaries is non-empty (seq-num gap).  Revisit once
-    # rapidsmpf empty-partition handling is clearer.
-    for k, (seq_num, _start, _end) in enumerate(boundaries):
-        # Bring sub-chunks to device if spilled (async wait).
-        available: list[TableChunk] = []
-        for chunk in accumulated[k]:
-            avail = await chunk.make_available_or_wait(context, net_memory_delta=0)
-            available.append(avail)
-        accumulated[k] = []  # drop refs to now-consumed originals
-
-        result = await asyncio.to_thread(
-            _concat_sort_boundary_sync,
-            available,
-            col_names,
-            col_types,
-            idx_col_idx,
-            keep_col_indices,
-            ir_context,
-            context.br(),
-        )
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
-        del available
+    sequence_numbers = [seq for seq, _ in inputs]
+    await _distribute_by_group(
+        context,
+        comm,
+        forward_shuffle,
+        inputs,
+        ir.key_indices,
+        ir_context,
+        skip_insert,
+    )
+    await _evaluate_and_route_to_origin(
+        context,
+        ir,
+        ir_context,
+        forward_shuffle,
+        return_shuffle,
+        comm.nranks,
+        stamps,
+    )
+    received = await _collect_returned_rows(context, return_shuffle, ir_context)
+    await _reassemble_input_chunks(
+        context, ch_out, ir_context, received, sequence_numbers, ir, tracer
+    )
 
     await ch_out.drain(context)
 
@@ -712,8 +781,8 @@ async def over_actor(
         The input channel.
     collective_ids
         Collective IDs reserved for this operation. Scalar Over nodes receive
-        one ID (AllGather); non-scalar nodes receive two (size AllGather +
-        Shuffle).
+        one ID (AllGather); non-scalar nodes receive three (size AllGather +
+        forward Shuffle + reverse Shuffle).
     target_partition_size
         Target output partition size in bytes, used to compute the shuffle
         modulus for the non-scalar path.
@@ -772,7 +841,8 @@ async def over_actor(
                 input_ir,
                 tracer,
                 size_collective_id=collective_ids[0],
-                shuffle_collective_id=collective_ids[1],
+                forward_shuffle_collective_id=collective_ids[1],
+                return_shuffle_collective_id=collective_ids[2],
                 target_partition_size=target_partition_size,
             )
 
