@@ -21,17 +21,6 @@ function(find_and_configure_rmm BUILD_SHARED EXCLUDE_FROM_ALL)
     list(APPEND _rmm_args INSTALL_EXPORT_SET cudf-exports)
   endif()
   rapids_cpm_rmm(${_rmm_args} ${_exclude_flag} CPM_ARGS OPTIONS "BUILD_SHARED_LIBS ${BUILD_SHARED}")
-  # Remove nvtx3 from rmm's public interface. Since rmm is absorbed into libcudf via whole-archive
-  # and we bundle nvtx3 headers directly, consumers don't need the nvtx3 target. This prevents the
-  # absorption loop from promoting nvtx3 into cudf's installed interface.
-  get_target_property(_rmm_real_target rmm::rmm ALIASED_TARGET)
-  if(_rmm_real_target)
-    get_target_property(_rmm_iface_libs ${_rmm_real_target} INTERFACE_LINK_LIBRARIES)
-    if(_rmm_iface_libs)
-      list(REMOVE_ITEM _rmm_iface_libs nvtx3::nvtx3-cpp)
-      set_property(TARGET ${_rmm_real_target} PROPERTY INTERFACE_LINK_LIBRARIES ${_rmm_iface_libs})
-    endif()
-  endif()
 
   # If rmm was found as a pre-existing shared library (e.g. conda), we need find_dependency(rmm) in
   # the installed config even when EXCLUDE_FROM_ALL is set. EXCLUDE_FROM_ALL controls whether CPM-
