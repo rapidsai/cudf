@@ -275,7 +275,7 @@ def test_reset_collects_after_options_change(reset_engine: RayEngine) -> None:
 
 
 def test_reset_after_shutdown_raises() -> None:
-    """``_reset`` after ``shutdown`` raises ``RuntimeError``."""
+    """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
@@ -283,8 +283,12 @@ def test_reset_after_shutdown_raises() -> None:
         ray_init_options={"include_dashboard": False},
     )
     engine.shutdown()
+    engine.shutdown()  # idempotent
     with pytest.raises(RuntimeError, match="shut-down"):
         engine._reset()
+    with pytest.raises(RuntimeError, match="shut-down"):
+        engine._reset()  # still raises on a second attempt
+    engine.shutdown()  # still safe after a failed _reset
 
 
 def test_reset_rejects_construction_time_executor_options(
