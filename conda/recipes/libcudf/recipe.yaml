@@ -32,10 +32,15 @@ cache:
         cudf_ROOT="$(realpath ./cpp/build)"
         export cudf_ROOT
 
+        cmake_args=
+        for arg in $CMAKE_ARGS; do
+          cmake_args="$cmake_args \"$arg\""
+        done
+
         ./build.sh -n -v \
             libcudf libcudf_kafka benchmarks tests \
             --build_metrics --incl_cache_stats --allgpuarch \
-            --cmake-args=\"-DCUDF_ENABLE_ARROW_S3=ON\"
+            --cmake-args="\"-DCUDF_ENABLE_ARROW_S3=ON\" $cmake_args"
       secrets:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY
@@ -79,8 +84,10 @@ cache:
     host:
       - librmm =${{ minor_version }}
       - libkvikio =${{ minor_version }}
+      - cuda-cudart-dev
       - cuda-nvrtc-dev
       - cuda-nvtx-dev
+      - cuda-sanitizer-api
       - libcurand-dev
       - libnvjitlink-dev
       - if: linux and x86_64
@@ -119,6 +126,7 @@ outputs:
         - ${{ compiler("c") }}
       host:
         - cuda-version =${{ cuda_version }}
+        - cuda-sanitizer-api
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
         - libnvcomp-dev ${{ nvcomp_version }}
@@ -129,6 +137,7 @@ outputs:
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
+        - cuda-sanitizer-api
         - if: linux and x86_64
           then:
             - libcufile
@@ -148,6 +157,7 @@ outputs:
           - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
+          - cuda-sanitizer-api
           - cuda-version
           - flatbuffers
           - libcufile
@@ -306,11 +316,13 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
+        - cuda-sanitizer-api
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - libcurand
+        - cuda-sanitizer-api
       ignore_run_exports:
         from_package:
           - libcurand-dev
@@ -318,6 +330,7 @@ outputs:
           - cuda-cudart
           - cuda-nvrtc
           - cuda-nvtx
+          - cuda-sanitizer-api
           - cuda-version
           - flatbuffers
           - libcudf
