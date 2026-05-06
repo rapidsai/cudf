@@ -51,16 +51,6 @@ def rapidsmpf_single_available(request, monkeypatch):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["norapidsmpf.dask", "rapidsmpf.dask"])
-def rapidsmpf_distributed_available(request, monkeypatch):
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_distributed_available",
-        lambda: request.param,
-    )
-    return request.param
-
-
 def test_polars_verbose_warns(monkeypatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
@@ -243,7 +233,7 @@ def test_parquet_options_from_none() -> None:
 
 
 def test_validate_streaming_executor_shuffle_method(
-    *, rapidsmpf_distributed_available: bool, rapidsmpf_single_available: bool
+    *, rapidsmpf_single_available: bool
 ) -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
@@ -253,21 +243,6 @@ def test_validate_streaming_executor_shuffle_method(
     )
     assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"
-
-    # rapidsmpf with distributed cluster
-    engine = pl.GPUEngine(
-        executor="streaming",
-        executor_options={"shuffle_method": "rapidsmpf", "cluster": "distributed"},
-    )
-    if rapidsmpf_distributed_available:
-        config = ConfigOptions.from_polars_engine(engine)
-        assert config.executor.name == "streaming"
-        assert config.executor.shuffle_method == "rapidsmpf"
-    else:
-        with pytest.raises(
-            ValueError, match="rapidsmpf.integrations.dask is not installed"
-        ):
-            ConfigOptions.from_polars_engine(engine)
 
     # rapidsmpf with single cluster
     engine = pl.GPUEngine(
@@ -344,10 +319,7 @@ def test_validate_cluster() -> None:
         )
 
 
-def test_validate_shuffle_method_defaults(
-    *,
-    rapidsmpf_distributed_available: bool,
-) -> None:
+def test_validate_shuffle_method_defaults() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -355,20 +327,6 @@ def test_validate_shuffle_method_defaults(
     )
     assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"  # Default for single cluster
-
-    # Test default for distributed cluster depends on rapidsmpf availability
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-            executor_options={"cluster": "distributed"},
-        )
-    )
-    assert config.executor.name == "streaming"
-    if rapidsmpf_distributed_available:
-        # Should be "rapidsmpf" if available, otherwise "tasks"
-        assert config.executor.shuffle_method == "rapidsmpf"
-    else:
-        assert config.executor.shuffle_method == "tasks"
 
     with pytest.raises(ValueError, match="'foo' is not a valid ShuffleMethod"):
         ConfigOptions.from_polars_engine(
@@ -387,7 +345,6 @@ def test_validate_shuffle_method_defaults(
         "target_partition_size",
         "groupby_n_ary",
         "broadcast_join_limit",
-        "rapidsmpf_spill",
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
@@ -447,44 +404,30 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
             ConfigOptions.from_polars_engine(engine)
 
 
-def test_config_option_from_env(
-    monkeypatch: pytest.MonkeyPatch, *, rapidsmpf_distributed_available: bool
-) -> None:
+def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "distributed")
+        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "single")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", '{"a": 0.5}')
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", "43")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
-        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
-        m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
+        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
-
-        if rapidsmpf_distributed_available:
-            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
-        else:
-            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
 
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
-        assert config.executor.cluster == "distributed"
+        assert config.executor.cluster == "single"
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.unique_fraction == {"a": 0.5}
         assert config.executor.target_partition_size == 100
         assert config.executor.groupby_n_ary == 43
         assert config.executor.broadcast_join_limit == 44
-        assert config.executor.rapidsmpf_spill is True
-        assert config.executor.sink_to_directory is True
+        assert config.executor.shuffle_method == "tasks"
         assert config.cuda_stream_policy is None
-
-        if rapidsmpf_distributed_available:
-            assert config.executor.shuffle_method == "rapidsmpf"
-        else:
-            assert config.executor.shuffle_method == "tasks"
 
 
 def test_target_partition_from_env(
@@ -824,6 +767,7 @@ def test_dynamic_planning_defaults() -> None:
     # Dynamic planning is enabled by default
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 2
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.5
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -845,6 +789,37 @@ def test_dynamic_planning_sample_chunk_count_from_env(
     assert config.executor.name == "streaming"
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_validate_bloom_filter_threshold_type() -> None:
+    with pytest.raises(TypeError, match="bloom_filter_threshold must be a float"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"bloom_filter_threshold": "bad"}
+                },
+            )
+        )
+
+
+def test_validate_bloom_filter_threshold_range() -> None:
+    with pytest.raises(ValueError, match="bloom_filter_threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"bloom_filter_threshold": 1.5}},
+            )
+        )
+
+
+def test_bloom_filter_threshold_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__BLOOM_FILTER_THRESHOLD", "0.3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.3
 
 
 def test_dynamic_planning_from_instance() -> None:
@@ -898,7 +873,7 @@ def test_num_py_executors_default() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.num_py_executors is None
+    assert config.executor.num_py_executors == 8
 
 
 def test_num_py_executors_from_executor_options() -> None:
@@ -923,11 +898,11 @@ def test_num_py_executors_from_env(
         assert config.executor.num_py_executors == 8
 
 
-def test_distributed_sink_to_directory_false_raises() -> None:
+def test_dask_sink_to_directory_false_raises() -> None:
     with pytest.raises(
-        ValueError, match="The distributed cluster requires sink_to_directory=True"
+        ValueError, match="The dask cluster requires sink_to_directory=True"
     ):
-        StreamingExecutor(cluster=Cluster.DISTRIBUTED, sink_to_directory=False)
+        StreamingExecutor(cluster=Cluster.DASK, sink_to_directory=False)
 
 
 def test_get_dask_cuda_stream() -> None:

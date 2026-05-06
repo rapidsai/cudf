@@ -40,10 +40,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
   auto const multiplicity = 1;
   auto const selectivity  = 0.3;
 
-  if (right_size > left_size) {
-    state.skip("Skip large right table");
-    return;
-  }
+  if (should_skip_large_sizes(state)) { return; }
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
@@ -116,4 +113,5 @@ NVBENCH_BENCH_TYPES(nvbench_sort_merge_inner_join,
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", {10'000, 100'000})
   .add_int64_axis("right_size", {10'000, 100'000})
-  .add_int64_axis("use_key_remap", {0, 1});
+  .add_int64_axis("use_key_remap", {0, 1})
+  .add_int64_axis("skip_large_sizes", {1});

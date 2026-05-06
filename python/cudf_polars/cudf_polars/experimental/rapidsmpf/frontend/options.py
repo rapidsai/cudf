@@ -206,7 +206,7 @@ class StreamingOptions:
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
         Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
-        Default: ``1``.
+        Default: ``8``.
         Category: executor.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
@@ -239,6 +239,13 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
         Default: ``{}``.
         Category: executor.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. The ``spmd``/``ray``/``dask`` engines
+        always use ``True``; passing ``False`` raises ``ValueError``.
+        Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
+        Default: ``True`` (forced by the streaming engines).
+        Category: executor.
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -264,6 +271,11 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__HARDWARE_BINDING`` (JSON object,
         e.g. ``'{"enabled": false}'``).
         Default: ``HardwareBindingPolicy()``.
+        Category: engine.
+    allow_gpu_sharing
+        When ``False`` (default), the engine raises if multiple ranks share the same physical GPU.
+        Env: ``CUDF_POLARS__ALLOW_GPU_SHARING``.
+        Default: ``False``.
         Category: engine.
 
     Examples
@@ -323,6 +335,9 @@ class StreamingOptions:
     unique_fraction: dict[str, float] | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
     )
+    sink_to_directory: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
+    )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
@@ -332,6 +347,9 @@ class StreamingOptions:
     )
     hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
         "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
+    )
+    allow_gpu_sharing: bool | Unspecified = _opt(
+        "engine", "CUDF_POLARS__ALLOW_GPU_SHARING", parse_boolean
     )
 
     # ------------------------------------------------------------------
