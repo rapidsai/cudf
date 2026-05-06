@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 try:
     import structlog
-except ImportError:
+except ImportError:  # pragma: no cover; requires no structlog
     _HAS_STRUCTLOG = False
 else:
     _HAS_STRUCTLOG = True
@@ -51,7 +51,7 @@ class QuentLogger:
                 wrapper_class=structlog.stdlib.BoundLogger,
                 **initial_values,
             )
-        else:
+        else:  # pragma: no cover; requires no structlog
             return logging.getLogger(__name__)
 
     def emit(self, event: Event) -> None:
@@ -66,9 +66,6 @@ class QuentLogger:
             events = list(self._buffer)
             self._buffer.clear()
         return events
-
-    def collect(self) -> list[dict[str, Any]]:
-        return list(self._buffer)
 
 
 class DequeLogger:

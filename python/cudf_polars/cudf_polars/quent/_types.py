@@ -30,9 +30,9 @@ class EventName(enum.Enum):
     TASK = "Task"
 
 
-if sys.version_info >= (3, 14):
+if sys.version_info >= (3, 14):  # pragma: no cover; requires Python 3.14+
     new_quent_id = uuid.uuid7
-else:
+else:  # pragma: no cover; requires Python 3.13 or earlier
     new_quent_id = uuid.uuid4
 
 
@@ -118,10 +118,6 @@ class Operator:
             timestamp=timestamp or time.time_ns(),
             data={EventName.OPERATOR.value: {"Declaration": self.to_dict()}},
         )
-
-    def statistics(self, timestamp: int | None = None) -> Event:
-        """Declare statistics for a Quent Operator."""
-        raise NotImplementedError("Not implemented")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -263,10 +259,6 @@ class Edge:
 
     source: Port
     target: Port
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to a plain dict for JSON output."""
-        return {"source": str(self.source.id), "target": str(self.target.id)}
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
