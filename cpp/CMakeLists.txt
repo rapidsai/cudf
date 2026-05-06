@@ -1108,9 +1108,9 @@ if(BUILD_SHARED_LIBS)
     # hidden from the installed interface.
     set(_${_dep}_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
 
-    # Promote the absorbed library's public transitive deps into cudf's public interface.
-    # Filter out deps that are themselves absorbed — they are already linked via whole-archive.
-    # Also filter LINK_ONLY entries — those are private link deps already statically linked in.
+    # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
+    # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
+    # LINK_ONLY entries — those are private link deps already statically linked in.
     get_target_property(_iface_libs ${_dep}::${_dep} INTERFACE_LINK_LIBRARIES)
     if(_iface_libs)
       foreach(_absorbed IN LISTS _absorbed_deps)
