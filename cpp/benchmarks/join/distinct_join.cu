@@ -18,11 +18,11 @@ void nvbench_distinct_inner_join(nvbench::state& state,
 {
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& probe_input,
-                 cudf::table_view const& build_input,
+  auto join = [](cudf::table_view const& left_input,
+                 cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, LOAD_FACTOR};
-    return hj_obj.inner_join(probe_input);
+    auto hj_obj = cudf::distinct_hash_join{right_input, compare_nulls, LOAD_FACTOR};
+    return hj_obj.inner_join(left_input);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
@@ -36,11 +36,11 @@ void nvbench_distinct_left_join(nvbench::state& state,
 {
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& probe_input,
-                 cudf::table_view const& build_input,
+  auto join = [](cudf::table_view const& left_input,
+                 cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, LOAD_FACTOR};
-    return hj_obj.left_join(probe_input);
+    auto hj_obj = cudf::distinct_hash_join{right_input, compare_nulls, LOAD_FACTOR};
+    return hj_obj.left_join(left_input);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
