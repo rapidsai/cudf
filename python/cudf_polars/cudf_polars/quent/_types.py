@@ -12,8 +12,6 @@ import time
 import uuid
 from typing import Any
 
-import structlog
-
 from cudf_polars import __version__
 
 QUENT_SCOPE = "QUENT"
@@ -36,12 +34,6 @@ if sys.version_info >= (3, 14):
     new_quent_id = uuid.uuid7
 else:
     new_quent_id = uuid.uuid4
-
-
-def emit(event: Event) -> None:
-    """Emit a Quent event."""
-    logger = structlog.get_logger()
-    logger.info(event.to_dict(), scope=QUENT_SCOPE)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
