@@ -3018,29 +3018,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         # nulls are preserved through the aggregation (min/max skip
         # nulls). For ``skipna=False``, nulls are replaced with True so
         # they don't flip ``all`` to False and always make ``any`` True.
-        def _to_bool_col(col):
-            from cudf.core.column import ColumnBase
+        bool_dtype = np.dtype(np.bool_)
 
+        def _to_bool_col(col):
             if is_dtype_obj_string(col.dtype):
-                counts_plc = plc.strings.attributes.count_characters(
-                    col.plc_column
-                )
-                gt_plc = plc.binaryop.binary_operation(
-                    counts_plc,
-                    plc.Scalar.from_py(0),
-                    plc.binaryop.BinaryOperator.GREATER,
-                    plc.DataType(plc.TypeId.BOOL8),
-                )
-                bool_col = ColumnBase.create(gt_plc, np.dtype(np.bool_))
+                bool_col = col.count_characters() > np.int8(0)
             else:
                 # For numeric/bool inputs, cast to bool preserving nulls.
-                ne_plc = plc.binaryop.binary_operation(
-                    col.plc_column,
-                    plc.Scalar.from_py(0),
-                    plc.binaryop.BinaryOperator.NOT_EQUAL,
-                    plc.DataType(plc.TypeId.BOOL8),
-                )
-                bool_col = ColumnBase.create(ne_plc, np.dtype(np.bool_))
+                bool_col = col != 0
+            # Normalize away pandas-extension bool dtypes so the downstream
+            # aggregation always sees ``np.bool_``.
+            if bool_col.dtype != bool_dtype:
+                bool_col = ColumnBase.create(bool_col.plc_column, bool_dtype)
             if not skipna:
                 bool_col = bool_col.fillna(True)
             return bool_col
