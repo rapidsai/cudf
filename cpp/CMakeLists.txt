@@ -1132,6 +1132,11 @@ if(BUILD_SHARED_LIBS)
         PROPERTY "GLOBAL_TARGETS"
       )
       foreach(_pkg IN LISTS _pkg_names)
+        # Skip packages that are themselves absorbed into libcudf — they won't be installed or
+        # findable at install time.
+        if(_mode STREQUAL "install" AND _pkg IN_LIST _absorbed_deps)
+          continue()
+        endif()
         rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
       endforeach()
     endforeach()
