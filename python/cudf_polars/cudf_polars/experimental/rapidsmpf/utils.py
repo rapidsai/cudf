@@ -704,7 +704,7 @@ class NormalizedPartitioning:
         return True
 
     def is_aligned_with(
-        self, other: NormalizedPartitioning, br: BufferResource | None = None
+        self, other: NormalizedPartitioning, br: BufferResource
     ) -> bool:
         """True when both sides share identical inter-rank and local chunk layouts."""
 
@@ -713,10 +713,6 @@ class NormalizedPartitioning:
             rhs: HashScheme | OrderScheme | None,
         ) -> bool:
             if isinstance(lhs, OrderScheme):
-                if br is None:
-                    raise ValueError(
-                        "br is required when comparing OrderScheme partitionings"
-                    )
                 return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(
                     rhs, br
                 )
@@ -823,7 +819,7 @@ class NormalizedPartitioning:
                     key_indices[:n],
                     order[:n],
                     null_order[:n],
-                    strict=False,
+                    strict=True,
                 )
             )
 

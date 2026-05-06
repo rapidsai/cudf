@@ -328,10 +328,11 @@ def test_get_partitioning_moduli_allow_subset(
         ),
     ],
 )
-def test_is_aligned_with(left, right, expected) -> None:
+def test_is_aligned_with(rapidsmpf_context, left, right, expected) -> None:
     """is_aligned_with checks compatible hash layout for chunkwise operations."""
-    assert left.is_aligned_with(right) is expected
-    assert right.is_aligned_with(left) is expected
+    br = rapidsmpf_context.br()
+    assert left.is_aligned_with(right, br) is expected
+    assert right.is_aligned_with(left, br) is expected
 
 
 def test_normalized_partitioning_eq() -> None:
