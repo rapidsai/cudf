@@ -18,12 +18,18 @@ from cudf_polars.testing.engine_utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
-
-    from rapidsmpf.communicator.communicator import Communicator
+    from collections.abc import Callable, Generator, Mapping
+    from typing import TypeAlias
 
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    # Read-only view over the per-backend streaming engines owned by the
+    # ``streaming_engines`` session fixture. Only that fixture mutates the
+    # underlying dict; consumers (``spmd_engine``, ``streaming_engine_factory``,
+    # ``engine``) only look up by backend name.
+    StreamingEngines: TypeAlias = Mapping[str, StreamingEngine]
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -66,12 +72,12 @@ def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
 
 
 @pytest.fixture(scope="session")
-def spmd_comm() -> Communicator:
-    """Session-scoped communicator — bootstrapped once and shared across all tests.
+def streaming_engines() -> Generator[StreamingEngines, None, None]:
+    """Return a session-scoped mapping of engine name to engine instance.
 
-    Sharing a single communicator avoids the file-based bootstrap race that can
-    cause hangs when ``create_ucxx_comm()`` is called repeatedly in the same
-    ``rrun`` session (stale barrier files / stale ``ucxx_root_address`` KV entry).
+    The returned :class:`StreamingEngines` is a dict that maps each engine
+    name to a single shared engine instance, which is reused across the entire
+    test session.
     """
     pytest.importorskip("rapidsmpf")
     from rapidsmpf import bootstrap
@@ -79,12 +85,36 @@ def spmd_comm() -> Communicator:
     from rapidsmpf.config import Options, get_environment_variables
     from rapidsmpf.progress_thread import ProgressThread
 
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
     if bootstrap.is_running_with_rrun():
-        return bootstrap.create_ucxx_comm(
+        comm = bootstrap.create_ucxx_comm(
             progress_thread=ProgressThread(),
             type=bootstrap.BackendType.AUTO,
         )
-    return single_communicator(Options(get_environment_variables()), ProgressThread())
+    else:
+        comm = single_communicator(
+            Options(get_environment_variables()), ProgressThread()
+        )
+
+    engines: dict[str, StreamingEngine] = {"spmd": SPMDEngine(comm=comm)}
+    try:
+        yield engines
+    finally:
+        while engines:
+            _, engine = engines.popitem()
+            engine.shutdown()
+
+
+@pytest.fixture
+def spmd_engine(streaming_engines: StreamingEngines) -> SPMDEngine:
+    """Return the shared :class:`SPMDEngine` reset to default options."""
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    engine = streaming_engines["spmd"]
+    assert isinstance(engine, SPMDEngine)
+    engine._reset()
+    return engine
 
 
 @pytest.fixture(params=STREAMING_ENGINE_FIXTURE_PARAMS)
@@ -102,38 +132,29 @@ def _all_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 @pytest.fixture
 def streaming_engine_factory(
     _streaming_engine_param: EngineFixtureParam,
-    spmd_comm: Communicator,
-) -> Generator[Callable[..., StreamingEngine], None, None]:
+    streaming_engines: StreamingEngines,
+) -> Callable[..., StreamingEngine]:
     """
-    Yield a factory that constructs :class:`StreamingEngine` instances for tests.
-
-    The fixture is parametrized over :data:`STREAMING_ENGINE_FIXTURE_PARAMS`.
-    Created engines are tracked and automatically shut down after the test.
+    Return a factory that yields a shared :class:`StreamingEngine`.
 
     Parameters
     ----------
     _streaming_engine_param
         Parametrized engine descriptor controlling backend and block size mode.
-    spmd_comm
-        Communicator used when constructing SPMD-based engines.
+    streaming_engines
+        Session-scoped engine collection to look up the shared engine in.
 
-    Yields
-    ------
-    Factory function that creates :class:`StreamingEngine` instances. The
-    factory accepts optional :class:`StreamingOptions`, which are merged on
-    top of the parametrized blocksize baseline.
+    Returns
+    -------
+    Factory function that returns the shared :class:`StreamingEngine`.
     """
-    engines: list[StreamingEngine] = []
 
     def factory(options: StreamingOptions | None = None) -> StreamingEngine:
-        engine = build_streaming_engine(_streaming_engine_param, spmd_comm, options)
-        engines.append(engine)
-        return engine
+        return build_streaming_engine(
+            _streaming_engine_param, streaming_engines, options
+        )
 
-    yield factory
-
-    for engine in reversed(engines):
-        engine.shutdown()
+    return factory
 
 
 @pytest.fixture
@@ -164,9 +185,9 @@ def streaming_engine(
 def engine(
     request: pytest.FixtureRequest,
     _all_engine_param: EngineFixtureParam,
-) -> Generator[pl.GPUEngine, None, None]:
+) -> pl.GPUEngine:
     """
-    Yield a :class:`polars.GPUEngine` for each engine variant under test.
+    Return a :class:`polars.GPUEngine` for each engine variant under test.
 
     Parameters
     ----------
@@ -176,8 +197,8 @@ def engine(
         Parametrized engine descriptor covering both in-memory and streaming
         variants.
 
-    Yields
-    ------
+    Returns
+    -------
     Engine instance matching the parametrized variant.
 
     Notes
@@ -186,15 +207,10 @@ def engine(
     :func:`streaming_engine` fixture instead.
     """
     if _all_engine_param.engine_name == "in-memory":
-        yield pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-        return
+        return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
-    spmd_comm: Communicator = request.getfixturevalue("spmd_comm")
-    engine = build_streaming_engine(_all_engine_param, spmd_comm)
-    try:
-        yield engine
-    finally:
-        engine.shutdown()
+    engines: StreamingEngines = request.getfixturevalue("streaming_engines")
+    return build_streaming_engine(_all_engine_param, engines)
 
 
 @pytest.fixture

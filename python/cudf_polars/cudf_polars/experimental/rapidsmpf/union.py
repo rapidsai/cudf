@@ -24,6 +24,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 @define_actor()
 async def union_node(
     context: Context,
+    comm: Communicator,
     ir: Union,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -46,6 +48,9 @@ async def union_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator. Used to suppress duplicated children's chunks on
+        non-root ranks so they aren't emitted twice cluster-wide.
     ir
         The Union IR node.
     ir_context
@@ -61,14 +66,19 @@ async def union_node(
         # Merge and forward metadata.
         # Union loses partitioning/ordering info since sources may differ.
         # TODO: Warn users that Union does NOT preserve order?
-        total_local_count = 0
-        duplicated = True
         metadata = await gather_in_task_group(
             *(recv_metadata(ch, context) for ch in chs_in)
         )
-        for meta in metadata:
-            total_local_count += meta.local_count
-            duplicated = duplicated and meta.duplicated
+        # When a child has duplicated=True, every rank has produced the same
+        # data and only rank 0 should forward it -- otherwise the downstream
+        # client-side concat would over-count by `nranks - 1` for each
+        # duplicated chunk.
+        skip = tuple(meta.duplicated and comm.rank != 0 for meta in metadata)
+        total_local_count = sum(
+            0 if drop else meta.local_count
+            for meta, drop in zip(metadata, skip, strict=True)
+        )
+        duplicated = all(meta.duplicated for meta in metadata)
         await send_metadata(
             ch_out,
             context,
@@ -79,21 +89,22 @@ async def union_node(
         )
 
         seq_num_offset = 0
-        for ch_in in chs_in:
+        for ch_in, drop in zip(chs_in, skip, strict=True):
             num_ch_chunks = 0
             while (msg := await ch_in.recv(context)) is not None:
-                num_ch_chunks += 1
-                await ch_out.send(
-                    context,
-                    Message(
-                        msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(
-                            msg, br=context.br()
-                        ).make_available_and_spill(
-                            context.br(), allow_overbooking=True
+                if not drop:
+                    await ch_out.send(
+                        context,
+                        Message(
+                            msg.sequence_number + seq_num_offset,
+                            TableChunk.from_message(
+                                msg, br=context.br()
+                            ).make_available_and_spill(
+                                context.br(), allow_overbooking=True
+                            ),
                         ),
-                    ),
-                )
+                    )
+                    num_ch_chunks += 1
             seq_num_offset += num_ch_chunks
 
         await ch_out.drain(context)
@@ -116,6 +127,7 @@ def _(
     nodes[ir] = [
         union_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
