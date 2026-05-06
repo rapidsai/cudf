@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReductionTest extends CudfTestBase {
   public static final double DELTAD = 0.00001;
@@ -637,6 +640,104 @@ class ReductionTest extends CudfTestBase {
          ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
          Scalar result = cv.standardDeviation(DType.FLOAT32)) {
       assertEquals(expected, result);
+    }
+  }
+
+  // SUM_WITH_OVERFLOW reduction returns a struct scalar with children
+  // {sum: INT64, overflow: BOOL8}. Helper closes the temporary children views.
+  private static long[] readSumWithOverflow(Scalar result) {
+    assertEquals(DType.STRUCT, result.getType());
+    assertTrue(result.isValid());
+    ColumnView[] children = result.getChildrenFromStructScalar();
+    try {
+      assertEquals(2, children.length);
+      assertEquals(DType.INT64, children[0].getType());
+      assertEquals(DType.BOOL8, children[1].getType());
+      try (ColumnVector sumCol = children[0].copyToColumnVector();
+           ColumnVector ovfCol = children[1].copyToColumnVector();
+           HostColumnVector sumHost = sumCol.copyToHost();
+           HostColumnVector ovfHost = ovfCol.copyToHost()) {
+        long sumValid = sumHost.isNull(0) ? 0L : 1L;
+        long sumValue = sumHost.isNull(0) ? 0L : sumHost.getLong(0);
+        long ovfValue = ovfHost.getBoolean(0) ? 1L : 0L;
+        return new long[] { sumValid, sumValue, ovfValue };
+      }
+    } finally {
+      for (ColumnView c : children) c.close();
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNoOverflow() {
+    try (ColumnVector cv = ColumnVector.fromLongs(1L, 2L, 3L, 4L, 5L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      long[] r = readSumWithOverflow(result);
+      assertEquals(1L, r[0]);   // sum is valid
+      assertEquals(15L, r[1]);  // 1+2+3+4+5
+      assertEquals(0L, r[2]);   // no overflow
+    }
+  }
+
+  @Test
+  void testSumWithOverflowPositiveOverflow() {
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      long[] r = readSumWithOverflow(result);
+      assertEquals(1L, r[0]);
+      assertEquals(1L, r[2]);   // overflow detected
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNegativeOverflow() {
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      long[] r = readSumWithOverflow(result);
+      assertEquals(1L, r[2]);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowEmptyColumn() {
+    try (ColumnVector cv = ColumnVector.fromLongs();
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      assertEquals(DType.STRUCT, result.getType());
+      assertTrue(result.isValid());
+      ColumnView[] children = result.getChildrenFromStructScalar();
+      try (ColumnVector sumCol = children[0].copyToColumnVector();
+           ColumnVector ovfCol = children[1].copyToColumnVector();
+           HostColumnVector sumHost = sumCol.copyToHost();
+           HostColumnVector ovfHost = ovfCol.copyToHost()) {
+        assertTrue(sumHost.isNull(0));         // empty input -> null sum
+        assertFalse(ovfHost.getBoolean(0));    // no overflow
+      } finally {
+        for (ColumnView c : children) c.close();
+      }
+    }
+  }
+
+  @Test
+  void testSumWithOverflowAllNullColumn() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(null, null, null);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      ColumnView[] children = result.getChildrenFromStructScalar();
+      try (ColumnVector sumCol = children[0].copyToColumnVector();
+           ColumnVector ovfCol = children[1].copyToColumnVector();
+           HostColumnVector sumHost = sumCol.copyToHost();
+           HostColumnVector ovfHost = ovfCol.copyToHost()) {
+        assertTrue(sumHost.isNull(0));
+        assertFalse(ovfHost.getBoolean(0));
+      } finally {
+        for (ColumnView c : children) c.close();
+      }
+    }
+  }
+
+  @Test
+  void testSumWithOverflowRejectsNonInt64() {
+    try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3)) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
     }
   }
 }

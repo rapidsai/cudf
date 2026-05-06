@@ -53,6 +53,14 @@ public final class ReductionAggregation {
   }
 
   /**
+   * Sum reduction that also reports int64 overflow. Result is a struct scalar
+   * with children {sum: INT64, overflow: BOOL8}. Input column must be INT64.
+   */
+  public static ReductionAggregation sumWithOverflow() {
+    return new ReductionAggregation(Aggregation.sumWithOverflow());
+  }
+
+  /**
    * Product Aggregation.
    */
   public static ReductionAggregation product() {

@@ -70,6 +70,16 @@ public final class GroupByAggregation {
   }
 
   /**
+   * Sum aggregation that also reports per-group overflow. The result column is a
+   * STRUCT with children {sum: input-type, overflow: BOOL8}. Supported input
+   * types are signed integers (INT8/16/32/64) and fixed-point decimal. Only
+   * hash-based groupby is supported; sort-based groupby will throw.
+   */
+  public static GroupByAggregation sumWithOverflow() {
+    return new GroupByAggregation(Aggregation.sumWithOverflow());
+  }
+
+  /**
    * Product Aggregation.
    */
   public static GroupByAggregation product() {
