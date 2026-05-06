@@ -52,7 +52,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         table_view source_table,
         column_view deletion_mask,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] unique(
