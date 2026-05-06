@@ -438,16 +438,6 @@ def test_over_multirank(
                     reason="key assignments only probed for exactly 2 ranks"
                 )
             )
-        if cross_rank and not is_scalar and nranks == 2:
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason=(
-                        "non-scalar over() swaps data across ranks when all input rows are "
-                        "shuffled to another rank's partition (row_idx spaces are rank-local "
-                        "so Phase 2 fills the wrong accumulated slots)"
-                    )
-                )
-            )
         keys = _CROSS_RANK_KEYS if cross_rank else _SAME_RANK_KEYS
         g = keys[rank]
         xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
