@@ -37,7 +37,8 @@ ENV LIBCUDF_KERNEL_CACHE_PATH="/home/coder/cudf/cpp/build/${PYTHON_PACKAGE_MANAG
 ###
 # sccache configuration
 ###
-ENV AWS_ROLE_ARN="arn:aws:iam::279114543810:role/nv-gha-token-sccache-devs"
+ENV AWS_IDP_URL="https://token.rapids.nvidia.com"
+ENV AWS_ROLE_ARN="arn:aws:iam::279114543810:role/rapids-token-sccache-devs"
 ENV SCCACHE_REGION="us-east-2"
 ENV SCCACHE_BUCKET="rapids-sccache-devs"
 ENV SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true

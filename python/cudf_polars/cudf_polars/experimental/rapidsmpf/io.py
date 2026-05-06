@@ -185,7 +185,7 @@ async def dataframescan_node(
     distributed_scan
         If ``True``, the DataFrame is treated as a shared object and divided
         across workers so each rank reads a disjoint subset. This is normally
-        used in ``Cluster.DISTRIBUTED`` mode.
+        used in ``Cluster.RAY`` and ``Cluster.DASK`` modes.
 
         If ``False``, the DataFrame is treated as rank-local and each rank
         scans its local DataFrame in full. This is normally used in
