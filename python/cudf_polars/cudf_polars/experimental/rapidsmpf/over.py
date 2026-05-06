@@ -201,9 +201,9 @@ class OriginStamps:
         return (_INT32_DTYPE, _INT64_DTYPE, _INT32_DTYPE)
 
 
-def _origin_stamps_for(input_ir: IR, ir: Over) -> OriginStamps:
+def _origin_stamps_for(ir: Over) -> OriginStamps:
     """Pick three stamp column names that do not collide with the schema."""
-    names = unique_names((*input_ir.schema.keys(), *ir.schema.keys()))
+    names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
     return OriginStamps(next(names), next(names), next(names))
 
 
@@ -401,7 +401,6 @@ async def _allgather_and_broadcast(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata_in: ChannelMetadata,
-    input_ir: IR,
     tracer: Any,
     collective_id: int,
 ) -> None:
@@ -419,7 +418,7 @@ async def _allgather_and_broadcast(
         if isinstance(c, Col)
     )
     piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
-        gw_nodes, input_ir
+        gw_nodes, ir.children[0]
     )
 
     # make_table_chunks_available_or_wait releases the original chunk,
@@ -680,7 +679,6 @@ async def _shuffle_and_reassemble(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata_in: ChannelMetadata,
-    input_ir: IR,
     tracer: Any,
     size_collective_id: int,
     forward_shuffle_collective_id: int,
@@ -701,7 +699,7 @@ async def _shuffle_and_reassemble(
     via ``replay_buffered_channel`` so the insert phase can stream rather than
     holding every input chunk in device memory at once.
     """
-    stamps = _origin_stamps_for(input_ir, ir)
+    stamps = _origin_stamps_for(ir)
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
@@ -815,7 +813,6 @@ async def over_actor(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
-        input_ir = ir.children[0]
         metadata_in = await recv_metadata(ch_in, context)
 
         partitioning = NormalizedPartitioning.from_keys(
@@ -850,7 +847,6 @@ async def over_actor(
                 ch_in,
                 ch_out,
                 metadata_in,
-                input_ir,
                 tracer,
                 collective_ids[0],
             )
@@ -863,7 +859,6 @@ async def over_actor(
                 ch_in,
                 ch_out,
                 metadata_in,
-                input_ir,
                 tracer,
                 size_collective_id=collective_ids[0],
                 forward_shuffle_collective_id=collective_ids[1],
