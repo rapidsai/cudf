@@ -660,9 +660,10 @@ class DaskEngine(StreamingEngine):
 
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
-        quent_context: cudf_polars.quent.QuentContext = executor_options[
-            "quent_context"
-        ]
+        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
+            "quent_context", cudf_polars.quent.QuentContext()
+        )
+        executor_options.setdefault("quent_context", quent_context)
         quent_context.emit_engine_init_events(self._quent_logger)
 
         owned_cluster: Any = None
