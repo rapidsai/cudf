@@ -601,29 +601,6 @@ def is_arrow_null_dtype(dtype: DtypeObj) -> bool:
     )
 
 
-def maybe_normalize_arrow_null(
-    col: plc.Column, dtype: DtypeObj
-) -> tuple[plc.Column, DtypeObj, DtypeObj | None]:
-    """Normalize ArrowDtype(pa.null()) columns for internal construction.
-
-    For pandas nullable null types (ArrowDtype wrapping pa.null()),
-    the column data is normalized and the dtype is replaced with
-    ``np.dtype("object")`` for internal dispatch. The original dtype
-    is returned as ``old_dtype`` so it can be stored on the column.
-
-    Returns
-    -------
-    tuple of (col, dtype, old_dtype)
-        ``old_dtype`` is the original dtype if normalization occurred,
-        otherwise ``None``.
-    """
-    from cudf.core.column.column import _normalize_types_column
-
-    if is_arrow_null_dtype(dtype):
-        return _normalize_types_column(col), np.dtype("object"), dtype
-    return col, dtype, None
-
-
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
