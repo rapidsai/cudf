@@ -895,6 +895,13 @@ class StreamingExecutor:
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
+
+        # Hash the quent context UUIDs as ints
+        quent_context = d["quent_context"]
+        for key in ["engine", "query_group", "query"]:
+            quent_context[key]["id"] = int(quent_context[key]["id"])
+
+        d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 

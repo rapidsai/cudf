@@ -30,7 +30,7 @@ from cudf_polars.quent._types import (
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
-    from rapidsmpf.communicator.communicator import Communicator
+    from collections.abc import Callable
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
@@ -459,6 +459,13 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
         query_init["data"]["Query"]["state"]["Init"]["query_group_id"]
         == query_group_declaration["id"]
     )
+    assert query_init["data"]["Query"]["seq"] == 0
+    assert query_planning["id"] == str(quent_context.query.id)
+    assert query_planning["data"]["Query"]["seq"] == 1
+    assert query_executing["id"] == str(quent_context.query.id)
+    assert query_executing["data"]["Query"]["seq"] == 2
+    assert query_exit["id"] == str(quent_context.query.id)
+    assert query_exit["data"]["Query"]["seq"] == 3
 
 
 @pytest.fixture
@@ -471,7 +478,9 @@ def quent_context() -> QuentContext:
 
 @pytest.fixture(params=["ray", "dask", "spmd"])
 def engine_with_quent_context(
-    request: pytest.FixtureRequest, quent_context: QuentContext, spmd_comm: Communicator
+    request: pytest.FixtureRequest,
+    quent_context: QuentContext,
+    streaming_engine_factory: Callable[..., StreamingEngine],
 ) -> StreamingEngine:
     backend = request.param
     if backend == "ray":
@@ -483,8 +492,25 @@ def engine_with_quent_context(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "spmd":
+        from rapidsmpf import bootstrap
+        from rapidsmpf.communicator.single import (
+            new_communicator as single_communicator,
+        )
+        from rapidsmpf.config import Options, get_environment_variables
+        from rapidsmpf.progress_thread import ProgressThread
+
+        if bootstrap.is_running_with_rrun():
+            comm = bootstrap.create_ucxx_comm(
+                progress_thread=ProgressThread(),
+                type=bootstrap.BackendType.AUTO,
+            )
+        else:
+            comm = single_communicator(
+                Options(get_environment_variables()), ProgressThread()
+            )
+
         return cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine(
-            executor_options={"quent_context": quent_context}, comm=spmd_comm
+            executor_options={"quent_context": quent_context}, comm=comm
         )
     else:
         raise ValueError(f"Invalid backend: {backend}")
@@ -494,6 +520,7 @@ def test_quent_events(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
     # We need to create the engine, to ensure the lifecycle events are emitted properly.
+    pytest.importorskip("structlog")
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
 
     with engine_with_quent_context:

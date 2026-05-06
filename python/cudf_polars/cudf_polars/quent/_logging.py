@@ -6,10 +6,16 @@
 from __future__ import annotations
 
 import collections
+import logging
 import threading
 from typing import TYPE_CHECKING, Any
 
-import structlog  # TODO: optional structlog.
+try:
+    import structlog
+except ImportError:
+    _HAS_STRUCTLOG = False
+else:
+    _HAS_STRUCTLOG = True
 
 if TYPE_CHECKING:
     from cudf_polars.quent._types import Event
@@ -34,20 +40,26 @@ class QuentLogger:
         self._lock = threading.Lock()
 
     def _get_logger(self, **initial_values: Any) -> Any:
-        return structlog.wrap_logger(
-            DequeLogger(self._buffer, self._lock),
-            processors=[
-                structlog.processors.add_log_level,
-                structlog.processors.TimeStamper(fmt="iso"),
-                collect_to_deque,
-            ],
-            wrapper_class=structlog.stdlib.BoundLogger,
-            **initial_values,
-        )
+        if _HAS_STRUCTLOG:
+            return structlog.wrap_logger(
+                DequeLogger(self._buffer, self._lock),
+                processors=[
+                    structlog.processors.add_log_level,
+                    structlog.processors.TimeStamper(fmt="iso"),
+                    collect_to_deque,
+                ],
+                wrapper_class=structlog.stdlib.BoundLogger,
+                **initial_values,
+            )
+        else:
+            return logging.getLogger(__name__)
 
     def emit(self, event: Event) -> None:
         logger = self._get_logger()
-        logger.info(event.to_dict(), scope=QUENT_SCOPE)
+        kwargs = {}
+        if _HAS_STRUCTLOG:
+            kwargs = {"scope": QUENT_SCOPE}
+        logger.info(event.to_dict(), **kwargs)
 
     def drain(self) -> list[dict[str, Any]]:
         with self._lock:
