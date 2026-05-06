@@ -368,6 +368,7 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
                                                 size_type const* d_name_offsets,
                                                 size_type depth,
                                                 size_type* d_sizes,
+                                                size_type* d_src_offsets,
                                                 bitmask_type* d_null_mask,
                                                 size_type num_rows)
 {
@@ -376,7 +377,8 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
   auto const row = static_cast<size_type>(tid);
 
   if (d_struct.nullable() && !d_struct.is_valid_nocheck(row)) {
-    d_sizes[row] = 0;
+    d_sizes[row]       = 0;
+    d_src_offsets[row] = 0;
     cudf::clear_bit(d_null_mask, row);
     return;
   }
@@ -393,21 +395,23 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
                                      d_name_offsets,
                                      depth);
   if (fs.length == 0) {
-    d_sizes[row] = 0;
+    d_sizes[row]       = 0;
+    d_src_offsets[row] = 0;
     cudf::clear_bit(d_null_mask, row);
     return;
   }
 
-  d_sizes[row] = fs.length;
+  d_sizes[row]       = fs.length;
+  d_src_offsets[row] = fs.offset;
 }
 
-CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device_view d_meta,
-                                               cudf::detail::lists_column_device_view d_val,
-                                               uint8_t const* d_step_kinds,
-                                               size_type const* d_step_indices,
-                                               char const* d_name_bytes,
-                                               size_type const* d_name_offsets,
-                                               size_type depth,
+// Pass 2: pure gather/copy. Source location was memoized by the sizes kernel,
+// so this kernel does no Variant parsing — it just copies `d_sizes[row]` bytes
+// from the row's value blob (offset by the cached intra-blob offset) to the
+// output buffer. The per-row size is recovered from the offsets column as
+// `d_offsets[row + 1] - d_offsets[row]`.
+CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device_view d_val,
+                                               size_type const* d_src_offsets,
                                                size_type const* d_offsets,
                                                uint8_t* d_out_bytes,
                                                bitmask_type const* d_null_mask,
@@ -419,22 +423,16 @@ CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device
 
   if (!cudf::bit_is_set(d_null_mask, row)) { return; }
 
-  auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(d_meta, d_val, row);
+  auto const dst_begin = d_offsets[row];
+  auto const len       = d_offsets[row + 1] - dst_begin;
+  if (len == 0) { return; }
 
-  auto const fs = device_locate_path(meta_ptr,
-                                     meta_len,
-                                     val_ptr,
-                                     val_len,
-                                     d_step_kinds,
-                                     d_step_indices,
-                                     d_name_bytes,
-                                     d_name_offsets,
-                                     depth);
-  if (fs.length == 0) { return; }
-
-  auto* dst = d_out_bytes + d_offsets[row];
-  for (size_type i = 0; i < fs.length; ++i) {
-    dst[i] = val_ptr[fs.offset + i];
+  auto const val_begin = d_val.offset_at(row);
+  auto const* val_ptr  = d_val.child().data<uint8_t>() + val_begin;
+  auto const* src      = val_ptr + d_src_offsets[row];
+  auto* dst            = d_out_bytes + dst_begin;
+  for (size_type i = 0; i < len; ++i) {
+    dst[i] = src[i];
   }
 }
 
@@ -631,12 +629,16 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   cudf::detail::lists_column_device_view d_meta(*d_meta_col_ptr);
   cudf::detail::lists_column_device_view d_val(*d_val_col_ptr);
 
-  // Allocate sizes array and null mask (all-valid initially)
+  // Allocate sizes array, source-offset memo, and null mask (all-valid initially).
+  // d_src_offsets caches the per-row intra-value byte offset returned by
+  // device_locate_path so the copy kernel can skip re-parsing.
   rmm::device_uvector<size_type> d_sizes(num_rows, stream);
+  rmm::device_uvector<size_type> d_src_offsets(num_rows, stream);
   auto null_mask    = cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
   auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
-  // Pass 1: compute sizes
+  // Pass 1: parse the path per row, compute output sizes, and memoize the
+  // intra-blob source offset for the copy kernel.
   auto grid = cudf::detail::grid_1d{num_rows, block_size};
   get_variant_field_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     *d_struct_ptr,
@@ -648,6 +650,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     d_name_offsets.data(),
     depth,
     d_sizes.data(),
+    d_src_offsets.data(),
     d_null_mask,
     num_rows);
 
@@ -656,21 +659,11 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
   auto const* d_offsets = offsets_column->view().data<size_type>();
 
-  // Allocate output byte buffer and run pass 2
+  // Pass 2: pure gather/copy using the memoized source offsets.
   auto d_out_bytes = rmm::device_uvector<uint8_t>(total_bytes, stream, mr);
   if (total_bytes > 0) {
     get_variant_field_copy_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      d_meta,
-      d_val,
-      d_step_kinds.data(),
-      d_step_indices.data(),
-      d_name_bytes.data(),
-      d_name_offsets.data(),
-      depth,
-      d_offsets,
-      d_out_bytes.data(),
-      d_null_mask,
-      num_rows);
+      d_val, d_src_offsets.data(), d_offsets, d_out_bytes.data(), d_null_mask, num_rows);
   }
 
   // Build the output value list<uint8> column
