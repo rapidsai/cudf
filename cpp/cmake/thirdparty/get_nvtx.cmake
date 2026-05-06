@@ -9,13 +9,15 @@
 function(find_and_configure_nvtx)
   include(${rapids-cmake-dir}/cpm/nvtx3.cmake)
 
-  # nvtx3 is private for cudf, but it is a public dependency of rmm. When rmm is absorbed into
-  # libcudf via whole-archive, rmm's public transitive deps (including nvtx3-cpp) are promoted into
-  # cudf's public interface. CMake's export validation requires that nvtx3-cpp be in an export set.
-  rapids_cpm_nvtx3(
-    BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports
-                                                     ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG}
-  )
+  # nvtx3 is part of rmm's public interface. Include it in the build export set so that
+  # configure-time target resolution works. Only include it in the install export set when rmm is
+  # NOT being absorbed — when absorbed, we bundle nvtx3 headers directly and consumers don't need
+  # find_dependency(nvtx3).
+  set(_nvtx_args BUILD_EXPORT_SET cudf-exports)
+  if(CUDF_INSTALL_LIBRARY_DEPS)
+    list(APPEND _nvtx_args INSTALL_EXPORT_SET cudf-exports)
+  endif()
+  rapids_cpm_nvtx3(${_nvtx_args} ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG})
 
   # Propagate source dir to parent scope (needed for header installation in standalone builds)
   set(nvtx3_SOURCE_DIR
