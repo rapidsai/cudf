@@ -89,6 +89,46 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto result = gb_obj.aggregate(requests);
   return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
 }
+
+template <typename CountType>
+void test_extreme_finite_first_partial()
+{
+  auto const key  = keys_col<int32_t>{1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto means      = means_col<double>{std::numeric_limits<double>::max()};
+  auto m2s        = M2s_col<double>{0.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_key, out_vals] = merge_M2({key}, {vals});
+
+  auto const expected_keys   = keys_col<int32_t>{1};
+  auto expected_counts       = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto expected_means        = means_col<double>{std::numeric_limits<double>::max()};
+  auto expected_m2s          = M2s_col<double>{0.0};
+  auto const expected_values = structs_col{expected_counts, expected_means, expected_m2s};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_key, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
+}
+
+template <typename CountType>
+void test_extreme_finite_merged_partials()
+{
+  auto const keys = keys_col<int32_t>{1, 1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}, CountType{1}};
+  auto means      = means_col<double>{std::numeric_limits<double>::max(), 0.0};
+  auto m2s        = M2s_col<double>{0.0, 0.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
+
+  auto const expected_keys   = keys_col<int32_t>{1};
+  auto expected_counts       = cudf::test::fixed_width_column_wrapper<CountType>{CountType{2}};
+  auto expected_means        = means_col<double>{std::numeric_limits<double>::max() / 2};
+  auto expected_m2s          = M2s_col<double>{std::numeric_limits<double>::infinity()};
+  auto const expected_values = structs_col{expected_counts, expected_means, expected_m2s};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
+}
 }  // namespace
 
 template <class T>
@@ -149,36 +189,24 @@ TYPED_TEST(GroupbyMergeM2TypedTest, EmptyInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(vals, *out_vals, verbosity);
 }
 
-TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteFirstPartial)
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteFirstPartialInt64Count)
 {
-  auto const key  = keys_col<int32_t>{1};
-  auto counts     = cudf::test::fixed_width_column_wrapper<int64_t>{1};
-  auto means      = means_col<double>{std::numeric_limits<double>::max()};
-  auto m2s        = M2s_col<double>{0.0};
-  auto const vals = structs_col{counts, means, m2s};
-
-  auto const [out_key, out_vals] = merge_M2({key}, {vals});
-
-  auto const expected_keys = keys_col<int32_t>{1};
-  auto const expected_m2s  = M2s_col<double>{0.0};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_key, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_m2s, out_vals->child(2), verbosity);
+  test_extreme_finite_first_partial<int64_t>();
 }
 
-TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartials)
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteFirstPartialDoubleCount)
 {
-  auto const keys = keys_col<int32_t>{1, 1};
-  auto counts     = cudf::test::fixed_width_column_wrapper<int64_t>{1, 1};
-  auto means      = means_col<double>{std::numeric_limits<double>::max(), 0.0};
-  auto m2s        = M2s_col<double>{0.0, 0.0};
-  auto const vals = structs_col{counts, means, m2s};
+  test_extreme_finite_first_partial<double>();
+}
 
-  auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartialsInt64Count)
+{
+  test_extreme_finite_merged_partials<int64_t>();
+}
 
-  auto const expected_keys = keys_col<int32_t>{1};
-  auto const expected_m2s  = M2s_col<double>{std::numeric_limits<double>::infinity()};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_m2s, out_vals->child(2), verbosity);
+TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartialsDoubleCount)
+{
+  test_extreme_finite_merged_partials<double>();
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
