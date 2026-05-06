@@ -554,6 +554,7 @@ jobs:
       build_command: |
         sccache --zero-stats;
         clone-rapidsmpf -j$(nproc) -v -q --branch "$(cat ~/cudf/RAPIDS_BRANCH)" --clone-upstream --depth 1 --single-branch --shallow-submodules;
+        if [ "$PYTHON_PACKAGE_MANAGER" = "pip" ]; then rapids-make-pip-env --force; fi;
         build-all -j0 -DBUILD_BENCHMARKS=ON -DBUILD_NUMA_SUPPORT=OFF --verbose 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
