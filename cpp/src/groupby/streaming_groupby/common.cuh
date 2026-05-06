@@ -56,10 +56,10 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
 /*
  * N-table comparator for the persistent hash set.
  *
- * Slot values < max_groups are "stored" dense IDs resolved via the companion
+ * Slot values < max_distinct_keys are "stored" dense IDs resolved via the companion
  * vector key_loc[id] = {batch_id, row_within_batch} to a (compacted_batch_table,
- * row) location.  Slot values >= max_groups are transient batch values: row index
- * = value - max_groups in the current batch table.  The transient encoding lives
+ * row) location.  Slot values >= max_distinct_keys are transient batch values: row index
+ * = value - max_distinct_keys in the current batch table.  The transient encoding lives
  * only for the duration of one probe_and_insert call; new keys are rewritten to
  * dense IDs before the next batch's insertion.
  *
@@ -71,21 +71,21 @@ struct n_table_comparator {
   RowEqT batch_self_eq;           ///< Self-comparator on the current batch table
   RowEqT const* cross_eqs;        ///< Device array [num_compacted_batches]: batch vs compacted[k]
   key_location_t const* key_loc;  ///< {batch_id, row_in_compacted} per dense ID
-  size_type max_groups;           ///< Threshold: idx >= max_groups is a transient batch value
+  size_type max_distinct_keys;           ///< Threshold: idx >= max_distinct_keys is a transient batch value
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
-    bool const lhs_is_batch = (lhs >= max_groups);
-    bool const rhs_is_batch = (rhs >= max_groups);
+    bool const lhs_is_batch = (lhs >= max_distinct_keys);
+    bool const rhs_is_batch = (rhs >= max_distinct_keys);
 
-    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_groups, rhs - max_groups); }
+    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys); }
     if (lhs_is_batch) {
       auto const loc = key_loc[rhs];
-      return cross_eqs[loc.first](lhs - max_groups, loc.second);
+      return cross_eqs[loc.first](lhs - max_distinct_keys, loc.second);
     }
     if (rhs_is_batch) {
       auto const loc = key_loc[lhs];
-      return cross_eqs[loc.first](rhs - max_groups, loc.second);
+      return cross_eqs[loc.first](rhs - max_distinct_keys, loc.second);
     }
     return lhs == rhs;
   }
@@ -108,7 +108,7 @@ template <typename SetRef>
 struct insert_and_map_fn {
   mutable SetRef set_ref;
   bitmask_type const* row_bitmask;
-  size_type max_groups;
+  size_type max_distinct_keys;
   size_type const* base;
   bool* inserted_flags;
   size_type* slot_offsets;
@@ -120,7 +120,7 @@ struct insert_and_map_fn {
       slot_offsets[batch_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
-    auto const [iter, inserted] = set_ref.insert_and_find(max_groups + batch_idx);
+    auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + batch_idx);
     inserted_flags[batch_idx]   = inserted;
     slot_offsets[batch_idx]     = static_cast<size_type>(iter - base);
     return *iter;
@@ -148,8 +148,8 @@ struct conditional_hash_fn {
 
 /*
  * Hasher backed by a precomputed cache, indexed by `idx - offset`.
- * In streaming_groupby `offset = max_groups`, so transient batch values
- * `max_groups + batch_idx` resolve to `cache[batch_idx]`.  Caching is faster
+ * In streaming_groupby `offset = max_distinct_keys`, so transient batch values
+ * `max_distinct_keys + batch_idx` resolve to `cache[batch_idx]`.  Caching is faster
  * than inlining the row_hasher inside cuco's probe at high cardinality
  * (measured: ~10% throughput drop without the cache) — the row_hasher's
  * dispatch + nullable check inflates the cuco insert kernel.
@@ -172,16 +172,16 @@ struct offset_cache_hasher {
  */
 struct finalize_new_key_fn {
   size_type const*
-    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_count]
+    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_keys]
   size_type* base;                  ///< hash set storage base
   size_type const* slot_offsets;    ///< slot offset per batch row [batch_size]
   key_location_t* key_loc;          ///< {batch_id, row_in_compacted} per dense ID
   size_type batch_id;               ///< the index of this batch in _compacted_batches
-  size_type distinct_count_before;  ///< _distinct_count prior to this batch
+  size_type distinct_keys_before;  ///< _distinct_keys prior to this batch
 
   __device__ void operator()(size_type r) const
   {
-    auto const dense_id    = distinct_count_before + r;
+    auto const dense_id    = distinct_keys_before + r;
     auto const batch_local = batch_local_indices[r];
 
     cuda::atomic_ref<size_type, cuda::thread_scope_device>{*(base + slot_offsets[batch_local])}
@@ -241,16 +241,16 @@ auto build_cross_comparators(
 struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
   std::vector<streaming_aggregation_request> _requests_clone;
-  size_type _max_groups;
+  size_type _max_distinct_keys;
   null_policy _null_handling;
 
   bool _initialized{false};
   /*
    * Number of distinct keys accumulated so far.  Also serves as the high-water
    * mark of dense IDs in the persistent hash set: stored slot values are in
-   * [0, _distinct_count).
+   * [0, _distinct_keys).
    */
-  size_type _distinct_count{0};
+  size_type _distinct_keys{0};
   bool _has_nullable_keys{false};
   bool _has_nested_keys{false};
 
@@ -259,7 +259,7 @@ struct streaming_groupby::impl {
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
     _preprocessed_batches;
 
-  /// Companion vector indexed by dense ID, sized to max_groups.
+  /// Companion vector indexed by dense ID, sized to max_distinct_keys.
   /// Each entry is {batch_id, row_in_compacted_batch}.
   std::unique_ptr<rmm::device_uvector<key_location_t>> _key_loc;
 
@@ -270,7 +270,7 @@ struct streaming_groupby::impl {
   bool _has_compound_aggs{false};
 
   /*
-   * Aggregation results table, pre-allocated to max_groups rows.
+   * Aggregation results table, pre-allocated to max_distinct_keys rows.
    * Indexed by dense ID (== row index).
    */
   std::unique_ptr<table> _agg_results;
@@ -290,11 +290,11 @@ struct streaming_groupby::impl {
   std::unique_ptr<streaming_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
-  [[nodiscard]] bool has_state() const { return _initialized && _distinct_count > 0; }
+  [[nodiscard]] bool has_state() const { return _initialized && _distinct_keys > 0; }
 
   impl(host_span<size_type const> key_indices,
        host_span<streaming_aggregation_request const> requests,
-       size_type max_groups,
+       size_type max_distinct_keys,
        null_policy null_handling);
 
   void initialize(table_view const& data, rmm::cuda_stream_view stream);

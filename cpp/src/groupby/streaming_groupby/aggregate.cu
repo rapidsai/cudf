@@ -25,11 +25,11 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_str
   auto const batch_size = data.num_rows();
   if (batch_size == 0) { return; }
 
-  // Transient encoding `max_groups + batch_idx` must fit alongside dense IDs
-  // in [0, max_groups), so a single batch can't exceed max_groups rows.
-  CUDF_EXPECTS(batch_size <= _max_groups,
-               "Batch size (" + std::to_string(batch_size) + ") exceeds max_groups (" +
-                 std::to_string(_max_groups) + ").",
+  // Transient encoding `max_distinct_keys + batch_idx` must fit alongside dense IDs
+  // in [0, max_distinct_keys), so a single batch can't exceed max_distinct_keys rows.
+  CUDF_EXPECTS(batch_size <= _max_distinct_keys,
+               "Batch size (" + std::to_string(batch_size) + ") exceeds max_distinct_keys (" +
+                 std::to_string(_max_distinct_keys) + ").",
                std::invalid_argument);
 
   if (!_initialized) { initialize(data, stream); }

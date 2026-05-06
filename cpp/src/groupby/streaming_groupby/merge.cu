@@ -94,9 +94,9 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
   CUDF_EXPECTS(_initialized,
                "Cannot merge into an uninitialized streaming_groupby. "
                "Call aggregate() at least once before merge().");
-  CUDF_EXPECTS(other._distinct_count <= _max_groups,
-               "Merge source distinct count (" + std::to_string(other._distinct_count) +
-                 ") exceeds max_groups (" + std::to_string(_max_groups) + ").",
+  CUDF_EXPECTS(other._distinct_keys <= _max_distinct_keys,
+               "Merge source distinct keys (" + std::to_string(other._distinct_keys) +
+                 ") exceeds max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").",
                std::invalid_argument);
   CUDF_EXPECTS(other._agg_kinds == _agg_kinds,
                "Cannot merge streaming_groupby objects with different aggregation schemas.",
@@ -112,8 +112,8 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
 
   auto other_keys             = other.gather_distinct_keys(stream, mr);
   auto const other_key_view   = other_keys->view();
-  auto const num_other_groups = other._distinct_count;
-  if (num_other_groups == 0) { return; }
+  auto const other_distinct_keys = other._distinct_keys;
+  if (other_distinct_keys == 0) { return; }
 
   update_nullable_state(other_key_view);
 
@@ -124,14 +124,14 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
   // Merge aggregation values using dense target indices.  We only read from
   // `other._agg_results`; no need to deep-copy the source rows like keys.
   auto const other_aggs_view =
-    cudf::detail::slice(other._agg_results->view(), {0, num_other_groups}, stream).front();
+    cudf::detail::slice(other._agg_results->view(), {0, other_distinct_keys}, stream).front();
   auto const d_source = table_device_view::create(other_aggs_view, stream);
 
   auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream, mr),
     cuda::counting_iterator<int64_t>(0),
-    static_cast<int64_t>(num_other_groups) * num_agg_cols,
+    static_cast<int64_t>(other_distinct_keys) * num_agg_cols,
     merge_single_pass_aggs_fn{
       result.target_indices.begin(), _d_agg_kinds.data(), *d_source, *_d_agg_results});
 }

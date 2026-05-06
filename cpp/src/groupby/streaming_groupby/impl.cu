@@ -68,18 +68,18 @@ std::vector<aggregation_request> build_aggregation_requests(
 
 streaming_groupby::impl::impl(host_span<size_type const> key_indices,
                               host_span<streaming_aggregation_request const> requests,
-                              size_type max_groups,
+                              size_type max_distinct_keys,
                               null_policy null_handling)
-  : _max_groups{max_groups},
+  : _max_distinct_keys{max_distinct_keys},
     _null_handling{null_handling},
     _d_agg_kinds{0, rmm::cuda_stream_default, cudf::get_current_device_resource_ref()}
 {
-  CUDF_EXPECTS(max_groups > 0, "max_groups must be positive.", std::invalid_argument);
-  // Slot values use [0, max_groups) for stored dense IDs and [max_groups, 2*max_groups)
-  // for transient batch encoding within a single insert; the upper bound 2*max_groups
+  CUDF_EXPECTS(max_distinct_keys > 0, "max_distinct_keys must be positive.", std::invalid_argument);
+  // Slot values use [0, max_distinct_keys) for stored dense IDs and [max_distinct_keys, 2*max_distinct_keys)
+  // for transient batch encoding within a single insert; the upper bound 2*max_distinct_keys
   // must fit in size_type.
-  CUDF_EXPECTS(static_cast<int64_t>(max_groups) * 2 <= std::numeric_limits<size_type>::max(),
-               "max_groups is too large: transient encoding overflows size_type.",
+  CUDF_EXPECTS(static_cast<int64_t>(max_distinct_keys) * 2 <= std::numeric_limits<size_type>::max(),
+               "max_distinct_keys is too large: transient encoding overflows size_type.",
                std::invalid_argument);
   if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
   validate_requests(requests);
@@ -127,7 +127,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   }
 
   _agg_results = detail::hash::create_results_table(
-    _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
+    _max_distinct_keys, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
 
   // Cache the mutable_table_device_view once; the underlying table is fixed-size and
   // never reallocated, so the device-side descriptor stays valid for the whole
@@ -166,7 +166,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   }
 
   // Companion vector: indexed by dense ID, one {batch_id, row} entry per distinct key.
-  _key_loc = std::make_unique<rmm::device_uvector<key_location_t>>(_max_groups, stream, mr);
+  _key_loc = std::make_unique<rmm::device_uvector<key_location_t>>(_max_distinct_keys, stream, mr);
 
   _initialized = true;
 }
@@ -174,7 +174,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
 void streaming_groupby::impl::create_key_set(rmm::cuda_stream_view stream)
 {
   _key_set = std::make_unique<streaming_set_t>(
-    cuco::extent<int64_t>{static_cast<int64_t>(_max_groups)},
+    cuco::extent<int64_t>{static_cast<int64_t>(_max_distinct_keys)},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     cuda::std::equal_to<size_type>{},
@@ -200,10 +200,10 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
   // Dense IDs are already row indices into _agg_results, so the meaningful
-  // result rows are exactly [0, _distinct_count).  A slice + table copy
+  // result rows are exactly [0, _distinct_keys).  A slice + table copy
   // replaces what used to be a gather-by-identity-indices kernel.
   auto const sliced =
-    cudf::detail::slice(_agg_results->view(), {0, _distinct_count}, stream).front();
+    cudf::detail::slice(_agg_results->view(), {0, _distinct_keys}, stream).front();
   return std::make_unique<table>(sliced, stream, mr);
 }
 
@@ -285,9 +285,9 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 // Constructor, destructor, and move ops require full impl definition.
 streaming_groupby::streaming_groupby(host_span<size_type const> key_indices,
                                      host_span<streaming_aggregation_request const> requests,
-                                     size_type max_groups,
+                                     size_type max_distinct_keys,
                                      null_policy null_handling)
-  : _impl{std::make_unique<impl>(key_indices, requests, max_groups, null_handling)}
+  : _impl{std::make_unique<impl>(key_indices, requests, max_distinct_keys, null_handling)}
 {
 }
 
@@ -315,6 +315,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_gro
   return _impl->do_finalize(stream, mr);
 }
 
-size_type streaming_groupby::distinct_count() const noexcept { return _impl->_distinct_count; }
+size_type streaming_groupby::distinct_keys() const noexcept { return _impl->_distinct_keys; }
 
 }  // namespace cudf::groupby

@@ -445,18 +445,18 @@ struct streaming_aggregation_request {
  * and in-place aggregation updates against the persistent state. Partial states
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
- * The `max_groups` parameter sets the upper bound on the number of distinct key
+ * The `max_distinct_keys` parameter sets the upper bound on the number of distinct key
  * combinations across the lifetime of this object.  Total memory has two parts:
  *
- *   - **Pre-allocated baseline, O(max_groups):** the hash set, the companion
+ *   - **Pre-allocated baseline, O(max_distinct_keys):** the hash set, the companion
  *     `(batch_id, row)` vector, and the aggregation results table are all sized
- *     to `max_groups` at the first `aggregate()` call regardless of the actual
+ *     to `max_distinct_keys` at the first `aggregate()` call regardless of the actual
  *     distinct-key count.  This is the memory cost the user opts into via
- *     `max_groups` and stays constant for the lifetime of the object.
+ *     `max_distinct_keys` and stays constant for the lifetime of the object.
  *   - **Incremental key data, O(distinct_keys × key_size):** the actual key
  *     payload is stored only for keys that have been seen.  Newly discovered
  *     keys append to per-batch compacted tables, so this part grows in step with
- *     `distinct_count()` rather than with `max_groups`.
+ *     `distinct_keys()` rather than with `max_distinct_keys`.
  *
  * Cumulative input rows are not bounded — only cumulative distinct keys.
  * All column types (including variable-width types such as strings, lists, and structs)
@@ -467,8 +467,8 @@ struct streaming_aggregation_request {
  *   MEAN, M2, VARIANCE, STD
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
- * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
- * @throws cudf::logic_error if cumulative distinct keys exceed `max_groups`
+ * @throws std::invalid_argument if a single batch exceeds `max_distinct_keys` rows
+ * @throws cudf::logic_error if cumulative distinct keys exceed `max_distinct_keys`
  */
 class streaming_groupby {
  public:
@@ -491,17 +491,17 @@ class streaming_groupby {
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
-   * @param max_groups Upper bound on distinct key combinations. The hash set,
+   * @param max_distinct_keys Upper bound on distinct key combinations. The hash set,
    *        companion vectors, and aggregation results table are all sized to this
    *        capacity. Cumulative input rows are not bounded.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
    *
-   * @throws std::invalid_argument if `max_groups <= 0`
+   * @throws std::invalid_argument if `max_distinct_keys <= 0`
    * @throws std::invalid_argument if any requested aggregation kind is unsupported
    */
   explicit streaming_groupby(host_span<size_type const> key_indices,
                              host_span<streaming_aggregation_request const> requests,
-                             size_type max_groups,
+                             size_type max_distinct_keys,
                              null_policy null_handling = null_policy::EXCLUDE);
 
   /**
@@ -514,8 +514,8 @@ class streaming_groupby {
    * @param data Table containing both key and value columns
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if `data.num_rows()` exceeds `max_groups`
-   * @throws cudf::logic_error if cumulative distinct keys exceed `max_groups`
+   * @throws std::invalid_argument if `data.num_rows()` exceeds `max_distinct_keys`
+   * @throws cudf::logic_error if cumulative distinct keys exceed `max_distinct_keys`
    */
   void aggregate(table_view const& data, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -530,9 +530,9 @@ class streaming_groupby {
    * @param other The streaming_groupby whose partial state to merge
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
+   * @throws std::invalid_argument if the other object has more distinct keys than `max_distinct_keys`
    * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
-   * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
+   * @throws cudf::logic_error if distinct keys exceed `max_distinct_keys` after merge
    */
   void merge(streaming_groupby const& other,
              rmm::cuda_stream_view stream = cudf::get_default_stream());
@@ -563,7 +563,7 @@ class streaming_groupby {
    *
    * @return The current count of distinct keys in the persistent hash table
    */
-  [[nodiscard]] size_type distinct_count() const noexcept;
+  [[nodiscard]] size_type distinct_keys() const noexcept;
 
  private:
   struct impl;
