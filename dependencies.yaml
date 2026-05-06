@@ -147,13 +147,6 @@ files:
       - develop
       - iwyu
       - py_version
-  stream_tests:
-    output: none
-    includes:
-      - build_all
-      - build_base
-      - cuda
-      - cuda_version
   docs:
     output: none
     includes:
@@ -657,6 +650,7 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
