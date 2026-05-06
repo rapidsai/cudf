@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 
 import cudf
@@ -69,6 +68,25 @@ class _Resampler(GroupBy):
                 allow_non_unique=True,
             )
         )
+
+    def size(self):
+        # GroupBy.size bypasses _Resampler.agg and so doesn't pick up the
+        # bin-label freq. Re-align to the full set of bins (filling empty
+        # buckets with 0, since size is non-null in pandas) and re-attach
+        # the freq.
+        result = super().size()
+        if len(self.grouping.bin_labels) != len(result):
+            index = cudf.Index(
+                self.grouping.bin_labels, name=self.grouping.names[0]
+            )
+            result = (
+                result._align_to_index(
+                    index, how="right", sort=False, allow_non_unique=True
+                )
+                .fillna(0)
+                .astype(result.dtype)
+            )
+        return self._restore_freq(result.sort_index())
 
     def _scan_fill(
         self, method: plc.replace.ReplacePolicy, limit: int | None
@@ -260,26 +278,12 @@ class _ResampleGrouping(_Grouping):
             freq=freq,
         )
 
-        # We want the (resampled) column of timestamps in the result
-        # to have a resolution closest to the resampling
-        # frequency. For example, if resampling from '1T' to '1s', we
-        # want the resulting timestamp column to by of dtype
-        # 'datetime64[s]'.  libcudf requires the bin labels and key
-        # column to have the same dtype, so we compute a `result_type`
+        # Pandas resample preserves the input column's resolution, so the
+        # resulting timestamp column should match `key_column.dtype` rather
+        # than be derived from the offset. libcudf requires the bin labels
+        # and key column to share a dtype, so we compute a `result_type`
         # and cast them both to that type.
-        if offset.rule_code.lower() in {"d", "h"}:
-            # unsupported resolution (we don't support resolutions >s)
-            result_type = np.dtype("datetime64[s]")
-        else:
-            try:
-                result_type = np.dtype(f"datetime64[{offset.rule_code}]")
-                # TODO: Ideally, we can avoid one cast by having `date_range`
-                # generate timestamps of a given dtype.  Currently, it can
-                # only generate timestamps with 'ns' precision
-            except TypeError:
-                # unsupported resolution (we don't support resolutions >s)
-                # fall back to using datetime64[s]
-                result_type = np.dtype("datetime64[s]")
+        result_type = key_column.dtype
         cast_key_column = key_column.astype(result_type)
         cast_bin_labels = bin_labels.astype(result_type)
 
