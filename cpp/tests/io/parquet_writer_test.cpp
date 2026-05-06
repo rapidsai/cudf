@@ -1187,14 +1187,16 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
   // Checks
   {
     // Check min and max bit widths
-    auto const [min_bits, max_bits] = std::ranges::minmax_element(page_dict_bits);
-    auto const chunk_wide_max_bits  = std::bit_width<uint32_t>(cardinality - 1);
-    auto const frequent_max_bits    = std::bit_width<uint32_t>(frequent_set_size - 1);
-    ASSERT_NE(min_bits, page_dict_bits.end());
-    ASSERT_NE(max_bits, page_dict_bits.end());
-    EXPECT_GT(*min_bits, 1);
-    EXPECT_GT(*max_bits, frequent_max_bits);
-    EXPECT_LE(*max_bits, chunk_wide_max_bits);
+    auto const [min_bits_iter, max_bits_iter] = std::ranges::minmax_element(page_dict_bits);
+    auto const chunk_wide_max_bits            = std::bit_width<uint32_t>(cardinality - 1);
+    auto const frequent_max_bits              = std::bit_width<uint32_t>(frequent_set_size - 1);
+
+    ASSERT_NE(min_bits_iter, page_dict_bits.end());
+    EXPECT_GT(*min_bits_iter, 1);
+
+    ASSERT_NE(max_bits_iter, page_dict_bits.end());
+    EXPECT_GT(*max_bits_iter, frequent_max_bits);
+    EXPECT_LE(*max_bits_iter, chunk_wide_max_bits);
 
     // Check expected number of freq and rare pages
     auto const total_page_count = static_cast<int>(page_dict_bits.size());
