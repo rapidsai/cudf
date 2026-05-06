@@ -479,8 +479,7 @@ async def _allgather_and_broadcast(
             context, global_agg, agg_select_ir, ir_context=ir_context
         )
 
-    final_agg_ir = agg_select_ir if agg_select_ir is not None else reduction_ir
-    global_agg_df = chunk_to_frame(global_agg, final_agg_ir)
+    global_agg_df = chunk_to_frame(global_agg, agg_select_ir or reduction_ir)
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
