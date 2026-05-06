@@ -37,9 +37,9 @@ using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
 struct parquet_stats_caster_test : cudf::io::parquet::detail::stats_caster_base {
   template <typename T>
-  static T convert_byte_array(std::vector<uint8_t> const& bytes,
-                              cudf::io::parquet::Type type =
-                                cudf::io::parquet::Type::FIXED_LEN_BYTE_ARRAY)
+  static T convert_byte_array(
+    std::vector<uint8_t> const& bytes,
+    cudf::io::parquet::Type type = cudf::io::parquet::Type::FIXED_LEN_BYTE_ARRAY)
   {
     return convert<T>(bytes.data(), bytes.size(), type);
   }
@@ -50,8 +50,7 @@ TEST_F(ParquetReaderTest, DecimalStatsFilterVariableWidthByteArrayStats)
   EXPECT_EQ(parquet_stats_caster_test::convert_byte_array<int32_t>({0x64}), 100);
   EXPECT_EQ(parquet_stats_caster_test::convert_byte_array<int32_t>({0x00, 0xc8}), 200);
   EXPECT_EQ(parquet_stats_caster_test::convert_byte_array<int32_t>({0xfe, 0x0c}), -500);
-  EXPECT_EQ(
-    parquet_stats_caster_test::convert_byte_array<int32_t>({0xff, 0xff, 0xfe, 0x0c}), -500);
+  EXPECT_EQ(parquet_stats_caster_test::convert_byte_array<int32_t>({0xff, 0xff, 0xfe, 0x0c}), -500);
   EXPECT_EQ(parquet_stats_caster_test::convert_byte_array<int64_t>({0xfd, 0x44}), -700);
 
   auto const decoded128 =
