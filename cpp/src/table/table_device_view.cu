@@ -27,8 +27,8 @@ void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
-  HostTableView source_view, rmm::cuda_stream_view stream)
-  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}
+  HostTableView source_view, ColumnDeviceView* columns)
+  : _columns{columns}, _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}
 {
 }
 
@@ -82,8 +82,8 @@ template std::pair<std::unique_ptr<rmm::device_buffer>, column_device_view*>
 create_column_device_views<column_device_view, host_span<column_view const>>(
   host_span<column_view const> source_view, rmm::cuda_stream_view stream);
 
-table_device_view::table_device_view(table_view source_view, rmm::cuda_stream_view stream)
-  : detail::table_device_view_base<column_device_view, table_view>(source_view, stream)
+table_device_view::table_device_view(table_view source_view, column_device_view* columns)
+  : detail::table_device_view_base<column_device_view, table_view>(source_view, columns)
 {
 }
 
@@ -97,15 +97,14 @@ table_device_view::create(table_view source_view, rmm::cuda_stream_view stream)
     delete ds;
   };
   std::unique_ptr<table_device_view, decltype(deleter)> result{
-    new table_device_view(source_view, stream), deleter};
-  result->_columns = columns;
+    new table_device_view(source_view, columns), deleter};
   return result;
 }
 
 mutable_table_device_view::mutable_table_device_view(mutable_table_view source_view,
-                                                     rmm::cuda_stream_view stream)
+                                                     mutable_column_device_view* columns)
   : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
-                                                                                   stream)
+                                                                                   columns)
 {
 }
 
@@ -119,8 +118,7 @@ mutable_table_device_view::create(mutable_table_view source_view, rmm::cuda_stre
     delete ds;
   };
   std::unique_ptr<mutable_table_device_view, decltype(deleter)> result{
-    new mutable_table_device_view(source_view, stream), deleter};
-  result->_columns = columns;
+    new mutable_table_device_view(source_view, columns), deleter};
   return result;
 }
 

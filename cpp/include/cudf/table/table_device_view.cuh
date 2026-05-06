@@ -125,19 +125,19 @@ class table_device_view_base {
   void destroy();
 
  private:
+  ColumnDeviceView* _columns{};  ///< Array of view objects in device memory
   size_type _num_rows{};
   size_type _num_columns{};
 
  protected:
   /**
-   * @brief Construct a new table device view base object from host table_view
+   * @brief Constructor for subclasses to create a table device view from a host table view
    *
    * @param source_view The host table_view to create table device view from
-   * @param stream The CUDA stream to use for device memory allocation
+   * @param columns Pointer to the array of column device views in device memory corresponding to
+   * the columns of `source_view`
    */
-  table_device_view_base(HostTableView source_view, rmm::cuda_stream_view stream);
-
-  ColumnDeviceView* _columns{};  ///< Array of view objects in device memory
+  table_device_view_base(HostTableView source_view, ColumnDeviceView* columns);
 };
 }  // namespace detail
 
@@ -164,7 +164,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
     table_view source_view, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
  private:
-  table_device_view(table_view source_view, rmm::cuda_stream_view stream);
+  table_device_view(table_view source_view, column_device_view* columns);
 };
 
 /**
@@ -193,7 +193,7 @@ class mutable_table_device_view
   create(mutable_table_view source_view, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
  private:
-  mutable_table_device_view(mutable_table_view source_view, rmm::cuda_stream_view stream);
+  mutable_table_device_view(mutable_table_view source_view, mutable_column_device_view* columns);
 };
 
 /**
