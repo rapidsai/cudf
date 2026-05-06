@@ -661,15 +661,19 @@ class SPMDEngine(StreamingEngine):
         # Order matters: ``super().shutdown()`` closes ``self._exit_stack``,
         # which invokes ``self._cleanup_ctx``. That requires ``self._ctx`` to
         # still be set so the rapidsmpf Context can be shut down correctly.
+        # But, super().shutdown() clears self.config, so we need to emit the
+        # quent traces before that.
         # Clear the references only after shutdown completes.
-        super().shutdown()
-        self._comm = None
-        self._ctx = None
+
         self._quent_logger.emit(self._quent_worker.exit())
         self.config["executor_options"]["quent_context"].emit_engine_exit_events(
             self._quent_logger
         )
 
+        super().shutdown()
+
+        self._comm = None
+        self._ctx = None
         # TODO: Figure out multi-rank handling.
         self._quent_events_raw.extend(self._quent_logger.drain())
         self._quent_events_raw.sort(key=lambda x: x["timestamp"])

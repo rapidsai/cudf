@@ -44,7 +44,7 @@ class QuentContext:
     query: Query = dataclasses.field(default_factory=Query)
 
     _query_group_cache: set[uuid.UUID] = dataclasses.field(
-        default_factory=set, init=False
+        default_factory=set, init=False, repr=False, compare=False
     )
 
     def emit_engine_init_events(self, logger: QuentLogger) -> None:
