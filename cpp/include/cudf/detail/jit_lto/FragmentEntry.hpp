@@ -4,15 +4,15 @@
  */
 #pragma once
 
+#include <cudf/detail/jit_lto/nvjitlink_checker.hpp>
+
+#include <nvJitLink.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <typeinfo>
 #include <vector>
-
-#include <nvJitLink.h>
-
-#include <cudf/detail/jit_lto/nvjitlink_checker.hpp>
 
 namespace cudf::detail::jit_lto {
 
@@ -45,23 +45,6 @@ struct StaticFatbinFragmentEntry final : FatbinFragmentEntry {
 
   static const uint8_t* const data;
   static const size_t length;
-};
-
-struct UDFFatbinFragment final : FatbinFragmentEntry {
-  UDFFatbinFragment(std::string key, std::vector<uint8_t> bytes)
-    : key_(std::move(key)), bytes_(std::move(bytes))
-  {
-  }
-
-  const uint8_t* get_data() const override { return bytes_.data(); }
-
-  size_t get_length() const override { return bytes_.size(); }
-
-  const char* get_key() const override { return key_.c_str(); }
-
- private:
-  std::string key_;
-  std::vector<uint8_t> bytes_;
 };
 
 }  // namespace cudf::detail::jit_lto
