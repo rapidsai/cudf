@@ -3021,9 +3021,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         def _to_bool_col(col):
             from cudf.core.column import ColumnBase
 
-            if isinstance(col.dtype, pd.StringDtype) or is_dtype_obj_string(
-                col.dtype
-            ):
+            if is_dtype_obj_string(col.dtype):
                 counts_plc = plc.strings.attributes.count_characters(
                     col.plc_column
                 )
