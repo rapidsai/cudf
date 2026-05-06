@@ -1143,6 +1143,10 @@ class _MethodProxy(_FunctionProxy):
         return self._fsproxy_slow.__doc__
 
     @property
+    def __func__(self):
+        return self._fsproxy_slow.__func__
+
+    @property
     def __name__(self):
         return self._fsproxy_slow.__name__
 
