@@ -822,7 +822,7 @@ async def over_actor(
             metadata_in.partitioning,
             comm.nranks,
             indices=ir.key_indices,
-            allow_subset=False,
+            allow_subset=True,
         )
         if partitioning:
             metadata_out = ChannelMetadata(
