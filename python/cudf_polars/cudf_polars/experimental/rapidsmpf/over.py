@@ -180,10 +180,6 @@ class OriginStamps:
     chunks — *not* the upstream message ``sequence_number``, which is not
     guaranteed unique (e.g., when the input is the output of a shuffle whose
     partition IDs collide across chunks).
-
-    All three stamps share :attr:`dtype` (``INT32``): chunk_index is bounded
-    by chunks-per-rank, position by cudf's per-table row limit, and rank by
-    ``comm.nranks`` — none come close to overflowing INT32.
     """
 
     chunk_index: str
