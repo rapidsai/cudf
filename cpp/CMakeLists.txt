@@ -1407,7 +1407,8 @@ if(NOT CUDF_INSTALL_LIBRARY_DEPS)
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
   endif()
-  # nvtx3 uses SOURCE_SUBDIR c, so headers are at ${nvtx3_SOURCE_DIR}/include/nvtx3/
+  # nvtx3 headers: nvtx3_SOURCE_DIR resolves to the cache variable set by FetchContent, which
+  # includes the SOURCE_SUBDIR (c/), so the headers are at ${nvtx3_SOURCE_DIR}/include/nvtx3/.
   if(nvtx3_SOURCE_DIR)
     install(DIRECTORY ${nvtx3_SOURCE_DIR}/include/nvtx3 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
   endif()

@@ -18,13 +18,6 @@ function(find_and_configure_nvtx)
     list(APPEND _nvtx_args INSTALL_EXPORT_SET cudf-exports)
   endif()
   rapids_cpm_nvtx3(${_nvtx_args} ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG})
-
-  # Propagate source dir to parent scope (needed for header installation in standalone builds)
-  set(nvtx3_SOURCE_DIR
-      "${nvtx3_SOURCE_DIR}"
-      PARENT_SCOPE
-  )
-
 endfunction()
 
 find_and_configure_nvtx()
