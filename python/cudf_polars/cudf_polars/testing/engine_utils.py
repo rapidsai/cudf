@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from rapidsmpf.communicator.communicator import Communicator
+    from collections.abc import Mapping
 
     import polars as pl
 
@@ -112,39 +112,49 @@ def create_streaming_options(
 
 def build_streaming_engine(
     param: EngineFixtureParam,
-    spmd_comm: Communicator,
+    engines: Mapping[str, StreamingEngine],
     options: StreamingOptions | None = None,
 ) -> StreamingEngine:
     """
-    Build a :class:`StreamingEngine` from an engine fixture parameter.
+    Return ``engines``'s entry for ``param``, ``_reset``-ed.
+
+    ``engines`` must already contain a slot for ``param.engine_name`` —
+    seeded by the ``streaming_engines`` session-scoped fixture. The
+    fixture owns mutation; this function only reads and ``_reset``-s.
 
     Parameters
     ----------
     param
         Decoded engine fixture parameter describing the backend and block size mode.
-    spmd_comm
-        Communicator used when constructing an :class:`SPMDEngine`.
+    engines
+        Streaming-engine collection keyed by backend name. Provided by
+        the ``streaming_engines`` test fixture.
     options
         Optional streaming options to merge on top of the baseline selected by
         ``param.blocksize_mode``.
 
     Returns
     -------
-    A streaming engine matching ``param``.
-    """
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    The shared :class:`StreamingEngine`, ``_reset`` to the requested options.
 
+    Raises
+    ------
+    RuntimeError
+        If ``engines`` has no slot for ``param.engine_name``.
+    """
     streaming_options = create_streaming_options(param.blocksize_mode, options)
-    match param.engine_name:
-        case "spmd":
-            return SPMDEngine(
-                comm=spmd_comm,
-                rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
-                executor_options=streaming_options.to_executor_options(),
-                engine_options=streaming_options.to_engine_options(),
-            )
-        case _:  # pragma: no cover
-            raise AssertionError(f"Unknown streaming backend: {param.engine_name!r}")
+    engine = engines.get(param.engine_name)
+    if engine is None:  # pragma: no cover
+        raise RuntimeError(
+            f"No streaming engine for {param.engine_name!r}. The corresponding "
+            "session-scoped fixture must populate the collection before tests run."
+        )
+    engine._reset(
+        rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
+        executor_options=streaming_options.to_executor_options(),
+        engine_options=streaming_options.to_engine_options(),
+    )
+    return engine
 
 
 def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["medium", "small"]:
