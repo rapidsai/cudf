@@ -1,0 +1,28 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// Strong explicit specialization with a no-op body for `T` not used by any column in the table.
+// nvJitLink does not coalesce weak + strong device symbols, so unused types use this fatbin
+// instead of `fragment_tag_murmur_hasher` (real hasher).
+
+#include <cudf/column/column_device_view.cuh>
+
+#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
+
+namespace cudf::hashing::detail {
+
+template <>
+__device__ hash_value_type murmur_jit_hasher<@storage_cpp@>(column_device_view col,
+                                                            uint32_t seed,
+                                                            bool nullable,
+                                                            size_type row_index)
+{
+  (void)col;
+  (void)seed;
+  (void)nullable;
+  (void)row_index;
+  return hash_value_type{0};
+}
+
+}  // namespace cudf::hashing::detail

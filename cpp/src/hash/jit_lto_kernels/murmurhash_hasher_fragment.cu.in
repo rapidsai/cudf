@@ -1,0 +1,27 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// Strong explicit specialization of `murmur_jit_hasher<T>` (real hasher); linked when logical
+// type T appears in the input table. Other storage types use `murmurhash_jit_hasher_noop_*`
+// (strong no-op) so nvJitLink sees exactly one definition per T.
+
+#include <cudf/column/column_device_view.cuh>
+
+// Decl only (not `jit_device.cuh`): dispatcher would use every `murmur_jit_hasher<T>` before the
+// explicit specialization below, which nvcc rejects ("must precede its first use").
+#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
+#include "murmurhash3_x86_32_lto.cuh"
+
+namespace cudf::hashing::detail {
+
+template <>
+__device__ hash_value_type murmur_jit_hasher<@storage_cpp@>(column_device_view col,
+                                                            uint32_t seed,
+                                                            bool nullable,
+                                                            size_type row_index)
+{
+  return hasher<@storage_cpp@>(col, seed, nullable, row_index);
+}
+
+}  // namespace cudf::hashing::detail

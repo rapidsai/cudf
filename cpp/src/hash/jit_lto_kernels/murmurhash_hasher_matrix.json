@@ -1,0 +1,32 @@
+{
+  "_row": [
+    {"storage_cpp": "int8_t", "abbrev": "i8"},
+    {"storage_cpp": "int16_t", "abbrev": "i16"},
+    {"storage_cpp": "int32_t", "abbrev": "i32"},
+    {"storage_cpp": "int64_t", "abbrev": "i64"},
+    {"storage_cpp": "uint8_t", "abbrev": "u8"},
+    {"storage_cpp": "uint16_t", "abbrev": "u16"},
+    {"storage_cpp": "uint32_t", "abbrev": "u32"},
+    {"storage_cpp": "uint64_t", "abbrev": "u64"},
+    {"storage_cpp": "float", "abbrev": "f32"},
+    {"storage_cpp": "double", "abbrev": "f64"},
+    {"storage_cpp": "bool", "abbrev": "b8"},
+    {"storage_cpp": "cudf::timestamp_D", "abbrev": "ts_day"},
+    {"storage_cpp": "cudf::timestamp_s", "abbrev": "ts_s"},
+    {"storage_cpp": "cudf::timestamp_ms", "abbrev": "ts_ms"},
+    {"storage_cpp": "cudf::timestamp_us", "abbrev": "ts_us"},
+    {"storage_cpp": "cudf::timestamp_ns", "abbrev": "ts_ns"},
+    {"storage_cpp": "cudf::duration_D", "abbrev": "du_day"},
+    {"storage_cpp": "cudf::duration_s", "abbrev": "du_s"},
+    {"storage_cpp": "cudf::duration_ms", "abbrev": "du_ms"},
+    {"storage_cpp": "cudf::duration_us", "abbrev": "du_us"},
+    {"storage_cpp": "cudf::duration_ns", "abbrev": "du_ns"},
+    {"storage_cpp": "cudf::dictionary32", "abbrev": "dict"},
+    {"storage_cpp": "cudf::string_view", "abbrev": "str"},
+    {"storage_cpp": "cudf::list_view", "abbrev": "list"},
+    {"storage_cpp": "numeric::decimal32", "abbrev": "dec32"},
+    {"storage_cpp": "numeric::decimal64", "abbrev": "dec64"},
+    {"storage_cpp": "numeric::decimal128", "abbrev": "dec128"},
+    {"storage_cpp": "cudf::struct_view", "abbrev": "struct"}
+  ]
+}

@@ -1,0 +1,33 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
+#include "murmurhash3_x86_32_jit_device.cuh"
+#include <cudf/table/table_device_view.cuh>
+
+extern "C" __global__ void cudf_murmurhash3_x86_32_jit_link_kernel(cudf::mutable_column_device_view output,
+                                                                   uint32_t seed,
+                                                                   cudf::table_device_view input,
+                                                                   bool nullable)
+{
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= input.num_rows()) { return; }
+
+  auto const num_cols = input.num_columns();
+  if (num_cols == 0) {
+    output.element<cudf::hash_value_type>(idx) = seed;
+    return;
+  }
+
+  cudf::hash_value_type hash_value =
+    cudf::hashing::detail::murmur_jit_hash_dispatcher(input.column(0), seed, nullable, idx);
+  for (cudf::size_type i = 1; i < num_cols; ++i) {
+    hash_value = cudf::hashing::detail::hash_combine(
+      hash_value,
+      cudf::hashing::detail::murmur_jit_hash_dispatcher(input.column(i), seed, nullable, idx));
+  }
+  output.element<cudf::hash_value_type>(idx) = hash_value;
+}

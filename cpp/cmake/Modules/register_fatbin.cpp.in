@@ -1,0 +1,22 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "@fatbin_header_file@"
+#include <cudf/detail/jit_lto/FragmentEntry.hpp>
+
+@fragment_tag_header_files@
+
+namespace {
+
+using fragment_tag   = @fragment_tag@;
+using fragment_entry = cudf::detail::jit_lto::StaticFatbinFragmentEntry<fragment_tag>;
+
+}  // namespace
+
+template <>
+const uint8_t* const fragment_entry::data = embedded_fatbin;
+
+template <>
+const size_t fragment_entry::length = sizeof(embedded_fatbin);

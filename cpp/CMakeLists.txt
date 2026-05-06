@@ -240,6 +240,7 @@ rapids_find_package(
   BUILD_EXPORT_SET cudf-exports
   INSTALL_EXPORT_SET cudf-exports
 )
+find_package(CUDAToolkit REQUIRED COMPONENTS nvJitLink)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
 # ##################################################################################################
@@ -327,6 +328,74 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
+
+# ##################################################################################################
+# * JIT+LTO (MurmurHash3 x86 32 device fragments + nvjitlink) --------------------------------------
+# Same CMake pattern as cuVS (`cpp/CMakeLists.txt` + `cmake/modules/generate_jit_lto_kernels.cmake`).
+include(cmake/Modules/generate_jit_lto_kernels.cmake)
+
+add_library(cudf_jit_lto_kernel_usage_requirements INTERFACE)
+target_include_directories(
+  cudf_jit_lto_kernel_usage_requirements
+  INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels"
+)
+target_compile_options(
+  cudf_jit_lto_kernel_usage_requirements
+  INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+            "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+target_compile_features(cudf_jit_lto_kernel_usage_requirements INTERFACE cuda_std_20)
+target_link_libraries(
+  cudf_jit_lto_kernel_usage_requirements INTERFACE CCCL::CCCL rmm::rmm
+                                                    $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+)
+
+# Same arch ladder as cuVS JIT fragments (single real arch for fatbin link).
+set(JIT_LTO_TARGET_ARCHITECTURE "70-real")
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
+  set(JIT_LTO_TARGET_ARCHITECTURE "75-real")
+endif()
+
+block(PROPAGATE cudf_jit_lto_generated_sources)
+set(cudf_jit_lto_generated_sources)
+set(CMAKE_CUDA_ARCHITECTURES ${JIT_LTO_TARGET_ARCHITECTURE})
+
+set(murmur_jit_ns "cudf::hashing::detail::jit_lto")
+generate_jit_lto_kernels(
+  cudf_jit_lto_generated_sources
+  NAME_FORMAT "murmurhash_jit_hasher_@abbrev@"
+  MATRIX_JSON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_hasher_matrix.json"
+  KERNEL_INPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_hasher_fragment.cu.in"
+  FRAGMENT_TAG_FORMAT
+    "${murmur_jit_ns}::fragment_tag_murmur_hasher<${murmur_jit_ns}::tag_@abbrev@>"
+  FRAGMENT_TAG_HEADER_FILES "<cudf/hashing/detail/murmurhash3_x86_32_jit_tags.hpp>"
+  OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated_jit_lto/murmurhash/hasher"
+  KERNEL_LINK_LIBRARIES cudf_jit_lto_kernel_usage_requirements
+)
+generate_jit_lto_kernels(
+  cudf_jit_lto_generated_sources
+  NAME_FORMAT "murmurhash_jit_hasher_noop_@abbrev@"
+  MATRIX_JSON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_hasher_matrix.json"
+  KERNEL_INPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_hasher_noop_fragment.cu.in"
+  FRAGMENT_TAG_FORMAT
+    "${murmur_jit_ns}::fragment_tag_murmur_hasher_noop<${murmur_jit_ns}::tag_@abbrev@>"
+  FRAGMENT_TAG_HEADER_FILES "<cudf/hashing/detail/murmurhash3_x86_32_jit_tags.hpp>"
+  OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated_jit_lto/murmurhash/hasher_noop"
+  KERNEL_LINK_LIBRARIES cudf_jit_lto_kernel_usage_requirements
+)
+generate_jit_lto_kernels(
+  cudf_jit_lto_generated_sources
+  NAME_FORMAT "murmurhash_jit_@k@"
+  MATRIX_JSON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_entry_matrix.json"
+  KERNEL_INPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_entry_kernel.cu.in"
+  FRAGMENT_TAG_FORMAT "${murmur_jit_ns}::fragment_tag_murmur_entry"
+  FRAGMENT_TAG_HEADER_FILES "<cudf/hashing/detail/murmurhash3_x86_32_jit_tags.hpp>"
+  OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated_jit_lto/murmurhash/entry"
+  KERNEL_LINK_LIBRARIES cudf_jit_lto_kernel_usage_requirements
+)
+endblock()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -460,6 +529,11 @@ add_library(
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
+  src/jit_lto/AlgorithmLauncher.cpp
+  src/jit_lto/AlgorithmPlanner.cpp
+  src/jit_lto/FragmentEntry.cpp
+  src/jit_lto/nvjitlink_checker.cpp
+  ${cudf_jit_lto_generated_sources}
   src/hash/murmurhash3_x64_128.cu
   src/hash/sha1_hash.cu
   src/hash/sha224_hash.cu
@@ -1004,7 +1078,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
+          nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink
 )
 
 # Add Conda library, and include paths if specified
