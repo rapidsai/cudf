@@ -72,7 +72,8 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
                               null_policy null_handling)
   : _max_distinct_keys{max_distinct_keys},
     _null_handling{null_handling},
-    _d_agg_kinds{0, rmm::cuda_stream_default, cudf::get_current_device_resource_ref()}
+    _d_agg_kinds{0, rmm::cuda_stream_default, cudf::get_current_device_resource_ref()},
+    _d_agg_results{nullptr, +[](mutable_table_device_view*) {}}
 {
   CUDF_EXPECTS(max_distinct_keys > 0, "max_distinct_keys must be positive.", std::invalid_argument);
   // Slot values use [0, max_distinct_keys) for stored dense IDs and [max_distinct_keys, 2*max_distinct_keys)
@@ -135,7 +136,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   {
     auto raii = mutable_table_device_view::create(*_agg_results, stream);
     _d_agg_results =
-      decltype(_d_agg_results){raii.release(), [](mutable_table_device_view* t) { t->destroy(); }};
+      decltype(_d_agg_results){raii.release(), +[](mutable_table_device_view* t) { t->destroy(); }};
   }
 
   _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
