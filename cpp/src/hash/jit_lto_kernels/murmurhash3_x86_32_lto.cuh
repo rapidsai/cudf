@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -10,9 +10,9 @@
 #include <cudf/detail/utilities/accumulate.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/hashing.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/structs/structs_column_device_view.cuh>
@@ -108,10 +108,9 @@ class element_hasher_adaptor {
     while (curr_col.type().id() == type_id::STRUCT || curr_col.type().id() == type_id::LIST) {
       if (_check_nulls) {
         auto validity_it = cudf::detail::make_validity_iterator<true>(curr_col);
-        hash               = cudf::detail::accumulate(
+        hash             = cudf::detail::accumulate(
           validity_it, validity_it + curr_col.size(), hash, [](auto h, auto is_valid) {
-            return cudf::hashing::detail::hash_combine(h,
-                                                        is_valid ? NON_NULL_HASH : NULL_HASH);
+            return cudf::hashing::detail::hash_combine(h, is_valid ? NON_NULL_HASH : NULL_HASH);
           });
       }
       if (curr_col.type().id() == type_id::STRUCT) {
@@ -128,10 +127,10 @@ class element_hasher_adaptor {
       }
     }
     for (int i = 0; i < curr_col.size(); ++i) {
-      hash = cudf::hashing::detail::hash_combine(
-        hash,
-        type_dispatcher<cudf::detail::dispatch_void_if_nested>(
-          curr_col.type(), _element_hasher, curr_col, i));
+      hash =
+        cudf::hashing::detail::hash_combine(hash,
+                                            type_dispatcher<cudf::detail::dispatch_void_if_nested>(
+                                              curr_col.type(), _element_hasher, curr_col, i));
     }
     return hash;
   }
@@ -141,20 +140,16 @@ class element_hasher_adaptor {
 };
 
 template <typename T>
-__device__ hash_value_type hasher_impl(bool check_nulls,
-                                       cudf::column_device_view col,
-                                       uint32_t seed,
-                                       size_type row_index)
+__device__ hash_value_type
+hasher_impl(bool check_nulls, cudf::column_device_view col, uint32_t seed, size_type row_index)
 {
   auto const hasher = element_hasher_adaptor{check_nulls, seed};
   return hasher.template operator()<T>(col, row_index);
 }
 
 template <typename T>
-__device__ hash_value_type hasher(cudf::column_device_view col,
-                                  uint32_t seed,
-                                  bool const nullable,
-                                  size_type row_index)
+__device__ hash_value_type
+hasher(cudf::column_device_view col, uint32_t seed, bool const nullable, size_type row_index)
 {
   return hasher_impl<T>(nullable, col, seed, row_index);
 }

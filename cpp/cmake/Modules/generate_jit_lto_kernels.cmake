@@ -4,15 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
-# cuVS uses DEPENDS $<TARGET_OBJECTS:${kernel_target}>. With CUDA_FATBIN_COMPILATION that genex
-# expands to .fatbin paths; add_custom_command then requires those files as separate Makefile
-# prerequisites, but no rule exists (gmake: "No rule to make target ... .fatbin"). Depending on
-# the OBJECT target keeps ordering correct; COMMAND still passes $<TARGET_OBJECTS:...> to bin2c.
 
 include_guard(GLOBAL)
 
 include(${CMAKE_CURRENT_LIST_DIR}/compute_matrix_product.cmake)
 
+# This function compiles a JIT LTO kernel object target and writes a C header embedding its fatbin.
 function(add_jit_lto_kernel kernel_target)
   set(options)
   set(one_value KERNEL_FILE FATBIN_HEADER_FILE)
@@ -36,12 +33,14 @@ function(add_jit_lto_kernel kernel_target)
 
   add_custom_command(
     OUTPUT "${_JIT_LTO_FATBIN_HEADER_FILE}"
+    COMMENT "Generate embedded fatbin header for ${kernel_target}"
     COMMAND "${bin_to_c}" --const --name embedded_fatbin --static $<TARGET_OBJECTS:${kernel_target}>
             > "${_JIT_LTO_FATBIN_HEADER_FILE}"
     DEPENDS ${kernel_target}
   )
 endfunction()
 
+# This function materializes one matrix entry into configured sources and registers its fatbin.
 function(process_jit_lto_matrix_entry source_list_var)
   set(options)
   set(one_value NAME_FORMAT KERNEL_INPUT_FILE OUTPUT_DIRECTORY FRAGMENT_TAG_FORMAT
@@ -71,9 +70,7 @@ function(process_jit_lto_matrix_entry source_list_var)
   configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/register_fatbin.cpp.in" "${fatbin_file}" @ONLY)
 
   add_jit_lto_kernel(
-    ${kernel_target}
-    KERNEL_FILE "${kernel_file}"
-    FATBIN_HEADER_FILE "${fatbin_header_file}"
+    ${kernel_target} KERNEL_FILE "${kernel_file}" FATBIN_HEADER_FILE "${fatbin_header_file}"
     LINK_LIBRARIES ${_JIT_LTO_KERNEL_LINK_LIBRARIES}
   )
   list(APPEND ${source_list_var} "${fatbin_header_file}" "${fatbin_file}")
@@ -83,6 +80,7 @@ function(process_jit_lto_matrix_entry source_list_var)
   )
 endfunction()
 
+# This function expands a JIT LTO matrix JSON description into kernel and fatbin source files.
 function(generate_jit_lto_kernels source_list_var)
   set(options)
   set(one_value NAME_FORMAT MATRIX_JSON_FILE MATRIX_JSON_STRING KERNEL_INPUT_FILE
@@ -118,13 +116,20 @@ function(generate_jit_lto_kernels source_list_var)
     string(JSON matrix_json_entry GET "${matrix_product}" "${i}")
     process_jit_lto_matrix_entry(
       "${source_list_var}"
-      NAME_FORMAT "${_JIT_LTO_NAME_FORMAT}"
-      KERNEL_INPUT_FILE "${_JIT_LTO_KERNEL_INPUT_FILE}"
-      FRAGMENT_TAG_FORMAT "${_JIT_LTO_FRAGMENT_TAG_FORMAT}"
-      FRAGMENT_TAG_HEADER_FILES ${_JIT_LTO_FRAGMENT_TAG_HEADER_FILES}
-      OUTPUT_DIRECTORY "${_JIT_LTO_OUTPUT_DIRECTORY}"
-      MATRIX_JSON_ENTRY "${matrix_json_entry}"
-      KERNEL_LINK_LIBRARIES ${_JIT_LTO_KERNEL_LINK_LIBRARIES}
+      NAME_FORMAT
+      "${_JIT_LTO_NAME_FORMAT}"
+      KERNEL_INPUT_FILE
+      "${_JIT_LTO_KERNEL_INPUT_FILE}"
+      FRAGMENT_TAG_FORMAT
+      "${_JIT_LTO_FRAGMENT_TAG_FORMAT}"
+      FRAGMENT_TAG_HEADER_FILES
+      ${_JIT_LTO_FRAGMENT_TAG_HEADER_FILES}
+      OUTPUT_DIRECTORY
+      "${_JIT_LTO_OUTPUT_DIRECTORY}"
+      MATRIX_JSON_ENTRY
+      "${matrix_json_entry}"
+      KERNEL_LINK_LIBRARIES
+      ${_JIT_LTO_KERNEL_LINK_LIBRARIES}
     )
   endforeach()
 

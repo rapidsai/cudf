@@ -6,8 +6,9 @@
 #include <cudf/detail/jit_lto/nvjitlink_checker.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <memory>
 #include <nvJitLink.h>
+
+#include <memory>
 #include <string>
 
 namespace cudf::detail::jit_lto {

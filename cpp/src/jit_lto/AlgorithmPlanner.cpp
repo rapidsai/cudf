@@ -8,14 +8,14 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
+
 #include <nvJitLink.h>
 
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <vector>
-
-#include <mutex>
 
 namespace cudf::detail::jit_lto {
 

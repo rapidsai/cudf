@@ -2,14 +2,14 @@
  * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "murmurhash3_x86_32_jit_launch.hpp"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-
-#include "murmurhash3_x86_32_jit_launch.hpp"
 
 namespace cudf {
 namespace hashing {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -93,8 +93,12 @@ inline void add_strong_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& 
     case type_id::UINT16: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_u16>>(); break;
     case type_id::UINT32: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_u32>>(); break;
     case type_id::UINT64: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_u64>>(); break;
-    case type_id::FLOAT32: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_f32>>(); break;
-    case type_id::FLOAT64: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_f64>>(); break;
+    case type_id::FLOAT32:
+      planner.add_static_fragment<fragment_tag_murmur_hasher<tag_f32>>();
+      break;
+    case type_id::FLOAT64:
+      planner.add_static_fragment<fragment_tag_murmur_hasher<tag_f64>>();
+      break;
     case type_id::BOOL8: planner.add_static_fragment<fragment_tag_murmur_hasher<tag_b8>>(); break;
     case type_id::TIMESTAMP_DAYS:
       planner.add_static_fragment<fragment_tag_murmur_hasher<tag_ts_day>>();
@@ -151,7 +155,9 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
 {
   using namespace cudf::hashing::detail::jit_lto;
   switch (id) {
-    case type_id::INT8: planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_i8>>(); break;
+    case type_id::INT8:
+      planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_i8>>();
+      break;
     case type_id::INT16:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_i16>>();
       break;
@@ -161,7 +167,9 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
     case type_id::INT64:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_i64>>();
       break;
-    case type_id::UINT8: planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_u8>>(); break;
+    case type_id::UINT8:
+      planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_u8>>();
+      break;
     case type_id::UINT16:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_u16>>();
       break;
@@ -177,7 +185,9 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
     case type_id::FLOAT64:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_f64>>();
       break;
-    case type_id::BOOL8: planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_b8>>(); break;
+    case type_id::BOOL8:
+      planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_b8>>();
+      break;
     case type_id::TIMESTAMP_DAYS:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_ts_day>>();
       break;
@@ -211,8 +221,12 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
     case type_id::DICTIONARY32:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_dict>>();
       break;
-    case type_id::STRING: planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_str>>(); break;
-    case type_id::LIST: planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_list>>(); break;
+    case type_id::STRING:
+      planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_str>>();
+      break;
+    case type_id::LIST:
+      planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_list>>();
+      break;
     case type_id::DECIMAL32:
       planner.add_static_fragment<fragment_tag_murmur_hasher_noop<tag_dec32>>();
       break;
@@ -232,9 +246,9 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
 }  // namespace
 
 inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
-                                                     uint32_t seed,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                      uint32_t seed,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
 {
   auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
                                     input.num_rows(),
@@ -244,9 +258,8 @@ inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
 
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable = has_nulls(input);
-  auto const preprocessed =
-    cudf::detail::row::hash::preprocessed_table::create(input, stream);
+  bool const nullable     = has_nulls(input);
+  auto const preprocessed = cudf::detail::row::hash::preprocessed_table::create(input, stream);
   table_device_view const input_dv{*preprocessed};
 
   auto output_view = output->mutable_view();
@@ -271,15 +284,16 @@ inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
   auto launcher = planner.get_launcher();
 
   cudf::detail::grid_1d const grid{input.num_rows(), 256};
-  launcher->dispatch<void(cudf::mutable_column_device_view, uint32_t, cudf::table_device_view, bool)>(
-    stream.value(),
-    dim3(grid.num_blocks),
-    dim3(grid.num_threads_per_block),
-    0,
-    *d_output,
-    seed,
-    input_dv,
-    nullable);
+  launcher
+    ->dispatch<void(cudf::mutable_column_device_view, uint32_t, cudf::table_device_view, bool)>(
+      stream.value(),
+      dim3(grid.num_blocks),
+      dim3(grid.num_threads_per_block),
+      0,
+      *d_output,
+      seed,
+      input_dv,
+      nullable);
 
   return output;
 }

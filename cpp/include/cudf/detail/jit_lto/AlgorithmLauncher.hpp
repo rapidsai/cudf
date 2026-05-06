@@ -4,14 +4,15 @@
  */
 #pragma once
 
-#include <cstdint>
+#include <cuda_runtime.h>
+
 #include <driver_types.h>
-#include <string>
-#include <unordered_map>
 #include <vector_types.h>
 
-#include <cuda_runtime.h>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace cudf::detail::jit_lto {
 
