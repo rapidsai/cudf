@@ -41,8 +41,6 @@ namespace cudf::groupby {
  */
 using key_location_t = cuda::std::pair<size_type, size_type>;
 
-// The actual comparator and hasher are always rebinded per-batch via
-// rebind_key_eq / rebind_hash_function, so the types used here are never invoked.
 using streaming_probing_scheme_t =
   cuco::linear_probing<detail::hash::GROUPBY_CG_SIZE,
                        cudf::hashing::detail::default_hash<size_type>>;
