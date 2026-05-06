@@ -327,6 +327,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                    iter,
                    iter + num_pages,
                    copy_page_info{d_page_indexes, pages});
+  stream.synchronize();  // ensures the page_indexes is not destroyed before the copy is completed
 }
 
 std::string encoding_to_string(Encoding encoding)

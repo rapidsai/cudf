@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
+import pytest
 
 import cudf
 from cudf.testing import assert_eq
@@ -57,3 +58,29 @@ def test_to_pandas_externally_set_stale_freq_matches_pandas_inferred():
 
     assert actual.freq == pd.tseries.frequencies.to_offset(expected_freq)
     assert_eq(actual.values, pidx.values)
+
+
+@pytest.mark.parametrize("freq", ["D", "h", "30min", "2D", "ME"])
+def test_to_pandas_empty_with_freq_falls_back_to_cached(freq):
+    # Empty indexes have nothing to infer from, so to_pandas() must fall back
+    # to the cached freq mapped through DateOffset._maybe_as_fast_pandas_offset
+    # (matches pandas, which keeps the offset on empty resample/asfreq output).
+    pidx = pd.DatetimeIndex([], dtype="datetime64[us]", freq=freq, name="t")
+    gidx = cudf.from_pandas(pidx)
+
+    actual = gidx.to_pandas()
+    assert actual.freq == pidx.freq
+    assert actual.dtype == pidx.dtype
+    assert_eq(actual, pidx)
+
+
+@pytest.mark.parametrize("freq", ["D", "h", "30min"])
+def test_to_pandas_single_element_with_freq_falls_back_to_cached(freq):
+    # Single-element indexes can't infer freq (pandas inferred_freq is None),
+    # but the cached freq is still authoritative — preserve it on round-trip.
+    pidx = pd.DatetimeIndex(["2020-01-01"], freq=freq, name="t")
+    gidx = cudf.from_pandas(pidx)
+
+    actual = gidx.to_pandas()
+    assert actual.freq == pidx.freq
+    assert_eq(actual, pidx)

@@ -30,12 +30,22 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.spmd
 
 
-def test_yields_context_and_engine(spmd_comm: Communicator) -> None:
+@pytest.fixture
+def comm(spmd_engine: SPMDEngine) -> Communicator:
+    """Communicator from the shared :class:`SPMDEngine` for local construction.
+
+    Most tests in this module need to construct their own
+    :class:`SPMDEngine` to exercise lifecycle, construction-time
+    options, MR-state semantics, or :meth:`SPMDEngine._reset`.
+    """
+    return spmd_engine.comm
+
+
+def test_yields_context_and_engine(spmd_engine: SPMDEngine) -> None:
     """SPMDEngine has comm and context properties."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        assert engine.comm is not None
-        assert engine.context is not None
-        assert isinstance(engine, pl.GPUEngine)
+    assert spmd_engine.comm is not None
+    assert spmd_engine.context is not None
+    assert isinstance(spmd_engine, pl.GPUEngine)
 
 
 def test_from_options() -> None:
@@ -74,31 +84,29 @@ def test_engine_options_reserved_keys() -> None:
             pass
 
 
-def test_engine_options_parquet_options(spmd_comm: Communicator) -> None:
+def test_engine_options_parquet_options(comm: Communicator) -> None:
     """engine_options forwards parquet_options to GPUEngine without error."""
-    with SPMDEngine(comm=spmd_comm, engine_options={"parquet_options": {}}) as engine:
+    with SPMDEngine(comm=comm, engine_options={"parquet_options": {}}) as engine:
         assert isinstance(engine, pl.GPUEngine)
 
 
-def test_scan(spmd_comm: Communicator) -> None:
+def test_scan(spmd_engine: SPMDEngine) -> None:
     """Each rank scans its own single-row LazyFrame and gets that row back."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        lf = pl.LazyFrame({"a": [engine.rank], "b": [engine.rank * 10]})
-        result = lf.collect(engine=engine)
-        assert result.shape == (1, 2)
-        assert result["a"].to_list() == [engine.rank]
-        assert result["b"].to_list() == [engine.rank * 10]
+    lf = pl.LazyFrame({"a": [spmd_engine.rank], "b": [spmd_engine.rank * 10]})
+    result = lf.collect(engine=spmd_engine)
+    assert result.shape == (1, 2)
+    assert result["a"].to_list() == [spmd_engine.rank]
+    assert result["b"].to_list() == [spmd_engine.rank * 10]
 
 
-def test_basic_query(spmd_comm: Communicator) -> None:
+def test_basic_query(spmd_engine: SPMDEngine) -> None:
     """A simple in-memory LazyFrame can be collected."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=engine)
+    result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=spmd_engine)
     assert result.shape == (3, 2)
     assert result["a"].to_list() == [1, 2, 3]
 
 
-def test_collect_then_lazy_equivalent(spmd_comm: Communicator) -> None:
+def test_collect_then_lazy_equivalent(spmd_engine: SPMDEngine) -> None:
     """collect().lazy() preserves SPMD semantics: an intermediate materialize is a no-op.
 
     In SPMD mode a DataFrame is always rank-local.  When it is wrapped back
@@ -106,111 +114,105 @@ def test_collect_then_lazy_equivalent(spmd_comm: Communicator) -> None:
     re-slicing it across ranks.  So ``lf.collect().lazy().op.collect()`` must
     produce the same result as ``lf.op.collect()``.
     """
-    with SPMDEngine(comm=spmd_comm) as engine:
-        lf = pl.LazyFrame(
-            {"a": [engine.rank, engine.rank + 1, engine.rank + 2], "b": [0, 1, 2]}
-        )
+    rank = spmd_engine.rank
+    lf = pl.LazyFrame({"a": [rank, rank + 1, rank + 2], "b": [0, 1, 2]})
 
-        # One-step
-        one_step = lf.filter(pl.col("b") >= 1).collect(engine=engine)
+    # One-step
+    one_step = lf.filter(pl.col("b") >= 1).collect(engine=spmd_engine)
 
-        # Two-step: materialize then re-wrap
-        intermediate = lf.collect(engine=engine)
-        two_step = intermediate.lazy().filter(pl.col("b") >= 1).collect(engine=engine)
+    # Two-step: materialize then re-wrap
+    intermediate = lf.collect(engine=spmd_engine)
+    two_step = intermediate.lazy().filter(pl.col("b") >= 1).collect(engine=spmd_engine)
 
     assert one_step.sort("a").equals(two_step.sort("a"))
 
 
-def test_group_by(spmd_comm: Communicator) -> None:
+def test_group_by(spmd_engine: SPMDEngine) -> None:
     """Group-by on rank-local data, then allgather to verify the global result."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        lf = pl.LazyFrame({"a": [engine.rank], "b": [engine.rank * 10]})
-        local_result = lf.group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
-        with reserve_op_id() as op_id:
-            global_result = allgather_polars_dataframe(
-                engine=engine, local_df=local_result, op_id=op_id
-            )
-        assert global_result.shape == (engine.nranks, 2)
-        assert global_result.sort("a")["a"].to_list() == list(range(engine.nranks))
-        assert global_result.sort("a")["b"].to_list() == [
-            r * 10 for r in range(engine.nranks)
-        ]
+    lf = pl.LazyFrame({"a": [spmd_engine.rank], "b": [spmd_engine.rank * 10]})
+    local_result = lf.group_by("a").agg(pl.col("b").sum()).collect(engine=spmd_engine)
+    with reserve_op_id() as op_id:
+        global_result = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local_result, op_id=op_id
+        )
+    assert global_result.shape == (spmd_engine.nranks, 2)
+    assert global_result.sort("a")["a"].to_list() == list(range(spmd_engine.nranks))
+    assert global_result.sort("a")["b"].to_list() == [
+        r * 10 for r in range(spmd_engine.nranks)
+    ]
 
 
-def test_allgather_polars_dataframe(spmd_comm: Communicator) -> None:
+def test_allgather_polars_dataframe(spmd_engine: SPMDEngine) -> None:
     """allgather_polars_dataframe collects every rank's contribution in rank order."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        local = pl.DataFrame({"rank": [engine.rank], "val": [engine.rank * 2]})
-        with reserve_op_id() as op_id:
-            result = allgather_polars_dataframe(
-                engine=engine, local_df=local, op_id=op_id
-            )
-        assert result.shape == (engine.nranks, 2)
-        assert result["rank"].to_list() == list(range(engine.nranks))
-        assert result["val"].to_list() == [r * 2 for r in range(engine.nranks)]
+    local = pl.DataFrame({"rank": [spmd_engine.rank], "val": [spmd_engine.rank * 2]})
+    with reserve_op_id() as op_id:
+        result = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local, op_id=op_id
+        )
+    assert result.shape == (spmd_engine.nranks, 2)
+    assert result["rank"].to_list() == list(range(spmd_engine.nranks))
+    assert result["val"].to_list() == [r * 2 for r in range(spmd_engine.nranks)]
 
 
-def test_num_py_executors(spmd_comm: Communicator) -> None:
+def test_num_py_executors(comm: Communicator) -> None:
     """executor_options forwards num_py_executors to the thread pool."""
     with SPMDEngine(
-        comm=spmd_comm,
+        comm=comm,
         executor_options={"num_py_executors": 2},
     ) as engine:
         result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
     assert result.shape == (3, 1)
 
 
-def test_allgather_polars_dataframe_empty(spmd_comm: Communicator) -> None:
+def test_allgather_polars_dataframe_empty(spmd_engine: SPMDEngine) -> None:
     """allgather handles an empty (zero-row) local DataFrame on every rank."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        local = pl.DataFrame(
-            {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
+    local = pl.DataFrame(
+        {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
+    )
+    with reserve_op_id() as op_id:
+        result = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local, op_id=op_id
         )
-        with reserve_op_id() as op_id:
-            result = allgather_polars_dataframe(
-                engine=engine, local_df=local, op_id=op_id
-            )
     assert result.shape == (0, 2)
     assert result.columns == ["a", "b"]
     assert result.dtypes == [pl.Int32, pl.Float64]
 
 
-def test_mr_wrapped_as_current_inside_context(spmd_comm: Communicator) -> None:
+def test_mr_wrapped_as_current_inside_context(comm: Communicator) -> None:
     """Inside SPMDEngine the current device resource is RmmResourceAdaptor."""
-    with SPMDEngine(comm=spmd_comm):
+    with SPMDEngine(comm=comm):
         assert isinstance(rmm.mr.get_current_device_resource(), RmmResourceAdaptor)
 
 
-def test_mr_restored_after_context(spmd_comm: Communicator) -> None:
+def test_mr_restored_after_context(comm: Communicator) -> None:
     """After SPMDEngine exits the original device resource is restored."""
     original = rmm.mr.get_current_device_resource()
-    with SPMDEngine(comm=spmd_comm):
+    with SPMDEngine(comm=comm):
         pass
     assert rmm.mr.get_current_device_resource() is original
 
 
-def test_allgather_polars_dataframe_multi_column(spmd_comm: Communicator) -> None:
+def test_allgather_polars_dataframe_multi_column(spmd_engine: SPMDEngine) -> None:
     """allgather preserves column names, count, and dtypes for multi-column DataFrames."""
-    with SPMDEngine(comm=spmd_comm) as engine:
-        local = pl.DataFrame(
-            {
-                "rank": [engine.rank],
-                "x": [float(engine.rank)],
-                "label": [f"r{engine.rank}"],
-            }
+    local = pl.DataFrame(
+        {
+            "rank": [spmd_engine.rank],
+            "x": [float(spmd_engine.rank)],
+            "label": [f"r{spmd_engine.rank}"],
+        }
+    )
+    with reserve_op_id() as op_id:
+        result = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local, op_id=op_id
         )
-        with reserve_op_id() as op_id:
-            result = allgather_polars_dataframe(
-                engine=engine, local_df=local, op_id=op_id
-            )
-        assert result.shape == (engine.nranks, 3)
-        assert result.columns == ["rank", "x", "label"]
-        sorted_result = result.sort("rank")
-        assert sorted_result["rank"].to_list() == list(range(engine.nranks))
-        assert sorted_result["x"].to_list() == [float(r) for r in range(engine.nranks)]
-        assert sorted_result["label"].to_list() == [
-            f"r{r}" for r in range(engine.nranks)
-        ]
+    assert result.shape == (spmd_engine.nranks, 3)
+    assert result.columns == ["rank", "x", "label"]
+    sorted_result = result.sort("rank")
+    assert sorted_result["rank"].to_list() == list(range(spmd_engine.nranks))
+    assert sorted_result["x"].to_list() == [float(r) for r in range(spmd_engine.nranks)]
+    assert sorted_result["label"].to_list() == [
+        f"r{r}" for r in range(spmd_engine.nranks)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -218,44 +220,44 @@ def test_allgather_polars_dataframe_multi_column(spmd_comm: Communicator) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_comm_argument_reuses_communicator(spmd_comm: Communicator) -> None:
+def test_comm_argument_reuses_communicator(comm: Communicator) -> None:
     """Passing comm= reuses the communicator across two engine lifetimes."""
-    with SPMDEngine(comm=spmd_comm) as engine1:
+    with SPMDEngine(comm=comm) as engine1:
         nranks = engine1.nranks
         rank = engine1.rank
-    # engine1 is shut down; spmd_comm is still alive
-    with SPMDEngine(comm=spmd_comm) as engine2:
+    # engine1 is shut down; the shared comm is still alive
+    with SPMDEngine(comm=comm) as engine2:
         assert engine2.nranks == nranks
         assert engine2.rank == rank
 
 
-def test_comm_not_closed_after_engine_shutdown(spmd_comm: Communicator) -> None:
+def test_comm_not_closed_after_engine_shutdown(comm: Communicator) -> None:
     """The caller-provided comm survives engine.shutdown()."""
-    with SPMDEngine(comm=spmd_comm):
+    with SPMDEngine(comm=comm):
         pass  # engine.shutdown() is called on __exit__
-    # spmd_comm must still be accessible — not destroyed by engine teardown
-    assert spmd_comm.rank >= 0
+    # comm must still be accessible — not destroyed by engine teardown
+    assert comm.rank >= 0
 
 
-def test_comm_argument_mr_still_wrapped(spmd_comm: Communicator) -> None:
+def test_comm_argument_mr_still_wrapped(comm: Communicator) -> None:
     """MR wrapping still happens even when comm is provided externally."""
-    with SPMDEngine(comm=spmd_comm):
+    with SPMDEngine(comm=comm):
         assert isinstance(rmm.mr.get_current_device_resource(), RmmResourceAdaptor)
 
 
-def test_comm_sequential_queries(spmd_comm: Communicator) -> None:
+def test_comm_sequential_queries(comm: Communicator) -> None:
     """Two engines sharing a comm can each execute a query without interference."""
-    with SPMDEngine(comm=spmd_comm) as engine:
+    with SPMDEngine(comm=comm) as engine:
         r1 = pl.LazyFrame({"a": [1, 2]}).collect(engine=engine)
-    with SPMDEngine(comm=spmd_comm) as engine:
+    with SPMDEngine(comm=comm) as engine:
         r2 = pl.LazyFrame({"a": [3, 4]}).collect(engine=engine)
     assert r1["a"].to_list() == [1, 2]
     assert r2["a"].to_list() == [3, 4]
 
 
-def test_shutdown_idempotent(spmd_comm: Communicator) -> None:
+def test_shutdown_idempotent(comm: Communicator) -> None:
     """Calling shutdown() twice does not raise."""
-    engine = SPMDEngine(comm=spmd_comm)
+    engine = SPMDEngine(comm=comm)
     engine.shutdown()
     engine.shutdown()
 
@@ -277,9 +279,9 @@ def test_memory_resource_config() -> None:
         mock_create.assert_called_once()
 
 
-def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) -> None:
+def test_comm_and_context_unavailable_after_shutdown(comm: Communicator) -> None:
     """Accessing comm or context after shutdown raises RuntimeError."""
-    engine = SPMDEngine(comm=spmd_comm)
+    engine = SPMDEngine(comm=comm)
     engine.shutdown()
     with pytest.raises(RuntimeError, match="shutdown"):
         _ = engine.comm
@@ -287,8 +289,89 @@ def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) ->
         _ = engine.context
 
 
-def test_run(spmd_comm):
-    with SPMDEngine(comm=spmd_comm) as engine:
-        result = engine._run(os.getpid)
-
+def test_run(spmd_engine: SPMDEngine) -> None:
+    result = spmd_engine._run(os.getpid)
     assert result == [os.getpid()]
+
+
+def test_reset_keeps_comm_alive(comm: Communicator) -> None:
+    """``_reset`` must not rebuild the communicator."""
+    with SPMDEngine(
+        comm=comm, executor_options={"max_rows_per_partition": 10}
+    ) as engine:
+        comm_before = engine.comm
+        engine._reset(executor_options={"max_rows_per_partition": 7})
+        # Same Communicator instance — caller-provided comm is preserved.
+        assert engine.comm is comm_before
+        # Engine still drives a real query.
+        result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        assert sorted(result["a"].to_list()) == [1, 2, 3]
+
+
+def test_reset_updates_executor_options(comm: Communicator) -> None:
+    """``_reset`` updates the polars-layer config to the new options."""
+    from cudf_polars.utils.config import SPMDContext
+
+    with SPMDEngine(
+        comm=comm, executor_options={"max_rows_per_partition": 10}
+    ) as engine:
+        engine._reset(executor_options={"max_rows_per_partition": 42})
+
+        opts = engine.config["executor_options"]
+        assert opts["max_rows_per_partition"] == 42
+        # Reserved keys are still injected by ``_reset``.
+        assert opts["runtime"] == "rapidsmpf"
+        assert opts["cluster"] == "spmd"
+        assert isinstance(opts["spmd_context"], SPMDContext)
+
+
+def test_reset_collects_after_options_change(comm: Communicator) -> None:
+    """The engine still drives a real query after ``_reset``."""
+    with SPMDEngine(
+        comm=comm, executor_options={"max_rows_per_partition": 10}
+    ) as engine:
+        engine._reset(executor_options={"max_rows_per_partition": 3})
+        result = pl.LazyFrame({"a": [1, 2, 3, 4, 5]}).collect(engine=engine)
+        assert sorted(result["a"].to_list()) == [1, 2, 3, 4, 5]
+
+
+def test_reset_after_shutdown_raises(comm: Communicator) -> None:
+    """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
+    engine = SPMDEngine(comm=comm)
+    engine.shutdown()
+    engine.shutdown()  # idempotent
+    with pytest.raises(RuntimeError, match="shut-down"):
+        engine._reset()
+    with pytest.raises(RuntimeError, match="shut-down"):
+        engine._reset()  # still raises on a second attempt
+    engine.shutdown()  # still safe after a failed _reset
+
+
+def test_reset_rejects_construction_time_executor_options(
+    comm: Communicator,
+) -> None:
+    """``_reset`` rejects ``executor_options`` keys read at engine construction."""
+    with (
+        SPMDEngine(comm=comm) as engine,
+        pytest.raises(ValueError, match="num_py_executors"),
+    ):
+        engine._reset(executor_options={"num_py_executors": 4})
+
+
+def test_reset_rejects_construction_time_engine_options(
+    comm: Communicator,
+) -> None:
+    """``_reset`` rejects ``engine_options`` keys read at engine construction."""
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    with SPMDEngine(comm=comm) as engine:
+        with pytest.raises(ValueError, match="hardware_binding"):
+            engine._reset(
+                engine_options={
+                    "hardware_binding": HardwareBindingPolicy(enabled=False),
+                },
+            )
+        with pytest.raises(ValueError, match="memory_resource_config"):
+            engine._reset(engine_options={"memory_resource_config": None})

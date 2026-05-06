@@ -19,8 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from rapidsmpf.communicator.communicator import Communicator
-
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 # Runs the spmd variant even under rrun with nranks > 1. The ray/dask
@@ -44,7 +42,7 @@ def df() -> pl.LazyFrame:
 @pytest.fixture(params=["spmd", "ray", "dask"])
 def engine(
     request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
+    spmd_engine: SPMDEngine,
 ) -> Iterator[StreamingEngine]:
     """Yield each supported streaming engine."""
     backend = request.param
@@ -52,7 +50,7 @@ def engine(
 
     if backend == "spmd":
         with SPMDEngine(
-            comm=spmd_comm,
+            comm=spmd_engine.comm,
             executor_options=executor_options,
         ) as eng:
             yield eng
@@ -104,7 +102,7 @@ def test_sink_parquet_empty_rank(engine: StreamingEngine, tmp_path: Path) -> Non
 
 @pytest.mark.parametrize(
     "cluster",
-    [Cluster.SPMD, Cluster.RAY, Cluster.DASK, Cluster.DISTRIBUTED],
+    [Cluster.SPMD, Cluster.RAY, Cluster.DASK],
 )
 def test_sink_to_directory_false_raises(cluster: Cluster) -> None:
     """Explicit ``sink_to_directory=False`` is rejected for every multi-rank cluster."""
