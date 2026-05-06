@@ -16,7 +16,7 @@ from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
-from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.communicator.ucxx import barrier
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
@@ -40,6 +40,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     all_gather_host_data,
     check_reserved_keys,
     evaluate_on_rank,
+    resolve_rapidsmpf_options,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.config import Options
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -359,11 +361,7 @@ class SPMDEngine(StreamingEngine):
         )
         bind_to_gpu(hw_binding)
 
-        rapidsmpf_options = (
-            rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
-        )
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
         )
@@ -387,10 +385,11 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        py_executor = ThreadPoolExecutor(
+        self._py_executor: ThreadPoolExecutor = ThreadPoolExecutor(
             max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
+        self._mr: RmmResourceAdaptor = mr
         exit_stack = contextlib.ExitStack()
 
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
@@ -402,11 +401,15 @@ class SPMDEngine(StreamingEngine):
         quent_context.emit_engine_init_events(self._quent_logger)
 
         try:
-            exit_stack.callback(py_executor.shutdown, wait=False)
+            exit_stack.callback(self._py_executor.shutdown, wait=False)
             exit_stack.enter_context(set_memory_resource(mr))
-            ctx = exit_stack.enter_context(
-                Context.from_options(comm.logger, mr, rapidsmpf_options)
-            )
+            # ``Context`` is *not* registered as a context manager so that
+            # :meth:`_reset` can swap it mid-life without leaving the
+            # exit-stack holding a stale reference. ``_cleanup_ctx`` is
+            # registered instead — it shuts down whatever ``self._ctx`` is
+            # at engine-shutdown time (i.e. the latest reset's Context).
+            ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
+            exit_stack.callback(self._cleanup_ctx)
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx
             self._quent_worker = cudf_polars.quent.Worker(
@@ -424,7 +427,7 @@ class SPMDEngine(StreamingEngine):
                     "spmd_context": SPMDContext(
                         comm=comm,
                         context=ctx,
-                        py_executor=py_executor,
+                        py_executor=self._py_executor,
                         engine_id=quent_context.engine.id,
                         worker_id=self._quent_worker.id,
                         quent_logger=self._quent_logger,
@@ -442,6 +445,17 @@ class SPMDEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    def _cleanup_ctx(self) -> None:
+        """
+        Shut down the current ``self._ctx`` if any; called from exit-stack.
+
+        ``Context.shutdown()`` is idempotent on the rapidsmpf C++ side, so this is
+        safe even if a prior ``_reset`` already shut down a now-replaced Context.
+        """
+        if self._ctx is not None:
+            self._ctx.shutdown()
+            self._ctx = None
 
     @classmethod
     def from_options(cls, options: StreamingOptions) -> SPMDEngine:
@@ -475,6 +489,72 @@ class SPMDEngine(StreamingEngine):
             rapidsmpf_options=options.to_rapidsmpf_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
+        )
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine; see :meth:`StreamingEngine._reset` for the contract.
+
+        Must be called collectively on all ranks. A barrier ensures no
+        rank tears down its Context while peers may still be using it.
+        """
+        if self._ctx is None:
+            raise RuntimeError("Cannot reset a shut-down engine")
+        assert self._comm is not None
+        super()._reset(
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options=engine_options,
+        )
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
+            "quent_context", cudf_polars.quent.QuentContext()
+        )
+        executor_options.setdefault("quent_context", quent_context)
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+
+        # Collective: synchronize all ranks before tearing down the Context.
+        if self._comm.nranks > 1:
+            barrier(self._comm)
+        # Same-thread shutdown, _reset runs on the thread that built the
+        # Context (the test driver's main thread). The per-engine RMM
+        # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
+        self._ctx.shutdown()
+        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+
+        # Re-run ``StreamingEngine.__init__`` on the existing instance to
+        # reconfigure the polars ``GPUEngine`` layer (``self.config``,
+        # ``self.device``, etc.) with the new options. Pass the existing
+        # ``self._exit_stack`` so any registered callbacks (notably
+        # ``_cleanup_ctx`` and ``set_memory_resource``) survive.
+        StreamingEngine.__init__(
+            self,
+            nranks=self._comm.nranks,
+            executor_options={
+                **executor_options,
+                "runtime": "rapidsmpf",
+                "cluster": "spmd",
+                "spmd_context": SPMDContext(
+                    comm=self._comm,
+                    context=self._ctx,
+                    py_executor=self._py_executor,
+                    engine_id=quent_context.engine.id,
+                    worker_id=self._quent_worker.id,
+                    quent_logger=self._quent_logger,
+                ),
+            },
+            engine_options={
+                **engine_options,
+                "memory_resource": self._ctx.br().device_mr,
+            },
+            exit_stack=self._exit_stack,
         )
 
     @property
@@ -577,6 +657,12 @@ class SPMDEngine(StreamingEngine):
         """
         if self._ctx is None:
             return  # already shut down
+
+        # Order matters: ``super().shutdown()`` closes ``self._exit_stack``,
+        # which invokes ``self._cleanup_ctx``. That requires ``self._ctx`` to
+        # still be set so the rapidsmpf Context can be shut down correctly.
+        # Clear the references only after shutdown completes.
+        super().shutdown()
         self._comm = None
         self._ctx = None
         self._quent_logger.emit(self._quent_worker.exit())
@@ -587,8 +673,6 @@ class SPMDEngine(StreamingEngine):
         # TODO: Figure out multi-rank handling.
         self._quent_events_raw.extend(self._quent_logger.drain())
         self._quent_events_raw.sort(key=lambda x: x["timestamp"])
-
-        super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         data = json.dumps(func(*args, **kwargs)).encode()
