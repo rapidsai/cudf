@@ -12,9 +12,6 @@ import pytest
 
 import polars as pl
 
-import cudf_polars.experimental.rapidsmpf.frontend.dask
-import cudf_polars.experimental.rapidsmpf.frontend.ray
-import cudf_polars.experimental.rapidsmpf.frontend.spmd
 import cudf_polars.quent
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.quent._plan import build_plan, port_names_for_node
@@ -484,10 +481,16 @@ def engine_with_quent_context(
 ) -> StreamingEngine:
     backend = request.param
     if backend == "ray":
+        pytest.importorskip("ray")
+        import cudf_polars.experimental.rapidsmpf.frontend.ray
+
         return cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "dask":
+        pytest.importorskip("distributed")
+        import cudf_polars.experimental.rapidsmpf.frontend.dask
+
         return cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine(
             executor_options={"quent_context": quent_context}
         )
@@ -498,6 +501,8 @@ def engine_with_quent_context(
         )
         from rapidsmpf.config import Options, get_environment_variables
         from rapidsmpf.progress_thread import ProgressThread
+
+        import cudf_polars.experimental.rapidsmpf.frontend.spmd
 
         if bootstrap.is_running_with_rrun():
             comm = bootstrap.create_ucxx_comm(
