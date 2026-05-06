@@ -407,7 +407,7 @@ _CROSS_RANK_KEYS = [
 )
 def test_over_multirank(
     request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
+    comm: Communicator,
     expr: pl.Expr,
     is_scalar: bool,  # noqa: FBT001
     cross_rank: bool,  # noqa: FBT001
@@ -423,7 +423,7 @@ def test_over_multirank(
     so num_partitions=max(nranks=2, 1)=2, matching the probed key assignments.
     """
     with SPMDEngine(
-        comm=spmd_comm,
+        comm=comm,
         executor_options={"max_rows_per_partition": 4, "dynamic_planning": {}},
     ) as engine:
         rank = engine.rank
@@ -480,7 +480,7 @@ def test_over_multirank(
 
 def test_over_nonscalar_duplicated_input(
     request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
+    comm: Communicator,
 ) -> None:
     """Non-scalar over() on duplicated=True input produces correct row count and values.
 
@@ -493,7 +493,7 @@ def test_over_nonscalar_duplicated_input(
     so modulus=max(nranks=2, 1)=2, matching the _SAME_RANK_KEYS assignments.
     """
     with SPMDEngine(
-        comm=spmd_comm,
+        comm=comm,
         executor_options={"max_rows_per_partition": 10, "dynamic_planning": {}},
     ) as engine:
         rank = engine.rank
