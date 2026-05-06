@@ -589,6 +589,16 @@ def test_orc_read_incorrect_ps_length():
         cudf.read_orc(buf)
 
 
+def test_orc_read_stripe_footer_no_encodings(datadir):
+    # Crafted ORC whose stripe footer's ColumnEncoding list is empty even though
+    # the file footer declares one data column. The reader used to index the
+    # encoding list out of bounds and segfault; it now raises IndexError from
+    # the early stripe-footer validation in aggregate_orc_metadata.
+    path = datadir / "stripe_footer_no_encodings.orc"
+    with pytest.raises(IndexError):
+        cudf.read_orc(path)
+
+
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
