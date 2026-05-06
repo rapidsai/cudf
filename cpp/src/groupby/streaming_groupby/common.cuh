@@ -69,14 +69,16 @@ struct n_table_comparator {
   RowEqT batch_self_eq;           ///< Self-comparator on the current batch table
   RowEqT const* cross_eqs;        ///< Device array [num_compacted_batches]: batch vs compacted[k]
   key_location_t const* key_loc;  ///< {batch_id, row_in_compacted} per dense ID
-  size_type max_distinct_keys;           ///< Threshold: idx >= max_distinct_keys is a transient batch value
+  size_type max_distinct_keys;  ///< Threshold: idx >= max_distinct_keys is a transient batch value
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
     bool const lhs_is_batch = (lhs >= max_distinct_keys);
     bool const rhs_is_batch = (rhs >= max_distinct_keys);
 
-    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys); }
+    if (lhs_is_batch && rhs_is_batch) {
+      return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys);
+    }
     if (lhs_is_batch) {
       auto const loc = key_loc[rhs];
       return cross_eqs[loc.first](lhs - max_distinct_keys, loc.second);
@@ -119,8 +121,8 @@ struct insert_and_map_fn {
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
     auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + row_idx);
-    inserted_flags[row_idx]   = inserted;
-    slot_offsets[row_idx]     = static_cast<size_type>(iter - base);
+    inserted_flags[row_idx]     = inserted;
+    slot_offsets[row_idx]       = static_cast<size_type>(iter - base);
     return *iter;
   }
 };
@@ -170,11 +172,11 @@ struct offset_cache_hasher {
  */
 struct finalize_new_key_fn {
   size_type const*
-    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_keys]
-  size_type* base;                  ///< hash set storage base
-  size_type const* slot_offsets;    ///< slot offset per batch row [batch_size]
-  key_location_t* key_loc;          ///< {batch_id, row_in_compacted} per dense ID
-  size_type batch_id;               ///< the index of this batch in _compacted_batches
+    batch_local_indices;           ///< batch-local row indices of new keys [new_distinct_keys]
+  size_type* base;                 ///< hash set storage base
+  size_type const* slot_offsets;   ///< slot offset per batch row [batch_size]
+  key_location_t* key_loc;         ///< {batch_id, row_in_compacted} per dense ID
+  size_type batch_id;              ///< the index of this batch in _compacted_batches
   size_type distinct_keys_before;  ///< _distinct_keys prior to this batch
 
   __device__ void operator()(size_type r) const
@@ -183,7 +185,7 @@ struct finalize_new_key_fn {
     auto const batch_local = batch_local_indices[r];
 
     *(base + slot_offsets[batch_local]) = dense_id;
-    *(key_loc + dense_id) = key_location_t{batch_id, r};
+    *(key_loc + dense_id)               = key_location_t{batch_id, r};
   }
 };
 
@@ -276,8 +278,7 @@ struct streaming_groupby::impl {
    * built once and reused on every aggregate() / merge() call rather than rebuilt
    * (which requires a host-to-device copy of the column metadata).
    */
-  std::unique_ptr<mutable_table_device_view, void (*)(mutable_table_device_view*)>
-    _d_agg_results;
+  std::unique_ptr<mutable_table_device_view, void (*)(mutable_table_device_view*)> _d_agg_results;
   std::vector<size_type> _value_col_indices;
   rmm::device_uvector<aggregation::Kind> _d_agg_kinds;
 

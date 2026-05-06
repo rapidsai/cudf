@@ -81,21 +81,24 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
   rmm::device_uvector<size_type> slot_offsets(batch_size, stream, temp_mr);
 
-  thrust::transform(
-    rmm::exec_policy_nosync(stream, temp_mr),
-    cuda::counting_iterator<size_type>(0),
-    cuda::counting_iterator<size_type>(batch_size),
-    target_indices.begin(),
-    insert_and_map_fn{
-      set_ref, batch_bitmask, _max_distinct_keys, base, inserted_flags.data(), slot_offsets.data()});
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
+                    cuda::counting_iterator<size_type>(0),
+                    cuda::counting_iterator<size_type>(batch_size),
+                    target_indices.begin(),
+                    insert_and_map_fn{set_ref,
+                                      batch_bitmask,
+                                      _max_distinct_keys,
+                                      base,
+                                      inserted_flags.data(),
+                                      slot_offsets.data()});
 
   // Count newly inserted keys.  Sequential reads over inserted_flags are cheaper
   // than the alternative (re-deriving winner status via two random loads per row).
-  auto const new_distinct_keys = static_cast<size_type>(
-    thrust::count_if(rmm::exec_policy_nosync(stream, temp_mr),
-                     inserted_flags.begin(),
-                     inserted_flags.end(),
-                     cuda::std::identity{}));
+  auto const new_distinct_keys =
+    static_cast<size_type>(thrust::count_if(rmm::exec_policy_nosync(stream, temp_mr),
+                                            inserted_flags.begin(),
+                                            inserted_flags.end(),
+                                            cuda::std::identity{}));
 
   if (new_distinct_keys > 0) {
     // Stream compact: get the batch-local indices of newly inserted keys.
@@ -110,7 +113,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     // Check bounds BEFORE any persistent state mutation.
     CUDF_EXPECTS(_distinct_keys + new_distinct_keys <= _max_distinct_keys,
                  "Distinct key count (" + std::to_string(_distinct_keys + new_distinct_keys) +
-                   ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").");
+                   ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) +
+                   ").");
 
     // Gather compacted distinct keys from the batch.
     auto compacted = cudf::detail::gather(batch_keys,
@@ -124,7 +128,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
       cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
     // Store the compacted batch.
-    auto const new_batch_id          = static_cast<size_type>(_compacted_batches.size());
+    auto const new_batch_id         = static_cast<size_type>(_compacted_batches.size());
     auto const distinct_keys_before = _distinct_keys;
     _compacted_batches.push_back(std::move(compacted));
     _preprocessed_batches.push_back(preprocessed_compacted);

@@ -530,7 +530,8 @@ class streaming_groupby {
    * @param other The streaming_groupby whose partial state to merge
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if the other object has more distinct keys than `max_distinct_keys`
+   * @throws std::invalid_argument if the other object has more distinct keys than
+   * `max_distinct_keys`
    * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
    * @throws cudf::logic_error if distinct keys exceed `max_distinct_keys` after merge
    */

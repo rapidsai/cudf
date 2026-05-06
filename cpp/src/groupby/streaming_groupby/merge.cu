@@ -110,8 +110,8 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
 
   auto const mr = cudf::get_current_device_resource_ref();
 
-  auto other_keys             = other.gather_distinct_keys(stream, mr);
-  auto const other_key_view   = other_keys->view();
+  auto other_keys                = other.gather_distinct_keys(stream, mr);
+  auto const other_key_view      = other_keys->view();
   auto const other_distinct_keys = other._distinct_keys;
   if (other_distinct_keys == 0) { return; }
 
