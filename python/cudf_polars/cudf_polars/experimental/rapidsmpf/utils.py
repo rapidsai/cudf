@@ -821,9 +821,7 @@ class NormalizedPartitioning:
                 if len(scheme.keys) != len(keys):
                     return False
                 n = len(keys)
-            return all(
-                ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True)
-            )
+            return all(ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True))
 
         def _keys_match(
             scheme: object,
