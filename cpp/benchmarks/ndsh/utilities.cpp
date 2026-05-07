@@ -393,13 +393,9 @@ void generate_parquet_data_sources(double scale_factor,
 {
   CUDF_BENCHMARK_RANGE();
 
-  // Set the memory resource to the managed pool
-  auto old_mr = cudf::get_current_device_resource_ref();
-  // TODO: if old_mr is already managed pool or managed, don't create new one.
+  // Use a managed pool for parquet generation.
   rmm::mr::pool_memory_resource managed_pool_mr{rmm::mr::managed_memory_resource{},
                                                 rmm::percent_of_free_device_memory(50)};
-  cudf::set_current_device_resource(managed_pool_mr);
-  // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
     if (table_names.empty()) {
@@ -414,9 +410,11 @@ void generate_parquet_data_sources(double scale_factor,
     });
   std::unordered_map<std::string, std::unique_ptr<cudf::table>> tables;
 
+  auto const stream = cudf::get_default_stream();
+
   if (sources.count("orders") or sources.count("lineitem") or sources.count("part")) {
-    auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
-      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    auto [orders, lineitem, part] =
+      cudf::datagen::generate_orders_lineitem_part(scale_factor, stream, managed_pool_mr);
     if (sources.count("orders")) {
       write_to_parquet_device_buffer(orders, SCHEMAS.at("orders"), sources.at("orders"));
       orders = {};
@@ -432,35 +430,27 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   if (sources.count("partsupp")) {
-    auto partsupp = cudf::datagen::generate_partsupp(
-      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    auto partsupp = cudf::datagen::generate_partsupp(scale_factor, stream, managed_pool_mr);
     write_to_parquet_device_buffer(partsupp, SCHEMAS.at("partsupp"), sources.at("partsupp"));
   }
 
   if (sources.count("supplier")) {
-    auto supplier = cudf::datagen::generate_supplier(
-      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    auto supplier = cudf::datagen::generate_supplier(scale_factor, stream, managed_pool_mr);
     write_to_parquet_device_buffer(supplier, SCHEMAS.at("supplier"), sources.at("supplier"));
   }
 
   if (sources.count("customer")) {
-    auto customer = cudf::datagen::generate_customer(
-      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    auto customer = cudf::datagen::generate_customer(scale_factor, stream, managed_pool_mr);
     write_to_parquet_device_buffer(customer, SCHEMAS.at("customer"), sources.at("customer"));
   }
 
   if (sources.count("nation")) {
-    auto nation = cudf::datagen::generate_nation(cudf::get_default_stream(),
-                                                 cudf::get_current_device_resource_ref());
+    auto nation = cudf::datagen::generate_nation(stream, managed_pool_mr);
     write_to_parquet_device_buffer(nation, SCHEMAS.at("nation"), sources.at("nation"));
   }
 
   if (sources.count("region")) {
-    auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
-                                                 cudf::get_current_device_resource_ref());
+    auto region = cudf::datagen::generate_region(stream, managed_pool_mr);
     write_to_parquet_device_buffer(region, SCHEMAS.at("region"), sources.at("region"));
   }
-
-  // Restore the original memory resource
-  cudf::set_current_device_resource(old_mr);
 }

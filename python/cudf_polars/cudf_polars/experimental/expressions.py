@@ -41,22 +41,18 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
-from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
+from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import (
-    _dynamic_planning_on,
-    _get_unique_fractions,
-    _leaf_column_names,
-)
+from cudf_polars.experimental.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -197,15 +193,6 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    unique_fraction_dict = _get_unique_fractions(
-        _leaf_column_names(child),
-        config_options.executor.unique_fraction,
-    )
-
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
-
     input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
@@ -218,7 +205,6 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        unique_fraction=unique_fraction,
     )
 
     return column, input_ir, partition_info
@@ -344,7 +330,6 @@ def _decompose_agg_node(
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
-                config_options.executor.shuffle_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(

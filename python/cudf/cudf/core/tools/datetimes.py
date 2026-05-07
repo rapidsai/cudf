@@ -133,7 +133,7 @@ def to_datetime(
     >>> cudf.to_datetime(df)
     0   2015-02-04
     1   2016-03-05
-    dtype: datetime64[s]
+    dtype: datetime64[us]
     >>> cudf.to_datetime(1490195805, unit='s')
     Timestamp('2017-03-22 15:16:45')
     >>> cudf.to_datetime(1490195805433502912, unit='ns')
@@ -216,32 +216,31 @@ def to_datetime(
                 .str.zfill(2)
             )
             format = "%Y-%m-%d"
+            target_unit = "us"
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
                 if value is not None and value in arg:
                     arg_col = arg._data[value]
                     if arg_col.dtype.kind == "f":
-                        col = new_series._column.strptime(
-                            np.dtype("datetime64[ns]"), format=format
-                        )
+                        target_unit = "ns"
                         break
                     elif arg_col.dtype.kind == "O":
                         string_col = cast("StringColumn", arg_col)
                         if not string_col.is_all_integer():
-                            col = new_series._column.strptime(
-                                np.dtype("datetime64[ns]"), format=format
-                            )
+                            target_unit = "ns"
                             break
-            else:
-                col = new_series._column.strptime(
-                    np.dtype("datetime64[s]"), format=format
-                )
+                    elif u == "ns":
+                        # An explicit nanosecond field forces ns precision
+                        # (pandas widens to [ns] when ns is present).
+                        target_unit = "ns"
+            col = new_series._column.strptime(
+                np.dtype(f"datetime64[{target_unit}]"), format=format
+            )
 
             times_column = None
-            factor_denominator = (
-                unit_to_nanoseconds_conversion["s"]
-                if np.datetime_data(col.dtype)[0] == "s"
-                else 1
+            col_unit = np.datetime_data(col.dtype)[0]
+            factor_denominator = unit_to_nanoseconds_conversion.get(
+                col_unit, 1
             )
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
@@ -259,9 +258,12 @@ def to_datetime(
                                 np.dtype(np.float64)
                             )
 
-                    factor = (
-                        unit_to_nanoseconds_conversion[u] / factor_denominator
-                    )
+                    factor_numerator = unit_to_nanoseconds_conversion[u]
+                    factor: int | float
+                    if factor_numerator % factor_denominator == 0:
+                        factor = factor_numerator // factor_denominator
+                    else:
+                        factor = factor_numerator / factor_denominator
 
                     if times_column is None:
                         times_column = current_col * factor
@@ -280,9 +282,6 @@ def to_datetime(
             )
             return Series._from_column(col, index=arg.index)
         else:
-            if unit is None and is_scalar(arg):
-                unit = "ns"
-
             col = _process_col(
                 col=as_column(arg),
                 unit=unit,
@@ -333,13 +332,13 @@ def _process_col(
             # int column out of it to parse against `format`.
             # Instead we directly cast to int and perform
             # parsing against `format`.
+            # Pandas 3 defaults parsed datetimes to `datetime64[us]`
+            # regardless of format precision.
             col = (
                 col.astype(np.dtype(np.int64))
                 .astype(DEFAULT_STRING_DTYPE)
                 .strptime(
-                    dtype=np.dtype("datetime64[us]")
-                    if "%f" in format
-                    else np.dtype("datetime64[s]"),
+                    dtype=np.dtype("datetime64[us]"),
                     format=format,
                 )
             )
@@ -373,7 +372,13 @@ def _process_col(
             )
 
     elif col.dtype.kind == "O":
-        if unit not in (None, "ns") or col.is_all_null:
+        if col.is_all_null:
+            # Pandas converts all-null inputs to NaT at second precision
+            # regardless of `unit`/`format`; mirror that here without
+            # routing through the int/float path (which would land on
+            # the [ns]/[us] defaults).
+            return col.astype(np.dtype("datetime64[s]"))
+        if unit not in (None, "ns"):
             try:
                 col = col.astype(np.dtype(np.int64))
             except ValueError:
@@ -711,7 +716,13 @@ class DateOffset:
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
 
-            if tz is not None:
+            if tz is not None and not isinstance(
+                datetime_col.dtype, pd.DatetimeTZDtype
+            ):
+                # Older arithmetic stripped the tz; restore it. When the
+                # arithmetic already preserves tz (e.g. datetime+timedelta),
+                # the column is already tz-aware and another tz_localize
+                # would raise "Already tz-aware".
                 datetime_col = datetime_col.tz_localize("UTC").tz_convert(tz)
 
         return datetime_col
