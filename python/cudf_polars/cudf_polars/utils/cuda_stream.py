@@ -13,6 +13,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from pylibcudf.utils import CudaStreamLike
     from rmm.pylibrmm.stream import Stream
 
 
@@ -27,7 +28,7 @@ def get_cuda_stream() -> Stream:
 
 
 def join_cuda_streams(
-    *, downstreams: Sequence[Stream], upstreams: Sequence[Stream]
+    *, downstreams: Sequence[CudaStreamLike], upstreams: Sequence[CudaStreamLike]
 ) -> None:
     """
     Join multiple CUDA streams.
@@ -46,7 +47,7 @@ def join_cuda_streams(
 
 
 def get_joined_cuda_stream(
-    get_cuda_stream: Callable[[], Stream], *, upstreams: Sequence[Stream]
+    get_cuda_stream: Callable[[], Stream], *, upstreams: Sequence[CudaStreamLike]
 ) -> Stream:
     """
     Return a CUDA stream that is joined to the given streams.

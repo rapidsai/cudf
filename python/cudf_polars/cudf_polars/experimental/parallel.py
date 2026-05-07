@@ -9,6 +9,8 @@ import operator
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
@@ -16,7 +18,8 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
-from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -25,11 +28,13 @@ from cudf_polars.dsl.ir import (
     HStack,
     IRExecutionContext,
     MapFunction,
+    Projection,
     Select,
     Slice,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
@@ -48,8 +53,6 @@ from cudf_polars.experimental.utils import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
-
-    import polars as pl
 
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
@@ -397,6 +400,20 @@ def _(
     )
 
 
+def _add_anchor_column(ir: HStack) -> tuple[HStack, str, DataType]:
+    """Add temporary anchor column to preserve row count."""
+    anchor_name = next(unique_names((*ir.schema, *ir.children[0].schema)))
+    anchor_dtype = DataType(pl.datatypes.Int8())
+    anchor_named_expr = NamedExpr(anchor_name, Literal(anchor_dtype, 0))
+    new_ir = HStack(
+        ir.children[0].schema | {anchor_name: anchor_dtype},
+        (anchor_named_expr,),
+        True,  # noqa: FBT003
+        ir.children[0],
+    )
+    return new_ir, anchor_name, anchor_dtype
+
+
 @lower_ir_node.register(HStack)
 def _(
     ir: HStack, rec: LowerIRTransformer
@@ -404,20 +421,29 @@ def _(
     if not all(e.is_pointwise for e in traversal([ne.value for ne in ir.columns])):
         # Redirect non-pointwise HStack to Select so the Select handler can
         # attempt decomposition (or fall back gracefully via decompose_select).
+        child: IR = ir.children[0]
+        anchor_name: str | None = None
         col_map = {ne.name: ne for ne in ir.columns}
-        has_passthrough = any(name not in col_map for name in ir.schema)
-        if has_passthrough or not ir.should_broadcast:
-            exprs = tuple(
-                col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
-                for name, dtype in ir.schema.items()
-            )
-            return lower_ir_node(
-                Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
-                rec,
-            )
-        # All output columns are aggregations: no N-row passthrough to anchor
-        # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
-        return _lower_ir_fallback(ir, rec)
+        schema = ir.schema
+        if ir.should_broadcast and all(name in col_map for name in ir.schema):
+            # We need to add a temporary anchor column to preserve row count.
+            child, anchor_name, anchor_dtype = _add_anchor_column(ir)
+
+            schema = ir.schema | {anchor_name: anchor_dtype}
+        exprs = tuple(
+            col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+            for name, dtype in schema.items()
+        )
+        new_ir: Select | Projection = Select(schema, exprs, ir.should_broadcast, child)
+        if anchor_name is not None:
+            # Need to drop the temporary anchor column.
+            schema = {
+                name: dtype
+                for name, dtype in new_ir.schema.items()
+                if name != anchor_name
+            }
+            new_ir = Projection(schema, new_ir)
+        return lower_ir_node(new_ir, rec)
 
     child, partition_info = rec(ir.children[0])
     new_node = ir.reconstruct([child])
