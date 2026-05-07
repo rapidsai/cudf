@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, cast
+from typing import cast
 
 import pytest
 
@@ -35,20 +35,7 @@ from cudf_polars.utils.config import (
     StreamingExecutor,
     _default_cuda_stream_policy,
 )
-from cudf_polars.utils.cuda_stream import (
-    get_cuda_stream,
-    get_dask_cuda_stream,
-)
-
-
-@pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
-def rapidsmpf_single_available(request, monkeypatch):
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_single_available",
-        lambda: request.param,
-    )
-    return request.param
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
 def test_polars_verbose_warns(monkeypatch):
@@ -232,47 +219,6 @@ def test_parquet_options_from_none() -> None:
     assert config.parquet_options.chunked is True
 
 
-def test_validate_streaming_executor_shuffle_method(
-    *, rapidsmpf_single_available: bool
-) -> None:
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-            executor_options={"shuffle_method": "tasks"},
-        )
-    )
-    assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method == "tasks"
-
-    # rapidsmpf with single cluster
-    engine = pl.GPUEngine(
-        executor="streaming",
-        executor_options={"shuffle_method": "rapidsmpf", "cluster": "single"},
-    )
-
-    if rapidsmpf_single_available:
-        config = ConfigOptions.from_polars_engine(engine)
-        assert config.executor.name == "streaming"
-        assert config.executor.shuffle_method == "rapidsmpf-single"
-    else:
-        with pytest.raises(ValueError, match="rapidsmpf is not installed"):
-            ConfigOptions.from_polars_engine(engine)
-
-
-def test_join_rapidsmpf_single_private_config() -> None:
-    # The user may not specify "rapidsmpf-single" directly
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "shuffle_method": "rapidsmpf-single",
-            "runtime": "tasks",
-        },
-    )
-    with pytest.raises(ValueError, match="not a supported shuffle method"):
-        ConfigOptions.from_polars_engine(engine)
-
-
 @pytest.mark.parametrize("executor", ["in-memory", "streaming"])
 def test_hashable(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(
@@ -319,31 +265,11 @@ def test_validate_cluster() -> None:
         )
 
 
-def test_validate_shuffle_method_defaults() -> None:
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-        )
-    )
-    assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method == "tasks"  # Default for single cluster
-
-    with pytest.raises(ValueError, match="'foo' is not a valid ShuffleMethod"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"shuffle_method": "foo"},
-            )
-        )
-
-
 @pytest.mark.parametrize(
     "option",
     [
         "max_rows_per_partition",
-        "unique_fraction",
         "target_partition_size",
-        "groupby_n_ary",
         "broadcast_join_limit",
         "sink_to_directory",
         "client_device_threshold",
@@ -409,11 +335,8 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "single")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
-        m.setenv("CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", '{"a": 0.5}')
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
-        m.setenv("CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", "43")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
-        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         engine = pl.GPUEngine()
@@ -422,11 +345,8 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.cluster == "single"
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
-        assert config.executor.unique_fraction == {"a": 0.5}
         assert config.executor.target_partition_size == 100
-        assert config.executor.groupby_n_ary == 43
         assert config.executor.broadcast_join_limit == 44
-        assert config.executor.shuffle_method == "tasks"
         assert config.cuda_stream_policy is None
 
 
@@ -498,12 +418,6 @@ def test_default_executor() -> None:
     assert config.executor.name == "streaming"
 
 
-def test_default_runtime() -> None:
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.executor.name == "streaming"
-    assert config.executor.runtime == "tasks"
-
-
 @pytest.mark.parametrize(
     "memory_resource, memory_resource_config",
     [
@@ -537,10 +451,7 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
-            if _is_concurrent_managed_access_supported():
-                assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
-            else:
-                assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
+            assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
 
         elif memory_resource is None:
             # Configured through memory_resource_config
@@ -608,21 +519,17 @@ def test_cuda_stream_pool():
 def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Default from engine
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.cuda_stream_policy is None
+    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
 
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(executor_options={"runtime": "tasks"})
-    )
-    assert config.cuda_stream_policy is None
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
+    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
 
     # Default from env
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.cuda_stream_policy is None
 
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(executor_options={"runtime": "tasks"})
-    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
     assert config.cuda_stream_policy is None
 
 
@@ -635,26 +542,19 @@ def test_default_cuda_stream_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(result, CUDAStreamPoolConfig)
 
 
-def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> None:
+def test_cuda_stream_policy_from_config() -> None:
     engine = pl.GPUEngine(
         executor="streaming",
-        executor_options={"runtime": "rapidsmpf"},
         cuda_stream_policy={
             "pool_size": 32,
             "flags": rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING,
         },
     )
-    if rapidsmpf_single_available:
-        config = ConfigOptions.from_polars_engine(engine)
-        assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-        assert config.cuda_stream_policy.pool_size == 32
-        assert (
-            config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
-        )
-        config.cuda_stream_policy.build().get_stream()  # no exception
-    else:
-        with pytest.raises(ValueError, match="The rapidsmpf streaming engine"):
-            ConfigOptions.from_polars_engine(engine)
+    config = ConfigOptions.from_polars_engine(engine)
+    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
+    assert config.cuda_stream_policy.pool_size == 32
+    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
+    config.cuda_stream_policy.build().get_stream()  # no exception
 
 
 @pytest.mark.parametrize(
@@ -667,26 +567,19 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         '{"pool_size": 32}',
     ],
 )
-def test_cuda_stream_policy_from_env(
-    monkeypatch: pytest.MonkeyPatch, env: str, *, rapidsmpf_single_available: bool
-) -> None:
+def test_cuda_stream_policy_from_env(monkeypatch: pytest.MonkeyPatch, env: str) -> None:
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", env)
-    runtime = "tasks" if env == "default" else "rapidsmpf"
-    engine = pl.GPUEngine(executor="streaming", executor_options={"runtime": runtime})
-    if runtime == "rapidsmpf" and rapidsmpf_single_available:
-        config = ConfigOptions.from_polars_engine(engine)
+    engine = pl.GPUEngine(executor="streaming")
+    config = ConfigOptions.from_polars_engine(engine)
+    if env == "default":
+        assert config.cuda_stream_policy is None
+    else:
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
         if env == "pool":
             assert config.cuda_stream_policy.pool_size == 16
             assert config.cuda_stream_policy.flags == CudaStreamFlags.NON_BLOCKING
         else:
             assert config.cuda_stream_policy.pool_size == 32
-    elif runtime == "rapidsmpf":
-        with pytest.raises(ValueError, match="The rapidsmpf streaming engine"):
-            ConfigOptions.from_polars_engine(engine)
-    else:
-        config = ConfigOptions.from_polars_engine(engine)
-        assert config.cuda_stream_policy is None
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
@@ -696,41 +589,26 @@ def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -> None:
-    pytest.importorskip("rapidsmpf")
-
     # Default from engine
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
-    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
     assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
     assert config.cuda_stream_policy.pool_size == 16
     assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
     # "default" user argument overrides pool default
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
-    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
     assert config.cuda_stream_policy is None
 
 
-@pytest.mark.parametrize(
-    "polars_kwargs",
-    [
-        {"executor": "in-memory"},
-        {"executor": "streaming", "executor_options": {"runtime": "tasks"}},
-    ],
-)
-def test_cuda_stream_policy_pool_only_supported_by_rapidsmpf(
-    polars_kwargs: dict[str, Any],
-) -> None:
+def test_cuda_stream_policy_pool_in_memory_unsupported() -> None:
     with pytest.raises(
         ValueError,
-        match="A stream pool is only supported by the rapidsmpf runtime.",
+        match="A stream pool is only supported by the streaming executor.",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
-                **polars_kwargs,
+                executor="in-memory",
                 cuda_stream_policy={"pool_size": 32, "flags": "NON_BLOCKING"},
             )
         )
@@ -903,8 +781,3 @@ def test_dask_sink_to_directory_false_raises() -> None:
         ValueError, match="The dask cluster requires sink_to_directory=True"
     ):
         StreamingExecutor(cluster=Cluster.DASK, sink_to_directory=False)
-
-
-def test_get_dask_cuda_stream() -> None:
-    stream = get_dask_cuda_stream()
-    assert stream is not None
