@@ -1251,26 +1251,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             return self._reduce_numeric_only(op)
         result = self.agg(op)
         if min_count and min_count > 0:
-            # Mask result rows where the per-group non-null count is less
-            # than ``min_count``.
             counts = self.agg("count")
-            from cudf.core.dataframe import DataFrame
-            from cudf.core.series import Series
-
-            if isinstance(result, DataFrame):
-                for col_name in result._column_names:
-                    if col_name not in counts._column_names:
-                        continue
-                    count_col = counts._data[col_name]
-                    mask = count_col < min_count
-                    result[col_name] = result[col_name].where(
-                        ~Series._from_column(mask), None
-                    )
-            elif isinstance(result, Series):
-                count_series = (
-                    counts if isinstance(counts, Series) else counts.iloc[:, 0]
-                )
-                result = result.where(count_series >= min_count, None)
+            result = result.where(counts >= min_count, None)
         return result
 
     def _scan(self, op: str, *args, **kwargs):
