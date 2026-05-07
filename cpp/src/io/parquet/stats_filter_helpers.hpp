@@ -43,11 +43,9 @@ constexpr size_t initial_chars_capacity = 1024;
 class stats_caster_base {
  protected:
   template <typename T>
-  static inline T decode_byte_array_decimal(uint8_t const* stats_val, size_t stats_size)
-    requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
+  static inline T decode_fixed_width_decimal(uint8_t const* stats_val, size_t stats_size)
+    requires(cudf::is_integral<T>() and !cudf::is_boolean<T>() and cudf::is_signed<T>())
   {
-    CUDF_EXPECTS(cudf::is_signed<T>(),
-                 "FLBA/BYTE_ARRAY decimals must have signed representation types");
     CUDF_EXPECTS(stats_size > 0, "Parquet reader encountered an empty decimal statistics vector");
     CUDF_EXPECTS(stats_size <= sizeof(T),
                  "Parquet reader encountered a statistics vector larger than the type's size");
@@ -75,13 +73,11 @@ class stats_caster_base {
 
   template <typename T>
   static inline T decode_fixed_width_value(uint8_t const* stats_val, size_t stats_size)
-    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
-             cudf::is_chrono<T>())
+    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_chrono<T>())
   {
-    CUDF_EXPECTS(
-      stats_size == sizeof(T),
-      "Parquet reader encountered a mismatch in size of fixed width statistics vector and "
-      "the selected cudf storage type");
+    CUDF_EXPECTS(stats_size == sizeof(T),
+                 "Parquet reader encountered a mismatch in size of statistics vector and the cudf "
+                 "storage type");
     auto value = T{};
     std::memcpy(&value, stats_val, std::min(stats_size, sizeof(T)));
     return value;
@@ -156,10 +152,10 @@ class stats_caster_base {
           // smaller than the selected cudf storage width, so sign extend while decoding
           if constexpr (cudf::is_fixed_point<T>()) {
             return stats_caster_base::target_type<T>(
-              decode_byte_array_decimal<typename T::rep>(stats_val, stats_size), ts_scale);
+              decode_fixed_width_decimal<typename T::rep>(stats_val, stats_size), ts_scale);
           } else {
             return stats_caster_base::target_type<T>(
-              decode_byte_array_decimal<T>(stats_val, stats_size), ts_scale);
+              decode_fixed_width_decimal<T>(stats_val, stats_size), ts_scale);
           }
         }
         // TODO(mh): add support for `UUID` (big-endian but no sign extension) here
