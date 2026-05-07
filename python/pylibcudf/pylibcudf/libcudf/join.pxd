@@ -13,7 +13,7 @@ from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_equality, size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 from rmm.librmm.device_uvector cimport device_uvector
@@ -28,7 +28,7 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -36,7 +36,7 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -44,7 +44,7 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -52,7 +52,7 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -60,7 +60,7 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -68,14 +68,14 @@ cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] cross_join(
         const table_view left,
         const table_view right,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -84,7 +84,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -93,7 +93,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -101,7 +101,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -110,7 +110,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -118,7 +118,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -126,7 +126,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -135,7 +135,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -143,7 +143,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -152,7 +152,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -165,7 +165,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const expression binary_predicate,
         null_equality compare_nulls,
         output_size_data_type output_size_data,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -177,7 +177,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const expression binary_predicate,
         null_equality compare_nulls,
         output_size_data_type output_size_data,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -189,7 +189,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const expression binary_predicate,
         null_equality compare_nulls,
         output_size_data_type output_size_data,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -200,7 +200,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -211,7 +211,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -225,21 +225,21 @@ cdef extern from "cudf/join/filtered_join.hpp" namespace "cudf" nogil:
         filtered_join(
             const table_view build,
             null_equality compare_nulls,
-            cuda_stream_view stream
+            cudaStream_t stream
         ) except +libcudf_exception_handler
         filtered_join(
             const table_view build,
             null_equality compare_nulls,
             double load_factor,
-            cuda_stream_view stream
+            cudaStream_t stream
         ) except +libcudf_exception_handler
         gather_map_type semi_join(
             const table_view probe,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
         gather_map_type anti_join(
             const table_view probe,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler

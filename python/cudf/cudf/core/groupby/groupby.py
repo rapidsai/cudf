@@ -1306,13 +1306,13 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if min_count != 0:
-            raise NotImplementedError(
-                "min_count parameter is not implemented yet"
-            )
         if numeric_only:
             return self._reduce_numeric_only(op)
-        return self.agg(op)
+        result = self.agg(op)
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
     def _scan(self, op: str, *args, **kwargs):
         """{op_name} for each group."""

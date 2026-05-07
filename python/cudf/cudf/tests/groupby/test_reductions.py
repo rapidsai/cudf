@@ -1244,4 +1244,28 @@ def test_groupby_series_self_does_not_exclude():
     with cudf.option_context("mode.pandas_compatible", True):
         got = gsr.groupby(gsr).count()
     expect = psr.groupby(psr).count()
+
+
+@pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])
+@pytest.mark.parametrize("min_count", [0, 1, 2, 3, 5])
+def test_groupby_reduce_min_count(op, min_count):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3], "b": [1.0, 2.0, 3.0, np.nan, 5.0]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)(min_count=min_count)
+    expect = getattr(pdf.groupby("a"), op)(min_count=min_count)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("min_count", [0, 2, 3])
+def test_groupby_series_reduce_min_count(min_count):
+    psr = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
+    pkeys = pd.Series([1, 1, 2, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gsr.groupby(gkeys).sum(min_count=min_count)
+    expect = psr.groupby(pkeys).sum(min_count=min_count)
     assert_eq(expect, got)
