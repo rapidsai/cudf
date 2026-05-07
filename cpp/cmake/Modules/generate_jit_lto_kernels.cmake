@@ -36,7 +36,7 @@ function(add_jit_lto_kernel kernel_target)
     COMMENT "Generate embedded fatbin header for ${kernel_target}"
     COMMAND "${bin_to_c}" --const --name embedded_fatbin --static $<TARGET_OBJECTS:${kernel_target}>
             > "${_JIT_LTO_FATBIN_HEADER_FILE}"
-    DEPENDS ${kernel_target}
+    DEPENDS $<TARGET_OBJECTS:${kernel_target}>
   )
 endfunction()
 
