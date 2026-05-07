@@ -52,9 +52,9 @@ class stats_caster_base {
 
     // Use std::type_identity to defer and avoid instantiating std::make_unsigned<__int128_t>::type
     // which is not a standard integer type
-    using UnsignedT    = typename std::conditional_t<std::is_same_v<T, __int128_t>,
-                                                     std::type_identity<unsigned __int128>,
-                                                     std::make_unsigned<T>>::type;
+    using UnsignedT    = std::conditional_t<std::is_same_v<T, __int128_t>,
+                                            std::type_identity<unsigned __int128>,
+                                            std::make_unsigned<T>>::type;
     auto const payload = std::span{stats_val, stats_size};
     auto value         = std::accumulate(
       payload.begin(), payload.end(), UnsignedT{0}, [](UnsignedT acc, uint8_t byte) {
