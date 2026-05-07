@@ -69,6 +69,7 @@ def _broadcast_gw_sync(
     chunk_df: DataFrame,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
+    name_remap: dict[str, str],
 ) -> Any:
     """Broadcast the global aggregate for one GroupedWindow back to row positions."""
     by_exprs = gw.children[: gw.by_count]
@@ -86,8 +87,12 @@ def _broadcast_gw_sync(
     _, out_names, out_dtypes = gw._build_groupby_requests(
         scalar_named, chunk_df, by_cols=by_cols
     )
+    # ne.name is gw-local; look up the globally-unique remapped name in
+    # global_agg_df, but keep the gw-local name on the broadcasted output
+    # so gw.post.value.evaluate (which uses the gw-local name) sees it.
     value_tbls = [
-        plc.Table([global_agg_df.column_map[ne.name].obj]) for ne in scalar_named
+        plc.Table([global_agg_df.column_map[name_remap[ne.name]].obj])
+        for ne in scalar_named
     ]
 
     broadcasted_cols = gw._broadcast_agg_results(
@@ -104,6 +109,7 @@ def _evaluate_ir_broadcast_sync(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
+    name_remaps: dict[int, dict[str, str]],
 ) -> DataFrame:
     """Evaluate Select/HStack/Over using a pre-computed global aggregate for each GroupedWindow."""
     child_schema = ir.children[0].schema
@@ -116,7 +122,9 @@ def _evaluate_ir_broadcast_sync(
     )
 
     gw_results: dict[int, Any] = {
-        id(gw): _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names)
+        id(gw): _broadcast_gw_sync(
+            gw, chunk_df, global_agg_df, key_names, name_remaps[id(gw)]
+        )
         for gw in gw_nodes
     }
 
@@ -144,6 +152,7 @@ async def _evaluate_broadcast_chunk(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
+    name_remaps: dict[int, dict[str, str]],
 ) -> TableChunk:
     """Make chunk available then evaluate it against the pre-computed global aggregate."""
     chunk, extra = await make_table_chunks_available_or_wait(
@@ -161,6 +170,7 @@ async def _evaluate_broadcast_chunk(
             global_agg_df,
             key_names,
             gw_nodes,
+            name_remaps,
         )
     return TableChunk.from_pylibcudf_table(
         result_df.table, result_df.stream, exclusive_view=True, br=context.br()
@@ -408,7 +418,7 @@ async def _allgather_and_broadcast(
         for c in gw_nodes[0].children[: gw_nodes[0].by_count]
         if isinstance(c, Col)
     )
-    piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
+    piecewise_ir, reduction_ir, agg_select_ir, name_remaps = _build_over_groupby_irs(
         gw_nodes, ir.children[0]
     )
 
@@ -488,6 +498,7 @@ async def _allgather_and_broadcast(
             global_agg_df,
             key_names,
             gw_nodes,
+            name_remaps,
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())

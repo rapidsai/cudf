@@ -36,7 +36,7 @@ _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
 def _build_over_groupby_irs(
     gw_nodes: tuple[GroupedWindow, ...],
     child_ir: IR,
-) -> tuple[GroupBy, GroupBy, Select | None]:
+) -> tuple[GroupBy, GroupBy, Select | None, dict[int, dict[str, str]]]:
     """
     Build piecewise, reduction, and (optionally) selection GroupBy IRs.
 
@@ -57,22 +57,31 @@ def _build_over_groupby_irs(
     agg_select_ir
         Select IR for post-aggregation expressions (e.g. division for mean);
         None when all aggregations are pass-through.
+    name_remaps
+        Per-gw mapping from original named-agg name to its globally-unique
+        name in the aggregate IRs. Polars assigns each ``GroupedWindow`` its
+        own local internal name (often the same string across gws), so we
+        rename here to avoid collisions in the shared piecewise schema.
     """
     gw = gw_nodes[0]
     by_exprs = cast("list[Col]", list(gw.children[: gw.by_count]))
     key_named_exprs = [NamedExpr(e.name, e) for e in by_exprs]
     key_schema = {e.name: child_ir.schema[e.name] for e in by_exprs}
 
-    seen: set[str] = set()
+    name_gen = unique_names(child_ir.schema.keys())
     all_scalar_named: list[NamedExpr] = []
+    name_remaps: dict[int, dict[str, str]] = {}
     for gw_node in gw_nodes:
         reductions, _ = gw_node._split_named_expr()
+        remap: dict[str, str] = {}
         for ne in reductions:
-            if ne.name not in seen:
-                all_scalar_named.append(ne)
-                seen.add(ne.name)
+            if ne.name in remap:
+                continue
+            renamed = next(name_gen)
+            all_scalar_named.append(NamedExpr(renamed, ne.value))
+            remap[ne.name] = renamed
+        name_remaps[id(gw_node)] = remap
 
-    name_gen = unique_names(child_ir.schema.keys())
     decompositions = [
         decompose(ne.name, ne.value, names=name_gen) for ne in all_scalar_named
     ]
@@ -132,13 +141,19 @@ def _build_over_groupby_irs(
     else:
         agg_select_ir = None
 
-    return piecewise_ir, reduction_ir, agg_select_ir
+    return piecewise_ir, reduction_ir, agg_select_ir, name_remaps
 
 
 class Over(IR):
     """Window over() IR node for the streaming runtime."""
 
     __slots__ = ("exprs", "is_scalar", "key_indices")
+    _non_child: ClassVar[tuple[str, ...]] = (
+        "schema",
+        "key_indices",
+        "is_scalar",
+        "exprs",
+    )
     _n_non_child_args: ClassVar[int] = 3
 
     key_indices: tuple[int, ...]

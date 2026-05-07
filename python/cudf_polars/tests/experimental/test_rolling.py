@@ -102,6 +102,22 @@ def test_over_with_columns(engine):
     )
 
 
+def test_over_colliding_internal_agg_names(engine):
+    df = pl.LazyFrame(
+        {
+            "category": ["A", "A", "B", "B", "C"],
+            "value": [20, 30, 15, 40, 35],
+        }
+    )
+    q = df.select(
+        pl.col("category"),
+        pl.col("value"),
+        pl.col("value").sum().over("category").alias("cat_sum"),
+        pl.col("value").mean().over("category").alias("cat_avg"),
+    ).sort("category", "value")
+    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
 @pytest.mark.parametrize(
     "expr",
     [
