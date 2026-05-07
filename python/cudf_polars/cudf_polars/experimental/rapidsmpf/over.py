@@ -79,9 +79,7 @@ def _broadcast_gw_sync(
         stream=chunk_df.stream,
     )
     by_tbl = plc.Table([c.obj for c in by_cols])
-    group_keys_tbl = plc.Table(
-        [global_agg_df.column_map[name].obj for name in key_names]
-    )
+    group_keys_tbl = global_agg_df.select(key_names).table
 
     scalar_named, _ = gw._split_named_expr()
     _, out_names, out_dtypes = gw._build_groupby_requests(
@@ -105,21 +103,14 @@ def _broadcast_gw_sync(
 def _evaluate_ir_broadcast_sync(
     chunk: TableChunk,
     ir: Select | HStack | Over,
-    ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
     name_remaps: dict[GroupedWindow, dict[str, str]],
-) -> DataFrame:
+    br: Any,
+) -> TableChunk:
     """Evaluate Select/HStack/Over using a pre-computed global aggregate for each GroupedWindow."""
-    child_schema = ir.children[0].schema
-    stream = ir_context.get_cuda_stream()
-    chunk_df = DataFrame.from_table(
-        chunk.table_view(),
-        list(child_schema.keys()),
-        list(child_schema.values()),
-        stream,
-    )
+    chunk_df = chunk_to_frame(chunk, ir.children[0])
 
     gw_results: dict[GroupedWindow, Any] = {
         gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, name_remaps[gw])
@@ -137,16 +128,20 @@ def _evaluate_ir_broadcast_sync(
             col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
         result_cols.append(col)
 
-    if is_hstack:
-        return chunk_df.with_columns(result_cols, stream=stream)
-    return DataFrame(result_cols, stream=stream)
+    result_df = (
+        chunk_df.with_columns(result_cols, stream=chunk_df.stream)
+        if is_hstack
+        else DataFrame(result_cols, stream=chunk_df.stream)
+    )
+    return TableChunk.from_pylibcudf_table(
+        result_df.table, result_df.stream, exclusive_view=True, br=br
+    )
 
 
 async def _evaluate_broadcast_chunk(
     context: Context,
     chunk: TableChunk,
     ir: Select | HStack | Over,
-    ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
@@ -160,19 +155,16 @@ async def _evaluate_broadcast_chunk(
         net_memory_delta=0,
     )
     with opaque_memory_usage(extra):
-        result_df = await asyncio.to_thread(
+        return await asyncio.to_thread(
             _evaluate_ir_broadcast_sync,
             chunk,
             ir,
-            ir_context,
             global_agg_df,
             key_names,
             gw_nodes,
             name_remaps,
+            context.br(),
         )
-    return TableChunk.from_pylibcudf_table(
-        result_df.table, result_df.stream, exclusive_view=True, br=context.br()
-    )
 
 
 @dataclass(frozen=True)
@@ -219,19 +211,16 @@ def _append_origin_stamps(
     table = chunk.table_view()
     n_rows = table.num_rows()
     int32 = plc.types.DataType(plc.TypeId.INT32)
-    zero = plc.Scalar.from_py(0, int32, stream=stream)
-    one = plc.Scalar.from_py(1, int32, stream=stream)
-    chunk_index_col = plc.filling.sequence(
-        n_rows,
-        plc.Scalar.from_py(chunk_index, int32, stream=stream),
-        zero,
-        stream=stream,
+    chunk_index_col = plc.Column.from_scalar(
+        plc.Scalar.from_py(chunk_index, int32, stream=stream), n_rows, stream=stream
     )
-    position_col = plc.filling.sequence(n_rows, zero, one, stream=stream)
-    rank_col = plc.filling.sequence(
+    rank_col = plc.Column.from_scalar(
+        plc.Scalar.from_py(origin_rank, int32, stream=stream), n_rows, stream=stream
+    )
+    position_col = plc.filling.sequence(
         n_rows,
-        plc.Scalar.from_py(origin_rank, int32, stream=stream),
-        zero,
+        plc.Scalar.from_py(0, int32, stream=stream),
+        plc.Scalar.from_py(1, int32, stream=stream),
         stream=stream,
     )
     return TableChunk.from_pylibcudf_table(
@@ -319,14 +308,12 @@ def _split_by_chunk_index(
 
     stream = ir_context.get_cuda_stream()
     columns = table.columns()
-    sort_order = plc.sorting.stable_sorted_order(
+    sorted_table = plc.sorting.stable_sort_by_key(
+        table,
         plc.Table([columns[chunk_index_column], columns[position_column]]),
         [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
         [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         stream=stream,
-    )
-    sorted_table = plc.copying.gather(
-        table, sort_order, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
     )
 
     needles = plc.Column.from_iterable_of_py(
@@ -341,16 +328,7 @@ def _split_by_chunk_index(
         [plc.types.NullOrder.AFTER],
         stream=stream,
     )
-    split_positions = (
-        DataFrame.from_table(
-            plc.Table([split_position_col]),
-            ["p"],
-            [DataType(pl.Int32())],
-            stream=stream,
-        )
-        .to_polars()["p"]
-        .to_list()
-    )
+    split_positions = split_position_col.to_arrow(stream=stream).to_pylist()
 
     output_table = plc.Table([sorted_table.columns()[i] for i in output_indices])
     pieces = plc.copying.split(output_table, split_positions, stream=stream)
@@ -359,34 +337,15 @@ def _split_by_chunk_index(
     for chunk_index, piece in enumerate(pieces):
         if piece.num_rows() == 0:
             continue
-        # ``split`` returns zero-copy views into ``output_table``; concatenate
-        # to materialise an independent buffer.
+        # ``split`` returns zero-copy views into ``output_table``; copy to
+        # materialise an independent buffer.
         by_chunk_index[chunk_index] = TableChunk.from_pylibcudf_table(
-            plc.concatenate.concatenate([piece], stream=stream),
+            piece.copy(stream=stream),
             stream,
             exclusive_view=True,
             br=br,
         )
     return by_chunk_index
-
-
-def _empty_output_chunk(
-    output_dtypes: list[DataType],
-    stream: Stream,
-    br: Any,
-) -> TableChunk:
-    """Build an empty chunk with the given column dtypes."""
-    return TableChunk.from_pylibcudf_table(
-        plc.Table(
-            [
-                plc.column_factories.make_empty_column(dt.plc_type, stream=stream)
-                for dt in output_dtypes
-            ]
-        ),
-        stream,
-        exclusive_view=True,
-        br=br,
-    )
 
 
 async def _allgather_and_broadcast(
@@ -424,18 +383,18 @@ async def _allgather_and_broadcast(
     partial_aggs: list[TableChunk] = []
 
     while (msg := await ch_in.recv(context)) is not None:
-        raw_chunk = TableChunk.from_message(msg, br=context.br())
-        avail_chunk, extra = await make_table_chunks_available_or_wait(
+        chunk = TableChunk.from_message(msg, br=context.br())
+        chunk, extra = await make_table_chunks_available_or_wait(
             context,
-            raw_chunk,
-            reserve_extra=raw_chunk.data_alloc_size(),
+            chunk,
+            reserve_extra=chunk.data_alloc_size(),
             net_memory_delta=0,
         )
-        buffered.append((msg.sequence_number, avail_chunk))
+        buffered.append((msg.sequence_number, chunk))
         with opaque_memory_usage(extra):
             partial = await asyncio.to_thread(
                 _evaluate_chunk_sync,
-                avail_chunk,
+                chunk,
                 piecewise_ir,
                 ir_context,
                 context.br(),
@@ -489,7 +448,6 @@ async def _allgather_and_broadcast(
             context,
             chunk,
             ir,
-            ir_context,
             global_agg_df,
             key_names,
             gw_nodes,
@@ -641,7 +599,6 @@ async def _reassemble_input_chunks(
     output_indices = list(range(n_exprs))
     chunk_index_column = n_exprs
     position_column = n_exprs + 1
-    output_dtypes = [ne.value.dtype for ne in ir.exprs]
     n_chunks = len(sequence_numbers)
 
     by_chunk_index: dict[int, TableChunk] = {}
@@ -659,8 +616,8 @@ async def _reassemble_input_chunks(
 
     stream = ir_context.get_cuda_stream()
     for chunk_index, sequence_number in enumerate(sequence_numbers):
-        chunk = by_chunk_index.get(chunk_index) or _empty_output_chunk(
-            output_dtypes, stream, context.br()
+        chunk = by_chunk_index.get(chunk_index) or empty_table_chunk(
+            ir, context, stream
         )
         if tracer is not None:
             tracer.add_chunk(table=chunk.table_view())
