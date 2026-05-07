@@ -11,7 +11,7 @@
 #include <sstream>
 #include <string>
 
-namespace {
+namespace cudf::detail {
 /**
  * @brief Returns the value of the environment variable, or a default value if the variable is not
  * present.
@@ -52,4 +52,4 @@ inline bool get_bool_env_or(std::string_view env_var_name, bool default_val)
          val == "True";
 }
 
-}  // namespace
+}  // namespace cudf::detail
