@@ -1127,8 +1127,9 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
     std::mt19937 rng{0xACAD1A};
     using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-    // Hot pages contain values in [0, frequent_set_size - 1], rare pages contain values in
-    // [frequent_set_size, cardinality - 1]
+    // Hot pages contain values in [0, frequent_set_size - 1], (first `freq_pages` pages in the
+    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `rare_pages`
+    // pages in the chunk)
     std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
     std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
     auto constexpr threshold = freq_pages * page_size;
