@@ -501,8 +501,13 @@ def test_groupby_sum_decimal_null_group(engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.xfail(
-    raises=AssertionError,
-    reason="https://github.com/rapidsai/cudf/issues/19610",
+    raises=(AssertionError, pl.exceptions.SchemaError),
+    reason=(
+        "https://github.com/rapidsai/cudf/issues/19610 — in-memory engine "
+        "fails with AssertionError (wrong values); multi-rank streaming "
+        "fails earlier with SchemaError (literal agg yields a divergent "
+        "schema after cross-rank concat)."
+    ),
 )
 def test_groupby_literal_agg(engine: pl.GPUEngine):
     df = pl.LazyFrame({"c0": [True, False]})
