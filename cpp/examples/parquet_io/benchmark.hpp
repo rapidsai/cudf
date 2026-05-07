@@ -18,6 +18,8 @@
 template <std::invocable F>
 void benchmark(F&& f, std::size_t iterations)
 {
+  if (iterations == 0) { return; }
+
   auto total_time = double{0.0};
 
   std::for_each(
