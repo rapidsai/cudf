@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from cudf_polars.typing import GenericTransformer
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl import ir
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import (
         PartitionInfo,
         StatsCollector,
@@ -70,40 +70,5 @@ def lower_ir_node(
     See Also
     --------
     lower_ir_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@singledispatch
-def generate_ir_tasks(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """
-    Generate a task graph for evaluation of an IR node.
-
-    Parameters
-    ----------
-    ir
-        IR node to generate tasks for.
-    partition_info
-        Partitioning information, obtained from :func:`lower_ir_graph`.
-    context
-        Runtime context for IR node execution.
-
-    Returns
-    -------
-    mapping
-        A (partial) dask task graph for the evaluation of an ir node.
-
-    Notes
-    -----
-    Task generation should only produce the tasks for the current node,
-    referring to child tasks by name.
-
-    See Also
-    --------
-    task_graph
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
