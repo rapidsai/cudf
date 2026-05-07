@@ -822,7 +822,7 @@ class NormalizedPartitioning:
                     return False
                 n = len(keys)
             return all(
-                ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=False)
+                ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True)
             )
 
         def _keys_match(
