@@ -233,7 +233,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             null_count,
             std::move(*col_content.null_mask));
         }
-      } break;
+      }
 
       case type_id::LIST: {
         // make offsets column
@@ -332,7 +332,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
           0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr});
       }
       return cudf::make_empty_column(buffer.type);
-    } break;
+    }
 
     case type_id::LIST: {
       // make offsets column
