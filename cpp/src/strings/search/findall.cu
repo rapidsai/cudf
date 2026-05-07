@@ -71,9 +71,8 @@ struct one_capture_fn {
   {
     if (d_strings.is_null(idx)) { return; }
 
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const bytes  = d_str.size_bytes();
-    auto const groups = d_prog.group_counts();
+    auto const d_str = d_strings.element<string_view>(idx);
+    auto const bytes = d_str.size_bytes();
 
     auto d_output   = d_indices + d_offsets[idx];
     auto output_idx = size_type{0};
