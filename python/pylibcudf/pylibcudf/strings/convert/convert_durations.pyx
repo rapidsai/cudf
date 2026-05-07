@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.types import DataType
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_durations", "to_durations"]
 
@@ -21,7 +22,7 @@ cpdef Column to_durations(
     Column input,
     DataType duration_type,
     str format,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -51,7 +52,8 @@ cpdef Column to_durations(
     """
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -59,16 +61,16 @@ cpdef Column to_durations(
             input.view(),
             duration_type.c_obj,
             c_format,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column from_durations(
     Column durations,
     str format=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -95,7 +97,8 @@ cpdef Column from_durations(
         New strings column with formatted durations.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if format is None:
@@ -106,8 +109,8 @@ cpdef Column from_durations(
         c_result = cpp_convert_durations.from_durations(
             durations.view(),
             c_format,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
