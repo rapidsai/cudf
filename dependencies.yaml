@@ -26,6 +26,7 @@ files:
       - depends_on_numba_cuda
       - depends_on_rapids_logger
       - depends_on_rapidsmpf
+      - depends_on_ray
       - depends_on_rmm
       - develop
       - docs
@@ -160,6 +161,7 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
+      - depends_on_ray
   test_java:
     output: none
     includes:
