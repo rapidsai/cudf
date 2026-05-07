@@ -161,7 +161,6 @@ class stats_caster_base {
           }
         }
         // TODO(mh): add support for `UUID` (big-endian but no sign extension) here
-        [[fallthrough]];
       default:
         // unsupported type
         CUDF_FAIL("Invalid type and stats combination");
