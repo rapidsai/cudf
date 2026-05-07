@@ -23,10 +23,10 @@ template <join_kind Join>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 probe_join_hash_table(
-  cudf::table_view const& build_table,
-  cudf::table_view const& probe_table,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  cudf::table_view const& right_table,
+  cudf::table_view const& left_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_right,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
   cudf::detail::hash_table_t const& hash_table,
   bool has_nulls,
   null_equality compare_nulls,
@@ -41,10 +41,10 @@ probe_join_hash_table(
 
   std::size_t const join_size = output_size
                                   ? *output_size
-                                  : compute_join_output_size<size_join>(build_table,
-                                                                        probe_table,
-                                                                        preprocessed_build,
-                                                                        preprocessed_probe,
+                                  : compute_join_output_size<size_join>(right_table,
+                                                                        left_table,
+                                                                        preprocessed_right,
+                                                                        preprocessed_left,
                                                                         hash_table,
                                                                         has_nulls,
                                                                         compare_nulls,
@@ -60,7 +60,7 @@ probe_join_hash_table(
   cudf::prefetch::detail::prefetch(*left_indices, stream);
   cudf::prefetch::detail::prefetch(*right_indices, stream);
 
-  auto const probe_table_num_rows = probe_table.num_rows();
+  auto const left_table_num_rows = left_table.num_rows();
   auto const out_probe_begin =
     thrust::make_transform_output_iterator(left_indices->begin(), output_fn{});
   auto const out_build_begin =
@@ -70,7 +70,7 @@ probe_join_hash_table(
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
     if constexpr (Join == join_kind::INNER_JOIN) {
       hash_table.retrieve(iter,
-                          iter + probe_table_num_rows,
+                          iter + left_table_num_rows,
                           equality,
                           hash_table.hash_function(),
                           out_probe_begin,
@@ -79,7 +79,7 @@ probe_join_hash_table(
     } else {
       [[maybe_unused]] auto out_probe_end = hash_table
                                               .retrieve_outer(iter,
-                                                              iter + probe_table_num_rows,
+                                                              iter + left_table_num_rows,
                                                               equality,
                                                               hash_table.hash_function(),
                                                               out_probe_begin,
@@ -95,10 +95,10 @@ probe_join_hash_table(
     }
   };
 
-  dispatch_join_comparator(build_table,
-                           probe_table,
-                           preprocessed_build,
-                           preprocessed_probe,
+  dispatch_join_comparator(right_table,
+                           left_table,
+                           preprocessed_right,
+                           preprocessed_left,
                            has_nulls,
                            compare_nulls,
                            retrieve_results);
@@ -108,22 +108,22 @@ probe_join_hash_table(
 
 template <typename RightOutputIterator>
 void retrieve_left_join_build_indices(
-  cudf::table_view const& build_table,
-  cudf::table_view const& probe_table,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  cudf::table_view const& right_table,
+  cudf::table_view const& left_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_right,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
   cudf::detail::hash_table_t const& hash_table,
   bool has_nulls,
   null_equality compare_nulls,
   RightOutputIterator out_build_begin,
   rmm::cuda_stream_view stream)
 {
-  auto const probe_table_num_rows = probe_table.num_rows();
+  auto const left_table_num_rows = left_table.num_rows();
 
   auto retrieve_results = [&](auto equality, auto d_hasher) {
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
     hash_table.retrieve_outer(iter,
-                              iter + probe_table_num_rows,
+                              iter + left_table_num_rows,
                               equality,
                               hash_table.hash_function(),
                               cuda::make_discard_iterator(),
@@ -131,10 +131,10 @@ void retrieve_left_join_build_indices(
                               stream.value());
   };
 
-  dispatch_join_comparator(build_table,
-                           probe_table,
-                           preprocessed_build,
-                           preprocessed_probe,
+  dispatch_join_comparator(right_table,
+                           left_table,
+                           preprocessed_right,
+                           preprocessed_left,
                            has_nulls,
                            compare_nulls,
                            retrieve_results);
@@ -144,36 +144,36 @@ template <typename Hasher>
 template <join_kind Join>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join<Hasher>::join_retrieve(cudf::table_view const& probe,
+hash_join<Hasher>::join_retrieve(cudf::table_view const& left,
                                  std::optional<std::size_t> output_size,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
 
-  validate_hash_join_probe(_build, probe, _has_nulls);
+  validate_hash_join_probe(_right, left, _has_nulls);
 
   if constexpr (Join == join_kind::INNER_JOIN) {
-    if (is_trivial_join(probe, _build, Join)) {
+    if (is_trivial_join(left, _right, Join)) {
       return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                        std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
     }
   } else {
-    if (_is_empty) { return get_trivial_left_join_indices(probe, stream, mr); }
+    if (_is_empty) { return get_trivial_left_join_indices(left, stream, mr); }
 
-    if (is_trivial_join(probe, _build, Join)) {
+    if (is_trivial_join(left, _right, Join)) {
       return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                        std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
     }
   }
 
-  auto const preprocessed_probe =
-    cudf::detail::row::equality::preprocessed_table::create(probe, stream);
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream);
 
-  auto join_indices = cudf::detail::probe_join_hash_table<Join>(_build,
-                                                                probe,
-                                                                _preprocessed_build,
-                                                                preprocessed_probe,
+  auto join_indices = cudf::detail::probe_join_hash_table<Join>(_right,
+                                                                left,
+                                                                _preprocessed_right,
+                                                                preprocessed_left,
                                                                 _impl->_hash_table,
                                                                 _has_nulls,
                                                                 _nulls_equal,
@@ -183,7 +183,7 @@ hash_join<Hasher>::join_retrieve(cudf::table_view const& probe,
 
   if constexpr (Join == join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, probe.num_rows(), _build.num_rows(), stream, mr);
+      join_indices.second, left.num_rows(), _right.num_rows(), stream, mr);
     return detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   } else {
     return join_indices;

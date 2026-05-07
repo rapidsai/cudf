@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -62,6 +62,18 @@ def test_dataframe_to_cupy():
 
     for i, k in enumerate("ac"):
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
+
+
+@pytest.mark.parametrize("in_dtype", ["int32", "int64", "float32", "float64"])
+@pytest.mark.parametrize("out_dtype", ["int32", "int64", "float32", "float64"])
+def test_dataframe_to_cupy_dtype(in_dtype, out_dtype):
+    data = np.arange(12, dtype=in_dtype).reshape(3, 4)
+    df = cudf.DataFrame(data)
+
+    result = df.to_cupy(dtype=out_dtype)
+
+    assert result.dtype == np.dtype(out_dtype)
+    np.testing.assert_allclose(result.get(), data.astype(out_dtype))
 
 
 @pytest.mark.parametrize("has_nulls", [False, True])

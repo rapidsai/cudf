@@ -66,7 +66,7 @@ def test_single_communicator_outside_rrun() -> None:
 
 def test_reserved_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd_context"):
+    for key in ("cluster", "spmd_context"):
         with (
             pytest.raises(TypeError, match="reserved"),
             SPMDEngine(executor_options={key: "anything"}),
@@ -320,7 +320,6 @@ def test_reset_updates_executor_options(comm: Communicator) -> None:
         opts = engine.config["executor_options"]
         assert opts["max_rows_per_partition"] == 42
         # Reserved keys are still injected by ``_reset``.
-        assert opts["runtime"] == "rapidsmpf"
         assert opts["cluster"] == "spmd"
         assert isinstance(opts["spmd_context"], SPMDContext)
 

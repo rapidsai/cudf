@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -18,6 +18,7 @@ from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["is_letter", "porter_stemmer_measure", "LetterType"]
 
@@ -25,7 +26,7 @@ cpdef Column is_letter(
     Column input,
     bool check_vowels,
     ColumnOrSize indices,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -55,7 +56,8 @@ cpdef Column is_letter(
         New boolean column.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -63,14 +65,14 @@ cpdef Column is_letter(
             input.view(),
             letter_type.VOWEL if check_vowels else letter_type.CONSONANT,
             indices if ColumnOrSize is size_type else indices.view(),
-            stream.view()
+            _cs
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column porter_stemmer_measure(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns the Porter Stemmer measurements of a strings column.
@@ -92,12 +94,13 @@ cpdef Column porter_stemmer_measure(
         New column of measure values
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_porter_stemmer_measure(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_porter_stemmer_measure(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 LetterType.__str__ = LetterType.__repr__
