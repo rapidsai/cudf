@@ -380,7 +380,16 @@ def _split_by_chunk_index(
         [plc.types.NullOrder.AFTER],
         stream=stream,
     )
-    split_positions = split_position_col.to_arrow(stream=stream).to_pylist()
+    split_positions = (
+        DataFrame.from_table(
+            plc.Table([split_position_col]),
+            ["p"],
+            [DataType(pl.Int32())],
+            stream=stream,
+        )
+        .to_polars()["p"]
+        .to_list()
+    )
 
     output_table = plc.Table([sorted_table.columns()[i] for i in output_indices])
     pieces = plc.copying.split(output_table, split_positions, stream=stream)
