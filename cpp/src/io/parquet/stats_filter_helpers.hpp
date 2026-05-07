@@ -52,6 +52,7 @@ class stats_caster_base {
 
     // Use std::type_identity to defer and avoid instantiating std::make_unsigned<__int128_t>::type
     // which is not a standard integer type
+    // NOLINTNEXTLINE(modernize-type-traits)
     using UnsignedT    = std::conditional_t<std::is_same_v<T, __int128_t>,
                                             std::type_identity<unsigned __int128>,
                                             std::make_unsigned<T>>::type;
