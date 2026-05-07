@@ -109,7 +109,7 @@ def _evaluate_ir_broadcast_sync(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
-    name_remaps: dict[int, dict[str, str]],
+    name_remaps: dict[GroupedWindow, dict[str, str]],
 ) -> DataFrame:
     """Evaluate Select/HStack/Over using a pre-computed global aggregate for each GroupedWindow."""
     child_schema = ir.children[0].schema
@@ -121,10 +121,8 @@ def _evaluate_ir_broadcast_sync(
         stream,
     )
 
-    gw_results: dict[int, Any] = {
-        id(gw): _broadcast_gw_sync(
-            gw, chunk_df, global_agg_df, key_names, name_remaps[id(gw)]
-        )
+    gw_results: dict[GroupedWindow, Any] = {
+        gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, name_remaps[gw])
         for gw in gw_nodes
     }
 
@@ -132,9 +130,9 @@ def _evaluate_ir_broadcast_sync(
     exprs = ir.columns if isinstance(ir, HStack) else ir.exprs
     result_cols = []
     for ne in exprs:
-        if isinstance(ne.value, GroupedWindow) and id(ne.value) in gw_results:
+        if isinstance(ne.value, GroupedWindow) and ne.value in gw_results:
             # gw.post.value.evaluate uses the post name, not ne.name
-            col = gw_results[id(ne.value)].rename(ne.name)
+            col = gw_results[ne.value].rename(ne.name)
         else:
             col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
         result_cols.append(col)
@@ -152,7 +150,7 @@ async def _evaluate_broadcast_chunk(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
-    name_remaps: dict[int, dict[str, str]],
+    name_remaps: dict[GroupedWindow, dict[str, str]],
 ) -> TableChunk:
     """Make chunk available then evaluate it against the pre-computed global aggregate."""
     chunk, extra = await make_table_chunks_available_or_wait(

@@ -37,7 +37,7 @@ _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
 def _build_over_groupby_irs(
     gw_nodes: tuple[GroupedWindow, ...],
     child_ir: IR,
-) -> tuple[GroupBy, GroupBy, Select | None, dict[int, dict[str, str]]]:
+) -> tuple[GroupBy, GroupBy, Select | None, dict[GroupedWindow, dict[str, str]]]:
     """
     Build piecewise, reduction, and (optionally) selection GroupBy IRs.
 
@@ -71,7 +71,7 @@ def _build_over_groupby_irs(
 
     name_gen = unique_names(child_ir.schema.keys())
     all_scalar_named: list[NamedExpr] = []
-    name_remaps: dict[int, dict[str, str]] = {}
+    name_remaps: dict[GroupedWindow, dict[str, str]] = {}
     for gw_node in gw_nodes:
         reductions, _ = gw_node._split_named_expr()
         remap: dict[str, str] = {}
@@ -81,7 +81,7 @@ def _build_over_groupby_irs(
             renamed = next(name_gen)
             all_scalar_named.append(NamedExpr(renamed, ne.value))
             remap[ne.name] = renamed
-        name_remaps[id(gw_node)] = remap
+        name_remaps[gw_node] = remap
 
     decompositions = [
         decompose(ne.name, ne.value, names=name_gen) for ne in all_scalar_named
@@ -289,9 +289,9 @@ def _fuse_over_nodes(
     shuffle, each rank holds only a fraction of each input chunk), causing
     HConcat's broadcast() to raise ``Mismatching column lengths``.
 
-    The grouping key is ``(key_indices, is_scalar, id(input_ir))``.
+    The grouping key is ``(key_indices, is_scalar, input_ir)``.
     """
-    over_groups: defaultdict[tuple[tuple[int, ...], bool, int], list[Select]] = (
+    over_groups: defaultdict[tuple[tuple[int, ...], bool, IR], list[Select]] = (
         defaultdict(list)
     )
     passthrough: list[Select] = []
@@ -300,7 +300,7 @@ def _fuse_over_nodes(
         child = sel.children[0]
         if isinstance(child, Over):
             input_ir = child.children[0]
-            over_groups[(child.key_indices, child.is_scalar, id(input_ir))].append(sel)
+            over_groups[(child.key_indices, child.is_scalar, input_ir)].append(sel)
         else:
             passthrough.append(sel)
 
@@ -308,9 +308,8 @@ def _fuse_over_nodes(
         return selections, partition_info
 
     result: list[Select] = []
-    for (key_indices, is_scalar, _), group in over_groups.items():
+    for (key_indices, is_scalar, input_ir), group in over_groups.items():
         first_over = cast("Over", group[0].children[0])
-        input_ir = first_over.children[0]
         pi = partition_info[first_over]
 
         combined_window_exprs: list[NamedExpr] = []
@@ -341,11 +340,11 @@ def _fuse_over_nodes(
         partition_info[merged_over] = pi
 
         # Build outer_exprs in original selection order to preserve column ordering.
-        all_this_group = {id(s) for s in itertools.chain(absorbed, group)}
+        all_this_group = set(itertools.chain(absorbed, group))
         outer_exprs: list[NamedExpr] = []
         outer_schema: Schema = {}
         for sel in selections:
-            if id(sel) in all_this_group:
+            if sel in all_this_group:
                 outer_exprs.extend(sel.exprs)
                 outer_schema |= sel.schema
 
