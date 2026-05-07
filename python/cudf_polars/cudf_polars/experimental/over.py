@@ -14,6 +14,7 @@ from cudf_polars.dsl.ir import IR, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.groupby import combine, decompose
+from cudf_polars.experimental.rapidsmpf.utils import names_to_indices
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -26,9 +27,9 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-# Aggregation names that can be decomposed across partitions (see groupby.decompose).
-# n_unique is excluded: its decomposition requires a pre-shuffle (need_preshuffle=True),
-# which the scalar AllGather path does not perform — use the non-scalar shuffle path instead.
+# Aggregations whose partial results can be combined across partitions
+# without a pre-shuffle. n_unique is omitted because its decomposition
+# sets need_preshuffle=True (see groupby.decompose).
 _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
     ("sum", "count", "mean", "min", "max", "std", "var")
 )
@@ -47,7 +48,8 @@ def _build_over_groupby_irs(
         Top-level GroupedWindow nodes sharing the same partition-by keys;
         all must be scalar (Agg/Len only in named_aggs).
     child_ir
-        Child IR of the enclosing Select/HStack; defines the input schema.
+        Input IR feeding the Over node; defines the schema seen by the
+        per-chunk piecewise GroupBy.
 
     Returns
     -------
@@ -211,23 +213,17 @@ def _extract_over_shuffle_indices(
     expr: GroupedWindow, child_schema: Schema
 ) -> tuple[int, ...] | None:
     """
-    Return column indices for hash-shuffling a window over() operation.
+    Return partition-by column indices in ``child_schema``, or None.
 
-    Returns
-    -------
-    tuple[int, ...]
-        Non-empty: indices of the partition-by keys in ``child_schema``.
-    None
-        Any partition-by expression is not a plain column reference.
+    Returns None when any partition-by expression is not a plain column
+    reference (the multi-partition path only supports Col keys today).
     """
     by_children = expr.children[: expr.by_count]
     if not all(isinstance(c, Col) for c in by_children):
         return None
-    schema_keys = list(child_schema.keys())
-    try:
-        return tuple(schema_keys.index(cast("Col", c).name) for c in by_children)
-    except ValueError:
-        return None
+    return names_to_indices(
+        tuple(cast("Col", c).name for c in by_children), child_schema
+    )
 
 
 def _decompose_grouped_window_node(
@@ -239,11 +235,21 @@ def _decompose_grouped_window_node(
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Decompose a single GroupedWindow expression into an Over IR node.
+    Build an Over IR node wrapping a single GroupedWindow expression.
 
-    Creates a minimal single-expression Over node for this GroupedWindow.
-    Co-keyed Over nodes from the same Select are later fused by
-    ``_fuse_over_nodes`` in ``select.py``.
+    Every GroupedWindow becomes its own Over here; co-keyed Overs are
+    fused together later by select fusion so the actor evaluates all
+    window expressions in one pass.
+
+    Returns
+    -------
+    Expr
+        A ``Col`` referencing the Over node's output column, suitable
+        for substitution into the enclosing expression.
+    IR
+        The new ``Over`` IR node.
+    MutableMapping[IR, PartitionInfo]
+        ``partition_info`` augmented with an entry for the new node.
     """
     indices = _extract_over_shuffle_indices(expr, input_ir.schema)
     if indices is None:
@@ -274,20 +280,12 @@ def _fuse_over_nodes(
     partition_info: MutableMapping[IR, PartitionInfo],
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
     """
-    Fuse per-expression Over nodes that share the same grouping key and kind.
+    Fuse per-expression Over nodes that share the same grouping key.
 
-    After ``decompose_select`` decomposes each ``GroupedWindow`` expression
-    into its own ``Over`` node, this pass merges co-keyed nodes into a single
-    ``Over`` node so the actor evaluates all window expressions in one pass.
-
-    Passthrough selections (simple Col references) that share the same input
-    IR as an Over group are absorbed into that Over node.  This ensures the
-    Over actor outputs *all* output columns in one shuffle pass without a
-    separate HConcat to combine Over output with passthrough channels.
-    Without this, the non-scalar shuffle path produces per-boundary chunks
-    whose row counts differ from the passthrough channels (after the hash
-    shuffle, each rank holds only a fraction of each input chunk), causing
-    HConcat's broadcast() to raise ``Mismatching column lengths``.
+    Each GroupedWindow starts as its own Over node. This pass merges
+    co-keyed Overs across the input Selects, and absorbs passthrough
+    selections that share an input IR into the merged Over so the
+    actor produces the full output schema in one shuffle pass.
 
     The grouping key is ``(key_indices, is_scalar, input_ir)``.
     """
