@@ -153,8 +153,7 @@ class Over(IR):
         "is_scalar",
         "exprs",
     )
-    _n_non_child_args: ClassVar[int] = 3
-
+    _n_non_child_args: ClassVar[int] = 1
     key_indices: tuple[int, ...]
     is_scalar: bool
     exprs: tuple[NamedExpr, ...]
@@ -172,14 +171,12 @@ class Over(IR):
         self.key_indices = key_indices
         self.is_scalar = is_scalar
         self.exprs = exprs
-        self._non_child_args = (key_indices, is_scalar, exprs)
+        self._non_child_args = (exprs,)
         self.children = (input_ir,)
 
     @classmethod
     def do_evaluate(
         cls,
-        key_indices: tuple[int, ...],
-        is_scalar: bool,  # noqa: FBT001
         exprs: tuple[NamedExpr, ...],
         df: DataFrame,
         *,

@@ -25,7 +25,6 @@ import pylibcudf as plc
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.dsl.ir import HStack
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.over import Over, _build_over_groupby_irs
@@ -60,9 +59,45 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.expr import Col
-    from cudf_polars.dsl.ir import IR, IRExecutionContext, Select
+    from cudf_polars.dsl.ir import IR, GroupBy, IRExecutionContext, Select
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import TableSizeStats
+
+
+@dataclass(frozen=True)
+class _ScalarOverPlan:
+    """
+    IR rewrites and metadata for the scalar-aggregation Over path.
+
+    Built at planning time from the Over node's GroupedWindow children and
+    handed to the actor so the broadcast loop never builds IR at runtime.
+    """
+
+    gw_nodes: tuple[GroupedWindow, ...]
+    key_names: tuple[str, ...]
+    piecewise_ir: GroupBy
+    reduction_ir: GroupBy
+    agg_select_ir: Select
+    name_remaps: dict[GroupedWindow, dict[str, str]]
+
+
+def _build_scalar_over_plan(ir: Over) -> _ScalarOverPlan:
+    """Pre-compute the IR rewrites needed by the scalar Over path."""
+    gw_nodes = tuple(ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow))
+    # Lowering rejects non-Col partition-by keys, so every by-child here is a Col.
+    by_children = gw_nodes[0].children[: gw_nodes[0].by_count]
+    key_names = tuple(cast("Col", c).name for c in by_children)
+    piecewise_ir, reduction_ir, agg_select_ir, name_remaps = _build_over_groupby_irs(
+        gw_nodes, ir.children[0]
+    )
+    return _ScalarOverPlan(
+        gw_nodes=gw_nodes,
+        key_names=key_names,
+        piecewise_ir=piecewise_ir,
+        reduction_ir=reduction_ir,
+        agg_select_ir=agg_select_ir,
+        name_remaps=name_remaps,
+    )
 
 
 def _broadcast_gw_sync(
@@ -103,14 +138,14 @@ def _broadcast_gw_sync(
 
 def _evaluate_ir_broadcast_sync(
     chunk: TableChunk,
-    ir: Select | HStack | Over,
+    ir: Over,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
     name_remaps: dict[GroupedWindow, dict[str, str]],
     br: Any,
 ) -> TableChunk:
-    """Evaluate Select/HStack/Over using a pre-computed global aggregate for each GroupedWindow."""
+    """Evaluate the Over node using a pre-computed global aggregate per GroupedWindow."""
     chunk_df = chunk_to_frame(chunk, ir.children[0])
 
     gw_results: dict[GroupedWindow, Any] = {
@@ -118,10 +153,8 @@ def _evaluate_ir_broadcast_sync(
         for gw in gw_nodes
     }
 
-    is_hstack = isinstance(ir, HStack)
-    exprs = ir.columns if isinstance(ir, HStack) else ir.exprs
     result_cols = []
-    for ne in exprs:
+    for ne in ir.exprs:
         if isinstance(ne.value, GroupedWindow) and ne.value in gw_results:
             # gw.post.value.evaluate uses the post name, not ne.name
             col = gw_results[ne.value].rename(ne.name)
@@ -129,11 +162,7 @@ def _evaluate_ir_broadcast_sync(
             col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
         result_cols.append(col)
 
-    result_df = (
-        chunk_df.with_columns(result_cols, stream=chunk_df.stream)
-        if is_hstack
-        else DataFrame(result_cols, stream=chunk_df.stream)
-    )
+    result_df = DataFrame(result_cols, stream=chunk_df.stream)
     return TableChunk.from_pylibcudf_table(
         result_df.table, result_df.stream, exclusive_view=True, br=br
     )
@@ -142,7 +171,7 @@ def _evaluate_ir_broadcast_sync(
 async def _evaluate_broadcast_chunk(
     context: Context,
     chunk: TableChunk,
-    ir: Select | HStack | Over,
+    ir: Over,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
@@ -250,9 +279,7 @@ def _evaluate_window_with_stamps(
         list(child_schema.values()),
         stream,
     )
-    result = ir.do_evaluate(
-        ir.key_indices, ir.is_scalar, ir.exprs, input_df, context=ir_context
-    )
+    result = ir.do_evaluate(ir.exprs, input_df, context=ir_context)
     stamp_cols = [
         Column(col, dtype=stamps.dtype, name=name)
         for col, name in zip(columns[n_child:], stamps.names, strict=True)
@@ -359,6 +386,7 @@ async def _allgather_and_broadcast(
     metadata_in: ChannelMetadata,
     tracer: Any,
     collective_id: int,
+    plan: _ScalarOverPlan,
 ) -> None:
     """
     Compute partial aggregates per chunk, AllGather globally, then broadcast to each chunk.
@@ -367,13 +395,9 @@ async def _allgather_and_broadcast(
     tree-reduces via AllGather, then broadcasts the global aggregate back to
     each buffered chunk using the pre-computed GroupedWindow lookup.
     """
-    gw_nodes = tuple(ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow))
-    # Lowering rejects non-Col partition-by keys, so every by-child here is a Col.
-    by_children = gw_nodes[0].children[: gw_nodes[0].by_count]
-    key_names = tuple(cast("Col", c).name for c in by_children)
-    piecewise_ir, reduction_ir, agg_select_ir, name_remaps = _build_over_groupby_irs(
-        gw_nodes, ir.children[0]
-    )
+    piecewise_ir = plan.piecewise_ir
+    reduction_ir = plan.reduction_ir
+    agg_select_ir = plan.agg_select_ir
 
     # make_table_chunks_available_or_wait releases the original chunk,
     # so we make each chunk available once and reuse it for both buffering
@@ -446,9 +470,9 @@ async def _allgather_and_broadcast(
             chunk,
             ir,
             global_agg_df,
-            key_names,
-            gw_nodes,
-            name_remaps,
+            plan.key_names,
+            plan.gw_nodes,
+            plan.name_remaps,
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
@@ -725,6 +749,7 @@ async def over_actor(
     collective_ids: list[int],
     target_partition_size: int,
     sample_chunk_count: int,
+    scalar_plan: _ScalarOverPlan | None,
 ) -> None:
     """
     Streaming actor for window ``over()`` expressions.
@@ -760,6 +785,9 @@ async def over_actor(
     sample_chunk_count
         Maximum number of input chunks to sample when estimating the shuffle
         modulus on the non-scalar path.
+    scalar_plan
+        Pre-computed IR rewrites for the scalar Over path, built at planning
+        time. ``None`` for non-scalar Over nodes.
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
@@ -790,6 +818,7 @@ async def over_actor(
             return
 
         if ir.is_scalar:
+            assert scalar_plan is not None
             await _allgather_and_broadcast(
                 context,
                 comm,
@@ -800,6 +829,7 @@ async def over_actor(
                 metadata_in,
                 tracer,
                 collective_ids[0],
+                scalar_plan,
             )
         else:
             await _shuffle_and_reassemble(
@@ -841,6 +871,7 @@ def _(
         if executor.dynamic_planning is not None
         else 0
     )
+    scalar_plan = _build_scalar_over_plan(ir) if ir.is_scalar else None
     actors[ir] = [
         over_actor(
             rec.state["context"],
@@ -852,6 +883,7 @@ def _(
             collective_ids,
             executor.target_partition_size,
             sample_chunk_count,
+            scalar_plan,
         )
     ]
     return actors, channels
