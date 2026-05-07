@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import importlib.util
 from typing import TYPE_CHECKING
 
 import pytest
@@ -54,13 +53,6 @@ def clear_memory_resource_cache():
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
-    # Do not use `pytest.importorskip` here: this fixture is autouse, so an
-    # import-based skip would skip every test in the suite on environments
-    # without rapidsmpf (e.g. the coverage CI job), masking real coverage.
-    # We only want to gate the nranks>1 check on rapidsmpf being available.
-    if importlib.util.find_spec("rapidsmpf") is None:
-        return
-
     from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
 
     if (
@@ -79,7 +71,6 @@ def streaming_engines() -> Generator[StreamingEngines, None, None]:
     name to a single shared engine instance, which is reused across the entire
     test session.
     """
-    pytest.importorskip("rapidsmpf")
     from rapidsmpf import bootstrap
     from rapidsmpf.communicator.single import new_communicator as single_communicator
     from rapidsmpf.config import Options, get_environment_variables
@@ -228,7 +219,8 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     from ``.collect()``. Uses the in-memory executor so errors are not wrapped
     by a streaming task group.
     """
-    return pl.GPUEngine(raise_on_fail=True)
+    # TODO: We should be testing will all supported engine variants
+    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
 def pytest_addoption(parser):
@@ -238,14 +230,6 @@ def pytest_addoption(parser):
         default="streaming",
         choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
-    )
-
-    parser.addoption(
-        "--runtime",
-        action="store",
-        default="tasks",
-        choices=("tasks", "rapidsmpf"),
-        help="Runtime to use for the 'streaming' executor.",
     )
 
     parser.addoption(
@@ -278,17 +262,7 @@ def pytest_configure(config):
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
 
-    if config.getoption("--runtime") == "rapidsmpf":
-        if config.getoption("--executor") == "in-memory":
-            raise pytest.UsageError("Rapidsmpf runtime requires --executor='streaming'")
-
-        if importlib.util.find_spec("rapidsmpf") is None:
-            raise pytest.UsageError(
-                "Rapidsmpf runtime requires the 'rapidsmpf' package"
-            )
-
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
     cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
 
 
