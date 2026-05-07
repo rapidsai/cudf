@@ -515,6 +515,45 @@ CUDF_HOST_DEVICE inline IntegerType guarded_left_shift(IntegerType value, int bi
 }
 
 /**
+ * @brief Perform a bit-shift left with overflow detection (saturating)
+ *
+ * Sets `overflow = true` if:
+ * - the shift count would be undefined behavior, or
+ * - any set bits would be shifted out of the destination type (i.e. true overflow)
+ *
+ * @tparam IntegerType Type of input unsigned integer value
+ * @param value The integer whose bits are being shifted
+ * @param bit_shift The number of bits to shift left
+ * @param overflow Sticky overflow flag to set on overflow
+ * @return The bit-shifted integer, except max value on overflow/UB
+ */
+template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerType>)>
+CUDF_HOST_DEVICE inline IntegerType checked_left_shift(IntegerType value, int bit_shift, bool& overflow)
+{
+  constexpr int digits             = cuda::std::numeric_limits<IntegerType>::digits;
+  constexpr int max_safe_bit_shift = digits - 1;
+
+  if (bit_shift < 0) {
+    // Not expected for callers; treat as overflow (would be a right-shift).
+    overflow = true;
+    return cuda::std::numeric_limits<IntegerType>::max();
+  }
+  if (bit_shift > max_safe_bit_shift) {
+    overflow = true;
+    return cuda::std::numeric_limits<IntegerType>::max();
+  }
+  if (bit_shift == 0) { return value; }
+
+  // Detect whether any bits would be shifted out.
+  auto const max_value_before_shift = cuda::std::numeric_limits<IntegerType>::max() >> bit_shift;
+  if (value > max_value_before_shift) {
+    overflow = true;
+    return cuda::std::numeric_limits<IntegerType>::max();
+  }
+  return static_cast<IntegerType>(value << bit_shift);
+}
+
+/**
  * @brief Perform a bit-shift right, guarding against undefined behavior
  *
  * @tparam IntegerType Type of input unsigned integer value
@@ -528,6 +567,39 @@ CUDF_HOST_DEVICE inline IntegerType guarded_right_shift(IntegerType value, int b
   // Bit shifts larger than this are undefined behavior
   constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
   return (bit_shift <= max_safe_bit_shift) ? value >> bit_shift : 0;
+}
+
+/**
+ * @brief Cast `value` to a narrower unsigned type with overflow detection (saturating)
+ */
+template <typename To, typename From, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<To> && cuda::std::is_unsigned_v<From>)>
+CUDF_HOST_DEVICE inline To checked_narrow_cast(From value, bool& overflow)
+{
+  if (value > static_cast<From>(cuda::std::numeric_limits<To>::max())) {
+    overflow = true;
+    return cuda::std::numeric_limits<To>::max();
+  }
+  return static_cast<To>(value);
+}
+
+/**
+ * @brief Multiply by 10^pow10 with overflow detection (saturating)
+ *
+ * This is intentionally simple (looping by decimal digits): pow10 can be up to ~3e2 for doubles.
+ */
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
+CUDF_HOST_DEVICE inline T multiply_power10_saturating(T value, int pow10, bool& overflow)
+{
+  if (pow10 <= 0) { return value; }
+  auto const max_v = cuda::std::numeric_limits<T>::max();
+  for (int i = 0; i < pow10; ++i) {
+    if (value > max_v / 10) {
+      overflow = true;
+      return max_v;
+    }
+    value = static_cast<T>(value * 10);
+  }
+  return value;
 }
 
 /**
@@ -759,6 +831,63 @@ CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_pospow(
 }
 
 /**
+ * @brief Overflow-tracking variant of `shift_to_decimal_pospow`
+ */
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_pospow_checked(
+  typename shifting_constants<FloatingType>::IntegerRep const base2_value,
+  int pow2,
+  int pow10,
+  bool& overflow)
+{
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+
+  auto shifting_rep = static_cast<ShiftingRep>(base2_value);
+
+  static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::num_2s_shift_buffer_bits;
+  static constexpr int shift_from  = Constants::num_significand_bits + 1;
+  static constexpr int max_init_shift = shift_up_to - shift_from;
+
+  if (pow2 <= max_init_shift) {
+    shifting_rep = divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+    return checked_narrow_cast<UnsignedRep>(static_cast<cuda::std::make_unsigned_t<ShiftingRep>>(shifting_rep),
+                                           overflow);
+  }
+
+  shifting_rep <<= max_init_shift;
+  pow2 -= max_init_shift;
+
+  while (pow10 > Constants::max_digits_shift) {
+    shifting_rep /= Constants::max_digits_shift_pow;
+    pow10 -= Constants::max_digits_shift;
+
+    if (pow2 <= Constants::max_bits_shift) {
+      shifting_rep = divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+      return checked_narrow_cast<UnsignedRep>(static_cast<cuda::std::make_unsigned_t<ShiftingRep>>(shifting_rep),
+                                             overflow);
+    }
+
+    shifting_rep <<= Constants::max_bits_shift;
+    pow2 -= Constants::max_bits_shift;
+  }
+
+  if constexpr (Constants::is_double) {
+    shifting_rep = divide_power10_64bit(shifting_rep, pow10);
+  } else {
+    shifting_rep = divide_power10_32bit(shifting_rep, pow10);
+  }
+
+  // Final cast + left-shift can overflow.
+  auto const narrowed =
+    checked_narrow_cast<UnsignedRep>(static_cast<cuda::std::make_unsigned_t<ShiftingRep>>(shifting_rep), overflow);
+  return checked_left_shift<UnsignedRep>(narrowed, pow2, overflow);
+}
+
+/**
  * @brief Perform base-2 -> base-10 fixed-point conversion for pow10 < 0
  *
  * @tparam Rep The type of the storage for the decimal value
@@ -845,6 +974,65 @@ CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_negpow(
 }
 
 /**
+ * @brief Overflow-tracking variant of `shift_to_decimal_negpow`
+ */
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_negpow_checked(
+  typename shifting_constants<FloatingType>::IntegerRep base2_value, int pow2, int pow10, bool& overflow)
+{
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+
+  auto shifting_rep = static_cast<ShiftingRep>(base2_value);
+
+  int pow10_mag = -pow10;
+  int pow2_mag  = -pow2;
+
+  auto final_shifts_low10s = [&]() {
+    if constexpr (Constants::is_double) {
+      shifting_rep = multiply_power10_64bit(shifting_rep, pow10_mag);
+    } else {
+      shifting_rep = multiply_power10_32bit(shifting_rep, pow10_mag);
+    }
+    // guarded_right_shift does not "overflow" the representable range; it may drop to 0 on UB.
+    // We don't treat that as overflow here.
+    return checked_narrow_cast<UnsignedRep>(
+      static_cast<cuda::std::make_unsigned_t<ShiftingRep>>(guarded_right_shift(shifting_rep, pow2_mag)), overflow);
+  };
+
+  if (pow10_mag <= Constants::max_digits_shift) { return final_shifts_low10s(); }
+
+  static constexpr int shift_up_to        = sizeof(ShiftingRep) * 8 - Constants::max_bits_shift;
+  static constexpr int shift_from         = Constants::num_significand_bits + 1;
+  static constexpr int num_init_bit_shift = shift_up_to - shift_from;
+
+  shifting_rep <<= num_init_bit_shift;
+  pow2_mag += num_init_bit_shift;
+
+  do {
+    shifting_rep *= Constants::max_digits_shift_pow;
+    pow10_mag -= Constants::max_digits_shift;
+
+    if (pow2_mag <= Constants::max_bits_shift) {
+      shifting_rep >>= pow2_mag;
+
+      auto const narrowed =
+        checked_narrow_cast<UnsignedRep>(static_cast<cuda::std::make_unsigned_t<ShiftingRep>>(shifting_rep),
+                                         overflow);
+      return multiply_power10_saturating<UnsignedRep>(narrowed, pow10_mag, overflow);
+    }
+
+    shifting_rep >>= Constants::max_bits_shift;
+    pow2_mag -= Constants::max_bits_shift;
+  } while (pow10_mag > Constants::max_digits_shift);
+
+  return final_shifts_low10s();
+}
+
+/**
  * @brief Perform base-2 -> base-10 fixed-point conversion
  *
  * @tparam Rep The type of integer we are converting to, to store the decimal value
@@ -898,6 +1086,45 @@ CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> convert_floating_to_inte
 }
 
 /**
+ * @brief Overflow-tracking variant of `convert_floating_to_integral_shifting`
+ */
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::pair<cuda::std::make_unsigned_t<Rep>, bool>
+convert_floating_to_integral_shifting_checked(
+  typename floating_converter<FloatingType>::IntegralType base2_value, int pow10, int pow2)
+{
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+  bool overflow     = false;
+
+  if (pow10 == 0) {
+    if (pow2 >= 0) {
+      auto const shifted = checked_left_shift(static_cast<UnsignedRep>(base2_value), pow2, overflow);
+      return {shifted, overflow};
+    }
+    return {static_cast<UnsignedRep>(guarded_right_shift(base2_value, -pow2)), overflow};
+  }
+
+  if (pow10 > 0) {
+    if (pow2 <= 0) {
+      auto const shifted = guarded_right_shift(base2_value, -pow2);
+      // divide shrinks; cast can still overflow only if the intermediate is wider (it isn't here)
+      return {static_cast<UnsignedRep>(divide_power10<decltype(shifted)>(shifted, pow10)), overflow};
+    }
+    return {shift_to_decimal_pospow_checked<Rep, FloatingType>(base2_value, pow2, pow10, overflow), overflow};
+  }
+
+  // pow10 < 0
+  if (pow2 >= 0) {
+    auto const shifted = checked_left_shift(static_cast<UnsignedRep>(base2_value), pow2, overflow);
+    auto const scaled  = multiply_power10_saturating<UnsignedRep>(shifted, -pow10, overflow);
+    return {scaled, overflow};
+  }
+  return {shift_to_decimal_negpow_checked<Rep, FloatingType>(base2_value, pow2, pow10, overflow), overflow};
+}
+
+/**
  * @brief Perform floating-point -> integer decimal conversion
  *
  * @tparam Rep The type of integer we are converting to, to store the decimal value
@@ -934,6 +1161,58 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   // NOTE: Cast can overflow!
   auto const signed_magnitude = static_cast<Rep>(magnitude);
   return is_negative ? -signed_magnitude : signed_magnitude;
+}
+
+/**
+ * @brief Floating-point -> integer decimal conversion with overflow detection (saturating)
+ *
+ * Returns {value, overflow} where `overflow` is sticky across the conversion steps.
+ */
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::pair<Rep, bool> convert_floating_to_integral_checked(
+  FloatingType const& floating, scale_type const& scale)
+{
+  using converter = floating_converter<FloatingType>;
+  bool overflow   = false;
+
+  auto const integer_rep = converter::bit_cast_to_integer(floating);
+  if (converter::is_zero(integer_rep)) { return {Rep{0}, overflow}; }
+
+  auto const is_negative                  = converter::get_is_negative(integer_rep);
+  auto const [significand, floating_pow2] = converter::get_significand_and_pow2(integer_rep);
+
+  auto const pow10 = static_cast<int>(scale);
+  auto const [base2_value, pow2] =
+    add_half_if_truncates(floating, significand, floating_pow2, pow10);
+
+  auto const [magnitude_u, shift_overflow] =
+    convert_floating_to_integral_shifting_checked<Rep, FloatingType>(base2_value, pow10, pow2);
+  overflow = overflow || shift_overflow;
+
+  // Reapply sign with saturation on representational overflow.
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+  auto const umax   = static_cast<UnsignedRep>(cuda::std::numeric_limits<Rep>::max());
+
+  if (!is_negative) {
+    if (magnitude_u > umax) {
+      overflow = true;
+      return {cuda::std::numeric_limits<Rep>::max(), overflow};
+    }
+    return {static_cast<Rep>(magnitude_u), overflow};
+  }
+
+  // Negative range has one extra representable value for two's complement.
+  // magnitude == max+1 maps to min.
+  auto const umin_mag = umax + UnsignedRep{1};
+  if (magnitude_u > umin_mag) {
+    overflow = true;
+    return {cuda::std::numeric_limits<Rep>::min(), overflow};
+  }
+  if (magnitude_u == umin_mag) { return {cuda::std::numeric_limits<Rep>::min(), overflow}; }
+
+  return {static_cast<Rep>(-static_cast<Rep>(magnitude_u)), overflow};
 }
 
 /**

@@ -41,13 +41,23 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
   using Rep        = typename Fixed::rep;
   auto const value = [&]() {
     if constexpr (Fixed::rad == numeric::Radix::BASE_10) {
-      return numeric::detail::convert_floating_to_integral<Rep>(floating, scale);
+      if constexpr (Fixed::track == numeric::overflow_tracking::on) {
+        auto const [v, overflow] =
+          numeric::detail::convert_floating_to_integral_checked<Rep>(floating, scale);
+        return cuda::std::pair{v, overflow};
+      } else {
+        return numeric::detail::convert_floating_to_integral<Rep>(floating, scale);
+      }
     } else {
       return static_cast<Rep>(numeric::detail::shift<Rep, Fixed::rad>(floating, scale));
     }
   }();
 
-  return Fixed(numeric::scaled_integer<Rep>{value, scale});
+  if constexpr (Fixed::rad == numeric::Radix::BASE_10 && Fixed::track == numeric::overflow_tracking::on) {
+    return Fixed(numeric::scaled_integer<Rep>{value.first, scale}, value.second);
+  } else {
+    return Fixed(numeric::scaled_integer<Rep>{value, scale});
+  }
 }
 
 /**

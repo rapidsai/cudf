@@ -9,6 +9,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -205,6 +206,41 @@ TEST_F(FixedPointOverflowTest, ConstructorShiftOverflowSetsFlag)
 
   decimal64_safe const fine{int64_t{42}, scale_type{0}};
   EXPECT_FALSE(fine.overflow_occurred());
+}
+
+// ---------------------------------------------------------------------------
+// Floating <-> fixed conversions: `decimal*_safe` must surface overflow.
+// ---------------------------------------------------------------------------
+
+TEST_F(FixedPointOverflowTest, ConvertFloatingToDecimal32SafeDetectsPositiveOverflow)
+{
+  // Choose a value that cannot fit into int32 at scale 0.
+  auto const d = cudf::convert_floating_to_fixed<decimal32_safe>(1e20, scale_type{0});
+  EXPECT_TRUE(d.overflow_occurred());
+  EXPECT_EQ(d.value(), std::numeric_limits<int32_t>::max());
+}
+
+TEST_F(FixedPointOverflowTest, ConvertFloatingToDecimal32SafeDetectsNegativeOverflow)
+{
+  auto const d = cudf::convert_floating_to_fixed<decimal32_safe>(-1e20, scale_type{0});
+  EXPECT_TRUE(d.overflow_occurred());
+  EXPECT_EQ(d.value(), std::numeric_limits<int32_t>::min());
+}
+
+TEST_F(FixedPointOverflowTest, ConvertFloatingToDecimal64SafeDetectsPositiveOverflowViaScale)
+{
+  // Overflow via scale factor multiplication even for a "moderate" input.
+  // scale -19 implies multiplying by 10^19 in the decimal rep.
+  auto const d = cudf::convert_floating_to_fixed<decimal64_safe>(1.0, scale_type{-19});
+  EXPECT_TRUE(d.overflow_occurred());
+  EXPECT_EQ(d.value(), std::numeric_limits<int64_t>::max());
+}
+
+TEST_F(FixedPointOverflowTest, ConvertFloatingToDecimal64SafeNoOverflow)
+{
+  auto const d = cudf::convert_floating_to_fixed<decimal64_safe>(123.456, scale_type{-3});
+  EXPECT_FALSE(d.overflow_occurred());
+  EXPECT_EQ(d.value(), int64_t{123456});
 }
 
 // ---------------------------------------------------------------------------

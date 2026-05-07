@@ -295,6 +295,20 @@ class fixed_point {
   }
 
   /**
+   * @brief Constructor from a pre-scaled integer plus an overflow flag
+   *
+   * This is intended for conversions that already computed the scaled integer
+   * representation and independently detected overflow (e.g. float <-> decimal
+   * conversion helpers).
+   */
+  CUDF_HOST_DEVICE inline explicit fixed_point(scaled_integer<Rep> s, bool overflow)
+    requires(Track == overflow_tracking::on)
+    : _value{s.value}, _scale{s.scale}
+  {
+    _overflow.value = overflow;
+  }
+
+  /**
    * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
    * value and scale of zero
    *
