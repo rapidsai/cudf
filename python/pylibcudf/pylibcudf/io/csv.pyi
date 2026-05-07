@@ -4,7 +4,6 @@
 from typing import Self
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.io.types import (
     CompressionType,
@@ -15,6 +14,7 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class CsvReaderOptions:
     def __init__(self): ...
@@ -61,10 +61,12 @@ class CsvReaderOptionsBuilder:
 
 def read_csv(
     options: CsvReaderOptions,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
-def write_csv(options: CsvWriterOptions, stream: Stream | None = None): ...
+def write_csv(
+    options: CsvWriterOptions, stream: CudaStreamLike | None = None
+): ...
 
 class CsvWriterOptions:
     def __init__(self): ...
