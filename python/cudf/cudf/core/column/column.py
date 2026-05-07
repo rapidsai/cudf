@@ -3360,32 +3360,21 @@ def as_column(
                     arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
                 ):
                     # pa.array(arbitrary, from_pandas=True) drops the tz from
-                    # the dictionary value type, so build the categorical
-                    # column manually so the categories' timezone is preserved.
+                    # the dictionary value type; cast back to a tz-aware
+                    # dictionary type to restore the categories' timezone.
                     # pyarrow bug: https://github.com/apache/arrow/issues/49875
                     new_tz = get_compatible_timezone(
                         arbitrary.dtype.categories.dtype
                     )
-                    cats_col = as_column(
-                        arbitrary.dtype.categories.astype(new_tz)
-                    )
-                    cat_dtype = CategoricalDtype(
-                        categories=cats_col,
-                        ordered=bool(arbitrary.dtype.ordered),
-                    )
-                    pa_arr = pa.array(arbitrary, from_pandas=True)
-                    codes_plc = _normalize_types_column(
-                        plc.Column.from_arrow(pa_arr.indices)
-                    )
-                    expected_codes_dtype = dtype_to_pylibcudf_type(
-                        cat_dtype._codes_dtype
-                    )
-                    if codes_plc.type() != expected_codes_dtype:
-                        codes_plc = plc.unary.cast(
-                            codes_plc, expected_codes_dtype
+                    pa_arbitrary = pa.array(arbitrary, from_pandas=True)
+                    arbitrary = pa_arbitrary.cast(
+                        pa.dictionary(
+                            pa_arbitrary.type.index_type,
+                            pa.timestamp(new_tz.unit, str(new_tz.tz)),
+                            ordered=pa_arbitrary.type.ordered,
                         )
-                    return ColumnBase.create(codes_plc, cat_dtype)
-                if dtype is None:
+                    )
+                elif dtype is None:
                     # Going through Arrow below erases pandas extension dtypes
                     # of the categories, if any, so always along pass the exact type
                     dtype = CategoricalDtype(
