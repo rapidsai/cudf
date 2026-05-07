@@ -436,7 +436,7 @@ def execute_ir_on_rank(
 
 
 _RESERVED_EXECUTOR_KEYS: frozenset[str] = frozenset(
-    {"runtime", "cluster", "spmd_context", "ray_context", "dask_context"}
+    {"cluster", "spmd_context", "ray_context", "dask_context"}
 )
 _RESERVED_ENGINE_KEYS: frozenset[str] = frozenset({"memory_resource", "executor"})
 

@@ -91,12 +91,8 @@ def evaluate_pipeline_ray_mode(
     Raises
     ------
     RuntimeError
-        If the configured executor runtime is not ``"rapidsmpf"``.
-    RuntimeError
         If ``config_options.executor.ray_context`` is not set.
     """
-    if config_options.executor.runtime != "rapidsmpf":
-        raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.ray_context is None:
         raise RuntimeError("ray_context must be set when cluster='ray'")
     rank_actors = config_options.executor.ray_context.rank_actors
@@ -586,7 +582,6 @@ class RayEngine(StreamingEngine):
                 nranks=nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "ray",
                     "ray_context": RayContext(rank_actors),
                 },
@@ -641,7 +636,6 @@ class RayEngine(StreamingEngine):
             nranks=len(self._rank_actors),
             executor_options={
                 **executor_options,
-                "runtime": "rapidsmpf",
                 "cluster": "ray",
                 "ray_context": RayContext(self._rank_actors),
             },
