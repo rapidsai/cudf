@@ -60,8 +60,8 @@ def test_scan_by_hand(expr, selection, pq_file, chunked):
     )
 
 
-def test_parquet_filter_boolean_column(tmp_path):
+def test_parquet_filter_boolean_column(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"x": [1, 2, 3], "y": [True, False, True]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet").filter(pl.col("y"))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

@@ -234,10 +234,12 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
-    unique_fraction
-        Per-column uniqueness estimate (0-1). Defaults to ``1.0``.
-        Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
-        Default: ``{}``.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. The ``spmd``/``ray``/``dask`` engines
+        always use ``True``; passing ``False`` raises ``ValueError``.
+        Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
+        Default: ``True`` (forced by the streaming engines).
         Category: executor.
     raise_on_fail
         Raise instead of falling back to CPU.
@@ -325,8 +327,8 @@ class StreamingOptions:
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
-    unique_fraction: dict[str, float] | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
+    sink_to_directory: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
@@ -505,7 +507,6 @@ class StreamingOptions:
             broadcast_join_limit=_get("broadcast_join_limit"),
             target_partition_size=target_partition_size,
             dynamic_planning=dynamic_planning,
-            unique_fraction=_get("unique_fraction"),
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
@@ -700,15 +701,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--unique-fraction",
-            dest="unique_fraction",
-            default=None,
-            type=json.loads,
-            help=textwrap.dedent("""\
-                Per-column uniqueness estimate as a JSON object (e.g. '{"col": 0.5}').
-                Env: CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION. Built-in default: {}."""),
         )
         g.add_argument(
             "--stream-policy",

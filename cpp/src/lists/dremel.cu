@@ -210,7 +210,8 @@ dremel_data get_encoding(column_view h_col,
   }
 
   [[maybe_unused]] auto [device_view_owners, d_nesting_levels] =
-    contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
+    contiguous_copy_column_device_views<column_device_view, host_span<column_view const>>(
+      host_span<column_view const>{nesting_levels}, stream);
 
   auto max_def_level = def_at_level.back();
   thrust::exclusive_scan(
