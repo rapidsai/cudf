@@ -1160,7 +1160,7 @@ def run_polars_spmd(
         )
 
     if _HAS_STRUCTLOG and run_config.collect_traces and is_rank_0:
-        _write_quent_traces(run_config.run_id, engine=engine)
+        _write_quent_traces(engine=engine)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1210,7 +1210,7 @@ def run_polars_ray(
         run_config = _consolidate_logs(run_config, engine=engine)
 
     if _HAS_STRUCTLOG and run_config.collect_traces:
-        _write_quent_traces(run_config.run_id, engine=engine)
+        _write_quent_traces(engine=engine)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1271,7 +1271,7 @@ def run_polars_dask(
             run_config = _consolidate_logs(run_config, engine)
 
         if _HAS_STRUCTLOG and run_config.collect_traces:
-            _write_quent_traces(run_config.run_id, engine=engine)
+            _write_quent_traces(engine=engine)
     finally:
         if dask_client is not None:
             dask_client.close()
@@ -1351,9 +1351,18 @@ def setup_logging(query_id: int, iteration: int) -> None:
         )
 
 
-def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
+def _write_quent_traces(engine: StreamingEngine) -> None:
     """Write collected Quent events to logs/{run_id}.ndjson."""
     quent_logs = list(engine._quent_events)
+
+    # The quent UI currently requires the Run ID to match the engine's ID.
+    for log in quent_logs:
+        if "Init" in log.get("data", {}).get("Engine"):
+            run_id = log["id"]
+            break
+    else:
+        print("No engine init log found in Quent events", file=sys.stderr)
+        run_id = str(uuid.uuid4())
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
