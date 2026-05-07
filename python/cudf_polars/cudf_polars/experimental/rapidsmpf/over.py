@@ -100,12 +100,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _ScalarOverPlan:
-    """
-    IR rewrites and metadata for the scalar-aggregation Over path.
-
-    Built at planning time from the Over node's GroupedWindow children and
-    handed to the actor so the broadcast loop never builds IR at runtime.
-    """
+    """Pre-computed IR rewrites for the scalar Over path."""
 
     gw_nodes: tuple[GroupedWindow, ...]
     key_names: tuple[str, ...]
@@ -234,16 +229,11 @@ async def _evaluate_broadcast_chunk(
 @dataclass(frozen=True)
 class OriginStamps:
     """
-    Per-row metadata appended before shuffling so output can be reassembled.
+    Per-row metadata appended before the forward shuffle.
 
-    The forward shuffle distributes rows by group, breaking input order. After
-    window evaluation we route rows back to their origin rank using ``rank``,
-    then sort by ``(chunk_index, position)`` to recover the input chunking.
-
-    ``chunk_index`` is a rank-local 0-based index into the stream of input
-    chunks, *not* the upstream message ``sequence_number``, which is not
-    guaranteed unique (e.g., when the input is the output of a shuffle whose
-    partition IDs collide across chunks).
+    ``chunk_index`` is a rank-local 0-based index into the input chunk
+    stream, *not* the upstream message ``sequence_number`` (which can
+    collide when the input is the output of a shuffle).
     """
 
     chunk_index: str
@@ -329,8 +319,8 @@ def _partition_by_origin_rank(
     """
     Rearrange rows so partition i contains rows whose origin rank is i.
 
-    Returns a chunk with the rank stamp dropped plus the split indices that
-    feed straight into ``ShuffleManager.Inserter.insert_split``.
+    Returns a chunk with the rank stamp dropped and the per-rank split
+    indices for direct insertion into the return shuffle.
     """
     if result.table.num_rows() == 0:
         return None, []
@@ -422,20 +412,13 @@ async def _allgather_and_broadcast(
     collective_id: int,
     plan: _ScalarOverPlan,
 ) -> None:
-    """
-    Compute partial aggregates per chunk, AllGather globally, then broadcast to each chunk.
-
-    Buffers all incoming chunks while computing per-chunk partial aggregates,
-    tree-reduces via AllGather, then broadcasts the global aggregate back to
-    each buffered chunk using the pre-computed GroupedWindow lookup.
-    """
+    """Compute partial aggregates per chunk, AllGather globally, then broadcast to each chunk."""
     piecewise_ir = plan.piecewise_ir
     reduction_ir = plan.reduction_ir
     agg_select_ir = plan.agg_select_ir
 
-    # make_table_chunks_available_or_wait releases the original chunk,
-    # so we make each chunk available once and reuse it for both buffering
-    # and piecewise evaluation.
+    # Making the chunk available consumes the spilled handle, so we keep
+    # the available chunk and reuse it for both buffering and piecewise eval.
     buffered: list[tuple[int, TableChunk]] = []
     partial_aggs: list[TableChunk] = []
 
@@ -468,7 +451,7 @@ async def _allgather_and_broadcast(
         )
 
     # AllGather the unreduced form so the final reduction operates over
-    # all ranks' partial results; agg_select_ir is applied only once after.
+    # all ranks' partials; the post-aggregation step runs once after.
     if comm.nranks > 1 and not metadata_in.duplicated:
         allgather = AllGatherManager(context, comm, collective_id)
         with allgather.inserting() as inserter:
@@ -694,19 +677,7 @@ async def _shuffle_and_reassemble(
     target_partition_size: int,
     sample_chunk_count: int,
 ) -> None:
-    """
-    Evaluate non-decomposable window expressions across ranks via a return-shuffle.
-
-    Each row is stamped with (origin rank, input chunk index, position in
-    chunk). A hash shuffle by the partition-by keys co-locates each group on
-    one rank for window evaluation; a second shuffle routes rows back to their
-    origin so the rank that received an input chunk can also emit its output.
-    Sorting the returned rows by (chunk_index, position) recovers input order.
-
-    Input chunks are sampled to size the forward shuffle, then replayed back
-    via ``replay_buffered_channel`` so the insert phase can stream rather than
-    holding every input chunk in device memory at once.
-    """
+    """Hash-shuffle by partition keys, evaluate, then route rows back to their origin rank."""
     stamps = _origin_stamps_for(ir)
 
     metadata_out = ChannelMetadata(
@@ -787,12 +758,6 @@ async def over_actor(
 ) -> None:
     """
     Streaming actor for window ``over()`` expressions.
-
-    Selects one of three strategies at runtime based on partitioning metadata
-    and whether all GroupedWindow nodes are scalar aggregations: chunkwise
-    (already partitioned), scalar broadcast (tree-reduce + AllGather), or
-    non-scalar shuffle (forward-shuffle by partition keys, evaluate, then
-    return-shuffle to origin rank for in-order reassembly).
 
     Parameters
     ----------

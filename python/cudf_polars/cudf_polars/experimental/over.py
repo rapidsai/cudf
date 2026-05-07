@@ -274,13 +274,9 @@ def _fuse_over_nodes(
     """
     Fuse per-expression Over nodes that share the same grouping key.
 
-    Each GroupedWindow starts as its own Over node. This pass merges
-    co-keyed Overs across the input Selects, and also absorbs any
-    Select that shares the Over's input IR (whether it's a simple
-    column reference or a per-row expression) into the merged Over,
-    so the actor produces the full output schema in one shuffle pass.
-
-    The grouping key is ``(key_indices, is_scalar, input_ir)``.
+    Selects sharing the Over's input IR are absorbed into the merged Over
+    so the actor produces the full output schema in one shuffle pass. The
+    grouping key is ``(key_indices, is_scalar, input_ir)``.
 
     Returns
     -------
@@ -318,8 +314,6 @@ def _fuse_over_nodes(
             over = cast("Over", sel.children[0])
             combined_window_exprs.extend(over.exprs)
 
-        # Absorb passthrough selections that share the same input_ir into
-        # the Over node so it outputs all columns in one pass.
         absorbed: list[Select] = []
         remaining: list[Select] = []
         for p_sel in passthrough:
@@ -340,7 +334,6 @@ def _fuse_over_nodes(
         )
         partition_info[merged_over] = pi
 
-        # Build outer_exprs in original selection order to preserve column ordering.
         all_this_group = set(itertools.chain(absorbed, group))
         outer_exprs: list[NamedExpr] = []
         outer_schema: Schema = {}
