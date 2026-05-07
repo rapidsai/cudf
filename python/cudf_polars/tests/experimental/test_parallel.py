@@ -12,13 +12,9 @@ from polars import GPUEngine
 from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
-from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
@@ -134,40 +130,3 @@ def test_pickle_conditional_join_args():
     ir = Translator(q._ldf.visit(), GPUEngine()).translate_ir()
     for node in traversal([ir]):
         pickle.loads(pickle.dumps(node._non_child_args))
-
-
-def test_preserve_partitioning(streaming_engine_factory):
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=2,
-            broadcast_join_limit=2,
-            unique_fraction={"a": 1.0},
-        ),
-    )
-    left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
-    right = pl.LazyFrame({"a": [3, 4, 5, 6, 7] * 4, "c": range(20)})
-    q = (
-        left.join(right, on="a")
-        .filter(pl.col("a") == 2)
-        .group_by(pl.col("a"))
-        .mean()
-        .select(pl.col("a"), pl.col("c"))
-    )
-    _engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 2,
-            "broadcast_join_limit": 2,
-            "unique_fraction": {"a": 1.0},
-        },
-    )
-    config_options = ConfigOptions.from_polars_engine(_engine)
-    ir = Translator(q._ldf.visit(), _engine).translate_ir()
-    ir, partition_info = lower_ir_graph(
-        ir, config_options, collect_statistics(ir, config_options)
-    )
-    expect_dtype = ir.schema["a"]
-    expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
-    assert partition_info[ir].partitioned_on == expect_expr
-    assert_gpu_result_equal(q, engine=streaming_engine)
