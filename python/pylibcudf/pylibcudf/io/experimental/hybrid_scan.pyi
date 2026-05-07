@@ -4,13 +4,13 @@
 from enum import IntEnum
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.io.parquet import ParquetReaderOptions
 from pylibcudf.io.text import ByteRangeInfo
 from pylibcudf.io.types import TableWithMetadata
 from pylibcudf.span import Span
+from pylibcudf.utils import CudaStreamLike
 
 class UseDataPageMask(IntEnum):
     YES: int
@@ -44,7 +44,7 @@ class HybridScanReader:
         self,
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
     def secondary_filters_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
@@ -54,20 +54,20 @@ class HybridScanReader:
         dictionary_page_data: list[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
     def filter_row_groups_with_bloom_filters(
         self,
         bloom_filter_data: list[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
     def build_row_mask_with_page_index_stats(
         self,
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def filter_column_chunks_byte_ranges(
@@ -80,7 +80,7 @@ class HybridScanReader:
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
     def payload_column_chunks_byte_ranges(
@@ -93,7 +93,7 @@ class HybridScanReader:
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
     def all_column_chunks_byte_ranges(
@@ -104,7 +104,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         column_chunk_data: list[Span],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
     def setup_chunking_for_filter_columns(
@@ -116,7 +116,7 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         column_chunk_data: list[Span],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> None: ...
     def materialize_filter_columns_chunk(
@@ -132,7 +132,7 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         column_chunk_data: list[Span],
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> None: ...
     def materialize_payload_columns_chunk(

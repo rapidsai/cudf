@@ -43,10 +43,6 @@ jobs:
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
       - cuml-compat-tests
-      - streams-build-matrix
-      - streams-build
-      - streams-test-matrix
-      - streams-test
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
@@ -77,8 +73,7 @@ jobs:
         with:
           repo: ${{ github.repository }}
           target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
-          # TODO: Fix nightly CI and remove this line
-          max-days-without-success: 40
+          max-days-without-success: 14
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -87,6 +82,8 @@ jobs:
       files_yaml: |
         build_docs:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -112,6 +109,8 @@ jobs:
           - '!codecov.yml'
         test_cpp:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
           - '!.github/ISSUE_TEMPLATE/**'
@@ -145,6 +144,8 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -171,6 +172,8 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -203,6 +206,8 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -229,6 +234,8 @@ jobs:
           - '!java/**'
         test_python_conda:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -260,6 +267,8 @@ jobs:
           - '!notebooks/**'
         test_python_wheels:
           - '**'
+          - '!**/REVIEW_GUIDELINES.md'
+          - '!.coderabbit.yaml'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!.github/CODEOWNERS'
@@ -542,9 +551,16 @@ jobs:
         SCCACHE_DIST_MAX_RETRIES=inf
         SCCACHE_SERVER_LOG=sccache=debug
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
+      # clone-rapidsmpf to not use the rapidsmpf wheels from cudf_polars dependency
+      # librapidsmpf-cu13 wheels brings in a hardcoded libnuma-dev cmake target: https://github.com/NVIDIA/cuCascade/issues/118
+      # -DBUILD_TESTS=OFF to match rapidsmpf https://github.com/rapidsai/rapidsmpf/blob/main/.github/workflows/pr.yaml#L351 (leads to compilation errors)
+      # -DCUDF_BUILD_TESTUTIL=OFF to avoid IMPORTED_GLOBAL promotion errors when cuCascade's find_package(cudf) loads cudf-config.cmake from a CPM subdirectory
       build_command: |
         sccache --zero-stats;
-        build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        clone-rapidsmpf -j$(nproc) -v -q --branch "$(cat ~/cudf/RAPIDS_BRANCH)" --clone-upstream --depth 1 --single-branch --shallow-submodules;
+        if [ "$PYTHON_PACKAGE_MANAGER" = "pip" ]; then rapids-make-pip-env --force; elif [ "$PYTHON_PACKAGE_MANAGER" = "conda" ]; then rapids-make-conda-env --force; fi;
+        rapids-generate-scripts;
+        build-all -j0 -DBUILD_BENCHMARKS=OFF -DBUILD_NUMA_SUPPORT=OFF -DBUILD_TESTS=OFF -DCUDF_BUILD_TESTUTIL=OFF --verbose 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
@@ -616,52 +632,6 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
-  streams-build-matrix:
-    needs: [checks, changed-files]
-    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
-    with:
-      build_type: pull-request
-      matrix_name: conda-cpp-build
-      matrix_filter: map(select(.ARCH == "amd64"))
-  streams-build:
-    needs: streams-build-matrix
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.streams-build-matrix.outputs.matrix) }}
-    with:
-      build_type: pull-request
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      node_type: cpu8
-      container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
-      script: ci/build_streams.sh
-      artifact-name: stream_tests_${{ matrix.CUDA_VER }}
-      file_to_upload: cpp/install
-  streams-test-matrix:
-    needs: streams-build
-    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
-    with:
-      build_type: pull-request
-      matrix_name: conda-cpp-tests
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-  streams-test:
-    needs: streams-test-matrix
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.streams-test-matrix.outputs.matrix) }}
-    with:
-      build_type: pull-request
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      node_type: gpu-l4-latest-1
-      container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
-      script: ci/test_streams.sh stream_tests_${{ matrix.CUDA_VER }}
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -28,6 +28,7 @@ from .column cimport Column
 from .table cimport Table
 from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector, _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = ["GroupBy", "GroupByRequest"]
@@ -141,12 +142,13 @@ cdef class GroupBy:
     @staticmethod
     cdef tuple _parse_outputs(
         pair[unique_ptr[table], vector[aggregation_result]] c_res,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr,
     ):
         # Convert libcudf aggregation/scan outputs into pylibcudf objects.
         # This function is for internal use only.
-        cdef Table group_keys = Table.from_libcudf(move(c_res.first), stream, mr)
+        cdef Stream _stream = <Stream>stream
+        cdef Table group_keys = Table.from_libcudf(move(c_res.first), _stream, mr)
 
         cdef int i, j
         cdef list results = []
@@ -155,13 +157,13 @@ cdef class GroupBy:
             inner_results = []
             for j in range(c_res.second[i].results.size()):
                 inner_results.append(
-                    Column.from_libcudf(move(c_res.second[i].results[j]), stream, mr)
+                    Column.from_libcudf(move(c_res.second[i].results[j]), _stream, mr)
                 )
             results.append(Table(inner_results))
         return group_keys, results
 
     cpdef tuple aggregate(
-        self, list requests, Stream stream=None, DeviceMemoryResource mr=None
+        self, list requests, object stream=None, DeviceMemoryResource mr=None
     ):
         """Compute aggregations on columns.
 
@@ -189,19 +191,20 @@ cdef class GroupBy:
             c_requests.push_back(move(request._to_libcudf_agg_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         # TODO: Need to capture C++ exceptions indicating that an invalid type was used.
         # We rely on libcudf to tell us this rather than checking the types beforehand
         # ourselves.
         with nogil:
             c_res = dereference(self.c_obj).aggregate(
-                c_requests, stream.view(), mr.get_mr()
+                c_requests, _cs, mr.get_mr()
             )
-        return GroupBy._parse_outputs(move(c_res), stream, mr)
+        return GroupBy._parse_outputs(move(c_res), _stream, mr)
 
     cpdef tuple scan(
-        self, list requests, Stream stream=None, DeviceMemoryResource mr=None
+        self, list requests, object stream=None, DeviceMemoryResource mr=None
     ):
         """Compute scans on columns.
 
@@ -229,18 +232,23 @@ cdef class GroupBy:
             c_requests.push_back(move(request._to_libcudf_scan_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
-            c_res = dereference(self.c_obj).scan(c_requests, stream.view(), mr.get_mr())
-        return GroupBy._parse_outputs(move(c_res), stream, mr)
+            c_res = dereference(self.c_obj).scan(
+                c_requests,
+                _cs,
+                mr.get_mr(),
+            )
+        return GroupBy._parse_outputs(move(c_res), _stream, mr)
 
     cpdef tuple shift(
         self,
         Table values,
         list offset,
         list fill_values,
-        Stream stream=None,
+        object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """Compute shifts on columns.
@@ -269,26 +277,27 @@ cdef class GroupBy:
 
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).shift(
                 values.view(),
                 c_offset,
                 c_fill_values,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return (
-            Table.from_libcudf(move(c_res.first), stream, mr),
-            Table.from_libcudf(move(c_res.second), stream, mr),
+            Table.from_libcudf(move(c_res.first), _stream, mr),
+            Table.from_libcudf(move(c_res.second), _stream, mr),
         )
 
     cpdef tuple replace_nulls(
         self,
         Table value,
         list replace_policies,
-        Stream stream=None,
+        object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """Replace nulls in columns.
@@ -312,22 +321,23 @@ cdef class GroupBy:
         """
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         cdef vector[replace_policy] c_replace_policies = replace_policies
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).replace_nulls(
                 value.view(),
                 c_replace_policies,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return (
-            Table.from_libcudf(move(c_res.first), stream, mr),
-            Table.from_libcudf(move(c_res.second), stream, mr),
+            Table.from_libcudf(move(c_res.first), _stream, mr),
+            Table.from_libcudf(move(c_res.second), _stream, mr),
         )
 
     cpdef tuple get_groups(
-        self, Table values=None, Stream stream=None, DeviceMemoryResource mr=None
+        self, Table values=None, object stream=None, DeviceMemoryResource mr=None
     ):
         """Get the grouped keys and values labels for each row.
 
@@ -352,24 +362,24 @@ cdef class GroupBy:
 
         cdef groups c_groups
         cdef table_view empty_view
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         if values:
             c_groups = dereference(self.c_obj).get_groups(
-                values.view(), stream.view(), mr.get_mr()
+                values.view(), _stream.view().value(), mr.get_mr()
             )
             return (
                 c_groups.offsets,
-                Table.from_libcudf(move(c_groups.keys), stream, mr),
-                Table.from_libcudf(move(c_groups.values), stream, mr),
+                Table.from_libcudf(move(c_groups.keys), _stream, mr),
+                Table.from_libcudf(move(c_groups.values), _stream, mr),
             )
         else:
             # c_groups.values is nullptr - call get_groups with empty table view
             c_groups = dereference(self.c_obj).get_groups(
-                empty_view, stream.view(), mr.get_mr()
+                empty_view, _stream.view().value(), mr.get_mr()
             )
             return (
                 c_groups.offsets,
-                Table.from_libcudf(move(c_groups.keys), stream, mr),
+                Table.from_libcudf(move(c_groups.keys), _stream, mr),
                 None,
             )
