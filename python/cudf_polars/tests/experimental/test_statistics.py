@@ -16,8 +16,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from rapidsmpf.communicator.communicator import Communicator
-
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 # Runs the spmd variant even under rrun with nranks > 1. The ray/dask
@@ -30,7 +28,7 @@ pytestmark = [
 @pytest.fixture(params=["spmd", "ray", "dask"])
 def engine(
     request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
+    spmd_engine: SPMDEngine,
 ) -> Iterator[StreamingEngine]:
     """Yield each supported streaming engine with statistics enabled."""
     backend = request.param
@@ -39,7 +37,7 @@ def engine(
 
     if backend == "spmd":
         with SPMDEngine(
-            comm=spmd_comm,
+            comm=spmd_engine.comm,
             rapidsmpf_options=rapidsmpf_options,
             executor_options=executor_options,
         ) as engine:
