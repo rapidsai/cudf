@@ -134,7 +134,7 @@ def apply_boolean_mask(
 def apply_deletion_mask(
     input: Column,
     deletion_mask: Column,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def distinct(

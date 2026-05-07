@@ -40,7 +40,7 @@ def apply_boolean_mask(
 def apply_deletion_mask(
     source_table: Table,
     deletion_mask: Column,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def unique(
