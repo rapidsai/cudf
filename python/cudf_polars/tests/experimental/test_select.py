@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import contextlib
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -17,7 +16,7 @@ from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import HStack, Projection, Select
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -28,25 +27,12 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_134,
 )
 
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-
 
 @pytest.fixture
-def engine(
-    request: pytest.FixtureRequest,
-) -> Generator[StreamingEngine, None, None]:
-    params: dict[str, Any] = getattr(request, "param", {})
-    executor_options = {
-        "max_rows_per_partition": 3,
-        "fallback_mode": "warn",
-        "dynamic_planning": {},
-        **params.get("executor_options", {}),
-    }
-    with SPMDEngine(executor_options=executor_options) as engine:
-        yield engine
+def engine(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -67,17 +53,11 @@ def test_select(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "fallback_mode,engine",
-    [
-        ("silent", {"executor_options": {"fallback_mode": "silent"}}),
-        ("raise", {"executor_options": {"fallback_mode": "raise"}}),
-        ("warn", {"executor_options": {"fallback_mode": "warn"}}),
-        ("foo", {"executor_options": {"fallback_mode": "foo"}}),
-    ],
-    indirect=["engine"],
-)
-def test_select_reduce_fallback(df, fallback_mode, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode=fallback_mode),
+    )
     match = "This selection is not supported for multiple partitions."
 
     query = df.select(

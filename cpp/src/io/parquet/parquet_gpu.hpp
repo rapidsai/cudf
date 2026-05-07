@@ -102,17 +102,18 @@ __device__ constexpr void set_error(kernel_error::value_type error,
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : kernel_error::value_type {
-  DATA_STREAM_OVERRUN      = 0x1,
-  LEVEL_STREAM_OVERRUN     = 0x2,
-  UNSUPPORTED_ENCODING     = 0x4,
-  INVALID_LEVEL_RUN        = 0x8,
-  INVALID_DATA_TYPE        = 0x10,
-  EMPTY_PAGE               = 0x20,
-  INVALID_DICT_WIDTH       = 0x40,
-  DELTA_PARAM_MISMATCH     = 0x80,
-  DELTA_PARAMS_UNSUPPORTED = 0x100,
-  INVALID_PAGE_TYPE        = 0x200,
-  INVALID_PAGE_HEADER      = 0x400,
+  DATA_STREAM_OVERRUN            = 0x1,
+  LEVEL_STREAM_OVERRUN           = 0x2,
+  UNSUPPORTED_ENCODING           = 0x4,
+  INVALID_LEVEL_RUN              = 0x8,
+  INVALID_DATA_TYPE              = 0x10,
+  EMPTY_PAGE                     = 0x20,
+  INVALID_DICT_WIDTH             = 0x40,
+  DELTA_PARAM_MISMATCH           = 0x80,
+  DELTA_PARAMS_UNSUPPORTED       = 0x100,
+  INVALID_PAGE_TYPE              = 0x200,
+  INVALID_PAGE_HEADER            = 0x400,
+  INVALID_BYTE_STREAM_SPLIT_SIZE = 0x800,
 };
 
 /**
@@ -735,10 +736,12 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Pointer to the error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
                                    int32_t num_chunks,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream);
 
 /**
