@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections import defaultdict
 from typing import TYPE_CHECKING, ClassVar, cast
 
@@ -322,7 +323,7 @@ def _fuse_over_nodes(
         absorbed: list[Select] = []
         remaining: list[Select] = []
         for p_sel in passthrough:
-            if p_sel.children[0] is input_ir:
+            if p_sel.children[0] == input_ir:
                 absorbed.append(p_sel)
             else:
                 remaining.append(p_sel)
@@ -340,7 +341,7 @@ def _fuse_over_nodes(
         partition_info[merged_over] = pi
 
         # Build outer_exprs in original selection order to preserve column ordering.
-        all_this_group = {id(s) for s in [*absorbed, *group]}
+        all_this_group = {id(s) for s in itertools.chain(absorbed, group)}
         outer_exprs: list[NamedExpr] = []
         outer_schema: Schema = {}
         for sel in selections:

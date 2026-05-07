@@ -75,7 +75,7 @@ class ActorTracer:
         # using TableChunk.shape[0] for the row count, and consider providing a
         # helper that logs and sends a chunk in one call so the
         # ``tracer.add_chunk(...) + ch_out.send(...)`` pattern doesn't have to
-        # be duplicated across every actor. Best handled as a dedicated PR.
+        # be duplicated across every actor.
         if table is not None:  # pragma: no cover; Covered by rapidsmpf tests
             self.row_count = (self.row_count or 0) + table.num_rows()
         self.chunk_count += 1

@@ -153,10 +153,12 @@ class ReserveOpIDs:
                         _get_new_collective_id(),
                     ]
             elif isinstance(node, Over) and not node.is_scalar:
-                # Non-scalar Over needs 3 IDs: size allgather, forward shuffle,
-                # reverse shuffle (routes results back to origin rank).
+                # Non-scalar Over needs 2 IDs: one for the size AllGather +
+                # forward shuffle (the AllGather completes before the forward
+                # shuffle starts, so they can share), and a separate ID for
+                # the return shuffle (which overlaps with the forward shuffle
+                # during extract+insert).
                 self.collective_id_map[node] = [
-                    _get_new_collective_id(),
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]

@@ -385,18 +385,11 @@ def determine_fanout_nodes(
     for node in traversal([ir]):
         if node in unbounded:
             _mark_children_unbounded(node)
-        elif isinstance(node, Union):
-            # Union processes children sequentially, so all children
-            # with multiple consumers need unbounded fanout
-            _mark_children_unbounded(node)
-        elif isinstance(node, Join):
-            # This may be a broadcast join
-            _mark_children_unbounded(node)
-        elif isinstance(node, Over):
-            # Over buffers all input before producing any output, so its
-            # input source needs unbounded fanout to avoid deadlock when
-            # that source also feeds passthrough branches consumed by a
-            # concurrent HConcat.
+        elif isinstance(node, (Union, Join, Over)):
+            # Union processes children sequentially; Join may broadcast one
+            # side; Over buffers (or samples-then-replays) its input before
+            # producing output. In every case the input source needs
+            # unbounded fanout so other consumers don't block it.
             _mark_children_unbounded(node)
         elif len(node.children) > 1:
             # Check if this node is doing any broadcasting.

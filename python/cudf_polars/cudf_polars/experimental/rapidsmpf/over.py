@@ -187,7 +187,7 @@ class OriginStamps:
     then sort by ``(chunk_index, position)`` to recover the input chunking.
 
     ``chunk_index`` is a rank-local 0-based index into the stream of input
-    chunks — *not* the upstream message ``sequence_number``, which is not
+    chunks, *not* the upstream message ``sequence_number``, which is not
     guaranteed unique (e.g., when the input is the output of a shuffle whose
     partition IDs collide across chunks).
     """
@@ -802,8 +802,9 @@ async def over_actor(
         The input channel.
     collective_ids
         Collective IDs reserved for this operation. Scalar Over nodes receive
-        one ID (AllGather); non-scalar nodes receive three (size AllGather +
-        forward Shuffle + reverse Shuffle).
+        one ID (AllGather); non-scalar nodes receive two (one shared by the
+        size AllGather and forward Shuffle, plus a separate one for the
+        return Shuffle which overlaps with the forward extract).
     target_partition_size
         Target output partition size in bytes, used to compute the shuffle
         modulus for the non-scalar path.
@@ -861,9 +862,12 @@ async def over_actor(
                 ch_out,
                 metadata_in,
                 tracer,
+                # collective_ids[0] is reused for the size AllGather and the
+                # forward shuffle (sequential, no overlap); collective_ids[1]
+                # is the return shuffle, which overlaps with forward extract.
                 size_collective_id=collective_ids[0],
-                forward_shuffle_collective_id=collective_ids[1],
-                return_shuffle_collective_id=collective_ids[2],
+                forward_shuffle_collective_id=collective_ids[0],
+                return_shuffle_collective_id=collective_ids[1],
                 target_partition_size=target_partition_size,
                 sample_chunk_count=sample_chunk_count,
             )
