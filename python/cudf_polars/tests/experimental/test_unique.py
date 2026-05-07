@@ -34,12 +34,9 @@ def df():
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.7}])
-def test_unique(
-    df, streaming_engine_factory, keep, subset, maintain_order, cardinality
-):
+def test_unique(df, streaming_engine_factory, keep, subset, maintain_order):
     engine = streaming_engine_factory(
-        StreamingOptions(unique_fraction=cardinality, fallback_mode="warn"),
+        StreamingOptions(fallback_mode="warn"),
     )
     q = df.unique(subset=subset, keep=keep, maintain_order=maintain_order)
     check_row_order = maintain_order
@@ -50,40 +47,16 @@ def test_unique(
     assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
-def test_unique_fallback(df, streaming_engine_factory):
-    engine = streaming_engine_factory(
-        StreamingOptions(
-            unique_fraction={"y": 1.0},
-            fallback_mode="raise",
-            dynamic_planning=None,
-        ),
-    )
-    q = df.unique(keep="first", maintain_order=True)
-    with pytest.raises(
-        NotImplementedError,
-        match="Unsupported unique options",
-    ):
-        assert_gpu_result_equal(q, engine=engine)
-
-
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
-def test_unique_select(df, streaming_engine_factory, maintain_order, cardinality):
+def test_unique_select(df, streaming_engine_factory, maintain_order):
     engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=4,
-            unique_fraction=cardinality,
             fallback_mode="warn",
         ),
     )
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
-    if cardinality == {"y": 0.5} and maintain_order:
-        with pytest.warns(
-            UserWarning, match="Unsupported unique options for multiple partitions."
-        ):
-            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-    else:
-        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("keep", ["first", "last", "any"])
