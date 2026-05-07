@@ -14,7 +14,7 @@ from pylibcudf.libcudf.types cimport (
     null_equality,
     size_type,
 )
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -29,7 +29,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[size_type] keys,
         size_type keep_threshold,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -37,14 +37,14 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[size_type] keys,
         size_type keep_threshold,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,
         column_view boolean_mask,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -53,7 +53,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         vector[size_type] keys,
         duplicate_keep_option keep,
         null_equality nulls_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -63,7 +63,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equals,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -72,7 +72,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -82,7 +82,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equal,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -90,6 +90,6 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         table_view predicate_table,
         const expression& predicate_expr,
         table_view filter_table,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

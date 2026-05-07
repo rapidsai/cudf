@@ -82,7 +82,8 @@ def explain_query(
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     if physical:
-        lowered_ir, partition_info, _ = lower_ir_graph(ir, config)
+        stats = collect_statistics(ir, config)
+        lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         if config.executor.name == "streaming":
@@ -287,10 +288,7 @@ def _(ir: GroupBy) -> dict[str, Serializable]:
 
 @_serialize_properties.register
 def _(ir: Shuffle) -> dict[str, Serializable]:
-    return {
-        "keys": [ne.name for ne in ir.keys],
-        "shuffle_method": ir.shuffle_method.value,
-    }
+    return {"keys": [ne.name for ne in ir.keys]}
 
 
 @_serialize_properties.register
@@ -446,7 +444,8 @@ class SerializablePlan:
         """
         partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
         if lowered:
-            ir, partition_info_d, _ = lower_ir_graph(ir, config_options)
+            stats = collect_statistics(ir, config_options)
+            ir, partition_info_d = lower_ir_graph(ir, config_options, stats)
             partition_info_dict = {}
 
         nodes: dict[str, SerializableIRNode] = {}

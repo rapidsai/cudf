@@ -540,8 +540,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     dag = serialize_query(q, engine)
 
-    # walk Union -> Scan
-    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    node = dag.nodes[dag.roots[0]]
     assert node.type == "Scan"
     assert node.properties == expected_properties
 
@@ -673,7 +672,6 @@ def test_dynamic_planning_adds_repartition(df, op):
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "runtime": "rapidsmpf",
             "dynamic_planning": {},
             "max_rows_per_partition": 1_000_000,
         },
@@ -681,8 +679,8 @@ def test_dynamic_planning_adds_repartition(df, op):
     plan = explain_query(q, engine, physical=True)
 
     # With dynamic planning enabled, sum needs a REPARTITION to collapse
-    # partitions for global aggregation. Sort uses SHUFFLESORTED and does not.
+    # partitions for global aggregation. Sort does not.
     if op == "sort":
-        assert "SHUFFLESORTED" in plan
+        assert "SORT" in plan
     else:
         assert "REPARTITION" in plan

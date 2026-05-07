@@ -66,14 +66,19 @@ def test_executor_options_includes_set_fields() -> None:
     assert "log" not in result
 
 
-def test_executor_options_unique_fraction() -> None:
-    result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
-    assert result["unique_fraction"] == {"col_a": 0.5}
-
-
 def test_executor_options_num_py_executors() -> None:
     result = StreamingOptions(num_py_executors=4).to_executor_options()
     assert result["num_py_executors"] == 4
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_executor_options_sink_to_directory(*, value: bool) -> None:
+    result = StreamingOptions(sink_to_directory=value).to_executor_options()
+    assert result["sink_to_directory"] is value
+
+
+def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
+    assert "sink_to_directory" not in StreamingOptions().to_executor_options()
 
 
 # ---------------------------------------------------------------------------
