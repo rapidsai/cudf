@@ -36,7 +36,6 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.utils import (
     _dynamic_planning_on,
-    _get_unique_fractions,
     _lower_ir_fallback,
 )
 
@@ -390,7 +389,6 @@ def _(
 
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
-    groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
     child_count = partition_info[child].count
 
@@ -421,7 +419,6 @@ def _(
         child = Shuffle(
             child.schema,
             ir.keys,
-            config_options.executor.shuffle_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -441,14 +438,6 @@ def _(
         )
         return dynamic_node, partition_info
 
-    if unique_fraction_dict := _get_unique_fractions(
-        groupby_key_columns,
-        config_options.executor.unique_fraction,
-    ):
-        # Use unique_fraction to determine output partitioning
-        unique_fraction = max(unique_fraction_dict.values())
-        post_aggregation_count = max(int(unique_fraction * child_count), 1)
-
     # Partition-wise groupby operation
     pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
         k.name: k.value.dtype for k in piecewise_exprs
@@ -465,46 +454,28 @@ def _(
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
     grouped_keys = tuple(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys)
 
-    # Reduction
-    gb_inter: GroupBy | Repartition | Shuffle
+    # N-ary tree reduction
+    gb_inter: GroupBy | Repartition
     reduction_schema = {k.name: k.value.dtype for k in grouped_keys} | {
         k.name: k.value.dtype for k in reduction_exprs
     }
-    if not shuffled and post_aggregation_count > 1:
-        # Shuffle reduction
-        if ir.maintain_order:  # pragma: no cover
-            return _lower_ir_fallback(
-                ir,
-                rec,
-                msg="maintain_order not supported for multiple output partitions.",
+    n_ary = 32
+    count = child_count
+    gb_inter = gb_pwise
+    while count > post_aggregation_count:
+        gb_inter = Repartition(gb_inter.schema, gb_inter)
+        count = max(math.ceil(count / n_ary), post_aggregation_count)
+        partition_info[gb_inter] = PartitionInfo(count=count)
+        if count > post_aggregation_count:
+            gb_inter = GroupBy(
+                reduction_schema,
+                grouped_keys,
+                reduction_exprs,
+                ir.maintain_order,
+                None,
+                gb_inter,
             )
-
-        gb_inter = Shuffle(
-            gb_pwise.schema,
-            grouped_keys,
-            config_options.executor.shuffle_method,
-            gb_pwise,
-        )
-        partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
-    else:
-        # N-ary tree reduction
-        n_ary = config_options.executor.groupby_n_ary
-        count = child_count
-        gb_inter = gb_pwise
-        while count > post_aggregation_count:
-            gb_inter = Repartition(gb_inter.schema, gb_inter)
-            count = max(math.ceil(count / n_ary), post_aggregation_count)
             partition_info[gb_inter] = PartitionInfo(count=count)
-            if count > post_aggregation_count:
-                gb_inter = GroupBy(
-                    reduction_schema,
-                    grouped_keys,
-                    reduction_exprs,
-                    ir.maintain_order,
-                    None,
-                    gb_inter,
-                )
-                partition_info[gb_inter] = PartitionInfo(count=count)
 
     # Final aggregation
     gb_reduce = GroupBy(
