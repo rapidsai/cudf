@@ -469,6 +469,11 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
+    local_quent_context = cudf_polars.quent.LocalQuentContext(
+        context=quent_context,
+        worker=mp_ctx.quent_worker,
+        logger=mp_ctx.quent_logger,
+    )
     return evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
@@ -477,9 +482,7 @@ def _worker_evaluate(
         config_options,
         collect_metadata=collect_metadata,
         logical_plan_id=logical_plan_id,
-        worker_id=mp_ctx.quent_worker.id,
-        quent_context=quent_context,
-        quent_logger=mp_ctx.quent_logger,
+        local_quent_context=local_quent_context,
     )
 
 

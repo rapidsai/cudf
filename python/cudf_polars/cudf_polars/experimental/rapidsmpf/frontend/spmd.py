@@ -114,6 +114,17 @@ def evaluate_pipeline_spmd_mode(
     )
     quent_context.emit_query_events(config_options.executor.spmd_context.quent_logger)
 
+    # I don't like recreating the Worker here...
+    local_quent_context = cudf_polars.quent.LocalQuentContext(
+        context=quent_context,
+        worker=cudf_polars.quent.Worker(
+            id=config_options.executor.spmd_context.worker_id,
+            engine_id=config_options.executor.spmd_context.engine_id,
+            instance_name=f"rank-{comm.rank}",
+        ),
+        logger=config_options.executor.spmd_context.quent_logger,
+    )
+
     result = evaluate_on_rank(
         context,
         comm,
@@ -121,10 +132,8 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        local_quent_context=local_quent_context,
         logical_plan_id=logical_plan_id,
-        worker_id=config_options.executor.spmd_context.worker_id,
-        quent_context=config_options.executor.quent_context,
-        quent_logger=config_options.executor.spmd_context.quent_logger,
     )
     quent_context.emit_query_exit_events(
         config_options.executor.spmd_context.quent_logger

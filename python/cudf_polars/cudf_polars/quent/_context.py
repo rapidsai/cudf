@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         Operator,
         Plan,
         Port,
+        Worker,
     )
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -37,7 +38,14 @@ __all__ = [
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class QuentContext:
-    """Configuration for Quent execution."""
+    """
+    A Quent context that is globally valid for a query.
+
+    This context will be used by all ranks involved in executing the query. All
+    the fields here are serializable and valid on all ranks. Rank-specific
+    fields (like a Worker ID) are generated on the local rank and passed
+    around in a ``LocalQuentContext`` object.
+    """
 
     engine: Engine = dataclasses.field(default_factory=Engine)
     query_group: QueryGroup = dataclasses.field(default_factory=QueryGroup)
@@ -216,3 +224,17 @@ class QuentContext:
             parent_plan_id=parent_plan_id,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class LocalQuentContext:
+    """
+    A Quent Context that is only ever used locally.
+
+    This can contain non-serializable objects (like a QuentLogger)
+    and entities that are only valid on the local rank.
+    """
+
+    context: QuentContext
+    worker: Worker
+    logger: QuentLogger

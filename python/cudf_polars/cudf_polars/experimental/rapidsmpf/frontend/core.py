@@ -579,10 +579,8 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
+    local_quent_context: cudf_polars.quent.LocalQuentContext,
     logical_plan_id: uuid.UUID,
-    worker_id: uuid.UUID,
-    quent_context: cudf_polars.quent.QuentContext,
-    quent_logger: cudf_polars.quent._logging.QuentLogger,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -609,19 +607,10 @@ def evaluate_on_rank(
         Executor configuration forwarded from the client.
     collect_metadata
         Whether to collect channel metadata during execution.
+    local_quent_context
+        The local Quent context for this rank.
     logical_plan_id
-        Client-generated UUID identifying the entire logical plan.
-        Used to associate logical and physical plan telemetry events.
-    worker_id
-        Quent worker ID for this rank. When provided, rank 0 emits
-        plan-level Quent telemetry (logical and physical plan
-        declarations). Passed explicitly so that all frontends
-        (SPMD, Ray, Dask) can supply their own ID without requiring
-        a specific context type.
-    quent_context
-        The quent context to use for this query.
-    quent_logger
-        The logger collecting Quent events for this rank.
+        A unique identifier for the logical plan.
 
     Returns
     -------
@@ -635,37 +624,41 @@ def evaluate_on_rank(
 
     physical_plan_id = uuid.uuid4()
 
-    if worker_id is not None:
+    if local_quent_context is not None:
         # TODO: split out build from emit.
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
             config_options,
-            query_id=quent_context.query.id,
+            query_id=local_quent_context.context.query.id,
+            # plan_id=local_quent_context.context.logical_plan_id,
             plan_id=logical_plan_id,
-            worker_id=worker_id,
+            worker_id=local_quent_context.worker.id,
             instance_name="logical",
             parent_plan_id=None,
             parent_operators_by_node_id=None,
         )
         if comm.rank == 0:
-            quent_context.emit_plan_declarations(quent_logger, plan, ops, ports)
+            local_quent_context.context.emit_plan_declarations(
+                local_quent_context.logger, plan, ops, ports
+            )
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
     )
 
-    if worker_id is not None:
+    if local_quent_context is not None:
         # Problem: each worker gets their own `plan.id` so we can't
         # associate the physical plan with the logical plan on any
         # rank other than 0.
         # We would need to pass the plan ID in along with the IR...
         log_query_plan(ir, config_options)
-        quent_context.emit_physical_plan_events(
-            quent_logger,
+        local_quent_context.context.emit_physical_plan_events(
+            local_quent_context.logger,
             ir,
             config_options,
             plan_id=physical_plan_id,
-            worker_id=worker_id,
+            worker_id=local_quent_context.worker.id,
+            # parent_plan_id=local_quent_context.context.logical_plan_id,
             parent_plan_id=logical_plan_id,
             node_map=node_map,
             logical_op_by_id=logical_op_by_id,

@@ -212,7 +212,6 @@ class RankActor:
         self._worker_id: uuid.UUID = worker_id
         self._engine_id: uuid.UUID = engine_id
         self._rank: int = rank
-        self._quent_worker: cudf_polars.quent._types.Worker | None = None
         self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         self._quent_worker = cudf_polars.quent._types.Worker(
             id=worker_id,
@@ -364,8 +363,8 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
-        logical_plan_id: uuid.UUID,
         quent_context: cudf_polars.quent.QuentContext,
+        logical_plan_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -407,6 +406,11 @@ class RankActor:
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
+        local_quent_context = cudf_polars.quent.LocalQuentContext(
+            context=quent_context,
+            worker=self._quent_worker,
+            logger=self._quent_logger,
+        )
         return evaluate_on_rank(
             self._ctx,
             self._comm,
@@ -414,10 +418,8 @@ class RankActor:
             ir,
             config_options,
             collect_metadata=collect_metadata,
+            local_quent_context=local_quent_context,
             logical_plan_id=logical_plan_id,
-            worker_id=self._worker_id,
-            quent_context=quent_context,
-            quent_logger=self._quent_logger,
         )
 
     def _drain_quent_events(self) -> list[dict[str, Any]]:
