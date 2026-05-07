@@ -182,9 +182,3 @@ compile_commands.json
 rmm_log.txt
 python/cudf/cudf_pandas_tests/data/rmm_log.txt
 
-# AI agent artifacts
-.agents/*
-.claude/*
-.cursor/*
-.copilot/*
-.codex/*
