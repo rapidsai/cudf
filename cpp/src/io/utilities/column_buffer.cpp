@@ -66,7 +66,8 @@ void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes
 namespace {
 
 /**
- * @brief Recursively copy `name` and `user_data` fields of one buffer to another.
+ * @brief Recursively copy `name`, `user_data`, and `string_as_binary` fields of one buffer to
+ * another.
  *
  * @param buff The old output buffer
  * @param new_buff The new output buffer
@@ -74,8 +75,9 @@ namespace {
 template <class string_policy>
 void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 {
-  new_buff.name      = buff.name;
-  new_buff.user_data = buff.user_data;
+  new_buff.name             = buff.name;
+  new_buff.user_data        = buff.user_data;
+  new_buff.string_as_binary = buff.string_as_binary;
   for (auto const& child : buff.children) {
     auto& new_child = new_buff.children.emplace_back(string_policy(child.type, child.is_nullable));
     copy_buffer_data(child, new_child);
@@ -188,9 +190,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     }
     switch (buffer.type.id()) {
       case type_id::STRING: {
-        bool const force_binary = (buffer.user_data & COLUMN_BUFFER_FLAG_FORCE_BINARY) != 0;
         if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings() and
-            not force_binary) {
+            not buffer.string_as_binary) {
           if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
           // make_strings_column allocates new memory, it does not simply move
@@ -320,8 +321,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
   switch (buffer.type.id()) {
     case type_id::STRING: {
-      bool const force_binary = (buffer.user_data & COLUMN_BUFFER_FLAG_FORCE_BINARY) != 0;
-      if (force_binary) {
+      if (buffer.string_as_binary) {
         auto offsets = cudf::make_empty_column(type_id::INT32);
         auto child   = cudf::make_empty_column(type_id::UINT8);
         if (schema_info != nullptr) {

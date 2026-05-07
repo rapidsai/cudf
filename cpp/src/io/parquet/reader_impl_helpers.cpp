@@ -1789,7 +1789,7 @@ aggregate_reader_metadata::select_columns(
         if (schema_elem.type == Type::BYTE_ARRAY && parent_schema.logical_type.has_value() &&
             parent_schema.logical_type->type == LogicalType::VARIANT &&
             (schema_elem.name == "metadata" || schema_elem.name == "value")) {
-          output_col.user_data |= cudf::io::detail::COLUMN_BUFFER_FLAG_FORCE_BINARY;
+          output_col.string_as_binary = true;
         }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid

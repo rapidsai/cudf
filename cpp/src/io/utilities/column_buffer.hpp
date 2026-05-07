@@ -60,10 +60,6 @@ inline rmm::device_buffer create_data(data_type type,
 
 using string_index_pair = cuda::std::pair<char const*, size_type>;
 
-// `column_buffer::user_data` flag: force a STRING/BYTE_ARRAY-backed buffer to be materialized
-// as a `list<uint8>` column instead of being converted to strings
-constexpr uint32_t COLUMN_BUFFER_FLAG_FORCE_BINARY = (1u << 26);
-
 // forward declare friend functions
 template <typename string_policy>
 class column_buffer_base;
@@ -165,6 +161,8 @@ class column_buffer_base {
   bool is_nullable{false};
   size_type size{0};
   uint32_t user_data{0};  // arbitrary user data
+  // Materialize a STRING/BYTE_ARRAY-backed buffer as a `list<uint8>` column
+  bool string_as_binary{false};
   std::string name;
 
   std::vector<string_policy> children;
