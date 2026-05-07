@@ -122,6 +122,18 @@ repos:
             cpp/include/cudf/utilities/error\.hpp|
             cpp/include/cudf/detail/utilities/cuda_memcpy\.hpp
           )$
+      # C++ Core Guidelines SF.21 forbids unnamed namespaces in header files:
+      # https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#rs-unnamed
+      - id: no-anonymous-namespaces-in-headers
+        name: no-anonymous-namespaces-in-headers
+        description: 'Forbid anonymous namespaces in C++ header files'
+        entry: '^\s*namespace\s*(?:/\*.*\*/\s*)?\{'
+        language: pygrep
+        files: '.*[.](h|hpp|cuh)$'
+        exclude: |
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp
+          )$
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
