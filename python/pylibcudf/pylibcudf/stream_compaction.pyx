@@ -155,7 +155,7 @@ cpdef Table apply_boolean_mask(
 cpdef Table apply_deletion_mask(
     Table source_table,
     Column deletion_mask,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table using a deletion mask.
@@ -182,7 +182,7 @@ cpdef Table apply_deletion_mask(
 
     with nogil:
         c_result = cpp_stream_compaction.apply_deletion_mask(
-            source_table.view(), boolean_mask.view(), _cs, mr.get_mr()
+            source_table.view(), deletion_mask.view(), _cs, mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
 
