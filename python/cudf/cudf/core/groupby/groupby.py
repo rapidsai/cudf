@@ -1249,15 +1249,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if numeric_only:
             return self._reduce_numeric_only(op)
+
         if op == "sum" and self._has_string_value_column():
             return self._string_sum(
                 skipna=kwargs.get("skipna", True), min_count=min_count
             )
-        if min_count != 0:
-            raise NotImplementedError(
-                "min_count parameter is not implemented yet"
-            )
-        return self.agg(op)
+
+        result = self.agg(op)
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
     def _scan(self, op: str, *args, **kwargs):
         """{op_name} for each group."""

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -13,11 +13,12 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["extract", "extract_all_record", "extract_single"]
 
 cpdef Table extract(
-    Column input, RegexProgram prog, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, RegexProgram prog, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a table of strings columns where each column
@@ -41,22 +42,23 @@ cpdef Table extract(
         Columns of strings extracted from the input column.
     """
     cdef unique_ptr[table] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column extract_all_record(
-    Column input, RegexProgram prog, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, RegexProgram prog, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a lists column of strings where each string column
@@ -80,25 +82,26 @@ cpdef Column extract_all_record(
         Lists column containing strings extracted from the input column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract_all_record(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column extract_single(
     Column input,
     RegexProgram prog,
     size_type group,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -124,7 +127,8 @@ cpdef Column extract_single(
         Column of strings extracted from the input column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -132,8 +136,8 @@ cpdef Column extract_single(
             input.view(),
             prog.c_obj.get()[0],
             group,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

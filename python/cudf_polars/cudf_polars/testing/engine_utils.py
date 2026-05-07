@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from rapidsmpf.communicator.communicator import Communicator
+    from collections.abc import Mapping
+    from contextlib import AbstractContextManager
 
     import polars as pl
 
@@ -21,6 +22,15 @@ if TYPE_CHECKING:
 STREAMING_ENGINE_FIXTURE_PARAMS: list[str] = []
 if importlib.util.find_spec("rapidsmpf") is not None:
     STREAMING_ENGINE_FIXTURE_PARAMS.extend(["spmd", "spmd-small"])
+    # ``DaskEngine`` and ``RayEngine`` both reject construction inside an
+    # ``rrun`` cluster.
+    from rapidsmpf.bootstrap import is_running_with_rrun as _is_running_with_rrun
+
+    if not _is_running_with_rrun():  # pragma: no cover
+        if importlib.util.find_spec("distributed") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("dask")
+        if importlib.util.find_spec("ray") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("ray")
 ALL_ENGINE_FIXTURE_PARAMS = ["in-memory", *STREAMING_ENGINE_FIXTURE_PARAMS]
 
 
@@ -63,6 +73,34 @@ def is_streaming_engine(obj: Any) -> bool:
     return isinstance(obj, StreamingEngine)
 
 
+def warns_on_spmd(  # pragma: no cover; rapidsmpf-only path
+    engine: Any,
+    *args: Any,
+    when: bool = True,
+    **kwargs: Any,
+) -> AbstractContextManager[Any]:
+    """
+    ``pytest.warns(*args, **kwargs)`` on SPMD; ``nullcontext`` otherwise.
+
+    ``pytest.warns`` only captures warnings emitted in the test process. On
+    multi-process backends (``DaskEngine``, ``RayEngine``) the fallback
+    warning fires on workers/actors and only appears in worker logs/stdout,
+    so the assertion is replaced with a passthrough on those backends.
+
+    The optional ``when`` kwarg lets callers compose an additional gate (e.g.
+    a parametrize value) without an outer ``if``.
+    """
+    import contextlib
+
+    import pytest
+
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    if when and isinstance(engine, SPMDEngine):
+        return pytest.warns(*args, **kwargs)
+    return contextlib.nullcontext()
+
+
 def create_streaming_options(
     blocksize_mode: Literal["medium", "small"],
     overrides: StreamingOptions | None = None,
@@ -87,6 +125,9 @@ def create_streaming_options(
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import StreamingFallbackMode
 
+    # ``allow_gpu_sharing=True`` is always set so the cached multi-rank
+    # engines (Dask workers, Ray actors with ``num_ranks > 1``) don't trip
+    # the UUID-collision guard on every ``_reset(...)``.
     match blocksize_mode:
         case "medium":
             baseline = StreamingOptions(
@@ -94,6 +135,7 @@ def create_streaming_options(
                 dynamic_planning={},
                 target_partition_size=1_000_000,
                 raise_on_fail=True,
+                allow_gpu_sharing=True,
             )
         case "small":
             baseline = StreamingOptions(
@@ -102,6 +144,7 @@ def create_streaming_options(
                 target_partition_size=10,
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
+                allow_gpu_sharing=True,
             )
         case _:  # pragma: no cover
             raise ValueError(f"Unknown blocksize_mode: {blocksize_mode!r}")
@@ -112,39 +155,49 @@ def create_streaming_options(
 
 def build_streaming_engine(
     param: EngineFixtureParam,
-    spmd_comm: Communicator,
+    engines: Mapping[str, StreamingEngine],
     options: StreamingOptions | None = None,
 ) -> StreamingEngine:
     """
-    Build a :class:`StreamingEngine` from an engine fixture parameter.
+    Return ``engines``'s entry for ``param``, ``_reset``-ed.
+
+    ``engines`` must already contain a slot for ``param.engine_name`` —
+    seeded by the ``streaming_engines`` session-scoped fixture. The
+    fixture owns mutation; this function only reads and ``_reset``-s.
 
     Parameters
     ----------
     param
         Decoded engine fixture parameter describing the backend and block size mode.
-    spmd_comm
-        Communicator used when constructing an :class:`SPMDEngine`.
+    engines
+        Streaming-engine collection keyed by backend name. Provided by
+        the ``streaming_engines`` test fixture.
     options
         Optional streaming options to merge on top of the baseline selected by
         ``param.blocksize_mode``.
 
     Returns
     -------
-    A streaming engine matching ``param``.
-    """
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    The shared :class:`StreamingEngine`, ``_reset`` to the requested options.
 
+    Raises
+    ------
+    RuntimeError
+        If ``engines`` has no slot for ``param.engine_name``.
+    """
     streaming_options = create_streaming_options(param.blocksize_mode, options)
-    match param.engine_name:
-        case "spmd":
-            return SPMDEngine(
-                comm=spmd_comm,
-                rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
-                executor_options=streaming_options.to_executor_options(),
-                engine_options=streaming_options.to_engine_options(),
-            )
-        case _:  # pragma: no cover
-            raise AssertionError(f"Unknown streaming backend: {param.engine_name!r}")
+    engine = engines.get(param.engine_name)
+    if engine is None:  # pragma: no cover
+        raise RuntimeError(
+            f"No streaming engine for {param.engine_name!r}. The corresponding "
+            "session-scoped fixture must populate the collection before tests run."
+        )
+    engine._reset(
+        rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
+        executor_options=streaming_options.to_executor_options(),
+        engine_options=streaming_options.to_engine_options(),
+    )
+    return engine
 
 
 def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["medium", "small"]:
