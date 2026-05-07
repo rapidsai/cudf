@@ -20,7 +20,6 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
 from cudf_polars.utils.config import ConfigOptions
@@ -34,7 +33,6 @@ def engine():
         executor_options={
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -105,7 +103,7 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
 
 def test_with_columns_scalar_upstream_20981(engine):
     # Based on upstream-Polars unit test.
-    lf = pl.LazyFrame({"a": [1.0, 2.0, 3.0]})
+    lf = pl.LazyFrame({"a": [1.0, 2.0, 3.0, 4.0, 5.0]})
     q = lf.with_columns(pl.col.a.mean())
     assert_gpu_result_equal(q, engine=engine)
 
