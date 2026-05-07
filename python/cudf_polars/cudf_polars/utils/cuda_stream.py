@@ -17,11 +17,6 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
 
-def get_dask_cuda_stream() -> Stream:
-    """Get the default CUDA stream for Dask."""
-    return DEFAULT_STREAM
-
-
 def get_cuda_stream() -> Stream:
     """Get the default CUDA stream for the current thread."""
     return DEFAULT_STREAM

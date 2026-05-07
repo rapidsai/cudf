@@ -288,10 +288,7 @@ def _(ir: GroupBy) -> dict[str, Serializable]:
 
 @_serialize_properties.register
 def _(ir: Shuffle) -> dict[str, Serializable]:
-    return {
-        "keys": [ne.name for ne in ir.keys],
-        "shuffle_method": ir.shuffle_method.value,
-    }
+    return {"keys": [ne.name for ne in ir.keys]}
 
 
 @_serialize_properties.register

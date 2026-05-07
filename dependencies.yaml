@@ -25,6 +25,51 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+      - develop
+      - docs
+      - iwyu
+      - notebooks
+      - numpy_run
+      - py_version
+      - pyarrow_run
+      - rapids_build_skbuild
+      - rapids_build_setuptools
+      - run_common
+      - run_cudf
+      - run_cudf_polars
+      - run_pylibcudf
+      - run_dask_cudf
+      - run_custreamz
+      - test_cpp
+      - test_python_common
+      - test_python_cudf
+      - test_python_cudf_common
+      - test_python_pylibcudf
+      - test_python_cudf_pandas
+      - test_python_cudf_polars
+      - test_python_s3
+  devcontainers:
+    output: none
+    # Same as "all", excluding depends_on_rapidsmpf (which is built from source)
+    includes:
+      - build_base
+      - build_all
+      - build_cpp
+      - build_python_common
+      - clang
+      - cuda
+      - cuda_version
+      - cudf_polars_trace
+      - depends_on_cupy
+      - depends_on_cuda_python
+      - depends_on_dask_cuda
+      - depends_on_libkvikio
+      - depends_on_librmm
+      - depends_on_libnvcomp
+      - depends_on_numba_cuda
+      - depends_on_rapids_logger
       - depends_on_rmm
       - develop
       - docs
@@ -328,6 +373,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
   py_run_cudf_polars_experimental:
@@ -338,15 +384,6 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
-  py_run_cudf_polars_rapidsmpf:
-    output: pyproject
-    pyproject_dir: python/cudf_polars
-    extras:
-      table: project.optional-dependencies
-      key: rapidsmpf
-    includes:
-      - depends_on_rapidsmpf
-      - pyarrow_run
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -360,7 +397,6 @@ files:
       - test_python_common
       - test_python_cudf_polars
       - cudf_polars_trace
-      - depends_on_rapidsmpf
   py_trace_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
