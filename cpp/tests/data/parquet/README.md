@@ -19,7 +19,7 @@ From the repository root (requires **PyArrow**):
 python3 cpp/tests/scripts/parquet_variant_fixture_gen.py
 ```
 
-The generator writes struct columns with PyArrow, then patches the Thrift footer to set **Parquet logical type `VARIANT`** on the parent group `v` (union field 16), matching what libcudf's reader expects for `PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY` on the **unshredded** `metadata` / `value` pair only.
+The generator writes struct columns with PyArrow, then patches the Thrift footer to set **Parquet logical type `VARIANT`** on the parent group `v` (union field 16), matching what libcudf's reader expects to flag `metadata` / `value` BYTE_ARRAY children of the **unshredded** VARIANT group as `string_as_binary` so they materialize as `list<uint8>`.
 
 ### DuckDB cross-check (optional)
 
