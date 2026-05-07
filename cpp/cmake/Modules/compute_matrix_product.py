@@ -8,6 +8,8 @@
 # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/11516, we may be able
 # to port the algorithm to CMake script and use it in other RAPIDS projects.
 
+from __future__ import annotations
+
 import argparse
 import json
 import re

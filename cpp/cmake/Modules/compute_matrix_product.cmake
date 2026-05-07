@@ -7,6 +7,7 @@
 
 include_guard(GLOBAL)
 
+# This function runs compute_matrix_product.py and stores the JSON matrix product in output_var.
 function(compute_matrix_product output_var)
   set(options)
   set(one_value MATRIX_JSON_FILE MATRIX_JSON_STRING)
@@ -37,6 +38,7 @@ function(compute_matrix_product output_var)
   )
 endfunction()
 
+# This function unpacks a JSON object into CMake variables in the caller scope.
 function(populate_matrix_variables matrix_json_entry)
   string(JSON len LENGTH "${matrix_json_entry}")
   math(EXPR last "${len} - 1")
