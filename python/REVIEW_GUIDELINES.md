@@ -61,7 +61,7 @@
 - Exceptions not handled correctly across Python/C++ boundary (missing `+libcudf_exception_handler` if not `noexcept`)
 - Incorrect GIL handling for CUDA operations
 - Cython bindings not matching the C++ API
-- Use of Polars or pylibcudf APIs that require pyarrow (like `to_arrow` in pylibcudf) instead of going through cudf_polars containers
+- Using pylibcudf or Polars APIs that require pyarrow (like `to_arrow`) when cudf_polars containers should be used instead
 
 ### cudf_polars (Polars GPU Executor)
 - Missing coverage of Polars expression types (silent fallback to CPU without warning)
@@ -69,7 +69,7 @@
 - IR nodes not properly translated
 - Stream argument not explicitly passed to a pylibcudf API
 - `asyncio.Task`s not explicitly canceled in a finally block upon failure
-- rapidsmpf `Channel`s enter the `shutdown_on_error` context manager for proper resource cleanup
+- rapidsmpf `Channel`s not eventually entering the `shutdown_on_error` context manager
 
 ### dask_cudf
 - Dask DataFrame API compatibility issues
