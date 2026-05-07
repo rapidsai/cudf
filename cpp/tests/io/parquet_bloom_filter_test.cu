@@ -25,7 +25,7 @@ class ParquetBloomFilterTest : public cudf::test::BaseFixture {};
 TEST_F(ParquetBloomFilterTest, TestStrings)
 {
   using key_type    = StringType;
-  using policy_type = cudf::io::parquet::detail::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+  using policy_type = cudf::io::parquet::detail::arrow_filter_policy<key_type>;
   using word_type   = policy_type::word_type;
 
   std::size_t constexpr num_filter_blocks = 4;

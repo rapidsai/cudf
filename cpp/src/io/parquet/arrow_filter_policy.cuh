@@ -5,14 +5,12 @@
 
 #pragma once
 
-#include <cuco/hash_functions.cuh>
+#include <cudf/hashing/detail/xxhash_64.cuh>
 
-#include <cuda/functional>
-#include <cuda/std/bit>
+#include <cuda/std/algorithm>
 #include <cuda/std/limits>
 
 #include <cstdint>
-#include <nv/target>
 
 namespace cudf::io::parquet::detail {
 
@@ -23,16 +21,12 @@ namespace cudf::io::parquet::detail {
  * Reference:
  * https://github.com/apache/arrow/blob/be1dcdb96b030639c0b56955c4c62f9d6b03f473/cpp/src/parquet/bloom_filter.cc#L219-L230
  *
- * @note Duplicated from `cuco::arrow_filter_policy` so cudf is not affected by the policy's
- * upcoming removal from cuco.
- *
  * @tparam Key The type of the values to generate a fingerprint for.
- * @tparam XXHash64 64-bit XXHash hasher implementation for fingerprint generation.
  */
-template <class Key, template <typename> class XXHash64 = cuco::xxhash_64>
+template <class Key>
 class arrow_filter_policy {
  public:
-  using hasher           = XXHash64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
+  using hasher           = cudf::hashing::detail::XXHash_64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
   using word_type        = std::uint32_t;  ///< uint32_t for Arrow bloom filter policy
   using key_type         = Key;            ///< Hash function input type
   using hash_result_type = std::uint64_t;  ///< hash function output type

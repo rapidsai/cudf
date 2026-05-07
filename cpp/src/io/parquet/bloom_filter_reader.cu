@@ -57,7 +57,7 @@ struct bloom_filter_caster {
              not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>))
   {
     using key_type          = T;
-    using policy_type       = arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+    using policy_type       = arrow_filter_policy<key_type>;
     using bloom_filter_type = cuco::
       bloom_filter_ref<key_type, cuco::extent<std::size_t>, cuco::thread_scope_thread, policy_type>;
     using filter_block_type = typename bloom_filter_type::filter_block_type;
@@ -298,7 +298,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 {
   // Using `arrow_filter_policy` with a temporary `cuda::std::byte` key type to extract bloom
   // filter properties
-  using policy_type = arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+  using policy_type = arrow_filter_policy<cuda::std::byte>;
   auto constexpr filter_block_alignment =
     alignof(cuco::bloom_filter_ref<cuda::std::byte,
                                    cuco::extent<std::size_t>,
@@ -409,7 +409,7 @@ std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
 {
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
-  using policy_type = arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+  using policy_type = arrow_filter_policy<cuda::std::byte>;
   auto constexpr alignment = alignof(cuco::bloom_filter_ref<cuda::std::byte,
                                                             cuco::extent<std::size_t>,
                                                             cuco::thread_scope_thread,
