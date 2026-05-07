@@ -8,17 +8,16 @@ import itertools
 from collections import defaultdict
 from typing import TYPE_CHECKING, ClassVar, cast
 
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Agg, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import IR, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.groupby import combine, decompose
 from cudf_polars.experimental.rapidsmpf.utils import names_to_indices
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import GroupedWindow
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IRExecutionContext
@@ -183,9 +182,9 @@ class Over(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate window expressions against df."""
-        columns = [ne.evaluate(df) for ne in exprs]
-        columns = broadcast(*columns, stream=df.stream)
-        return DataFrame(columns, stream=df.stream)
+        # At evaluation time Over is just a Select with should_broadcast=True;
+        # the window-specific work lives in the GroupedWindow expressions.
+        return Select.do_evaluate(exprs, True, df, context=context)  # noqa: FBT003
 
 
 def _is_scalar_grouped_window(expr: GroupedWindow) -> bool:
@@ -282,6 +281,16 @@ def _fuse_over_nodes(
     so the actor produces the full output schema in one shuffle pass.
 
     The grouping key is ``(key_indices, is_scalar, input_ir)``.
+
+    Returns
+    -------
+    list[Select]
+        The rewritten selections: one merged ``Select`` per Over group,
+        followed by any selections that were neither part of an Over
+        group nor absorbed into one.
+    MutableMapping[IR, PartitionInfo]
+        ``partition_info`` augmented with entries for the merged Over
+        nodes and merged Select nodes introduced by the rewrite.
     """
     over_groups: defaultdict[tuple[tuple[int, ...], bool, IR], list[Select]] = (
         defaultdict(list)

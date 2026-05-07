@@ -1,6 +1,40 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Window over() actor for the RapidsMPF streaming runtime."""
+"""
+Window ``over()`` actor for the RapidsMPF streaming runtime.
+
+Implements the ``group_to_rows`` ``WindowMapping`` only: each input row
+receives the value computed for its group. Other mappings (``explode``,
+``join``) are not supported.
+
+The actor picks one of three strategies at runtime based on the incoming
+channel metadata and the shape of the windowed expressions.
+
+Chunkwise (already partitioned)
+    If the channel is already hash-partitioned on the over-keys (or any
+    prefix of them), every group is fully contained within one rank's
+    chunks. The window expression is correct on each chunk in isolation
+    and no cross-rank coordination is needed.
+
+Scalar broadcast (decomposable aggregations)
+    When every aggregation is decomposable, partial aggregates can be
+    combined associatively across ranks. Each rank computes per-chunk
+    partials, an AllGather collects them, a single reduction yields the
+    global aggregate per group, and each input chunk has those results
+    joined back onto its rows by the partition keys. Order is preserved
+    naturally: input chunks are buffered in receive order and emitted in
+    the same order after the global aggregate is known.
+
+Forward + return shuffle (non-decomposable aggregations)
+    For functions that need every row in a group visible at once, a hash
+    shuffle on the partition keys co-locates each group on one rank for
+    evaluation. After evaluation, a second shuffle routes each row back
+    to the rank that originally received it (output channels are
+    rank-local, so only the originating rank can emit), and the rows are
+    reassembled in input order using stamps that travel with the data
+    through both shuffles. The forward shuffle is sized by sampling a few
+    input chunks so insertion can stream rather than buffering everything.
+"""
 
 from __future__ import annotations
 
@@ -256,7 +290,7 @@ def _append_origin_stamps(
     return TableChunk.from_pylibcudf_table(
         plc.Table([*table.columns(), chunk_index_col, position_col, rank_col]),
         stream,
-        exclusive_view=True,
+        exclusive_view=False,
         br=br,
     )
 
