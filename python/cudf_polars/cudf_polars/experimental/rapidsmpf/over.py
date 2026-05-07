@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.shuffler import PartitionAssignment
@@ -23,7 +23,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
-from cudf_polars.dsl.expr import Col, GroupedWindow
+from cudf_polars.dsl.expr import GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import HStack
 from cudf_polars.dsl.utils.naming import unique_names
@@ -59,6 +59,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import Col
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Select
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import TableSizeStats
@@ -367,11 +368,9 @@ async def _allgather_and_broadcast(
     each buffered chunk using the pre-computed GroupedWindow lookup.
     """
     gw_nodes = tuple(ne.value for ne in ir.exprs if isinstance(ne.value, GroupedWindow))
-    key_names = tuple(
-        c.name
-        for c in gw_nodes[0].children[: gw_nodes[0].by_count]
-        if isinstance(c, Col)
-    )
+    # Lowering rejects non-Col partition-by keys, so every by-child here is a Col.
+    by_children = gw_nodes[0].children[: gw_nodes[0].by_count]
+    key_names = tuple(cast("Col", c).name for c in by_children)
     piecewise_ir, reduction_ir, agg_select_ir, name_remaps = _build_over_groupby_irs(
         gw_nodes, ir.children[0]
     )
@@ -429,12 +428,10 @@ async def _allgather_and_broadcast(
     else:
         global_agg = local_agg
 
-    if agg_select_ir is not None:
-        global_agg = await evaluate_chunk(
-            context, global_agg, agg_select_ir, ir_context=ir_context
-        )
-
-    global_agg_df = chunk_to_frame(global_agg, agg_select_ir or reduction_ir)
+    global_agg = await evaluate_chunk(
+        context, global_agg, agg_select_ir, ir_context=ir_context
+    )
+    global_agg_df = chunk_to_frame(global_agg, agg_select_ir)
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,

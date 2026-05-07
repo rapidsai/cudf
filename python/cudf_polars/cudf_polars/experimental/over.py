@@ -38,7 +38,7 @@ _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
 def _build_over_groupby_irs(
     gw_nodes: tuple[GroupedWindow, ...],
     child_ir: IR,
-) -> tuple[GroupBy, GroupBy, Select | None, dict[GroupedWindow, dict[str, str]]]:
+) -> tuple[GroupBy, GroupBy, Select, dict[GroupedWindow, dict[str, str]]]:
     """
     Build piecewise, reduction, and (optionally) selection GroupBy IRs.
 
@@ -58,8 +58,10 @@ def _build_over_groupby_irs(
     reduction_ir
         GroupBy IR that reduces partial aggregates to a single result.
     agg_select_ir
-        Select IR for post-aggregation expressions (e.g. division for mean);
-        None when all aggregations are pass-through.
+        Select IR applied on top of the reduction. Carries any post-
+        aggregation expressions (e.g. division for mean); for fully
+        pass-through aggregations it is a Select of plain ``Col`` refs
+        of the same shape as the reduction output.
     name_remaps
         Per-gw mapping from original named-agg name to its globally-unique
         name in the aggregate IRs. Polars assigns each ``GroupedWindow`` its
@@ -75,7 +77,8 @@ def _build_over_groupby_irs(
     all_scalar_named: list[NamedExpr] = []
     name_remaps: dict[GroupedWindow, dict[str, str]] = {}
     for gw_node in gw_nodes:
-        reductions, _ = gw_node._split_named_expr()
+        reductions, unary_ops = gw_node._split_named_expr()
+        assert not any(unary_ops.values()), "unary window ops not allowed here"
         remap: dict[str, str] = {}
         for ne in reductions:
             if ne.name in remap:
@@ -123,26 +126,19 @@ def _build_over_groupby_irs(
         piecewise_ir,
     )
 
-    agg_select_ir: Select | None
-    if any(
-        ne.name not in reduction_schema or reduction_schema[ne.name] != ne.value.dtype
-        for ne in selection_exprs
-    ):
-        select_key_exprs = [
-            NamedExpr(ne.name, Col(reduction_schema[ne.name], ne.name))
-            for ne in key_named_exprs
-        ]
-        select_schema = {
-            ne.name: reduction_schema[ne.name] for ne in key_named_exprs
-        } | {ne.name: ne.value.dtype for ne in selection_exprs}
-        agg_select_ir = Select(
-            select_schema,
-            [*select_key_exprs, *selection_exprs],
-            False,  # noqa: FBT003
-            reduction_ir,
-        )
-    else:
-        agg_select_ir = None
+    select_key_exprs = [
+        NamedExpr(ne.name, Col(reduction_schema[ne.name], ne.name))
+        for ne in key_named_exprs
+    ]
+    select_schema = {ne.name: reduction_schema[ne.name] for ne in key_named_exprs} | {
+        ne.name: ne.value.dtype for ne in selection_exprs
+    }
+    agg_select_ir = Select(
+        select_schema,
+        [*select_key_exprs, *selection_exprs],
+        False,  # noqa: FBT003
+        reduction_ir,
+    )
 
     return piecewise_ir, reduction_ir, agg_select_ir, name_remaps
 
@@ -198,7 +194,7 @@ class Over(IR):
 def _is_scalar_grouped_window(expr: GroupedWindow) -> bool:
     """Return True if this GroupedWindow can use the scalar broadcast path."""
     reductions, unary_ops = expr._split_named_expr()
-    if any(ops for ops in unary_ops.values()):
+    if any(unary_ops.values()):
         return False
     if not all(isinstance(c, Col) for c in expr.children[: expr.by_count]):
         return False
@@ -253,13 +249,13 @@ def _decompose_grouped_window_node(
     """
     indices = _extract_over_shuffle_indices(expr, input_ir.schema)
     if indices is None:
+        # TODO: support non-Col partition-by keys on the multi-partition
+        # paths. Today the hash shuffle layer rejects expression keys, and
+        # the scalar-aggregation broadcast path builds its piecewise
+        # groupby from Col by-children directly. Supporting expression
+        # keys would require lowering them to columns in the input first.
         raise NotImplementedError(
             "GroupedWindow with non-Col partition-by keys "
-            "is not supported for multiple partitions."
-        )
-    if len(indices) == 0:
-        raise NotImplementedError(
-            "GroupedWindow with empty partition-by keys "
             "is not supported for multiple partitions."
         )
     is_scalar = _is_scalar_grouped_window(expr)
@@ -283,9 +279,10 @@ def _fuse_over_nodes(
     Fuse per-expression Over nodes that share the same grouping key.
 
     Each GroupedWindow starts as its own Over node. This pass merges
-    co-keyed Overs across the input Selects, and absorbs passthrough
-    selections that share an input IR into the merged Over so the
-    actor produces the full output schema in one shuffle pass.
+    co-keyed Overs across the input Selects, and also absorbs any
+    Select that shares the Over's input IR (whether it's a simple
+    column reference or a per-row expression) into the merged Over,
+    so the actor produces the full output schema in one shuffle pass.
 
     The grouping key is ``(key_indices, is_scalar, input_ir)``.
     """
