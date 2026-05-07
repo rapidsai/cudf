@@ -718,7 +718,7 @@ def test_scan_parquet_zero_width_with_limit(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            is_streaming_engine(engine) and custom_engine is None,
+            is_streaming_engine(engine) or custom_engine is not None,
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )
