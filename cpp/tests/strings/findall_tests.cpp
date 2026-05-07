@@ -212,4 +212,7 @@ TEST_F(StringsFindallTests, Errors)
   auto pattern = std::string("(\\d+)-(\\w+)");
   auto prog    = cudf::strings::regex_program::create(pattern);
   EXPECT_THROW(cudf::strings::findall(sv, *prog), cudf::logic_error);
+  prog = cudf::strings::regex_program::create(
+    pattern, cudf::strings::regex_flags::DEFAULT, cudf::strings::capture_groups::NON_CAPTURE);
+  EXPECT_NO_THROW(cudf::strings::findall(sv, *prog));
 }
