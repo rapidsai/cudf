@@ -83,15 +83,13 @@ struct one_capture_fn {
       auto const match = d_prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
       itr += (match->first - itr.position());  // position to beginning of the match
-      auto last_pos     = itr;
       auto const result = d_prog.extract(prog_idx, d_str, itr, match->second, 0);
       if (result) {
-        auto const ext_str   = string_from_match(*result, d_str, last_pos);
+        auto const ext_str   = string_from_match(*result, d_str, itr);
         d_output[output_idx] = string_index_pair{ext_str.data(), ext_str.size_bytes()};
       } else {
         d_output[output_idx] = string_index_pair{"", 0};  // empty string
       }
-      last_pos += (result->second - last_pos.position());
       itr += (match->second - itr.position());  // increment for next match
       ++output_idx;
     }

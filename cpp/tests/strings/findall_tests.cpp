@@ -203,6 +203,20 @@ TEST_F(StringsFindallTests, OneCaptureGroup)
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::findall(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  expected = LCW({LCW{"3-A"},
+                  LCW{"4-May", "5-Day", "6-Hay"},
+                  LCW{"12-Dec", "2021-Jan"},
+                  LCW{},
+                  LCW{},
+                  LCW{},
+                  LCW{},
+                  LCW{"25-9000"}},
+                 valids.data());
+  prog     = cudf::strings::regex_program::create(
+    pattern, cudf::strings::regex_flags::DEFAULT, cudf::strings::capture_groups::NON_CAPTURE);
+  results = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsFindallTests, Errors)
@@ -212,7 +226,4 @@ TEST_F(StringsFindallTests, Errors)
   auto pattern = std::string("(\\d+)-(\\w+)");
   auto prog    = cudf::strings::regex_program::create(pattern);
   EXPECT_THROW(cudf::strings::findall(sv, *prog), cudf::logic_error);
-  prog = cudf::strings::regex_program::create(
-    pattern, cudf::strings::regex_flags::DEFAULT, cudf::strings::capture_groups::NON_CAPTURE);
-  EXPECT_NO_THROW(cudf::strings::findall(sv, *prog));
 }

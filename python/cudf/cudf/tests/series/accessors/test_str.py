@@ -1515,7 +1515,7 @@ def test_string_findall_one_capture():
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    pat = r"(\d)+ \w+"
+    pat = r"(\d+) \w+"
     expected = ps.str.findall(pat)
     actual = gs.str.findall(pat)
     assert_eq(expected, actual)
