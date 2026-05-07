@@ -389,6 +389,8 @@ Series = make_final_proxy_type(
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_values": _FastSlowAttribute("_values", private=True),
+        "values": _FastSlowAttribute("values"),
         "sparse": _FastSlowAttribute("sparse", private=True),
         "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
         "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
@@ -882,6 +884,7 @@ BooleanDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -908,6 +911,7 @@ Int8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -921,6 +925,7 @@ Int16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -933,6 +938,7 @@ Int32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -945,6 +951,7 @@ Int64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -957,6 +964,7 @@ UInt8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -969,6 +977,7 @@ UInt16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -981,6 +990,7 @@ UInt32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -993,6 +1003,7 @@ UInt64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -1026,6 +1037,8 @@ IntervalArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_left": _FastSlowAttribute("_left", private=True),
+        "_right": _FastSlowAttribute("_right", private=True),
     },
 )
 
@@ -1074,6 +1087,7 @@ Float32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -1086,6 +1100,7 @@ Float64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
     },
 )
@@ -1352,6 +1367,7 @@ try:
             "_display_funcs": _FastSlowAttribute(
                 "_display_funcs", private=True
             ),
+            "_compute": _FastSlowAttribute("_compute", private=True),
             "table_styles": _FastSlowAttribute("table_styles"),
             "columns": _FastSlowAttribute("columns"),
             "caption": _FastSlowAttribute("caption"),
@@ -1360,6 +1376,12 @@ try:
             "ctx_index": _FastSlowAttribute("ctx_index"),
             "_display_funcs_index": _FastSlowAttribute(
                 "_display_funcs_index", private=True
+            ),
+            "_display_funcs_column_names": _FastSlowAttribute(
+                "_display_funcs_column_names", private=True
+            ),
+            "_display_funcs_index_names": _FastSlowAttribute(
+                "_display_funcs_index_names", private=True
             ),
             "uuid": _FastSlowAttribute("uuid"),
             "hide_index_": _FastSlowAttribute("hide_index_"),
