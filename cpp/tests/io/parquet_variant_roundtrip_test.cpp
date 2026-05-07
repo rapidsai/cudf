@@ -8,8 +8,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cudf/io/experimental/variant.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/variant.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
@@ -48,7 +48,7 @@ TEST_F(ParquetVariantRoundtripTest, ReadMinimalVariantParquet)
   ASSERT_EQ(meta.child().type().id(), cudf::type_id::UINT8);
   ASSERT_EQ(val.child().type().id(), cudf::type_id::UINT8);
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     col, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   cudf::test::fixed_width_column_wrapper<int32_t> expected({7});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
@@ -68,17 +68,17 @@ TEST_F(ParquetVariantRoundtripTest, ReadMultirowVariantParquet)
 
   auto stream = cudf::test::get_default_stream();
 
-  auto x = cudf::io::parquet::extract_variant_field(
+  auto x = cudf::io::parquet::experimental::extract_variant_field(
     col, "x", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> x_exp({7, 42, 0}, {true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*x, x_exp);
 
-  auto k = cudf::io::parquet::extract_variant_field(
+  auto k = cudf::io::parquet::experimental::extract_variant_field(
     col, "k", cudf::data_type{cudf::type_id::STRING}, stream);
   cudf::test::strings_column_wrapper k_exp({"hi", "", "zzz"}, {true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*k, k_exp);
 
-  auto y = cudf::io::parquet::extract_variant_field(
+  auto y = cudf::io::parquet::experimental::extract_variant_field(
     col, "y", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> y_exp({0, 99, 0}, {false, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*y, y_exp);
