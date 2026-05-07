@@ -4,19 +4,18 @@
  */
 #pragma once
 
-#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
-
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf::hashing::detail {
 
-__device__ inline hash_value_type murmur_jit_hash_dispatcher(column_device_view col,
-                                                             uint32_t seed,
-                                                             bool const nullable,
-                                                             size_type row_index)
+// Strong definition lives in the ``murmurhash_jit_dispatch`` fatbin only; declared in
+// ``murmurhash3_x86_32_jit_hasher_decl.cuh`` for entry / hasher / LTO device code.
+__device__ hash_value_type murmur_jit_hash_dispatcher(column_device_view col,
+                                                      uint32_t seed,
+                                                      bool const nullable,
+                                                      size_type row_index)
 {
   switch (col.type().id()) {
     case type_id::INT8:

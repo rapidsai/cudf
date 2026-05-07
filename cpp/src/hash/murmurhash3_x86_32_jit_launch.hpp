@@ -11,6 +11,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32_jit_tags.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -65,19 +66,41 @@ static constexpr std::array<type_id, 30> murmur_jit_hasher_type_ids{{
   type_id::STRUCT,
 }};
 
-inline void insert_logical_type(std::unordered_set<type_id>& ids, column_view const& col)
+/**
+ * @brief Collect logical `type_id`s for fragment selection, including descendants of nested
+ * columns.
+ *
+ * Nested hashing dispatches primitives via `murmur_jit_hash_dispatcher`; strong `murmur_jit_hasher`
+ * fragments must be linked for every storage type that can appear under struct/list/dictionary
+ * columns, not only top-level columns.
+ */
+inline void collect_nested_logical_types(std::unordered_set<type_id>& ids, column_view const& col)
 {
   ids.insert(col.type().id());
-  if (col.type().id() == type_id::DICTIONARY32) {
-    dictionary_column_view const dcv(col);
-    insert_logical_type(ids, dcv.keys());
+  switch (col.type().id()) {
+    case type_id::STRUCT:
+      for (size_type i = 0; i < col.num_children(); ++i) {
+        collect_nested_logical_types(ids, col.child(i));
+      }
+      break;
+    case type_id::LIST: {
+      lists_column_view const lcv(col);
+      collect_nested_logical_types(ids, lcv.child());
+      break;
+    }
+    case type_id::DICTIONARY32: {
+      dictionary_column_view const dcv(col);
+      collect_nested_logical_types(ids, dcv.keys());
+      break;
+    }
+    default: break;
   }
 }
 
 inline void collect_table_logical_types(std::unordered_set<type_id>& ids, table_view const& table)
 {
   for (size_type c = 0; c < table.num_columns(); ++c) {
-    insert_logical_type(ids, table.column(c));
+    collect_nested_logical_types(ids, table.column(c));
   }
 }
 
@@ -270,6 +293,7 @@ inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
 
   using namespace cudf::hashing::detail::jit_lto;
   planner.add_static_fragment<fragment_tag_murmur_entry>();
+  planner.add_static_fragment<fragment_tag_murmur_dispatch>();
 
   std::unordered_set<type_id> logical_types;
   collect_table_logical_types(logical_types, input);

@@ -8,9 +8,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 
-// Decl only (not `jit_device.cuh`): dispatcher would use every `murmur_jit_hasher<T>` before the
-// explicit specialization below, which nvcc rejects ("must precede its first use").
-#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
+// `murmurhash3_x86_32_lto.cuh` pulls in `murmurhash3_x86_32_jit_hasher_decl.cuh` first (dispatcher
+// decl + `murmur_jit_hasher` template decl). Dispatcher body lives only in the entry fatbin.
 #include "murmurhash3_x86_32_lto.cuh"
 
 namespace cudf::hashing::detail {

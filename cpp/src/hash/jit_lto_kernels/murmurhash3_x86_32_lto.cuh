@@ -4,9 +4,10 @@
  */
 #pragma once
 
+#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/utilities/accumulate.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -18,7 +19,6 @@
 #include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
 
@@ -42,6 +42,8 @@ class element_hasher {
     : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
+
+  __device__ result_type seed() const noexcept { return _seed; }
 
   template <typename T>
   __device__ result_type operator()(column_device_view const& col,
@@ -91,11 +93,10 @@ class element_hasher_adaptor {
     if (_check_nulls && col.is_null(row_index)) { return NULL_HASH; }
 
     auto const keys = col.child(dictionary_column_view::keys_column_index);
-    return type_dispatcher<dispatch_storage_type>(
-      keys.type(),
-      _element_hasher,
-      keys,
-      static_cast<size_type>(col.element<dictionary32>(row_index)));
+    return murmur_jit_hash_dispatcher(keys,
+                                      _element_hasher.seed(),
+                                      _check_nulls,
+                                      static_cast<size_type>(col.element<dictionary32>(row_index)));
   }
 
   template <typename T>
@@ -127,10 +128,8 @@ class element_hasher_adaptor {
       }
     }
     for (int i = 0; i < curr_col.size(); ++i) {
-      hash =
-        cudf::hashing::detail::hash_combine(hash,
-                                            type_dispatcher<cudf::detail::dispatch_void_if_nested>(
-                                              curr_col.type(), _element_hasher, curr_col, i));
+      hash = cudf::hashing::detail::hash_combine(
+        hash, murmur_jit_hash_dispatcher(curr_col, _element_hasher.seed(), _check_nulls, i));
     }
     return hash;
   }

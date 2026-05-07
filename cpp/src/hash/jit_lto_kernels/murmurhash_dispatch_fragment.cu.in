@@ -1,0 +1,11 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// Owns the single device definition of ``murmur_jit_hash_dispatcher`` so the entry kernel and
+// hasher fragments can all reference it and resolve at nvJitLink time.
+
+#include <cudf/column/column_device_view.cuh>
+
+#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
+#include "murmurhash3_x86_32_jit_dispatch_impl.cuh"

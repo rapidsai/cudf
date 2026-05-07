@@ -4,9 +4,11 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include "murmurhash3_x86_32_jit_device.cuh"
 #include <cudf/table/table_device_view.cuh>
+
+#include "murmurhash3_x86_32_jit_hasher_decl.cuh"
 
 extern "C" __global__ void cudf_murmurhash3_x86_32_jit_link_kernel(cudf::mutable_column_device_view output,
                                                                    uint32_t seed,

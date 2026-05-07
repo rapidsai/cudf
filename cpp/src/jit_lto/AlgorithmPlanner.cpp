@@ -5,12 +5,16 @@
 
 #include <cudf/detail/jit_lto/AlgorithmPlanner.hpp>
 #include <cudf/detail/jit_lto/nvjitlink_checker.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
 
 #include <nvJitLink.h>
 
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -18,6 +22,19 @@
 #include <vector>
 
 namespace cudf::detail::jit_lto {
+
+namespace {
+
+void emit_jit_lto_build_timing(double const build_ms)
+{
+  CUDF_LOG_INFO("jit_lto: AlgorithmPlanner::build %.6f ms", build_ms);
+  if (std::getenv("CUDF_JIT_LTO_LINK_TIMING") != nullptr) {
+    std::fprintf(stderr, "CUDF_JIT_LTO_LINK_TIMING build_ms=%.6f\n", build_ms);
+    std::fflush(stderr);
+  }
+}
+
+}  // namespace
 
 std::string AlgorithmPlanner::get_fragments_key() const
 {
@@ -53,6 +70,11 @@ std::shared_ptr<AlgorithmLauncher> AlgorithmPlanner::get_launcher()
 
 std::shared_ptr<AlgorithmLauncher> AlgorithmPlanner::build()
 {
+  using clock       = std::chrono::steady_clock;
+  using duration_ms = std::chrono::duration<double, std::milli>;
+
+  auto const t_build_start = clock::now();
+
   int device = 0;
   int major  = 0;
   int minor  = 0;
@@ -91,6 +113,9 @@ std::shared_ptr<AlgorithmLauncher> AlgorithmPlanner::build()
 
   cudaKernel_t kernel;
   CUDF_CUDA_TRY(cudaLibraryGetKernel(&kernel, library, this->entrypoint.c_str()));
+
+  double const build_ms = duration_ms(clock::now() - t_build_start).count();
+  emit_jit_lto_build_timing(build_ms);
 
   return std::make_shared<AlgorithmLauncher>(kernel, library);
 }

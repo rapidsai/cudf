@@ -47,4 +47,7 @@ struct fragment_tag_murmur_hasher_noop {};
 
 struct fragment_tag_murmur_entry {};
 
+/// Owns ``murmur_jit_hash_dispatcher`` (shared by entry + hasher fragments).
+struct fragment_tag_murmur_dispatch {};
+
 }  // namespace cudf::hashing::detail::jit_lto

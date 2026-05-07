@@ -11,13 +11,22 @@
 namespace cudf::hashing::detail {
 
 /**
- * @brief Forward declaration only (no `murmur_jit_hash_dispatcher` here).
+ * @brief Forward declarations for the Murmur JIT link graph.
  *
  * Per-type explicit specializations must appear in the TU before any use of that specialization.
  * Hasher / noop fragment TUs include this header, then define `template <> ...
- * murmur_jit_hasher<T>`. The entry kernel includes `murmurhash3_x86_32_jit_device.cuh`, which pulls
- * this in and adds the dispatcher that calls `murmur_jit_hasher` for every storage type.
+ * murmur_jit_hasher<T>`. The ``murmurhash_jit_dispatch`` fatbin defines
+ * ``murmur_jit_hash_dispatcher``; the entry kernel and hasher fragments only declare it here.
+ *
+ * `murmur_jit_hash_dispatcher` is declared here so `murmurhash3_x86_32_lto.cuh` can call it from
+ * nested/dictionary paths without including the dispatcher body before `murmur_jit_hasher`
+ * specializations in hasher fragment TUs.
  */
+extern __device__ hash_value_type murmur_jit_hash_dispatcher(column_device_view col,
+                                                             uint32_t seed,
+                                                             bool nullable,
+                                                             size_type row_index);
+
 template <typename T>
 extern __device__ hash_value_type
 murmur_jit_hasher(column_device_view col, uint32_t seed, bool nullable, size_type row_index);
