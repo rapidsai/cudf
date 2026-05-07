@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from cudf_polars.testing.engine_utils import (
     EngineFixtureParam,
     create_streaming_options,
@@ -30,7 +28,6 @@ def test_engine_fixture_param_small_blocksize():
 
 
 def test_create_streaming_options_medium():
-    pytest.importorskip("rapidsmpf")
     opts = create_streaming_options("medium")
     assert opts.max_rows_per_partition == 50
     assert opts.target_partition_size == 1_000_000
@@ -38,7 +35,6 @@ def test_create_streaming_options_medium():
 
 
 def test_create_streaming_options_small():
-    pytest.importorskip("rapidsmpf")
     opts = create_streaming_options("small")
     assert opts.max_rows_per_partition == 4
     assert opts.target_partition_size == 10
@@ -46,7 +42,6 @@ def test_create_streaming_options_small():
 
 def test_create_streaming_options_overrides_merge():
     """Overrides take precedence over the blocksize baseline."""
-    pytest.importorskip("rapidsmpf")
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
     overrides = StreamingOptions(max_rows_per_partition=999)
