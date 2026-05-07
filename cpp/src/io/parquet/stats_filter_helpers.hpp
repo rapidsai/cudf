@@ -143,16 +143,23 @@ class stats_caster_base {
           ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
+        // Handle chronos, decimals and UUIDs here
         if constexpr (cudf::is_chrono<T>()) {
           return stats_caster_base::target_type<T>(
             decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
-        } else if constexpr (cudf::is_integral<T>() and not cudf::is_boolean<T>()) {
+        } else {
           // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
           // signed two's-complement values using big-endian byte order. The physical width may be
-          // smaller than the selected cudf storage width, so sign extend while decoding.
-          return stats_caster_base::target_type<T>(
-            decode_byte_array_decimal<T>(stats_val, stats_size), ts_scale);
+          // smaller than the selected cudf storage width, so sign extend while decoding
+          if constexpr (cudf::is_fixed_point<T>()) {
+            return stats_caster_base::target_type<T>(
+              decode_byte_array_decimal<typename T::rep>(stats_val, stats_size), ts_scale);
+          } else {
+            return stats_caster_base::target_type<T>(
+              decode_byte_array_decimal<T>(stats_val, stats_size), ts_scale);
+          }
         }
+        // TODO(mh): add support for `UUID` (big-endian but no sign extension) here
         [[fallthrough]];
       default:
         // unsupported type
