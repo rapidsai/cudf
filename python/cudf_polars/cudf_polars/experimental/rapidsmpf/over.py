@@ -22,7 +22,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import Col, GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import HStack
@@ -248,29 +248,26 @@ def _evaluate_window_with_stamps(
     ir_context: IRExecutionContext,
     stamps: OriginStamps,
 ) -> DataFrame:
-    """Evaluate *ir* on a stamped chunk; the stamps ride through to the result."""
+    """Evaluate *ir* on the un-stamped portion of *chunk*; reattach stamps after."""
     child_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
+    columns = chunk.table_view().columns()
+    n_child = len(child_schema)
 
-    augmented = DataFrame.from_table(
-        chunk.table_view(),
-        [*child_schema.keys(), *stamps.names],
-        [*child_schema.values(), *([stamps.dtype] * len(stamps.names))],
+    input_df = DataFrame.from_table(
+        plc.Table(columns[:n_child]),
+        list(child_schema.keys()),
+        list(child_schema.values()),
         stream,
     )
     result = ir.do_evaluate(
-        ir.key_indices, ir.is_scalar, ir.exprs, augmented, context=ir_context
+        ir.key_indices, ir.is_scalar, ir.exprs, input_df, context=ir_context
     )
-
-    # ``do_evaluate`` returns only ir.exprs; reattach stamps from the input.
-    missing = [
-        augmented.column_map[name]
-        for name in stamps.names
-        if name not in result.column_map
+    stamp_cols = [
+        Column(col, dtype=stamps.dtype, name=name)
+        for col, name in zip(columns[n_child:], stamps.names, strict=True)
     ]
-    if missing:
-        return DataFrame([*result.columns, *missing], stream=stream)
-    return result
+    return result.with_columns(stamp_cols, stream=stream)
 
 
 def _partition_by_origin_rank(
