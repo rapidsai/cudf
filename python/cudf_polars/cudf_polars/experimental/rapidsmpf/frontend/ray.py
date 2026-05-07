@@ -577,16 +577,23 @@ class RayEngine(StreamingEngine):
                 ]
             )
 
+            cluster_infos = self._gather_cluster_info(rank_actors)
+            min_device_size = min(
+                (i.device_memory for i in cluster_infos if i.device_memory),
+                default=None,
+            )
             self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
             super().__init__(
                 nranks=nranks,
                 executor_options={
                     **executor_options,
                     "cluster": "ray",
+                    "min_device_size": min_device_size,
                     "ray_context": RayContext(rank_actors),
                 },
                 engine_options=engine_options,
                 exit_stack=exit_stack,
+                cluster_infos=cluster_infos,
             )
         except Exception:
             exit_stack.close()
@@ -709,7 +716,13 @@ class RayEngine(StreamingEngine):
         -------
         List of :class:`ClusterInfo`, one per rank.
         """
-        return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+        return self._gather_cluster_info(self.rank_actors)
+
+    @staticmethod
+    def _gather_cluster_info(
+        rank_actors: list[ActorHandle[RankActor]],
+    ) -> list[ClusterInfo]:
+        return ray.get([rank.get_info.remote() for rank in rank_actors])
 
     def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
         """

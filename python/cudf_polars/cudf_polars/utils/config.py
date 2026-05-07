@@ -269,32 +269,20 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-@functools.cache
-def default_target_partition_size() -> int:
-    """Return the default blocksize."""
-    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        # Fall back to a conservative 1GB default.
-        return 1_000_000_000
-
-    blocksize = int(device_size * 0.025)
-
-    # Use lower and upper bounds of 1GB and 10GB
-    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
+def default_target_partition_size(min_device_size: int | None) -> int:
+    """Return the default target partition size."""
+    _DEFAULT_TARGET_PARTITION_SIZE = 1_500_000_000
+    if min_device_size is None:  # pragma: no cover
+        return _DEFAULT_TARGET_PARTITION_SIZE
+    return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
-@functools.cache
-def default_broadcast_join_limit() -> int:
-    """Return the default broadcast join limit."""
-    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        # We probably want to broadcast in most cases.
-        return 32
-
-    # Target about 12.5% of the device memory when
-    # default_target_partition_size is used to set the
-    # target partition size (i.e. 5x the 2.5% default).
-    return min(5, int(max(1, (device_size * 0.125) // 1e9)))
+def default_broadcast_limit(min_device_size: int | None) -> int:
+    """Set the broadcast-limit configuration."""
+    if min_device_size is None:  # pragma: no cover
+        return 6_000_000_000
+    # Target 15% of the minimum device memory across all ranks.
+    return int(min_device_size * 0.15)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -573,13 +561,6 @@ class StreamingExecutor:
         visible GPU. If the device size is not available, the default target
         partition size will be 1GB. The default will always be between 1GB and 10GB.
 
-        NOTE: If this configuration is changed manually, it is recommended to set
-        `broadcast_join_limit` manually as well.
-    broadcast_join_limit
-        The maximum number of partitions to allow for the smaller table in
-        a broadcast join. For example, if the target partition size is 1GB and the
-        broadcast join limit is 5, then the smaller table will be broadcasted
-        if it is smaller than 5GB.
     client_device_threshold
         Threshold for spilling data from device memory.
         Default is 50% of device memory on the client process.
@@ -636,9 +617,9 @@ class StreamingExecutor:
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
-    broadcast_join_limit: int = dataclasses.field(
+    broadcast_limit: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
+            f"{_env_prefix}__BROADCAST_LIMIT", int, default=0
         )
     )
     client_device_threshold: float = dataclasses.field(
@@ -669,6 +650,7 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+    min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
@@ -682,19 +664,20 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
+        object.__setattr__(self, "cluster", Cluster(self.cluster))
+        min_device_size = self.min_device_size or get_total_device_memory()
         if self.target_partition_size == 0:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_target_partition_size(),
+                default_target_partition_size(min_device_size),
             )
-        if self.broadcast_join_limit == 0:
+        if self.broadcast_limit == 0:
             object.__setattr__(
                 self,
-                "broadcast_join_limit",
-                default_broadcast_join_limit(),
+                "broadcast_limit",
+                default_broadcast_limit(min_device_size),
             )
-        object.__setattr__(self, "cluster", Cluster(self.cluster))
 
         # Handle dynamic_planning.
         # Can be None, dict, or DynamicPlanningOptions
@@ -719,8 +702,9 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-        if not isinstance(self.broadcast_join_limit, int):
-            raise TypeError("broadcast_join_limit must be an int")
+
+        if not isinstance(self.broadcast_limit, int):
+            raise TypeError("broadcast_limit must be an int")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):

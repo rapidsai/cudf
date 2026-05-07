@@ -48,8 +48,8 @@ def right():
 @pytest.mark.parametrize(
     "options",
     [
-        StreamingOptions(max_rows_per_partition=3, broadcast_join_limit=2),
-        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=2),
+        StreamingOptions(max_rows_per_partition=3),
+        StreamingOptions(max_rows_per_partition=5),
     ],
 )
 def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
@@ -63,7 +63,7 @@ def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
 def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=3, broadcast_join_limit=2),
+        StreamingOptions(max_rows_per_partition=3),
     )
     # Reverse so "right" frame is larger; exercises right-side preservation
     q = right.join(left, on="y", how=how)
@@ -77,7 +77,7 @@ def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, 
 
 def test_join_then_shuffle(left, right, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=2, broadcast_join_limit=1),
+        StreamingOptions(max_rows_per_partition=2),
     )
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
@@ -122,14 +122,10 @@ def test_join_conditional(reverse, max_rows_per_partition, streaming_engine_fact
 @pytest.mark.parametrize(
     "options",
     [
-        StreamingOptions(max_rows_per_partition=1, broadcast_join_limit=1),
-        StreamingOptions(max_rows_per_partition=1, broadcast_join_limit=16),
-        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=1),
-        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=16),
-        StreamingOptions(max_rows_per_partition=10, broadcast_join_limit=1),
-        StreamingOptions(max_rows_per_partition=10, broadcast_join_limit=16),
-        StreamingOptions(max_rows_per_partition=15, broadcast_join_limit=1),
-        StreamingOptions(max_rows_per_partition=15, broadcast_join_limit=16),
+        StreamingOptions(max_rows_per_partition=1),
+        StreamingOptions(max_rows_per_partition=5),
+        StreamingOptions(max_rows_per_partition=10),
+        StreamingOptions(max_rows_per_partition=15),
     ],
 )
 def test_join(left, right, how, reverse, streaming_engine_factory, options):
@@ -160,7 +156,6 @@ def test_join_and_slice(zlice, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=3,
-            broadcast_join_limit=100,
             fallback_mode="warn",
         ),
     )
@@ -206,7 +201,7 @@ def test_bloom_filter_join(how, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=2,
-            broadcast_join_limit=1,
+            broadcast_limit=10,
             target_partition_size=10,
         ),
     )
@@ -226,7 +221,6 @@ def test_join_maintain_order_fallback_streaming(
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=3,
-            broadcast_join_limit=1,
             fallback_mode="warn",
         ),
     )
@@ -244,14 +238,17 @@ def test_join_maintain_order_fallback_streaming(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(left, right, broadcast_join_limit):
+@pytest.mark.parametrize("broadcast_limit", [1, 2, 3, 4])
+def test_broadcast_join_limit(left, right, broadcast_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "broadcast_join_limit": broadcast_join_limit,
+            # target_partition_size=1 makes broadcast_limit/1 = broadcast_limit
+            # partitions, giving a clean partition-count threshold for this test.
+            "target_partition_size": 1,
+            "broadcast_limit": broadcast_limit,
             "dynamic_planning": None,  # Requires static planning
         },
     )
@@ -285,8 +282,8 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
 
     # NOTE: Expect small table to have 3 partitions (9 / 3).
     # Therefore, we will get a shuffle-based join if our
-    # "broadcast_join_limit" config is less than 3.
-    if broadcast_join_limit < 3:
+    # "broadcast_limit" config is less than 3 (with target_partition_size=1).
+    if broadcast_limit < 3:
         # Expect shuffle-based join
         assert len(shuffle_nodes) == 2
     else:

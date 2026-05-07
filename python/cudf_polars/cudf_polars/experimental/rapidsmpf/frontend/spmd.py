@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
@@ -388,13 +389,21 @@ class SPMDEngine(StreamingEngine):
             exit_stack.callback(self._cleanup_ctx)
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx
+            cluster_infos = self._gather_cluster_info(comm, ctx.br())
+            min_device_size = min(
+                (i.device_memory for i in cluster_infos if i.device_memory),
+                default=None,
+            )
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
                     **executor_options,
                     "cluster": "spmd",
+                    "min_device_size": min_device_size,
                     "spmd_context": SPMDContext(
-                        comm=comm, context=ctx, py_executor=self._py_executor
+                        comm=comm,
+                        context=ctx,
+                        py_executor=self._py_executor,
                     ),
                 },
                 engine_options={
@@ -402,6 +411,7 @@ class SPMDEngine(StreamingEngine):
                     "memory_resource": ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
+                cluster_infos=cluster_infos,
             )
         except Exception:
             exit_stack.close()
@@ -572,10 +582,16 @@ class SPMDEngine(StreamingEngine):
         -------
         List of :class:`ClusterInfo`, one per rank.
         """
+        return self._gather_cluster_info(self.comm, self.context.br())
+
+    @staticmethod
+    def _gather_cluster_info(
+        comm: Communicator, br: BufferResource
+    ) -> list[ClusterInfo]:
         data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
         with reserve_op_id() as op_id:
-            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
-        return [ClusterInfo(**json.loads(r)) for r in results]
+            results = all_gather_host_data(comm, br, op_id, data)
+        return [ClusterInfo(**json.loads(d)) for d in results]
 
     def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
         """

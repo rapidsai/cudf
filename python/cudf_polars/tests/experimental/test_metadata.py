@@ -53,12 +53,14 @@ def right() -> pl.LazyFrame:
     [
         StreamingOptions(
             max_rows_per_partition=1,
-            broadcast_join_limit=2,
+            target_partition_size=1,
+            broadcast_limit=2,
             dynamic_planning=None,
         ),
         StreamingOptions(
             max_rows_per_partition=1,
-            broadcast_join_limit=10,
+            target_partition_size=1,
+            broadcast_limit=10,
             dynamic_planning=None,
         ),
     ],
@@ -71,7 +73,10 @@ def test_rapidsmpf_join_metadata(
 ) -> None:
     streaming_engine = streaming_engine_factory(options)
     config_options = ConfigOptions.from_polars_engine(streaming_engine)
-    broadcast_join_limit = config_options.executor.broadcast_join_limit
+    broadcast_join_limit = (
+        config_options.executor.broadcast_limit
+        // config_options.executor.target_partition_size
+    )
     q = left.join(
         right,
         on="y",
