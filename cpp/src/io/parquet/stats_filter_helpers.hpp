@@ -19,9 +19,9 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <algorithm>
 #include <bit>
-#include <climits>
+#include <numeric>
+#include <span>
 #include <string_view>
 #include <type_traits>
 
@@ -31,19 +31,6 @@ namespace {
 
 /// Initial capacity for the chars host vector in host_column
 constexpr size_t initial_chars_capacity = 1024;
-
-template <typename T>
-struct unsigned_stats_rep {
-  using type = std::make_unsigned_t<T>;
-};
-
-template <>
-struct unsigned_stats_rep<__int128_t> {
-  using type = unsigned __int128;
-};
-
-template <typename T>
-using unsigned_stats_rep_t = typename unsigned_stats_rep<T>::type;
 
 }  // namespace
 
@@ -63,13 +50,21 @@ class stats_caster_base {
     CUDF_EXPECTS(stats_size <= sizeof(T),
                  "Parquet reader encountered a statistics vector larger than the type's size");
 
-    using UnsignedT = unsigned_stats_rep_t<T>;
-    auto value      = UnsignedT{0};
-    for (size_t i = 0; i < stats_size; ++i) {
-      value = static_cast<UnsignedT>((value << CHAR_BIT) | static_cast<UnsignedT>(stats_val[i]));
-    }
+    // Use std::type_identity to defer and avoid instantiating std::make_unsigned<__int128_t>::type
+    // which is not a standard integer type
+    using UnsignedT    = typename std::conditional_t<std::is_same_v<T, __int128_t>,
+                                                     std::type_identity<unsigned __int128>,
+                                                     std::make_unsigned<T>>::type;
+    auto const payload = std::span{stats_val, stats_size};
+    auto value         = std::accumulate(
+      payload.begin(), payload.end(), UnsignedT{0}, [](UnsignedT acc, uint8_t byte) {
+        return static_cast<UnsignedT>((acc << CHAR_BIT) | static_cast<UnsignedT>(byte));
+      });
 
-    if (stats_size < sizeof(T) and (stats_val[0] & uint8_t{0x80}) != 0) {
+    // Check the sign of the first byte to determine if the value is negative
+    auto const is_negative_value = std::bit_cast<int8_t>(stats_val[0]) < 0;
+    // Sign-extension if negative value and the payload is smaller than the storage type
+    if (stats_size < sizeof(T) and is_negative_value) {
       value = static_cast<UnsignedT>(value | (~UnsignedT{0} << (stats_size * CHAR_BIT)));
     }
     return std::bit_cast<T>(value);
@@ -80,8 +75,10 @@ class stats_caster_base {
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
   {
-    CUDF_EXPECTS(stats_size == sizeof(T),
-                 "Parquet reader encountered a statistics vector larger than the type's size");
+    CUDF_EXPECTS(
+      stats_size == sizeof(T),
+      "Parquet reader encountered a mismatch in size of fixed width statistics vector and "
+      "the selected cudf storage type");
     auto value = T{};
     std::memcpy(&value, stats_val, std::min(stats_size, sizeof(T)));
     return value;
@@ -146,17 +143,15 @@ class stats_caster_base {
           ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
-        if constexpr (cudf::is_integral<T>() and !cudf::is_boolean<T>()) {
+        if constexpr (cudf::is_chrono<T>()) {
+          return stats_caster_base::target_type<T>(
+            decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
+        } else if constexpr (cudf::is_integral<T>() and not cudf::is_boolean<T>()) {
           // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
           // signed two's-complement values using big-endian byte order. The physical width may be
           // smaller than the selected cudf storage width, so sign extend while decoding.
           return stats_caster_base::target_type<T>(
             decode_byte_array_decimal<T>(stats_val, stats_size), ts_scale);
-        } else if constexpr (cudf::is_chrono<T>()) {
-          if (stats_size == sizeof(T)) {
-            return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
-          }
         }
         [[fallthrough]];
       default:
