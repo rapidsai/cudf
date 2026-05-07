@@ -10,5 +10,5 @@ set -euo pipefail
 # Support invoking outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-echo "Running the full cudf-polars test suite with both the in-memory and spmd engine"
+echo "Running the full cudf-polars test suite"
 python -m pytest --cache-clear "$@" tests

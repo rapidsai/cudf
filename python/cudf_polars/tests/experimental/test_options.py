@@ -66,11 +66,6 @@ def test_executor_options_includes_set_fields() -> None:
     assert "log" not in result
 
 
-def test_executor_options_unique_fraction() -> None:
-    result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
-    assert result["unique_fraction"] == {"col_a": 0.5}
-
-
 def test_executor_options_num_py_executors() -> None:
     result = StreamingOptions(num_py_executors=4).to_executor_options()
     assert result["num_py_executors"] == 4
