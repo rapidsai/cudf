@@ -40,7 +40,8 @@ constexpr auto frequent_pages_ratio =
  * @brief Build a string column such that certain pages only contain elements from the frequent set
  and others only contain elements from the rare set
  *
- * Each generated value is of the form `"k_<v>"`, where `v` is a `cudf::size_type` index in `[0, cardinality)`, so cardinality maps 1:1 to distinct strings.
+ * Each generated value is of the form `"k_<v>"`, where `v` is a `cudf::size_type` index in `[0,
+ cardinality)`, so cardinality maps 1:1 to distinct strings.
  *
  * @param num_rows Total number of rows
  * @param page_size_rows Number of rows per page
