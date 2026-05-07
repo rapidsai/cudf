@@ -35,6 +35,7 @@ export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
 python -m auditwheel repair \
     --exclude libkvikio.so \
     --exclude libnvcomp.so.5 \
+    --exclude libnvJitLink.so.* \
     --exclude librapids_logger.so \
     --exclude librmm.so \
     -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
