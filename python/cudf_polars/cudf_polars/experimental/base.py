@@ -11,11 +11,10 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Generator
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.dsl.nodebase import Node
 
 
 class PartitionInfo:
@@ -40,20 +39,10 @@ class PartitionInfo:
         self.partitioned_on = partitioned_on
         self.io_plan = io_plan
 
-    def keys(self, node: Node) -> Iterator[tuple[str, int]]:
-        """Return the partitioned keys for a given node."""
-        name = get_key_name(node)
-        yield from ((name, i) for i in range(self.count))
-
     def __rich_repr__(self) -> Generator[Any, None, None]:
         """Formatting for rich.pretty.pprint."""
         yield "count", self.count
         yield "partitioned_on", self.partitioned_on
-
-
-def get_key_name(node: Node) -> str:
-    """Generate the key name for a Node."""
-    return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
 class SerializedDataSourceInfo(TypedDict):
