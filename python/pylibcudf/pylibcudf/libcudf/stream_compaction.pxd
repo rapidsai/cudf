@@ -48,6 +48,13 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[table] apply_deletion_mask(
+        table_view source_table,
+        column_view deletion_mask,
+        cudaStream_t stream,
+        device_async_resource_ref mr
+    ) except +libcudf_exception_handler
+
     cdef unique_ptr[table] unique(
         table_view input,
         vector[size_type] keys,

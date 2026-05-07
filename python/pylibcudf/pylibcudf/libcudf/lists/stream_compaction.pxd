@@ -19,6 +19,13 @@ cdef extern from "cudf/lists/stream_compaction.hpp" \
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[column] apply_deletion_mask(
+        const lists_column_view& lists_column,
+        const lists_column_view& deletion_mask,
+        cudaStream_t stream,
+        device_async_resource_ref mr
+    ) except +libcudf_exception_handler
+
     cdef unique_ptr[column] distinct(
         const lists_column_view& lists_column,
         null_equality nulls_equal,
