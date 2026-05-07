@@ -7916,6 +7916,126 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // For SUM_WITH_OVERFLOW on fixed-point inputs, cudf's hash groupby produces a
+  // STRUCT whose sum-child has the same decimal type AND scale as the input
+  // (target_type_impl<fixed_point, SUM_WITH_OVERFLOW> uses Source as the sum
+  // type at cpp/include/cudf/detail/aggregation/aggregation.hpp). The three
+  // tests below assert both the values and that scale is preserved end-to-end
+  // through the JNI struct-column extraction path.
+  @Test
+  void testGroupByHashSumWithOverflowDecimal32() {
+    final int scale = -2;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2, 1)
+             .decimal32Column(scale, 100, 200, 150, 250, 50)  // 1.00, 2.00, 1.50, 2.50, 0.50
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector keyCol = sorted.getColumn(0);
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedKeys = ColumnVector.fromInts(1, 2);
+           ColumnVector expectedSum = ColumnVector.decimalFromInts(scale, 300, 450);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL32, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedKeys, keyCol);
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal64() {
+    final int scale = -4;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal64Column(scale, 10000L, 20000L, 30000L, 40000L)  // 1.0000, 2.0000, ...
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromLongs(scale, 40000L, 60000L);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL64, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal128() {
+    final int scale = -10;
+    BigInteger v1 = BigInteger.valueOf(123456789L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v2 = BigInteger.valueOf(987654321L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v3 = BigInteger.valueOf(111111111L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v4 = BigInteger.valueOf(222222222L).multiply(BigInteger.TEN.pow(10));
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY, v1, v2, v3, v4)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromBigInt(scale,
+               v1.add(v3), v2.add(v4));
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL128, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal128DetectsOverflow() {
+    // Pick a value with at most 38 significant digits (the MathContext cap in
+    // Table.TestBuilder.decimal128Column) that still overflows int128_max when
+    // summed with itself. 10^38 - 1 is 38 nines; 2 * (10^38 - 1) ~= 2e38 which
+    // exceeds int128_max ~= 1.7e38, so cudf's kernel flags overflow.
+    final int scale = 0;
+    BigInteger nearMax = BigInteger.TEN.pow(38).subtract(BigInteger.ONE);
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY,
+                 nearMax, nearMax, BigInteger.valueOf(3), BigInteger.valueOf(4))
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      try (ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
   @Test
   void testGroupByMergeM2() {
     StructType nestedType = new StructType(false,
