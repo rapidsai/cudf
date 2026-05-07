@@ -838,7 +838,7 @@ cpdef Column apply_boolean_mask(
 cpdef Column apply_deletion_mask(
     Column input,
     Column deletion_mask,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters elements in each row of the input lists column using a deletion mask.
@@ -861,17 +861,18 @@ cpdef Column apply_deletion_mask(
     cdef ListsColumnView list_view = input.list_view()
     cdef ListsColumnView mask_view = deletion_mask.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_apply_deletion_mask(
             list_view.view(),
             mask_view.view(),
-            stream.view(),
+            _cs,
             mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column distinct(

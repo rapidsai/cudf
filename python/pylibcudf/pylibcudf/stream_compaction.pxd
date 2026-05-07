@@ -40,7 +40,7 @@ cpdef Table apply_boolean_mask(
 cpdef Table apply_deletion_mask(
     Table source_table,
     Column deletion_mask,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )
 

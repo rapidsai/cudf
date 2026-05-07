@@ -176,14 +176,15 @@ cpdef Table apply_deletion_mask(
     """
     cdef unique_ptr[table] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.apply_deletion_mask(
-            source_table.view(), deletion_mask.view(), stream.view(), mr.get_mr()
+            source_table.view(), boolean_mask.view(), _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table unique(

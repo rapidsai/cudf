@@ -51,7 +51,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] apply_deletion_mask(
         table_view source_table,
         column_view deletion_mask,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 

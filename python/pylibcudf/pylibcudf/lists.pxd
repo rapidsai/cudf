@@ -153,7 +153,7 @@ cpdef Column apply_boolean_mask(
 cpdef Column apply_deletion_mask(
     Column,
     Column,
-    Stream stream=*,
+    object stream=*,
     DeviceMemoryResource mr=*,
 )
 
