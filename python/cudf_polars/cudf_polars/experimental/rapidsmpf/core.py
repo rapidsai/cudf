@@ -10,14 +10,10 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.communicator.single import (
-    new_communicator as single_process_communicator,
-)
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
-from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
@@ -139,7 +135,15 @@ def evaluate_logical_plan(
                     query_id=query_id,
                 )
             case "single":
-                # Single-process execution: lower and run locally.
+                # Single-process execution: lower and run locally. Reuse the
+                # process-wide ``DefaultSingletonEngine`` so the rapidsmpf
+                # Context, RMM adaptor, and py-executor persist across
+                # ``.collect()`` calls instead of being rebuilt per query.
+                from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+                    DefaultSingletonEngine,
+                )
+
+                engine = DefaultSingletonEngine.create_or_get()
                 stats = collect_statistics(ir, config_options)
                 ir, partition_info = lower_ir_graph(ir, config_options, stats)
                 with ReserveOpIDs(ir, config_options) as collective_id_map:
@@ -150,7 +154,8 @@ def evaluate_logical_plan(
                         config_options,
                         stats,
                         collective_id_map,
-                        single_process_communicator(Options(), ProgressThread()),
+                        engine.comm,
+                        engine.context,
                         collect_metadata=collect_metadata,
                         query_id=query_id,
                     )

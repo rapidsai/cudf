@@ -9,7 +9,9 @@ import dataclasses
 import json
 import os
 import socket
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+import threading
+import weakref
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
@@ -150,6 +152,12 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    # Process-wide registry of every live :class:`StreamingEngine`. Used by
+    # :class:`DefaultSingletonEngine` to enforce that no other engine is
+    # alive when the singleton is constructed.
+    _active_engines: ClassVar[weakref.WeakSet[StreamingEngine]] = weakref.WeakSet()
+    _active_engines_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(
         self,
         *,
@@ -178,6 +186,24 @@ class StreamingEngine(pl.GPUEngine):
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
+        with StreamingEngine._active_engines_lock:
+            StreamingEngine._active_engines.add(self)
+
+    @classmethod
+    def _active_engine_count(cls) -> int:
+        """
+        Return the number of currently-live :class:`StreamingEngine` instances.
+
+        "Live" means constructed and not yet shut down (or garbage collected).
+        The count is process-wide and shared across all subclasses.
+
+        Returns
+        -------
+        Number of live engines, including ``self`` if called on a live
+        instance.
+        """
+        with StreamingEngine._active_engines_lock:
+            return len(StreamingEngine._active_engines)
 
     @property
     def nranks(self) -> int:
@@ -311,6 +337,8 @@ class StreamingEngine(pl.GPUEngine):
             self.device = None
             self.memory_resource = None
             self.config = {}
+            with StreamingEngine._active_engines_lock:
+                StreamingEngine._active_engines.discard(self)
 
     def __enter__(self) -> Self:
         """Enter the context manager, returning ``self``."""

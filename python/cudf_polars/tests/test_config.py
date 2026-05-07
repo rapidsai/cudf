@@ -74,7 +74,7 @@ def test_use_device_not_current(monkeypatch):
     # Fake that the current device is 1.
     monkeypatch.setattr(gpu, "getDevice", lambda: 1)
     q = pl.LazyFrame({})
-    assert_gpu_result_equal(q, engine=pl.GPUEngine(device=0))
+    assert_gpu_result_equal(q, engine=pl.GPUEngine(executor="in-memory", device=0))
 
 
 @pytest.mark.parametrize("device", [-1, "foo"])
@@ -118,7 +118,7 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
         monkeycontext.setenv(
             "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", enable_managed_memory
         )
-        result = q.collect(engine=pl.GPUEngine())
+        result = q.collect(engine=pl.GPUEngine(executor="in-memory"))
         mr = default_memory_resource(
             0,
             cuda_managed_memory=bool(enable_managed_memory == "1"),
@@ -136,7 +136,7 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
 def test_explicit_device_zero():
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
-    result = q.collect(engine=pl.GPUEngine(device=0))
+    result = q.collect(engine=pl.GPUEngine(executor="in-memory", device=0))
     assert_frame_equal(q.collect(), result)
 
 
@@ -152,7 +152,7 @@ def test_explicit_memory_resource():
     mr = rmm.mr.CallbackMemoryResource(allocate, upstream.deallocate)
 
     q = pl.LazyFrame({"a": [1, 2, 3]})
-    result = q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    result = q.collect(engine=pl.GPUEngine(executor="in-memory", memory_resource=mr))
     assert_frame_equal(q.collect(), result)
     assert n_allocations > 0
 

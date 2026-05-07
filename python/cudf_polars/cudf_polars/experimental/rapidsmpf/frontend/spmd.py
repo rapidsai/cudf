@@ -336,6 +336,11 @@ class SPMDEngine(StreamingEngine):
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            check_no_live_default_singleton,
+        )
+
+        check_no_live_default_singleton(self)
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
