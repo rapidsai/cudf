@@ -26,10 +26,11 @@ namespace cudf::io::parquet::detail {
 template <class Key>
 class arrow_filter_policy {
  public:
-  using hasher           = cudf::hashing::detail::XXHash_64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
-  using word_type        = std::uint32_t;  ///< uint32_t for Arrow bloom filter policy
-  using key_type         = Key;            ///< Hash function input type
-  using hash_result_type = std::uint64_t;  ///< hash function output type
+  using hasher =
+    cudf::hashing::detail::XXHash_64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
+  using word_type        = std::uint32_t;   ///< uint32_t for Arrow bloom filter policy
+  using key_type         = Key;             ///< Hash function input type
+  using hash_result_type = std::uint64_t;   ///< hash function output type
 
   static constexpr std::uint32_t bits_set_per_block = 8;  ///< bits set per Arrow filter block
   static constexpr std::uint32_t words_per_block    = 8;  ///< words per Arrow filter block

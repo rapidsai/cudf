@@ -409,7 +409,7 @@ std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
 {
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
-  using policy_type = arrow_filter_policy<cuda::std::byte>;
+  using policy_type        = arrow_filter_policy<cuda::std::byte>;
   auto constexpr alignment = alignof(cuco::bloom_filter_ref<cuda::std::byte,
                                                             cuco::extent<std::size_t>,
                                                             cuco::thread_scope_thread,
