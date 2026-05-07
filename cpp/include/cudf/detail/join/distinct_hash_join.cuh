@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -25,14 +25,14 @@ using cudf::detail::row::lhs_index_type;
 using cudf::detail::row::rhs_index_type;
 
 /**
- * @brief A custom comparator used for the build table insertion
+ * @brief A custom comparator used for the right table insertion
  */
 struct always_not_equal {
   __device__ constexpr bool operator()(
     cuco::pair<hash_value_type, rhs_index_type> const&,
     cuco::pair<hash_value_type, rhs_index_type> const&) const noexcept
   {
-    // All build table keys are distinct thus `false` no matter what
+    // All right table keys are distinct thus `false` no matter what
     return false;
   }
 };
@@ -76,11 +76,11 @@ struct primitive_comparator_adapter {
 };
 
 /**
- * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
- * `*_join` member functions.
+ * @brief Distinct hash join that builds a hash table with the right table on construction and
+ * probes results in subsequent `*_join` member functions.
  *
- * This class enables the distinct hash join scheme that builds hash table once, and probes as many
- * times as needed (possibly in parallel).
+ * This class enables the distinct hash join scheme that builds with the right table once and
+ * probes with many left tables (possibly in parallel).
  */
 class distinct_hash_join {
  public:
@@ -104,15 +104,15 @@ class distinct_hash_join {
   };
 
   /**
-   * @brief Constructor that internally builds the hash table based on the given `build` table.
+   * @brief Constructor that internally builds the hash table from the given `right` table.
    *
-   * @throw cudf::logic_error if the number of columns in `build` table is 0.
+   * @throw cudf::logic_error if the number of columns in `right` table is 0.
    *
-   * @param build The build table, from which the hash table is built
+   * @param right The right table, from which the hash table is built
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  distinct_hash_join(cudf::table_view const& build,
+  distinct_hash_join(cudf::table_view const& right,
                      cudf::null_equality compare_nulls,
                      rmm::cuda_stream_view stream);
 
@@ -121,7 +121,7 @@ class distinct_hash_join {
    *
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
    */
-  distinct_hash_join(cudf::table_view const& build,
+  distinct_hash_join(cudf::table_view const& right,
                      cudf::null_equality compare_nulls,
                      double load_factor,
                      rmm::cuda_stream_view stream);
@@ -131,7 +131,7 @@ class distinct_hash_join {
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(cudf::table_view const& probe,
+  inner_join(cudf::table_view const& left,
              rmm::cuda_stream_view stream,
              rmm::device_async_resource_ref mr) const;
 
@@ -139,7 +139,7 @@ class distinct_hash_join {
    * @copydoc cudf::distinct_hash_join::left_join
    */
   std::unique_ptr<rmm::device_uvector<size_type>> left_join(
-    cudf::table_view const& probe,
+    cudf::table_view const& left,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
@@ -156,11 +156,11 @@ class distinct_hash_join {
                                            rmm::mr::polymorphic_allocator<char>,
                                            cuco_storage_type>;
 
-  bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
+  bool _has_nested_columns;  ///< True if nested columns are present in right and left tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
-  cudf::table_view _build;           ///< Input table to build the hash map
+  cudf::table_view _right;           ///< Input table to build the hash map
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
-    _preprocessed_build;        ///< Input table preprocssed for row operators
-  hash_table_type _hash_table;  ///< Hash table built on `_build`
+    _preprocessed_right;        ///< Input table preprocssed for row operators
+  hash_table_type _hash_table;  ///< Hash table built on `_right`
 };
 }  // namespace cudf::detail

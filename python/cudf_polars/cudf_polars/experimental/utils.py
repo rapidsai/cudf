@@ -10,7 +10,7 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
+from cudf_polars.dsl.expr import Col, GroupedWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
@@ -49,11 +49,8 @@ def _fallback_inform(
 
 
 def _dynamic_planning_on(config_options: ConfigOptions[StreamingExecutor]) -> bool:
-    """Check if dynamic planning is enabled for rapidsmpf runtime."""
-    return (
-        config_options.executor.runtime == "rapidsmpf"
-        and config_options.executor.dynamic_planning is not None
-    )
+    """Check if dynamic planning is enabled."""
+    return config_options.executor.dynamic_planning is not None
 
 
 def _lower_ir_fallback(
@@ -68,9 +65,6 @@ def _lower_ir_fallback(
     from cudf_polars.experimental.repartition import Repartition
     from cudf_polars.experimental.select import _inline_hstack_false
 
-    config_options = rec.state["config_options"]
-    rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
-
     # Make sure we avoid mixed-length columns in intermediate TableChunks.
     ir = _inline_hstack_false(ir)
 
@@ -82,13 +76,10 @@ def _lower_ir_fallback(
     children = []
     inform = False
     for c in lowered_children:
-        child = c
-        if multi_partitioned := partition_info[c].count > 1:
+        if partition_info[c].count > 1:
             inform = True
-        if multi_partitioned or rapidsmpf_engine:
-            # Fall-back logic
-            child = Repartition(child.schema, child)
-            partition_info[child] = PartitionInfo(count=1)
+        child = Repartition(c.schema, c)
+        partition_info[child] = PartitionInfo(count=1)
         children.append(child)
 
     if inform and msg:
@@ -112,32 +103,6 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
-
-
-def _get_unique_fractions(
-    column_names: Sequence[str],
-    user_unique_fractions: dict[str, float],
-) -> dict[str, float]:
-    """
-    Return unique-fraction statistics subset.
-
-    Parameters
-    ----------
-    column_names
-        The column names to get unique-fractions for.
-    user_unique_fractions
-        The user-provided unique-fraction dictionary.
-
-    Returns
-    -------
-    unique_fractions
-        The final unique-fraction dictionary filtered to column_names.
-    """
-    return {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in user_unique_fractions.items()
-        if c in column_names
-    }
 
 
 def _contains_over(exprs: Sequence[Expr]) -> bool:
