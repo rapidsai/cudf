@@ -550,9 +550,16 @@ jobs:
         SCCACHE_DIST_MAX_RETRIES=inf
         SCCACHE_SERVER_LOG=sccache=debug
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
+      # clone-rapidsmpf to not use the rapidsmpf wheels from cudf_polars dependency
+      # librapidsmpf-cu13 wheels brings in a hardcoded libnuma-dev cmake target: https://github.com/NVIDIA/cuCascade/issues/118
+      # -DBUILD_TESTS=OFF to match rapidsmpf https://github.com/rapidsai/rapidsmpf/blob/main/.github/workflows/pr.yaml#L351 (leads to compilation errors)
+      # -DCUDF_BUILD_TESTUTIL=OFF to avoid IMPORTED_GLOBAL promotion errors when cuCascade's find_package(cudf) loads cudf-config.cmake from a CPM subdirectory
       build_command: |
         sccache --zero-stats;
-        build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        clone-rapidsmpf -j$(nproc) -v -q --branch "$(cat ~/cudf/RAPIDS_BRANCH)" --clone-upstream --depth 1 --single-branch --shallow-submodules;
+        if [ "$PYTHON_PACKAGE_MANAGER" = "pip" ]; then rapids-make-pip-env --force; elif [ "$PYTHON_PACKAGE_MANAGER" = "conda" ]; then rapids-make-conda-env --force; fi;
+        rapids-generate-scripts;
+        build-all -j0 -DBUILD_BENCHMARKS=OFF -DBUILD_NUMA_SUPPORT=OFF -DBUILD_TESTS=OFF -DCUDF_BUILD_TESTUTIL=OFF --verbose 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]

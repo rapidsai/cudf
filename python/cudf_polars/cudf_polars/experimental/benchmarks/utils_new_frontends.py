@@ -637,26 +637,8 @@ def get_executor_options(
     executor_options: dict[str, Any] = (
         run_config.streaming_options.to_executor_options()
     )
-    executor_options["runtime"] = "rapidsmpf"
     executor_options["max_io_threads"] = run_config.max_io_threads
     executor_options["quent_context"] = cudf_polars.quent.QuentContext()
-
-    # PDSHQueries: inject unique_fraction when dynamic planning is explicitly disabled
-    if (
-        benchmark
-        and benchmark.__name__ == "PDSHQueries"
-        and run_config.executor == "streaming"
-        and run_config.streaming_options.dynamic_planning is None
-    ):
-        executor_options.setdefault(
-            "unique_fraction",
-            {
-                "c_custkey": 0.05,
-                "l_orderkey": 1.0,
-                "l_partkey": 0.1,
-                "o_custkey": 0.25,
-            },
-        )
 
     return executor_options
 
@@ -1131,8 +1113,7 @@ def run_polars_spmd(
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — SPMDEngine sets them
-    executor_options.pop("runtime", None)
+    # "cluster" is reserved — SPMDEngine sets it
     executor_options.pop("cluster", None)
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
@@ -1197,8 +1178,7 @@ def run_polars_ray(
     from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime", "cluster" are reserved — RayEngine sets them
-    executor_options.pop("runtime", None)
+    # "cluster" is reserved — RayEngine sets it
     executor_options.pop("cluster", None)
     engine_options: dict[str, Any] = {
         **run_config.streaming_options.to_engine_options(),
@@ -1250,8 +1230,7 @@ def run_polars_dask(
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime", "cluster" are reserved — DaskEngine sets them
-    executor_options.pop("runtime", None)
+    # "cluster" is reserved — DaskEngine sets it
     executor_options.pop("cluster", None)
     engine_options: dict[str, Any] = {
         **run_config.streaming_options.to_engine_options(),
