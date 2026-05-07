@@ -17,7 +17,10 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.dtype.validators import is_dtype_obj_string
+from cudf.core.dtype.validators import (
+    is_dtype_obj_datetime_tz,
+    is_dtype_obj_string,
+)
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -27,6 +30,35 @@ from cudf.utils.dtypes import (
     find_common_type,
 )
 from cudf.utils.utils import is_na_like
+
+
+def _raise_on_invalid_ordering_scalar(
+    self_dtype: DtypeObj, other: Any, op: str
+) -> None:
+    """Raise TypeError for ordering ops against pandas-invalid scalars.
+
+    pandas raises ``Invalid comparison between dtype=<dtype> and <type>``
+    when a datetime64/timedelta64 array is compared (``<``, ``<=``,
+    ``>``, ``>=``) against ``None``, a plain (non-typed) ``float`` NaN,
+    or a ``datetime.date`` that is not a ``datetime.datetime``. Without
+    this guard those scalars silently coerce to NaT in cudf and
+    ``_binaryop`` would return an incorrect boolean column.
+    """
+    if op not in {"__lt__", "__le__", "__gt__", "__ge__"}:
+        return
+    if (
+        other is None
+        or (isinstance(other, float) and np.isnan(other))
+        or (
+            isinstance(other, datetime.date)
+            and not isinstance(other, datetime.datetime)
+        )
+    ):
+        raise TypeError(
+            f"Invalid comparison between dtype={self_dtype} "
+            f"and {type(other).__name__}"
+        )
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -131,16 +163,32 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     arrow_type = cudf_dtype_to_pa_type(self.dtype)
                 return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
-                if other.tz is not None:
+                if other.tz is not None and not is_dtype_obj_datetime_tz(
+                    self.dtype
+                ):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
-                other = other.to_numpy()
+                if other.tz is None:
+                    other = other.to_numpy()
+                # else: leave the tz-aware Timestamp untouched; pa.scalar
+                # will carry its tz through and libcudf's binary op
+                # compares the underlying UTC integer values correctly.
             elif self.dtype.kind == "M" and isinstance(other, str):
                 try:
-                    other = pd.Timestamp(other)
+                    ts = pd.Timestamp(other)
                 except ValueError:
                     return NotImplemented
+                if is_dtype_obj_datetime_tz(self.dtype):
+                    # pandas parses the string and interprets it in the
+                    # column's tz for comparison, so localize here.
+                    if isinstance(self.dtype, pd.DatetimeTZDtype):
+                        tz = self.dtype.tz
+                    else:
+                        tz = cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.tz
+                    other = ts.tz_localize(tz)
+                else:
+                    other = ts
             elif self.dtype.kind == "m" and isinstance(other, pd.Timedelta):
                 other = other.to_numpy()
             elif isinstance(other, (np.datetime64, np.timedelta64)):
@@ -169,7 +217,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
-                if scalar.type.tz is not None:
+                if scalar.type.tz is not None and not is_dtype_obj_datetime_tz(
+                    self.dtype
+                ):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
