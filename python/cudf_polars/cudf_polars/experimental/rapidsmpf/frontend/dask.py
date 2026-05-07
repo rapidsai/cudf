@@ -940,7 +940,6 @@ class DaskEngine(StreamingEngine):
         """
         if self._dask_context is None:
             return  # already shut down
-        # gather all quent traces
 
         ctx = self._dask_context
         self._dask_context = None

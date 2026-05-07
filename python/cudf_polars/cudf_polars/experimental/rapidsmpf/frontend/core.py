@@ -306,12 +306,6 @@ class StreamingEngine(pl.GPUEngine):
         """
         Shut down engine and release all owned resources.
 
-        Subclasses should emit their final lifecycle events and extend
-        ``_worker_quent_events`` with remote worker events *before*
-        calling ``super().shutdown()``. This base implementation drains
-        any locally buffered Quent events (e.g. Engine init/exit emitted
-        on the driver).
-
         Idempotent: safe to call more than once. Must be called on the same
         thread that created the engine.
         """
