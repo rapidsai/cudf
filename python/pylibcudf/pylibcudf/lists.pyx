@@ -825,7 +825,7 @@ cpdef Column apply_deletion_mask(
 ):
     """Filters elements in each row of the input lists column using a deletion mask.
 
-    For details, see :cpp:func:`cudf::lists::apply_deletion_mask`.
+    For details, see :cpp:func:`apply_deletion_mask`.
 
     Parameters
     ----------
