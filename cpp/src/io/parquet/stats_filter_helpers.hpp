@@ -46,6 +46,8 @@ class stats_caster_base {
   static inline T decode_byte_array_decimal(uint8_t const* stats_val, size_t stats_size)
     requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
   {
+    CUDF_EXPECTS(cudf::is_signed<T>(),
+                 "FLBA/BYTE_ARRAY decimals must have signed representation types");
     CUDF_EXPECTS(stats_size > 0, "Parquet reader encountered an empty decimal statistics vector");
     CUDF_EXPECTS(stats_size <= sizeof(T),
                  "Parquet reader encountered a statistics vector larger than the type's size");
