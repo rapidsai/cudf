@@ -50,10 +50,10 @@ def test_rename_concat(streaming_engine) -> None:
     assert_gpu_result_equal(q, engine=streaming_engine)
 
 
-def test_fallback_on_concat_zlice(streaming_engine_factory) -> None:
+def test_fallback_on_concat_zlice(spmd_engine_factory) -> None:
     # Pin ``fallback_mode="warn"`` so the spmd-small baseline (which sets
     # ``SILENT``) doesn't suppress the warning this test asserts on.
-    streaming_engine = streaming_engine_factory(StreamingOptions(fallback_mode="warn"))
+    streaming_engine = spmd_engine_factory(StreamingOptions(fallback_mode="warn"))
     q = pl.concat(
         [
             pl.LazyFrame({"a": [1, 2]}),
