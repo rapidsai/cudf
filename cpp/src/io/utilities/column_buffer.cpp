@@ -325,8 +325,11 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
         auto offsets = cudf::make_empty_column(type_id::INT32);
         auto child   = cudf::make_empty_column(type_id::UINT8);
         if (schema_info != nullptr) {
+          // Mirror the binary path in `make_column` so that the schema_info for an empty
+          // list<uint8> column matches the shape produced for a non-empty one.
           schema_info->children.emplace_back("offsets");
-          schema_info->children.emplace_back("");
+          schema_info->children.emplace_back("binary");
+          schema_info->is_binary = true;
         }
         return make_lists_column(
           0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr});
