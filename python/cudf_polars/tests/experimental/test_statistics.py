@@ -7,14 +7,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from rapidsmpf.bootstrap import is_running_with_rrun
-from rapidsmpf.config import Options
 from rapidsmpf.statistics import Statistics
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable
 
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
@@ -25,49 +23,14 @@ pytestmark = [
 ]
 
 
-@pytest.fixture(params=["spmd", "ray", "dask"])
+@pytest.fixture
 def engine(
-    request: pytest.FixtureRequest,
-    spmd_engine: SPMDEngine,
-) -> Iterator[StreamingEngine]:
+    streaming_engine_factory: Callable[..., StreamingEngine],
+) -> StreamingEngine:
     """Yield each supported streaming engine with statistics enabled."""
-    backend = request.param
-    rapidsmpf_options = Options({"statistics": "True"})
-    executor_options = {"max_rows_per_partition": 10}
-
-    if backend == "spmd":
-        with SPMDEngine(
-            comm=spmd_engine.comm,
-            rapidsmpf_options=rapidsmpf_options,
-            executor_options=executor_options,
-        ) as engine:
-            yield engine
-        return
-
-    if is_running_with_rrun():
-        pytest.skip(f"{backend}Engine must not be created from within an rrun cluster")
-
-    if backend == "ray":
-        pytest.importorskip("ray", reason="ray is not installed")
-        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-
-        with RayEngine(
-            rapidsmpf_options=rapidsmpf_options,
-            executor_options=executor_options,
-            ray_init_options={"include_dashboard": False},
-        ) as engine:
-            yield engine
-        return
-
-    assert backend == "dask"
-    pytest.importorskip("distributed", reason="distributed is not installed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-
-    with DaskEngine(
-        rapidsmpf_options=rapidsmpf_options,
-        executor_options=executor_options,
-    ) as engine:
-        yield engine
+    return streaming_engine_factory(
+        StreamingOptions(statistics=True, max_rows_per_partition=10),
+    )
 
 
 def test_statistics(engine: StreamingEngine) -> None:
