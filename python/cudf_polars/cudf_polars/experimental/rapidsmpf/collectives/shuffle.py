@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.communicator.single import new_communicator as single_comm
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
     split_and_pack as py_split_and_pack,
@@ -14,6 +16,7 @@ from rapidsmpf.integrations.cudf.partition import (
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
@@ -21,6 +24,8 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
     Partitioning,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import pylibcudf as plc
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -34,15 +39,17 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.sort import find_sort_splits
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
-    from rapidsmpf.streaming.core.context import Context
 
-    import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
@@ -53,15 +60,15 @@ class ShuffleManager:
 
     Parameters
     ----------
-    context: Context
+    context
         The streaming context.
-    comm: Communicator
+    comm
         The communicator.
-    num_partitions: int
+    num_partitions
         The number of partitions to shuffle into.
-    collective_id: int
+    collective_id
         The collective ID.
-    partition_assignment: PartitionAssignment, optional
+    partition_assignment, optional
         How to assign partition IDs to ranks: ROUND_ROBIN (default) or
         CONTIGUOUS. Use CONTIGUOUS for sort so each rank gets adjacent
         partition IDs and concatenation order matches global order.
@@ -76,7 +83,7 @@ class ShuffleManager:
 
         Parameters
         ----------
-        manager: ShuffleManager
+        manager
             The shuffle manager to insert into.
         """
 
@@ -126,7 +133,9 @@ class ShuffleManager:
         partition_assignment: PartitionAssignment = PartitionAssignment.ROUND_ROBIN,
     ):
         self.context = context
+        self.comm = comm
         self.num_partitions = num_partitions
+        self.collective_id = collective_id
         self.shuffler = ShufflerAsync(
             context,
             comm,
@@ -143,32 +152,136 @@ class ShuffleManager:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
 
-    def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
+    def extract_chunk(self, partition_id: int, stream: Stream) -> plc.Table:
         """
         Extract a chunk from the ShuffleManager.
 
         Parameters
         ----------
-        sequence_number: int
-            The sequence number of the chunk to extract.
-        stream: Stream
+        partition_id
+            The partition ID of the chunk to extract.
+        stream
             The stream to use for chunk extraction.
 
         Returns
         -------
         The extracted table.
-
-        Raises
-        ------
-        KeyError
-            If the requested sequence number has already been extracted.
         """
-        partition_chunks = self.shuffler.extract(sequence_number)
         return py_unpack_and_concat(
-            partitions=partition_chunks,
+            partitions=self.shuffler.extract(partition_id),
             stream=stream,
             br=self.context.br(),
         )
+
+    def extract_pieces(self, partition_id: int) -> list:
+        """
+        Extract raw packed items for a partition without unpacking.
+
+        Parameters
+        ----------
+        partition_id
+            The partition ID to extract.
+
+        Returns
+        -------
+        list[PackedData]
+            Raw packed items for the partition.
+        """
+        return self.shuffler.extract(partition_id)
+
+
+class LocalShuffle:
+    """
+    Local re-partitioner that wraps a completed :class:`ShuffleManager`.
+
+    Parameters
+    ----------
+    shuffle
+        Completed inter-rank :class:`ShuffleManager` (insertion phase done).
+        Must own exactly one global partition.
+    local_count
+        Number of local output partitions to produce.
+    """
+
+    def __init__(self, shuffle: ShuffleManager, local_count: int) -> None:
+        self._global_shuffle = shuffle
+        self._br = shuffle.context.br()
+        options = Options(get_environment_variables())
+        local_comm = single_comm(options, shuffle.comm.progress_thread)
+        local_ctx = Context(local_comm.logger, self._br, options)
+        self._local_shuffle = ShuffleManager(
+            local_ctx,
+            local_comm,
+            local_count,
+            shuffle.collective_id,
+        )
+
+    def _iter_chunks(self, stream: Stream) -> Generator[plc.Table, None, None]:
+        for partition_id in self._global_shuffle.local_partitions():
+            for piece in self._global_shuffle.extract_pieces(partition_id):
+                # TODO: batch pieces up to target_partition_size before unpacking
+                table = py_unpack_and_concat([piece], stream=stream, br=self._br)
+                if table.num_rows() > 0:
+                    yield table
+
+    async def insert_chunks_hash(
+        self, *, columns_to_hash: tuple[int, ...], stream: Stream
+    ) -> None:
+        """Re-partition items by hash of the given columns."""
+        async with self._local_shuffle.inserting() as inserter:
+            for table in self._iter_chunks(stream):
+                inserter.insert_hash(
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=self._br
+                    ),
+                    columns_to_hash,
+                )
+
+    async def insert_chunks_boundaries(
+        self,
+        *,
+        sort_boundaries_df: DataFrame,
+        by_indices: tuple[int, ...],
+        column_order: list,
+        null_order: list,
+        stream: Stream,
+    ) -> None:
+        """Re-partition items by sort boundaries."""
+        async with self._local_shuffle.inserting() as inserter:
+            for seq_num, table in enumerate(self._iter_chunks(stream)):
+                sort_cols_tbl = plc.Table([table.columns()[i] for i in by_indices])
+                splits = find_sort_splits(
+                    sort_cols_tbl,
+                    sort_boundaries_df.table,
+                    seq_num,
+                    column_order,
+                    null_order,
+                    stream=stream,
+                    chunk_relative=True,
+                )
+                inserter.insert_split(
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=self._br
+                    ),
+                    splits,
+                )
+
+    def local_partitions(self) -> list[int]:
+        """Return the local partition IDs."""
+        return self._local_shuffle.local_partitions()
+
+    def extract_chunk(self, partition_id: int, stream: Stream) -> plc.Table:
+        """
+        Extract the table for *partition_id* from the local shuffle.
+
+        Parameters
+        ----------
+        partition_id
+            The local partition to extract.
+        stream
+            CUDA stream for the unpack operation.
+        """
+        return self._local_shuffle.extract_chunk(partition_id, stream)
 
 
 async def _global_shuffle(
@@ -241,7 +354,7 @@ async def _global_shuffle(
                     columns_to_hash,
                 )
 
-    for partition_id in shuffle.shuffler.local_partitions():
+    for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         await ch_out.send(
             context,
