@@ -20,7 +20,7 @@ from cudf.core.column.column import (
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils.dtypes import _get_nan_for_dtype
+from cudf.utils.dtypes import _get_nan_for_dtype, get_dtype_of_same_kind
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -151,6 +151,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         exact: bool,
         return_scalar: bool,
     ) -> NumericalBaseColumn:
+        if self.dtype.kind == "b":
+            raise NotImplementedError(
+                "quantile is not implemented for boolean dtype"
+            )
         if np.logical_or(q < 0, q > 1).any():
             raise ValueError(
                 "percentiles should all be in the interval [0, 1]"
@@ -172,13 +176,20 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
             interpolation_type = plc.types.Interpolation[interpolation.upper()]
 
+            # For non-arithmetic interpolations the chosen value is an
+            # actual element of the input - ask libcudf to preserve the
+            # input dtype rather than casting through float64, which
+            # would lose precision for int64 values exceeding 2**53
+            # (e.g. nanosecond timestamps).
+            plc_exact = exact and interpolation in {"linear", "midpoint"}
+
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
                 PylibcudfFunction(
                     plc.quantiles.quantile,
                     pylibcudf_result_dtype_policy,
                 ).execute_with_args(
-                    no_nans, q, interpolation_type, indices, exact
+                    no_nans, q, interpolation_type, indices, plc_exact
                 ),
             )
         if return_scalar:
@@ -197,6 +208,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
                 if scalar_result is NA
                 else scalar_result
+            )
+        # Preserve the input's dtype "kind" (numpy / pandas-nullable /
+        # ArrowDtype) on the result column, since libcudf always returns
+        # a plain numpy dtype.
+        target_dtype = get_dtype_of_same_kind(self.dtype, result.dtype)
+        if target_dtype != result.dtype:
+            result = cast(
+                cudf.core.column.numerical_base.NumericalBaseColumn,
+                result.astype(target_dtype),
             )
         return result
 
