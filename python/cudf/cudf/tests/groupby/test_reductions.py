@@ -1217,6 +1217,7 @@ def test_groupby_string_sum(string_dtype):
     with cudf.option_context("mode.pandas_compatible", True):
         got = gdf.groupby("a").sum()
     expect = pdf.groupby("a").sum()
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])
