@@ -31,6 +31,12 @@ if TYPE_CHECKING:
     StreamingEngines: TypeAlias = Mapping[str, StreamingEngine]
 
 
+# Number of ranks for multi-rank streaming engines that share one GPU
+# (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
+# ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
+NUM_RANKS = 2
+
+
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
 def with_nulls(request):
     return request.param
@@ -89,6 +95,27 @@ def streaming_engines() -> Generator[StreamingEngines, None, None]:
         )
 
     engines: dict[str, StreamingEngine] = {"spmd": SPMDEngine(comm=comm)}
+
+    if "dask" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+        engines["dask"] = DaskEngine(engine_options={"allow_gpu_sharing": True})
+
+    if "ray" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+        # Always pin ``num_ranks`` so the cached engine has a deterministic
+        # actor count regardless of how many GPUs the host happens to have;
+        # otherwise ``RayEngine`` defaults to ``get_num_gpus_in_ray_cluster()``
+        # and tests that depend on rank-count behavior (e.g. fast-count
+        # parquet, concat) become non-portable. Pinning ``num_ranks`` requires
+        # ``allow_gpu_sharing=True`` (production guard).
+        engines["ray"] = RayEngine(
+            num_ranks=NUM_RANKS,
+            engine_options={"allow_gpu_sharing": True},
+            ray_init_options={"include_dashboard": False},
+        )
+
     try:
         yield engines
     finally:
@@ -106,6 +133,28 @@ def spmd_engine(streaming_engines: StreamingEngines) -> SPMDEngine:
     assert isinstance(engine, SPMDEngine)
     engine._reset()
     return engine
+
+
+@pytest.fixture
+def spmd_engine_factory(
+    streaming_engines: StreamingEngines,
+) -> Callable[..., SPMDEngine]:
+    """
+    Return a factory that yields the shared :class:`SPMDEngine`.
+
+    Use this in place of :func:`streaming_engine_factory` for tests that
+    must run on SPMD only.
+    """
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    param = EngineFixtureParam(full_name="spmd")
+
+    def factory(options: StreamingOptions | None = None) -> SPMDEngine:
+        engine = build_streaming_engine(param, streaming_engines, options)
+        assert isinstance(engine, SPMDEngine)
+        return engine
+
+    return factory
 
 
 @pytest.fixture(params=STREAMING_ENGINE_FIXTURE_PARAMS)
@@ -246,10 +295,9 @@ def pytest_configure(config):
 
     config.addinivalue_line(
         "markers",
-        "skip_on_streaming_engine(reason): skip the test for streaming "
-        '``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``) while '
-        "still letting the in-memory variant run. Use this to track features "
-        "that have no multi-partition implementation",
+        "skip_on_streaming_engine(reason, *, engine=None): skip the test for "
+        'streaming ``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``, '
+        '``"dask"``, ``"ray"``) while still allowing the in-memory variant to run.',
     )
 
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
@@ -275,9 +323,23 @@ def pytest_collection_modifyitems(items):
         callspec = getattr(item, "callspec", None)
         if callspec is None:
             continue
-        engine_param = callspec.params.get("_all_engine_param")
+        # Tests bind to either ``engine`` (parametrized via ``_all_engine_param``)
+        # or ``streaming_engine`` / ``streaming_engine_factory`` (parametrized via
+        # ``_streaming_engine_param``). Check both.
+        engine_param = callspec.params.get("_all_engine_param") or callspec.params.get(
+            "_streaming_engine_param"
+        )
         if engine_param is None or engine_param == "in-memory":
             continue
+        engine_filter = marker.kwargs.get("engine")
+        if engine_filter is not None:
+            if isinstance(engine_filter, str):
+                engine_filter = (engine_filter,)
+            # Strip the ``-small`` suffix so ``"spmd-small"`` matches
+            # ``engine=("spmd",)``.
+            engine_name = engine_param.removesuffix("-small")
+            if engine_name not in engine_filter:
+                continue
         reason = (
             marker.args[0]
             if marker.args
