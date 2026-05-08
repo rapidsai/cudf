@@ -993,10 +993,16 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
+        if isinstance(self.dtype, pd.ArrowDtype):
+            target_dtype: DtypeObj = pd.ArrowDtype(
+                pa.timestamp(self.time_unit)  # type: ignore[call-overload]
+            )
+        else:
+            target_dtype = _get_base_dtype(self.dtype)
         return cast(
             "DatetimeColumn",
             DatetimeColumn.create(
-                self.plc_column, _get_base_dtype(self.dtype), validate=False
+                self.plc_column, target_dtype, validate=False
             ),
         )
 
@@ -1106,17 +1112,7 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
-            utc = self._utc_time
-            if isinstance(self.dtype, pd.ArrowDtype):
-                # Preserve the ArrowDtype kind for naive (UTC) result.
-                return cast(
-                    DatetimeColumn,
-                    ColumnBase.create(
-                        utc.plc_column,
-                        pd.ArrowDtype(pa.timestamp(self.time_unit)),  # type: ignore[call-overload]
-                    ),
-                )
-            return utc
+            return self._utc_time
         elif tz == str(self.tz):
             return self.copy()
 
