@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
-import itertools
 import operator
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+import polars as pl
 
 import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
@@ -16,30 +17,27 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
-from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
     HConcat,
     HStack,
-    IRExecutionContext,
     MapFunction,
+    Projection,
     Select,
     Slice,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
-from cudf_polars.experimental.dispatch import (
-    generate_ir_tasks,
-    lower_ir_node,
-)
+from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import (
-    _concat,
     _contains_over,
     _dynamic_planning_on,
     _lower_ir_fallback,
@@ -47,9 +45,6 @@ from cudf_polars.experimental.utils import (
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
-    from typing import Any
-
-    import polars as pl
 
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
@@ -106,63 +101,6 @@ def lower_ir_graph(
     return mapper(ir)
 
 
-def task_graph(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
-    """
-    Construct a task graph for evaluation of an IR graph.
-
-    Parameters
-    ----------
-    ir
-        Root of the graph to rewrite.
-    partition_info
-        A mapping from all unique IR nodes to the
-        associated partitioning information.
-
-    Returns
-    -------
-    graph
-        A task graph for the entire IR graph with root `ir`,
-        in dict-of-tuples form consumed by
-        :func:`~cudf_polars.experimental.scheduler.synchronous_scheduler`.
-
-    Notes
-    -----
-    This function traverses the unique nodes of the
-    graph with root `ir`, and extracts the tasks for
-    each node with :func:`generate_ir_tasks`.
-
-    See Also
-    --------
-    generate_ir_tasks
-    """
-    context = IRExecutionContext()
-    graph = reduce(
-        operator.or_,
-        (
-            generate_ir_tasks(node, partition_info, context=context)
-            for node in traversal([ir])
-        ),
-    )
-
-    key_name = get_key_name(ir)
-    partition_count = partition_info[ir].count
-
-    key: str | tuple[str, int]
-    if partition_count > 1:
-        graph[key_name] = (
-            partial(_concat, context=context),
-            *partition_info[ir].keys(ir),
-        )
-        key = key_name
-    else:
-        key = (key_name, 0)
-
-    return graph, key
-
-
 def evaluate_rapidsmpf(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -208,44 +146,7 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-        # Using the RapidsMPF streaming runtime.
-        return evaluate_rapidsmpf(ir, config_options)
-    else:
-        # Using the default task engine.
-        from cudf_polars.experimental.scheduler import synchronous_scheduler
-
-        stats = collect_statistics(ir, config_options)
-        ir, partition_info = lower_ir_graph(ir, config_options, stats)
-
-        graph, key = task_graph(ir, partition_info)
-
-        return synchronous_scheduler(graph, key).to_polars()
-
-
-@generate_ir_tasks.register(IR)
-def _(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    # Generate pointwise (embarrassingly-parallel) tasks by default
-    child_names = [get_key_name(c) for c in ir.children]
-    bcast_child = [partition_info[c].count == 1 for c in ir.children]
-
-    return {
-        key: (
-            partial(ir.do_evaluate, context=context),
-            *ir._non_child_args,
-            *[
-                (child_name, 0 if bcast_child[j] else i)
-                for j, child_name in enumerate(child_names)
-            ],
-        )
-        for i, key in enumerate(partition_info[ir].keys(ir))
-    }
+    return evaluate_rapidsmpf(ir, config_options)
 
 
 @lower_ir_node.register(Union)
@@ -273,21 +174,6 @@ def _(
     new_node = ir.reconstruct(children)
     partition_info[new_node] = PartitionInfo(count=count)
     return new_node, partition_info
-
-
-@generate_ir_tasks.register(Union)
-def _(
-    ir: Union,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    key_name = get_key_name(ir)
-    partition = itertools.count()
-    return {
-        (key_name, next(partition)): child_key
-        for child in ir.children
-        for child_key in partition_info[child].keys(child)
-    }
 
 
 @lower_ir_node.register(MapFunction)
@@ -397,6 +283,20 @@ def _(
     )
 
 
+def _add_anchor_column(ir: HStack) -> tuple[HStack, str, DataType]:
+    """Add temporary anchor column to preserve row count."""
+    anchor_name = next(unique_names((*ir.schema, *ir.children[0].schema)))
+    anchor_dtype = DataType(pl.datatypes.Int8())
+    anchor_named_expr = NamedExpr(anchor_name, Literal(anchor_dtype, 0))
+    new_ir = HStack(
+        ir.children[0].schema | {anchor_name: anchor_dtype},
+        (anchor_named_expr,),
+        True,  # noqa: FBT003
+        ir.children[0],
+    )
+    return new_ir, anchor_name, anchor_dtype
+
+
 @lower_ir_node.register(HStack)
 def _(
     ir: HStack, rec: LowerIRTransformer
@@ -404,20 +304,29 @@ def _(
     if not all(e.is_pointwise for e in traversal([ne.value for ne in ir.columns])):
         # Redirect non-pointwise HStack to Select so the Select handler can
         # attempt decomposition (or fall back gracefully via decompose_select).
+        child: IR = ir.children[0]
+        anchor_name: str | None = None
         col_map = {ne.name: ne for ne in ir.columns}
-        has_passthrough = any(name not in col_map for name in ir.schema)
-        if has_passthrough or not ir.should_broadcast:
-            exprs = tuple(
-                col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
-                for name, dtype in ir.schema.items()
-            )
-            return lower_ir_node(
-                Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
-                rec,
-            )
-        # All output columns are aggregations: no N-row passthrough to anchor
-        # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
-        return _lower_ir_fallback(ir, rec)
+        schema = ir.schema
+        if ir.should_broadcast and all(name in col_map for name in ir.schema):
+            # We need to add a temporary anchor column to preserve row count.
+            child, anchor_name, anchor_dtype = _add_anchor_column(ir)
+
+            schema = ir.schema | {anchor_name: anchor_dtype}
+        exprs = tuple(
+            col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+            for name, dtype in schema.items()
+        )
+        new_ir: Select | Projection = Select(schema, exprs, ir.should_broadcast, child)
+        if anchor_name is not None:
+            # Need to drop the temporary anchor column.
+            schema = {
+                name: dtype
+                for name, dtype in new_ir.schema.items()
+                if name != anchor_name
+            }
+            new_ir = Projection(schema, new_ir)
+        return lower_ir_node(new_ir, rec)
 
     child, partition_info = rec(ir.children[0])
     new_node = ir.reconstruct([child])

@@ -131,8 +131,8 @@ def test_groupby_std_var_ddof(df, engine, agg, ddof):
 
 
 @pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
-def test_groupby_fallback(df, fallback_mode, streaming_engine_factory):
-    streaming_engine = streaming_engine_factory(
+def test_groupby_fallback(df, fallback_mode, spmd_engine_factory):
+    streaming_engine = spmd_engine_factory(
         StreamingOptions(fallback_mode=fallback_mode),
     )
     match = "Failed to decompose groupby aggs"
@@ -270,10 +270,7 @@ def test_groupby_literal_key(df, streaming_engine):
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg_config_options(df, op, keys, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=4,
-            unique_fraction={"z": 0.5},
-        ),
+        StreamingOptions(max_rows_per_partition=4),
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
@@ -290,6 +287,10 @@ def test_groupby_count_type_mismatch(df, streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    "patch.object on ShuffleManager.Inserter doesn't reach worker processes",
+    engine=("dask", "ray"),
+)
 def test_shuffle_reduce_insert_finished_called_on_oom(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=10, max_rows_per_partition=5),

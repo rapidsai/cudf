@@ -99,8 +99,6 @@ def evaluate_logical_plan(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-
     query_id = uuid.uuid4()
 
     with cudf_polars.dsl.tracing.bound_contextvars(
@@ -202,8 +200,6 @@ def evaluate_pipeline(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-
     _original_mr: Any = None
     use_stream_pool = False
     if rmpf_context is not None:
