@@ -26,6 +26,7 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
+import pylibcudf.partitioning
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -39,6 +40,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -113,35 +115,36 @@ class ShuffleManager:
                 )
             )
 
-        def insert_index(self, chunk: TableChunk, partition_col: int) -> None:
+        def insert_index(self, chunk: TableChunk, partition_map: TableChunk) -> None:
             """
-            Partition chunk by a pre-computed integer column and insert.
+            Partition chunk by a separate single-column partition-map and insert.
 
             Parameters
             ----------
             chunk
-                The chunk to partition.
-            partition_col
-                Index of the integer column whose values give the target
-                local partition ID for each row. The partition column is
-                consumed as routing metadata and stripped from the payload.
-                Callers should not expect it in the output.
+                The payload chunk to partition. Its schema is preserved
+                unchanged in the shuffler output.
+            partition_map
+                Single-column ``TableChunk`` whose integer values give the
+                target partition ID for each row. Must be row-aligned with
+                ``chunk``.
             """
-            table = chunk.table_view()
-            cols = table.columns()
-            partition_map = cols[partition_col]
-            payload = plc.Table([c for i, c in enumerate(cols) if i != partition_col])
+            stream = get_joined_cuda_stream(
+                self._manager.context.get_stream_from_pool,
+                upstreams=(chunk.stream, partition_map.stream),
+            )
+            partition_map_col = partition_map.table_view().columns()[0]
             reordered, offsets = plc.partitioning.partition(
-                payload,
-                partition_map,
+                chunk.table_view(),
+                partition_map_col,
                 self._manager.num_partitions,
-                stream=chunk.stream,
+                stream=stream,
             )
             self._manager.shuffler.insert(
                 py_split_and_pack(
                     table=reordered,
                     splits=list(offsets[1:-1]),
-                    stream=chunk.stream,
+                    stream=stream,
                     br=self._manager.context.br(),
                 )
             )
@@ -277,27 +280,45 @@ class LocalRepartitioner:
                     columns_to_hash,
                 )
 
-    async def insert_chunks_index(self, *, partition_col: int, stream: Stream) -> None:
+    async def insert_chunks_index(
+        self,
+        *,
+        partition_col: int,
+        stream: Stream,
+        drop_partition_col: bool = True,
+    ) -> None:
         """
-        Re-partition items by a pre-computed integer partition column.
+        Re-partition items by a pre-computed integer column in the received data.
 
         Parameters
         ----------
         partition_col
             Index of the integer column whose values give the target
-            local partition ID for each row. The partition column is
-            consumed as routing metadata and stripped from the payload.
-            Callers should not expect it in the output.
+            local partition ID for each row.
         stream
             CUDA stream for the unpack operation.
+        drop_partition_col
+            If ``True`` (default), the partition column is stripped from the
+            payload before inserting. If ``False``, it is kept in the output.
         """
         async with self._local_shuffle.inserting() as inserter:
             for table in self._iter_chunks(stream):
+                cols = table.columns()
+                payload = plc.Table(
+                    [
+                        c
+                        for i, c in enumerate(cols)
+                        if not drop_partition_col or i != partition_col
+                    ]
+                )
+                partition_map = plc.Table([cols[partition_col]])
                 inserter.insert_index(
                     TableChunk.from_pylibcudf_table(
-                        table, stream, exclusive_view=True, br=self._br
+                        payload, stream, exclusive_view=True, br=self._br
                     ),
-                    partition_col,
+                    TableChunk.from_pylibcudf_table(
+                        partition_map, stream, exclusive_view=True, br=self._br
+                    ),
                 )
 
     def local_partitions(self) -> list[int]:

@@ -222,17 +222,16 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
 
-    # "rank_part" routes each row to a rank via insert_index (global phase).
-    # "local_part" routes each row to a local partition via insert_chunks_index.
-    # Both columns are stripped; output has only "val".
-    pl_df = pl.DataFrame(
+    # Payload: "local_part" routes locally, "val" is the data.
+    # Routing for the global phase ("rank_part") is kept separate.
+    pl_payload = pl.DataFrame(
         {
-            "rank_part": [i % comm.nranks for i in range(12)],
             "local_part": [i % local_count for i in range(12)],
             "val": list(range(12)),
         }
     )
-    # Output schema after both routing columns are stripped.
+    pl_rank_part = pl.DataFrame({"rank_part": [i % comm.nranks for i in range(12)]})
+    # Output schema after local_part is also stripped by insert_chunks_index.
     out_col_names = ["val"]
     out_dtypes = [DataType(pl.Int32())]
 
@@ -240,24 +239,26 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
 
     async def _run() -> None:
         stream = context.get_stream_from_pool()
-        cudf_df = DataFrame.from_polars(pl_df, stream)
+        payload_df = DataFrame.from_polars(pl_payload, stream)
+        rank_part_df = DataFrame.from_polars(pl_rank_part, stream)
 
         with reserve_op_id() as op_id:
-            # Global phase: route by rank_part (col 0), which is stripped.
-            # After this shuffle each rank holds rows where rank_part == rank,
-            # and the remaining schema is {"local_part": Int32, "val": Int32}.
+            # Global phase: route payload by rank_part (separate chunk).
+            # After shuffle each rank holds {"local_part": Int32, "val": Int32}.
             shuffle = ShuffleManager(
                 context, comm, num_partitions=comm.nranks, collective_id=op_id
             )
             async with shuffle.inserting() as inserter:
                 inserter.insert_index(
                     TableChunk.from_pylibcudf_table(
-                        cudf_df.table, stream, exclusive_view=True, br=context.br()
+                        payload_df.table, stream, exclusive_view=True, br=context.br()
                     ),
-                    partition_col=0,
+                    TableChunk.from_pylibcudf_table(
+                        rank_part_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
                 )
 
-            # Local phase: route by local_part (now col 0 after rank_part stripped).
+            # Local phase: route by local_part (col 0 of the received data), strip it.
             local = LocalRepartitioner(shuffle, local_count=local_count)
             await local.insert_chunks_index(partition_col=0, stream=stream)
 
