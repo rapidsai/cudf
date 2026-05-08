@@ -46,6 +46,10 @@ class stats_caster_base {
   static inline T decode_fixed_width_decimal(uint8_t const* stats_val, size_t stats_size)
     requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
   {
+    // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
+    // signed two's-complement values using big-endian byte order. The physical width may be
+    // smaller than the selected cudf storage width, so sign extend while decoding
+
     CUDF_EXPECTS(cudf::is_signed<T>(),
                  "FLBA/BYTE_ARRAY decimals must have signed representation types");
     CUDF_EXPECTS(stats_size > 0, "Parquet reader encountered an empty decimal statistics vector");
@@ -146,13 +150,14 @@ class stats_caster_base {
       case Type::FIXED_LEN_BYTE_ARRAY:
         // Handle chronos, decimals and UUIDs here
         if constexpr (cudf::is_chrono<T>()) {
+          // Chrono
           return stats_caster_base::target_type<T>(
             decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
         } else {
-          // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
-          // signed two's-complement values using big-endian byte order. The physical width may be
-          // smaller than the selected cudf storage width, so sign extend while decoding
+          // Decimals (32, 64, 128), 256 bit not yet supported
           if constexpr (cudf::is_fixed_point<T>()) {
+            // Using T::rep as raw stats are always decoded as the underlying storage type
+            // before conversion
             return stats_caster_base::target_type<T>(
               decode_fixed_width_decimal<typename T::rep>(stats_val, stats_size), ts_scale);
           } else {
