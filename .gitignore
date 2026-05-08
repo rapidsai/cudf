@@ -181,6 +181,3 @@ compile_commands.json
 # pytest artifacts
 rmm_log.txt
 python/cudf/cudf_pandas_tests/data/rmm_log.txt
-
-# agents
-.agents/
