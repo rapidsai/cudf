@@ -16,12 +16,12 @@
 
 static std::vector<std::string> const patterns = {
   "\\d+",                  // 0: builtins class plus quantifier
-  "[a-z]+[A-Z]+",          // 1: multiple classes
-  "[a-f]+|[0-5]+",         // 2: alternation (comparable density to \d+)
-  "[a-z][0-9]{0,3}[A-Z]",  // 3: bounded repetition / gap transitions
-  ".+[0-9]",               // 4: late-failure stress (~97% hit rate)
-  "[a-z]+Z",               // 5: late-failure + low hit rate (~23% on 32-char, ~79% on 256-char)
-  "\b0987\b",              // 6: specific terms
+  " ",                     // 1: literal
+  "[a-z]+[A-Z]+",          // 2: multiple classes
+  "[a-f]+|[0-5]+",         // 3: alternation (comparable density to \d+)
+  "[a-z][0-9]{0,3}[A-Z]",  // 4: bounded repetition / gap transitions
+  ".+[0-9]",               // 5: late-failure stress (~97% hit rate)
+  "[a-z]+Z",               // 6: late-failure + low hit rate (~23% on 32-char, ~79% on 256-char)
 };
 
 static void bench_split(nvbench::state& state)
