@@ -29,6 +29,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -9563,10 +9564,45 @@ public class TableTest extends CudfTestBase {
         assertEquals(1, schema.getFields().get(0).getId().intValue());
         assertEquals(2, schema.getFields().get(1).getId().intValue());
         assertEquals(3, schema.getFields().get(2).getId().intValue());
+
+        // No nested descendant must inherit the outer id (catches "id placed on
+        // both outer and inner" regressions, including the original bug where
+        // withBinary(...id) attached the id to the inner BINARY_DATA child).
+        assertNoNestedIdEquals(schema.getFields().get(0), 1);
+        assertNoNestedIdEquals(schema.getFields().get(1), 2);
+        assertNoNestedIdEquals(schema.getFields().get(2), 3);
+
+        // The explicit child id on the LIST<INT> "element" must be preserved.
+        Type listElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(listElement);
+        assertEquals(22, listElement.getId().intValue());
       }
     } finally {
       tempFile.delete();
     }
+  }
+
+  private static void assertNoNestedIdEquals(Type type, int outerId) {
+    if (type.isPrimitive()) return;
+    for (Type child : type.asGroupType().getFields()) {
+      if (child.getId() != null) {
+        assertNotEquals(outerId, child.getId().intValue(),
+            "Field " + child.getName() + " unexpectedly inherited outer id " + outerId);
+      }
+      assertNoNestedIdEquals(child, outerId);
+    }
+  }
+
+  private static Type findDescendantByName(Type type, String name) {
+    if (type.isPrimitive()) {
+      return name.equals(type.getName()) ? type : null;
+    }
+    for (Type child : type.asGroupType().getFields()) {
+      if (name.equals(child.getName())) return child;
+      Type found = findDescendantByName(child, name);
+      if (found != null) return found;
+    }
+    return null;
   }
 
   /** Return a column where DECIMAL64 has been up-casted to DECIMAL128 */
