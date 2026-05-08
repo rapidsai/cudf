@@ -243,7 +243,8 @@ def engine(
 
     Notes
     -----
-    For tests that require a :class:`StreamingEngine` only, use the    :func:`streaming_engine` fixture instead.
+    For tests that require a :class:`StreamingEngine` only, use the
+    :func:`streaming_engine` fixture instead.
     """
     if _all_engine_param.engine_name == "in-memory":
         return pl.GPUEngine(executor="in-memory", raise_on_fail=True)

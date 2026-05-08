@@ -27,8 +27,6 @@ from cudf_polars.quent._types import (
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.quent import QuentContext
@@ -477,7 +475,6 @@ def quent_context() -> QuentContext:
 def engine_with_quent_context(
     request: pytest.FixtureRequest,
     quent_context: QuentContext,
-    streaming_engine_factory: Callable[..., StreamingEngine],
 ) -> StreamingEngine:
     backend = request.param
     if backend == "ray":
