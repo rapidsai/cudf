@@ -66,20 +66,30 @@ def right() -> pl.LazyFrame:
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    streaming_engine_factory,
+    spmd_engine_factory,
     options,
 ) -> None:
-    streaming_engine = streaming_engine_factory(options)
-    config_options = ConfigOptions.from_polars_engine(streaming_engine)
+    # Pinned to SPMD: ``ChannelMetadata.__reduce_cython__`` can't pickle
+    # ``self._handle`` across worker/actor processes, so the
+    # ``metadata_collector`` round-trip fails on Dask and Ray.
+    #
+    # When https://github.com/rapidsai/cudf/pull/22394 lands, dedup of
+    # replicated outputs moves to the Dask/Ray frontends and the
+    # ``duplicated`` flag's semantics change to "every rank holds the
+    # data". Revisit the ``len(metadata_collector) == 1`` and
+    # ``metadata.duplicated is False`` assertions below, and reconsider
+    # whether this test can widen to ``streaming_engine_factory``.
+    engine = spmd_engine_factory(options)
+    config_options = ConfigOptions.from_polars_engine(engine)
     broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
         right,
         on="y",
         how="left",
     ).filter(pl.col("x") > pl.col("zz"))
-    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
-    left_count = left.collect(engine=streaming_engine).height
-    right_count = right.collect(engine=streaming_engine).height
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    left_count = left.collect(engine=engine).height
+    right_count = right.collect(engine=engine).height
 
     metadata_collector = evaluate_logical_plan(
         ir, config_options, collect_metadata=True

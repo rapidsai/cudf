@@ -50,20 +50,20 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     ],
 )
 def test_make_spill_function(
-    streaming_engine_factory,
+    spmd_engine_factory,
     *,
     pinned_memory: bool,
     spilled_host_mem_type: MemoryType,
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
-    engine = streaming_engine_factory(StreamingOptions(pinned_memory=pinned_memory))
+    engine = spmd_engine_factory(StreamingOptions(pinned_memory=pinned_memory))
     context = engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
-        assert engine.context.br().pinned_mr is not None
+        assert context.br().pinned_mr is not None
         other_host_mem_type = MemoryType.HOST
     else:
-        assert engine.context.br().pinned_mr is None
+        assert context.br().pinned_mr is None
         other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers

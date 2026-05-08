@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["Inclusive", "label_bins"]
 
@@ -23,7 +24,7 @@ cpdef Column label_bins(
     inclusive left_inclusive,
     Column right_edges,
     inclusive right_inclusive,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """Labels elements based on membership in the specified bins.
@@ -54,7 +55,8 @@ cpdef Column label_bins(
         according to the specified bins.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -64,10 +66,10 @@ cpdef Column label_bins(
             left_inclusive,
             right_edges.view(),
             right_inclusive,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 Inclusive.__str__ = Inclusive.__repr__
