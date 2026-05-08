@@ -24,7 +24,6 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
     maybe_remap_partitioning,
@@ -338,9 +337,9 @@ def test_get_partitioning_moduli_allow_subset(
         ),
     ],
 )
-def test_is_aligned_with(rapidsmpf_context, left, right, expected) -> None:
+def test_is_aligned_with(spmd_engine, left, right, expected) -> None:
     """is_aligned_with checks compatible hash layout for chunkwise operations."""
-    br = rapidsmpf_context.br()
+    br = spmd_engine.context.br()
     assert left.is_aligned_with(right, br) is expected
     assert right.is_aligned_with(left, br) is expected
 
@@ -492,13 +491,6 @@ def _make_order_scheme(context, *, key_index=0, values=(100, 200), strict=False)
     return OrderScheme([key], chunk, strict_boundaries=strict)
 
 
-@pytest.fixture(scope="module")
-def rapidsmpf_context():
-    # Use SPMDEngine to generatate a simple Context for testing
-    with SPMDEngine() as engine:
-        yield engine.context
-
-
 @pytest.mark.parametrize(
     "keys,strict,should_match",
     [
@@ -525,43 +517,44 @@ def rapidsmpf_context():
         ((0,), True, False),  # plain int → hash-only, won't match OrderScheme
     ],
 )
-def test_from_keys_order_scheme(rapidsmpf_context, keys, strict, should_match):
+def test_from_keys_order_scheme(spmd_engine, keys, strict, should_match):
     part = Partitioning(
-        inter_rank=_make_order_scheme(rapidsmpf_context, strict=strict), local="inherit"
+        inter_rank=_make_order_scheme(spmd_engine.context, strict=strict),
+        local="inherit",
     )
     result = NormalizedPartitioning.from_keys(part, nranks=4, keys=keys)
     assert isinstance(result.inter_rank_scheme, OrderScheme) == should_match
 
 
-def test_is_strictly_partitioned_order_scheme(rapidsmpf_context):
-    strict = _make_order_scheme(rapidsmpf_context, strict=True)
-    non_strict = _make_order_scheme(rapidsmpf_context, strict=False)
+def test_is_strictly_partitioned_order_scheme(spmd_engine):
+    strict = _make_order_scheme(spmd_engine.context, strict=True)
+    non_strict = _make_order_scheme(spmd_engine.context, strict=False)
     assert NormalizedPartitioning(strict, "inherit").is_strictly_partitioned()
     assert not NormalizedPartitioning(non_strict, "inherit").is_strictly_partitioned()
     assert not NormalizedPartitioning(strict, non_strict).is_strictly_partitioned()
 
 
-def test_is_aligned_with_order_scheme(rapidsmpf_context):
-    s1 = _make_order_scheme(rapidsmpf_context, values=(100, 200), strict=True)
-    s2 = _make_order_scheme(rapidsmpf_context, values=(100, 200), strict=True)
-    s_diff = _make_order_scheme(rapidsmpf_context, values=(100, 300), strict=True)
+def test_is_aligned_with_order_scheme(spmd_engine):
+    s1 = _make_order_scheme(spmd_engine.context, values=(100, 200), strict=True)
+    s2 = _make_order_scheme(spmd_engine.context, values=(100, 200), strict=True)
+    s_diff = _make_order_scheme(spmd_engine.context, values=(100, 300), strict=True)
     s_non_strict = _make_order_scheme(
-        rapidsmpf_context, values=(100, 200), strict=False
+        spmd_engine.context, values=(100, 200), strict=False
     )
     assert NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s2, "inherit"), rapidsmpf_context.br()
+        NormalizedPartitioning(s2, "inherit"), spmd_engine.context.br()
     )
     assert not NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s_diff, "inherit"), rapidsmpf_context.br()
+        NormalizedPartitioning(s_diff, "inherit"), spmd_engine.context.br()
     )
     assert not NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s_non_strict, "inherit"), rapidsmpf_context.br()
+        NormalizedPartitioning(s_non_strict, "inherit"), spmd_engine.context.br()
     )
 
 
-def test_from_keys_order_scheme_single_rank(rapidsmpf_context):
+def test_from_keys_order_scheme_single_rank(spmd_engine):
     keys = (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),)
-    local_scheme = _make_order_scheme(rapidsmpf_context, strict=True)
+    local_scheme = _make_order_scheme(spmd_engine.context, strict=True)
     # Single-rank: local OrderScheme promoted to inter-rank
     part = Partitioning(inter_rank=None, local=local_scheme)
     result = NormalizedPartitioning.from_keys(part, nranks=1, keys=keys)
@@ -572,9 +565,9 @@ def test_from_keys_order_scheme_single_rank(rapidsmpf_context):
     assert result_multi.inter_rank_scheme is None
 
 
-def test_remap_partitioning_order_scheme_select(rapidsmpf_context, engine):
+def test_remap_partitioning_order_scheme_select(spmd_engine, engine):
     part = Partitioning(
-        inter_rank=_make_order_scheme(rapidsmpf_context, key_index=0), local="inherit"
+        inter_rank=_make_order_scheme(spmd_engine.context, key_index=0), local="inherit"
     )
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
     assert result is not None
@@ -582,9 +575,9 @@ def test_remap_partitioning_order_scheme_select(rapidsmpf_context, engine):
     assert result.inter_rank.keys[0].column_index == 1
 
 
-def test_remap_partitioning_order_scheme_drops_key(rapidsmpf_context, engine):
+def test_remap_partitioning_order_scheme_drops_key(spmd_engine, engine):
     part = Partitioning(
-        inter_rank=_make_order_scheme(rapidsmpf_context, key_index=0), local="inherit"
+        inter_rank=_make_order_scheme(spmd_engine.context, key_index=0), local="inherit"
     )
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b",)), part)
     assert result is not None
