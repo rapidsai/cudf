@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "groupby/common/utils.hpp"
 #include "groupby/hash/helpers.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
