@@ -33,7 +33,7 @@ jobs:
       tests: ${{ steps.find-tests.outputs.tests }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
       - name: Discover test executables
@@ -58,7 +58,7 @@ jobs:
         test_name: ${{ fromJson(inputs.test_names || needs.discover-sanitizer-tests.outputs.tests) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
       - name: Run compute-sanitizer ${{ inputs.tool_name }} on ${{ matrix.test_name }}
