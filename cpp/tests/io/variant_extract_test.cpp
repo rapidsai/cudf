@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "apache_variant_fixtures.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -430,19 +432,24 @@ TEST_F(VariantExtractTest, GetThenCastMatchesExtract)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_k, *two_step_k);
 }
 
-// ---------------------------------------------------------------------------
-// Validation against Apache parquet-testing reference binaries
-// https://github.com/apache/parquet-testing/tree/master/variant
-// ---------------------------------------------------------------------------
+namespace {
+
+// Build a single-row VARIANT struct column from a (metadata, value) byte pair.
+template <std::size_t M, std::size_t V>
+cudf::test::structs_column_wrapper make_apache_variant(
+  cudf::test::apache_variant_fixtures::fixture<M, V> const& f)
+{
+  cudf::test::lists_column_wrapper<uint8_t> m(f.metadata.begin(), f.metadata.end());
+  cudf::test::lists_column_wrapper<uint8_t> v(f.value.begin(), f.value.end());
+  return cudf::test::structs_column_wrapper{{m, v}};
+}
+
+}  // namespace
 
 TEST_F(VariantExtractTest, ApachePrimitiveInt32)
 {
-  // primitive_int32: metadata = empty dict, value = INT32(123456)
-  std::vector<uint8_t> const meta = {0x01, 0x00, 0x00};
-  std::vector<uint8_t> const val  = {0x14, 0x40, 0xe2, 0x01, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  cudf::test::structs_column_wrapper struc{{m, v}};
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::primitive_int32);
 
   auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
@@ -453,91 +460,39 @@ TEST_F(VariantExtractTest, ApachePrimitiveInt32)
 
 TEST_F(VariantExtractTest, ApacheShortString)
 {
-  // short_string: basic_type=1, header6=37, "Less than 64 bytes (❤️ with utf8)"
-  // clang-format off
-  std::vector<uint8_t> const meta = {0x01, 0x00, 0x00};
-  std::vector<uint8_t> const val  = {
-    0x95, 0x4c, 0x65, 0x73, 0x73, 0x20, 0x74, 0x68, 0x61, 0x6e, 0x20, 0x36, 0x34,
-    0x20, 0x62, 0x79, 0x74, 0x65, 0x73, 0x20, 0x28, 0xe2, 0x9d, 0xa4, 0xef, 0xb8,
-    0x8f, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20, 0x75, 0x74, 0x66, 0x38, 0x29};
-  // clang-format on
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  cudf::test::structs_column_wrapper struc{{m, v}};
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::short_string);
 
   auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
-  cudf::test::strings_column_wrapper expected(
-    {"\x4c\x65\x73\x73\x20\x74\x68\x61\x6e\x20\x36\x34"
-     "\x20\x62\x79\x74\x65\x73\x20\x28\xe2\x9d\xa4\xef"
-     "\xb8\x8f\x20\x77\x69\x74\x68\x20\x75\x74\x66\x38"
-     "\x29"});
+  // Decoded from short_string.value: skip the 1-byte header, take the rest.
+  std::string const expected_str(reinterpret_cast<char const*>(afv::short_string.value.data() + 1),
+                                 afv::short_string.value.size() - 1);
+  cudf::test::strings_column_wrapper expected({expected_str});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 TEST_F(VariantExtractTest, ApacheLongString)
 {
-  // primitive_string: basic_type=0, header6=16 (long string), 174 UTF-8 bytes with emoji
-  // clang-format off
-  std::vector<uint8_t> const meta = {0x01, 0x00, 0x00};
-  std::vector<uint8_t> const val  = {
-    0x40, 0xae, 0x00, 0x00, 0x00, 0x54, 0x68, 0x69, 0x73, 0x20, 0x73, 0x74, 0x72,
-    0x69, 0x6e, 0x67, 0x20, 0x69, 0x73, 0x20, 0x6c, 0x6f, 0x6e, 0x67, 0x65, 0x72,
-    0x20, 0x74, 0x68, 0x61, 0x6e, 0x20, 0x36, 0x34, 0x20, 0x62, 0x79, 0x74, 0x65,
-    0x73, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x74, 0x68, 0x65, 0x72, 0x65, 0x66, 0x6f,
-    0x72, 0x65, 0x20, 0x64, 0x6f, 0x65, 0x73, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x66,
-    0x69, 0x74, 0x20, 0x69, 0x6e, 0x20, 0x61, 0x20, 0x73, 0x68, 0x6f, 0x72, 0x74,
-    0x5f, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x69,
-    0x74, 0x20, 0x61, 0x6c, 0x73, 0x6f, 0x20, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64,
-    0x65, 0x73, 0x20, 0x73, 0x65, 0x76, 0x65, 0x72, 0x61, 0x6c, 0x20, 0x6e, 0x6f,
-    0x6e, 0x20, 0x61, 0x73, 0x63, 0x69, 0x69, 0x20, 0x63, 0x68, 0x61, 0x72, 0x61,
-    0x63, 0x74, 0x65, 0x72, 0x73, 0x20, 0x73, 0x75, 0x63, 0x68, 0x20, 0x61, 0x73,
-    0x20, 0xf0, 0x9f, 0x90, 0xa2, 0x2c, 0x20, 0xf0, 0x9f, 0x92, 0x96, 0x2c, 0x20,
-    0xe2, 0x99, 0xa5, 0xef, 0xb8, 0x8f, 0x2c, 0x20, 0xf0, 0x9f, 0x8e, 0xa3, 0x20,
-    0x61, 0x6e, 0x64, 0x20, 0xf0, 0x9f, 0xa4, 0xa6, 0x21, 0x21};
-  // clang-format on
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  cudf::test::structs_column_wrapper struc{{m, v}};
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::primitive_string);
 
   auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
-  // The long string decoded from the reference file
-  std::string const expected_str(reinterpret_cast<char const*>(val.data() + 5), 174);
+  // Long-string layout: 1 header byte + 4-byte LE length + payload.
+  std::string const expected_str(
+    reinterpret_cast<char const*>(afv::primitive_string.value.data() + 5),
+    afv::primitive_string.value.size() - 5);
   cudf::test::strings_column_wrapper expected({expected_str});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 TEST_F(VariantExtractTest, ApacheObjectPrimitiveExtractString)
 {
-  // object_primitive from parquet-testing: 7 fields including "string_field" = "Apache Parquet"
-  // clang-format off
-  std::vector<uint8_t> const meta = {
-    0x01, 0x07, 0x00, 0x09, 0x15, 0x27, 0x3a, 0x46, 0x50, 0x5f,
-    0x69, 0x6e, 0x74, 0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x62, 0x6f, 0x6f, 0x6c, 0x65, 0x61, 0x6e, 0x5f, 0x74, 0x72, 0x75, 0x65, 0x5f,
-    0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x62, 0x6f, 0x6f, 0x6c, 0x65, 0x61, 0x6e, 0x5f, 0x66, 0x61, 0x6c, 0x73, 0x65,
-    0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x6e, 0x75, 0x6c, 0x6c, 0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
-    0x74, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x5f, 0x66, 0x69, 0x65,
-    0x6c, 0x64};
-  std::vector<uint8_t> const val = {
-    0x02, 0x07, 0x03, 0x02, 0x01, 0x00, 0x05, 0x04, 0x06,
-    0x09, 0x08, 0x02, 0x00, 0x19, 0x0a, 0x1a, 0x31,
-    0x0c, 0x01, 0x20, 0x08, 0x15, 0xcd, 0x5b, 0x07, 0x04, 0x08,
-    0x39, 0x41, 0x70, 0x61, 0x63, 0x68, 0x65, 0x20, 0x50, 0x61, 0x72, 0x71, 0x75,
-    0x65, 0x74, 0x00,
-    0x59, 0x32, 0x30, 0x32, 0x35, 0x2d, 0x30, 0x34, 0x2d, 0x31, 0x36, 0x54, 0x31,
-    0x32, 0x3a, 0x33, 0x34, 0x3a, 0x35, 0x36, 0x2e, 0x37, 0x38};
-  // clang-format on
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  cudf::test::structs_column_wrapper struc{{m, v}};
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_primitive);
 
   auto got =
     cudf::io::parquet::experimental::extract_variant_field(struc,
@@ -551,36 +506,10 @@ TEST_F(VariantExtractTest, ApacheObjectPrimitiveExtractString)
 
 TEST_F(VariantExtractTest, ApacheNestedGetVariantField)
 {
-  // object_nested from parquet-testing: {"id":1, "species":{"name":"lava monster",...}, ...}
-  // Metadata dictionary: [0]id [1]species [2]name [3]population [4]observation
-  //                       [5]time [6]location [7]value [8]temperature [9]humidity
-  // Shared across all nesting levels -- this validates nested extraction.
-  // clang-format off
-  std::vector<uint8_t> const meta = {
-    0x01, 0x0a, 0x00, 0x02, 0x09, 0x0d, 0x17, 0x22, 0x26, 0x2e, 0x33, 0x3e, 0x46,
-    0x69, 0x64, 0x73, 0x70, 0x65, 0x63, 0x69, 0x65, 0x73, 0x6e, 0x61, 0x6d, 0x65,
-    0x70, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x6f, 0x62, 0x73,
-    0x65, 0x72, 0x76, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x74, 0x69, 0x6d, 0x65, 0x6c,
-    0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x74,
-    0x65, 0x6d, 0x70, 0x65, 0x72, 0x61, 0x74, 0x75, 0x72, 0x65, 0x68, 0x75, 0x6d,
-    0x69, 0x64, 0x69, 0x74, 0x79};
-  std::vector<uint8_t> const val = {
-    0x02, 0x03, 0x00, 0x04, 0x01, 0x00, 0x19, 0x02, 0x46, 0x0c, 0x01, 0x02, 0x02,
-    0x02, 0x03, 0x00, 0x0d, 0x10, 0x31, 0x6c, 0x61, 0x76, 0x61, 0x20, 0x6d, 0x6f,
-    0x6e, 0x73, 0x74, 0x65, 0x72, 0x10, 0x85, 0x1a, 0x02, 0x03, 0x06, 0x05, 0x07,
-    0x09, 0x00, 0x18, 0x24, 0x21, 0x31, 0x32, 0x3a, 0x33, 0x34, 0x3a, 0x35, 0x36,
-    0x39, 0x49, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x56, 0x6f, 0x6c, 0x63, 0x61,
-    0x6e, 0x6f, 0x02, 0x02, 0x09, 0x08, 0x02, 0x00, 0x05, 0x0c, 0x7b, 0x10, 0xc8,
-    0x01};
-  // clang-format on
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  cudf::test::structs_column_wrapper struc{{m, v}};
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_nested);
+  auto stream   = cudf::test::get_default_stream();
 
-  auto stream = cudf::test::get_default_stream();
-
-  // Extract top-level "species" as raw VARIANT, then extract "name" from it, then cast to STRING.
-  // This validates: (1) non-monotonic field offsets, (2) shared metadata across nesting levels.
   auto species = cudf::io::parquet::experimental::get_variant_field(struc, "species", stream);
   EXPECT_EQ(species->type().id(), cudf::type_id::STRUCT);
 
@@ -592,6 +521,186 @@ TEST_F(VariantExtractTest, ApacheNestedGetVariantField)
 
   cudf::test::strings_column_wrapper expected({"lava monster"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*name_str, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectPrimitive_int_field_castInt32IsNull)
+{
+  // int_field is encoded as INT8 (header 0x0c), not INT32, so cast_variant(INT32) -> null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_primitive);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "int_field", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectPrimitive_timestamp_field_asString)
+{
+  // timestamp_field is encoded as a long string ("2025-04-16T12:34:56.78"), so STRING decodes.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_primitive);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "timestamp_field",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected({"2025-04-16T12:34:56.78"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectPrimitive_missing_field_isNull)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_primitive);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "no_such_field",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectPrimitive_null_field_isNull)
+{
+  // null_field is the Variant null primitive; cast to STRING yields null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_primitive);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "null_field", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectNested_observation_location)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_nested);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$.observation.location",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected({"In the Volcano"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectNested_observation_time)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_nested);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$.observation.time",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected({"12:34:56"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectNested_species_population_castInt32IsNull)
+{
+  // population=6789 is encoded as INT16, not INT32, so cast_variant(INT32) -> null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_nested);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$.species.population",
+                                                           cudf::data_type{cudf::type_id::INT32},
+                                                           cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectNested_id_castInt32IsNull)
+{
+  // id=1 is encoded as INT8 (0x0c 0x01), so cast_variant(INT32) -> null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_nested);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$.id", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayPrimitive_indexZero_castInt32IsNull)
+{
+  // Element 0 is INT8(2); INT32 cast must be null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_primitive);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$[0]", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayPrimitive_outOfBounds_isNull)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_primitive);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$[42]", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayNested_index2_type)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_nested);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$[2].type", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected({"if"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayNested_index0_thing_names_index1)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_nested);
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$[0].thing.names[1]",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected({"Spider"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayNested_indexNull_isNull)
+{
+  // Element 1 is the Variant null primitive. Walking into it returns null.
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_nested);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$[1].id", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheObjectEmpty_anyKey_isNull)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::object_empty);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "foo", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(VariantExtractTest, ApacheArrayEmpty_anyIndex_isNull)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::array_empty);
+  auto got      = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "$[0]", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
 }
 
 namespace {
@@ -679,46 +788,11 @@ inline cudf::test::structs_column_wrapper wrap_single_variant(std::vector<uint8_
   return cudf::test::structs_column_wrapper{{m, v}};
 }
 
-// Shared fixture: Apache parquet-testing object_nested blob. Dictionary:
-//   [0]id [1]species [2]name [3]population [4]observation
-//   [5]time [6]location [7]value [8]temperature [9]humidity
-// Value: { id:1, species:{name:"lava monster", population:6789},
-//          observation:{time:"12:34:56", location:"In the Volcano",
-//                       value:{temperature:123, humidity:456}} }
-struct apache_nested_fixture {
-  std::vector<uint8_t> meta;
-  std::vector<uint8_t> val;
-};
-
-apache_nested_fixture make_apache_nested_fixture()
-{
-  // clang-format off
-  std::vector<uint8_t> const meta = {
-    0x01, 0x0a, 0x00, 0x02, 0x09, 0x0d, 0x17, 0x22, 0x26, 0x2e, 0x33, 0x3e, 0x46,
-    0x69, 0x64, 0x73, 0x70, 0x65, 0x63, 0x69, 0x65, 0x73, 0x6e, 0x61, 0x6d, 0x65,
-    0x70, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x6f, 0x62, 0x73,
-    0x65, 0x72, 0x76, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x74, 0x69, 0x6d, 0x65, 0x6c,
-    0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x74,
-    0x65, 0x6d, 0x70, 0x65, 0x72, 0x61, 0x74, 0x75, 0x72, 0x65, 0x68, 0x75, 0x6d,
-    0x69, 0x64, 0x69, 0x74, 0x79};
-  std::vector<uint8_t> const val = {
-    0x02, 0x03, 0x00, 0x04, 0x01, 0x00, 0x19, 0x02, 0x46, 0x0c, 0x01, 0x02, 0x02,
-    0x02, 0x03, 0x00, 0x0d, 0x10, 0x31, 0x6c, 0x61, 0x76, 0x61, 0x20, 0x6d, 0x6f,
-    0x6e, 0x73, 0x74, 0x65, 0x72, 0x10, 0x85, 0x1a, 0x02, 0x03, 0x06, 0x05, 0x07,
-    0x09, 0x00, 0x18, 0x24, 0x21, 0x31, 0x32, 0x3a, 0x33, 0x34, 0x3a, 0x35, 0x36,
-    0x39, 0x49, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x56, 0x6f, 0x6c, 0x63, 0x61,
-    0x6e, 0x6f, 0x02, 0x02, 0x09, 0x08, 0x02, 0x00, 0x05, 0x0c, 0x7b, 0x10, 0xc8,
-    0x01};
-  // clang-format on
-  return {meta, val};
-}
-
+// Shared fixture: Apache parquet-testing object_nested blob. See
+// apache_variant_fixtures.hpp for the underlying bytes and provenance.
 cudf::test::structs_column_wrapper make_apache_nested_col()
 {
-  auto const f = make_apache_nested_fixture();
-  cudf::test::lists_column_wrapper<uint8_t> m(f.meta.begin(), f.meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(f.val.begin(), f.val.end());
-  return cudf::test::structs_column_wrapper{{m, v}};
+  return make_apache_variant(cudf::test::apache_variant_fixtures::object_nested);
 }
 
 }  // namespace
