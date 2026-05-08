@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
@@ -20,7 +21,11 @@ from cudf.core.column.column import (
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils.dtypes import _get_nan_for_dtype, get_dtype_of_same_kind
+from cudf.utils.dtypes import (
+    _get_nan_for_dtype,
+    dtype_from_pylibcudf_column,
+    get_dtype_of_same_kind,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -183,13 +188,30 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             # (e.g. nanosecond timestamps).
             plc_exact = exact and interpolation in {"linear", "midpoint"}
 
+            with ExitStack() as stack:
+                no_nans_acc = stack.enter_context(
+                    no_nans.access(mode="read", scope="internal")
+                )
+                indices_acc = stack.enter_context(
+                    indices.access(mode="read", scope="internal")
+                )
+                plc_result = plc.quantiles.quantile(
+                    no_nans_acc.plc_column,
+                    q,
+                    interpolation_type,
+                    indices_acc.plc_column,
+                    plc_exact,
+                )
+            # libcudf returns a plain numpy dtype - re-wrap so the result
+            # mirrors the input's dtype "kind" (numpy / pandas-nullable /
+            # ArrowDtype).
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
-                PylibcudfFunction(
-                    plc.quantiles.quantile,
-                    pylibcudf_result_dtype_policy,
-                ).execute_with_args(
-                    no_nans, q, interpolation_type, indices, plc_exact
+                ColumnBase.create(
+                    plc_result,
+                    get_dtype_of_same_kind(
+                        self.dtype, dtype_from_pylibcudf_column(plc_result)
+                    ),
                 ),
             )
         if return_scalar:
@@ -208,15 +230,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
                 if scalar_result is NA
                 else scalar_result
-            )
-        # Preserve the input's dtype "kind" (numpy / pandas-nullable /
-        # ArrowDtype) on the result column, since libcudf always returns
-        # a plain numpy dtype.
-        target_dtype = get_dtype_of_same_kind(self.dtype, result.dtype)
-        if target_dtype != result.dtype:
-            result = cast(
-                cudf.core.column.numerical_base.NumericalBaseColumn,
-                result.astype(target_dtype),
             )
         return result
 
