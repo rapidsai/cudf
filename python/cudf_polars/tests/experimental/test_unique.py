@@ -10,13 +10,7 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-
-
-@pytest.fixture
-def engine(streaming_engine_factory):
-    return streaming_engine_factory(
-        StreamingOptions(fallback_mode="warn"),
-    )
+from cudf_polars.testing.engine_utils import warns_on_spmd
 
 
 @pytest.fixture(scope="module")
@@ -77,11 +71,12 @@ def test_unique_head_tail(keep, zlice, streaming_engine_factory):
     )
 
 
-def test_unique_complex_slice_fallback(df, engine):
+def test_unique_complex_slice_fallback(df, streaming_engine_factory):
     """Test that unique with complex slice (offset >= 1) falls back correctly."""
+    engine = streaming_engine_factory(StreamingOptions(fallback_mode="warn"))
     # unique().slice(offset=5, length=10) has zlice[0] >= 1, triggering fallback
     q = df.unique(subset=("y",), keep="any").slice(5, 10)
-    with pytest.warns(UserWarning, match="Complex slice not supported"):
+    with warns_on_spmd(engine, UserWarning, match="Complex slice not supported"):
         result = q.collect(engine=engine)
     # Just verify the fallback produces valid output with expected shape
     assert result.shape == (10, 3)
