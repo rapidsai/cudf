@@ -503,6 +503,7 @@ jobs:
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       script: "ci/test_cudf_polars_experimental.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
