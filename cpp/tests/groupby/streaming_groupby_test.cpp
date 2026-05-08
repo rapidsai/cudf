@@ -1129,10 +1129,12 @@ TEST_F(StreamingGroupbyTest, StringKeyNullKeysExcluded)
 {
   using V = int32_t;
 
-  cudf::test::strings_column_wrapper keys1{{"a", "b", "c"}, {true, false, true}};
+  cudf::test::strings_column_wrapper keys1(std::initializer_list<std::string>{"a", "b", "c"},
+                                           std::initializer_list<bool>{true, false, true});
   cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30};
 
-  cudf::test::strings_column_wrapper keys2{{"a", "b"}, {true, false}};
+  cudf::test::strings_column_wrapper keys2(std::initializer_list<std::string>{"a", "b"},
+                                           std::initializer_list<bool>{true, false});
   cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   cudf::table_view batch1{{keys1, vals1}};
