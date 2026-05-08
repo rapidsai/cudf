@@ -34,7 +34,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.utils.config import RayContext
+from cudf_polars.utils.config import MemoryResourceConfig, RayContext
 
 if TYPE_CHECKING:
     import uuid
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_pipeline_ray_mode(
@@ -156,6 +156,9 @@ class RankActor:
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
     hardware_binding
         Policy controlling topology-aware hardware binding.
+    memory_resource_config
+        Optional RMM memory resource configuration. If ``None``, defaults to
+        :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
 
     Notes
     -----
@@ -175,11 +178,10 @@ class RankActor:
         memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
         bind_to_gpu(hardware_binding)
-        base_mr = (
-            memory_resource_config.create_memory_resource()
-            if memory_resource_config is not None
-            else rmm.mr.CudaAsyncMemoryResource()
+        memory_resource_config = (
+            memory_resource_config or MemoryResourceConfig.default()
         )
+        base_mr = memory_resource_config.create_memory_resource()
         self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes

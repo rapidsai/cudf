@@ -39,7 +39,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.utils.config import DaskContext
+from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def _get_visible_gpu_ids() -> list[str]:
@@ -156,11 +156,8 @@ def _setup_root(
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
     bind_to_gpu(hardware_binding)
-    base_mr = (
-        memory_resource_config.create_memory_resource()
-        if memory_resource_config is not None
-        else rmm.mr.CudaAsyncMemoryResource()
-    )
+    memory_resource_config = memory_resource_config or MemoryResourceConfig.default()
+    base_mr = memory_resource_config.create_memory_resource()
     mr = RmmResourceAdaptor(base_mr)
     comm = new_communicator(
         nranks=nranks,
@@ -211,7 +208,7 @@ def _setup_worker(
         Policy controlling topology-aware hardware binding.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
-        :class:`rmm.mr.CudaAsyncMemoryResource`.
+        :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -224,11 +221,10 @@ def _setup_worker(
     if mp_ctx is None:
         # Non-root worker: create communicator now.
         bind_to_gpu(hardware_binding)
-        base_mr = (
-            memory_resource_config.create_memory_resource()
-            if memory_resource_config is not None
-            else rmm.mr.CudaAsyncMemoryResource()
+        memory_resource_config = (
+            memory_resource_config or MemoryResourceConfig.default()
         )
+        base_mr = memory_resource_config.create_memory_resource()
         mr = RmmResourceAdaptor(base_mr)
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
