@@ -6,7 +6,7 @@
 #include "variant_blob_builders.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/io/variant.hpp>
+#include <cudf/io/experimental/variant.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -232,7 +232,8 @@ static void bench_get_variant_field(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result = cudf::io::parquet::get_variant_field(col->view(), target_key, stream, mr);
+    auto result =
+      cudf::io::parquet::experimental::get_variant_field(col->view(), target_key, stream, mr);
   });
 }
 
@@ -267,7 +268,7 @@ static void bench_cast_variant(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result = cudf::io::parquet::cast_variant(
+    auto result = cudf::io::parquet::experimental::cast_variant(
       col->view(), cudf::data_type{cudf::type_id::INT32}, stream, mr);
   });
 }
@@ -318,7 +319,7 @@ static void bench_get_variant_field_nested(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result = cudf::io::parquet::get_variant_field(col->view(), path, stream, mr);
+    auto result = cudf::io::parquet::experimental::get_variant_field(col->view(), path, stream, mr);
   });
 }
 

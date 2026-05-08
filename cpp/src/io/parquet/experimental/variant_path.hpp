@@ -12,7 +12,7 @@
 #include <variant>
 #include <vector>
 
-namespace cudf::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 /**
  * @brief One step in a parsed VARIANT path: either a dictionary field name or an array index.
@@ -36,4 +36,4 @@ using variant_path_step = std::variant<std::string, cudf::size_type>;
  */
 std::vector<variant_path_step> parse_variant_path(std::string_view path);
 
-}  // namespace cudf::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

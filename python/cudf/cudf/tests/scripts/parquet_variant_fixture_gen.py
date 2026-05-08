@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 """
-Generate Parquet VARIANT fixtures for libcudf tests.
+Generate Parquet VARIANT fixtures for cudf tests.
 
 PyArrow writes struct<metadata:binary,value:binary> without Parquet logical type VARIANT on
 the parent group. This script patches the Thrift footer (compact protocol) to annotate the
@@ -13,12 +13,12 @@ Requires: pyarrow, Python 3.9+
 
 Usage (from repo root or this directory)::
 
-    python3 cpp/tests/scripts/parquet_variant_fixture_gen.py
+    python3 python/cudf/cudf/tests/scripts/parquet_variant_fixture_gen.py
 
 Outputs (default)::
 
-    cpp/tests/data/parquet/variant_minimal.parquet
-    cpp/tests/data/parquet/variant_multirow.parquet
+    python/cudf/cudf/tests/data/parquet/variant_minimal.parquet
+    python/cudf/cudf/tests/data/parquet/variant_multirow.parquet
 """
 
 from __future__ import annotations
@@ -130,8 +130,9 @@ def write_fixture(
 
 
 def main() -> int:
-    repo = Path(__file__).resolve().parents[2]  # cpp/tests/scripts -> cpp
-    out_dir = repo / "tests" / "data" / "parquet"
+    # python/cudf/cudf/tests/scripts -> python/cudf/cudf/tests
+    tests_dir = Path(__file__).resolve().parents[1]
+    out_dir = tests_dir / "data" / "parquet"
 
     # Minimal: single row, object { "x": 7 }
     m0 = metadata_v1(["x"])
@@ -149,8 +150,8 @@ def main() -> int:
         out_dir / "variant_multirow.parquet", [mr1, mr2, mr3], [vr1, vr2, vr3]
     )
 
-    print(f"Wrote {out_dir / 'variant_minimal.parquet'}")
-    print(f"Wrote {out_dir / 'variant_multirow.parquet'}")
+    print(f"Wrote {out_dir / 'variant_minimal.parquet'}")  # noqa: T201
+    print(f"Wrote {out_dir / 'variant_multirow.parquet'}")  # noqa: T201
     return 0
 
 

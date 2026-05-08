@@ -16,7 +16,7 @@
 #include <string_view>
 
 namespace CUDF_EXPORT cudf {
-namespace io::parquet {
+namespace io::parquet::experimental {
 /**
  * @addtogroup io_readers
  * @{
@@ -108,5 +108,5 @@ std::unique_ptr<column> extract_variant_field(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
-}  // namespace io::parquet
+}  // namespace io::parquet::experimental
 }  // namespace CUDF_EXPORT cudf

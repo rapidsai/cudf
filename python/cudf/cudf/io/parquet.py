@@ -2630,3 +2630,150 @@ def is_supported_write_parquet(
     return plc.io.parquet.is_supported_write_parquet(
         _get_comp_type(compression)
     )
+
+
+# ---------------------------------------------------------------------------
+# Experimental Parquet VARIANT extraction APIs
+#
+# These wrap ``cudf::io::parquet::experimental::{get,cast,extract}_variant_field``
+# from libcudf. They operate on a "VARIANT struct" Series whose underlying
+# column is ``struct<list<uint8> metadata, list<uint8> value, ...>`` -- the
+# materialization produced by ``cudf.read_parquet`` for unshredded Parquet
+# VARIANT columns. These APIs are experimental and may change.
+# ---------------------------------------------------------------------------
+
+
+def _wrap_variant_result(parent_series, plc_result, dtype):
+    import cudf
+
+    result_col = ColumnBase.create(plc_result, dtype=dtype)
+    return cudf.Series._from_column(
+        result_col,
+        name=parent_series.name,
+        index=parent_series.index,
+    )
+
+
+def get_variant_field(variant_column, path):
+    """Extract the raw VARIANT-encoded bytes of a value at a JSONPath-like path.
+
+    Returns a new VARIANT Series (``struct<list<uint8>, list<uint8>>``) where
+    child 0 is the input ``metadata`` (copied) and child 1 contains the raw
+    encoded bytes of the value at the end of ``path``. Null is produced when
+    the row is null, a name step is missing from the dictionary, an array
+    index is out of bounds, or a step's kind does not match the current
+    value's type.
+
+    .. note:: Experimental. Wraps
+       ``cudf::io::parquet::experimental::get_variant_field``.
+
+    Parameters
+    ----------
+    variant_column : cudf.Series
+        VARIANT struct Series with ``list<uint8>`` ``metadata`` and ``value``
+        children.
+    path : str
+        JSONPath-like path string (e.g. ``"x"``, ``"$.foo.bar"``,
+        ``"$[0].name"``); see the C++ docstring for the supported grammar.
+
+    Returns
+    -------
+    cudf.Series
+        VARIANT struct Series with the extracted value's encoded bytes.
+    """
+    from cudf.utils.dtypes import dtype_from_pylibcudf_column
+
+    src = variant_column._column
+    with src.access(mode="read", scope="internal"):
+        plc_result = plc.io.experimental.get_variant_field(
+            src.plc_column, path
+        )
+    result_dtype = dtype_from_pylibcudf_column(plc_result)
+    return _wrap_variant_result(variant_column, plc_result, result_dtype)
+
+
+def _normalize_variant_dtype(dtype):
+    from cudf.api.types import dtype as cudf_dtype
+
+    return cudf_dtype(dtype)
+
+
+def cast_variant(variant_column, dtype):
+    """Decode a VARIANT Series's ``value`` blobs into a typed Series.
+
+    Each row's ``value`` child is interpreted as a Variant-encoded primitive
+    and decoded into ``dtype``. Only ``int32`` and string types are currently
+    supported.
+
+    .. note:: Experimental. Wraps
+       ``cudf::io::parquet::experimental::cast_variant``.
+
+    Parameters
+    ----------
+    variant_column : cudf.Series
+        VARIANT struct Series.
+    dtype : numpy/cudf dtype
+        Target dtype (``int32`` or ``str``).
+
+    Returns
+    -------
+    cudf.Series
+        Typed Series decoded from the VARIANT value blobs.
+    """
+    from cudf.utils.dtypes import (
+        dtype_from_pylibcudf_column,
+        dtype_to_pylibcudf_type,
+    )
+
+    plc_dtype = dtype_to_pylibcudf_type(_normalize_variant_dtype(dtype))
+
+    src = variant_column._column
+    with src.access(mode="read", scope="internal"):
+        plc_result = plc.io.experimental.cast_variant(
+            src.plc_column, plc_dtype
+        )
+    return _wrap_variant_result(
+        variant_column, plc_result, dtype_from_pylibcudf_column(plc_result)
+    )
+
+
+def extract_variant_field(variant_column, path, dtype):
+    """Extract a VARIANT value at ``path`` and decode it into a typed Series.
+
+    Convenience wrapper around :func:`get_variant_field` followed by
+    :func:`cast_variant`.
+
+    .. note:: Experimental. Wraps
+       ``cudf::io::parquet::experimental::extract_variant_field``.
+
+    Parameters
+    ----------
+    variant_column : cudf.Series
+        VARIANT struct Series.
+    path : str
+        JSONPath-like path string (e.g. ``"x"``, ``"$.foo.bar"``).
+    dtype : numpy/cudf dtype
+        Target dtype (``int32`` or ``str``).
+
+    Returns
+    -------
+    cudf.Series
+        Typed Series with one row per input row; null where the input row is
+        null, any step along the path misses, or the encoded value does not
+        match ``dtype``.
+    """
+    from cudf.utils.dtypes import (
+        dtype_from_pylibcudf_column,
+        dtype_to_pylibcudf_type,
+    )
+
+    plc_dtype = dtype_to_pylibcudf_type(_normalize_variant_dtype(dtype))
+
+    src = variant_column._column
+    with src.access(mode="read", scope="internal"):
+        plc_result = plc.io.experimental.extract_variant_field(
+            src.plc_column, path, plc_dtype
+        )
+    return _wrap_variant_result(
+        variant_column, plc_result, dtype_from_pylibcudf_column(plc_result)
+    )

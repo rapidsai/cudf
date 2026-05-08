@@ -12,7 +12,7 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/io/variant.hpp>
+#include <cudf/io/experimental/variant.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace cudf {
-namespace io::parquet {
+namespace io::parquet::experimental {
 namespace {
 
 constexpr int variant_version_v1 = 1;
@@ -769,5 +769,5 @@ std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
   return cast_variant(intermediate->view(), desired_type, stream, mr);
 }
 
-}  // namespace io::parquet
+}  // namespace io::parquet::experimental
 }  // namespace cudf

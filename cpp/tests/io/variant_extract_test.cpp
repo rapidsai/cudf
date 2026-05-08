@@ -8,7 +8,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/io/variant.hpp>
+#include <cudf/io/experimental/variant.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <array>
@@ -30,7 +30,7 @@ TEST_F(VariantExtractTest, ExtractInt32TopLevelField)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected{7};
@@ -48,7 +48,7 @@ TEST_F(VariantExtractTest, ExtractShortStringField)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "k", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected{"hi"};
@@ -65,7 +65,7 @@ TEST_F(VariantExtractTest, NullStructRow)
     {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00}};
   cudf::test::structs_column_wrapper struc{{meta, val}, std::vector<bool>{true, false}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({7, 0}, {true, false});
@@ -80,7 +80,7 @@ TEST_F(VariantExtractTest, MissingKeyYieldsNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "missing", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
@@ -96,7 +96,7 @@ TEST_F(VariantExtractTest, WrongDesiredTypeYieldsNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected({"donotread"}, {false});
@@ -112,7 +112,7 @@ TEST_F(VariantExtractTest, NonObjectValueYieldsNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
@@ -128,7 +128,7 @@ TEST_F(VariantExtractTest, InvalidMetadataYieldsNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
@@ -144,7 +144,7 @@ TEST_F(VariantExtractTest, TruncatedObjectValueYieldsNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
@@ -160,11 +160,11 @@ TEST_F(VariantExtractTest, ObjectTwoFieldsSingleRow)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
   auto stream = cudf::test::get_default_stream();
-  auto x      = cudf::io::parquet::extract_variant_field(
+  auto x      = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> x_exp{7};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*x, x_exp);
-  auto k = cudf::io::parquet::extract_variant_field(
+  auto k = cudf::io::parquet::experimental::extract_variant_field(
     struc, "k", cudf::data_type{cudf::type_id::STRING}, stream);
   cudf::test::strings_column_wrapper k_exp{"hi"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*k, k_exp);
@@ -204,17 +204,17 @@ TEST_F(VariantExtractTest, MultiRowDistinctKeysHandBuilt)
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
   auto stream = cudf::test::get_default_stream();
-  auto x      = cudf::io::parquet::extract_variant_field(
+  auto x      = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> x_exp({7, 42, 0}, {true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*x, x_exp);
 
-  auto k = cudf::io::parquet::extract_variant_field(
+  auto k = cudf::io::parquet::experimental::extract_variant_field(
     struc, "k", cudf::data_type{cudf::type_id::STRING}, stream);
   cudf::test::strings_column_wrapper k_exp({"hi", "", "zzz"}, {true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*k, k_exp);
 
-  auto y = cudf::io::parquet::extract_variant_field(
+  auto y = cudf::io::parquet::experimental::extract_variant_field(
     struc, "y", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> y_exp({0, 99, 0}, {false, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*y, y_exp);
@@ -232,7 +232,7 @@ TEST_F(VariantExtractTest, MultiRowMixedKeys)
   cudf::test::lists_column_wrapper<uint8_t> val{{v0.begin(), v0.end()}, {v1.begin(), v1.end()}};
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0}, {true, false});
@@ -251,11 +251,11 @@ TEST_F(VariantExtractTest, ExtraShreddingSiblingIgnored)
   cudf::test::fixed_width_column_wrapper<int32_t> shredding_placeholder{0};
   cudf::test::structs_column_wrapper struc{{meta, val, shredding_placeholder}};
   auto stream = cudf::test::get_default_stream();
-  auto x      = cudf::io::parquet::extract_variant_field(
+  auto x      = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
   cudf::test::fixed_width_column_wrapper<int32_t> x_exp{7};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*x, x_exp);
-  auto k = cudf::io::parquet::extract_variant_field(
+  auto k = cudf::io::parquet::experimental::extract_variant_field(
     struc, "k", cudf::data_type{cudf::type_id::STRING}, stream);
   cudf::test::strings_column_wrapper k_exp{"hi"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*k, k_exp);
@@ -275,7 +275,8 @@ TEST_F(VariantExtractTest, GetVariantFieldReturnsVariantStruct)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::get_variant_field(struc, "x", cudf::test::get_default_stream());
+  auto got = cudf::io::parquet::experimental::get_variant_field(
+    struc, "x", cudf::test::get_default_stream());
 
   EXPECT_EQ(got->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(got->num_children(), 2);
@@ -288,7 +289,7 @@ TEST_F(VariantExtractTest, GetVariantFieldReturnsVariantStruct)
 
   // The extracted value for "x" should be the INT32 encoding: {0x14, 0x07, 0x00, 0x00, 0x00}
   // Verify it can be decoded via cast_variant
-  auto casted = cudf::io::parquet::cast_variant(
+  auto casted = cudf::io::parquet::experimental::cast_variant(
     got->view(), cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   cudf::test::fixed_width_column_wrapper<int32_t> expected{7};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*casted, expected);
@@ -302,8 +303,8 @@ TEST_F(VariantExtractTest, GetVariantFieldMissingKeyAllNull)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got =
-    cudf::io::parquet::get_variant_field(struc, "missing", cudf::test::get_default_stream());
+  auto got = cudf::io::parquet::experimental::get_variant_field(
+    struc, "missing", cudf::test::get_default_stream());
 
   EXPECT_EQ(got->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(got->null_count(), 1);
@@ -323,7 +324,7 @@ TEST_F(VariantExtractTest, CastVariantInt32)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected{42};
@@ -339,7 +340,7 @@ TEST_F(VariantExtractTest, CastVariantString)
   cudf::test::lists_column_wrapper<uint8_t> val(short_str.begin(), short_str.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected{"hi"};
@@ -366,7 +367,7 @@ TEST_F(VariantExtractTest, CastVariantLongString)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected{"hello world!"};
@@ -409,21 +410,21 @@ TEST_F(VariantExtractTest, GetThenCastMatchesExtract)
   auto stream = cudf::test::get_default_stream();
 
   // extract_variant_field (convenience)
-  auto extract_x = cudf::io::parquet::extract_variant_field(
+  auto extract_x = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
 
   // get_variant_field + cast_variant (two-step)
-  auto intermediate = cudf::io::parquet::get_variant_field(struc, "x", stream);
-  auto two_step_x   = cudf::io::parquet::cast_variant(
+  auto intermediate = cudf::io::parquet::experimental::get_variant_field(struc, "x", stream);
+  auto two_step_x   = cudf::io::parquet::experimental::cast_variant(
     intermediate->view(), cudf::data_type{cudf::type_id::INT32}, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_x, *two_step_x);
 
   // Same for string field "k"
-  auto extract_k = cudf::io::parquet::extract_variant_field(
+  auto extract_k = cudf::io::parquet::experimental::extract_variant_field(
     struc, "k", cudf::data_type{cudf::type_id::STRING}, stream);
-  auto intermediate_k = cudf::io::parquet::get_variant_field(struc, "k", stream);
-  auto two_step_k     = cudf::io::parquet::cast_variant(
+  auto intermediate_k = cudf::io::parquet::experimental::get_variant_field(struc, "k", stream);
+  auto two_step_k     = cudf::io::parquet::experimental::cast_variant(
     intermediate_k->view(), cudf::data_type{cudf::type_id::STRING}, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_k, *two_step_k);
@@ -443,7 +444,7 @@ TEST_F(VariantExtractTest, ApachePrimitiveInt32)
   cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
   cudf::test::structs_column_wrapper struc{{m, v}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected{123456};
@@ -464,7 +465,7 @@ TEST_F(VariantExtractTest, ApacheShortString)
   cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
   cudf::test::structs_column_wrapper struc{{m, v}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected(
@@ -500,7 +501,7 @@ TEST_F(VariantExtractTest, ApacheLongString)
   cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
   cudf::test::structs_column_wrapper struc{{m, v}};
 
-  auto got = cudf::io::parquet::cast_variant(
+  auto got = cudf::io::parquet::experimental::cast_variant(
     struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   // The long string decoded from the reference file
@@ -538,10 +539,11 @@ TEST_F(VariantExtractTest, ApacheObjectPrimitiveExtractString)
   cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
   cudf::test::structs_column_wrapper struc{{m, v}};
 
-  auto got = cudf::io::parquet::extract_variant_field(struc,
-                                                      "string_field",
-                                                      cudf::data_type{cudf::type_id::STRING},
-                                                      cudf::test::get_default_stream());
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "string_field",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected({"Apache Parquet"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
@@ -579,14 +581,14 @@ TEST_F(VariantExtractTest, ApacheNestedGetVariantField)
 
   // Extract top-level "species" as raw VARIANT, then extract "name" from it, then cast to STRING.
   // This validates: (1) non-monotonic field offsets, (2) shared metadata across nesting levels.
-  auto species = cudf::io::parquet::get_variant_field(struc, "species", stream);
+  auto species = cudf::io::parquet::experimental::get_variant_field(struc, "species", stream);
   EXPECT_EQ(species->type().id(), cudf::type_id::STRUCT);
 
-  auto name = cudf::io::parquet::get_variant_field(species->view(), "name", stream);
+  auto name = cudf::io::parquet::experimental::get_variant_field(species->view(), "name", stream);
   EXPECT_EQ(name->type().id(), cudf::type_id::STRUCT);
 
-  auto name_str =
-    cudf::io::parquet::cast_variant(name->view(), cudf::data_type{cudf::type_id::STRING}, stream);
+  auto name_str = cudf::io::parquet::experimental::cast_variant(
+    name->view(), cudf::data_type{cudf::type_id::STRING}, stream);
 
   cudf::test::strings_column_wrapper expected({"lava monster"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*name_str, expected);
@@ -726,16 +728,17 @@ TEST_F(VariantExtractTest, GetNestedPathSpeciesName)
   auto col    = make_apache_nested_col();
   auto stream = cudf::test::get_default_stream();
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     col, "$.species.name", cudf::data_type{cudf::type_id::STRING}, stream);
 
   cudf::test::strings_column_wrapper expected({"lava monster"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 
   // Parity: single-call path equals chained calls.
-  auto chained_species = cudf::io::parquet::get_variant_field(col, "species", stream);
-  auto chained_name = cudf::io::parquet::get_variant_field(chained_species->view(), "name", stream);
-  auto chained_str  = cudf::io::parquet::cast_variant(
+  auto chained_species = cudf::io::parquet::experimental::get_variant_field(col, "species", stream);
+  auto chained_name =
+    cudf::io::parquet::experimental::get_variant_field(chained_species->view(), "name", stream);
+  auto chained_str = cudf::io::parquet::experimental::cast_variant(
     chained_name->view(), cudf::data_type{cudf::type_id::STRING}, stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *chained_str);
 }
@@ -748,12 +751,13 @@ TEST_F(VariantExtractTest, GetNestedPathThreeLevel)
   // Depth 3: observation.value.temperature. The encoded value is INT8 (header 0x0c, byte 0x7b),
   // which cast_variant does not support, so we compare raw VARIANT bytes against the chained
   // result.
-  auto single =
-    cudf::io::parquet::get_variant_field(col, "$.observation.value.temperature", stream);
+  auto single = cudf::io::parquet::experimental::get_variant_field(
+    col, "$.observation.value.temperature", stream);
 
-  auto obs     = cudf::io::parquet::get_variant_field(col, "observation", stream);
-  auto vobj    = cudf::io::parquet::get_variant_field(obs->view(), "value", stream);
-  auto chained = cudf::io::parquet::get_variant_field(vobj->view(), "temperature", stream);
+  auto obs  = cudf::io::parquet::experimental::get_variant_field(col, "observation", stream);
+  auto vobj = cudf::io::parquet::experimental::get_variant_field(obs->view(), "value", stream);
+  auto chained =
+    cudf::io::parquet::experimental::get_variant_field(vobj->view(), "temperature", stream);
 
   // Both columns must be VARIANT structs with the same value child contents.
   EXPECT_EQ(single->type().id(), cudf::type_id::STRUCT);
@@ -766,7 +770,7 @@ TEST_F(VariantExtractTest, GetNestedPathMissingIntermediate)
   auto col    = make_apache_nested_col();
   auto stream = cudf::test::get_default_stream();
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     col, "$.species.nope", cudf::data_type{cudf::type_id::STRING}, stream);
 
   cudf::test::strings_column_wrapper expected({"donotread"}, {false});
@@ -785,7 +789,7 @@ TEST_F(VariantExtractTest, GetNestedPathNonObjectIntermediate)
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.a.b", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
@@ -795,9 +799,10 @@ TEST_F(VariantExtractTest, GetNestedPathNonObjectIntermediate)
 TEST_F(VariantExtractTest, GetNestedPathEmptyThrows)
 {
   auto col = make_apache_nested_col();
-  EXPECT_THROW(cudf::io::parquet::get_variant_field(col, "", cudf::test::get_default_stream()),
-               std::invalid_argument);
-  EXPECT_THROW(cudf::io::parquet::extract_variant_field(
+  EXPECT_THROW(
+    cudf::io::parquet::experimental::get_variant_field(col, "", cudf::test::get_default_stream()),
+    std::invalid_argument);
+  EXPECT_THROW(cudf::io::parquet::experimental::extract_variant_field(
                  col, "", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream()),
                std::invalid_argument);
 }
@@ -838,9 +843,9 @@ TEST_F(VariantExtractTest, GetNestedPathSingleKeyMatchesOldApi)
   auto stream = cudf::test::get_default_stream();
 
   // "x", "$.x", and "$['x']" must all be equivalent single-step paths.
-  auto bare    = cudf::io::parquet::get_variant_field(struc, "x", stream);
-  auto dollar  = cudf::io::parquet::get_variant_field(struc, "$.x", stream);
-  auto bracket = cudf::io::parquet::get_variant_field(struc, "$['x']", stream);
+  auto bare    = cudf::io::parquet::experimental::get_variant_field(struc, "x", stream);
+  auto dollar  = cudf::io::parquet::experimental::get_variant_field(struc, "$.x", stream);
+  auto bracket = cudf::io::parquet::experimental::get_variant_field(struc, "$['x']", stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *dollar);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *bracket);
@@ -867,7 +872,7 @@ TEST_F(VariantExtractTest, GetNestedPathMultiRowMixedNulls)
     {v0.begin(), v0.end()}, {v1.begin(), v1.end()}, {v2.begin(), v2.end()}};
   cudf::test::structs_column_wrapper struc{{meta, val}};
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.a.b", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0, 0}, {true, false, false});
@@ -887,9 +892,9 @@ TEST_F(VariantExtractTest, TopLevelArrayIndex)
   auto stream     = cudf::test::get_default_stream();
 
   auto const i32 = cudf::data_type{cudf::type_id::INT32};
-  auto first     = cudf::io::parquet::extract_variant_field(struc, "$[0]", i32, stream);
-  auto third     = cudf::io::parquet::extract_variant_field(struc, "$[2]", i32, stream);
-  auto oob       = cudf::io::parquet::extract_variant_field(struc, "$[5]", i32, stream);
+  auto first = cudf::io::parquet::experimental::extract_variant_field(struc, "$[0]", i32, stream);
+  auto third = cudf::io::parquet::experimental::extract_variant_field(struc, "$[2]", i32, stream);
+  auto oob   = cudf::io::parquet::experimental::extract_variant_field(struc, "$[5]", i32, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{10});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*third, cudf::test::fixed_width_column_wrapper<int32_t>{30});
@@ -907,10 +912,11 @@ TEST_F(VariantExtractTest, ObjectArrayObject)
   auto const outer_obj = build_single_field_object(/*fid=*/1, foo_array);
   auto struc           = wrap_single_variant(meta, outer_obj);
 
-  auto got = cudf::io::parquet::extract_variant_field(struc,
-                                                      "$.foo[0].bar",
-                                                      cudf::data_type{cudf::type_id::STRING},
-                                                      cudf::test::get_default_stream());
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$.foo[0].bar",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, cudf::test::strings_column_wrapper{"ok"});
 }
 
@@ -922,7 +928,7 @@ TEST_F(VariantExtractTest, IndexOnObject)
   auto const outer = build_single_field_object(/*fid=*/0, empty);
   auto struc       = wrap_single_variant(meta, outer);
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.foo[0]", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got,
                                  cudf::test::fixed_width_column_wrapper<int32_t>({0}, {false}));
@@ -935,7 +941,7 @@ TEST_F(VariantExtractTest, NameOnArray)
   auto const val  = build_array_value({enc_int32(1)});
   auto struc      = wrap_single_variant(meta, val);
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$[0].bar", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got,
                                  cudf::test::fixed_width_column_wrapper<int32_t>({0}, {false}));
@@ -947,9 +953,9 @@ TEST_F(VariantExtractTest, NegativeIndexThrows)
   auto const val  = build_array_value({enc_int32(10)});
   auto struc      = wrap_single_variant(meta, val);
 
-  EXPECT_THROW(
-    cudf::io::parquet::get_variant_field(struc, "$[-1]", cudf::test::get_default_stream()),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(
+                 struc, "$[-1]", cudf::test::get_default_stream()),
+               std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -963,8 +969,8 @@ TEST_F(VariantExtractTest, LeadingDollarOptional)
   auto struc      = wrap_single_variant(meta, val);
   auto stream     = cudf::test::get_default_stream();
 
-  auto bare   = cudf::io::parquet::get_variant_field(struc, "x", stream);
-  auto dollar = cudf::io::parquet::get_variant_field(struc, "$.x", stream);
+  auto bare   = cudf::io::parquet::experimental::get_variant_field(struc, "x", stream);
+  auto dollar = cudf::io::parquet::experimental::get_variant_field(struc, "$.x", stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *dollar);
 }
 
@@ -976,10 +982,11 @@ TEST_F(VariantExtractTest, QuotedKey)
   auto const outer_obj = build_single_field_object(/*fid=*/0, arr_val);
   auto struc           = wrap_single_variant(meta, outer_obj);
 
-  auto got = cudf::io::parquet::extract_variant_field(struc,
-                                                      "$['weird.key'][2]",
-                                                      cudf::data_type{cudf::type_id::INT32},
-                                                      cudf::test::get_default_stream());
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$['weird.key'][2]",
+                                                           cudf::data_type{cudf::type_id::INT32},
+                                                           cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, cudf::test::fixed_width_column_wrapper<int32_t>{300});
 }
 
@@ -989,7 +996,7 @@ TEST_F(VariantExtractTest, WildcardRejected)
   auto stream = cudf::test::get_default_stream();
   // Match on the substring "[*]" in the error message.
   try {
-    cudf::io::parquet::get_variant_field(struc, "$.a[*].b", stream);
+    cudf::io::parquet::experimental::get_variant_field(struc, "$.a[*].b", stream);
     FAIL() << "expected std::invalid_argument";
   } catch (std::invalid_argument const& e) {
     EXPECT_NE(std::string_view{e.what()}.find("[*]"), std::string_view::npos);
@@ -1000,8 +1007,10 @@ TEST_F(VariantExtractTest, EmptyPathRejected)
 {
   auto struc  = wrap_single_variant(build_metadata({}), build_array_value({enc_int32(1)}));
   auto stream = cudf::test::get_default_stream();
-  EXPECT_THROW(cudf::io::parquet::get_variant_field(struc, "", stream), std::invalid_argument);
-  EXPECT_THROW(cudf::io::parquet::get_variant_field(struc, "$", stream), std::invalid_argument);
+  EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, "", stream),
+               std::invalid_argument);
+  EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, "$", stream),
+               std::invalid_argument);
 }
 
 TEST_F(VariantExtractTest, SyntaxErrors)
@@ -1009,7 +1018,8 @@ TEST_F(VariantExtractTest, SyntaxErrors)
   auto struc  = wrap_single_variant(build_metadata({}), build_array_value({enc_int32(1)}));
   auto stream = cudf::test::get_default_stream();
   for (auto const* bad : {"$..a", "$.a[", "$.a[]", "$.a.1bad", "$.", "$.'q'"}) {
-    EXPECT_THROW(cudf::io::parquet::get_variant_field(struc, bad, stream), std::invalid_argument)
+    EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, bad, stream),
+                 std::invalid_argument)
       << "path that should have thrown: " << bad;
   }
 }
@@ -1031,17 +1041,18 @@ TEST_F(VariantExtractTest, BenchmarkPathSmokeCheck)
   auto struc             = wrap_single_variant(meta, root);
   auto stream            = cudf::test::get_default_stream();
 
-  auto nested = cudf::io::parquet::extract_variant_field(
+  auto nested = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.item016.item017.item085[0].item018", cudf::data_type{cudf::type_id::STRING}, stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nested, cudf::test::strings_column_wrapper{"found"});
 
   // Purely-object prefix.
-  auto raw_item017 = cudf::io::parquet::get_variant_field(struc, "$.item016.item017", stream);
+  auto raw_item017 =
+    cudf::io::parquet::experimental::get_variant_field(struc, "$.item016.item017", stream);
   EXPECT_EQ(raw_item017->type().id(), cudf::type_id::STRUCT);
 
   // Bare-name first step equivalent to `$.item016`.
-  auto bare   = cudf::io::parquet::get_variant_field(struc, "item016", stream);
-  auto dollar = cudf::io::parquet::get_variant_field(struc, "$.item016", stream);
+  auto bare   = cudf::io::parquet::experimental::get_variant_field(struc, "item016", stream);
+  auto dollar = cudf::io::parquet::experimental::get_variant_field(struc, "$.item016", stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *dollar);
 }
 
@@ -1053,7 +1064,7 @@ TEST_F(VariantExtractTest, CastInt32Composed)
   auto const outer_obj = build_single_field_object(/*fid=*/0, arr);
   auto struc           = wrap_single_variant(meta, outer_obj);
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.arr[1]", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, cudf::test::fixed_width_column_wrapper<int32_t>{20});
 }
@@ -1141,15 +1152,15 @@ TEST_F(VariantExtractTest, LargeDictionaryAndObjectScan)
   auto const i32  = cudf::data_type{cudf::type_id::INT32};
 
   // First, middle, and last keys each decode to their own field id.
-  auto first = cudf::io::parquet::extract_variant_field(struc, "k00", i32, stream);
-  auto mid   = cudf::io::parquet::extract_variant_field(struc, "k24", i32, stream);
-  auto last  = cudf::io::parquet::extract_variant_field(struc, "k49", i32, stream);
+  auto first = cudf::io::parquet::experimental::extract_variant_field(struc, "k00", i32, stream);
+  auto mid   = cudf::io::parquet::experimental::extract_variant_field(struc, "k24", i32, stream);
+  auto last  = cudf::io::parquet::experimental::extract_variant_field(struc, "k49", i32, stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
 
   // Not-present key must still yield null after a full dictionary scan.
-  auto missing = cudf::io::parquet::extract_variant_field(struc, "k99", i32, stream);
+  auto missing = cudf::io::parquet::experimental::extract_variant_field(struc, "k99", i32, stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing,
                                  cudf::test::fixed_width_column_wrapper<int32_t>({0}, {false}));
 }
@@ -1203,7 +1214,7 @@ TEST_F(VariantExtractTest, DeepMixedPathManyRowsWithNulls)
 
   auto struc = wrap_multi_row_variant(meta_rows, val_rows);
 
-  auto got = cudf::io::parquet::extract_variant_field(
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.a.b[0].d", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected(exp_strs.begin(), exp_strs.end(), exp_valid.begin());

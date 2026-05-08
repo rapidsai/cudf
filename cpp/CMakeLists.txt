@@ -506,8 +506,6 @@ add_library(
   src/io/json/process_tokens.cu
   src/io/json/write_json.cpp
   src/io/json/write_json.cu
-  src/io/variant_extract.cu
-  src/io/variant_path.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -536,6 +534,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/experimental/variant_extract.cu
+  src/io/parquet/experimental/variant_path.cpp
   src/io/parquet/expression_transform_helpers.cpp
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu

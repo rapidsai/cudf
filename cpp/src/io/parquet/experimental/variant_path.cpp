@@ -13,7 +13,7 @@
 #include <string>
 #include <system_error>
 
-namespace cudf::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
@@ -139,4 +139,4 @@ std::vector<variant_path_step> parse_variant_path(std::string_view path)
   return steps;
 }
 
-}  // namespace cudf::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail
