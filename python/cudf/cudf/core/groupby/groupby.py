@@ -3028,8 +3028,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 bool_col = col != 0
             # Normalize away pandas-extension bool dtypes so the downstream
             # aggregation always sees ``np.bool_``.
-            if bool_col.dtype != bool_dtype:
-                bool_col = ColumnBase.create(bool_col.plc_column, bool_dtype)
+            bool_col = bool_col.astype(bool_dtype, copy=False)
             if not skipna:
                 bool_col = bool_col.fillna(True)
             return bool_col
