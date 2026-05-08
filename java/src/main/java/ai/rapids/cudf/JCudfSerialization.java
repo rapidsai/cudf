@@ -904,10 +904,16 @@ public class JCudfSerialization {
       return ret;
     } finally {
       if (!success) {
-        for (int i = 0; i < onHost.length; i++) {
-          if (onHost[i] != null) {
-            onHost[i].close();
-            onHost[i] = null;
+        // Async D->H copies may still be in flight into these host buffers;
+        // sync before closing to avoid a use-after-free on pinned memory.
+        try {
+          Cuda.DEFAULT_STREAM.sync();
+        } finally {
+          for (int i = 0; i < onHost.length; i++) {
+            if (onHost[i] != null) {
+              onHost[i].close();
+              onHost[i] = null;
+            }
           }
         }
       }

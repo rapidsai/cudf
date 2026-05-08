@@ -5517,14 +5517,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         currValidity.close();
       }
       if (needsCleanup) {
-        if (hostData != null) {
-          hostData.close();
-        }
-        if (hostOffsets != null) {
-          hostOffsets.close();
-        }
-        if (hostValid != null) {
-          hostValid.close();
+        // Async D->H copies may still be in flight into these host buffers;
+        // sync before closing to avoid a use-after-free on pinned memory.
+        try {
+          stream.sync();
+        } finally {
+          for (HostColumnVectorCore child : children) {
+            if (child != null) {
+              child.close();
+            }
+          }
+          if (hostData != null) {
+            hostData.close();
+          }
+          if (hostOffsets != null) {
+            hostOffsets.close();
+          }
+          if (hostValid != null) {
+            hostValid.close();
+          }
         }
       }
     }
@@ -5547,6 +5558,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
+      List<HostColumnVectorCore> children = null;
       BaseDeviceMemoryBuffer valid = getValid();
       BaseDeviceMemoryBuffer offsets = getOffsets();
       BaseDeviceMemoryBuffer data = null;
@@ -5592,7 +5604,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
             hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
-          List<HostColumnVectorCore> children = new ArrayList<>();
+          children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
               children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
@@ -5614,14 +5626,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           valid.close();
         }
         if (needsCleanup) {
-          if (hostOffsetsBuffer != null) {
-            hostOffsetsBuffer.close();
-          }
-          if (hostDataBuffer != null) {
-            hostDataBuffer.close();
-          }
-          if (hostValidityBuffer != null) {
-            hostValidityBuffer.close();
+          // Async D->H copies may still be in flight into these host buffers;
+          // sync before closing to avoid a use-after-free on pinned memory.
+          try {
+            stream.sync();
+          } finally {
+            if (children != null) {
+              for (HostColumnVectorCore child : children) {
+                if (child != null) {
+                  child.close();
+                }
+              }
+            }
+            if (hostOffsetsBuffer != null) {
+              hostOffsetsBuffer.close();
+            }
+            if (hostDataBuffer != null) {
+              hostDataBuffer.close();
+            }
+            if (hostValidityBuffer != null) {
+              hostValidityBuffer.close();
+            }
           }
         }
       }
