@@ -31,7 +31,7 @@ template <bool IsOuter, typename Ref>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve(probe_key_type const* keys,
-                            cuda::std::int64_t n,
+                            thread_index_type n,
                             size_type const* match_counts,
                             Ref ref,
                             size_type left_offset,

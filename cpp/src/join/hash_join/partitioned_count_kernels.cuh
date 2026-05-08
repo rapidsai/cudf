@@ -39,7 +39,7 @@ namespace cudf::detail {
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   partitioned_count_kernel(probe_key_type const* __restrict__ keys,
-                           cuda::std::int64_t n,
+                           thread_index_type n,
                            size_type* __restrict__ output,
                            Ref ref)
 {
@@ -83,7 +83,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 
 template <bool IsOuter, typename Ref>
 void launch_partitioned_count(probe_key_type const* keys,
-                              cuda::std::int64_t n,
+                              thread_index_type n,
                               size_type* output,
                               Ref ref,
                               rmm::cuda_stream_view stream)

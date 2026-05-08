@@ -57,7 +57,7 @@ __device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   partitioned_retrieve_kernel(probe_key_type const* __restrict__ input_probe,
-                              cuda::std::int64_t n,
+                              thread_index_type n,
                               size_type left_offset,
                               size_type* __restrict__ left_output,
                               size_type* __restrict__ right_output,
@@ -95,22 +95,20 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto atomic_counter = cuda::atomic_ref<size_type, cuda::thread_scope_device>{*output_counter};
 
   auto flush_buffers = [&](auto const& tile) {
-    size_type offset = 0;
-    auto const count = counters[flushing_tile_id];
-    auto const rank  = tile.thread_rank();
-    if (rank == 0) {
-      offset = atomic_counter.fetch_add(static_cast<size_type>(count), cuda::memory_order_relaxed);
-    }
-    offset = tile.shfl(offset, 0);
+    auto const count  = counters[flushing_tile_id];
+    auto const offset = cg::invoke_one_broadcast(tile, [&]() {
+      return atomic_counter.fetch_add(static_cast<size_type>(count), cuda::memory_order_relaxed);
+    });
+    auto const rank   = tile.thread_rank();
     for (int i = rank; i < count; i += tile.size()) {
       left_output[offset + i]  = buffers[flushing_tile_id][i].first;
       right_output[offset + i] = buffers[flushing_tile_id][i].second;
     }
   };
 
-  auto const grid_stride_tiles = static_cast<cuda::std::int64_t>(gridDim.x) * tiles_in_block;
+  auto const grid_stride_tiles = static_cast<thread_index_type>(gridDim.x) * tiles_in_block;
   auto idx =
-    static_cast<cuda::std::int64_t>(blockIdx.x) * tiles_in_block + probing_tile.meta_group_rank();
+    static_cast<thread_index_type>(blockIdx.x) * tiles_in_block + probing_tile.meta_group_rank();
 
   while (flushing_tile.any(idx < n)) {
     bool const active = idx < n;
@@ -214,7 +212,7 @@ template <bool IsOuter, typename Ref>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve(probe_key_type const* keys,
-                            cuda::std::int64_t n,
+                            thread_index_type n,
                             size_type const* match_counts,
                             Ref ref,
                             size_type left_offset,

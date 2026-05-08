@@ -103,7 +103,7 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
   // launch_partitioned_retrieve reduces match counts to compute output size
   // (total = last_offset + last_count), allocates output buffers, and launches the kernel.
   auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
-  auto const n                 = static_cast<cuda::std::int64_t>(partition_size);
+  auto const n                 = static_cast<thread_index_type>(partition_size);
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
