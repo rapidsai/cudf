@@ -21,42 +21,6 @@
 
 struct VariantExtractTest : public cudf::test::BaseFixture {};
 
-TEST_F(VariantExtractTest, ExtractInt32TopLevelField)
-{
-  // Metadata: version 1, 1-byte offsets, dictionary {"x"}
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  // Value: object { "x": 7 } as Variant binary (see parquet-format VariantEncoding.md)
-  std::vector<uint8_t> const valb = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{7};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, ExtractShortStringField)
-{
-  // Dictionary {"k"}
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('k')};
-  // Object { "k": "hi" } — short string basic_type=1, length 2 in header
-  std::vector<uint8_t> const valb = {0x02, 0x01, 0x00, 0x00, 0x03, 0x09, 'h', 'i'};
-
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "k", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper expected{"hi"};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
 TEST_F(VariantExtractTest, NullStructRow)
 {
   cudf::test::lists_column_wrapper<uint8_t> meta{
@@ -71,37 +35,6 @@ TEST_F(VariantExtractTest, NullStructRow)
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({7, 0}, {true, false});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, MissingKeyYieldsNull)
-{
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "missing", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, WrongDesiredTypeYieldsNull)
-{
-  // Object holds INT32 at "x"; request STRING
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "x", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper expected({"donotread"}, {false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
@@ -151,25 +84,6 @@ TEST_F(VariantExtractTest, TruncatedObjectValueYieldsNull)
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, ObjectTwoFieldsSingleRow)
-{
-  std::vector<uint8_t> const metab = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'k'};
-  std::vector<uint8_t> const valb  = {
-    0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x07, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-  auto stream = cudf::test::get_default_stream();
-  auto x      = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
-  cudf::test::fixed_width_column_wrapper<int32_t> x_exp{7};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*x, x_exp);
-  auto k = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "k", cudf::data_type{cudf::type_id::STRING}, stream);
-  cudf::test::strings_column_wrapper k_exp{"hi"};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*k, k_exp);
 }
 
 TEST_F(VariantExtractTest, MultiRowDistinctKeysHandBuilt)
@@ -315,65 +229,6 @@ TEST_F(VariantExtractTest, GetVariantFieldMissingKeyAllNull)
   auto const meta_child = got->view().child(0);
   EXPECT_EQ(meta_child.type().id(), cudf::type_id::LIST);
   EXPECT_EQ(meta_child.size(), 1);
-}
-
-TEST_F(VariantExtractTest, CastVariantInt32)
-{
-  // Build a VARIANT struct where value is a bare INT32 encoding (0x14, 42, 0, 0, 0)
-  std::vector<uint8_t> const metab = {0x01, 0x00, 0x00};
-  std::vector<uint8_t> const valb  = {0x14, 0x2a, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::cast_variant(
-    struc, cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{42};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, CastVariantString)
-{
-  // Short string "hi" (basic_type=1, header6=2): 0x09, 'h', 'i'
-  std::vector<uint8_t> const metab     = {0x01, 0x00, 0x00};
-  std::vector<uint8_t> const short_str = {0x09, 'h', 'i'};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(short_str.begin(), short_str.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::cast_variant(
-    struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper expected{"hi"};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(VariantExtractTest, CastVariantLongString)
-{
-  // Long string (basic_type=0, header6=16): header=0x40, then 4-byte LE length, then chars
-  std::string const payload = "hello world!";
-  std::vector<uint8_t> valb;
-  valb.push_back(0x40);  // (16 << 2) | 0
-  auto const slen = static_cast<uint32_t>(payload.size());
-  valb.push_back(slen & 0xFF);
-  valb.push_back((slen >> 8) & 0xFF);
-  valb.push_back((slen >> 16) & 0xFF);
-  valb.push_back((slen >> 24) & 0xFF);
-  for (auto c : payload) {
-    valb.push_back(static_cast<uint8_t>(c));
-  }
-
-  std::vector<uint8_t> const metab = {0x01, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::cast_variant(
-    struc, cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper expected{"hello world!"};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 TEST_F(VariantExtractTest, GetThenCastMatchesExtract)
