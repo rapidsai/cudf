@@ -145,13 +145,6 @@ def test_groupby_sorted_keys(
     exprs,
     request,
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            is_streaming_engine(engine),
-            strict=False,
-            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
-        )
-    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))
@@ -163,16 +156,24 @@ def test_groupby_sorted_keys(
     sort_keys = list(schema.keys())[: len(keys)]
     # Multiple keys don't do sorting
     qsorted = q.sort(*sort_keys)
+    # https://github.com/rapidsai/cudf/issues/21642#issuecomment-4153202939
+    check_row_order = not is_streaming_engine(engine)
     if len(keys) > 1:
         # https://github.com/pola-rs/polars/issues/17556
         # Can't assert that the query without post-sorting fails,
         # since it _might_ pass.
-        assert_gpu_result_equal(qsorted, engine=engine, check_exact=False)
+        assert_gpu_result_equal(
+            qsorted, engine=engine, check_exact=False, check_row_order=check_row_order
+        )
     elif schema[sort_keys[0]] == pl.Boolean():
         # Boolean keys don't do sorting, so we get random order
-        assert_gpu_result_equal(qsorted, engine=engine, check_exact=False)
+        assert_gpu_result_equal(
+            qsorted, engine=engine, check_exact=False, check_row_order=check_row_order
+        )
     else:
-        assert_gpu_result_equal(q, engine=engine, check_exact=False)
+        assert_gpu_result_equal(
+            q, engine=engine, check_exact=False, check_row_order=check_row_order
+        )
 
 
 def test_groupby_len(engine: pl.GPUEngine, df, keys):
