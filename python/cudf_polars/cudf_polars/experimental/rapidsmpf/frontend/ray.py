@@ -14,10 +14,7 @@ import ray
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
-from rapidsmpf.config import (
-    Options,
-    get_environment_variables,
-)
+from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
@@ -31,6 +28,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
     check_reserved_keys,
     evaluate_on_rank,
+    resolve_rapidsmpf_options,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -93,12 +91,8 @@ def evaluate_pipeline_ray_mode(
     Raises
     ------
     RuntimeError
-        If the configured executor runtime is not ``"rapidsmpf"``.
-    RuntimeError
         If ``config_options.executor.ray_context`` is not set.
     """
-    if config_options.executor.runtime != "rapidsmpf":
-        raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.ray_context is None:
         raise RuntimeError("ray_context must be set when cluster='ray'")
     rank_actors = config_options.executor.ray_context.rank_actors
@@ -251,6 +245,31 @@ class RankActor:
         # Set the current RMM device resource so all temporary allocations
         # in libcudf also use the same memory resource.
         rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
+
+    def reset(self, *, rapidsmpf_options_as_bytes: bytes) -> None:
+        """
+        Rebuild the streaming Context with new options.
+
+        Must be called collectively on all actors. A barrier ensures no
+        rank tears down its Context while peers may still be using it.
+
+        Parameters
+        ----------
+        rapidsmpf_options_as_bytes
+            Serialized :class:`Options` to install.
+        """
+        if self._ctx is None:
+            raise RuntimeError("reset() requires setup_worker() to have run")
+        assert self._comm is not None
+        # Collective: all ranks idle before any rank tears down its Context.
+        if self._comm.nranks > 1:
+            barrier(self._comm)
+        self._ctx.shutdown()
+        self._ctx = None
+        self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, self._rapidsmpf_options
+        )
 
     def shutdown(self) -> None:
         """
@@ -508,13 +527,9 @@ class RayEngine(StreamingEngine):
             "memory_resource_config", None
         )
 
-        rapidsmpf_options = (
+        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
             rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
-        )
-        rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
-        rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
+        ).serialize()
 
         exit_stack = contextlib.ExitStack()
         if not ray.is_initialized():
@@ -567,7 +582,6 @@ class RayEngine(StreamingEngine):
                 nranks=nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "ray",
                     "ray_context": RayContext(rank_actors),
                 },
@@ -577,6 +591,57 @@ class RayEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """Reset the engine; see :meth:`StreamingEngine._reset` for the contract."""
+        if self._rank_actors is None:
+            raise RuntimeError("Cannot reset a shut-down engine")
+        super()._reset(
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options=engine_options,
+        )
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
+            rapidsmpf_options
+        ).serialize()
+
+        # Reset all actor Contexts collectively. ``ray.get`` blocks until
+        # every actor's reset returns; the per-actor barrier inside
+        # :meth:`RankActor.reset` synchronizes the teardown across ranks.
+        ray.get(
+            [
+                rank.reset.remote(
+                    rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+                )
+                for rank in self._rank_actors
+            ]
+        )
+
+        # Re-run ``StreamingEngine.__init__`` on the existing instance to
+        # reconfigure the polars ``GPUEngine`` layer (``self.config``,
+        # ``self.device``, etc.) with the new options. Pass the existing
+        # ``self._exit_stack`` so any registered shutdown callbacks
+        # (e.g. ``ray.shutdown`` if this engine bootstrapped Ray itself)
+        # remain registered.
+        StreamingEngine.__init__(
+            self,
+            nranks=len(self._rank_actors),
+            executor_options={
+                **executor_options,
+                "cluster": "ray",
+                "ray_context": RayContext(self._rank_actors),
+            },
+            engine_options=engine_options,
+            exit_stack=self._exit_stack,
+        )
 
     @classmethod
     def from_options(
@@ -680,6 +745,12 @@ class RayEngine(StreamingEngine):
             return  # already shut down; idempotent
         exceptions: list[Exception] = []
         try:
+            # If Ray is no longer initialized (for example, if ``ray.shutdown()`` was
+            # called before ``RayEngine.shutdown()``), the actors are gone as well.
+            # Calling ``.remote()`` in this state would trigger Ray's ``auto_init_hook``
+            # and start a new cluster.
+            if not ray.is_initialized():
+                return
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:
                 try:

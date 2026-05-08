@@ -67,6 +67,7 @@ void table_to_array_impl(table_view const& input,
 
   cudf::detail::batched_memcpy_async(
     d_srcs.begin(), d_dsts.begin(), sizes, num_columns, stream.value());
+  stream.synchronize();  // ensures h_srcs and h_dsts are not destroyed before the copy is done
 }
 
 struct table_to_array_dispatcher {

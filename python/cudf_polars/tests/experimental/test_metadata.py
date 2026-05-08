@@ -18,6 +18,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
     maybe_remap_partitioning,
@@ -48,40 +49,47 @@ def right() -> pl.LazyFrame:
 
 
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "broadcast_join_limit": 2,
-                "dynamic_planning": None,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "broadcast_join_limit": 10,
-                "dynamic_planning": None,
-            }
-        },
+        StreamingOptions(
+            max_rows_per_partition=1,
+            broadcast_join_limit=2,
+            dynamic_planning=None,
+        ),
+        StreamingOptions(
+            max_rows_per_partition=1,
+            broadcast_join_limit=10,
+            dynamic_planning=None,
+        ),
     ],
-    indirect=True,
 )
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    streaming_engine,
+    spmd_engine_factory,
+    options,
 ) -> None:
-    config_options = ConfigOptions.from_polars_engine(streaming_engine)
+    # Pinned to SPMD: ``ChannelMetadata.__reduce_cython__`` can't pickle
+    # ``self._handle`` across worker/actor processes, so the
+    # ``metadata_collector`` round-trip fails on Dask and Ray.
+    #
+    # When https://github.com/rapidsai/cudf/pull/22394 lands, dedup of
+    # replicated outputs moves to the Dask/Ray frontends and the
+    # ``duplicated`` flag's semantics change to "every rank holds the
+    # data". Revisit the ``len(metadata_collector) == 1`` and
+    # ``metadata.duplicated is False`` assertions below, and reconsider
+    # whether this test can widen to ``streaming_engine_factory``.
+    engine = spmd_engine_factory(options)
+    config_options = ConfigOptions.from_polars_engine(engine)
     broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
         right,
         on="y",
         how="left",
     ).filter(pl.col("x") > pl.col("zz"))
-    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
-    left_count = left.collect().height
-    right_count = right.collect().height
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    left_count = left.collect(engine=engine).height
+    right_count = right.collect(engine=engine).height
 
     metadata_collector = evaluate_logical_plan(
         ir, config_options, collect_metadata=True

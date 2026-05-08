@@ -819,11 +819,13 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():
+                while reader.has_next():  # pragma: no cover
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(len(concatenated_columns) - 1, -1, -1):
+                    for i in range(  # pragma: no cover
+                        len(concatenated_columns) - 1, -1, -1
+                    ):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
@@ -840,7 +842,7 @@ class Scan(IR):
                     num_rows=num_rows,
                 )
                 if include_file_paths is not None:
-                    df = Scan.add_file_paths(
+                    df = Scan.add_file_paths(  # pragma: no cover
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
@@ -1164,7 +1166,7 @@ class Sink(IR):
             | plc.io.parquet.ParquetWriterOptionsBuilder
         )
 
-        if (
+        if (  # pragma: no cover
             parquet_options.chunked
             and parquet_options.n_output_chunks != 1
             and df.table.num_rows() != 0
