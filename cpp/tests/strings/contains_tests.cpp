@@ -401,6 +401,20 @@ TEST_F(StringsContainsTests, CountTest)
   }
 }
 
+TEST_F(StringsContainsTests, CountEmptyMatching)
+{
+  auto input    = cudf::test::strings_column_wrapper({"hello", "world", "", "abc"});
+  auto sv       = cudf::strings_column_view(input);
+  auto patterns = std::vector<std::string>{
+    "a*", "X?", "b{0,}", "()", "(?:)", "^", "$", "^$", "\\b", "\\B", "[a-z]*"};
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>({6, 6, 1, 4});
+  for (auto pattern : patterns) {
+    auto prog    = cudf::strings::regex_program::create("a*");
+    auto results = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, FixedQuantifier)
 {
   auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
