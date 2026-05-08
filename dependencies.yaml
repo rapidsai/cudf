@@ -1302,7 +1302,10 @@ dependencies:
               - *rapidsmpf_unsuffixed
   depends_on_ray:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: conda
+        packages:
+          - ray-default>=2.55.1
+      - output_types: [requirements, pyproject]
         packages:
           - ray>=2.55.1
   depends_on_rapids_logger:
