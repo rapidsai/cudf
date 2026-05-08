@@ -115,7 +115,8 @@ NVBENCH_BENCH_TYPES(nvbench_hm_inner_join,
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000})
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -127,7 +128,8 @@ NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000})
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -139,4 +141,5 @@ NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000});
+  .add_int64_axis("multiplicity", {100, 1'000, 10'000, 50'000})
+  .add_int64_axis("skip_large_sizes", {1});

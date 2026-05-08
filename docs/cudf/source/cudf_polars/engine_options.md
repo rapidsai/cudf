@@ -52,7 +52,7 @@ For example, the environment variable
 `max_rows_per_partition` to use if it isn't overridden through
 `executor_options`.
 
-For boolean options, like `rapidsmpf_spill`, the values `{"1", "true", "yes", "y"}`
+For boolean options, like `sink_to_directory`, the values `{"1", "true", "yes", "y"}`
 are considered `True` and `{"0", "false", "no", "n"}` are considered `False`.
 
 See [Configuration Reference](#cudf-polars-api) for a full list of options, and

@@ -19,10 +19,7 @@ import pynvml
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
-from rapidsmpf.config import (
-    Options,
-    get_environment_variables,
-)
+from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
@@ -35,7 +32,8 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
-    execute_ir_on_rank,
+    evaluate_on_rank,
+    resolve_rapidsmpf_options,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -44,14 +42,13 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
@@ -295,6 +292,47 @@ def _teardown_worker(
             delattr(dask_worker, attr)
 
 
+def _reset_worker(
+    rapidsmpf_options_as_bytes: bytes,
+    *,
+    uid: str,
+    dask_worker: distributed.Worker | None = None,
+) -> None:
+    """
+    Rebuild the streaming Context with new options.
+
+    Must be called collectively on all workers. A barrier ensures no
+    worker tears down its Context while peers may still be using it.
+
+    Parameters
+    ----------
+    rapidsmpf_options_as_bytes
+        Serialized :class:`Options` to install.
+    uid
+        Cluster instance identifier used to look up the per-worker context.
+    dask_worker
+        Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    """
+    assert dask_worker is not None
+    attr = f"_cudf_polars_mp_context_{uid}"
+    mp_ctx: _WorkerContext | None = getattr(dask_worker, attr, None)
+    if mp_ctx is None:
+        raise RuntimeError(f"_reset_worker called before _setup_worker for uid={uid}")
+    assert mp_ctx.comm is not None
+    assert mp_ctx.ctx is not None
+    # Collective: all ranks idle before any rank tears down its Context.
+    if mp_ctx.comm.nranks > 1:
+        barrier(mp_ctx.comm)
+    # Explicit shutdown is thread-affine. ``distributed.worker.run``
+    # dispatches sync work onto the worker's event-loop thread, which is
+    # the same thread that built the Context in ``_setup_worker``.
+    mp_ctx.ctx.shutdown()
+    mp_ctx.ctx = None
+    options = Options.deserialize(rapidsmpf_options_as_bytes)
+    mp_ctx.ctx = Context.from_options(mp_ctx.comm.logger, mp_ctx.mr, options)
+    rmm.mr.set_current_device_resource(mp_ctx.ctx.br().device_mr)
+
+
 def _get_statistics(
     *, clear: bool, uid: str, dask_worker: distributed.Worker | None = None
 ) -> tuple[int, Statistics]:
@@ -331,30 +369,25 @@ def _get_statistics(
 
 def _worker_evaluate(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     uid: str,
     collect_metadata: bool = False,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
-    Execute a Polars IR query on this Dask worker's GPU.
+    Lower and execute a Polars IR query on this Dask worker's GPU.
+
+    IR lowering is performed collectively across all workers: rank 0
+    collects scan statistics and allgathers them, then every worker
+    lowers the graph independently.
 
     Parameters
     ----------
     ir
-        Root IR node.
-    partition_info
-        Per-node partition metadata.
+        pre-lowered root IR node.
     config_options
         Executor configuration (``dask_context`` is already stripped).
-    stats
-        Statistics collector.
-    collective_id_map
-        Mapping from IR nodes to collective operation IDs.
     uid
         Unique identifier for the cluster instance, used to look up the
         per-worker context attribute.
@@ -375,25 +408,19 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    return execute_ir_on_rank(
+    return evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
         ir,
-        partition_info,
         config_options,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 
 
 def evaluate_pipeline_dask_mode(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -401,24 +428,18 @@ def evaluate_pipeline_dask_mode(
     """
     Evaluate a RapidsMPF streaming pipeline in Dask mode.
 
-    Dispatches :func:`_worker_evaluate` to every Dask worker via
-    :meth:`distributed.Client.run`. Each worker executes the full pipeline
-    on its local GPU and participates in collective operations through the
-    shared UCXX communicator. Per-worker outputs are concatenated on the
-    client before being returned.
+    The pre-lowered IR is dispatched to every Dask worker via
+    :meth:`distributed.Client.run`.  Each worker collectively lowers the
+    graph (rank 0 gathers statistics; all ranks allgather them) and then
+    executes the resulting pipeline on its local GPU.  Per-worker outputs
+    are concatenated on the client before being returned.
 
     Parameters
     ----------
     ir
-        The IR node.
-    partition_info
-        The partition information.
+        The pre-lowered IR node.
     config_options
         Executor configuration, including the ``dask_context`` handle.
-    stats
-        The statistics collector.
-    collective_id_map
-        Mapping from IR nodes to their pre-allocated collective operation IDs.
     collect_metadata
         Whether to collect runtime metadata.
     query_id
@@ -451,10 +472,7 @@ def evaluate_pipeline_dask_mode(
     result_map = dask_context.client.run(
         functools.partial(_worker_evaluate, uid=dask_context.rapidsmpf_id),
         ir,
-        partition_info,
         worker_config,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 
@@ -584,13 +602,9 @@ class DaskEngine(StreamingEngine):
             "memory_resource_config", None
         )
 
-        rapidsmpf_options = (
+        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
             rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
-        )
-        rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
-        rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
+        ).serialize()
 
         # Unique identifier for this cluster instance; namespaces the per-worker
         # attribute so multiple DaskEngine contexts can coexist on the same workers.
@@ -674,11 +688,58 @@ class DaskEngine(StreamingEngine):
             nranks=nranks,
             executor_options={
                 **executor_options,
-                "runtime": "rapidsmpf",
                 "cluster": "dask",
                 "dask_context": dask_ctx,
             },
             engine_options={**engine_options, "memory_resource": None},
+        )
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """Reset the engine; see :meth:`StreamingEngine._reset` for the contract."""
+        if self._dask_context is None:
+            raise RuntimeError("Cannot reset a shut-down engine")
+        super()._reset(
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options=engine_options,
+        )
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+
+        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
+            rapidsmpf_options
+        ).serialize()
+
+        ctx = self._dask_context
+        # Reset all worker Contexts collectively. ``client.run`` blocks
+        # until every worker's reset returns; the per-worker barrier
+        # inside :func:`_reset_worker` synchronizes the teardown across
+        # workers.
+        ctx.client.run(
+            functools.partial(_reset_worker, uid=ctx.rapidsmpf_id),
+            rapidsmpf_options_as_bytes,
+        )
+
+        # Re-run ``StreamingEngine.__init__`` on the existing instance to
+        # reconfigure the polars ``GPUEngine`` layer (``self.config``,
+        # ``self.device``, etc.) with the new options. Pass the existing
+        # ``self._exit_stack`` so any registered callbacks survive.
+        StreamingEngine.__init__(
+            self,
+            nranks=self._nranks,
+            executor_options={
+                **executor_options,
+                "cluster": "dask",
+                "dask_context": ctx,
+            },
+            engine_options={**engine_options, "memory_resource": None},
+            exit_stack=self._exit_stack,
         )
 
     @classmethod

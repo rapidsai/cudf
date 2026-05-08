@@ -5,7 +5,7 @@
     "args": {
       "CUDA": "13.1",
       "PYTHON_PACKAGE_MANAGER": "pip",
-      "BASE": "rapidsai/devcontainers:26.06-cpp-cuda13.1"
+      "BASE": "rapidsai/devcontainers:26.06-cpp-cuda13.1-ucx1.19.0-openmpi5.0.10"
     }
   },
   "runArgs": [
@@ -27,7 +27,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs}"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs} ${localWorkspaceFolder}/../rapidsmpf"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -40,7 +40,8 @@
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../rapidsmpf,target=/home/coder/rapidsmpf,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {
