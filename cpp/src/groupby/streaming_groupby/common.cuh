@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "groupby/common/utils.hpp"
 #include "groupby/hash/helpers.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
@@ -108,42 +107,38 @@ struct n_table_comparator {
 };
 
 /*
- * insert_and_find on the main set for each batch row.  Writes the resident slot's
- * value to `target_indices[row_idx]` and returns 1 if this row inserted a new key,
- * 0 otherwise.  Also writes two side-output arrays:
- *   inserted_flags[row_idx] = whether this row won the CAS (used as the stencil
- *                               for the subsequent copy_if of winners)
- *   slot_offsets[row_idx]   = offset of the resident slot from `base`, or
- *                               CUDF_SIZE_TYPE_SENTINEL for null/excluded rows
+ * Predicate used by `thrust::copy_if` to compact the batch row indices of newly
+ * inserted keys in a single pass.  Each invocation calls `set_ref.insert_and_find`
+ * for one batch row, records the resident slot's value in `target_indices[row_idx]`
+ * and the slot offset in `slot_offsets[row_idx]` (or `CUDF_SIZE_TYPE_SENTINEL` for
+ * null/excluded rows), and returns true iff this row inserted a new key.  When
+ * the return is true `copy_if` writes `row_idx` to `batch_local_indices`; the
+ * total insert count is the iterator distance returned by `copy_if`.
  *
- * The return value is consumed by `thrust::transform_reduce` to count the number of
- * newly inserted keys in the same pass.  If the batch produces no new keys,
- * target_indices is already final.  If new keys exist, Pass 2 rewrites the affected
- * slots and the caller re-reads target_indices via slot_offsets in a single transform.
+ * If the batch produces no new keys, target_indices is already final.  If new
+ * keys exist, Pass 2 rewrites the affected slots and the caller re-reads
+ * target_indices via slot_offsets in a single transform.
  */
 template <typename SetRef>
-struct insert_and_map_fn {
+struct insert_and_check_fn {
   mutable SetRef set_ref;
   bitmask_type const* row_bitmask;
   size_type max_distinct_keys;
   size_type const* base;
   size_type* target_indices;
-  bool* inserted_flags;
   size_type* slot_offsets;
 
-  __device__ size_type operator()(size_type row_idx) const
+  __device__ bool operator()(size_type row_idx) const
   {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, row_idx)) {
       target_indices[row_idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-      inserted_flags[row_idx] = false;
       slot_offsets[row_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-      return 0;
+      return false;
     }
     auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + row_idx);
     target_indices[row_idx]     = *iter;
-    inserted_flags[row_idx]     = inserted;
     slot_offsets[row_idx]       = static_cast<size_type>(iter - base);
-    return inserted ? 1 : 0;
+    return inserted;
   }
 };
 
@@ -151,8 +146,7 @@ struct insert_and_map_fn {
  * Per-row hash producer used to populate the precomputed batch hash cache.
  * Returns 0 (a dummy value never read) for rows excluded by the null bitmask
  * under `null_policy::EXCLUDE`, avoiding wasted hash work for rows that won't
- * probe the set.  Cuco only consults the cache for rows whose `insert_and_map_fn`
- * actually called `insert_and_find`, so the dummy is invisible to it.
+ * probe the set.
  */
 template <typename RowHasher>
 struct conditional_hash_fn {
@@ -169,10 +163,7 @@ struct conditional_hash_fn {
 /*
  * Hasher backed by a precomputed cache, indexed by `idx - offset`.
  * In streaming_groupby `offset = max_distinct_keys`, so transient batch values
- * `max_distinct_keys + row_idx` resolve to `cache[row_idx]`.  Caching is faster
- * than inlining the row_hasher inside cuco's probe at high cardinality
- * (measured: ~10% throughput drop without the cache) — the row_hasher's
- * dispatch + nullable check inflates the cuco insert kernel.
+ * `max_distinct_keys + row_idx` resolve to `cache[row_idx]`.
  */
 struct offset_cache_hasher {
   hash_value_type const* cache;
@@ -192,16 +183,16 @@ struct offset_cache_hasher {
  */
 struct finalize_new_key_fn {
   size_type const*
-    batch_local_indices;           ///< batch-local row indices of new keys [new_distinct_keys]
-  size_type* base;                 ///< hash set storage base
-  size_type const* slot_offsets;   ///< slot offset per batch row [batch_size]
-  key_location_t* key_loc;         ///< {batch_id, row_in_compacted} per dense ID
-  size_type batch_id;              ///< the index of this batch in _compacted_batches
-  size_type distinct_keys_before;  ///< _distinct_keys prior to this batch
+    batch_local_indices;          ///< batch-local row indices of new keys [new_distinct_keys]
+  size_type* base;                ///< hash set storage base
+  size_type const* slot_offsets;  ///< slot offset per batch row [batch_size]
+  key_location_t* key_loc;        ///< {batch_id, row_in_compacted} per dense ID
+  size_type batch_id;             ///< the index of this batch in _compacted_batches
+  size_type dense_id_offset;      ///< first dense ID assigned to this batch's new keys
 
   __device__ void operator()(size_type r) const
   {
-    auto const dense_id    = distinct_keys_before + r;
+    auto const dense_id    = dense_id_offset + r;
     auto const batch_local = batch_local_indices[r];
 
     *(base + slot_offsets[batch_local]) = dense_id;
@@ -209,21 +200,15 @@ struct finalize_new_key_fn {
   }
 };
 
-/*
- * Read the dense ID at each batch row's resident slot, post-Pass-2.
- * Returns CUDF_SIZE_TYPE_SENTINEL for null/excluded rows (slot_offsets sentinel).
- */
-struct read_target_indices_fn {
+struct update_transient_target_indices_fn {
   size_type const* base;
   size_type const* slot_offsets;
+  size_type max_distinct_keys;
+  size_type* target_indices;
 
-  __device__ size_type operator()(size_type i) const
+  __device__ void operator()(size_type i) const
   {
-    auto const off = slot_offsets[i];
-    if (off == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-    }
-    return *(base + off);
+    if (target_indices[i] >= max_distinct_keys) { target_indices[i] = *(base + slot_offsets[i]); }
   }
 };
 

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "common.cuh"
+#include "groupby/common/utils.hpp"
 
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table_view.hpp>
@@ -21,7 +22,6 @@
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
-#include <thrust/transform_reduce.h>
 
 #include <string>
 
@@ -41,8 +41,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto const d_batch_hash     = batch_hasher_obj.device_hasher(has_null);
 
   // Compute the null-exclusion bitmask first so the hash cache pass can skip
-  // hashing rows that will be excluded — the dummy hash for excluded rows is
-  // never read by cuco because `insert_and_map_fn` short-circuits on those rows.
+  // hashing rows that will be excluded
   auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
   auto [bitmask_buffer, batch_bitmask] =
     skip_rows_with_nulls
@@ -50,7 +49,6 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
       : std::pair<rmm::device_buffer, bitmask_type const*>{rmm::device_buffer{0, stream}, nullptr};
 
   // Precompute batch hash values.  Caching is faster than inlining the row hasher
-  // inside cuco's probe at high cardinality.
   rmm::device_uvector<hash_value_type> batch_hash_cache(batch_size, stream, temp_mr);
   thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                     cuda::counting_iterator<size_type>(0),
@@ -63,32 +61,31 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto const batch_self_eq  = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
   auto const hasher         = offset_cache_hasher{batch_hash_cache.data(), _max_distinct_keys};
 
-  // Pass 1 — insert_and_find with transient encoding `_max_distinct_keys + row_idx`.
-  // Writes target_indices, inserted_flags, and slot_offsets, and returns the number
-  // of newly inserted keys.  slot_offsets stores 4-byte slot offsets (vs. 8-byte
-  // raw pointers) to halve temp memory.
+  // Pass 1 — fused insert_and_find + compact via `thrust::copy_if`.
+  // Side-effects in the predicate: writes target_indices and slot_offsets.
+  // Output: batch row indices of newly inserted keys, compacted into batch_local_indices.
+  // Count: iterator distance returned by copy_if.
+  // slot_offsets stores 4-byte slot offsets (vs. 8-byte raw pointers) to halve temp memory.
   auto* const base = _key_set->data();
   rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
-  rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
   rmm::device_uvector<size_type> slot_offsets(batch_size, stream, temp_mr);
+  rmm::device_uvector<size_type> batch_local_indices(batch_size, stream, temp_mr);
 
   // First batch has no compacted batches yet, so all slot values are transient (>=
   // _max_distinct_keys) and only the batch-self equality branch of n_table_comparator
   // can fire.  Bypass it with first_batch_comparator to skip the cross-table dispatch,
   // the cross-comparator build, and the dense-ID branches.
-  auto do_insert_and_map = [&](auto set_ref) {
-    return thrust::transform_reduce(rmm::exec_policy_nosync(stream, temp_mr),
-                                    cuda::counting_iterator<size_type>(0),
-                                    cuda::counting_iterator<size_type>(batch_size),
-                                    insert_and_map_fn{set_ref,
-                                                      batch_bitmask,
-                                                      _max_distinct_keys,
-                                                      base,
-                                                      target_indices.data(),
-                                                      inserted_flags.data(),
-                                                      slot_offsets.data()},
-                                    size_type{0},
-                                    cuda::std::plus<size_type>{});
+  auto do_insert_and_compact = [&](auto set_ref) {
+    return thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
+                           cuda::counting_iterator<size_type>(0),
+                           cuda::counting_iterator<size_type>(batch_size),
+                           batch_local_indices.begin(),
+                           insert_and_check_fn{set_ref,
+                                               batch_bitmask,
+                                               _max_distinct_keys,
+                                               base,
+                                               target_indices.data(),
+                                               slot_offsets.data()});
   };
 
   auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
@@ -96,25 +93,19 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   size_type new_distinct_keys = 0;
   if (_compacted_batches.empty()) {
     auto const first_batch_cmp = first_batch_comparator{batch_self_eq, _max_distinct_keys};
-    new_distinct_keys          = do_insert_and_map(set_ref_base.rebind_key_eq(first_batch_cmp));
+    auto const out_end         = do_insert_and_compact(set_ref_base.rebind_key_eq(first_batch_cmp));
+    new_distinct_keys          = static_cast<size_type>(out_end - batch_local_indices.begin());
   } else {
     auto d_cross_eqs = build_cross_comparators<has_nested>(
       preprocessed_batch, _preprocessed_batches, has_null, stream);
     auto const comparator =
       n_table_comparator{batch_self_eq, d_cross_eqs.data(), _key_loc->data(), _max_distinct_keys};
-    new_distinct_keys = do_insert_and_map(set_ref_base.rebind_key_eq(comparator));
+    auto const out_end = do_insert_and_compact(set_ref_base.rebind_key_eq(comparator));
+    new_distinct_keys  = static_cast<size_type>(out_end - batch_local_indices.begin());
   }
+  batch_local_indices.resize(new_distinct_keys, stream);
 
   if (new_distinct_keys > 0) {
-    // Stream compact: get the batch-local indices of newly inserted keys.
-    rmm::device_uvector<size_type> batch_local_indices(new_distinct_keys, stream, temp_mr);
-    thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
-                    cuda::counting_iterator<size_type>(0),
-                    cuda::counting_iterator<size_type>(batch_size),
-                    inserted_flags.begin(),
-                    batch_local_indices.begin(),
-                    cuda::std::identity{});
-
     // Check bounds BEFORE any persistent state mutation.
     CUDF_EXPECTS(_distinct_keys + new_distinct_keys <= _max_distinct_keys,
                  "Distinct key count (" + std::to_string(_distinct_keys + new_distinct_keys) +
@@ -133,13 +124,13 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
       cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
     // Store the compacted batch.
-    auto const new_batch_id         = static_cast<size_type>(_compacted_batches.size());
-    auto const distinct_keys_before = _distinct_keys;
+    auto const new_batch_id    = static_cast<size_type>(_compacted_batches.size());
+    auto const dense_id_offset = _distinct_keys;
     _compacted_batches.push_back(std::move(compacted));
     _preprocessed_batches.push_back(preprocessed_compacted);
 
-    // Pass 2 — fused: relaxed atomic store rewrites slots from transient encoding
-    //                to dense IDs, and writes the {batch_id, row} companion entry.
+    // Pass 2 — fused: rewrites slots from transient encoding to dense IDs and
+    // writes the {batch_id, row} companion entry.
     thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<size_type>(0),
                        new_distinct_keys,
@@ -148,17 +139,13 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                                            slot_offsets.data(),
                                            _key_loc->data(),
                                            new_batch_id,
-                                           distinct_keys_before});
+                                           dense_id_offset});
 
-    // Re-read target_indices for rows whose slot held a transient value during Pass 1
-    // (winners and intra-batch duplicates of new keys).  After Pass 2 every slot holds
-    // its final dense ID.  `transform(counting_iterator, ...)` is used instead of
-    // `tabulate` to keep nvcc compile times reasonable (see cudf PR #21793).
-    thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
-                      cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(batch_size),
-                      target_indices.begin(),
-                      read_target_indices_fn{base, slot_offsets.data()});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
+                       cuda::counting_iterator<size_type>(0),
+                       batch_size,
+                       update_transient_target_indices_fn{
+                         base, slot_offsets.data(), _max_distinct_keys, target_indices.data()});
 
     _distinct_keys += new_distinct_keys;
   }

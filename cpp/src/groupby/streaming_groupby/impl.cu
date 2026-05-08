@@ -4,6 +4,7 @@
  */
 
 #include "common.cuh"
+#include "groupby/common/utils.hpp"
 #include "groupby/hash/extract_single_pass_aggs.hpp"
 #include "groupby/hash/hash_compound_agg_finalizer.hpp"
 #include "groupby/hash/output_utils.hpp"
