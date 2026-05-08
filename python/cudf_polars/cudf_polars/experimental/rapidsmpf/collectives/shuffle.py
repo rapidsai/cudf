@@ -25,8 +25,6 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import pylibcudf as plc
-
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -39,7 +37,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.sort import find_sort_splits
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -47,9 +44,9 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
 
+    import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
@@ -190,7 +187,7 @@ class ShuffleManager:
         return self.shuffler.extract(partition_id)
 
 
-class LocalShuffle:
+class LocalRepartitioner:
     """
     Local re-partitioner that wraps a completed :class:`ShuffleManager`.
 
@@ -227,7 +224,16 @@ class LocalShuffle:
     async def insert_chunks_hash(
         self, *, columns_to_hash: tuple[int, ...], stream: Stream
     ) -> None:
-        """Re-partition items by hash of the given columns."""
+        """
+        Re-partition items by hash of the given columns.
+
+        Parameters
+        ----------
+        columns_to_hash
+            Tuple of column indices to use for hashing.
+        stream
+            CUDA stream for the unpack operation.
+        """
         async with self._local_shuffle.inserting() as inserter:
             for table in self._iter_chunks(stream):
                 inserter.insert_hash(
@@ -235,35 +241,6 @@ class LocalShuffle:
                         table, stream, exclusive_view=True, br=self._br
                     ),
                     columns_to_hash,
-                )
-
-    async def insert_chunks_boundaries(
-        self,
-        *,
-        sort_boundaries_df: DataFrame,
-        by_indices: tuple[int, ...],
-        column_order: list,
-        null_order: list,
-        stream: Stream,
-    ) -> None:
-        """Re-partition items by sort boundaries."""
-        async with self._local_shuffle.inserting() as inserter:
-            for seq_num, table in enumerate(self._iter_chunks(stream)):
-                sort_cols_tbl = plc.Table([table.columns()[i] for i in by_indices])
-                splits = find_sort_splits(
-                    sort_cols_tbl,
-                    sort_boundaries_df.table,
-                    seq_num,
-                    column_order,
-                    null_order,
-                    stream=stream,
-                    chunk_relative=True,
-                )
-                inserter.insert_split(
-                    TableChunk.from_pylibcudf_table(
-                        table, stream, exclusive_view=True, br=self._br
-                    ),
-                    splits,
                 )
 
     def local_partitions(self) -> list[int]:
