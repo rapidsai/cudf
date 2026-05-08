@@ -11,7 +11,7 @@
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-starburst-${localWorkspaceFolderBasename}-26.06-cuda13.1-pip",
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-26.06-cuda13.1-pip",
     "--ulimit",
     "nofile=500000"
   ],
@@ -41,8 +41,7 @@
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda13.1-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../rapidsmpf,target=/home/coder/rapidsmpf,type=bind,consistency=consistent",
-    "source=/raid/mhaseeb/data,target=/data,type=bind,readonly"
+    "source=${localWorkspaceFolder}/../rapidsmpf,target=/home/coder/rapidsmpf,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {
