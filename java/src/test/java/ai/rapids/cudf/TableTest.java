@@ -9605,6 +9605,67 @@ public class TableTest extends CudfTestBase {
     return null;
   }
 
+  @Test
+  void testParquetWriteFieldIdOnNestedArrayOfBinaryAndString() throws IOException {
+    // Regression test for cudf #22347: the original Spark-Rapids/Iceberg
+    // failure ("Missing required field ... optional binary element is not in
+    // the store") came from array<binary> / array<string> columns where
+    // iceberg looks the leaf up by its parquet field id. Lock that nested path
+    // down here in addition to the top-level cases.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withListColumn(listBuilder("arr_bin", true, 10)
+            .withBinaryColumn("element", true, 11)
+            .build())
+        .withListColumn(listBuilder("arr_str", true, 20)
+            .withColumn(true, "element", 21)
+            .build())
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-nested", ".parquet");
+    try {
+      HostColumnVector.ListType binEl = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType arrBinType = new HostColumnVector.ListType(true, binEl);
+      HostColumnVector.ListType arrStrType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (ColumnVector arrBinCol = ColumnVector.fromLists(arrBinType,
+               Arrays.asList(asList("ABC"), asList("DEF")),
+               Arrays.asList(asList("GHI")));
+           ColumnVector arrStrCol = ColumnVector.fromLists(arrStrType,
+               Arrays.asList("a", "b"),
+               Arrays.asList("c"));
+           Table t0 = new Table(arrBinCol, arrStrCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // Outer LIST ids must land on the outer list groups.
+        assertEquals(10, schema.getFields().get(0).getId().intValue());
+        assertEquals(20, schema.getFields().get(1).getId().intValue());
+
+        // Outer ids must not leak into nested descendants.
+        assertNoNestedIdEquals(schema.getFields().get(0), 10);
+        assertNoNestedIdEquals(schema.getFields().get(1), 20);
+
+        // Inner element ids must reach the leaf — this is the iceberg lookup
+        // path that broke before the fix on array<binary>.
+        Type binElement = findDescendantByName(schema.getFields().get(0), "element");
+        assertNotNull(binElement);
+        assertEquals(11, binElement.getId().intValue());
+        Type strElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(strElement);
+        assertEquals(21, strElement.getId().intValue());
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
   /** Return a column where DECIMAL64 has been up-casted to DECIMAL128 */
   private ColumnVector castDecimal64To128(ColumnView c) {
     DType dtype = c.getType();
