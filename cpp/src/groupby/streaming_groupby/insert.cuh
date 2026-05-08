@@ -92,7 +92,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
 
   if (_compacted_batches.empty()) {
-    do_insert_and_map(set_ref_base.rebind_key_eq(batch_self_eq));
+    auto const first_batch_cmp = first_batch_comparator{batch_self_eq, _max_distinct_keys};
+    do_insert_and_map(set_ref_base.rebind_key_eq(first_batch_cmp));
   } else {
     auto d_cross_eqs = build_cross_comparators<has_nested>(
       preprocessed_batch, _preprocessed_batches, has_null, stream);

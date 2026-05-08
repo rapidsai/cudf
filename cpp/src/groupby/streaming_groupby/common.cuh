@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "groupby/common/utils.hpp"
 #include "groupby/hash/helpers.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
@@ -63,6 +64,22 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
  * Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
  * and stored in a device array.  Self-comparisons use batch_self_eq.
  */
+/*
+ * Comparator for the first batch only.  All slot values are transient (encoded as
+ * `max_distinct_keys + row_idx`) since no dense IDs exist yet; this wrapper subtracts
+ * the offset and delegates to the batch self-equality.
+ */
+template <typename RowEqT>
+struct first_batch_comparator {
+  RowEqT batch_self_eq;
+  size_type max_distinct_keys;
+
+  __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
+  {
+    return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys);
+  }
+};
+
 template <typename RowEqT>
 struct n_table_comparator {
   RowEqT batch_self_eq;           ///< Self-comparator on the current batch table
