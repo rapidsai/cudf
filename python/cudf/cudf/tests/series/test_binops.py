@@ -422,10 +422,10 @@ def test_timedelta_invalid_ops():
 def test_timdelta_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         op(s, pd_tz_timestamp)
     date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         op(s, date_tz_scalar)
 
 
@@ -794,11 +794,11 @@ def test_datetime_invalid_ops():
 def test_datetime_binop_tz_timestamp(comparison_op):
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         comparison_op(s, pd_tz_timestamp)
 
     date_scalar = datetime.datetime.now(datetime.timezone.utc)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         comparison_op(s, date_scalar)
 
 

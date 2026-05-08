@@ -195,16 +195,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 self_tz = getattr(self.dtype, "tz", None)
                 if (other.tz is None) != (self_tz is None):
-                    if cudf.get_option("mode.pandas_compatible"):
-                        raise TypeError(
-                            f"Invalid comparison between dtype={self.dtype} "
-                            f"and {type(other).__name__}"
-                        )
-                if other.tz is not None and not is_dtype_obj_datetime_tz(
-                    self.dtype
-                ):
-                    raise NotImplementedError(
-                        "Binary operations with timezone aware operands is not supported."
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} "
+                        f"and {type(other).__name__}"
                     )
                 if other.tz is None:
                     other = other.to_numpy()
@@ -255,16 +248,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             if pa.types.is_timestamp(scalar.type):
                 self_tz = getattr(self.dtype, "tz", None)
                 if (scalar.type.tz is None) != (self_tz is None):
-                    if cudf.get_option("mode.pandas_compatible"):
-                        raise TypeError(
-                            f"Invalid comparison between dtype={self.dtype} "
-                            f"and {type(other).__name__}"
-                        )
-                if scalar.type.tz is not None and not is_dtype_obj_datetime_tz(
-                    self.dtype
-                ):
-                    raise NotImplementedError(
-                        "Binary operations with timezone aware operands is not supported."
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} "
+                        f"and {type(other).__name__}"
                     )
                 return scalar
             elif pa.types.is_duration(scalar.type):
