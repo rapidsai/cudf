@@ -568,11 +568,14 @@ public class ColumnWriterOptions {
    * named 'value'. The caller of this method doesn't need to worry about this as this method will
    * take care of this without the knowledge of the caller.
    *
-   * @param isNullable     is the returned map nullable.
+   * @param isNullable     is the returned map nullable. Primitive {@code boolean} (not
+   *                       {@code Boolean}) so a {@code null} can't slip through and trigger an
+   *                       unexpected {@link NullPointerException} when forwarded to
+   *                       {@link #listBuilder(String, boolean, int)}.
    * @param parquetFieldId the Parquet field ID to attach to the outer (list) column.
    */
   public static ColumnWriterOptions mapColumn(String name, ColumnWriterOptions key,
-                                              ColumnWriterOptions value, Boolean isNullable,
+                                              ColumnWriterOptions value, boolean isNullable,
                                               int parquetFieldId) {
     if (key.isNullable) {
       throw new IllegalArgumentException("key column can not be nullable");
