@@ -9,12 +9,11 @@ import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import warns_on_spmd
 
 
 @pytest.fixture
 def engine(streaming_engine_factory):
-    # ``fallback_mode="warn"`` overrides the small-blocksize baseline (which
-    # sets SILENT) so ``test_filter_non_pointwise`` can assert on the warning.
     return streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
     )
@@ -38,7 +37,9 @@ def test_filter_pointwise(df, engine):
 
 def test_filter_non_pointwise(df, engine):
     query = df.filter(pl.col("a") > pl.col("a").max())
-    with pytest.warns(
-        UserWarning, match="This filter is not supported for multiple partitions."
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match="This filter is not supported for multiple partitions.",
     ):
         assert_gpu_result_equal(query, engine=engine)
