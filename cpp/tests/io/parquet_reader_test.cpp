@@ -26,6 +26,7 @@
 #include <cuda/iterator>
 
 #include <src/io/parquet/parquet_gpu.hpp>
+#include <src/io/parquet/stats_filter_helpers.hpp>
 
 #include <array>
 #include <limits>
@@ -4489,4 +4490,30 @@ TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
     auto const expected = cudf::cast(written_table_chunk.column(0), cudf::data_type{target_type});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected->view());
   }
+}
+
+struct ParquetStatsDecoder : cudf::io::parquet::detail::stats_caster_base {
+  template <typename T>
+  static T decode(std::initializer_list<uint8_t> bytes,
+                  cudf::io::parquet::Type type = cudf::io::parquet::Type::FIXED_LEN_BYTE_ARRAY)
+  {
+    return convert<T>(bytes.begin(), bytes.size(), type);
+  }
+};
+
+TEST_F(ParquetReaderTest, DecodeVariableWidthDecimalStats)
+{
+  EXPECT_EQ(ParquetStatsDecoder::decode<int32_t>({0x64}), 100);
+  EXPECT_EQ(ParquetStatsDecoder::decode<int32_t>({0x00, 0xc8}), 200);
+  EXPECT_EQ(ParquetStatsDecoder::decode<int32_t>({0xfe, 0x0c}), -500);
+  EXPECT_EQ(ParquetStatsDecoder::decode<int32_t>({0xff, 0xff, 0xfe, 0x0c}), -500);
+  EXPECT_EQ(ParquetStatsDecoder::decode<int64_t>({0xfd, 0x44}), -700);
+
+  using d128 = numeric::decimal128;
+  EXPECT_EQ(ParquetStatsDecoder::decode<d128>({0xfd, 0x44}), d128{d128::rep{-700}});
+  EXPECT_EQ(ParquetStatsDecoder::decode<d128::rep>({0xfe, 0x0c}), d128::rep{-500});
+  EXPECT_EQ(ParquetStatsDecoder::decode<int32_t>({0xfe, 0x0c}, cudf::io::parquet::Type::BYTE_ARRAY),
+            -500);
+  EXPECT_THROW(ParquetStatsDecoder::decode<int32_t>({0xff, 0xff, 0xff, 0xfe, 0x0c}),
+               cudf::logic_error);
 }
