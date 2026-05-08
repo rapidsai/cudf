@@ -15,6 +15,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/groupby.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -109,6 +110,19 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   _has_nested_keys = cudf::detail::has_nested_columns(table_view{key_cols});
 
   auto agg_requests = build_aggregation_requests(_requests_clone, data);
+
+  // TODO: streaming aggregation reuses the cudf hash-groupby element_aggregator,
+  // so it inherits the same atomic-support requirement.  In particular, decimal128
+  // MIN/MAX/SUM falls through to CUDF_UNREACHABLE because __int128 is not
+  // lock-free atomic.  Stateless cudf::groupby falls back to sort-based groupby
+  // in that case; streaming has no such fallback.  Until streaming has a
+  // non-atomic aggregator path (or 128-bit atomics gain hardware support), gate
+  // by the same predicate to fail loudly instead of silently producing garbage.
+  CUDF_EXPECTS(detail::hash::can_use_hash_groupby(agg_requests),
+               "streaming_groupby does not support this combination of value type and "
+               "aggregation kind (e.g. decimal128 MIN/MAX/SUM require 128-bit atomics).",
+               std::invalid_argument);
+
   auto [values_view, agg_kinds_hv, agg_objects, is_intermediate, has_compound] =
     detail::hash::extract_single_pass_aggs(agg_requests, stream);
 

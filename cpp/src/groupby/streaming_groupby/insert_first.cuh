@@ -33,7 +33,7 @@ size_type streaming_groupby::impl::probe_and_insert_first_batch(
   auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
   auto const batch_self_eq  = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
   auto const hasher         = offset_cache_hasher{batch_hash_cache, _max_distinct_keys};
-  auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
+  auto const set_ref_base   = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
   auto const first_batch_cmp = first_batch_comparator{batch_self_eq, _max_distinct_keys};
   auto* const base           = _key_set->data();
 
