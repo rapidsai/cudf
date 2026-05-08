@@ -135,7 +135,7 @@ class reprog {
   void finalize();
   void check_for_errors();
 
-  match_flags compute_match_flags() const;
+  [[nodiscard]] match_flags compute_match_flags() const;
 
 #ifndef NDEBUG
   void print(regex_flags const flags);
