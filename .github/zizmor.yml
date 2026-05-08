@@ -6,4 +6,4 @@ rules:
         # rapidsai/shared-workflows and rapidsai/shared-actions
         "rapidsai/shared-workflows/*": any
         "rapidsai/shared-actions/*": any
-        "*": ref-pin
+        "*": hash-pin
