@@ -22,6 +22,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
@@ -54,8 +55,8 @@ def test_select(df, engine):
 
 
 @pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
-def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
-    engine = streaming_engine_factory(
+def test_select_reduce_fallback(df, spmd_engine_factory, fallback_mode):
+    engine = spmd_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode=fallback_mode),
     )
     match = "This selection is not supported for multiple partitions."
@@ -84,13 +85,17 @@ def test_select_reduce_fallback(df, streaming_engine_factory, fallback_mode):
         assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_fill_null_with_strategy(df, engine):
+def test_select_fill_null_with_strategy(df, streaming_engine_factory):
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
     q = df.select(pl.col("a").forward_fill())
 
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:
-        with pytest.warns(
+        with warns_on_spmd(
+            engine,
             UserWarning,
             match="fill_null with strategy other than 'zero' or 'one' is not supported for multiple partitions",
         ):
@@ -183,15 +188,19 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
 
 
-def test_select_with_len(engine):
-    # https://github.com/pola-rs/polars/issues/25592
+def test_select_with_len(streaming_engine_factory):
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
     df1 = pl.LazyFrame({"c0": [1] * 4})
     df2 = pl.LazyFrame({"c0": [2] * 4})
     q = pl.concat([df1.join(df2, how="cross"), df1.with_columns(pl.lit(None))]).select(
         pl.len()
     )
-    with pytest.warns(
-        UserWarning, match="Cross join not support for multiple partitions"
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match="Cross join not support for multiple partitions",
     ):
         assert_gpu_result_equal(q, engine=engine)
 
