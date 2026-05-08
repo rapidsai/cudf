@@ -544,7 +544,11 @@ add_library(
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
+  src/groupby/streaming_groupby/insert_first.cu
+  src/groupby/streaming_groupby/insert_first_nested.cu
   src/groupby/streaming_groupby/insert_nested.cu
+  src/groupby/streaming_groupby/insert_subsequent.cu
+  src/groupby/streaming_groupby/insert_subsequent_nested.cu
   src/groupby/streaming_groupby/merge.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu

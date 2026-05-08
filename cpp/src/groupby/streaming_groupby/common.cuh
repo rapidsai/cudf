@@ -317,6 +317,39 @@ struct streaming_groupby::impl {
   batch_insert_result probe_and_insert_impl(table_view const& batch_keys,
                                             rmm::cuda_stream_view stream);
 
+  /*
+   * Two helpers split off probe_and_insert_impl for compile-time parallelism.
+   * Each builds the cuco set_ref + comparator and runs the fused insert/compact
+   * via thrust::copy_if.  Split into separate TUs because both cuco and thrust
+   * algorithm template instantiations dominate compile time.
+   *
+   * Defined in insert_first.cuh / insert_subsequent.cuh, instantiated in
+   * insert_first{,_nested}.cu and insert_subsequent{,_nested}.cu respectively.
+   */
+  template <bool has_nested>
+  size_type probe_and_insert_first_batch(
+    std::shared_ptr<cudf::detail::row::hash::preprocessed_table> const& preprocessed_batch,
+    cudf::nullate::DYNAMIC has_null,
+    bitmask_type const* batch_bitmask,
+    hash_value_type const* batch_hash_cache,
+    size_type batch_size,
+    size_type* target_indices,
+    size_type* slot_offsets,
+    size_type* batch_local_indices,
+    rmm::cuda_stream_view stream);
+
+  template <bool has_nested>
+  size_type probe_and_insert_subsequent(
+    std::shared_ptr<cudf::detail::row::hash::preprocessed_table> const& preprocessed_batch,
+    cudf::nullate::DYNAMIC has_null,
+    bitmask_type const* batch_bitmask,
+    hash_value_type const* batch_hash_cache,
+    size_type batch_size,
+    size_type* target_indices,
+    size_type* slot_offsets,
+    size_type* batch_local_indices,
+    rmm::cuda_stream_view stream);
+
   void do_aggregate(table_view const& data, rmm::cuda_stream_view stream);
 
   [[nodiscard]] std::unique_ptr<table> gather_agg_results(rmm::cuda_stream_view stream,
