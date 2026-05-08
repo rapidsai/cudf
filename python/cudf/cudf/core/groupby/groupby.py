@@ -3070,20 +3070,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if min_count and min_count > 0:
             counts = self.agg("count")
-            if isinstance(result, Series):
-                count_series = (
-                    counts if isinstance(counts, Series) else counts.iloc[:, 0]
-                )
-                result = result.where(count_series >= min_count, None)
-            else:
-                for col_name in result._column_names:
-                    if col_name not in counts._column_names:
-                        continue
-                    count_col = counts._data[col_name]
-                    mask = count_col < min_count
-                    result[col_name] = result[col_name].where(
-                        ~Series._from_column(mask), None
-                    )
+            result = result.where(counts >= min_count, None)
         return result
 
 
