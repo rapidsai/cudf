@@ -69,7 +69,6 @@ def evaluate_pipeline_spmd_mode(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    logical_plan_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline in SPMD mode.
@@ -94,8 +93,6 @@ def evaluate_pipeline_spmd_mode(
         Python thread-pool executor used to drive the actor network.
     collect_metadata
         Whether to collect runtime metadata.
-    logical_plan_id
-        Client-generated UUID identifying the entire logical plan.
 
     Returns
     -------
@@ -133,7 +130,6 @@ def evaluate_pipeline_spmd_mode(
         config_options,
         collect_metadata=collect_metadata,
         local_quent_context=local_quent_context,
-        logical_plan_id=logical_plan_id,
     )
     quent_context.emit_query_exit_events(
         config_options.executor.spmd_context.quent_logger

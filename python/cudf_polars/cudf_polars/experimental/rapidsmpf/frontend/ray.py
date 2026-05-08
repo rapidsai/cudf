@@ -61,7 +61,6 @@ def evaluate_pipeline_ray_mode(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    logical_plan_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline in Ray mode.
@@ -81,8 +80,6 @@ def evaluate_pipeline_ray_mode(
         Python thread-pool executor used to drive the actor network.
     collect_metadata
         Whether to collect runtime metadata.
-    logical_plan_id
-        Client-generated UUID identifying the entire logical plan.
 
     Returns
     -------
@@ -126,7 +123,6 @@ def evaluate_pipeline_ray_mode(
                 ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
-                logical_plan_id=logical_plan_id,
                 quent_context=quent_context,
             )
             for rank in rank_actors
@@ -364,7 +360,6 @@ class RankActor:
         *,
         collect_metadata: bool,
         quent_context: cudf_polars.quent.QuentContext,
-        logical_plan_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -382,8 +377,6 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
-        logical_plan_id
-            Client-generated UUID identifying the entire logical plan.
         quent_context
             The client's current quent context.
 
@@ -419,7 +412,6 @@ class RankActor:
             config_options,
             collect_metadata=collect_metadata,
             local_quent_context=local_quent_context,
-            logical_plan_id=logical_plan_id,
         )
 
     def _drain_quent_events(self) -> list[dict[str, Any]]:

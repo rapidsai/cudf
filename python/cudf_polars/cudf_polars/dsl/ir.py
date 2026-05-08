@@ -37,6 +37,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -174,7 +175,7 @@ _BINOPS = {
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("_non_child_args", "schema")
+    __slots__ = ("_non_child_args", "_stable_plan_id", "schema")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     # Concrete classes should set this up with the arguments that will
@@ -184,6 +185,7 @@ class IR(Node["IR"]):
     _n_non_child_args: ClassVar[int]
     schema: Schema
     """Mapping from column names to their data types."""
+    _stable_plan_id: uuid.UUID
 
     def get_hashable(self) -> Hashable:
         """
@@ -197,6 +199,22 @@ class IR(Node["IR"]):
         args = self._ctor_arguments(self.children)[1:]
         schema_hash = tuple(self.schema.items())
         return (type(self), schema_hash, args)
+
+    def get_stable_plan_id(self) -> uuid.UUID:
+        """
+        Return a stable ID for the full IR plan rooted at this node.
+
+        The ID is computed by XOR-ing each node's ``get_stable_id()`` over a
+        traversal of the complete plan DAG, then embedding the result in a UUID.
+        """
+        try:
+            return self._stable_plan_id
+        except AttributeError:
+            plan_hash = 0
+            for node in traversal([self]):
+                plan_hash ^= node.get_stable_id()
+            self._stable_plan_id = uuid.UUID(int=plan_hash)
+            return self._stable_plan_id
 
     # Hacky to avoid type-checking issues, just advertise the
     # signature. Both mypy and pyright complain if we have an abstract

@@ -428,7 +428,6 @@ def _worker_evaluate(
     *,
     uid: str,
     collect_metadata: bool = False,
-    logical_plan_id: uuid.UUID,
     dask_worker: distributed.Worker | None = None,
     quent_context: cudf_polars.quent.QuentContext,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
@@ -450,8 +449,6 @@ def _worker_evaluate(
         per-worker context attribute.
     collect_metadata
         Whether to collect channel metadata.
-    logical_plan_id
-        Client-generated UUID identifying the entire logical plan.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
     quent_context
@@ -481,7 +478,6 @@ def _worker_evaluate(
         ir,
         config_options,
         collect_metadata=collect_metadata,
-        logical_plan_id=logical_plan_id,
         local_quent_context=local_quent_context,
     )
 
@@ -505,7 +501,6 @@ def evaluate_pipeline_dask_mode(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    logical_plan_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline in Dask mode.
@@ -524,8 +519,6 @@ def evaluate_pipeline_dask_mode(
         Executor configuration, including the ``dask_context`` handle.
     collect_metadata
         Whether to collect runtime metadata.
-    logical_plan_id
-        Client-generated UUID identifying the entire logical plan.
 
     Returns
     -------
@@ -560,7 +553,6 @@ def evaluate_pipeline_dask_mode(
         ir,
         worker_config,
         collect_metadata=collect_metadata,
-        logical_plan_id=logical_plan_id,
         quent_context=quent_context,
     )
 

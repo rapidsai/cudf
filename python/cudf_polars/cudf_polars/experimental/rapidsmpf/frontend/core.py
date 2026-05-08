@@ -580,7 +580,6 @@ def evaluate_on_rank(
     *,
     collect_metadata: bool = False,
     local_quent_context: cudf_polars.quent.LocalQuentContext,
-    logical_plan_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -609,8 +608,6 @@ def evaluate_on_rank(
         Whether to collect channel metadata during execution.
     local_quent_context
         The local Quent context for this rank.
-    logical_plan_id
-        A unique identifier for the logical plan.
 
     Returns
     -------
@@ -621,6 +618,7 @@ def evaluate_on_rank(
         otherwise ``None``.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
+    logical_plan_id = ir.get_stable_plan_id()
 
     physical_plan_id = uuid.uuid4()
 

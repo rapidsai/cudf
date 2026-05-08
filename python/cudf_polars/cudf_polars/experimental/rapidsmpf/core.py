@@ -100,7 +100,6 @@ def evaluate_logical_plan(
     The output DataFrame and metadata collector.
     """
     query_id = uuid.uuid4()
-    logical_plan_id = uuid.uuid4()
 
     with cudf_polars.dsl.tracing.bound_contextvars(
         cudf_polars_query_id=str(query_id),
@@ -115,7 +114,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    logical_plan_id=logical_plan_id,
                 )
             case "ray":
                 from cudf_polars.experimental.rapidsmpf.frontend.ray import (
@@ -126,7 +124,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    logical_plan_id=logical_plan_id,
                 )
             case "dask":
                 from cudf_polars.experimental.rapidsmpf.frontend.dask import (
@@ -137,7 +134,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    logical_plan_id=logical_plan_id,
                 )
             case "single":
                 # Single-process execution: lower and run locally.
