@@ -202,9 +202,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices_acc.plc_column,
                     plc_exact,
                 )
-            # libcudf returns a plain numpy dtype - re-wrap so the result
-            # mirrors the input's dtype "kind" (numpy / pandas-nullable /
-            # ArrowDtype).
+
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
                 ColumnBase.create(
