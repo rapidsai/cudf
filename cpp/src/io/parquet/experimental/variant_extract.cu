@@ -235,23 +235,33 @@ __device__ inline field_span device_locate_array_element(uint8_t const* val,
   return {values_base + start, endoff - start};
 }
 
-struct int32_decode_result {
-  int32_t value;
+template <typename T>
+struct int_decode_result {
+  T value;
   bool ok;
 };
 
-__device__ inline int32_decode_result device_decode_int32(uint8_t const* enc, size_type len)
+// Variant primitive ints: basic_type=0, header6 maps INT{8,16,32,64} -> {3,4,5,6}.
+template <typename T>
+__device__ inline int_decode_result<T> device_decode_int(uint8_t const* enc, size_type len)
 {
-  if (len < 5) { return {0, false}; }
-  uint8_t const vm     = enc[0];
-  int const basic_type = vm & 0x03;
-  int const header6    = (vm >> 2) & 0x3F;
-  if (basic_type != 0 || header6 != 5) { return {0, false}; }
-  uint32_t u = 0;
-  for (int i = 0; i < 4; ++i) {
-    u |= static_cast<uint32_t>(enc[1 + i]) << (8 * i);
+  static_assert(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
+                  std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>,
+                "device_decode_int: unsupported width");
+  constexpr int header6_for = std::is_same_v<T, int8_t>    ? 3
+                              : std::is_same_v<T, int16_t> ? 4
+                              : std::is_same_v<T, int32_t> ? 5
+                                                           : 6;
+  constexpr int width       = sizeof(T);
+  if (len < 1 + width) { return {0, false}; }
+  uint8_t const vm = enc[0];
+  if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != header6_for) { return {0, false}; }
+  using U = std::make_unsigned_t<T>;
+  U u     = 0;
+  for (int i = 0; i < width; ++i) {
+    u |= static_cast<U>(enc[1 + i]) << (8 * i);
   }
-  return {static_cast<int32_t>(u), true};
+  return {static_cast<T>(u), true};
 }
 
 // Walk a path (name or index steps) level by level starting at (val, val_len) and return the span
@@ -437,14 +447,15 @@ CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device
 }
 
 // ---------------------------------------------------------------------------
-// cast_variant: INT32 kernel
+// cast_variant: integer kernel (INT8/INT16/INT32/INT64)
 // ---------------------------------------------------------------------------
 
-CUDF_KERNEL void cast_variant_int32_kernel(column_device_view d_struct,
-                                           cudf::detail::lists_column_device_view d_val,
-                                           int32_t* d_output,
-                                           bitmask_type* d_null_mask,
-                                           size_type num_rows)
+template <typename T>
+CUDF_KERNEL void cast_variant_int_kernel(column_device_view d_struct,
+                                         cudf::detail::lists_column_device_view d_val,
+                                         T* d_output,
+                                         bitmask_type* d_null_mask,
+                                         size_type num_rows)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
   if (tid >= num_rows) { return; }
@@ -462,7 +473,7 @@ CUDF_KERNEL void cast_variant_int32_kernel(column_device_view d_struct,
   auto const* val_ptr  = val_child.data<uint8_t>() + val_begin;
   auto const val_len   = val_end - val_begin;
 
-  auto const result = device_decode_int32(val_ptr, val_len);
+  auto const result = device_decode_int<T>(val_ptr, val_len);
   if (result.ok) {
     d_output[row] = result.value;
   } else {
@@ -706,8 +717,10 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
 {
   validate_variant_struct(variant_column);
 
-  CUDF_EXPECTS(desired_type.id() == type_id::STRING || desired_type.id() == type_id::INT32,
-               "cast_variant supports STRING and INT32 only",
+  auto const tid = desired_type.id();
+  CUDF_EXPECTS(tid == type_id::STRING || tid == type_id::INT8 || tid == type_id::INT16 ||
+                 tid == type_id::INT32 || tid == type_id::INT64,
+               "cast_variant supports STRING and INT8/INT16/INT32/INT64 only",
                std::invalid_argument);
 
   size_type const num_rows = variant_column.size();
@@ -719,23 +732,31 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
   auto d_val_col_ptr = column_device_view::create(val_lcv.parent(), stream);
   cudf::detail::lists_column_device_view d_val(*d_val_col_ptr);
 
-  if (desired_type.id() == type_id::INT32) {
-    rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(int32_t), stream, mr};
+  auto launch_int = [&]<typename T>(std::in_place_type_t<T>) {
+    rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(T), stream, mr};
     auto null_mask    = cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
     auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_int32_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      *d_struct_ptr, d_val, static_cast<int32_t*>(data.data()), d_null_mask, num_rows);
+    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      *d_struct_ptr, d_val, static_cast<T*>(data.data()), d_null_mask, num_rows);
 
     auto const null_count =
       num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
 
-    return std::make_unique<column>(data_type{type_id::INT32},
+    return std::make_unique<column>(desired_type,
                                     num_rows,
                                     std::move(data),
                                     null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
                                     null_count);
+  };
+
+  switch (tid) {
+    case type_id::INT8: return launch_int(std::in_place_type<int8_t>);
+    case type_id::INT16: return launch_int(std::in_place_type<int16_t>);
+    case type_id::INT32: return launch_int(std::in_place_type<int32_t>);
+    case type_id::INT64: return launch_int(std::in_place_type<int64_t>);
+    default: break;
   }
 
   // STRING path

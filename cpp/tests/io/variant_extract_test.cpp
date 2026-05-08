@@ -446,6 +446,26 @@ cudf::test::structs_column_wrapper make_apache_variant(
 
 }  // namespace
 
+TEST_F(VariantExtractTest, ApachePrimitiveInt8)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::primitive_int8);
+  auto got      = cudf::io::parquet::experimental::cast_variant(
+    struc, cudf::data_type{cudf::type_id::INT8}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{42}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApachePrimitiveInt16)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::primitive_int16);
+  auto got      = cudf::io::parquet::experimental::cast_variant(
+    struc, cudf::data_type{cudf::type_id::INT16}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int16_t> expected{int16_t{1234}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
 TEST_F(VariantExtractTest, ApachePrimitiveInt32)
 {
   namespace afv = cudf::test::apache_variant_fixtures;
@@ -455,6 +475,16 @@ TEST_F(VariantExtractTest, ApachePrimitiveInt32)
     struc, cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected{123456};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, ApachePrimitiveInt64)
+{
+  namespace afv = cudf::test::apache_variant_fixtures;
+  auto struc    = make_apache_variant(afv::primitive_int64);
+  auto got      = cudf::io::parquet::experimental::cast_variant(
+    struc, cudf::data_type{cudf::type_id::INT64}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{int64_t{1234567890123456789LL}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
@@ -523,15 +553,15 @@ TEST_F(VariantExtractTest, ApacheNestedGetVariantField)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*name_str, expected);
 }
 
-TEST_F(VariantExtractTest, ApacheObjectPrimitive_int_field_castInt32IsNull)
+TEST_F(VariantExtractTest, ApacheObjectPrimitive_int_field_asInt8)
 {
-  // int_field is encoded as INT8 (header 0x0c), not INT32, so cast_variant(INT32) -> null.
+  // int_field is encoded as INT8 (header 0x0c). cast_variant(INT8) -> 1.
   namespace afv = cudf::test::apache_variant_fixtures;
   auto struc    = make_apache_variant(afv::object_primitive);
   auto got      = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "int_field", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-  ASSERT_EQ(got->size(), 1);
-  EXPECT_EQ(got->null_count(), 1);
+    struc, "int_field", cudf::data_type{cudf::type_id::INT8}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 TEST_F(VariantExtractTest, ApacheObjectPrimitive_timestamp_field_asString)
@@ -601,40 +631,40 @@ TEST_F(VariantExtractTest, ApacheObjectNested_observation_time)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(VariantExtractTest, ApacheObjectNested_species_population_castInt32IsNull)
+TEST_F(VariantExtractTest, ApacheObjectNested_species_population_asInt16)
 {
-  // population=6789 is encoded as INT16, not INT32, so cast_variant(INT32) -> null.
+  // population=6789 is encoded as INT16. cast_variant(INT16) -> 6789.
   namespace afv = cudf::test::apache_variant_fixtures;
   auto struc    = make_apache_variant(afv::object_nested);
   auto got =
     cudf::io::parquet::experimental::extract_variant_field(struc,
                                                            "$.species.population",
-                                                           cudf::data_type{cudf::type_id::INT32},
+                                                           cudf::data_type{cudf::type_id::INT16},
                                                            cudf::test::get_default_stream());
-  ASSERT_EQ(got->size(), 1);
-  EXPECT_EQ(got->null_count(), 1);
+  cudf::test::fixed_width_column_wrapper<int16_t> expected{int16_t{6789}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(VariantExtractTest, ApacheObjectNested_id_castInt32IsNull)
+TEST_F(VariantExtractTest, ApacheObjectNested_id_asInt8)
 {
-  // id=1 is encoded as INT8 (0x0c 0x01), so cast_variant(INT32) -> null.
+  // id=1 is encoded as INT8 (0x0c 0x01). cast_variant(INT8) -> 1.
   namespace afv = cudf::test::apache_variant_fixtures;
   auto struc    = make_apache_variant(afv::object_nested);
   auto got      = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "$.id", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-  ASSERT_EQ(got->size(), 1);
-  EXPECT_EQ(got->null_count(), 1);
+    struc, "$.id", cudf::data_type{cudf::type_id::INT8}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(VariantExtractTest, ApacheArrayPrimitive_indexZero_castInt32IsNull)
+TEST_F(VariantExtractTest, ApacheArrayPrimitive_indexZero_asInt8)
 {
-  // Element 0 is INT8(2); INT32 cast must be null.
+  // Element 0 is INT8(2). cast_variant(INT8) -> 2.
   namespace afv = cudf::test::apache_variant_fixtures;
   auto struc    = make_apache_variant(afv::array_primitive);
   auto got      = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "$[0]", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-  ASSERT_EQ(got->size(), 1);
-  EXPECT_EQ(got->null_count(), 1);
+    struc, "$[0]", cudf::data_type{cudf::type_id::INT8}, cudf::test::get_default_stream());
+  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{2}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 TEST_F(VariantExtractTest, ApacheArrayPrimitive_outOfBounds_isNull)

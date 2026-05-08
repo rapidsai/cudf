@@ -70,11 +70,12 @@ std::unique_ptr<column> get_variant_field(
  * @brief Decode a VARIANT struct column's `value` blobs into a typed cuDF column.
  *
  * Each row's `value` child (child 1) is interpreted as a Variant-encoded primitive and decoded
- * into `desired_type`. Only `INT32` and `STRING` are currently supported. Null is produced when
- * the struct row is null or the encoded type does not match `desired_type`.
+ * into `desired_type`. Supported targets: `INT8`, `INT16`, `INT32`, `INT64`, `STRING`. Type
+ * matching is strict: an INT16-encoded value cast to `INT32` produces null. Null is produced
+ * when the struct row is null or the encoded type does not match `desired_type`.
  *
  * @param variant_column Struct column (VARIANT materialization) with `list<uint8>` children
- * @param desired_type Target cuDF type (`STRING` or `INT32`)
+ * @param desired_type Target cuDF type (`STRING` or `INT8`/`INT16`/`INT32`/`INT64`)
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
@@ -92,7 +93,7 @@ std::unique_ptr<column> cast_variant(
  *
  * @param variant_column Struct column (VARIANT materialization)
  * @param path JSONPath-like path string (see `get_variant_field` for syntax)
- * @param desired_type Target type: `STRING` or `INT32` only
+ * @param desired_type Target type: `STRING` or `INT8`/`INT16`/`INT32`/`INT64`
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Column of `desired_type` with one row per struct row; null where the struct row is null,

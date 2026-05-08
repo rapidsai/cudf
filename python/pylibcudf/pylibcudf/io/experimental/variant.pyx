@@ -86,8 +86,8 @@ cpdef Column cast_variant(
     """Decode a VARIANT struct column's ``value`` blobs into a typed column.
 
     Each row's ``value`` child is interpreted as a Variant-encoded primitive
-    and decoded into ``desired_type``. Only ``INT32`` and ``STRING`` are
-    currently supported.
+    and decoded into ``desired_type``. Supported targets: ``INT8``, ``INT16``,
+    ``INT32``, ``INT64``, ``STRING``. Type matching is strict.
 
     For details, see :cpp:func:`cudf::io::parquet::experimental::cast_variant`.
 
@@ -96,7 +96,7 @@ cpdef Column cast_variant(
     variant_column : Column
         Struct column (VARIANT materialization) with ``list<uint8>`` children.
     desired_type : DataType
-        Target cuDF type (``STRING`` or ``INT32``).
+        Target cuDF type (``STRING`` or ``INT8``/``INT16``/``INT32``/``INT64``).
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -143,7 +143,7 @@ cpdef Column extract_variant_field(
     path : str
         JSONPath-like path (e.g. ``"x"``, ``"$.foo.bar"``).
     desired_type : DataType
-        Target type (``STRING`` or ``INT32``).
+        Target type (``STRING`` or ``INT8``/``INT16``/``INT32``/``INT64``).
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
