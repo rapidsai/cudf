@@ -129,6 +129,72 @@ void test_extreme_finite_merged_partials()
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
 }
+
+// A non-finite mean in a partial must propagate, not be coerced. This pins the
+// identity-branch behavior: a single non-empty partial with NaN/Inf statistics
+// should be preserved as-is, since coercing to NaN would discard upstream
+// signal (e.g. an upstream overflow that already produced +Inf).
+template <typename CountType>
+void test_nan_mean_first_partial()
+{
+  auto const key  = keys_col<int32_t>{1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto means      = means_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto m2s        = M2s_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_key, out_vals] = merge_M2({key}, {vals});
+
+  auto const expected_keys   = keys_col<int32_t>{1};
+  auto expected_counts       = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto expected_means        = means_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto expected_m2s          = M2s_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto const expected_values = structs_col{expected_counts, expected_means, expected_m2s};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_key, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
+}
+
+template <typename CountType>
+void test_inf_mean_first_partial()
+{
+  auto const key  = keys_col<int32_t>{1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto means      = means_col<double>{std::numeric_limits<double>::infinity()};
+  auto m2s        = M2s_col<double>{0.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_key, out_vals] = merge_M2({key}, {vals});
+
+  auto const expected_keys   = keys_col<int32_t>{1};
+  auto expected_counts       = cudf::test::fixed_width_column_wrapper<CountType>{CountType{1}};
+  auto expected_means        = means_col<double>{std::numeric_limits<double>::infinity()};
+  auto expected_m2s          = M2s_col<double>{0.0};
+  auto const expected_values = structs_col{expected_counts, expected_means, expected_m2s};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_key, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
+}
+
+// Once the accumulator holds a NaN, any subsequent merge step must keep
+// propagating NaN (NaN ⊕ anything = NaN), regardless of partial order.
+template <typename CountType>
+void test_nan_mean_merged_with_finite()
+{
+  auto const keys = keys_col<int32_t>{1, 1};
+  auto counts     = cudf::test::fixed_width_column_wrapper<CountType>{CountType{10}, CountType{10}};
+  auto means      = means_col<double>{std::numeric_limits<double>::quiet_NaN(), 5.0};
+  auto m2s        = M2s_col<double>{std::numeric_limits<double>::quiet_NaN(), 20.0};
+  auto const vals = structs_col{counts, means, m2s};
+
+  auto const [out_keys, out_vals] = merge_M2({keys}, {vals});
+
+  auto const expected_keys   = keys_col<int32_t>{1};
+  auto expected_counts       = cudf::test::fixed_width_column_wrapper<CountType>{CountType{20}};
+  auto expected_means        = means_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto expected_m2s          = M2s_col<double>{std::numeric_limits<double>::quiet_NaN()};
+  auto const expected_values = structs_col{expected_counts, expected_means, expected_m2s};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values, *out_vals, verbosity);
+}
 }  // namespace
 
 template <class T>
@@ -207,6 +273,36 @@ TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartialsInt64Count)
 TEST_F(GroupbyMergeM2ExtremeTest, ExtremeFiniteMergedPartialsDoubleCount)
 {
   test_extreme_finite_merged_partials<double>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, NanMeanFirstPartialInt64Count)
+{
+  test_nan_mean_first_partial<int64_t>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, NanMeanFirstPartialDoubleCount)
+{
+  test_nan_mean_first_partial<double>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, InfMeanFirstPartialInt64Count)
+{
+  test_inf_mean_first_partial<int64_t>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, InfMeanFirstPartialDoubleCount)
+{
+  test_inf_mean_first_partial<double>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, NanMeanMergedWithFiniteInt64Count)
+{
+  test_nan_mean_merged_with_finite<int64_t>();
+}
+
+TEST_F(GroupbyMergeM2ExtremeTest, NanMeanMergedWithFiniteDoubleCount)
+{
+  test_nan_mean_merged_with_finite<double>();
 }
 
 TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
