@@ -1477,6 +1477,16 @@ class Index(SingleColumnFrame):
             other_name = getattr(other, "name", self.name)
 
         ret.name = self.name if _is_same_name(self.name, other_name) else None
+        # pandas preserves the freq on a DatetimeIndex when shifting it by a
+        # constant timedelta / Tick offset (vector shifts drop the freq).
+        if (
+            isinstance(self, DatetimeIndex)
+            and self.freq is not None
+            and op in {"__add__", "__sub__"}
+            and isinstance(ret, DatetimeIndex)
+            and is_scalar(other)
+        ):
+            ret._freq = self._freq
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
