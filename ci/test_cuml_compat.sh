@@ -21,8 +21,6 @@ CUML_TESTS_DIR=/tmp/cuml/python/cuml/tests
 
 rapids-logger "pytest cuml cuDF-compat subset"
 
-exit 1
-
 timeout 15m python -m pytest \
   --cache-clear \
   "${CUML_TESTS_DIR}/test_array.py" \
