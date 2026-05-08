@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/detail/utilities/getenv_or.hpp>
 #include "runtime/context.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <jit/cache.hpp>

@@ -4,10 +4,10 @@
  */
 
 #include "io/orc/orc.hpp"
-#include <cudf/detail/utilities/getenv_or.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>

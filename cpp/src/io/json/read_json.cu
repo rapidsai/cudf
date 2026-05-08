@@ -5,12 +5,12 @@
 
 #include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
-#include <cudf/detail/utilities/getenv_or.hpp>
 #include "read_json.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>

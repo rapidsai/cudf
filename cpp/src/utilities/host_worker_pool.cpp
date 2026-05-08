@@ -4,7 +4,6 @@
  */
 
 #include <cudf/detail/utilities/getenv_or.hpp>
-
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/utilities/error.hpp>
 

@@ -6,10 +6,10 @@
 #include "runtime/context.hpp"
 
 #include "io/comp/nvcomp_adapter.hpp"
-#include <cudf/detail/utilities/getenv_or.hpp>
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <memory>
