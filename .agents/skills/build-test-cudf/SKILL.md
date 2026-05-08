@@ -18,6 +18,15 @@ cudf packages must be built in this order as needed (each depends on the previou
 
 When rebuilding a package, ensure its dependencies are already built. Since we are in cudf devcontainer, DO NOT run the `build.sh` script or install any packages yourself. Instead, always use the `build-*`, `test-*`, `rapids-*`, `clean-*` scripts located at `/usr/bin`.
 
+### Set native architecture
+
+Set and export `CUDAARCHS=NATIVE` before building cudf so we only build it for the GPU architectures installed on the machine.
+
+```bash
+export CUDAARCHS=NATIVE # Direct export
+set-native              # Alternative: alias defined in .bashrc
+```
+
 ### Building libcudf
 
 Whenever building libcudf from scratch (CMake has not been run before), run:
