@@ -24,7 +24,7 @@ from pylibcudf.libcudf.types cimport (
     sorted,
 )
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -67,7 +67,7 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] aggregate(
             const vector[aggregation_request]& requests,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
@@ -76,7 +76,7 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] scan(
             const vector[scan_request]& requests,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
@@ -87,19 +87,19 @@ cdef extern from "cudf/groupby.hpp" \
             const table_view values,
             const vector[size_type] offset,
             const vector[reference_wrapper[constscalar]] fill_values,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
         groups get_groups(
             table_view values,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
             const table_view& values,
             const vector[replace_policy] replace_policy,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler

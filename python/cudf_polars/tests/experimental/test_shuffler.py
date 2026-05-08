@@ -12,6 +12,7 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
     _is_already_partitioned,
 )
@@ -19,26 +20,14 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "broadcast_join_limit": 2,
-                "shuffle_method": "rapidsmpf",
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 5,
-                "broadcast_join_limit": 2,
-                "shuffle_method": "rapidsmpf",
-            }
-        },
+        StreamingOptions(max_rows_per_partition=1, broadcast_join_limit=2),
+        StreamingOptions(max_rows_per_partition=5, broadcast_join_limit=2),
     ],
-    indirect=True,
 )
-def test_join_rapidsmpf(streaming_engine) -> None:
+def test_join_rapidsmpf(streaming_engine_factory, options) -> None:
+    streaming_engine = streaming_engine_factory(options)
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -58,24 +47,14 @@ def test_join_rapidsmpf(streaming_engine) -> None:
 
 
 @pytest.mark.parametrize(
-    "streaming_engine",
+    "options",
     [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 1,
-                "shuffle_method": "rapidsmpf",
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 5,
-                "shuffle_method": "rapidsmpf",
-            }
-        },
+        StreamingOptions(max_rows_per_partition=1),
+        StreamingOptions(max_rows_per_partition=5),
     ],
-    indirect=True,
 )
-def test_sort_rapidsmpf(streaming_engine) -> None:
+def test_sort_rapidsmpf(streaming_engine_factory, options) -> None:
+    streaming_engine = streaming_engine_factory(options)
     df = pl.LazyFrame(
         {
             "x": range(15),

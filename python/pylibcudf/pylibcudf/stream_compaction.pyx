@@ -24,10 +24,12 @@ from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "DuplicateKeepOption",
     "apply_boolean_mask",
+    "apply_deletion_mask",
     "distinct",
     "distinct_indices",
     "drop_nans",
@@ -41,7 +43,7 @@ cpdef Table drop_nulls(
     Table source_table,
     list keys,
     size_type keep_threshold,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on the presence of nulls.
@@ -65,21 +67,22 @@ cpdef Table drop_nulls(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nulls(
-            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
+            source_table.view(), c_keys, keep_threshold, _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table drop_nans(
     Table source_table,
     list keys,
     size_type keep_threshold,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on the presence of NaNs.
@@ -103,20 +106,21 @@ cpdef Table drop_nans(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nans(
-            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
+            source_table.view(), c_keys, keep_threshold, _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table apply_boolean_mask(
     Table source_table,
     Column boolean_mask,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on a boolean mask.
@@ -137,14 +141,50 @@ cpdef Table apply_boolean_mask(
     """
     cdef unique_ptr[table] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.apply_boolean_mask(
-            source_table.view(), boolean_mask.view(), stream.view(), mr.get_mr()
+            source_table.view(), boolean_mask.view(), _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
+
+
+cpdef Table apply_deletion_mask(
+    Table source_table,
+    Column deletion_mask,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Filters out rows from the input table using a deletion mask.
+
+    For details, see :cpp:func:`apply_deletion_mask`.
+
+    Parameters
+    ----------
+    source_table : Table
+        The input table to filter.
+    deletion_mask : Column
+        A boolean column used as a deletion mask.
+
+    Returns
+    -------
+    Table
+        Table with rows removed where deletion_mask is true.
+    """
+    cdef unique_ptr[table] c_result
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_stream_compaction.apply_deletion_mask(
+            source_table.view(), deletion_mask.view(), _cs, mr.get_mr()
+        )
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table unique(
@@ -152,7 +192,7 @@ cpdef Table unique(
     list keys,
     duplicate_keep_option keep,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filter duplicate consecutive rows from the input table.
@@ -184,14 +224,15 @@ cpdef Table unique(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.unique(
-            input.view(), c_keys, keep, nulls_equal, stream.view(), mr.get_mr()
+            input.view(), c_keys, keep, nulls_equal, _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table distinct(
@@ -200,7 +241,7 @@ cpdef Table distinct(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Get the distinct rows from the input table.
@@ -229,15 +270,16 @@ cpdef Table distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            input.view(), c_keys, keep, nulls_equal, nans_equal, _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column distinct_indices(
@@ -245,7 +287,7 @@ cpdef Column distinct_indices(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Get the indices of the distinct rows from the input table.
@@ -270,14 +312,15 @@ cpdef Column distinct_indices(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct_indices(
-            input.view(), keep, nulls_equal, nans_equal, stream.view(), mr.get_mr()
+            input.view(), keep, nulls_equal, nans_equal, _cs, mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table stable_distinct(
@@ -286,7 +329,7 @@ cpdef Table stable_distinct(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Get the distinct rows from the input table, preserving input order.
@@ -315,22 +358,23 @@ cpdef Table stable_distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.stable_distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            input.view(), c_keys, keep, nulls_equal, nans_equal, _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table filter(
     Table predicate_table,
     Expression predicate_expr,
     Table filter_table,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Filters a table using a predicate expression.
@@ -353,7 +397,8 @@ cpdef Table filter(
     """
     cdef unique_ptr[table] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -361,9 +406,9 @@ cpdef Table filter(
             predicate_table.view(),
             dereference(predicate_expr.c_obj.get()),
             filter_table.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 DuplicateKeepOption.__str__ = DuplicateKeepOption.__repr__
