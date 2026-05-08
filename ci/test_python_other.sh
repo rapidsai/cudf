@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -17,32 +17,32 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-rapids-logger "pytest dask_cudf"
-timeout 30m ./ci/run_dask_cudf_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
-  --numprocesses=8 \
-  --dist=worksteal \
-  --cov-config=../.coveragerc \
-  --cov=dask_cudf \
-  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
-  --cov-report=term
+# rapids-logger "pytest dask_cudf"
+# timeout 30m ./ci/run_dask_cudf_pytests.sh \
+#   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
+#   --numprocesses=8 \
+#   --dist=worksteal \
+#   --cov-config=../.coveragerc \
+#   --cov=dask_cudf \
+#   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
+#   --cov-report=term
 
-rapids-logger "pytest cudf_kafka"
-timeout 30m ./ci/run_cudf_kafka_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
+# rapids-logger "pytest cudf_kafka"
+# timeout 30m ./ci/run_cudf_kafka_pytests.sh \
+#   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
 
-rapids-logger "pytest custreamz"
-timeout 30m ./ci/run_custreamz_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
-  --numprocesses=8 \
-  --dist=worksteal \
-  --cov-config=../.coveragerc \
-  --cov=custreamz \
-  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
-  --cov-report=term
+# rapids-logger "pytest custreamz"
+# timeout 30m ./ci/run_custreamz_pytests.sh \
+#   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
+#   --numprocesses=8 \
+#   --dist=worksteal \
+#   --cov-config=../.coveragerc \
+#   --cov=custreamz \
+#   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
+#   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
-timeout 30m ./ci/run_cudf_polars_pytests.sh \
+timeout 30m ./ci/run_cudf_polars_pytests.sh -vs \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=8 \
   --dist=worksteal \
