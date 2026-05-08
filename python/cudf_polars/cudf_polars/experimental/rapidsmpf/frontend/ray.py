@@ -844,7 +844,7 @@ class RayEngine(StreamingEngine):
                 try:
                     ray.get(ref)
                 except ray.exceptions.RayActorError:
-                    pass  # expected: exit_actor() terminates the process
+                    pass  # expected: exit_actor() terminates the process immediately
                 except Exception as e:
                     exceptions.append(e)
 
