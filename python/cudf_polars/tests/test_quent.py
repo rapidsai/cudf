@@ -33,6 +33,14 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import StreamingExecutor
 
 
+def _make_worker() -> Worker:
+    return Worker(
+        id=uuid.uuid4(),
+        engine=Engine(id=uuid.uuid4()),
+        instance_name="test-worker",
+    )
+
+
 @pytest.fixture
 def ir_and_config() -> tuple[IR, ConfigOptions[StreamingExecutor]]:
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
@@ -48,10 +56,10 @@ def test_build_plan_returns_correct_types(
     ir, config_options = ir_and_config
     query_id = uuid.uuid4()
     plan_id = uuid.uuid4()
-    worker_id = uuid.uuid4()
+    worker = _make_worker()
 
     plan, operators, ports, _ = build_plan(
-        ir, config_options, query_id, plan_id, worker_id
+        ir, config_options, Query(id=query_id), plan_id, worker
     )
 
     assert isinstance(plan, Plan)
@@ -59,7 +67,7 @@ def test_build_plan_returns_correct_types(
     assert plan.query_id == query_id
     assert plan.instance_name == "logical"
     assert plan.parent_plan_id is None
-    assert plan.worker_id == worker_id
+    assert plan.worker_id == worker.id
     assert len(operators) > 0
     assert len(ports) > 0
     assert all(isinstance(op, Operator) for op in operators)
@@ -72,7 +80,7 @@ def test_build_plan_operator_plan_ids(
     ir, config_options = ir_and_config
     plan_id = uuid.uuid4()
     plan, operators, _, _ = build_plan(
-        ir, config_options, uuid.uuid4(), plan_id, uuid.uuid4()
+        ir, config_options, Query(), plan_id, _make_worker()
     )
 
     for op in operators:
@@ -84,7 +92,7 @@ def test_build_plan_edges_reference_ports(
 ) -> None:
     ir, config_options = ir_and_config
     plan, operators, ports, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     port_ids = {p.id for p in ports}
     for edge in plan.edges:
@@ -98,7 +106,7 @@ def test_build_plan_edge_direction(
     """Edges go from child 'out' port to parent input port."""
     ir, config_options = ir_and_config
     plan, operators, ports, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     for edge in plan.edges:
         assert edge.source.instance_name == "out"
@@ -111,7 +119,7 @@ def test_build_plan_filter_topology(
     """Filter(DataFrameScan) should produce 2 operators and 1 edge."""
     ir, config_options = ir_and_config
     plan, operators, _, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     type_names = {op.type_name for op in operators}
     assert "Filter" in type_names
@@ -125,7 +133,9 @@ def test_plan_declare_serialization(
     ir, config_options = ir_and_config
     query_id = uuid.uuid4()
     plan_id = uuid.uuid4()
-    plan, _, _, _ = build_plan(ir, config_options, query_id, plan_id, uuid.uuid4())
+    plan, _, _, _ = build_plan(
+        ir, config_options, Query(id=query_id), plan_id, _make_worker()
+    )
 
     event = plan.declare(timestamp=12345)
     d = event.to_dict()
@@ -144,7 +154,7 @@ def test_operator_declare_serialization(
 ) -> None:
     ir, config_options = ir_and_config
     _, operators, _, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
 
     for op in operators:
@@ -161,7 +171,7 @@ def test_port_declare_serialization(
 ) -> None:
     ir, config_options = ir_and_config
     _, _, ports, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
 
     for port in ports:
@@ -182,7 +192,7 @@ def test_build_physical_plan(
     physical_plan_id = uuid.uuid4()
 
     logical_plan, _, _, _ = build_plan(
-        ir, config_options, query_id, logical_plan_id, uuid.uuid4()
+        ir, config_options, Query(id=query_id), logical_plan_id, _make_worker()
     )
     assert logical_plan.instance_name == "logical"
     assert logical_plan.parent_plan_id is None
@@ -190,11 +200,11 @@ def test_build_physical_plan(
     physical_plan, _, _, _ = build_plan(
         ir,
         config_options,
-        query_id,
+        Query(id=query_id),
         physical_plan_id,
-        uuid.uuid4(),
+        _make_worker(),
         instance_name="physical",
-        parent_plan_id=logical_plan_id,
+        parent_plan=logical_plan,
     )
     assert physical_plan.instance_name == "physical"
     assert physical_plan.parent_plan_id == logical_plan_id
@@ -212,11 +222,18 @@ def test_physical_plan_declare_serialization(
     physical_plan, _, _, _ = build_plan(
         ir,
         config_options,
-        query_id,
+        Query(id=query_id),
         physical_plan_id,
-        uuid.uuid4(),
+        _make_worker(),
         instance_name="physical",
-        parent_plan_id=logical_plan_id,
+        parent_plan=Plan(
+            id=logical_plan_id,
+            query=Query(id=query_id),
+            parent_plan=None,
+            instance_name="logical",
+            edges=[],
+            worker=None,
+        ),
     )
 
     event = physical_plan.declare(timestamp=99999)
@@ -233,7 +250,7 @@ def test_build_plan_with_parent_operators(
     """Physical operators reference their logical parent operators."""
     ir, config_options = ir_and_config
     _, logical_ops, _, logical_op_by_id = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
 
     parent_operators_by_node_id = {sid: [op] for sid, op in logical_op_by_id.items()}
@@ -241,11 +258,18 @@ def test_build_plan_with_parent_operators(
     _, physical_ops, _, _ = build_plan(
         ir,
         config_options,
+        Query(),
         uuid.uuid4(),
-        uuid.uuid4(),
-        uuid.uuid4(),
+        _make_worker(),
         instance_name="physical",
-        parent_plan_id=uuid.uuid4(),
+        parent_plan=Plan(
+            id=uuid.uuid4(),
+            query=Query(),
+            parent_plan=None,
+            instance_name="logical",
+            edges=[],
+            worker=None,
+        ),
         parent_operators_by_node_id=parent_operators_by_node_id,
     )
 
@@ -260,7 +284,7 @@ def test_build_plan_parent_operators_serialization(
     """parent_operator_ids appear in the serialized Operator declaration."""
     ir, config_options = ir_and_config
     _, logical_ops, _, logical_op_by_id = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
 
     parent_operators_by_node_id = {sid: [op] for sid, op in logical_op_by_id.items()}
@@ -268,9 +292,9 @@ def test_build_plan_parent_operators_serialization(
     _, physical_ops, _, _ = build_plan(
         ir,
         config_options,
+        Query(),
         uuid.uuid4(),
-        uuid.uuid4(),
-        uuid.uuid4(),
+        _make_worker(),
         instance_name="physical",
         parent_operators_by_node_id=parent_operators_by_node_id,
     )
@@ -286,7 +310,7 @@ def test_build_plan_without_parent_operators_has_empty_list(
 ) -> None:
     ir, config_options = ir_and_config
     _, operators, _, _ = build_plan(
-        ir, config_options, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     for op in operators:
         assert op.parent_operators == []
@@ -377,7 +401,7 @@ def test_engine_lifecycle() -> None:
 def test_worker_lifecycle() -> None:
     engine_id = uuid.uuid4()
     worker_id = uuid.uuid4()
-    worker = Worker(id=worker_id, engine_id=engine_id, instance_name="rank-0")
+    worker = Worker(id=worker_id, engine=Engine(id=engine_id), instance_name="rank-0")
 
     init_event = worker.init()
     d = init_event.to_dict()
@@ -397,7 +421,7 @@ def test_query_lifecycle() -> None:
     group_id = uuid.uuid4()
     query = Query(id=query_id)
 
-    init_event = query.init(query_group_id=group_id)
+    init_event = query.init(query_group=cudf_polars.quent.QueryGroup(id=group_id))
     assert init_event.to_dict()["data"]["Query"]["seq"] == 0
     assert query.planning().to_dict()["data"]["Query"]["seq"] == 1
     assert query.executing().to_dict()["data"]["Query"]["seq"] == 2

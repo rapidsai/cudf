@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.explain import SerializableIRNode
+    from cudf_polars.quent import Query, Worker
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})
@@ -29,12 +30,12 @@ _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})
 def build_plan(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
-    query_id: uuid.UUID | None,
+    query: Query | None,
     plan_id: uuid.UUID,
-    worker_id: uuid.UUID,
+    worker: Worker,
     *,
     instance_name: str = "logical",
-    parent_plan_id: uuid.UUID | None = None,
+    parent_plan: Plan | None = None,
     parent_operators_by_node_id: dict[str, list[Operator]] | None = None,
 ) -> tuple[Plan, list[Operator], list[Port], dict[str, Operator]]:
     """
@@ -46,17 +47,17 @@ def build_plan(
         The cudf-polars IR.
     config_options
         The configuration options for the streaming executor.
-    query_id
-        The Quent query ID this plan belongs to.
+    query
+        The Quent query this plan belongs to.
     plan_id
         Unique ID for this plan.
-    worker_id
-        The Quent worker ID.
+    worker
+        The Quent worker.
     instance_name
         Human-readable plan name (e.g. ``"logical"`` or ``"physical"``).
-    parent_plan_id
+    parent_plan
         If this plan was derived from another (e.g. a physical plan derived
-        from a logical plan), the parent plan's ID.
+        from a logical plan), the parent plan.
     parent_operators_by_node_id
         Optional mapping from node stable ID to the list of parent
         :class:`Operator` objects from a parent plan.  Used to populate
@@ -69,6 +70,15 @@ def build_plan(
     port_lookup: dict[tuple[uuid.UUID, str], Port] = {}
     operators: list[Operator] = []
     all_ports: list[Port] = []
+    edges: list[Edge] = []
+    plan = Plan(
+        id=plan_id,
+        query=query,
+        parent_plan=parent_plan,
+        instance_name=instance_name,
+        edges=edges,
+        worker=worker,
+    )
 
     for node_id in sorted(serializable_plan.nodes.keys(), key=int):
         serializable_node = serializable_plan.nodes[node_id]
@@ -76,7 +86,7 @@ def build_plan(
         operator_id = new_quent_id()
         operator = Operator(
             id=operator_id,
-            plan_id=plan_id,
+            plan=plan,
             parent_operators=parent_ops.get(node_id, []),
             instance_name=f"{serializable_node.type}-{node_id}",
             type_name=serializable_node.type,
@@ -89,7 +99,6 @@ def build_plan(
             all_ports.append(port)
             port_lookup[(operator_id, port_name)] = port
 
-    edges: list[Edge] = []
     for node_id in sorted(serializable_plan.nodes.keys(), key=int):
         serializable_node = serializable_plan.nodes[node_id]
         operator = operator_by_ir_id[node_id]
@@ -101,14 +110,6 @@ def build_plan(
             target = port_lookup[(operator.id, input_port_names[i])]
             edges.append(Edge(source=source, target=target))
 
-    plan = Plan(
-        id=plan_id,
-        query_id=query_id,
-        parent_plan_id=parent_plan_id,
-        instance_name=instance_name,
-        edges=edges,
-        worker_id=worker_id,
-    )
     op_by_id = dict(
         zip(
             sorted(serializable_plan.nodes.keys(), key=int),

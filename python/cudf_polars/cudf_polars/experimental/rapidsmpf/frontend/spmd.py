@@ -116,7 +116,7 @@ def evaluate_pipeline_spmd_mode(
         context=quent_context,
         worker=cudf_polars.quent.Worker(
             id=config_options.executor.spmd_context.worker_id,
-            engine_id=config_options.executor.spmd_context.engine_id,
+            engine=quent_context.engine,
             instance_name=f"rank-{comm.rank}",
         ),
         logger=config_options.executor.spmd_context.quent_logger,
@@ -422,7 +422,7 @@ class SPMDEngine(StreamingEngine):
             self._ctx: Context | None = ctx
             self._quent_worker = cudf_polars.quent.Worker(
                 id=uuid.uuid4(),
-                engine_id=quent_context.engine.id,
+                engine=quent_context.engine,
                 instance_name=f"rank-{self.rank}",  # relies on self.comm
             )
 

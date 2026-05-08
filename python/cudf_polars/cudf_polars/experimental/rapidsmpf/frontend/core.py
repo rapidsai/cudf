@@ -627,12 +627,12 @@ def evaluate_on_rank(
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
             config_options,
-            query_id=local_quent_context.context.query.id,
+            query=local_quent_context.context.query,
             # plan_id=local_quent_context.context.logical_plan_id,
             plan_id=logical_plan_id,
-            worker_id=local_quent_context.worker.id,
+            worker=local_quent_context.worker,
             instance_name="logical",
-            parent_plan_id=None,
+            parent_plan=None,
             parent_operators_by_node_id=None,
         )
         if comm.rank == 0:
@@ -655,9 +655,8 @@ def evaluate_on_rank(
             ir,
             config_options,
             plan_id=physical_plan_id,
-            worker_id=local_quent_context.worker.id,
-            # parent_plan_id=local_quent_context.context.logical_plan_id,
-            parent_plan_id=logical_plan_id,
+            worker=local_quent_context.worker,
+            parent_plan=plan,
             node_map=node_map,
             logical_op_by_id=logical_op_by_id,
         )

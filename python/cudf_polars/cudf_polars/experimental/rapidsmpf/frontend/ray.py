@@ -185,7 +185,7 @@ class RankActor:
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
         worker_id: uuid.UUID,
-        engine_id: uuid.UUID,
+        engine: cudf_polars.quent.Engine,
         rank: int = 0,
     ) -> None:
         bind_to_gpu(hardware_binding)
@@ -206,12 +206,12 @@ class RankActor:
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
         self._worker_id: uuid.UUID = worker_id
-        self._engine_id: uuid.UUID = engine_id
+        self._engine = engine
         self._rank: int = rank
         self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         self._quent_worker = cudf_polars.quent._types.Worker(
             id=worker_id,
-            engine_id=self._engine_id,
+            engine=self._engine,
             instance_name=f"rank-{rank}",
         )
         self._quent_logger.emit(self._quent_worker.init())
@@ -628,7 +628,7 @@ class RayEngine(StreamingEngine):
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                     worker_id=worker_id,
-                    engine_id=quent_context.engine.id,
+                    engine=quent_context.engine,
                     rank=i,
                 )
                 for i, worker_id in enumerate(worker_ids)

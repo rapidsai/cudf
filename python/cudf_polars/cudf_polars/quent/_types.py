@@ -88,21 +88,23 @@ class Operator:
     {"id":"019dd571-1062-77c2-9803-62c7c1941381","timestamp":1777402450018384340,"data":{"Operator":{"Declaration":{"plan_id":"019dd571-1062-77c2-9803-642b6c301d29","parent_operator_ids":[],"instance_name":"Scan-NodeIndex(0)","type_name":"Scan","custom_attributes":[]}}}}
     """
 
-    # circular references *everywhere*. Oh well.
     id: uuid.UUID
-    # plan: Plan
-    plan_id: uuid.UUID
+    plan: Plan
     parent_operators: list[Operator]
-    # parent_operator_ids: list[uuid.UUID]
     instance_name: str
     type_name: str
     custom_attributes: list[Any] = dataclasses.field(default_factory=list)
+
+    @property
+    def plan_id(self) -> uuid.UUID:
+        """Compatibility accessor for the operator's plan UUID."""
+        return self.plan.id
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for JSON output."""
         return {
             "id": str(self.id),
-            "plan_id": str(self.plan_id),
+            "plan_id": str(self.plan.id),
             "parent_operator_ids": [
                 str(operator.id) for operator in self.parent_operators
             ],
@@ -168,8 +170,13 @@ class Worker:
     """A Quent Worker."""
 
     id: uuid.UUID
-    engine_id: uuid.UUID
+    engine: Engine
     instance_name: str
+
+    @property
+    def engine_id(self) -> uuid.UUID:
+        """Compatibility accessor for the worker's parent engine UUID."""
+        return self.engine.id
 
     def init(self, timestamp: int | None = None) -> Event:
         """
@@ -218,11 +225,26 @@ class Plan:
     """
 
     id: uuid.UUID
-    query_id: uuid.UUID | None
-    parent_plan_id: uuid.UUID | None
+    query: Query | None
+    parent_plan: Plan | None
     instance_name: str  # TODO: Literal? logical / physical
     edges: list[Edge]
-    worker_id: uuid.UUID | None
+    worker: Worker | None
+
+    @property
+    def query_id(self) -> uuid.UUID | None:
+        """Compatibility accessor for the parent query UUID."""
+        return self.query.id if self.query is not None else None
+
+    @property
+    def parent_plan_id(self) -> uuid.UUID | None:
+        """Compatibility accessor for the parent plan UUID."""
+        return self.parent_plan.id if self.parent_plan is not None else None
+
+    @property
+    def worker_id(self) -> uuid.UUID | None:
+        """Compatibility accessor for the worker UUID."""
+        return self.worker.id if self.worker is not None else None
 
     def declare(self, timestamp: int | None = None) -> Event:
         """Declare a Quent Plan."""
@@ -233,9 +255,11 @@ class Plan:
                 EventName.PLAN.value: {
                     "Declaration": {
                         "parent": {
-                            "query_id": str(self.query_id) if self.query_id else None,
-                            "plan_id": str(self.parent_plan_id)
-                            if self.parent_plan_id
+                            "query_id": str(self.query.id)
+                            if self.query is not None
+                            else None,
+                            "plan_id": str(self.parent_plan.id)
+                            if self.parent_plan is not None
                             else None,
                         },
                         "instance_name": self.instance_name,
@@ -246,7 +270,9 @@ class Plan:
                             }
                             for edge in self.edges
                         ],
-                        "worker_id": str(self.worker_id) if self.worker_id else None,
+                        "worker_id": str(self.worker.id)
+                        if self.worker is not None
+                        else None,
                     }
                 }
             },
@@ -298,7 +324,7 @@ class Query:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     instance_name: str | None = None
 
-    def init(self, query_group_id: uuid.UUID, timestamp: int | None = None) -> Event:
+    def init(self, query_group: QueryGroup, timestamp: int | None = None) -> Event:
         """
         Build a Quent Query Init event.
 
@@ -316,7 +342,7 @@ class Query:
                     "state": {
                         "Init": {
                             "instance_name": name,
-                            "query_group_id": str(query_group_id),
+                            "query_group_id": str(query_group.id),
                         }
                     },
                 }
@@ -372,9 +398,8 @@ class QueryGroup:
 
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     instance_name: str | None = None
-    # engine_id: uuid.UUID
 
-    def declare(self, engine_id: uuid.UUID, timestamp: int | None = None) -> Event:
+    def declare(self, engine: Engine, timestamp: int | None = None) -> Event:
         """Declare a Quent QueryGroup."""
         return Event(
             id=self.id,
@@ -383,7 +408,7 @@ class QueryGroup:
                 EventName.QUERY_GROUP.value: {
                     "Declaration": {
                         "instance_name": self.instance_name,
-                        "engine_id": str(engine_id),
+                        "engine_id": str(engine.id),
                     }
                 }
             },

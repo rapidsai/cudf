@@ -701,10 +701,10 @@ with StreamingEngine(executor_options={"quent_context": quent_context}) as engin
 Quent tracing is currently implemented manually.
 
 `cudf_polars.quent._types` defines one dataclass per `Entity` from the quent
-data processing domain (e.g.  `Engine`, `Worker`, etc.).  To avoid too many
-circular references we prefer that these entities maintain references to other
-entities just via ID, rather than an instance of the entity. For example, a
-`Worker` accepts an `engine_id` rather than an `Engine`.
+data processing domain (e.g.  `Engine`, `Worker`, etc.). We prefer to reference
+other entities through instances of that type, rather than by ID. For example, a
+`Worker` has an `engine` field, rather than an `engine_id` field. This prevents
+accidentally using the ID for an entity of the wrong type.
 
 All IDs in `cudf_polars.quent` are UUIDs rather than integers or strings.
 

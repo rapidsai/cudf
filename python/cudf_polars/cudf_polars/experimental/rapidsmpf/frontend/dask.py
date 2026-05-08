@@ -28,6 +28,7 @@ import polars as pl
 
 import rmm.mr
 
+import cudf_polars.quent
 import cudf_polars.quent._logging
 import cudf_polars.quent._types
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
@@ -182,7 +183,7 @@ def _setup_root(
 
     quent_worker = cudf_polars.quent._types.Worker(
         id=worker_id,
-        engine_id=engine_id,
+        engine=cudf_polars.quent.Engine(id=engine_id),
         instance_name=f"rank-{comm.rank}",
     )
 
@@ -281,7 +282,7 @@ def _setup_worker(
 
     quent_worker = cudf_polars.quent._types.Worker(
         id=worker_id,
-        engine_id=engine_id,
+        engine=cudf_polars.quent.Engine(id=engine_id),
         instance_name=f"rank-{comm.rank}",
     )
 

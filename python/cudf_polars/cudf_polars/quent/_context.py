@@ -76,7 +76,7 @@ class QuentContext:
         if self.query_group.id in self._query_group_cache:
             return
         self._query_group_cache.add(self.query_group.id)
-        logger.emit(self.query_group.declare(engine_id=self.engine.id))
+        logger.emit(self.query_group.declare(engine=self.engine))
 
     def emit_query_events(self, logger: QuentLogger) -> None:
         """
@@ -84,7 +84,7 @@ class QuentContext:
 
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
-        logger.emit(self.query.init(query_group_id=self.query_group.id))
+        logger.emit(self.query.init(query_group=self.query_group))
         logger.emit(self.query.planning())
         logger.emit(self.query.executing())
 
@@ -112,10 +112,10 @@ class QuentContext:
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
-        worker_id: uuid.UUID,
-        query_id: uuid.UUID | None = None,
+        worker: Worker,
+        query: Query | None = None,
         instance_name: str = "logical",
-        parent_plan_id: uuid.UUID | None = None,
+        parent_plan: Plan | None = None,
         parent_operators_by_node_id: dict[str, list[Operator]] | None = None,
     ) -> dict[str, Operator]:
         """
@@ -135,15 +135,15 @@ class QuentContext:
             Executor configuration.
         plan_id
             Unique ID for this plan.
-        worker_id
-            The Quent worker ID.
-        query_id
-            The Quent query ID this plan belongs to (``None`` for physical
+        worker
+            The Quent worker executing the plan.
+        query
+            The Quent query this plan belongs to (``None`` for physical
             plans that hang off a parent plan instead).
         instance_name
             Human-readable plan name (e.g. ``"logical"`` or ``"physical"``).
-        parent_plan_id
-            If this plan was derived from another, the parent plan's ID.
+        parent_plan
+            If this plan was derived from another, the parent plan.
         parent_operators_by_node_id
             Optional mapping from node stable ID to parent
             :class:`Operator` objects (used for physical plans).
@@ -156,11 +156,11 @@ class QuentContext:
         plan, ops, ports, op_by_id = build_plan(
             ir,
             config_options,
-            query_id,
-            plan_id,
-            worker_id=worker_id,
+            query=query,
+            plan_id=plan_id,
+            worker=worker,
             instance_name=instance_name,
-            parent_plan_id=parent_plan_id,
+            parent_plan=parent_plan,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
         self.emit_plan_declarations(logger, plan, ops, ports)
@@ -172,9 +172,9 @@ class QuentContext:
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
-        worker_id: uuid.UUID,
+        worker: Worker,
         *,
-        parent_plan_id: uuid.UUID,
+        parent_plan: Plan,
         node_map: dict[str, list[str]],
         logical_op_by_id: dict[str, Operator],
     ) -> dict[str, Operator]:
@@ -194,10 +194,10 @@ class QuentContext:
             Executor configuration.
         plan_id
             Unique ID for the physical plan.
-        worker_id
-            The Quent worker ID.
-        parent_plan_id
-            ID of the logical plan this physical plan was derived from.
+        worker
+            The Quent worker executing the physical plan.
+        parent_plan
+            Logical plan this physical plan was derived from.
         node_map
             Mapping from physical stable IDs to the logical stable IDs
             they were derived from (as returned by
@@ -219,9 +219,9 @@ class QuentContext:
             ir,
             config_options,
             plan_id,
-            worker_id,
+            worker,
             instance_name="physical",
-            parent_plan_id=parent_plan_id,
+            parent_plan=parent_plan,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
 
