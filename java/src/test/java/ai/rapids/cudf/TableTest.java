@@ -9514,6 +9514,61 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testParquetWriteFieldIdOnOuterListBinaryAndMap() throws IOException {
+    // Regression test for cudf #22347: parquet field IDs supplied via
+    // withBinaryColumn(name, nullable, id), listBuilder(name, nullable, id) and
+    // mapColumn(name, key, value, isNullable, id) must end up on the outer
+    // (list/map) column on disk, not on the inner element/key_value child.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withBinaryColumn("_c0", true, 1)
+        .withListColumn(listBuilder("_c1", true, 2)
+            .withColumn(false, "element", 22)
+            .build())
+        .withMapColumn(mapColumn("_c2",
+            new ColumnWriterOptions("key", false),
+            new ColumnWriterOptions("value"),
+            true, 3))
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-outer", ".parquet");
+    try {
+      List<Byte> bin1 = asList("ABC");
+      List<Byte> bin2 = asList("DEF");
+      HostColumnVector.ListType binType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType listOfInt = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.INT32));
+      HostColumnVector.StructType kvType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                        new HostColumnVector.BasicType(true, DType.STRING)));
+      HostColumnVector.ListType mapType = new HostColumnVector.ListType(true, kvType);
+
+      try (ColumnVector binCol = ColumnVector.fromLists(binType, bin1, bin2);
+           ColumnVector listCol = ColumnVector.fromLists(listOfInt,
+               Arrays.asList(1, 2, 3), Arrays.asList(4, 5));
+           ColumnVector mapCol = ColumnVector.fromLists(mapType,
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b"))),
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c", "d"))));
+           Table t0 = new Table(binCol, listCol, mapCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // The id supplied to the API must land on the outer (BINARY/LIST/MAP) column.
+        assertEquals(1, schema.getFields().get(0).getId().intValue());
+        assertEquals(2, schema.getFields().get(1).getId().intValue());
+        assertEquals(3, schema.getFields().get(2).getId().intValue());
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
   /** Return a column where DECIMAL64 has been up-casted to DECIMAL128 */
   private ColumnVector castDecimal64To128(ColumnView c) {
     DType dtype = c.getType();
