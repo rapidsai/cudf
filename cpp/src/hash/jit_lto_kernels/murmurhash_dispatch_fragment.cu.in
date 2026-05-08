@@ -2,10 +2,32 @@
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
-// Owns the single device definition of ``murmur_jit_hash_dispatcher`` so the entry kernel and
-// hasher fragments can all reference it and resolve at nvJitLink time.
+// Owns the device definition of ``murmur_jit_hash_dispatcher``. Matrix row injects
+// ``dispatch_int32_only`` (0 = full switch, 1 = INT32-only) for ``if constexpr`` so the unused
+// branch is not codegen'd in this fatbin.
 
 #include <cudf/column/column_device_view.cuh>
 
 #include "murmurhash3_x86_32_jit_hasher_decl.cuh"
 #include "murmurhash3_x86_32_jit_dispatch_impl.cuh"
+
+namespace cudf::hashing::detail {
+
+static constexpr bool dispatch_int32_only_v = static_cast<bool>(@dispatch_int32_only@);
+
+__device__ hash_value_type murmur_jit_hash_dispatcher(column_device_view col,
+                                                      uint32_t seed,
+                                                      bool const nullable,
+                                                      size_type row_index)
+{
+  if constexpr (dispatch_int32_only_v) {
+    if (col.type().id() == type_id::INT32) {
+      return murmur_jit_hasher<id_to_type<type_id::INT32>>(col, seed, nullable, row_index);
+    }
+    CUDF_UNREACHABLE("Invalid type_id.");
+  } else {
+    return murmur_jit_hash_dispatcher_all_types(col, seed, nullable, row_index);
+  }
+}
+
+}  // namespace cudf::hashing::detail

@@ -31,10 +31,11 @@ inline cudf::detail::jit_lto::LauncherJitCache& murmur_jit_launcher_cache()
   return cache;
 }
 
-// Every `type_id` handled by `murmur_jit_hash_dispatcher` must have exactly one device
-// definition of `murmur_jit_hasher<T>` in the nvJitLink input. Types present in the table use the
-// real hasher fatbin; all others use a separate strong no-op fatbin (nvJitLink does not merge
-// weak + strong overrides for the same symbol).
+// Every `type_id` handled by `murmur_jit_hash_dispatcher` must have exactly one device definition
+// of `murmur_jit_hasher<T>` in the nvJitLink input for that link. Types present in the table use
+// the real hasher fatbin; unused types use a strong no-op fatbin when linking the full dispatcher.
+// Flat INT32-only tables use the INT32-only dispatcher and link only the INT32 strong hasher (no
+// no-op stubs).
 static constexpr std::array<type_id, 30> murmur_jit_hasher_type_ids{{
   type_id::INT8,
   type_id::INT16,
@@ -268,6 +269,15 @@ inline void add_noop_hasher_fragment(cudf::detail::jit_lto::AlgorithmPlanner& pl
 
 }  // namespace
 
+/// True for a flat ``INT32``-only table: ``collect_table_logical_types`` yields exactly
+/// ``{INT32}``. Then we link ``fragment_tag_murmur_dispatch_int32`` and **omit** noop hasher
+/// fatbins. Nested or mixed types keep the full dispatcher and noop stubs for unreferenced
+/// ``murmur_jit_hasher`` symbols.
+inline bool use_murmur_jit_int32_only_dispatch(std::unordered_set<type_id> const& logical_types)
+{
+  return logical_types.size() == 1u && logical_types.count(type_id::INT32) == 1u;
+}
+
 inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
                                                       uint32_t seed,
                                                       rmm::cuda_stream_view stream,
@@ -291,16 +301,21 @@ inline std::unique_ptr<column> murmurhash3_x86_32_jit(table_view const& input,
   cudf::detail::jit_lto::AlgorithmPlanner planner{"cudf_murmurhash3_x86_32_jit_link_kernel",
                                                   murmur_jit_launcher_cache()};
 
-  using namespace cudf::hashing::detail::jit_lto;
-  planner.add_static_fragment<fragment_tag_murmur_entry>();
-  planner.add_static_fragment<fragment_tag_murmur_dispatch>();
-
   std::unordered_set<type_id> logical_types;
   collect_table_logical_types(logical_types, input);
+
+  using namespace cudf::hashing::detail::jit_lto;
+  planner.add_static_fragment<fragment_tag_murmur_entry>();
+  bool const int32_only_jit_link = use_murmur_jit_int32_only_dispatch(logical_types);
+  if (int32_only_jit_link) {
+    planner.add_static_fragment<fragment_tag_murmur_dispatch_int32>();
+  } else {
+    planner.add_static_fragment<fragment_tag_murmur_dispatch_all>();
+  }
   for (type_id const id : murmur_jit_hasher_type_ids) {
     if (logical_types.count(id) != 0u) {
       add_strong_hasher_fragment(planner, id);
-    } else {
+    } else if (not int32_only_jit_link) {
       add_noop_hasher_fragment(planner, id);
     }
   }

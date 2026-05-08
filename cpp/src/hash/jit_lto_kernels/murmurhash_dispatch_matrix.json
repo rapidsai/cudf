@@ -1,7 +1,12 @@
 {
-  "_singleton": [
+  "_row": [
     {
-      "k": "dispatch"
+      "suffix": "all",
+      "dispatch_int32_only": 0
+    },
+    {
+      "suffix": "int32",
+      "dispatch_int32_only": 1
     }
   ]
 }

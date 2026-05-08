@@ -47,7 +47,10 @@ struct fragment_tag_murmur_hasher_noop {};
 
 struct fragment_tag_murmur_entry {};
 
-/// Owns ``murmur_jit_hash_dispatcher`` (shared by entry + hasher fragments).
-struct fragment_tag_murmur_dispatch {};
+/// Owns ``murmur_jit_hash_dispatcher`` with the full type-id switch (matrix ``suffix`` = ``all``).
+struct fragment_tag_murmur_dispatch_all {};
+
+/// Owns ``murmur_jit_hash_dispatcher`` with an INT32-only branch (matrix ``suffix`` = ``int32``).
+struct fragment_tag_murmur_dispatch_int32 {};
 
 }  // namespace cudf::hashing::detail::jit_lto

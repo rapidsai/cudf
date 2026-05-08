@@ -409,13 +409,13 @@ generate_jit_lto_kernels(
 generate_jit_lto_kernels(
   cudf_jit_lto_generated_sources
   NAME_FORMAT
-  "murmurhash_jit_@k@"
+  "murmurhash_jit_dispatch_@suffix@"
   MATRIX_JSON_FILE
   "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_dispatch_matrix.json"
   KERNEL_INPUT_FILE
   "${CMAKE_CURRENT_SOURCE_DIR}/src/hash/jit_lto_kernels/murmurhash_dispatch_fragment.cu.in"
   FRAGMENT_TAG_FORMAT
-  "${murmur_jit_ns}::fragment_tag_murmur_dispatch"
+  "${murmur_jit_ns}::fragment_tag_murmur_dispatch_@suffix@"
   FRAGMENT_TAG_HEADER_FILES
   "<cudf/hashing/detail/murmurhash3_x86_32_jit_tags.hpp>"
   OUTPUT_DIRECTORY

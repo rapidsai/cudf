@@ -10,12 +10,11 @@
 
 namespace cudf::hashing::detail {
 
-// Strong definition lives in the ``murmurhash_jit_dispatch`` fatbin only; declared in
-// ``murmurhash3_x86_32_jit_hasher_decl.cuh`` for entry / hasher / LTO device code.
-__device__ hash_value_type murmur_jit_hash_dispatcher(column_device_view col,
-                                                      uint32_t seed,
-                                                      bool const nullable,
-                                                      size_type row_index)
+/// Full type-id switch used when the dispatch fatbin is built with ``dispatch_int32_only == 0``.
+__device__ inline hash_value_type murmur_jit_hash_dispatcher_all_types(column_device_view col,
+                                                                       uint32_t seed,
+                                                                       bool const nullable,
+                                                                       size_type row_index)
 {
   switch (col.type().id()) {
     case type_id::INT8:
