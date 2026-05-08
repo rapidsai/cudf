@@ -455,7 +455,7 @@ class MemoryResourceConfig:
         if (device_size := get_total_device_memory()) is None:  # pragma: no cover
             # System doesn't have proper "GPU memory".
             # We probably want to use the default async memory resource.
-            release_threshold = 0
+            release_threshold = None
         else:
             release_threshold = int(0.9 * device_size)
         return cls(
