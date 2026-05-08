@@ -742,6 +742,7 @@ def run_pandas(
         query_failures.extend(result.iteration_failures)
         if result.validation_failed:
             validation_failures.append(q_id)
+        records[q_id].extend(result.query_records)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
 
