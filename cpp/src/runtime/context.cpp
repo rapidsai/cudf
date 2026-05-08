@@ -6,7 +6,7 @@
 #include "runtime/context.hpp"
 
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/getenv_or.hpp"
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>

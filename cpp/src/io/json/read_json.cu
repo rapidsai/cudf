@@ -5,7 +5,7 @@
 
 #include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
-#include "io/utilities/getenv_or.hpp"
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include "read_json.hpp"
 
 #include <cudf/concatenate.hpp>

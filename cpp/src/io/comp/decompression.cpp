@@ -8,11 +8,11 @@
 #include "common_internal.hpp"
 #include "cudf/utilities/memory_resource.hpp"
 #include "gpuinflate.hpp"
-#include "io/utilities/getenv_or.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>

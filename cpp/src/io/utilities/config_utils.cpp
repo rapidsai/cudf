@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "getenv_or.hpp"
+#include <cudf/detail/utilities/getenv_or.hpp>
 
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/io/config_utils.hpp>

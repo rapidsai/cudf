@@ -12,6 +12,7 @@
 #include <string>
 
 namespace cudf::detail {
+
 /**
  * @brief Returns the value of the environment variable, or a default value if the variable is not
  * present.
@@ -45,11 +46,6 @@ T getenv_or(std::string_view env_var_name, T default_val)
 /**
  * @brief Specialization of getenv_or for bool, to allow common "ON"/"OFF" string values.
  */
-inline bool get_bool_env_or(std::string_view env_var_name, bool default_val)
-{
-  auto val = getenv_or(env_var_name, default_val ? std::string{"ON"} : std::string{"OFF"});
-  return val == "ON" || val == "on" || val == "1" || val == "true" || val == "TRUE" ||
-         val == "True";
-}
+bool get_bool_env_or(std::string_view env_var_name, bool default_val);
 
 }  // namespace cudf::detail
