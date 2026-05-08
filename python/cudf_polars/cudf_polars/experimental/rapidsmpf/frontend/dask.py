@@ -486,6 +486,10 @@ def evaluate_pipeline_dask_mode(
     return pl.concat(dfs), metadata_collector or None
 
 
+def _gather_dask_cluster_info(client: distributed.Client) -> list[ClusterInfo]:
+    return list(client.run(ClusterInfo.local).values())
+
+
 class DaskEngine(StreamingEngine):
     """
     Multi-GPU Polars engine for Dask distributed execution backed by RapidsMPF.
@@ -677,11 +681,6 @@ class DaskEngine(StreamingEngine):
             executor_options,
         )
 
-        cluster_infos = self._gather_cluster_info(dask_client)
-        min_device_size = min(
-            (i.device_memory for i in cluster_infos if i.device_memory),
-            default=None,
-        )
         dask_ctx = DaskContext(
             client=dask_client,
             rapidsmpf_id=uid,
@@ -694,11 +693,10 @@ class DaskEngine(StreamingEngine):
             executor_options={
                 **executor_options,
                 "cluster": "dask",
-                "min_device_size": min_device_size,
                 "dask_context": dask_ctx,
             },
             engine_options={**engine_options, "memory_resource": None},
-            cluster_infos=cluster_infos,
+            cluster_infos=_gather_dask_cluster_info(dask_client),
         )
 
     def _reset(
@@ -747,6 +745,7 @@ class DaskEngine(StreamingEngine):
             },
             engine_options={**engine_options, "memory_resource": None},
             exit_stack=self._exit_stack,
+            min_device_size=self.min_device_size,
         )
 
     @classmethod
@@ -806,11 +805,7 @@ class DaskEngine(StreamingEngine):
         -------
         List of :class:`ClusterInfo`, one per rank.
         """
-        return self._gather_cluster_info(self._dask_ctx.client)
-
-    @staticmethod
-    def _gather_cluster_info(client: distributed.Client) -> list[ClusterInfo]:
-        return list(client.run(ClusterInfo.local).values())
+        return _gather_dask_cluster_info(self._dask_ctx.client)
 
     def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
         """

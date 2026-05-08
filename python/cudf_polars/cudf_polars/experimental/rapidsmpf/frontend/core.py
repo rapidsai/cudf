@@ -151,6 +151,11 @@ class StreamingEngine(pl.GPUEngine):
     exit_stack
         A :class:`contextlib.ExitStack` whose registered contexts are closed
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
+    cluster_infos
+        List of :class:`ClusterInfo`, one per rank.
+    min_device_size
+        Minimum device memory of the cluster. If ``None``, the minimum device
+        memory is computed from ``cluster_infos`` (if provided).
     """
 
     def __init__(
@@ -161,6 +166,7 @@ class StreamingEngine(pl.GPUEngine):
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
         cluster_infos: list[ClusterInfo] | None = None,
+        min_device_size: int | None = None,
     ):
         self._nranks = nranks
         self._exit_stack: contextlib.ExitStack | None = (
@@ -170,18 +176,25 @@ class StreamingEngine(pl.GPUEngine):
         # accept it.
         engine_options = dict(engine_options)
         allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
+        if min_device_size is None and cluster_infos:
+            min_device_size = min(
+                (info.device_memory for info in cluster_infos),
+                default=None,
+            )
+        self.min_device_size: int | None = min_device_size
         super().__init__(
             executor="streaming",
-            executor_options=executor_options,
+            executor_options=executor_options
+            | {"min_device_size": self.min_device_size},
             **engine_options,
         )
         if nranks > 1 and not allow_gpu_sharing:
-            infos = (
+            cluster_infos = (
                 cluster_infos
                 if cluster_infos is not None
                 else self.gather_cluster_info()
             )
-            uuids = [info.gpu_uuid for info in infos]
+            uuids = [info.gpu_uuid for info in cluster_infos]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
                     "Multiple ranks share the same GPU (UUID collision detected). "
