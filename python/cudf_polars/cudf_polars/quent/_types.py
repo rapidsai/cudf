@@ -115,7 +115,7 @@ class Operator:
         """Declare a Quent Operator."""
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.OPERATOR.value: {"Declaration": self.to_dict()}},
         )
 
@@ -137,7 +137,7 @@ class Engine:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.ENGINE.value: {
                     "Init": {
@@ -158,7 +158,7 @@ class Engine:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.ENGINE.value: {"Exit": None}},
         )
 
@@ -181,7 +181,7 @@ class Worker:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.WORKER.value: {
                     "Init": {
@@ -202,7 +202,7 @@ class Worker:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.WORKER.value: {"Exit": None}},
         )
 
@@ -228,7 +228,7 @@ class Plan:
         """Declare a Quent Plan."""
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.PLAN.value: {
                     "Declaration": {
@@ -279,7 +279,7 @@ class Port:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.PORT.value: {
                     "Declaration": {
@@ -309,7 +309,7 @@ class Query:
         name = self.instance_name or self.id.hex[:8]
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.QUERY.value: {
                     "seq": 0,
@@ -333,7 +333,7 @@ class Query:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.QUERY.value: {"seq": 1, "state": {"Planning": {}}}},
         )
 
@@ -347,7 +347,7 @@ class Query:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.QUERY.value: {"seq": 2, "state": {"Executing": {}}}},
         )
 
@@ -361,7 +361,7 @@ class Query:
         """
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.QUERY.value: {"seq": 3, "state": "Exit"}},
         )
 
@@ -378,7 +378,7 @@ class QueryGroup:
         """Declare a Quent QueryGroup."""
         return Event(
             id=self.id,
-            timestamp=timestamp or time.time_ns(),
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.QUERY_GROUP.value: {
                     "Declaration": {
