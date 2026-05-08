@@ -25,6 +25,8 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import pylibcudf as plc
+
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -44,7 +46,6 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
 
-    import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -107,6 +108,39 @@ class ShuffleManager:
                 py_split_and_pack(
                     table=chunk.table_view(),
                     splits=splits,
+                    stream=chunk.stream,
+                    br=self._manager.context.br(),
+                )
+            )
+
+        def insert_index(self, chunk: TableChunk, partition_col: int) -> None:
+            """
+            Partition chunk by a pre-computed integer column and insert.
+
+            Parameters
+            ----------
+            chunk
+                The chunk to partition.
+            partition_col
+                Index of the integer column whose values give the target
+                local partition ID for each row. The partition column is
+                consumed as routing metadata and stripped from the payload.
+                Callers should not expect it in the output.
+            """
+            table = chunk.table_view()
+            cols = table.columns()
+            partition_map = cols[partition_col]
+            payload = plc.Table([c for i, c in enumerate(cols) if i != partition_col])
+            reordered, offsets = plc.partitioning.partition(
+                payload,
+                partition_map,
+                self._manager.num_partitions,
+                stream=chunk.stream,
+            )
+            self._manager.shuffler.insert(
+                py_split_and_pack(
+                    table=reordered,
+                    splits=list(offsets[1:-1]),
                     stream=chunk.stream,
                     br=self._manager.context.br(),
                 )
@@ -241,6 +275,29 @@ class LocalRepartitioner:
                         table, stream, exclusive_view=True, br=self._br
                     ),
                     columns_to_hash,
+                )
+
+    async def insert_chunks_index(self, *, partition_col: int, stream: Stream) -> None:
+        """
+        Re-partition items by a pre-computed integer partition column.
+
+        Parameters
+        ----------
+        partition_col
+            Index of the integer column whose values give the target
+            local partition ID for each row. The partition column is
+            consumed as routing metadata and stripped from the payload.
+            Callers should not expect it in the output.
+        stream
+            CUDA stream for the unpack operation.
+        """
+        async with self._local_shuffle.inserting() as inserter:
+            for table in self._iter_chunks(stream):
+                inserter.insert_index(
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=self._br
+                    ),
+                    partition_col,
                 )
 
     def local_partitions(self) -> list[int]:

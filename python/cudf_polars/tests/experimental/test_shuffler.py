@@ -212,3 +212,88 @@ def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
 
     # All 4 distinct key values must appear somewhere across all ranks.
     assert set(global_df["key"].unique().to_list()) == {0, 1, 2, 3}
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize("local_count", [1, 2, 4])
+def test_local_repartitioner_index(spmd_engine, local_count) -> None:
+    # Two-phase index routing: insert_index globally, insert_chunks_index locally.
+    # Each row carries explicit routing columns so we can verify end-to-end placement.
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+
+    # "rank_part" routes each row to a rank via insert_index (global phase).
+    # "local_part" routes each row to a local partition via insert_chunks_index.
+    # Both columns are stripped; output has only "val".
+    pl_df = pl.DataFrame(
+        {
+            "rank_part": [i % comm.nranks for i in range(12)],
+            "local_part": [i % local_count for i in range(12)],
+            "val": list(range(12)),
+        }
+    )
+    # Output schema after both routing columns are stripped.
+    out_col_names = ["val"]
+    out_dtypes = [DataType(pl.Int32())]
+
+    results: list[tuple[int, pl.DataFrame]] = []
+
+    async def _run() -> None:
+        stream = context.get_stream_from_pool()
+        cudf_df = DataFrame.from_polars(pl_df, stream)
+
+        with reserve_op_id() as op_id:
+            # Global phase: route by rank_part (col 0), which is stripped.
+            # After this shuffle each rank holds rows where rank_part == rank,
+            # and the remaining schema is {"local_part": Int32, "val": Int32}.
+            shuffle = ShuffleManager(
+                context, comm, num_partitions=comm.nranks, collective_id=op_id
+            )
+            async with shuffle.inserting() as inserter:
+                inserter.insert_index(
+                    TableChunk.from_pylibcudf_table(
+                        cudf_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
+                    partition_col=0,
+                )
+
+            # Local phase: route by local_part (now col 0 after rank_part stripped).
+            local = LocalRepartitioner(shuffle, local_count=local_count)
+            await local.insert_chunks_index(partition_col=0, stream=stream)
+
+            for pid in local.local_partitions():
+                tbl = local.extract_chunk(pid, stream)
+                results.append(
+                    (
+                        pid,
+                        DataFrame.from_table(
+                            tbl, out_col_names, out_dtypes, stream
+                        ).to_polars(),
+                    )
+                )
+
+    asyncio.run(_run())
+
+    # Each rank produces exactly local_count partitions.
+    assert len(results) == local_count
+
+    # Both routing columns are stripped; output has only "val".
+    for _, df in results:
+        assert df.columns == ["val"]
+
+    # Routing: val=v must land in local partition v % local_count (== local_part).
+    for pid, df in results:
+        for val in df["val"].to_list():
+            assert val % local_count == pid
+
+    # Global: every inserted row survives.
+    local_df = (
+        pl.concat([df for _, df in results])
+        if results
+        else pl.DataFrame(schema={"val": pl.Int32})
+    )
+    with reserve_op_id() as op_id:
+        global_df = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local_df, op_id=op_id
+        )
+    assert global_df.height == 12 * comm.nranks
