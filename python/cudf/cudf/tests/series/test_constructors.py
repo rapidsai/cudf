@@ -1405,6 +1405,23 @@ def test_categorical_creation(codes, categories):
     assert_eq(expected, got)
 
 
+@pytest.mark.parametrize("tz", ["US/Eastern", "Asia/Tokyo", "UTC"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2024-01-01", "2024-02-01", "2024-01-01"],
+        ["2024-01-01", None, "2024-02-01"],
+    ],
+)
+def test_categorical_creation_tz_aware(data, tz):
+    cats = pd.to_datetime(data).tz_localize(tz)
+    pd_cat = pd.Categorical(cats)
+    expected = pd.Series(pd_cat)
+    got = cudf.Series(pd_cat)
+    assert_eq(expected, got)
+    assert got.cat.categories.dtype == expected.cat.categories.dtype
+
+
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls_as_category(
     input_obj, all_supported_types_as_str

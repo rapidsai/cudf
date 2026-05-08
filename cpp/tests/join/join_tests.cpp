@@ -2401,9 +2401,9 @@ TEST_F(JoinTest, HashJoinFullMatchContext)
   }
 }
 
-TEST_F(JoinTest, HashJoinMatchContextEmptyBuild)
+TEST_F(JoinTest, HashJoinMatchContextEmptyRight)
 {
-  // Test match context with empty build table
+  // Test match context with empty right table
   column_wrapper<int32_t> col0_0{{3, 1, 2}};
   column_wrapper<int32_t> col1_0{};  // Empty
 
@@ -2855,7 +2855,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
       [],        3
       [5, 6]     4
   */
-  lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}, null_at(0)};
+  lcw right{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}, null_at(0)};
 
   /*
     [
@@ -2868,7 +2868,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
       [6]        6
     ]
   */
-  lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}, null_at(2)};
+  lcw left{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}, null_at(2)};
 
   auto column_view_from_device_uvector(rmm::device_uvector<cudf::size_type> const& vector)
   {
@@ -2893,23 +2893,23 @@ struct JoinTestLists : public cudf::test::BaseFixture {
             JoinFunc join_func,
             cudf::out_of_bounds_policy oob_policy)
   {
-    auto const build_tv = cudf::table_view{{build}};
-    auto const probe_tv = cudf::table_view{{probe}};
+    auto const right_tv = cudf::table_view{{right}};
+    auto const left_tv  = cudf::table_view{{left}};
 
     auto const [left_result_map, right_result_map] =
-      join_func(build_tv,
-                probe_tv,
+      join_func(right_tv,
+                left_tv,
                 nulls_equal,
                 cudf::get_default_stream(),
                 cudf::get_current_device_resource_ref());
 
     auto const left_result_table =
-      sort_and_gather(build_tv, column_view_from_device_uvector(*left_result_map), oob_policy);
+      sort_and_gather(right_tv, column_view_from_device_uvector(*left_result_map), oob_policy);
     auto const right_result_table =
-      sort_and_gather(probe_tv, column_view_from_device_uvector(*right_result_map), oob_policy);
+      sort_and_gather(left_tv, column_view_from_device_uvector(*right_result_map), oob_policy);
 
-    auto const left_gold_table  = sort_and_gather(build_tv, left_gold_map, oob_policy);
-    auto const right_gold_table = sort_and_gather(probe_tv, right_gold_map, oob_policy);
+    auto const left_gold_table  = sort_and_gather(right_tv, left_gold_map, oob_policy);
+    auto const right_gold_table = sort_and_gather(left_tv, right_gold_map, oob_policy);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*left_result_table, *left_gold_table);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*right_result_table, *right_gold_table);
