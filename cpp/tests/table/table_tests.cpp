@@ -261,8 +261,9 @@ TEST_F(TableTest, TablesEqualThrowsForNonEqualityComparableTypes)
   auto right =
     column{cudf::data_type{cudf::type_id::EMPTY}, 3, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
-  EXPECT_THROW(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}),
-               cudf::logic_error);
+  EXPECT_THROW(
+    std::ignore = cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}),
+    cudf::logic_error);
 }
 
 TEST_F(TableTest, TablesEqualListColumns)

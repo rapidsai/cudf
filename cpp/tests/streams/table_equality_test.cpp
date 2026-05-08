@@ -19,10 +19,10 @@ TEST_F(TableEqualTest, NotEqual)
   cudf::test::fixed_width_column_wrapper<int> left(
     {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   cudf::test::fixed_width_column_wrapper<int> right({1, 1, 1, 1, 1});
-  cudf::tables_equal(cudf::table_view{{left}},
-                     cudf::table_view{{right}},
-                     cudf::null_equality::EQUAL,
-                     cudf::test::get_default_stream());
+  std::ignore = cudf::tables_equal(cudf::table_view{{left}},
+                                   cudf::table_view{{right}},
+                                   cudf::null_equality::EQUAL,
+                                   cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

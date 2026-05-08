@@ -26,10 +26,10 @@ namespace detail {
 namespace {
 
 template <bool has_nested_columns>
-bool tables_equal(table_view const& left,
-                  table_view const& right,
-                  null_equality nulls_equal,
-                  rmm::cuda_stream_view stream)
+[[nodiscard]] bool tables_equal(table_view const& left,
+                                table_view const& right,
+                                null_equality nulls_equal,
+                                rmm::cuda_stream_view stream)
 {
   auto const comparator = detail::row::equality::two_table_comparator{left, right, stream};
   auto const rows_equal = comparator.equal_to<has_nested_columns>(
@@ -50,10 +50,10 @@ bool tables_equal(table_view const& left,
 
 }  // namespace
 
-bool tables_equal(table_view const& left,
-                  table_view const& right,
-                  null_equality nulls_equal,
-                  rmm::cuda_stream_view stream)
+[[nodiscard]] bool tables_equal(table_view const& left,
+                                table_view const& right,
+                                null_equality nulls_equal,
+                                rmm::cuda_stream_view stream)
 {
   if (left.num_rows() != right.num_rows() || left.num_columns() != right.num_columns() ||
       !have_same_types(left, right)) {

@@ -27,9 +27,9 @@ namespace CUDF_EXPORT cudf {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return true if the tables are equal, false otherwise
  */
-bool tables_equal(table_view const& left,
-                  table_view const& right,
-                  null_equality nulls_equal    = null_equality::EQUAL,
-                  rmm::cuda_stream_view stream = cudf::get_default_stream());
+[[nodiscard]] bool tables_equal(table_view const& left,
+                                table_view const& right,
+                                null_equality nulls_equal    = null_equality::EQUAL,
+                                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 }  // namespace CUDF_EXPORT cudf
