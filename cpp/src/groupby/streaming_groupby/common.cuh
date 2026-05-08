@@ -108,17 +108,18 @@ struct n_table_comparator {
 };
 
 /*
- * insert_and_find on the main set for each batch row.  Returns the resident slot's
- * value (consumed by `thrust::transform` as `target_indices[row_idx]`) and writes
- * two side-output arrays:
+ * insert_and_find on the main set for each batch row.  Writes the resident slot's
+ * value to `target_indices[row_idx]` and returns 1 if this row inserted a new key,
+ * 0 otherwise.  Also writes two side-output arrays:
  *   inserted_flags[row_idx] = whether this row won the CAS (used as the stencil
- *                               for the subsequent count + copy_if of winners)
+ *                               for the subsequent copy_if of winners)
  *   slot_offsets[row_idx]   = offset of the resident slot from `base`, or
  *                               CUDF_SIZE_TYPE_SENTINEL for null/excluded rows
  *
- * If the batch produces no new keys, target_indices is already final and no further
- * pass is required.  If new keys exist, Pass 2 rewrites the affected slots and the
- * caller re-reads target_indices via slot_offsets in a single transform.
+ * The return value is consumed by `thrust::transform_reduce` to count the number of
+ * newly inserted keys in the same pass.  If the batch produces no new keys,
+ * target_indices is already final.  If new keys exist, Pass 2 rewrites the affected
+ * slots and the caller re-reads target_indices via slot_offsets in a single transform.
  */
 template <typename SetRef>
 struct insert_and_map_fn {
@@ -126,20 +127,23 @@ struct insert_and_map_fn {
   bitmask_type const* row_bitmask;
   size_type max_distinct_keys;
   size_type const* base;
+  size_type* target_indices;
   bool* inserted_flags;
   size_type* slot_offsets;
 
   __device__ size_type operator()(size_type row_idx) const
   {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, row_idx)) {
+      target_indices[row_idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
       inserted_flags[row_idx] = false;
       slot_offsets[row_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+      return 0;
     }
     auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + row_idx);
+    target_indices[row_idx]     = *iter;
     inserted_flags[row_idx]     = inserted;
     slot_offsets[row_idx]       = static_cast<size_type>(iter - base);
-    return *iter;
+    return inserted ? 1 : 0;
   }
 };
 

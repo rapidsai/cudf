@@ -19,9 +19,9 @@
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
 
 #include <string>
 
@@ -74,41 +74,36 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   // First batch has no compacted batches yet, so all slot values are transient (>=
   // _max_distinct_keys) and only the batch-self equality branch of n_table_comparator
-  // can fire.  Bypass it and pass batch_self_eq directly to skip the cross-table
-  // dispatch, the cross-comparator build, and the dense-ID branches.
+  // can fire.  Bypass it with first_batch_comparator to skip the cross-table dispatch,
+  // the cross-comparator build, and the dense-ID branches.
   auto do_insert_and_map = [&](auto set_ref) {
-    thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
-                      cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(batch_size),
-                      target_indices.begin(),
-                      insert_and_map_fn{set_ref,
-                                        batch_bitmask,
-                                        _max_distinct_keys,
-                                        base,
-                                        inserted_flags.data(),
-                                        slot_offsets.data()});
+    return thrust::transform_reduce(rmm::exec_policy_nosync(stream, temp_mr),
+                                    cuda::counting_iterator<size_type>(0),
+                                    cuda::counting_iterator<size_type>(batch_size),
+                                    insert_and_map_fn{set_ref,
+                                                      batch_bitmask,
+                                                      _max_distinct_keys,
+                                                      base,
+                                                      target_indices.data(),
+                                                      inserted_flags.data(),
+                                                      slot_offsets.data()},
+                                    size_type{0},
+                                    cuda::std::plus<size_type>{});
   };
 
   auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
 
+  size_type new_distinct_keys = 0;
   if (_compacted_batches.empty()) {
     auto const first_batch_cmp = first_batch_comparator{batch_self_eq, _max_distinct_keys};
-    do_insert_and_map(set_ref_base.rebind_key_eq(first_batch_cmp));
+    new_distinct_keys          = do_insert_and_map(set_ref_base.rebind_key_eq(first_batch_cmp));
   } else {
     auto d_cross_eqs = build_cross_comparators<has_nested>(
       preprocessed_batch, _preprocessed_batches, has_null, stream);
     auto const comparator =
       n_table_comparator{batch_self_eq, d_cross_eqs.data(), _key_loc->data(), _max_distinct_keys};
-    do_insert_and_map(set_ref_base.rebind_key_eq(comparator));
+    new_distinct_keys = do_insert_and_map(set_ref_base.rebind_key_eq(comparator));
   }
-
-  // Count newly inserted keys.  Sequential reads over inserted_flags are cheaper
-  // than the alternative (re-deriving winner status via two random loads per row).
-  auto const new_distinct_keys =
-    static_cast<size_type>(thrust::count_if(rmm::exec_policy_nosync(stream, temp_mr),
-                                            inserted_flags.begin(),
-                                            inserted_flags.end(),
-                                            cuda::std::identity{}));
 
   if (new_distinct_keys > 0) {
     // Stream compact: get the batch-local indices of newly inserted keys.
