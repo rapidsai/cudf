@@ -41,6 +41,8 @@ set +e
 #   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
 #   --cov-report=term
 
+export RAPIDSMPF_PINNED_MEMORY="false"
+
 rapids-logger "pytest cudf-polars"
 timeout 30m ./ci/run_cudf_polars_pytests.sh -vs \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \

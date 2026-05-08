@@ -71,6 +71,8 @@ for version in "${VERSIONS[@]}"; do
         COVERAGE_ARGS=(--no-cov)
     fi
 
+    export RAPIDSMPF_PINNED_MEMORY="false"
+
     timeout 1h ./ci/run_cudf_polars_pytests.sh \
         "${COVERAGE_ARGS[@]}" \
         --numprocesses=8 \
