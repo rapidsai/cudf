@@ -170,11 +170,18 @@ class StreamingEngine(pl.GPUEngine):
             exit_stack or contextlib.ExitStack()
         )
 
-        # Choose good defaults for target_partition_size and broadcast_limit
+        # Choose good defaults for target_partition_size and broadcast_limit,
+        # but only when neither the key nor its backing env var is already set.
+        _auto_defaults = {
+            "target_partition_size": "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE",
+            "broadcast_limit": "CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT",
+        }
         cluster_infos: list[ClusterInfo] | None = None
-        if need_defaults := {"target_partition_size", "broadcast_limit"}.difference(
-            executor_options
-        ):
+        if need_defaults := {
+            key
+            for key, env in _auto_defaults.items()
+            if key not in executor_options and not os.getenv(env)
+        }:
             cluster_infos = self.gather_cluster_info()
             min_device_size = (
                 min(
