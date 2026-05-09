@@ -171,3 +171,26 @@ def test_replace_multiple_rows(datadir):
     gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+
+def test_dataframe_replace_inf_does_not_remap_categorical_codes():
+    categories = [f"cat_{i}" for i in range(20)]
+    cat_dtype = cudf.CategoricalDtype(
+        categories=sorted(categories),
+        ordered=False,
+    )
+    gdf = cudf.DataFrame(
+        {
+            "cat_col": ["cat_6", "cat_19", "cat_14", "cat_10", "cat_7"],
+            "num_col": [1.0, np.inf, np.inf, 4.0, 5.0],
+        }
+    )
+    gdf["cat_col"] = gdf["cat_col"].astype(cat_dtype)
+
+    before = gdf["cat_col"].copy()
+    before_codes = gdf["cat_col"].cat.codes.copy()
+
+    result = gdf.replace([np.inf, -np.inf], np.nan)
+
+    assert_eq(result["cat_col"], before)
+    assert_eq(result["cat_col"].cat.codes, before_codes)

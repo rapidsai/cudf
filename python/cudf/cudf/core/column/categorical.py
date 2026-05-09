@@ -431,6 +431,15 @@ class CategoricalColumn(ColumnBase):
                 plc.Table([old_plc, new_plc]), [0], 1
             ).columns()
 
+        if old_plc.size() == 0:
+            return replaced.copy()
+
+        remaining_to_replace = ColumnBase.create(
+            old_plc, to_replace_col.dtype
+        )
+        if not replaced.categories.isin(remaining_to_replace).any():
+            return replaced.copy()
+
         if new_plc.null_count() > 0:
             # Any value mapped to null is dropped in the result
             new_isnull_plc = plc.unary.is_null(new_plc)
