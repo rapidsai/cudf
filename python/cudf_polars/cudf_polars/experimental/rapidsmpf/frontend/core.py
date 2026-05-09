@@ -36,6 +36,7 @@ from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
@@ -379,6 +380,7 @@ def execute_ir_on_rank(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -407,6 +409,8 @@ def execute_ir_on_rank(
         Mapping from IR nodes to their pre-allocated collective operation IDs.
     collect_metadata
         Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -416,7 +420,9 @@ def execute_ir_on_rank(
         Collected channel metadata if ``collect_metadata`` is ``True``,
         otherwise ``None``.
     """
-    ir_context = IRExecutionContext(get_cuda_stream=ctx.get_stream_from_pool)
+    ir_context = IRExecutionContext(
+        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+    )
     metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
 
     nodes, output = generate_network(
@@ -594,6 +600,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -620,6 +627,8 @@ def evaluate_on_rank(
         Executor configuration forwarded from the client.
     collect_metadata
         Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -648,4 +657,5 @@ def evaluate_on_rank(
             stats,
             collective_id_map,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )

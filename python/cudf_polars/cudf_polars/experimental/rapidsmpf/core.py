@@ -4,45 +4,27 @@
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.actor import (
-    run_actor_network,
-)
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import pylibcudf as plc
-
-import cudf_polars.experimental.rapidsmpf.collectives.shuffle
-import cudf_polars.experimental.rapidsmpf.collectives.sort
-import cudf_polars.experimental.rapidsmpf.groupby
-import cudf_polars.experimental.rapidsmpf.io
-import cudf_polars.experimental.rapidsmpf.join
-import cudf_polars.experimental.rapidsmpf.repartition
-import cudf_polars.experimental.rapidsmpf.union
-from cudf_polars.containers import DataFrame
+import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
     DataFrameScan,
-    IRExecutionContext,
     Join,
     Scan,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
-from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
-from cudf_polars.experimental.statistics import collect_statistics
+from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -52,10 +34,11 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     import polars as pl
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -87,13 +70,32 @@ def evaluate_logical_plan(
     -------
     The output DataFrame and metadata collector.
     """
-    query_id = uuid.uuid4()
+    # For default_singleton, inject the process-wide DefaultSingletonEngine instance
+    # into config_options before treating it as a regular SPMDEngine.
+    if config_options.executor.cluster == "default_singleton":
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            DefaultSingletonEngine,
+        )
 
+        engine = DefaultSingletonEngine.create_or_get()
+        config_options = dataclasses.replace(
+            config_options,
+            executor=dataclasses.replace(
+                config_options.executor,
+                spmd_context=SPMDContext(
+                    comm=engine.comm,
+                    context=engine.context,
+                    py_executor=engine._py_executor,
+                ),
+            ),
+        )
+
+    query_id = uuid.uuid4()
     with cudf_polars.dsl.tracing.bound_contextvars(
         cudf_polars_query_id=str(query_id),
     ):
         match config_options.executor.cluster:
-            case "spmd":
+            case "spmd" | "default_singleton":
                 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
                     evaluate_pipeline_spmd_mode,
                 )
@@ -126,145 +128,8 @@ def evaluate_logical_plan(
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
-            case "default_singleton":
-                # Single-process execution: lower and run locally. Reuse the
-                # process-wide ``DefaultSingletonEngine`` so the rapidsmpf
-                # Context, RMM adaptor, and py-executor persist across
-                # ``.collect()`` calls instead of being rebuilt per query.
-                from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
-                    DefaultSingletonEngine,
-                )
-
-                engine = DefaultSingletonEngine.create_or_get()
-                stats = collect_statistics(ir, config_options)
-                ir, partition_info = lower_ir_graph(ir, config_options, stats)
-                with ReserveOpIDs(ir, config_options) as collective_id_map:
-                    log_query_plan(ir, config_options)
-                    result, metadata_collector = evaluate_pipeline(
-                        ir,
-                        partition_info,
-                        config_options,
-                        stats,
-                        collective_id_map,
-                        engine.comm,
-                        engine.context,
-                        collect_metadata=collect_metadata,
-                        query_id=query_id,
-                    )
             case other:
                 raise ValueError(f"Unknown cluster mode: {other}")
-
-    return result, metadata_collector
-
-
-def evaluate_pipeline(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
-    comm: Communicator,
-    rmpf_context: Context,
-    *,
-    collect_metadata: bool = False,
-    query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
-    """
-    Build and evaluate a RapidsMPF streaming pipeline.
-
-    Parameters
-    ----------
-    ir
-        The IR node.
-    partition_info
-        The partition information.
-    config_options
-        The configuration options.
-    stats
-        The statistics collector.
-    collective_id_map
-        The mapping of IR nodes to lists of collective IDs.
-    comm
-        The communicator describing the participating processes.
-    rmpf_context
-        The RapidsMPF context.
-    collect_metadata
-        Whether to collect runtime metadata.
-    query_id
-        A unique identifier for the query.
-
-    Returns
-    -------
-    The output DataFrame and metadata collector.
-    """
-    br = rmpf_context.br()
-
-    # Create the IR execution context (always uses the rapidsmpf stream pool).
-    ir_context = IRExecutionContext(
-        get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
-    )
-
-    # Generate actor graph nodes.
-    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
-    nodes, output = generate_network(
-        rmpf_context,
-        comm,
-        ir,
-        partition_info,
-        config_options,
-        stats,
-        ir_context=ir_context,
-        collective_id_map=collective_id_map,
-        metadata_collector=metadata_collector,
-    )
-
-    # Run the network.
-    with ThreadPoolExecutor(
-        max_workers=config_options.executor.num_py_executors,
-        thread_name_prefix="cpse",
-    ) as executor:
-        run_actor_network(actors=nodes, py_executor=executor)
-
-    # Extract/return the concatenated result. Keep chunks alive until after
-    # concatenation to prevent use-after-free with stream-ordered allocations.
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg, br=br).make_available_and_spill(
-            br, allow_overbooking=True
-        )
-        for msg in messages
-    ]
-    if chunks:
-        col_names = list(ir.schema.keys())
-        col_dtypes = list(ir.schema.values())
-        dfs = [
-            DataFrame.from_table(
-                chunk.table_view(), col_names, col_dtypes, chunk.stream
-            )
-            for chunk in chunks
-        ]
-        if len(dfs) == 1:
-            df = dfs[0]
-        else:
-            with ir_context.stream_ordered_after(*dfs) as stream:
-                df = DataFrame.from_table(
-                    plc.concatenate.concatenate([d.table for d in dfs], stream=stream),
-                    col_names,
-                    col_dtypes,
-                    stream,
-                )
-    else:
-        # No chunks received - create an empty DataFrame with correct schema.
-        stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(ir, rmpf_context, stream)
-        df = DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            stream,
-        )
-
-    result = df.to_polars()
 
     return result, metadata_collector
 

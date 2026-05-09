@@ -376,6 +376,7 @@ def _worker_evaluate(
     *,
     uid: str,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -396,6 +397,8 @@ def _worker_evaluate(
         per-worker context attribute.
     collect_metadata
         Whether to collect channel metadata.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -418,6 +421,7 @@ def _worker_evaluate(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
 
@@ -477,6 +481,7 @@ def evaluate_pipeline_dask_mode(
         ir,
         worker_config,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
     dfs: list[pl.DataFrame] = []

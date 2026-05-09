@@ -119,6 +119,7 @@ def evaluate_pipeline_ray_mode(
                 ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
+                query_id=query_id,
             )
             for rank in rank_actors
         ]
@@ -329,6 +330,7 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
+        query_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -346,6 +348,8 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
+        query_id
+            Unique identifier for the query, propagated into actor traces.
 
         Returns
         -------
@@ -373,6 +377,7 @@ class RankActor:
             ir,
             config_options,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:

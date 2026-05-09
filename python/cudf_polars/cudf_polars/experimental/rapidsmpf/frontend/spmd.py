@@ -112,6 +112,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
 
