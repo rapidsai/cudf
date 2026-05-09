@@ -10,8 +10,6 @@
 
 #include "column_buffer.hpp"
 
-#include "io/parquet/parquet_common.hpp"
-
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
