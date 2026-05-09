@@ -434,9 +434,7 @@ class CategoricalColumn(ColumnBase):
         if old_plc.size() == 0:
             return replaced.copy()
 
-        remaining_to_replace = ColumnBase.create(
-            old_plc, to_replace_col.dtype
-        )
+        remaining_to_replace = ColumnBase.create(old_plc, to_replace_col.dtype)
         if not replaced.categories.isin(remaining_to_replace).any():
             return replaced.copy()
 
