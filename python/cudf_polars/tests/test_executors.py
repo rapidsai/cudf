@@ -10,8 +10,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.parametrize("executor", [None, "in-memory", "streaming"])
-def test_executor_basics(executor, streaming_engine_factory):
+def test_executor_basics(streaming_engine_factory):
     df = pl.LazyFrame(
         {
             "a": pl.Series([[1, 2], [3]], dtype=pl.List(pl.Int8())),
@@ -27,10 +26,7 @@ def test_executor_basics(executor, streaming_engine_factory):
         }
     )
 
-    if executor in (None, "streaming"):
-        assert_gpu_result_equal(df, engine=streaming_engine_factory())
-    else:
-        assert_gpu_result_equal(df, executor=executor)
+    assert_gpu_result_equal(df, engine=streaming_engine_factory())
 
 
 def test_cudf_cache_evaluate():

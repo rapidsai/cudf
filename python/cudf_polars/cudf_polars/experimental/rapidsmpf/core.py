@@ -85,7 +85,7 @@ def evaluate_logical_plan(
                 spmd_context=SPMDContext(
                     comm=engine.comm,
                     context=engine.context,
-                    py_executor=engine._py_executor,
+                    py_executor=engine.py_executor,
                 ),
             ),
         )

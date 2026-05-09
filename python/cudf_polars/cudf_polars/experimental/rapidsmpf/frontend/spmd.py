@@ -376,7 +376,7 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        self._py_executor: ThreadPoolExecutor = ThreadPoolExecutor(
+        self._py_executor: ThreadPoolExecutor | None = ThreadPoolExecutor(
             max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
@@ -506,7 +506,7 @@ class SPMDEngine(StreamingEngine):
                 "spmd_context": SPMDContext(
                     comm=self._comm,
                     context=self._ctx,
-                    py_executor=self._py_executor,
+                    py_executor=self.py_executor,
                 ),
             },
             engine_options={
@@ -568,6 +568,24 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    @property
+    def py_executor(self) -> ThreadPoolExecutor:
+        """
+        The thread-pool executor used to drive the actor network.
+
+        Returns
+        -------
+        Active Python thread-pool executor.
+
+        Raises
+        ------
+        RuntimeError
+            If called after :meth:`shutdown`.
+        """
+        if self._py_executor is None:
+            raise RuntimeError("py_executor is not available after shutdown")
+        return self._py_executor
+
     def gather_cluster_info(self) -> list[ClusterInfo]:
         """
         Collect diagnostic information from every rank.
@@ -624,6 +642,7 @@ class SPMDEngine(StreamingEngine):
         super().shutdown()
         self._comm = None
         self._ctx = None
+        self._py_executor = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         data = json.dumps(func(*args, **kwargs)).encode()
