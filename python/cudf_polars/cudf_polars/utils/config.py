@@ -274,11 +274,12 @@ def default_target_partition_size(min_device_size: int | None) -> int:
     _DEFAULT_TARGET_PARTITION_SIZE = 1_500_000_000
     if min_device_size is None:  # pragma: no cover
         return _DEFAULT_TARGET_PARTITION_SIZE
-    return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
+    else:
+        return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
 def default_broadcast_limit(min_device_size: int | None) -> int:
-    """Set the broadcast-limit configuration."""
+    """Return the default broadcast limit."""
     if min_device_size is None:  # pragma: no cover
         return 6_000_000_000
     # Target 15% of the minimum device memory across all ranks.
@@ -554,13 +555,14 @@ class StreamingExecutor:
         - keyword argument to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
-        By default, cudf-polars uses a target partition size of 1/40th of the
-        device memory.
-
-        The pynvml library is used to query the total device memory on the first
-        visible GPU. If the device size is not available, the default target
-        partition size will be 1GB. The default will always be between 1GB and 10GB.
-
+        By default, cudf-polars uses the minimum of 1.5GB or 2.5% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``target_partition_size`` will be 1.5GB.
+    broadcast_limit
+        The maximum number of bytes to broadcast in a single operation.
+        By default, cudf-polars uses 15% of the minimum device size in the cluster.
+        If pynvml cannot query the the device size(s), the default
+        ``broadcast_limit`` will be 6GB.
     client_device_threshold
         Threshold for spilling data from device memory.
         Default is 50% of device memory on the client process.
@@ -650,7 +652,6 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
-    min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
@@ -665,18 +666,17 @@ class StreamingExecutor:
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
-        min_device_size = self.min_device_size or get_total_device_memory()
         if self.target_partition_size == 0:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_target_partition_size(min_device_size),
+                default_target_partition_size(get_total_device_memory()),
             )
         if self.broadcast_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_limit",
-                default_broadcast_limit(min_device_size),
+                default_broadcast_limit(get_total_device_memory()),
             )
 
         # Handle dynamic_planning.
@@ -702,7 +702,6 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-
         if not isinstance(self.broadcast_limit, int):
             raise TypeError("broadcast_limit must be an int")
         if not isinstance(self.sink_to_directory, bool):

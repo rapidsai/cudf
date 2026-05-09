@@ -32,7 +32,11 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import get_total_device_memory
+from cudf_polars.utils.config import (
+    default_broadcast_limit,
+    default_target_partition_size,
+    get_total_device_memory,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
@@ -151,11 +155,6 @@ class StreamingEngine(pl.GPUEngine):
     exit_stack
         A :class:`contextlib.ExitStack` whose registered contexts are closed
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
-    cluster_infos
-        List of :class:`ClusterInfo`, one per rank.
-    min_device_size
-        Minimum device memory of the cluster. If ``None``, the minimum device
-        memory is computed from ``cluster_infos`` (if provided).
     """
 
     def __init__(
@@ -165,27 +164,38 @@ class StreamingEngine(pl.GPUEngine):
         executor_options: dict[str, Any],
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
-        cluster_infos: list[ClusterInfo] | None = None,
-        min_device_size: int | None = None,
     ):
         self._nranks = nranks
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
-        # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
-        # accept it.
-        engine_options = dict(engine_options)
-        allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
-        if min_device_size is None and cluster_infos:
+
+        # Choose good defaults for target_partition_size and broadcast_limit
+        cluster_infos: list[ClusterInfo] | None = None
+        if need_defaults := {"target_partition_size", "broadcast_limit"}.difference(
+            executor_options
+        ):
+            cluster_infos = self.gather_cluster_info()
             min_device_size = min(
                 (info.device_memory for info in cluster_infos),
                 default=None,
             )
-        self.min_device_size: int | None = min_device_size
+            if "target_partition_size" in need_defaults:
+                executor_options["target_partition_size"] = (
+                    default_target_partition_size(min_device_size)
+                )
+            if "broadcast_limit" in need_defaults:
+                executor_options["broadcast_limit"] = default_broadcast_limit(
+                    min_device_size
+                )
+
+        # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
+        # accept it.
+        engine_options = dict(engine_options)
+        allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
         super().__init__(
             executor="streaming",
-            executor_options=executor_options
-            | {"min_device_size": self.min_device_size},
+            executor_options=executor_options,
             **engine_options,
         )
         if nranks > 1 and not allow_gpu_sharing:
