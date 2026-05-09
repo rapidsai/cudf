@@ -258,7 +258,7 @@ class LocalRepartitioner:
                 if table.num_rows() > 0:
                     yield table
 
-    async def insert_chunks_hash(
+    async def repartition_by_hash(
         self, *, columns_to_hash: tuple[int, ...], stream: Stream
     ) -> None:
         """
@@ -280,7 +280,7 @@ class LocalRepartitioner:
                     columns_to_hash,
                 )
 
-    async def insert_chunks_index(
+    async def repartition_by_index(
         self,
         *,
         partition_col: int,

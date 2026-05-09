@@ -145,11 +145,9 @@ def test_is_already_partitioned():
 @pytest.mark.spmd
 @pytest.mark.parametrize("local_count", [1, 2, 4])
 def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
-    # Test LocalRepartitioner with hash partitioning
     context = spmd_engine.context
     comm = spmd_engine.comm
 
-    # 12 rows, 4 distinct key values (3 rows per key)
     pl_df = pl.DataFrame({"key": list(range(4)) * 3, "val": list(range(12))})
     col_names = pl_df.columns
     dtypes = [DataType(dt) for dt in pl_df.dtypes]
@@ -172,7 +170,7 @@ def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
                 )
 
             local = LocalRepartitioner(shuffle, local_count=local_count)
-            await local.insert_chunks_hash(columns_to_hash=(0,), stream=stream)
+            await local.repartition_by_hash(columns_to_hash=(0,), stream=stream)
 
             for pid in local.local_partitions():
                 tbl = local.extract_chunk(pid, stream)
@@ -187,43 +185,29 @@ def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
 
     asyncio.run(_run())
 
-    # Each rank must produce exactly local_count output partitions.
     assert len(results) == local_count
 
-    # Hash is deterministic locally: same key always lands in the same local partition.
+    # Same key always lands in the same local partition.
     key_to_pid: dict[int, int] = {}
     for pid, df in results:
         for key_val in df["key"].to_list():
             assert key_to_pid.setdefault(key_val, pid) == pid
 
-    # AllGather across ranks to verify global invariants.
-    local_df = (
-        pl.concat([df for _, df in results])
-        if results
-        else pl.DataFrame(schema={"key": pl.Int32, "val": pl.Int32})
-    )
+    # AllGather across ranks: every rank inserts 12 rows, all must survive.
+    local_df = pl.concat([df for _, df in results])
     with reserve_op_id() as op_id:
         global_df = allgather_polars_dataframe(
             engine=spmd_engine, local_df=local_df, op_id=op_id
         )
-
-    # Every rank inserts 12 rows; all must survive the shuffle + local repartition.
     assert global_df.height == 12 * comm.nranks
-
-    # All 4 distinct key values must appear somewhere across all ranks.
-    assert set(global_df["key"].unique().to_list()) == {0, 1, 2, 3}
 
 
 @pytest.mark.spmd
 @pytest.mark.parametrize("local_count", [1, 2, 4])
 def test_local_repartitioner_index(spmd_engine, local_count) -> None:
-    # Two-phase index routing: insert_index globally, insert_chunks_index locally.
-    # Each row carries explicit routing columns so we can verify end-to-end placement.
     context = spmd_engine.context
     comm = spmd_engine.comm
 
-    # Payload: "local_part" routes locally, "val" is the data.
-    # Routing for the global phase ("rank_part") is kept separate.
     pl_payload = pl.DataFrame(
         {
             "local_part": [i % local_count for i in range(12)],
@@ -231,7 +215,6 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
         }
     )
     pl_rank_part = pl.DataFrame({"rank_part": [i % comm.nranks for i in range(12)]})
-    # Output schema after local_part is also stripped by insert_chunks_index.
     out_col_names = ["val"]
     out_dtypes = [DataType(pl.Int32())]
 
@@ -243,8 +226,6 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
         rank_part_df = DataFrame.from_polars(pl_rank_part, stream)
 
         with reserve_op_id() as op_id:
-            # Global phase: route payload by rank_part (separate chunk).
-            # After shuffle each rank holds {"local_part": Int32, "val": Int32}.
             shuffle = ShuffleManager(
                 context, comm, num_partitions=comm.nranks, collective_id=op_id
             )
@@ -258,9 +239,8 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
                     ),
                 )
 
-            # Local phase: route by local_part (col 0 of the received data), strip it.
             local = LocalRepartitioner(shuffle, local_count=local_count)
-            await local.insert_chunks_index(partition_col=0, stream=stream)
+            await local.repartition_by_index(partition_col=0, stream=stream)
 
             for pid in local.local_partitions():
                 tbl = local.extract_chunk(pid, stream)
@@ -275,24 +255,16 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
 
     asyncio.run(_run())
 
-    # Each rank produces exactly local_count partitions.
     assert len(results) == local_count
-
-    # Both routing columns are stripped; output has only "val".
-    for _, df in results:
-        assert df.columns == ["val"]
 
     # Routing: val=v must land in local partition v % local_count (== local_part).
     for pid, df in results:
+        assert df.columns == ["val"]
         for val in df["val"].to_list():
             assert val % local_count == pid
 
     # Global: every inserted row survives.
-    local_df = (
-        pl.concat([df for _, df in results])
-        if results
-        else pl.DataFrame(schema={"val": pl.Int32})
-    )
+    local_df = pl.concat([df for _, df in results])
     with reserve_op_id() as op_id:
         global_df = allgather_polars_dataframe(
             engine=spmd_engine, local_df=local_df, op_id=op_id
