@@ -8,6 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -340,10 +341,6 @@ __device__ inline string_decode_result device_decode_string_info(uint8_t const* 
   return {0, 0, false};
 }
 
-// ---------------------------------------------------------------------------
-// get_variant_field: two-pass kernel
-// ---------------------------------------------------------------------------
-
 // Reads the metadata and value list bytes for a given row from device views.
 // Returns pointers into device memory and the lengths.
 struct row_list_ptrs {
@@ -446,10 +443,6 @@ CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device
   }
 }
 
-// ---------------------------------------------------------------------------
-// cast_variant: integer kernel (INT8/INT16/INT32/INT64)
-// ---------------------------------------------------------------------------
-
 template <typename T>
 CUDF_KERNEL void cast_variant_int_kernel(column_device_view d_struct,
                                          cudf::detail::lists_column_device_view d_val,
@@ -481,10 +474,6 @@ CUDF_KERNEL void cast_variant_int_kernel(column_device_view d_struct,
     cudf::clear_bit(d_null_mask, row);
   }
 }
-
-// ---------------------------------------------------------------------------
-// cast_variant: STRING functor for make_strings_children
-// ---------------------------------------------------------------------------
 
 struct cast_variant_string_fn {
   column_device_view d_struct;
@@ -526,10 +515,6 @@ struct cast_variant_string_fn {
   }
 };
 
-// ---------------------------------------------------------------------------
-// Validation helpers shared between public APIs
-// ---------------------------------------------------------------------------
-
 void validate_variant_struct(column_view const& variant_column)
 {
   CUDF_EXPECTS(variant_column.type().id() == type_id::STRUCT,
@@ -546,6 +531,11 @@ void validate_variant_struct(column_view const& variant_column)
   CUDF_EXPECTS(meta_lists.child().type().id() == type_id::UINT8 &&
                  val_lists.child().type().id() == type_id::UINT8,
                "VARIANT metadata and value children must be list<uint8>",
+               std::invalid_argument);
+
+  auto const num_rows = variant_column.size();
+  CUDF_EXPECTS(meta_lists.size() == num_rows && val_lists.size() == num_rows,
+               "VARIANT metadata and value lists must have the same row count as the parent struct",
                std::invalid_argument);
 }
 
@@ -588,18 +578,14 @@ constexpr size_type block_size = 256;
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
-// get_variant_field
-// ---------------------------------------------------------------------------
+namespace detail {
 
 std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           std::string_view path,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  validate_variant_struct(variant_column);
-
-  auto const steps = detail::parse_variant_path(path);
+  auto const steps = parse_variant_path(path);
   CUDF_EXPECTS(
     !steps.empty(), "variant path must contain at least one step", std::invalid_argument);
 
@@ -619,16 +605,21 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   auto const host_path = marshal_path(steps);
   auto const depth     = static_cast<size_type>(steps.size());
 
-  auto d_step_kinds = cudf::detail::make_device_uvector_async(
-    host_span<uint8_t const>{host_path.kinds.data(), host_path.kinds.size()}, stream, mr);
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  auto d_step_kinds  = cudf::detail::make_device_uvector_async(
+    host_span<uint8_t const>{host_path.kinds.data(), host_path.kinds.size()}, stream, temp_mr);
   auto d_step_indices = cudf::detail::make_device_uvector_async(
-    host_span<size_type const>{host_path.indices.data(), host_path.indices.size()}, stream, mr);
+    host_span<size_type const>{host_path.indices.data(), host_path.indices.size()},
+    stream,
+    temp_mr);
   auto d_name_bytes = cudf::detail::make_device_uvector_async(
-    host_span<char const>{host_path.name_bytes.data(), host_path.name_bytes.size()}, stream, mr);
+    host_span<char const>{host_path.name_bytes.data(), host_path.name_bytes.size()},
+    stream,
+    temp_mr);
   auto d_name_offsets = cudf::detail::make_device_uvector_async(
     host_span<size_type const>{host_path.name_offsets.data(), host_path.name_offsets.size()},
     stream,
-    mr);
+    temp_mr);
 
   // Create device views for the struct and list children
   auto d_struct_ptr = column_device_view::create(variant_column, stream);
@@ -706,17 +697,11 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                   mr);
 }
 
-// ---------------------------------------------------------------------------
-// cast_variant
-// ---------------------------------------------------------------------------
-
 std::unique_ptr<column> cast_variant(column_view const& variant_column,
                                      data_type desired_type,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  validate_variant_struct(variant_column);
-
   auto const tid = desired_type.id();
   CUDF_EXPECTS(tid == type_id::STRING || tid == type_id::INT8 || tid == type_id::INT16 ||
                  tid == type_id::INT32 || tid == type_id::INT64,
@@ -776,9 +761,27 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
                              null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
 }
 
-// ---------------------------------------------------------------------------
-// extract_variant_field (convenience wrapper)
-// ---------------------------------------------------------------------------
+}  // namespace detail
+
+std::unique_ptr<column> get_variant_field(column_view const& variant_column,
+                                          std::string_view path,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  validate_variant_struct(variant_column);
+  return detail::get_variant_field(variant_column, path, stream, mr);
+}
+
+std::unique_ptr<column> cast_variant(column_view const& variant_column,
+                                     data_type desired_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  validate_variant_struct(variant_column);
+  return detail::cast_variant(variant_column, desired_type, stream, mr);
+}
 
 std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
                                               std::string_view path,
@@ -786,8 +789,12 @@ std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  auto intermediate = get_variant_field(variant_column, path, stream, mr);
-  return cast_variant(intermediate->view(), desired_type, stream, mr);
+  CUDF_FUNC_RANGE();
+  validate_variant_struct(variant_column);
+  // Validate once; the intermediate from detail::get_variant_field is always a well-formed
+  // VARIANT struct, so detail::cast_variant can skip its own validation.
+  auto intermediate = detail::get_variant_field(variant_column, path, stream, mr);
+  return detail::cast_variant(intermediate->view(), desired_type, stream, mr);
 }
 
 }  // namespace io::parquet::experimental

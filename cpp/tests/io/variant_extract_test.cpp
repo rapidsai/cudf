@@ -1173,8 +1173,11 @@ TEST_F(VariantExtractTest, DeepMixedPathManyRowsWithNulls)
 
   auto struc = wrap_multi_row_variant(meta_rows, val_rows);
 
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "$.a.b[0].d", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+  auto got =
+    cudf::io::parquet::experimental::extract_variant_field(struc,
+                                                           "$.a.b[0].c.d",
+                                                           cudf::data_type{cudf::type_id::STRING},
+                                                           cudf::test::get_default_stream());
 
   cudf::test::strings_column_wrapper expected(exp_strs.begin(), exp_strs.end(), exp_valid.begin());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*got, expected);

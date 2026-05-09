@@ -7,9 +7,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -348,19 +350,18 @@ inline std::unique_ptr<cudf::column> build_variant_column(
       std::copy(rows[i].begin(), rows[i].end(), h_data.begin() + h_offsets[i]);
     }
 
-    // Use synchronous cudaMemcpy (not Async) because the source host buffers
-    // go out of scope when this lambda returns; a pending async copy from
-    // pageable host memory would otherwise read garbage.
     rmm::device_buffer d_offsets_buf(h_offsets.size() * sizeof(int32_t), stream, mr);
-    CUDF_CUDA_TRY(cudaMemcpy(d_offsets_buf.data(),
-                             h_offsets.data(),
-                             h_offsets.size() * sizeof(int32_t),
-                             cudaMemcpyHostToDevice));
+    cudf::detail::cuda_memcpy(
+      cudf::device_span<int32_t>{static_cast<int32_t*>(d_offsets_buf.data()), h_offsets.size()},
+      cudf::host_span<int32_t const>{h_offsets.data(), h_offsets.size()},
+      stream);
 
     rmm::device_buffer d_data_buf(h_data.size(), stream, mr);
     if (!h_data.empty()) {
-      CUDF_CUDA_TRY(
-        cudaMemcpy(d_data_buf.data(), h_data.data(), h_data.size(), cudaMemcpyHostToDevice));
+      cudf::detail::cuda_memcpy(
+        cudf::device_span<uint8_t>{static_cast<uint8_t*>(d_data_buf.data()), h_data.size()},
+        cudf::host_span<uint8_t const>{h_data.data(), h_data.size()},
+        stream);
     }
 
     auto offsets_col =

@@ -343,7 +343,6 @@ ConfigureTest(
   GPUS 1
   PERCENT 100
 )
-
 ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_composer.cpp
