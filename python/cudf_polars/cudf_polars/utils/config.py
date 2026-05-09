@@ -665,7 +665,6 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        object.__setattr__(self, "cluster", Cluster(self.cluster))
         if self.target_partition_size == 0:
             object.__setattr__(
                 self,
@@ -678,6 +677,7 @@ class StreamingExecutor:
                 "broadcast_limit",
                 default_broadcast_limit(get_total_device_memory()),
             )
+        object.__setattr__(self, "cluster", Cluster(self.cluster))
 
         # Handle dynamic_planning.
         # Can be None, dict, or DynamicPlanningOptions
