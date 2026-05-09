@@ -600,4 +600,25 @@ public class CompiledExpressionTest extends CudfTestBase {
       Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
     }
   }
+
+  /**
+   * Verifies that computeColumn throws CudfException when the expression contains a
+   * ColumnNameReference, since plain table views carry no column-name metadata —
+   * name resolution is only supported inside HybridScanReader.
+   */
+  @Test
+  void testColumnNameReferenceThrowsOnComputeColumn() {
+    BinaryOperation op = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnNameReference("col"), Literal.ofInt(42));
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
+         CompiledExpression compiled = op.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiled.computeColumn(t).close());
+    }
+  }
+
+  /** Verifies that ExpressionType.COLUMN_NAME_REFERENCE has ordinal 5, matching the native plan's expected node-type ID. */
+  @Test
+  void testColumnNameReferenceTypeOrdinalMatchesPlan() {
+    Assertions.assertEquals(5, AstExpression.ExpressionType.COLUMN_NAME_REFERENCE.ordinal());
+  }
 }

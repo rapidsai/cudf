@@ -370,6 +370,10 @@ public final class MemoryCleaner {
     all.put(cleaner.id, new CleanerWeakReference(expr, cleaner, collected, false));
   }
 
+  public static void register(HybridScanReader reader, Cleaner cleaner) {
+    all.put(cleaner.id, new CleanerWeakReference(reader, cleaner, collected, false));
+  }
+
   static void register(HashJoin hashJoin, Cleaner cleaner) {
     all.put(cleaner.id, new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
