@@ -88,14 +88,14 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
     }
   }
 
-  // Slice the probe table to the partition range
-  auto const probe_partition_view =
+  // Slice the left table to the partition range
+  auto const left_partition_view =
     cudf::slice(match_ctx._left_table, {left_start_idx, left_end_idx})[0];
 
-  validate_hash_join_probe(_build, probe_partition_view, _has_nulls);
+  validate_hash_join_probe(_right, left_partition_view, _has_nulls);
 
-  auto const preprocessed_probe =
-    cudf::detail::row::equality::preprocessed_table::create(probe_partition_view, stream);
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left_partition_view, stream);
 
   // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
   bool const is_outer = (join != join_kind::INNER_JOIN);
@@ -110,12 +110,12 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
     join_indices;
 
   auto retrieve_partition = [&](auto equality, auto d_hasher) {
-    // Precompute probe keys for this partition slice.
-    rmm::device_uvector<probe_key_type> probe_keys(n, stream);
+    // Precompute left keys for this partition slice.
+    rmm::device_uvector<probe_key_type> left_keys(n, stream);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(partition_size),
-                      probe_keys.begin(),
+                      left_keys.begin(),
                       pair_fn{d_hasher});
 
     auto const ref = _impl->_hash_table.ref(cuco::op::count)
@@ -124,17 +124,17 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
 
     if (is_outer) {
       join_indices = launch_partitioned_retrieve<true>(
-        probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
+        left_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     } else {
       join_indices = launch_partitioned_retrieve<false>(
-        probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
+        left_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     }
   };
 
-  dispatch_join_comparator(_build,
-                           probe_partition_view,
-                           _preprocessed_build,
-                           preprocessed_probe,
+  dispatch_join_comparator(_right,
+                           left_partition_view,
+                           _preprocessed_right,
+                           preprocessed_left,
                            _has_nulls,
                            _nulls_equal,
                            retrieve_partition);

@@ -381,18 +381,18 @@ class hash_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Finalizes a partitioned full join by concatenating all per-partition probe results
-   * and appending the unmatched build rows (the complement).
+   * @brief Finalizes a partitioned full join by concatenating all per-partition results
+   * and appending the unmatched right rows (the complement).
    *
    * Call this method after calling `partitioned_full_join()` for every partition.  It combines
-   * the per-partition probe indices with the unmatched build row indices (a global property
+   * the per-partition indices with the unmatched right row indices (a global property
    * across all partitions) and returns a single `(left_indices, right_indices)` pair equivalent
    * to the output of `full_join()`.
    *
    * @param left_partials Per-partition `left_indices` views produced by `partitioned_full_join()`
    * @param right_partials Per-partition `right_indices` views produced by `partitioned_full_join()`
-   * @param probe_table_num_rows Total number of rows in the original probe table
-   * @param build_table_num_rows Total number of rows in the build table
+   * @param left_table_num_rows Total number of rows in the original left table
+   * @param right_table_num_rows Total number of rows in the right table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
@@ -404,8 +404,8 @@ class hash_join {
   finalize_partitioned_full_join(
     cudf::host_span<cudf::device_span<size_type const> const> left_partials,
     cudf::host_span<cudf::device_span<size_type const> const> right_partials,
-    size_type probe_table_num_rows,
-    size_type build_table_num_rows,
+    size_type left_table_num_rows,
+    size_type right_table_num_rows,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

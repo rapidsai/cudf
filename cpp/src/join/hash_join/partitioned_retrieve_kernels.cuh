@@ -46,7 +46,7 @@ __device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
  *
  * @tparam IsOuter  If true, unmatched probe rows emit a null-padded output row
  * @tparam Ref      cuco open-addressing reference type (carries hash, equality, storage)
- * @param input_probe    Packed probe keys: `.first` = hash, `.second` = probe row index
+ * @param keys           Packed left keys: `.first` = hash, `.second` = left row index
  * @param n              Number of probe keys
  * @param left_offset    Added to each probe row index to produce an absolute left index
  * @param left_output    Output buffer for left (probe-side) row indices
@@ -56,7 +56,7 @@ __device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
  */
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
-  partitioned_retrieve_kernel(probe_key_type const* __restrict__ input_probe,
+  partitioned_retrieve_kernel(probe_key_type const* __restrict__ keys,
                               thread_index_type n,
                               size_type left_offset,
                               size_type* __restrict__ left_output,
@@ -116,7 +116,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
       cg::binary_partition<flushing_tile_size>(flushing_tile, active);
 
     if (active) {
-      auto const probe_key  = input_probe[idx];
+      auto const probe_key  = keys[idx];
       auto const left_index = probe_key.second + left_offset;
 
       auto probing_iter = ref.probing_scheme().template make_iterator<bucket_size>(
