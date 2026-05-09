@@ -4,26 +4,18 @@
 
 from __future__ import annotations
 
-import contextlib
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
-from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
 )
-from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
-import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.collectives.sort
@@ -51,13 +43,13 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
+    from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
@@ -134,7 +126,7 @@ def evaluate_logical_plan(
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
-            case "single":
+            case "default_singleton":
                 # Single-process execution: lower and run locally. Reuse the
                 # process-wide ``DefaultSingletonEngine`` so the rapidsmpf
                 # Context, RMM adaptor, and py-executor persist across
@@ -172,7 +164,7 @@ def evaluate_pipeline(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     comm: Communicator,
-    rmpf_context: Context | None = None,
+    rmpf_context: Context,
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -205,152 +197,76 @@ def evaluate_pipeline(
     -------
     The output DataFrame and metadata collector.
     """
-    _original_mr: Any = None
-    use_stream_pool = False
-    if rmpf_context is not None:
-        # Using "distributed" mode.
-        # Always use the RapidsMPF stream pool for now.
-        br = rmpf_context.br()
-        use_stream_pool = True
-        rmpf_context_manager = contextlib.nullcontext(rmpf_context)
-    else:
-        # Using "single" mode.
-        # Create a new local RapidsMPF context.
-        _original_mr = rmm.mr.get_current_device_resource()
-        mr = RmmResourceAdaptor(_original_mr)
-        rmm.mr.set_current_device_resource(mr)
-        memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
-        single_spill_device = config_options.executor.client_device_threshold
-        if single_spill_device > 0.0 and single_spill_device < 1.0:
-            total_memory = rmm.mr.available_device_memory()[1]
-            memory_available = {
-                MemoryType.DEVICE: LimitAvailableMemory(
-                    mr, limit=int(total_memory * single_spill_device)
-                )
-            }
+    br = rmpf_context.br()
 
-        options = Options(
-            {
-                # By default, set the number of streaming threads to the max
-                # number of IO threads. The user may override this with an
-                # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
-                "num_streaming_threads": str(
-                    max(config_options.executor.max_io_threads, 1)
-                )
-            }
-            | get_environment_variables()
-        )
-        pinned_mr = (
-            PinnedMemoryResource.make_if_available()
-            if config_options.executor.spill_to_pinned_memory
-            else None
-        )
-        stream_pool = (
-            config_options.cuda_stream_policy.build()
-            if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig)
-            else None
-        )
-        use_stream_pool = stream_pool is not None
-        br = BufferResource(
-            mr,
-            pinned_mr=pinned_mr,
-            memory_available=memory_available,
-            stream_pool=stream_pool,
-        )
-        rmpf_context_manager = Context(comm.logger, br, options)
+    # Create the IR execution context (always uses the rapidsmpf stream pool).
+    ir_context = IRExecutionContext(
+        get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
+    )
 
-    with rmpf_context_manager as rmpf_context:
-        # Create the IR execution context
-        if use_stream_pool:
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
+    # Generate actor graph nodes.
+    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
+    nodes, output = generate_network(
+        rmpf_context,
+        comm,
+        ir,
+        partition_info,
+        config_options,
+        stats,
+        ir_context=ir_context,
+        collective_id_map=collective_id_map,
+        metadata_collector=metadata_collector,
+    )
+
+    # Run the network.
+    with ThreadPoolExecutor(
+        max_workers=config_options.executor.num_py_executors,
+        thread_name_prefix="cpse",
+    ) as executor:
+        run_actor_network(actors=nodes, py_executor=executor)
+
+    # Extract/return the concatenated result. Keep chunks alive until after
+    # concatenation to prevent use-after-free with stream-ordered allocations.
+    messages = output.release()
+    chunks = [
+        TableChunk.from_message(msg, br=br).make_available_and_spill(
+            br, allow_overbooking=True
+        )
+        for msg in messages
+    ]
+    if chunks:
+        col_names = list(ir.schema.keys())
+        col_dtypes = list(ir.schema.values())
+        dfs = [
+            DataFrame.from_table(
+                chunk.table_view(), col_names, col_dtypes, chunk.stream
             )
+            for chunk in chunks
+        ]
+        if len(dfs) == 1:
+            df = dfs[0]
         else:
-            ir_context = IRExecutionContext(query_id=query_id)
-
-        # Generate network nodes
-        assert rmpf_context is not None, "RapidsMPF context must defined."
-        metadata_collector: list[ChannelMetadata] | None = (
-            [] if collect_metadata else None
-        )
-        nodes, output = generate_network(
-            rmpf_context,
-            comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
-
-        try:
-            # Run the network
-            with ThreadPoolExecutor(
-                max_workers=config_options.executor.num_py_executors,
-                thread_name_prefix="cpse",
-            ) as executor:
-                run_actor_network(actors=nodes, py_executor=executor)
-
-            # Extract/return the concatenated result.
-            # Keep chunks alive until after concatenation to prevent
-            # use-after-free with stream-ordered allocations
-            messages = output.release()
-            chunks = [
-                TableChunk.from_message(msg, br=br).make_available_and_spill(
-                    br, allow_overbooking=True
-                )
-                for msg in messages
-            ]
-            dfs: list[DataFrame] = []
-            if chunks:
-                col_names = list(ir.schema.keys())
-                col_dtypes = list(ir.schema.values())
-                dfs = [
-                    DataFrame.from_table(
-                        chunk.table_view(), col_names, col_dtypes, chunk.stream
-                    )
-                    for chunk in chunks
-                ]
-                if len(dfs) == 1:
-                    df = dfs[0]
-                else:
-                    with ir_context.stream_ordered_after(*dfs) as stream:
-                        df = DataFrame.from_table(
-                            plc.concatenate.concatenate(
-                                [d.table for d in dfs], stream=stream
-                            ),
-                            col_names,
-                            col_dtypes,
-                            stream,
-                        )
-            else:
-                # No chunks received - create an empty DataFrame with correct schema
-                stream = ir_context.get_cuda_stream()
-                chunk = empty_table_chunk(ir, rmpf_context, stream)
+            with ir_context.stream_ordered_after(*dfs) as stream:
                 df = DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
+                    plc.concatenate.concatenate([d.table for d in dfs], stream=stream),
+                    col_names,
+                    col_dtypes,
                     stream,
                 )
+    else:
+        # No chunks received - create an empty DataFrame with correct schema.
+        stream = ir_context.get_cuda_stream()
+        chunk = empty_table_chunk(ir, rmpf_context, stream)
+        df = DataFrame.from_table(
+            chunk.table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            stream,
+        )
 
-            result = df.to_polars()
+    result = df.to_polars()
 
-            # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-            # before the Context, which ultimately contains the rmm MR, goes out of scope.
-            del messages, chunks, dfs, df
-        finally:
-            # Ensure these are dropped even if a node raises
-            # an exception in run_actor_network
-            del nodes, output
-
-            # Restore the initial RMM memory resource
-            if _original_mr is not None:
-                rmm.mr.set_current_device_resource(_original_mr)
-
-        return result, metadata_collector
+    return result, metadata_collector
 
 
 def determine_fanout_nodes(

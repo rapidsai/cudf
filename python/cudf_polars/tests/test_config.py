@@ -254,7 +254,7 @@ def test_validate_cluster() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.cluster == "single"
+    assert config.executor.cluster == "default_singleton"
 
     with pytest.raises(ValueError, match="'foo' is not a valid Cluster"):
         ConfigOptions.from_polars_engine(
@@ -332,7 +332,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "single")
+        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "default_singleton")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
@@ -342,7 +342,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
-        assert config.executor.cluster == "single"
+        assert config.executor.cluster == "default_singleton"
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100

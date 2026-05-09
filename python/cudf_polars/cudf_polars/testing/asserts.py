@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import polars as pl
 from polars import GPUEngine
@@ -28,9 +28,8 @@ __all__: list[str] = [
 ]
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--cluster` command-line arguments
+# command-line argument.
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_CLUSTER = "single"
 
 
 def assert_gpu_result_equal(
@@ -195,15 +194,10 @@ def get_default_engine(
     assert_gpu_result_equal
     assert_sink_result_equal
     """
-    executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
-    if executor == "streaming":
-        executor_options["cluster"] = DEFAULT_CLUSTER
-
     return GPUEngine(
         raise_on_fail=True,
         executor=executor,
-        executor_options=executor_options,
     )
 
 
