@@ -176,9 +176,12 @@ class StreamingEngine(pl.GPUEngine):
             executor_options
         ):
             cluster_infos = self.gather_cluster_info()
-            min_device_size = min(
-                (info.device_memory for info in cluster_infos),
-                default=None,
+            min_device_size = (
+                min(
+                    (info.device_memory for info in cluster_infos),
+                    default=None,
+                )
+                or None
             )
             if "target_partition_size" in need_defaults:
                 executor_options["target_partition_size"] = (
