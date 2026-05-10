@@ -1308,7 +1308,10 @@ class IndexedFrame(Frame):
                 index=self.index if result_index is None else result_index,
                 columns=result_cols,
             )
-        return result.item()
+        # 0-d result: return a numpy scalar (e.g. np.int64) to match
+        # pandas' ``np.matmul(Series, Series)`` semantics rather than the
+        # Python ``int`` produced by ``cupy.ndarray.item``.
+        return result.get()[()]
 
     @_performance_tracking
     def __matmul__(self, other):
