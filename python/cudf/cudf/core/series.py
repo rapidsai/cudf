@@ -3230,8 +3230,25 @@ class Series(SingleColumnFrame, IndexedFrame):
                 # their occurrences as 0.
                 # TODO: Remove this workaround once `observed`
                 # parameter support is added to `groupby`
+                #
+                # When ``dropna=False`` and the column contains nulls,
+                # ``res`` includes a ``NaN`` group that we must preserve;
+                # only the existing categories should be reindexed/filled
+                # with 0.
+                nan_count = (
+                    res[res.index.isna()]
+                    if not dropna and res.index.isna().any()
+                    else None
+                )
+                res = res[res.index.notna()]
                 res = res.reindex(self.dtype.categories).fillna(0)
                 res.index = res.index.astype(self.dtype)
+                if nan_count is not None:
+                    res = cudf.concat([res, nan_count])
+                    # ``cudf.concat`` does not always preserve the
+                    # ``ordered`` flag of the categorical index dtype, so
+                    # restore it here.
+                    res.index = res.index.astype(self.dtype)
 
         res.index.name = self.name
 

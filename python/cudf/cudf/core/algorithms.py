@@ -78,14 +78,21 @@ def factorize(
     >>> codes
     array([ 0,  1,  0, -1])
     >>> uniques
-    Index([1.0, 2.0], dtype='float64')
+    array([1., 2.])
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
     array([0, 1, 0, 2])
     >>> uniques
-    Index([1.0, 2.0, NaN], dtype='float64')
+    array([ 1.,  2., nan])
     """
+    # Dispatch to RangeIndex/MultiIndex (or any Index subclass with a
+    # specialized ``factorize``) so the resulting uniques preserve the
+    # original index class (matching ``pd.factorize`` behavior).
+    if isinstance(values, cudf.Index) and type(values) is not cudf.Index:
+        return values.factorize(sort=sort, use_na_sentinel=use_na_sentinel)
+
     return_cupy_array = isinstance(values, cp.ndarray)
+    return_numpy_array = isinstance(values, np.ndarray)
 
     if not can_convert_to_column(values):
         raise TypeError(
@@ -113,6 +120,11 @@ def factorize(
         dtype=np.dtype("int64"),
     ).values
 
+    # Match pandas: ``np.ndarray`` input → ``np.ndarray`` outputs;
+    # ``cp.ndarray`` input → ``cp.ndarray`` outputs; otherwise return a
+    # cudf ``Index`` for the uniques.
+    if return_numpy_array:
+        return labels.get(), cats.to_pandas().to_numpy()
     # TODO: Avoid accessing Index from the top level namespace
     return (
         labels,
