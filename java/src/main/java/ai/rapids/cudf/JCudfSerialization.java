@@ -903,17 +903,26 @@ public class JCudfSerialization {
       // Async D->H copies may still be in flight into these host buffers;
       // sync before closing to avoid a use-after-free on pinned memory.
       // Preserve the original cause; record secondary failures as suppressed.
+      boolean drained = false;
       try {
         Cuda.DEFAULT_STREAM.sync();
+        drained = true;
       } catch (Throwable syncFailure) {
         t.addSuppressed(syncFailure);
       }
-      for (int i = 0; i < onHost.length; i++) {
-        if (onHost[i] != null) {
-          try {
-            onHost[i].close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
+      // If the recovery sync threw, the CUDA stream is in an error state
+      // and pending DMA writes into the host buffers may not have completed.
+      // Closing them now risks the DMA engine writing into freed memory.
+      // Leak instead — the process is already in a broken state (sticky CUDA
+      // error usually requires a restart), and a leak beats silent corruption.
+      if (drained) {
+        for (int i = 0; i < onHost.length; i++) {
+          if (onHost[i] != null) {
+            try {
+              onHost[i].close();
+            } catch (Throwable closeFailure) {
+              t.addSuppressed(closeFailure);
+            }
           }
         }
       }

@@ -5506,39 +5506,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       // Async D->H copies may still be in flight into these host buffers;
       // sync before closing to avoid a use-after-free on pinned memory.
       // Preserve the original cause; record secondary failures as suppressed.
+      boolean drained = false;
       try {
         stream.sync();
+        drained = true;
       } catch (Throwable syncFailure) {
         t.addSuppressed(syncFailure);
       }
-      for (HostColumnVectorCore child : children) {
-        if (child != null) {
+      // If the recovery sync threw, the CUDA stream is in an error state
+      // and pending DMA writes into the host buffers may not have completed.
+      // Closing them now risks the DMA engine writing into freed memory.
+      // Leak instead — the process is already in a broken state (sticky CUDA
+      // error usually requires a restart), and a leak beats silent corruption.
+      if (drained) {
+        for (HostColumnVectorCore child : children) {
+          if (child != null) {
+            try {
+              child.close();
+            } catch (Throwable closeFailure) {
+              t.addSuppressed(closeFailure);
+            }
+          }
+        }
+        if (hostData != null) {
           try {
-            child.close();
+            hostData.close();
           } catch (Throwable closeFailure) {
             t.addSuppressed(closeFailure);
           }
         }
-      }
-      if (hostData != null) {
-        try {
-          hostData.close();
-        } catch (Throwable closeFailure) {
-          t.addSuppressed(closeFailure);
+        if (hostOffsets != null) {
+          try {
+            hostOffsets.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
         }
-      }
-      if (hostOffsets != null) {
-        try {
-          hostOffsets.close();
-        } catch (Throwable closeFailure) {
-          t.addSuppressed(closeFailure);
-        }
-      }
-      if (hostValid != null) {
-        try {
-          hostValid.close();
-        } catch (Throwable closeFailure) {
-          t.addSuppressed(closeFailure);
+        if (hostValid != null) {
+          try {
+            hostValid.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
         }
       }
       throw t;
@@ -5628,41 +5637,50 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         // Async D->H copies may still be in flight into these host buffers;
         // sync before closing to avoid a use-after-free on pinned memory.
         // Preserve the original cause; record secondary failures as suppressed.
+        boolean drained = false;
         try {
           stream.sync();
+          drained = true;
         } catch (Throwable syncFailure) {
           t.addSuppressed(syncFailure);
         }
-        if (children != null) {
-          for (HostColumnVectorCore child : children) {
-            if (child != null) {
-              try {
-                child.close();
-              } catch (Throwable closeFailure) {
-                t.addSuppressed(closeFailure);
+        // If the recovery sync threw, the CUDA stream is in an error state
+        // and pending DMA writes into the host buffers may not have completed.
+        // Closing them now risks the DMA engine writing into freed memory.
+        // Leak instead — the process is already in a broken state (sticky CUDA
+        // error usually requires a restart), and a leak beats silent corruption.
+        if (drained) {
+          if (children != null) {
+            for (HostColumnVectorCore child : children) {
+              if (child != null) {
+                try {
+                  child.close();
+                } catch (Throwable closeFailure) {
+                  t.addSuppressed(closeFailure);
+                }
               }
             }
           }
-        }
-        if (hostOffsetsBuffer != null) {
-          try {
-            hostOffsetsBuffer.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
+          if (hostOffsetsBuffer != null) {
+            try {
+              hostOffsetsBuffer.close();
+            } catch (Throwable closeFailure) {
+              t.addSuppressed(closeFailure);
+            }
           }
-        }
-        if (hostDataBuffer != null) {
-          try {
-            hostDataBuffer.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
+          if (hostDataBuffer != null) {
+            try {
+              hostDataBuffer.close();
+            } catch (Throwable closeFailure) {
+              t.addSuppressed(closeFailure);
+            }
           }
-        }
-        if (hostValidityBuffer != null) {
-          try {
-            hostValidityBuffer.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
+          if (hostValidityBuffer != null) {
+            try {
+              hostValidityBuffer.close();
+            } catch (Throwable closeFailure) {
+              t.addSuppressed(closeFailure);
+            }
           }
         }
         throw t;
