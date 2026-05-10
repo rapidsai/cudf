@@ -283,7 +283,10 @@ class RankActor:
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         # Release resources in dependency order before exit_actor() terminates
-        # the process.
+        # the process. Shut down the Context explicitly on the same thread
+        # that constructed it.
+        if self._ctx is not None:
+            self._ctx.shutdown()
         self._ctx = None
         self._comm = None
         self._mr = None

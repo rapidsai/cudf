@@ -396,7 +396,9 @@ class SPMDEngine(StreamingEngine):
                 max_workers=cast(int, executor_options.get("num_py_executors", 8)),
                 thread_name_prefix="spmd-executor",
             )
-            exit_stack.callback(self._py_executor.shutdown, wait=True)
+            exit_stack.callback(
+                self._py_executor.shutdown, wait=True, cancel_futures=True
+            )
 
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx

@@ -288,6 +288,10 @@ def _teardown_worker(
     if mp_ctx is not None:
         if mp_ctx.py_executor is not None:
             mp_ctx.py_executor.shutdown(wait=True, cancel_futures=True)
+        # Shut down the Context explicitly on the same thread that
+        # constructed it; otherwise rapidsmpf calls.
+        if mp_ctx.ctx is not None:
+            mp_ctx.ctx.shutdown()
         mp_ctx.ctx = None
         mp_ctx.comm = None
         mp_ctx.mr = None
