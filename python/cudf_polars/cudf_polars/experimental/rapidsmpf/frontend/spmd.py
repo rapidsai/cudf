@@ -387,7 +387,11 @@ class SPMDEngine(StreamingEngine):
             ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
 
-            # Create a thread pool and register its shutdown.
+            # Register after `_cleanup_ctx` so on teardown (LIFO) the
+            # executor shuts down first. `wait=True` is safe because
+            # rapidsmpf's `run_actor_network` awaits its only submitted
+            # future so by the time we reach shutdown the executor has no
+            # in-flight work and wait returns immediately.
             self._py_executor = ThreadPoolExecutor(
                 max_workers=cast(int, executor_options.get("num_py_executors", 8)),
                 thread_name_prefix="spmd-executor",
