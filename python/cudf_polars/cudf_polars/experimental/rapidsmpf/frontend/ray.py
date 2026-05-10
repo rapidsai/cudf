@@ -285,12 +285,14 @@ class RankActor:
         # Release resources in dependency order before exit_actor() terminates
         # the process. Shut down the Context explicitly on the same thread
         # that constructed it.
-        if self._ctx is not None:
-            self._ctx.shutdown()
-        self._ctx = None
-        self._comm = None
-        self._mr = None
-        ray.actor.exit_actor()
+        try:
+            if self._ctx is not None:
+                self._ctx.shutdown()
+        finally:
+            self._ctx = None
+            self._comm = None
+            self._mr = None
+            ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
         """
