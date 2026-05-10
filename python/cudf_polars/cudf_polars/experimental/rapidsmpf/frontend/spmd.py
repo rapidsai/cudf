@@ -376,22 +376,24 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        self._py_executor: ThreadPoolExecutor | None = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
-            thread_name_prefix="spmd-executor",
-        )
         self._mr: RmmResourceAdaptor = mr
+        self._py_executor: ThreadPoolExecutor | None = None
         exit_stack = contextlib.ExitStack()
         try:
-            exit_stack.callback(self._py_executor.shutdown, wait=False)
             exit_stack.enter_context(set_memory_resource(mr))
-            # ``Context`` is *not* registered as a context manager so that
-            # :meth:`_reset` can swap it mid-life without leaving the
-            # exit-stack holding a stale reference. ``_cleanup_ctx`` is
-            # registered instead — it shuts down whatever ``self._ctx`` is
-            # at engine-shutdown time (i.e. the latest reset's Context).
+
+            # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
+            # to at engine shutdown time, i.e. the `Context` from the latest reset.
             ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
+
+            # Create a thread pool and register its shutdown.
+            self._py_executor = ThreadPoolExecutor(
+                max_workers=cast(int, executor_options.get("num_py_executors", 8)),
+                thread_name_prefix="spmd-executor",
+            )
+            exit_stack.callback(self._py_executor.shutdown, wait=True)
+
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx
             super().__init__(
