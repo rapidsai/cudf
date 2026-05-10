@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import warnings
+from decimal import Decimal
 from functools import lru_cache
 from typing import TYPE_CHECKING, Literal, Self, cast
 
@@ -63,6 +64,64 @@ _unit_dtype_map = {
     "s": "datetime64[s]",
     "D": "datetime64[s]",
 }
+
+
+_YEAR_DIRECTIVES = set("Yy")
+_DAY_DIRECTIVES = set("dej")
+_WEEKDAY_DIRECTIVES = set("Aawu")
+
+
+def _iter_format_directives(format: str) -> list[str]:
+    """Yield the single-character directives in a strftime format string."""
+    out = []
+    i = 0
+    while i < len(format):
+        if format[i] == "%" and i + 1 < len(format):
+            out.append(format[i + 1])
+            i += 2
+        else:
+            i += 1
+    return out
+
+
+def _validate_format_directives(format: str) -> None:
+    """Raise ValueError for incompatible strftime directive combinations."""
+    directives = set(_iter_format_directives(format))
+    has_G = "G" in directives
+    has_V = "V" in directives
+    has_Y = bool(directives & _YEAR_DIRECTIVES)
+    has_weekday = bool(directives & _WEEKDAY_DIRECTIVES)
+    has_day = bool(directives & _DAY_DIRECTIVES)
+    has_j = "j" in directives
+
+    if has_G and has_j:
+        raise ValueError(
+            "Day of the year directive '%j' is not compatible with ISO "
+            "year directive '%G'. Use '%Y' instead."
+        )
+    if has_V and has_Y:
+        raise ValueError(
+            "ISO week directive '%V' is incompatible with the year "
+            "directive '%Y'. Use the ISO year '%G' instead."
+        )
+    if has_V and not (has_G and has_weekday):
+        raise ValueError(
+            "ISO week directive '%V' must be used with the ISO year "
+            "directive '%G' and a weekday directive '%A', '%a', "
+            "'%w', or '%u'."
+        )
+    if has_G and not (has_V and has_weekday):
+        raise ValueError(
+            "ISO year directive '%G' must be used with the ISO week "
+            "directive '%V' and a weekday directive '%A', '%a', "
+            "'%w', or '%u'."
+        )
+    if ("W" in directives or "U" in directives) and not (
+        has_Y and (has_day or has_weekday)
+    ):
+        # %W or %U requires both a year directive and either a day-of-month
+        # or weekday directive to identify a specific date.
+        raise ValueError("Cannot use '%W' or '%U' without day and year")
 
 
 def to_datetime(
@@ -175,8 +234,38 @@ def to_datetime(
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
             )
-        elif "%f" in format:
+        _validate_format_directives(format)
+        if "%f" in format:
             format = format.replace("%f", "%9f")
+
+    if isinstance(arg, bool):
+        if errors == "coerce":
+            return pd.NaT
+        elif errors == "raise":
+            raise TypeError("dtype bool cannot be converted to datetime64[ns]")
+
+    if not is_scalar(arg) and not isinstance(arg, DataFrame):
+        try:
+            iterator = iter(arg)
+        except TypeError:
+            iterator = None
+        if iterator is not None:
+            try:
+                first = next(iterator)
+            except StopIteration:
+                first = None
+            if first is not None and isinstance(first, Decimal):
+                raise TypeError(
+                    "<class 'decimal.Decimal'> is not convertible to datetime"
+                )
+
+    if unit in ("Y", "M"):
+        # cuDF does not support calendrical addition for to_datetime
+        # with unit='Y' or 'M'. Defer to pandas via the cudf.pandas
+        # fast/slow proxy fallback.
+        raise NotImplementedError(
+            f"unit={unit!r} is not supported in cudf.to_datetime"
+        )
 
     try:
         if isinstance(arg, DataFrame):
@@ -310,6 +399,8 @@ def to_datetime(
         elif errors == "ignore":
             pass
         elif errors == "coerce":
+            if is_scalar(arg):
+                return pd.NaT
             return np.datetime64("nat", "ns" if unit is None else unit)  # type: ignore[call-overload]
         return arg
 
