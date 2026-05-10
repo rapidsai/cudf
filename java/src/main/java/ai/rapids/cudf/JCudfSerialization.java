@@ -893,30 +893,31 @@ public class JCudfSerialization {
 
   private static ColumnBufferProvider[] providersFrom(ColumnVector[] columns) {
     HostColumnVector[] onHost = new HostColumnVector[columns.length];
-    boolean success = false;
     try {
       for (int i = 0; i < columns.length; i++) {
         onHost[i] = columns[i].copyToHostAsync(Cuda.DEFAULT_STREAM);
       }
       Cuda.DEFAULT_STREAM.sync();
-      ColumnBufferProvider[] ret = providersFrom(onHost, true);
-      success = true;
-      return ret;
-    } finally {
-      if (!success) {
-        // Async D->H copies may still be in flight into these host buffers;
-        // sync before closing to avoid a use-after-free on pinned memory.
-        try {
-          Cuda.DEFAULT_STREAM.sync();
-        } finally {
-          for (int i = 0; i < onHost.length; i++) {
-            if (onHost[i] != null) {
-              onHost[i].close();
-              onHost[i] = null;
-            }
+      return providersFrom(onHost, true);
+    } catch (Throwable t) {
+      // Async D->H copies may still be in flight into these host buffers;
+      // sync before closing to avoid a use-after-free on pinned memory.
+      // Preserve the original cause; record secondary failures as suppressed.
+      try {
+        Cuda.DEFAULT_STREAM.sync();
+      } catch (Throwable syncFailure) {
+        t.addSuppressed(syncFailure);
+      }
+      for (int i = 0; i < onHost.length; i++) {
+        if (onHost[i] != null) {
+          try {
+            onHost[i].close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
           }
         }
       }
+      throw t;
     }
   }
 

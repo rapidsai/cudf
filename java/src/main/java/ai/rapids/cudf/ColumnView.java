@@ -5474,7 +5474,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     BaseDeviceMemoryBuffer currOffsets = null;
     BaseDeviceMemoryBuffer currValidity = null;
     long currNullCount = 0l;
-    boolean needsCleanup = true;
     try {
       long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getType();
@@ -5501,11 +5500,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       currNullCount = deviceCvPointer.getNullCount();
       Optional<Long> nullCount = Optional.of(currNullCount);
-      HostColumnVectorCore ret =
-          new HostColumnVectorCore(currType, currRows, nullCount, hostData,
-              hostValid, hostOffsets, children);
-      needsCleanup = false;
-      return ret;
+      return new HostColumnVectorCore(currType, currRows, nullCount, hostData,
+          hostValid, hostOffsets, children);
+    } catch (Throwable t) {
+      // Async D->H copies may still be in flight into these host buffers;
+      // sync before closing to avoid a use-after-free on pinned memory.
+      // Preserve the original cause; record secondary failures as suppressed.
+      try {
+        stream.sync();
+      } catch (Throwable syncFailure) {
+        t.addSuppressed(syncFailure);
+      }
+      for (HostColumnVectorCore child : children) {
+        if (child != null) {
+          try {
+            child.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
+        }
+      }
+      if (hostData != null) {
+        try {
+          hostData.close();
+        } catch (Throwable closeFailure) {
+          t.addSuppressed(closeFailure);
+        }
+      }
+      if (hostOffsets != null) {
+        try {
+          hostOffsets.close();
+        } catch (Throwable closeFailure) {
+          t.addSuppressed(closeFailure);
+        }
+      }
+      if (hostValid != null) {
+        try {
+          hostValid.close();
+        } catch (Throwable closeFailure) {
+          t.addSuppressed(closeFailure);
+        }
+      }
+      throw t;
     } finally {
       if (currData != null) {
         currData.close();
@@ -5515,28 +5551,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (currValidity != null) {
         currValidity.close();
-      }
-      if (needsCleanup) {
-        // Async D->H copies may still be in flight into these host buffers;
-        // sync before closing to avoid a use-after-free on pinned memory.
-        try {
-          stream.sync();
-        } finally {
-          for (HostColumnVectorCore child : children) {
-            if (child != null) {
-              child.close();
-            }
-          }
-          if (hostData != null) {
-            hostData.close();
-          }
-          if (hostOffsets != null) {
-            hostOffsets.close();
-          }
-          if (hostValid != null) {
-            hostValid.close();
-          }
-        }
       }
     }
   }
@@ -5567,7 +5581,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       if (!type.isNestedType()) {
         data = getData();
       }
-      boolean needsCleanup = true;
       try {
         // We don't have a good way to tell if it is cached on the device or recalculate it on
         // the host for now, so take the hit here.
@@ -5586,10 +5599,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
+          return new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
-          needsCleanup = false;
-          return ret;
         } else {
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
@@ -5610,11 +5621,51 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
               children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
             }
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
+          return new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer, children);
-          needsCleanup = false;
-          return ret;
         }
+      } catch (Throwable t) {
+        // Async D->H copies may still be in flight into these host buffers;
+        // sync before closing to avoid a use-after-free on pinned memory.
+        // Preserve the original cause; record secondary failures as suppressed.
+        try {
+          stream.sync();
+        } catch (Throwable syncFailure) {
+          t.addSuppressed(syncFailure);
+        }
+        if (children != null) {
+          for (HostColumnVectorCore child : children) {
+            if (child != null) {
+              try {
+                child.close();
+              } catch (Throwable closeFailure) {
+                t.addSuppressed(closeFailure);
+              }
+            }
+          }
+        }
+        if (hostOffsetsBuffer != null) {
+          try {
+            hostOffsetsBuffer.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
+        }
+        if (hostDataBuffer != null) {
+          try {
+            hostDataBuffer.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
+        }
+        if (hostValidityBuffer != null) {
+          try {
+            hostValidityBuffer.close();
+          } catch (Throwable closeFailure) {
+            t.addSuppressed(closeFailure);
+          }
+        }
+        throw t;
       } finally {
         if (data != null) {
           data.close();
@@ -5624,30 +5675,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
         if (valid != null) {
           valid.close();
-        }
-        if (needsCleanup) {
-          // Async D->H copies may still be in flight into these host buffers;
-          // sync before closing to avoid a use-after-free on pinned memory.
-          try {
-            stream.sync();
-          } finally {
-            if (children != null) {
-              for (HostColumnVectorCore child : children) {
-                if (child != null) {
-                  child.close();
-                }
-              }
-            }
-            if (hostOffsetsBuffer != null) {
-              hostOffsetsBuffer.close();
-            }
-            if (hostDataBuffer != null) {
-              hostDataBuffer.close();
-            }
-            if (hostValidityBuffer != null) {
-              hostValidityBuffer.close();
-            }
-          }
         }
       }
     }
