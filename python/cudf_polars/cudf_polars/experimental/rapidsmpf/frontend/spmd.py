@@ -377,6 +377,8 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         self._mr: RmmResourceAdaptor = mr
+        self._comm: Communicator | None = comm
+        self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
         exit_stack = contextlib.ExitStack()
         try:
@@ -384,7 +386,7 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
+            self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
@@ -400,20 +402,18 @@ class SPMDEngine(StreamingEngine):
                 self._py_executor.shutdown, wait=True, cancel_futures=True
             )
 
-            self._comm: Communicator | None = comm
-            self._ctx: Context | None = ctx
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
                     **executor_options,
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
-                        comm=comm, context=ctx, py_executor=self._py_executor
+                        comm=comm, context=self._ctx, py_executor=self._py_executor
                     ),
                 },
                 engine_options={
                     **engine_options,
-                    "memory_resource": ctx.br().device_mr,
+                    "memory_resource": self._ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
             )
