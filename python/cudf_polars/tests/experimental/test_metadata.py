@@ -58,14 +58,12 @@ def right() -> pl.LazyFrame:
     [
         StreamingOptions(
             max_rows_per_partition=1,
-            target_partition_size=1,
-            broadcast_limit=2,
+            broadcast_limit=48,
             dynamic_planning=None,
         ),
         StreamingOptions(
             max_rows_per_partition=1,
-            target_partition_size=1,
-            broadcast_limit=10,
+            broadcast_limit=240,
             dynamic_planning=None,
         ),
     ],

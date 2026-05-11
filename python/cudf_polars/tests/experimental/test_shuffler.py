@@ -22,8 +22,8 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 @pytest.mark.parametrize(
     "options",
     [
-        StreamingOptions(max_rows_per_partition=1),
-        StreamingOptions(max_rows_per_partition=5),
+        StreamingOptions(max_rows_per_partition=1, broadcast_limit=48),
+        StreamingOptions(max_rows_per_partition=5, broadcast_limit=48),
     ],
 )
 def test_join_rapidsmpf(streaming_engine_factory, options) -> None:

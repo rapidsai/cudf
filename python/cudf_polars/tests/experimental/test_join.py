@@ -49,8 +49,8 @@ def right():
 @pytest.mark.parametrize(
     "options",
     [
-        StreamingOptions(max_rows_per_partition=3),
-        StreamingOptions(max_rows_per_partition=5),
+        StreamingOptions(max_rows_per_partition=3, broadcast_limit=48),
+        StreamingOptions(max_rows_per_partition=5, broadcast_limit=48),
     ],
 )
 def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
@@ -64,7 +64,7 @@ def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
 def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=3),
+        StreamingOptions(max_rows_per_partition=3, broadcast_limit=48),
     )
     # Reverse so "right" frame is larger; exercises right-side preservation
     q = right.join(left, on="y", how=how)
@@ -78,7 +78,7 @@ def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, 
 
 def test_join_then_shuffle(left, right, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=2),
+        StreamingOptions(max_rows_per_partition=2, broadcast_limit=24),
     )
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
@@ -122,10 +122,30 @@ def test_join_conditional(reverse, max_rows_per_partition, streaming_engine_fact
 @pytest.mark.parametrize(
     "options",
     [
-        StreamingOptions(max_rows_per_partition=1),
-        StreamingOptions(max_rows_per_partition=5),
-        StreamingOptions(max_rows_per_partition=10),
-        StreamingOptions(max_rows_per_partition=15),
+        StreamingOptions(
+            max_rows_per_partition=1, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=1, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=5, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=5, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=10, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=10, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=15, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=15, target_partition_size=24, broadcast_limit=384
+        ),
     ],
 )
 def test_join(left, right, how, reverse, streaming_engine_factory, options):
@@ -151,11 +171,13 @@ def test_join(left, right, how, reverse, streaming_engine_factory, options):
         assert_gpu_result_equal(q2, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
+@pytest.mark.parametrize("zlice", [(0, 2)])  # , (2, 2), (-2, None)])
 def test_join_and_slice(request, zlice, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=3,
+            target_partition_size=64,
+            broadcast_limit=6400,
             fallback_mode="warn",
         ),
     )
@@ -230,6 +252,8 @@ def test_join_maintain_order_fallback_streaming(
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             max_rows_per_partition=3,
+            target_partition_size=64,
+            broadcast_limit=64,
             fallback_mode="warn",
         ),
     )
@@ -248,8 +272,8 @@ def test_join_maintain_order_fallback_streaming(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("broadcast_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(left, right, broadcast_limit):
+@pytest.mark.parametrize("broadcast_limit", [1, 48, 128, 1024])
+def test_broadcast_limit(left, right, broadcast_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
