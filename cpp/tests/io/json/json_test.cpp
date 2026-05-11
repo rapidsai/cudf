@@ -3635,4 +3635,140 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
   }
 }
 
+// Tests for nested_mismatch_behavior_t (spark-compat parent-NULL on nested mismatch).
+// Mirrors the SPARK-33134 unit test "return partial results only for root JSON objects".
+// See https://github.com/rapidsai/cudf/issues/22423.
+
+namespace {
+// Build schema for: struct<c1: int64, c2: list<struct<c3: int64, c4: string>>>.
+// Pin column order so cuDF emits columns in (c1, c2) regardless of JSON-encounter order.
+cudf::io::schema_element make_nested_mismatch_schema_st()
+{
+  cudf::io::schema_element st_c2_elem{
+    cudf::data_type{cudf::type_id::STRUCT},
+    {{"c3", cudf::io::schema_element{cudf::data_type{cudf::type_id::INT64}}},
+     {"c4", cudf::io::schema_element{cudf::data_type{cudf::type_id::STRING}}}},
+    std::vector<std::string>{"c3", "c4"}};
+  cudf::io::schema_element st_c2{
+    cudf::data_type{cudf::type_id::LIST}, {{"element", st_c2_elem}}, std::vector<std::string>{}};
+  return cudf::io::schema_element{
+    cudf::data_type{cudf::type_id::STRUCT},
+    {{"c1", cudf::io::schema_element{cudf::data_type{cudf::type_id::INT64}}}, {"c2", st_c2}},
+    std::vector<std::string>{"c1", "c2"}};
+}
+}  // namespace
+
+TEST_F(JsonReaderTest, NestedMismatchDefaultPartialPropagates)
+{
+  // df2 case from SPARK-33134:
+  //   {"data": {"c2":[19],"c1":123456}}
+  // schema: struct<data: struct<c1: int64, c2: list<struct<...>>>>
+  // c2 expects list<struct> but JSON has list<int>; the nested mismatch happens at depth 3.
+  // Default (CHILD_NULL_ONLY) behavior: data row stays valid with c1=123456, c2=null.
+  std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
+  cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
+                                {{"data", make_nested_mismatch_schema_st()}}};
+
+  auto opts =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .dtypes(root)
+      .prune_columns(true)
+      .build();
+
+  auto result = cudf::io::read_json(opts);
+  ASSERT_EQ(result.tbl->num_columns(), 1);
+  ASSERT_EQ(result.tbl->num_rows(), 1);
+  // Top-level "data" struct row 0 is non-null (default behavior keeps the parent populated).
+  EXPECT_EQ(result.tbl->get_column(0).null_count(), 0);
+}
+
+TEST_F(JsonReaderTest, NestedMismatchSparkCompatNullsParent)
+{
+  // Same input + schema as the previous test. With PARENT_NULL_ON_NESTED_MISMATCH the depth-1
+  // ancestor "data" should be NULL for that row, matching Spark JacksonParser semantics for
+  // JSON_ENABLE_PARTIAL_RESULTS=false.
+  std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
+  cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
+                                {{"data", make_nested_mismatch_schema_st()}}};
+
+  auto opts =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .nested_mismatch_behavior(
+        cudf::io::nested_mismatch_behavior_t::PARENT_NULL_ON_NESTED_MISMATCH)
+      .dtypes(root)
+      .prune_columns(true)
+      .build();
+
+  auto result = cudf::io::read_json(opts);
+  ASSERT_EQ(result.tbl->num_columns(), 1);
+  ASSERT_EQ(result.tbl->num_rows(), 1);
+  // "data" should be NULL because its descendant c2.element had a schema type mismatch.
+  EXPECT_EQ(result.tbl->get_column(0).null_count(), 1);
+}
+
+TEST_F(JsonReaderTest, NestedMismatchSparkCompatRootLevelMismatchNullsField)
+{
+  // df1 case from SPARK-33134:
+  //   {"c2":[19],"c1":123456}
+  // schema: struct<c1: int64, c2: list<struct<...>>>
+  // Mismatch is on c2 (depth 2 from absolute root). The depth-1 ancestor of the mismatch IS c2
+  // itself, so c2 should be nulled. c1 stays as 123456 (Spark's "root partial" behavior).
+  std::string const json = "{\"c2\": [19], \"c1\": 123456}\n";
+  auto root_schema       = make_nested_mismatch_schema_st();
+
+  auto opts =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .nested_mismatch_behavior(
+        cudf::io::nested_mismatch_behavior_t::PARENT_NULL_ON_NESTED_MISMATCH)
+      .dtypes(root_schema)
+      .prune_columns(true)
+      .build();
+
+  auto result = cudf::io::read_json(opts);
+  ASSERT_EQ(result.tbl->num_columns(), 2);
+  ASSERT_EQ(result.tbl->num_rows(), 1);
+  // c1 remains valid (123456); c2 is nulled because of the descendant mismatch.
+  EXPECT_EQ(result.tbl->get_column(0).null_count(), 0);  // c1
+  EXPECT_EQ(result.tbl->get_column(1).null_count(), 1);  // c2
+}
+
+TEST_F(JsonReaderTest, NestedMismatchSparkCompatNoMismatchUnaffected)
+{
+  // Well-formed nested JSON should not be impacted by the new option.
+  std::string const json =
+    "{\"data\": {\"c2\": [{\"c3\": 19, \"c4\": \"x\"}], \"c1\": 123456}}\n";
+  cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
+                                {{"data", make_nested_mismatch_schema_st()}}};
+
+  auto opts =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .nested_mismatch_behavior(
+        cudf::io::nested_mismatch_behavior_t::PARENT_NULL_ON_NESTED_MISMATCH)
+      .dtypes(root)
+      .prune_columns(true)
+      .build();
+
+  auto result = cudf::io::read_json(opts);
+  ASSERT_EQ(result.tbl->num_columns(), 1);
+  ASSERT_EQ(result.tbl->num_rows(), 1);
+  // No mismatch anywhere — "data" stays non-null.
+  EXPECT_EQ(result.tbl->get_column(0).null_count(), 0);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

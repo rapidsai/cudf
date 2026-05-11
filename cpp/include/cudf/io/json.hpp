@@ -60,6 +60,25 @@ enum class json_recovery_mode_t {
 };
 
 /**
+ * @brief Control how a struct row is treated when one of its nested children is
+ *        forced to NULL because of a schema mismatch with the JSON content.
+ *
+ * Matches Spark's `JacksonParser.convertObject` behavior when set to
+ * `PARENT_NULL_ON_NESTED_MISMATCH`: a type mismatch encountered at depth >= 2
+ * propagates up to the immediate child of the root struct, nulling that
+ * entire field for the affected rows. The default `CHILD_NULL_ONLY` keeps the
+ * existing cuDF behavior where only the mismatching descendant is nulled.
+ */
+enum class nested_mismatch_behavior_t {
+  CHILD_NULL_ONLY,                ///< Default. Only the mismatching descendant column is nulled;
+                                  ///< the parent struct row stays populated with successful
+                                  ///< siblings.
+  PARENT_NULL_ON_NESTED_MISMATCH  ///< Spark-compatible. Any type mismatch on a depth >= 2 column
+                                  ///< nulls the entire depth-1 ancestor (immediate child of root)
+                                  ///< for affected rows.
+};
+
+/**
  * @brief Input arguments to the `read_json` interface.
  *
  * Available parameters are closely patterned after PANDAS' `read_json` API.
@@ -128,6 +147,10 @@ class json_reader_options {
 
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
+
+  // How to treat depth-1 struct rows when a deeper descendant is forced-NULL by a schema mismatch
+  nested_mismatch_behavior_t _nested_mismatch_behavior =
+    nested_mismatch_behavior_t::CHILD_NULL_ONLY;
 
   // Validation checks for spark
   // Should the json validation be strict or not
@@ -318,6 +341,17 @@ class json_reader_options {
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
    */
   [[nodiscard]] json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
+
+  /**
+   * @brief Queries the JSON reader's behavior when a depth >= 2 column has a schema type mismatch.
+   *
+   * @returns An enum that specifies whether the immediate child of root is nulled or only the
+   *          mismatching descendant is nulled.
+   */
+  [[nodiscard]] nested_mismatch_behavior_t nested_mismatch_behavior() const
+  {
+    return _nested_mismatch_behavior;
+  }
 
   /**
    * @brief Whether json validation should be enforced strictly or not.
@@ -522,6 +556,18 @@ class json_reader_options {
    * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    */
   void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
+
+  /**
+   * @brief Specifies how depth-1 struct rows are treated when a deeper descendant column has a
+   *        schema type mismatch with the JSON content.
+   *
+   * @param val An enum value selecting between current behavior (`CHILD_NULL_ONLY`) and the
+   *            Spark-compatible behavior (`PARENT_NULL_ON_NESTED_MISMATCH`).
+   */
+  void set_nested_mismatch_behavior(nested_mismatch_behavior_t val)
+  {
+    _nested_mismatch_behavior = val;
+  }
 
   /**
    * @brief Set whether strict validation is enabled or not.
@@ -814,6 +860,20 @@ class json_reader_options_builder {
   json_reader_options_builder& recovery_mode(json_recovery_mode_t val)
   {
     options._recovery_mode = val;
+    return *this;
+  }
+
+  /**
+   * @brief Specifies how depth-1 struct rows are treated when a deeper descendant column has a
+   *        schema type mismatch with the JSON content.
+   *
+   * @param val An enum value selecting between `CHILD_NULL_ONLY` (default) and
+   *            `PARENT_NULL_ON_NESTED_MISMATCH` (Spark-compatible).
+   * @return this for chaining
+   */
+  json_reader_options_builder& nested_mismatch_behavior(nested_mismatch_behavior_t val)
+  {
+    options._nested_mismatch_behavior = val;
     return *this;
   }
 

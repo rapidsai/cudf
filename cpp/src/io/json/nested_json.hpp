@@ -160,6 +160,13 @@ struct device_json_column {
   // Force as string column
   bool forced_as_string_column{false};
 
+  // Set to true if any descendant of this column was pruned because the JSON's actual category
+  // (NC_STRUCT / NC_LIST / NC_VAL) does not match the requested schema's type. Used by
+  // `nested_mismatch_behavior_t::PARENT_NULL_ON_NESTED_MISMATCH` to null the entire depth-1
+  // ancestor for the affected rows. The flag is propagated UP the tree from the mismatch node
+  // toward the root in `build_tree`. The depth-0 root column itself is never marked.
+  bool had_schema_mismatch{false};
+
   /**
    * @brief Construct a new d json column object
    *

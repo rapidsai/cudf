@@ -677,6 +677,10 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     auto& json_col = found_it->second;
 
     if (!options.is_enabled_prune_columns() or child_schema_element.has_value()) {
+      // Capture mismatch flag before `device_json_column_to_cudf_column` consumes (moves) the
+      // json_col's validity buffer.
+      bool const had_nested_mismatch = json_col.had_schema_mismatch;
+
       // Get this JSON column's cudf column and schema info, (modifies json_col)
       auto [cudf_col, col_name_info] =
         device_json_column_to_cudf_column(json_col,
@@ -686,6 +690,21 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                           child_schema_element,
                                           stream,
                                           mr);
+
+      // Spark-compatible nested-mismatch handling: if any descendant of this depth-1 column had
+      // a schema type mismatch with the JSON tree, Spark's JacksonParser would null this entire
+      // depth-1 field for the affected rows. The current implementation nulls the entire column
+      // (over-conservative for multi-row JSONL but exact for single-record cases such as the
+      // SPARK-33134 unit tests). A more precise per-row mask is left as a follow-up.
+      if (had_nested_mismatch and
+          options.nested_mismatch_behavior() ==
+            nested_mismatch_behavior_t::PARENT_NULL_ON_NESTED_MISMATCH) {
+        auto const num_rows = cudf_col->size();
+        cudf_col->set_null_mask(
+          cudf::detail::create_null_mask(num_rows, cudf::mask_state::ALL_NULL, stream, mr),
+          num_rows);
+      }
+
       // Insert this column's name into the schema
       out_column_names.emplace_back(col_name);
       // TODO: RangeIndex as DataFrame.columns names for array of arrays
