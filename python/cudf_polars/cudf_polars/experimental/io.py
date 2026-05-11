@@ -4,13 +4,11 @@
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import itertools
 import math
 import statistics
 from collections import defaultdict
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -24,16 +22,15 @@ from cudf_polars.dsl.ir import (
     Empty,
     Scan,
     Sink,
-    Union,
 )
 from cudf_polars.experimental.base import (
-    DataSourceInfo,
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
-    get_key_name,
+    SerializedDataSourceInfo,
 )
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
@@ -43,7 +40,11 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import StatsCollector
+    from cudf_polars.experimental.base import (
+        DataSourceInfo,
+        SerializedDataSourceInfo,
+        StatsCollector,
+    )
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
@@ -57,36 +58,9 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
-
-        return lower_dataframescan_rapidsmpf(ir, rec)
-
-    rows_per_partition = config_options.executor.max_rows_per_partition
-    nrows = max(ir.df.shape()[0], 1)
-    count = math.ceil(nrows / rows_per_partition)
-
-    if count > 1:
-        length = math.ceil(nrows / count)
-        slices = [
-            DataFrameScan(
-                ir.schema,
-                ir.df.slice(offset, length),
-                ir.projection,
-            )
-            for offset in range(0, nrows, length)
-        ]
-        new_node = Union(ir.schema, None, *slices)
-        return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
-            new_node: PartitionInfo(count=count)
-        }
-
-    return ir, {ir: PartitionInfo(count=1)}
+    return lower_dataframescan_rapidsmpf(ir, rec)
 
 
 def scan_partition_plan(
@@ -280,84 +254,9 @@ def _(
 def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    partition_info: MutableMapping[IR, PartitionInfo]
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
-
-        return lower_scan_rapidsmpf(ir, rec)
-
-    if (
-        ir.typ in ("csv", "parquet", "ndjson")
-        and ir.n_rows == -1
-        and ir.skip_rows == 0
-        and ir.row_index is None
-    ):
-        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
-        paths = list(ir.paths)
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            # Disable chunked reader when splitting files
-            parquet_options = dataclasses.replace(
-                config_options.parquet_options,
-                chunked=False,
-            )
-
-            slices: list[SplitScan] = []
-            for path in paths:
-                base_scan = Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    [path],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    parquet_options,
-                )
-                slices.extend(
-                    SplitScan(
-                        ir.schema, base_scan, sindex, plan.factor, parquet_options
-                    )
-                    for sindex in range(plan.factor)
-                )
-            new_node = Union(ir.schema, None, *slices)
-            partition_info = {slice: PartitionInfo(count=1) for slice in slices} | {
-                new_node: PartitionInfo(count=len(slices))
-            }
-        else:
-            groups: list[Scan] = [
-                Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    paths[i : i + plan.factor],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    config_options.parquet_options,
-                )
-                for i in range(0, len(paths), plan.factor)
-            ]
-            new_node = Union(ir.schema, None, *groups)
-            partition_info = {group: PartitionInfo(count=1) for group in groups} | {
-                new_node: PartitionInfo(count=len(groups))
-            }
-        return new_node, partition_info
-
-    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+    return lower_scan_rapidsmpf(ir, rec)
 
 
 class StreamingSink(IR):
@@ -402,11 +301,20 @@ def _(
     )
 
     # TODO: Support cloud storage
-    if Path(ir.path).exists() and executor_options.sink_to_directory:
+    if (
+        Path(ir.path).exists()
+        and executor_options.sink_to_directory
+        and executor_options.cluster == Cluster.SINGLE
+    ):
+        # This lowering-time check can't be performed with the spmd / ray / dask
+        # clusters, which lower on each worker independently. There's a race condition
+        # between each worker performing this check that the path doesn't yet exist,
+        # and the sink operation creating the directory at the start of execution.
         raise NotImplementedError(
+            f"Trying to sink to an existing directory: {ir.path}. "
             "Writing to an existing path is not supported when sinking "
-            "to a directory. If you are using the 'distributed' scheduler, "
-            "please remove the target directory before calling 'collect'. "
+            "to a directory. Please remove the target directory before "
+            "calling 'collect'."
         )
 
     sink_to_directory = executor_options.sink_to_directory
@@ -425,22 +333,6 @@ def _prepare_sink_directory(path: str) -> None:
     """Prepare for a multi-partition sink."""
     # TODO: Support cloud storage
     Path(path).mkdir(parents=True, exist_ok=True)
-
-
-def _sink_to_directory(
-    schema: Schema,
-    kind: str,
-    path: str,
-    parquet_options: ParquetOptions,
-    options: dict[str, Any],
-    df: DataFrame,
-    ready: None,
-    context: IRExecutionContext,
-) -> DataFrame:
-    """Sink a partition to a new file."""
-    return Sink.do_evaluate(
-        schema, kind, path, parquet_options, options, df, context=context
-    )
 
 
 def _sink_to_parquet_file(
@@ -531,106 +423,6 @@ def _sink_to_file(
     return True
 
 
-def _finalize_file_sink(
-    kind: str,
-    writer_state: Any,
-    df: DataFrame,
-) -> DataFrame:
-    """Finalize the file sink by closing the writer."""
-    if kind == "Parquet" and writer_state is not None:
-        writer_state.close([])
-    return df.slice((0, 0))
-
-
-def _file_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a single file."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-    if count == 1:
-        return {
-            (name, 0): (
-                partial(sink.do_evaluate, context=context),
-                *sink._non_child_args,
-                (child_name, 0),
-            )
-        }
-
-    sink_name = get_key_name(sink)
-    graph: MutableMapping[Any, Any] = {
-        (sink_name, i): (
-            _sink_to_file,
-            sink.kind,
-            sink.path,
-            sink.options,
-            None if i == 0 else (sink_name, i - 1),  # Writer state
-            (child_name, i),
-        )
-        for i in range(count)
-    }
-
-    # Finalize task closes the writer after all chunks are written
-    graph[(sink_name, "finalize")] = (
-        _finalize_file_sink,
-        sink.kind,
-        (sink_name, count - 1),  # Writer state from last task
-        (child_name, count - 1),  # Last source df for creating empty result
-    )
-
-    # Make sure final tasks point to finalize task
-    graph.update({(name, i): (sink_name, "finalize") for i in range(count)})
-    return graph
-
-
-def _directory_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a directory of files."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-
-    setup_name = f"setup-{name}"
-    suffix = sink.kind.lower()
-    width = math.ceil(math.log10(count))
-    graph: MutableMapping[Any, Any] = {
-        (name, i): (
-            _sink_to_directory,
-            sink.schema,
-            sink.kind,
-            f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
-            sink.parquet_options,
-            sink.options,
-            (child_name, i),
-            setup_name,
-            context,
-        )
-        for i in range(count)
-    }
-    graph[setup_name] = (_prepare_sink_directory, sink.path)
-    return graph
-
-
-@generate_ir_tasks.register(StreamingSink)
-def _(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    if ir.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info, context=context)
-    else:
-        return _file_sink_graph(ir, partition_info, context=context)
-
-
 class ParquetMetadata:
     """
     Parquet metadata container.
@@ -682,6 +474,7 @@ class ParquetMetadata:
 
         if not self.sample_paths:
             # No paths to sample from
+            # TODO: This requires row_count to be nullable. Why do we allow empty paths?
             return
 
         total_file_count = len(self.paths)
@@ -764,27 +557,37 @@ def _sample_rg_sizes(
     return result
 
 
-class ParquetSourceInfo(DataSourceInfo):
+class ParquetSourceInfo:
     """Parquet datasource information, fully computed at construction time."""
 
-    __slots__ = ("_per_file_means", "_row_count")
+    type: Literal["parquet"] = "parquet"
 
     def __init__(
-        self,
+        self, row_count: int | None, per_file_means: dict[str, int] | None = None
+    ):
+        if per_file_means is None:
+            per_file_means = {}
+
+        self.row_count = row_count
+        self.per_file_means = per_file_means
+
+    @classmethod
+    def from_paths(
+        cls,
         paths: tuple[str, ...],
         needed_cols: frozenset[str],
         max_footer_samples: int,
         max_row_group_samples: int,
-    ) -> None:
+    ) -> ParquetSourceInfo:
+        """Build a ParquetSourceInfo from a list of paths."""
         metadata = ParquetMetadata(paths, max_footer_samples)
-        self._row_count = metadata.row_count
+        row_count = metadata.row_count
 
         file_count = len(paths)
-        row_count = metadata.row_count
-        self._per_file_means: dict[str, int] = {}
+        per_file_means: dict[str, int] = {}
 
         if not (file_count and row_count and needed_cols):
-            return
+            return cls(row_count, {})
 
         # Floor on size: dictionary encoding can make in-memory size much larger
         # than what the compressed footer metadata reports.
@@ -798,7 +601,7 @@ class ParquetSourceInfo(DataSourceInfo):
             if footer_mean < min_floor:
                 suspicious.append(col)
             else:
-                self._per_file_means[col] = footer_mean
+                per_file_means[col] = footer_mean
 
         if suspicious and max_row_group_samples > 0:
             rg_sizes = _sample_rg_sizes(metadata, suspicious, max_row_group_samples)
@@ -809,42 +612,77 @@ class ParquetSourceInfo(DataSourceInfo):
             )
             for col in suspicious:
                 rg_size = rg_sizes.get(col)
-                self._per_file_means[col] = (
+                per_file_means[col] = (
                     max(min_floor, int(rg_size * mean_rg_count))
                     if rg_size
                     else min_floor
                 )
         else:
             for col in suspicious:
-                self._per_file_means[col] = min_floor
+                per_file_means[col] = min_floor
 
-    @property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._row_count
+        return cls(row_count, per_file_means)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        return self._per_file_means.get(column)
+        return self.per_file_means.get(column)
+
+    def serialize(self) -> SerializedDataSourceInfo:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+            "per_file_means": self.per_file_means,
+        }
+
+    @classmethod
+    def deserialize(cls, data: SerializedDataSourceInfo) -> ParquetSourceInfo:
+        """Deserialize a ParquetSourceInfo from a dictionary."""
+        if data["type"] != "parquet":
+            raise ValueError(f"Expected ParquetSourceInfo, got {data['type']}")
+        return cls(data["row_count"], data["per_file_means"])
 
 
-class DataFrameSourceInfo(DataSourceInfo):
+class DataFrameSourceInfo:
     """
     In-memory DataFrame source information.
 
     Parameters
     ----------
-    df
-        In-memory DataFrame source.
+    row_count
+        Exact row-count for the polars dataframe.
     """
 
-    def __init__(self, df: pl.DataFrame):
-        self._pdf = df
+    type: Literal["dataframe"] = "dataframe"
 
-    @functools.cached_property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._pdf.height
+    def __init__(self, row_count: int):
+        self.row_count = row_count
+
+    @classmethod
+    def from_polars(cls, df: pl.DataFrame) -> DataFrameSourceInfo:
+        """Build a DataFrameSourceInfo from a polars dataframe."""
+        return cls(df.height)
+
+    def column_storage_size(self, column: str) -> int | None:
+        """Return the average storage size for a single column in one file."""
+        return None
+
+    def serialize(self) -> SerializedDataSourceInfo:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+            "per_file_means": None,
+        }
+
+    @classmethod
+    def deserialize(cls, data: SerializedDataSourceInfo) -> DataFrameSourceInfo:
+        """Deserialize a DataFrameSourceInfo from a dictionary."""
+        if data["type"] != "dataframe":
+            raise ValueError(f"Expected DataFrameSourceInfo, got {data['type']}")
+        if data["row_count"] is None:
+            raise ValueError("Row count is required for DataFrameSourceInfo")
+        return cls(data["row_count"])
 
 
 @functools.cache
@@ -855,7 +693,7 @@ def _build_parquet_source(
     max_row_group_samples: int,
 ) -> ParquetSourceInfo:
     """Return cached, fully-computed Parquet datasource information."""
-    return ParquetSourceInfo(
+    return ParquetSourceInfo.from_paths(
         paths, needed_cols, max_footer_samples, max_row_group_samples
     )
 
@@ -868,7 +706,7 @@ def _build_source_info(
 ) -> DataSourceInfo:
     """Return DataSourceInfo for a Scan or DataFrameScan node."""
     if isinstance(ir, DataFrameScan):
-        return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
+        return DataFrameSourceInfo.from_polars(pl.DataFrame._from_pydf(ir.df))
     elif isinstance(ir, Scan) and ir.typ == "parquet":
         max_footer = config_options.parquet_options.max_footer_samples
         max_rg = config_options.parquet_options.max_row_group_samples

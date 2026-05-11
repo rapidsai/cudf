@@ -9,7 +9,7 @@ from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_hconcat():
+def test_hconcat(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -18,16 +18,16 @@ def test_hconcat():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"))
     query = pl.concat([ldf, ldf2], how="horizontal")
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_hconcat_different_heights():
+def test_hconcat_different_heights(engine: pl.GPUEngine):
     left = pl.LazyFrame({"a": [1, 2, 3, 4]})
 
     right = pl.LazyFrame({"b": [[1], [2]], "c": ["a", "bcde"]})
 
     q = pl.concat([left, right], how="horizontal")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_hconcat_should_broadcast():

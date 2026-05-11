@@ -67,7 +67,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
   auto [device_view_owners, device_views_ptr] =
-    contiguous_copy_column_device_views<column_device_view>(views, stream);
+    create_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type

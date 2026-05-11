@@ -12,6 +12,7 @@ enable_testing()
 
 include(rapids-test)
 rapids_test_init()
+rapids_cmake_install_lib_dir(lib_dir)
 
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
@@ -42,7 +43,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
@@ -60,7 +61,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
                                $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
-  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ON)
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
@@ -84,7 +85,9 @@ endfunction()
 # ##################################################################################################
 
 # No need to install Arrow libs when only the final test executables are shipped.
-set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_INSTALL_LIBRARY_DEPS OFF)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL ON)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG EXCLUDE_FROM_ALL)
 set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
@@ -185,6 +188,7 @@ ConfigureTest(IS_SORTED_TEST sort/is_sorted_tests.cpp)
 # ##################################################################################################
 # * datetime tests --------------------------------------------------------------------------------
 ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
+ConfigureTest(TIMEZONE_TEST datetime/timezone_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------

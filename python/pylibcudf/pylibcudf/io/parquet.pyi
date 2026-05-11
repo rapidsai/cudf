@@ -5,7 +5,6 @@ from collections.abc import Mapping, Sequence
 from typing import Self
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.expressions import Expression
 from pylibcudf.io.types import (
@@ -20,6 +19,7 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import TypeId
+from pylibcudf.utils import CudaStreamLike
 
 class ParquetReaderOptions:
     def __init__(self): ...
@@ -53,7 +53,7 @@ class ChunkedParquetReader:
     def __init__(
         self,
         options: ParquetReaderOptions,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         chunk_read_limit: int = 0,
         pass_read_limit: int = 1024000000,
     ) -> None: ...
@@ -62,7 +62,7 @@ class ChunkedParquetReader:
 
 def read_parquet(
     options: ParquetReaderOptions,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
@@ -101,7 +101,7 @@ class ParquetWriterOptionsBuilder:
     def build(self) -> ParquetWriterOptions: ...
 
 def write_parquet(
-    options: ParquetWriterOptions, stream: Stream | None = None
+    options: ParquetWriterOptions, stream: CudaStreamLike | None = None
 ) -> memoryview: ...
 def is_supported_read_parquet(compression: CompressionType) -> bool: ...
 def is_supported_write_parquet(compression: CompressionType) -> bool: ...
@@ -112,7 +112,8 @@ class ChunkedParquetWriter:
     def write(self, table: Table, partitions_info: object = None) -> None: ...
     @staticmethod
     def from_options(
-        options: ChunkedParquetWriterOptions, stream: Stream | None = None
+        options: ChunkedParquetWriterOptions,
+        stream: CudaStreamLike | None = None,
     ) -> ChunkedParquetWriter: ...
 
 class ChunkedParquetWriterOptions:
