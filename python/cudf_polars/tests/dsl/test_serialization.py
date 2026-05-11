@@ -14,9 +14,7 @@ from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
 from cudf_polars.dsl.expressions.struct import StructFunction
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_138,
-    POLARS_VERSION_LT_1321,
 )
 
 
@@ -48,30 +46,20 @@ def test_from_polars_all_names(function):
     # Check names advertised by polars are the same as we advertise
     polars_names_set = set(polars_names)
     cudf_polars_names_set = set(function.Name.__members__)
-    if not POLARS_VERSION_LT_132 and function == StructFunction:
+    if function == StructFunction:
         cudf_polars_names_set = cudf_polars_names_set - {
             "FieldByIndex",
             "MultipleFields",
         }
-    if POLARS_VERSION_LT_1321 and function == TemporalFunction:
-        cudf_polars_names_set = cudf_polars_names_set - {
-            "DaysInMonth",
-        }
-    if POLARS_VERSION_LT_132 and function == BooleanFunction:
-        cudf_polars_names_set = cudf_polars_names_set - {"IsClose"}
     if POLARS_VERSION_LT_138 and function == StringFunction:
         cudf_polars_names_set = cudf_polars_names_set - {"SplitRegex"}
     assert polars_names_set == cudf_polars_names_set
     names = function.Name
-    if not POLARS_VERSION_LT_132 and function == StructFunction:
+    if function == StructFunction:
         names = set(names) - {
             StructFunction.Name.FieldByIndex,
             StructFunction.Name.MultipleFields,
         }
-    if POLARS_VERSION_LT_1321 and function == TemporalFunction:
-        names = set(names) - {TemporalFunction.Name.DaysInMonth}
-    if POLARS_VERSION_LT_132 and function == BooleanFunction:
-        names = set(names) - {BooleanFunction.Name.IsClose}
     if POLARS_VERSION_LT_138 and function == StringFunction:
         names = set(names) - {StringFunction.Name.SplitRegex}
     for name in names:

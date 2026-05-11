@@ -17,10 +17,8 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.engine_utils import get_blocksize_mode, is_streaming_engine
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
-    POLARS_VERSION_LT_1321,
 )
 
 
@@ -50,11 +48,9 @@ def df():
             ],
         }
     )
-    if not POLARS_VERSION_LT_132:
-        lf = lf.with_columns(
-            pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
-        )
-    return lf
+    return lf.with_columns(
+        pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
+    )
 
 
 @pytest.fixture(
@@ -104,12 +100,10 @@ _EXPRS: list[list[pl.Expr | str]] = [
         pl.col("datetime").max(),
         pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
     ],
+    # polars gives us precision=None, which we
+    # do not support
+    [pl.col("decimal").median()],
 ]
-
-# polars gives us precision=None, which we
-# do not supprt
-if not POLARS_VERSION_LT_132:
-    _EXPRS.append([pl.col("decimal").median()])
 
 
 @pytest.fixture(
@@ -252,7 +246,6 @@ def test_groupby_nan_minmax_raises(op):
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
-                condition=not POLARS_VERSION_LT_1321,
                 reason="https://github.com/rapidsai/cudf/issues/19610",
             ),
         ),
@@ -423,7 +416,6 @@ def test_groupby_aggs_keep_unsupported_as_null(
     request.applymarker(
         pytest.mark.xfail(
             condition="quantile" in str(agg_expr)
-            and not POLARS_VERSION_LT_132
             and POLARS_VERSION_LT_134
             and is_streaming_engine(engine),
             reason="Decimal precision mismatch (9 vs 38)",

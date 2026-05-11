@@ -33,12 +33,10 @@ from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
-    POLARS_VERSION_LT_1323,
 )
 
 if TYPE_CHECKING:
@@ -339,18 +337,13 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Cache, translator: Translator, schema: Schema) -> ir.IR:
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        refcount = node.cache_hits
-    else:
-        refcount = None
-
     # Make sure Cache nodes with the same id_
     # are actually the same object.
     if node.id_ not in translator._cache_nodes:
         translator._cache_nodes[node.id_] = ir.Cache(
             schema,
             node.id_,
-            refcount,
+            None,
             translator.translate_ir(n=node.input),
         )
     return translator._cache_nodes[node.id_]
@@ -641,9 +634,7 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
                 f"{sink_kind} compression ('{compression}') is not supported."
             )
 
-    if POLARS_VERSION_LT_132:  # pragma: no cover
-        path = file["target"]
-    elif POLARS_VERSION_LT_138:  # pragma: no cover
+    if POLARS_VERSION_LT_138:  # pragma: no cover
         path = file["target"]["Local"]
     else:
         path = file["target"]["inner"]

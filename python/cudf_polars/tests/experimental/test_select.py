@@ -20,11 +20,9 @@ from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
-    assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
 )
 
@@ -91,15 +89,12 @@ def test_select_fill_null_with_strategy(df, streaming_engine_factory):
     )
     q = df.select(pl.col("a").forward_fill())
 
-    if POLARS_VERSION_LT_132:
-        assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        with warns_on_spmd(
-            engine,
-            UserWarning,
-            match="fill_null with strategy other than 'zero' or 'one' is not supported for multiple partitions",
-        ):
-            assert_gpu_result_equal(q, engine=engine)
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match="fill_null with strategy other than 'zero' or 'one' is not supported for multiple partitions",
+    ):
+        assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

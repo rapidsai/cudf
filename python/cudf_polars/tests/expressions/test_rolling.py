@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod
@@ -327,9 +327,7 @@ def test_rank_over(
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
+    request.applymarker()
     q = df.select(
         pl.col("x")
         .rank(method=method, descending=descending)
@@ -343,16 +341,12 @@ def test_rank_over(
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_ties(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.when(pl.col("g") == 2)
         .then(pl.lit(4))
@@ -368,16 +362,12 @@ def test_rank_over_with_ties(
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_null_values(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.when((pl.col("x") % 2) == 0)
         .then(None)
@@ -393,16 +383,12 @@ def test_rank_over_with_null_values(
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_null_group_keys(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.col("x")
         .rank(method=method, descending=descending)
@@ -441,10 +427,7 @@ def test_fill_over(
             group_key, order_by=order_by
         )
     )
-    if POLARS_VERSION_LT_132:
-        assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:

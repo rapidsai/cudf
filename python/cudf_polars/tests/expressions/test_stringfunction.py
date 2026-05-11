@@ -16,7 +16,6 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
@@ -550,15 +549,10 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
     q = ldf.select(pl.col("a").str.zfill(fill))
 
     if fill is not None and fill < 0:
-        cudf_except = (
-            pl.exceptions.InvalidOperationError
-            if not POLARS_VERSION_LT_132
-            else pl.exceptions.ComputeError
-        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=cudf_except,
+            cudf_except=pl.exceptions.InvalidOperationError,
         )
     else:
         assert_gpu_result_equal(q, engine=engine)
@@ -595,13 +589,10 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
     ).lazy()
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
-        cudf_except = (
-            pl.exceptions.InvalidOperationError if POLARS_VERSION_LT_132 else ()
-        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=cudf_except,
+            cudf_except=(),
         )
     else:
         assert_gpu_result_equal(q, engine=engine)
