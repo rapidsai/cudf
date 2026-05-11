@@ -12,6 +12,11 @@ from pylibcudf.io.types import TableWithMetadata
 from pylibcudf.span import Span
 from pylibcudf.utils import CudaStreamLike
 
+try:
+    from collections.abc import Buffer
+except ImportError:
+    from typing_extensions import Buffer
+
 class UseDataPageMask(IntEnum):
     YES: int
     NO: int
@@ -26,7 +31,7 @@ class FileMetaData:
 
 class HybridScanReader:
     def __init__(
-        self, footer_bytes: bytes, options: ParquetReaderOptions
+        self, footer_bytes: Buffer, options: ParquetReaderOptions
     ) -> None: ...
     @staticmethod
     def from_parquet_metadata(
@@ -34,7 +39,7 @@ class HybridScanReader:
     ) -> HybridScanReader: ...
     def parquet_metadata(self) -> FileMetaData: ...
     def page_index_byte_range(self) -> ByteRangeInfo: ...
-    def setup_page_index(self, page_index_bytes: bytes) -> None: ...
+    def setup_page_index(self, page_index_bytes: Buffer) -> None: ...
     def all_row_groups(self, options: ParquetReaderOptions) -> list[int]: ...
     def total_rows_in_row_groups(
         self, row_group_indices: list[int]
