@@ -34,6 +34,9 @@ def test_dataframe_series_dot():
     actual = gser @ gser
 
     assert_eq(expected, actual)
+    # 1-D dot/matmul on Series produces a 0-D scalar; cudf must return a
+    # numpy scalar (e.g. ``np.int64``) to match pandas, not a Python int.
+    assert type(actual) is type(expected)
 
     pdf = pd.DataFrame([[1, 2], [3, 4]], columns=list("ab"))
     gdf = cudf.from_pandas(pdf)
