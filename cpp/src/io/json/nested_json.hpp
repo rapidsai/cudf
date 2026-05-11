@@ -160,6 +160,14 @@ struct device_json_column {
   // Force as string column
   bool forced_as_string_column{false};
 
+  // JSON reader diagnostic. Set to true if any descendant of this column was pruned because the
+  // JSON's actual node category (`NC_STRUCT` / `NC_LIST` / `NC_VAL`) does not match the requested
+  // schema's type. Propagated UP the tree from the mismatch node toward the root in `build_tree`,
+  // and surfaced to callers via `column_name_info::had_schema_mismatch` on the resulting
+  // `table_metadata`. Consumers (e.g. spark-rapids-jni) can use this signal to implement their
+  // own per-column policy on schema mismatch.
+  bool had_schema_mismatch{false};
+
   /**
    * @brief Construct a new d json column object
    *
