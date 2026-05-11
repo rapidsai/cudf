@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 from cython.operator import dereference
 
 from libc.stddef cimport size_t
@@ -856,27 +858,29 @@ cdef class FilteredJoin:
     Filtered hash join that builds a hash table from the right (filter) table
     on creation and probes results in subsequent join member functions.
 
-    The build table is always treated as the right (filter) table. It will be
-    applied to multiple left (probe) tables in subsequent ``semi_join`` or
-    ``anti_join`` calls. For use cases where the left table should be reused
-    with multiple right tables, use ``MarkJoin`` instead.
+    The right table is used as the filter applied to multiple left tables in
+    subsequent ``semi_join`` or ``anti_join`` calls. For use cases where the
+    left table should be reused with multiple right tables, use ``MarkJoin``
+    instead.
 
     For details, see :cpp:class:`cudf::filtered_join`.
     """
 
     def __cinit__(
         self,
-        Table build,
-        null_equality compare_nulls,
+        right=None,
+        null_equality compare_nulls=null_equality.EQUAL,
         double load_factor=0.5,
         object stream=None,
+        *,
+        build=None,
     ):
         """
         Construct a filtered hash join object for subsequent probe calls.
 
         Parameters
         ----------
-        build : Table
+        right : Table
             The right (filter) table used to build the hash table.
         compare_nulls : NullEquality
             Controls whether null join-key values should match or not.
@@ -885,14 +889,34 @@ cdef class FilteredJoin:
             must be in range (0,1]. Defaults to 0.5.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
+        build : Table, optional
+            Deprecated alias for ``right``. Use ``right`` instead.
         """
+        if build is not None:
+            warnings.warn(
+                "The 'build' parameter is deprecated; use 'right' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if right is not None:
+                raise TypeError(
+                    "Cannot specify both 'right' and 'build'; use 'right'."
+                )
+            right = build
+        if right is None:
+            raise TypeError(
+                "FilteredJoin requires the 'right' argument."
+            )
+        if not isinstance(right, Table):
+            raise TypeError("'right' must be a Table")
+        cdef Table _right = <Table>right
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
 
         with nogil:
             self.c_obj.reset(
                 new cpp_join.filtered_join(
-                    build.view(),
+                    _right.view(),
                     compare_nulls,
                     load_factor,
                     _cs
@@ -901,30 +925,50 @@ cdef class FilteredJoin:
 
     def semi_join(
         self,
-        Table probe,
+        left=None,
         object stream=None,
         DeviceMemoryResource mr=None,
+        *,
+        probe=None,
     ):
         """
         Returns a column of row indices corresponding to a semi-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::semi_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
             Device memory resource used to allocate the returned column's device memory.
+        probe : Table, optional
+            Deprecated alias for ``left``. Use ``left`` instead.
 
         Returns
         -------
         Column
             A column containing the row indices from the left table after the join.
         """
+        if probe is not None:
+            warnings.warn(
+                "The 'probe' parameter is deprecated; use 'left' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if left is not None:
+                raise TypeError(
+                    "Cannot specify both 'left' and 'probe'; use 'left'."
+                )
+            left = probe
+        if left is None:
+            raise TypeError("semi_join requires the 'left' argument.")
+        if not isinstance(left, Table):
+            raise TypeError("'left' must be a Table")
+        cdef Table _left = <Table>left
         cdef cpp_join.gather_map_type c_result
 
         cdef Stream _stream = _get_stream(stream)
@@ -933,7 +977,7 @@ cdef class FilteredJoin:
 
         with nogil:
             c_result = self.c_obj.get()[0].semi_join(
-                probe.view(),
+                _left.view(),
                 _cs,
                 mr.get_mr()
             )
@@ -941,30 +985,50 @@ cdef class FilteredJoin:
 
     def anti_join(
         self,
-        Table probe,
+        left=None,
         object stream=None,
         DeviceMemoryResource mr=None,
+        *,
+        probe=None,
     ):
         """
         Returns a column of row indices corresponding to an anti-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::anti_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
             Device memory resource used to allocate the returned column's device memory.
+        probe : Table, optional
+            Deprecated alias for ``left``. Use ``left`` instead.
 
         Returns
         -------
         Column
             A column containing the row indices from the left table after the join.
         """
+        if probe is not None:
+            warnings.warn(
+                "The 'probe' parameter is deprecated; use 'left' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if left is not None:
+                raise TypeError(
+                    "Cannot specify both 'left' and 'probe'; use 'left'."
+                )
+            left = probe
+        if left is None:
+            raise TypeError("anti_join requires the 'left' argument.")
+        if not isinstance(left, Table):
+            raise TypeError("'left' must be a Table")
+        cdef Table _left = <Table>left
         cdef cpp_join.gather_map_type c_result
 
         cdef Stream _stream = _get_stream(stream)
@@ -973,7 +1037,7 @@ cdef class FilteredJoin:
 
         with nogil:
             c_result = self.c_obj.get()[0].anti_join(
-                probe.view(),
+                _left.view(),
                 _cs,
                 mr.get_mr()
             )
