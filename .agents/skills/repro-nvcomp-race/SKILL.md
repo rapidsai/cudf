@@ -22,6 +22,7 @@ Instructions to reproduce the intermittent ZSTD decompression bug in cuDF when m
 2. Streams from `cudf::detail::global_cuda_stream_pool()`
 3. ZSTD-compressed Parquet files
 4. Shared `cuda_async_memory_resource`
+5. Environment variable`LIBCUDF_NVCOMP_POLICY` is set to `ALWAYS`
 
 Note: All these are being handled in the new libcudf example called `nvcomp_zstd_repro`. Failure rate is intermittent (upstream reports ~60-70% of runs). Higher thread count, more files, and more iterations all increase trigger probability.
 
@@ -93,15 +94,17 @@ Start small and escalate:
 export CUDA_VISIBLE_DEVICES=0
 
 # Tier 1: quick smoke
-/home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
+export LIBCUDF_NVCOMP_POLICY=ALWAYS && /home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
     /home/coder/data/tpch_sf1 --iterations 30 --threads 8
 
 # Tier 2: if Tier 1 passes, increase pressure
-/home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
+export LIBCUDF_NVCOMP_POLICY=ALWAYS && /home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
     /home/coder/data/tpch_sf1 --iterations 50 --threads 16
 ```
 
 If still passing, loop the run until failure or further increase `--threads` / `--iterations`.
+
+**Note that** setting env-var `LIBCUDF_NVCOMP_POLICY=OFF` should make the race condition go away for the same test that was failing under the `ALWAYS` policy.
 
 **Known reproduction:** on `umb-b200-220` the bug was reproduced with `--threads 16 --iterations 50` against full SF1 (602 files), failing around iteration ~46 with:
 
