@@ -5520,35 +5520,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       // error usually requires a restart), and a leak beats silent corruption.
       if (drained) {
         for (HostColumnVectorCore child : children) {
-          if (child != null) {
-            try {
-              child.close();
-            } catch (Throwable closeFailure) {
-              t.addSuppressed(closeFailure);
-            }
-          }
+          Closeables.closeAndSuppress(child, t);
         }
-        if (hostData != null) {
-          try {
-            hostData.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
-          }
-        }
-        if (hostOffsets != null) {
-          try {
-            hostOffsets.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
-          }
-        }
-        if (hostValid != null) {
-          try {
-            hostValid.close();
-          } catch (Throwable closeFailure) {
-            t.addSuppressed(closeFailure);
-          }
-        }
+        Closeables.closeAndSuppress(hostData, t);
+        Closeables.closeAndSuppress(hostOffsets, t);
+        Closeables.closeAndSuppress(hostValid, t);
       }
       throw t;
     } finally {
@@ -5656,36 +5632,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         if (drained) {
           if (children != null) {
             for (HostColumnVectorCore child : children) {
-              if (child != null) {
-                try {
-                  child.close();
-                } catch (Throwable closeFailure) {
-                  t.addSuppressed(closeFailure);
-                }
-              }
+              Closeables.closeAndSuppress(child, t);
             }
           }
-          if (hostOffsetsBuffer != null) {
-            try {
-              hostOffsetsBuffer.close();
-            } catch (Throwable closeFailure) {
-              t.addSuppressed(closeFailure);
-            }
-          }
-          if (hostDataBuffer != null) {
-            try {
-              hostDataBuffer.close();
-            } catch (Throwable closeFailure) {
-              t.addSuppressed(closeFailure);
-            }
-          }
-          if (hostValidityBuffer != null) {
-            try {
-              hostValidityBuffer.close();
-            } catch (Throwable closeFailure) {
-              t.addSuppressed(closeFailure);
-            }
-          }
+          Closeables.closeAndSuppress(hostOffsetsBuffer, t);
+          Closeables.closeAndSuppress(hostDataBuffer, t);
+          Closeables.closeAndSuppress(hostValidityBuffer, t);
         }
         throw t;
       } finally {
