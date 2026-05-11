@@ -749,4 +749,4 @@ also has a `_quent_logger` attribute for "client-side" logs that records things 
 the engine start and exit events.
 
 Upon `StreamingEngine.shutdown`, all events are gathered from the workers and persisted
-on the (now closed) engine at `StreamingEngine._quent_events_raw`.
+on the (now closed) engine at `StreamingEngine._quent_events`.
