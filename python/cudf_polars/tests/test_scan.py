@@ -20,7 +20,6 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_135,
     POLARS_VERSION_LT_138,
 )
 
@@ -651,11 +650,7 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
         "index"
     )
 
-    if POLARS_VERSION_LT_135:
-        # Did not raise before
-        assert_gpu_result_equal(q, engine=engine)
-    else:
-        assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
