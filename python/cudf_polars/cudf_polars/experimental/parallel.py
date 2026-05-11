@@ -149,30 +149,6 @@ def lower_ir_graph_with_node_map(
     return *result, node_map
 
 
-def evaluate_rapidsmpf(
-    ir: IR,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-    """
-    Evaluate with the RapidsMPF streaming runtime.
-
-    Parameters
-    ----------
-    ir
-        Logical plan to evaluate.
-    config_options
-        GPUEngine configuration options.
-
-    Returns
-    -------
-    A cudf-polars DataFrame object.
-    """
-    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
-
-    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
-    return result
-
-
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -194,7 +170,10 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    return evaluate_rapidsmpf(ir, config_options)
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+
+    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
+    return result
 
 
 @lower_ir_node.register(Union)
