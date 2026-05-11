@@ -344,7 +344,7 @@ class SPMDEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
-            "HardwareBindingPolicy",
+            HardwareBindingPolicy,
             engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
         bind_to_gpu(hw_binding)
@@ -370,7 +370,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         self._py_executor: ThreadPoolExecutor = ThreadPoolExecutor(
-            max_workers=cast("int", executor_options.get("num_py_executors", 8)),
+            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
         self._mr: RmmResourceAdaptor = mr
