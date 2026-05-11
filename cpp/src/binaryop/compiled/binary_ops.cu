@@ -380,6 +380,39 @@ void binary_operation(mutable_column_view& out,
   operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
 }
 
+// Safe (decimal-overflow-tracking) overloads. The heavy lifting lives in
+// `apply_binary_op_safe` (see `binary_ops_safe.cu`); these three thin wrappers only
+// convert any scalar operand to a single-element `column_view` before forwarding.
+void binary_operation_safe(mutable_column_view& out,
+                           column_view const& lhs,
+                           column_view const& rhs,
+                           binary_operator op,
+                           unsigned int* d_overflow_flag,
+                           rmm::cuda_stream_view stream)
+{
+  apply_binary_op_safe(out, lhs, rhs, false, false, op, d_overflow_flag, stream);
+}
+void binary_operation_safe(mutable_column_view& out,
+                           scalar const& lhs,
+                           column_view const& rhs,
+                           binary_operator op,
+                           unsigned int* d_overflow_flag,
+                           rmm::cuda_stream_view stream)
+{
+  auto [lhsv, aux] = scalar_to_column_view(lhs, stream);
+  apply_binary_op_safe(out, lhsv, rhs, true, false, op, d_overflow_flag, stream);
+}
+void binary_operation_safe(mutable_column_view& out,
+                           column_view const& lhs,
+                           scalar const& rhs,
+                           binary_operator op,
+                           unsigned int* d_overflow_flag,
+                           rmm::cuda_stream_view stream)
+{
+  auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
+  apply_binary_op_safe(out, lhs, rhsv, false, true, op, d_overflow_flag, stream);
+}
+
 namespace detail {
 void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     column_view const& lhs,

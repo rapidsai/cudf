@@ -40,6 +40,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <cuda/std/optional>
 
@@ -229,6 +230,80 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
   auto out_view = out->mutable_view();
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
   // TODO: consider having the binary_operation count nulls instead
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
+  return out;
+}
+
+namespace {
+[[nodiscard]] constexpr bool is_decimal_safe_overflow_binary_operator(binary_operator op)
+{
+  switch (op) {
+    case binary_operator::ADD:
+    case binary_operator::SUB:
+    case binary_operator::MUL:
+    case binary_operator::DIV:
+    case binary_operator::MOD:
+    case binary_operator::PMOD:
+    case binary_operator::PYMOD: return true;
+    default: return false;
+  }
+}
+}  // namespace
+
+/**
+ * @brief Like `binary_operation` for fixed-point decimal operands, but updates @p overflow_flag
+ *        on the device (non-zero) if any non-null row overflows during arithmetic or rescale.
+ */
+template <typename LhsType, typename RhsType>
+std::unique_ptr<column> binary_operation_safe(LhsType const& lhs,
+                                              RhsType const& rhs,
+                                              binary_operator op,
+                                              data_type output_type,
+                                              rmm::device_scalar<std::uint32_t>& overflow_flag,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(cudf::is_fixed_point(lhs.type()) && cudf::is_fixed_point(rhs.type()),
+               "binary_operation_safe requires both operands to use fixed-point types.");
+  CUDF_EXPECTS(is_decimal_safe_overflow_binary_operator(op),
+               "binary_operation_safe only supports ADD, SUB, MUL, DIV, MOD, PMOD, and PYMOD.");
+
+  if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>) {
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match", std::invalid_argument);
+  }
+
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+      output_type.id() == type_id::STRING and
+      (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+    CUDF_FAIL("binary_operation_safe does not support string null min/max", cudf::logic_error);
+
+  if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
+    CUDF_FAIL("Unsupported operator for these types", cudf::data_type_error);
+
+  cudf::binops::compiled::fixed_point_binary_operation_validation(
+    op, lhs.type(), rhs.type(), output_type);
+
+  auto const common_intermediate =
+    cudf::binops::compiled::get_common_type(output_type, lhs.type(), rhs.type());
+  CUDF_EXPECTS(common_intermediate.has_value(),
+               "binary_operation_safe could not determine a common intermediate type.");
+  CUDF_EXPECTS(
+    lhs.type().id() == rhs.type().id() && lhs.type().id() == common_intermediate->id(),
+    "binary_operation_safe requires lhs, rhs, and their common intermediate type to share the "
+    "same decimal storage type (e.g. DECIMAL64 operands with DECIMAL64 output).");
+
+  overflow_flag.set_value_to_zero_async(stream);
+
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+
+  if constexpr (std::is_same_v<LhsType, column_view>)
+    if (lhs.is_empty()) return out;
+  if constexpr (std::is_same_v<RhsType, column_view>)
+    if (rhs.is_empty()) return out;
+
+  auto out_view = out->mutable_view();
+  cudf::binops::compiled::binary_operation_safe(
+    out_view, lhs, rhs, op, overflow_flag.data(), stream);
   out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
@@ -441,6 +516,45 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 {
   CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
+}
+
+std::unique_ptr<column> binary_operation_safe(scalar const& lhs,
+                                              column_view const& rhs,
+                                              binary_operator op,
+                                              data_type output_type,
+                                              rmm::device_scalar<std::uint32_t>& overflow_flag,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return cudf::binops::compiled::binary_operation_safe<scalar, column_view>(
+    lhs, rhs, op, output_type, overflow_flag, stream, mr);
+}
+
+std::unique_ptr<column> binary_operation_safe(column_view const& lhs,
+                                              scalar const& rhs,
+                                              binary_operator op,
+                                              data_type output_type,
+                                              rmm::device_scalar<std::uint32_t>& overflow_flag,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return cudf::binops::compiled::binary_operation_safe<column_view, scalar>(
+    lhs, rhs, op, output_type, overflow_flag, stream, mr);
+}
+
+std::unique_ptr<column> binary_operation_safe(column_view const& lhs,
+                                              column_view const& rhs,
+                                              binary_operator op,
+                                              data_type output_type,
+                                              rmm::device_scalar<std::uint32_t>& overflow_flag,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return cudf::binops::compiled::binary_operation_safe<column_view, column_view>(
+    lhs, rhs, op, output_type, overflow_flag, stream, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,

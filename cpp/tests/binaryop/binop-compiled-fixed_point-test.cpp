@@ -15,7 +15,11 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
+#include <rmm/device_scalar.hpp>
+
 #include <cuda/iterator>
+
+#include <limits>
 
 template <typename T>
 struct FixedPointCompiledTest : public cudf::test::BaseFixture {};
@@ -887,4 +891,53 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointWithFloating)
   // OTHER ARITHMETIC
   test_fixed_floating(cudf::binary_operator::NULL_MAX, 4.0, 20, -1, decimal_result);
   test_fixed_floating(cudf::binary_operator::NULL_MIN, 4.0, 200, -1, decimal_result);
+}
+
+TEST(BinaryOperationSafeDecimal, mulNoOverflowFlagZero)
+{
+  using namespace numeric;
+  using Rep = cudf::device_storage_type_t<numeric::decimal64>;
+  auto const lhs      = fp_wrapper<Rep>{{11, 22}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<Rep>{{10, 10}, scale_type{0}};
+  auto const expected = fp_wrapper<Rep>{{110, 220}, scale_type{-1}};
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+  rmm::device_scalar<std::uint32_t> overflow{0, stream, mr};
+
+  auto const result =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, overflow, stream, mr);
+
+  EXPECT_EQ(0u, overflow.value(stream));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST(BinaryOperationSafeDecimal, mulOverflowSetsGlobalFlag)
+{
+  using namespace numeric;
+  using Rep = cudf::device_storage_type_t<numeric::decimal64>;
+  // Product of scaled integers overflows int64; sticky overflow path should set the flag.
+  Rep const a = (std::numeric_limits<int64_t>::max() / 2) + 1;
+  Rep const b = 3;
+  auto const lhs = fp_wrapper<Rep>{{a}, scale_type{0}};
+  auto const rhs = fp_wrapper<Rep>{{b}, scale_type{0}};
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+  rmm::device_scalar<std::uint32_t> overflow{0, stream, mr};
+
+  auto const result =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, overflow, stream, mr);
+
+  stream.synchronize();
+  EXPECT_NE(0u, overflow.value(stream));
+  EXPECT_EQ(1, result->size());
 }

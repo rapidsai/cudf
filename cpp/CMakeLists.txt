@@ -369,6 +369,7 @@ add_library(
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
   src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/binary_ops_safe.cu
   src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
