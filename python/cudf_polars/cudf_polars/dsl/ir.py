@@ -49,7 +49,6 @@ from cudf_polars.utils.cuda_stream import (
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
     POLARS_VERSION_LT_138,
@@ -1970,19 +1969,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child

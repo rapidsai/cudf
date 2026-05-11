@@ -12,7 +12,6 @@ from polars import __version__
 
 POLARS_VERSION = parse(__version__)
 POLARS_LOWER_BOUND = parse("1.30")
-POLARS_VERSION_LT_134 = POLARS_VERSION < parse("1.34.0")
 POLARS_VERSION_LT_135 = POLARS_VERSION < parse("1.35.0")
 POLARS_VERSION_LT_136 = POLARS_VERSION < parse("1.36.0")
 POLARS_VERSION_LT_137 = POLARS_VERSION < parse("1.37.0")
