@@ -118,8 +118,9 @@ def _body_lifecycle() -> None:
 
 def _body_default_path_routing() -> None:
     """
-    .collect(engine=pl.GPUEngine("streaming")) routes through the singleton,
-    reuses it across queries, and picks up an explicit user singleton.
+    Both ``engine="gpu"`` and ``engine=pl.GPUEngine(executor="streaming")``
+    route through the singleton, reuse it across queries, and pick up an
+    explicit user singleton.
     """
     import polars as pl
 
@@ -130,8 +131,17 @@ def _body_default_path_routing() -> None:
         DefaultSingletonEngine,
     )
 
-    # Cold path: vanilla streaming GPUEngine triggers DefaultSingletonEngine.
+    # Default path #1: literal ``engine="gpu"`` triggers DefaultSingletonEngine.
     assert dse._state.instance is None
+    result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine="gpu")
+    assert result.shape == (3, 2)
+    assert result["a"].to_list() == [1, 2, 3]
+    first = dse._state.instance
+    assert first is not None
+    first.shutdown()
+    assert dse._state.instance is None
+
+    # Default path #2: vanilla streaming GPUEngine also triggers DefaultSingletonEngine.
     engine = pl.GPUEngine(executor="streaming")
     result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=engine)
     assert result.shape == (3, 2)
