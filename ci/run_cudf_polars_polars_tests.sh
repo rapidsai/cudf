@@ -56,6 +56,13 @@ fi
 
 DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 
+# Avoid oversubscribing the CPU
+num_cpus=$(nproc)
+export POLARS_MAX_THREADS=$(( num_cpus / 8 ))
+if (( POLARS_MAX_THREADS < 1 )); then
+    export POLARS_MAX_THREADS=1
+fi
+
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086

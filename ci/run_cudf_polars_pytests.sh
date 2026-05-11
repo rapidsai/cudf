@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# Avoid oversubscribing the CPU
+num_cpus=$(nproc)
+export POLARS_MAX_THREADS=$(( num_cpus / 8 ))
+if (( POLARS_MAX_THREADS < 1 )); then
+    export POLARS_MAX_THREADS=1
+fi
+
 # It is essential to cd into python/cudf_polars as `pytest-xdist` + `coverage` seem to work only at this directory level.
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
