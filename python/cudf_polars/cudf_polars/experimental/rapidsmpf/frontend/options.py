@@ -652,8 +652,8 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__NUM_PY_EXECUTORS.
-                Built-in default: 1."""),
+                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
+                Built-in default: 8."""),
         )
         g.add_argument(
             "--raise-on-fail",
