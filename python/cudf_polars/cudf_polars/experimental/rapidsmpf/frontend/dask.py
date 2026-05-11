@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import functools
 import logging
@@ -297,8 +296,7 @@ def _teardown_worker(
             mp_ctx.ctx = None
             mp_ctx.comm = None
             mp_ctx.mr = None
-            with contextlib.suppress(AttributeError):
-                delattr(dask_worker, attr)
+            delattr(dask_worker, attr)
 
 
 def _reset_worker(
