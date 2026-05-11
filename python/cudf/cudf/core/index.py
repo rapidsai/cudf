@@ -277,6 +277,18 @@ class Index(SingleColumnFrame):
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # Defer to Series (and DataFrame) which have higher priority than
+        # Index when participating in a numpy ufunc — pandas dispatches
+        # ``np.ufunc(Index, Series)`` to ``Series`` so the result is a
+        # ``Series``. Without this, cudf would handle it here and return an
+        # ``Index``.
+        if any(
+            isinstance(inp, (cudf.Series, cudf.DataFrame))
+            for inp in inputs
+            if inp is not self
+        ):
+            return NotImplemented
+
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
         if ret is not None:
