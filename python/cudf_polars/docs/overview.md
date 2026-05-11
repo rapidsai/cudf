@@ -731,6 +731,10 @@ associated with the engine correctly. We store these types of worker-independent
 entities on a new `QuentContext` class, which is provided to the engine via
 `StreamingExecutor.quent_context`.
 
+Rank-local properties (like a `QuentLogger` (see below) or `Worker` entity)
+should be propagated through functions in a
+`cudf_polars.quent._context.LocalQuentContext`.
+
 `cudf_polars.quent._logging.QuentLogger` connects the `Event` objects to the
 actual events. When we want record something, we call
 `quent_logger.emit(event)`. For now, these events are just buffered in-memory
