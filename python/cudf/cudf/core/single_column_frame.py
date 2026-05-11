@@ -343,12 +343,19 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         Index(['a', 'c'], dtype='str')
         """
-        # TODO: Avoid accessing factorize from the top level namespace
-        return cudf.factorize(
-            self,
-            sort=sort,
-            use_na_sentinel=use_na_sentinel,
+        return self._factorize(sort=sort, use_na_sentinel=use_na_sentinel)
+
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
+    ) -> tuple[cp.ndarray, Index]:
+        """Default factorize implementation for SingleColumnFrame subclasses.
+
+        Subclasses (e.g. ``RangeIndex``) may override to specialize.
+        """
+        labels, cats = self._column.factorize(
+            sort=sort, use_na_sentinel=use_na_sentinel
         )
+        return labels, cudf.Index._from_column(cats)
 
     @_performance_tracking
     def _make_operands_for_binop(

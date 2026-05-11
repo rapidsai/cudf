@@ -2962,9 +2962,12 @@ class RangeIndex(Index):
         return max(min(len(ri), offset), 0)
 
     @_performance_tracking
-    def factorize(
-        self, sort: bool = False, use_na_sentinel: bool = True
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
     ) -> tuple[cupy.ndarray, Self]:
+        # Specialized: the uniques of a RangeIndex are the RangeIndex
+        # itself (or its reverse when ``sort`` flips a decreasing range),
+        # not a generic Index built from a materialized column.
         if sort and self.step < 0:
             codes = cupy.arange(len(self) - 1, -1, -1)
             uniques = self[::-1]
