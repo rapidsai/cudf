@@ -13,12 +13,15 @@
 #include <nvJitLink.h>
 
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf::detail::jit_lto {
@@ -29,9 +32,48 @@ void emit_jit_lto_build_timing(double const build_ms)
 {
   CUDF_LOG_INFO("jit_lto: AlgorithmPlanner::build %.6f ms", build_ms);
   if (std::getenv("CUDF_JIT_LTO_LINK_TIMING") != nullptr) {
-    std::fprintf(stderr, "CUDF_JIT_LTO_LINK_TIMING build_ms=%.6f\n", build_ms);
+    if (auto const* meta = std::getenv("CUDF_JIT_LTO_LINK_TIMING_META");
+        meta != nullptr && meta[0] != '\0') {
+      std::fprintf(stderr, "CUDF_JIT_LTO_LINK_TIMING build_ms=%.6f %s\n", build_ms, meta);
+    } else {
+      std::fprintf(stderr, "CUDF_JIT_LTO_LINK_TIMING build_ms=%.6f\n", build_ms);
+    }
     std::fflush(stderr);
   }
+}
+
+std::vector<std::string> make_nvjitlink_option_strings(std::string arch_sm)
+{
+  std::vector<std::string> opts;
+  opts.reserve(8);
+  opts.emplace_back("-lto");
+  opts.push_back(std::move(arch_sm));
+
+  // Whitespace-separated extra nvJitLink flags (e.g. "-O3", "-split-compile=0"). When non-empty,
+  // this replaces compile-time CUDF_JIT_LTO_NVJITLINK_OPTSET extras so one build can sweep flags.
+  // Note: "-O0" with "-lto" has triggered cudaErrorLaunchFailure on some toolchains; axis
+  // benchmarks skip that pair (see benchmark_murmur_jit_lto_axes.sh). JIT fragments are LTO-IR;
+  // -lto is required.
+  if (auto const* env = std::getenv("CUDF_JIT_LTO_NVJITLINK_OPTIONS");
+      env != nullptr && env[0] != '\0') {
+    std::istringstream iss(env);
+    std::string tok;
+    while (iss >> tok) {
+      opts.push_back(std::move(tok));
+    }
+    return opts;
+  }
+
+#if defined(CUDF_JIT_LTO_NVJITLINK_PROFILE_O0)
+  opts.emplace_back("-O0");
+#elif defined(CUDF_JIT_LTO_NVJITLINK_PROFILE_O3)
+  opts.emplace_back("-O3");
+#elif defined(CUDF_JIT_LTO_NVJITLINK_PROFILE_SPLIT_COMPILE)
+  opts.emplace_back("-split-compile=0");
+#elif defined(CUDF_JIT_LTO_NVJITLINK_PROFILE_SPLIT_COMPILE_EXTENDED)
+  opts.emplace_back("-split-compile-extended=0");
+#endif
+  return opts;
 }
 
 }  // namespace
@@ -84,9 +126,15 @@ std::shared_ptr<AlgorithmLauncher> AlgorithmPlanner::build()
 
   std::string archs = "-arch=sm_" + std::to_string((major * 10 + minor));
 
+  auto const opt_strings = make_nvjitlink_option_strings(std::move(archs));
+  std::vector<char const*> opt_ptrs;
+  opt_ptrs.reserve(opt_strings.size());
+  for (auto const& s : opt_strings) {
+    opt_ptrs.push_back(s.c_str());
+  }
+
   nvJitLinkHandle handle;
-  const char* lopts[] = {"-lto", archs.c_str()};
-  auto result         = nvJitLinkCreate(&handle, 2, lopts);
+  auto result = nvJitLinkCreate(&handle, static_cast<uint32_t>(opt_ptrs.size()), opt_ptrs.data());
   check_nvjitlink_result(handle, result);
 
   for (const auto& frag : this->fragments) {
