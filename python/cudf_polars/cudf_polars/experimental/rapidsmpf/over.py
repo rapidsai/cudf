@@ -529,9 +529,12 @@ async def _choose_modulus(
         target_partition_size,
         metadata_in.local_count,
     )
-    total_bytes, total_count = await allgather_reduce(
-        context, comm, collective_id, sample.total_size, sample.total_chunks
-    )
+    if comm.nranks > 1 and not metadata_in.duplicated:
+        total_bytes, total_count = await allgather_reduce(
+            context, comm, collective_id, sample.total_size, sample.total_chunks
+        )
+    else:
+        total_bytes, total_count = sample.total_size, sample.total_chunks
     modulus = min(
         max(comm.nranks, total_bytes // max(1, target_partition_size)),
         max(1, total_count),
