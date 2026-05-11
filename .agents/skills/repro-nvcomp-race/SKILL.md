@@ -61,6 +61,7 @@ python -c "import pyarrow.parquet as pq; m = pq.ParquetFile('/home/coder/data/tp
 Follow the standard cuDF build flow (same convention as `build-test-cudf` skill):
 
 ```bash
+export CUDAARCHS=NATIVE
 build-cudf-cpp -j0
 ```
 
