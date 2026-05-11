@@ -77,7 +77,7 @@ def evaluate_logical_plan(
             DefaultSingletonEngine,
         )
 
-        engine = DefaultSingletonEngine.create_or_get()
+        engine = DefaultSingletonEngine.get_or_create()
         config_options = dataclasses.replace(
             config_options,
             executor=dataclasses.replace(

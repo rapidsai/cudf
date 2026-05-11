@@ -223,7 +223,7 @@ class DefaultSingletonEngine(SPMDEngine):
     """
     Process-wide single-GPU singleton specialization of :class:`SPMDEngine`.
 
-    At most one live instance exists per process. Use :meth:`create_or_get`
+    At most one live instance exists per process. Use :meth:`get_or_create`
     to obtain it and :meth:`shutdown` to tear it down.
 
     Always constructs a single-rank communicator and uses default RapidsMPF,
@@ -240,7 +240,7 @@ class DefaultSingletonEngine(SPMDEngine):
 
     Or constructed explicitly:
 
-    >>> engine = DefaultSingletonEngine.create_or_get()  # doctest: +SKIP
+    >>> engine = DefaultSingletonEngine.get_or_create()  # doctest: +SKIP
     >>> result = df.lazy().collect(engine=engine)  # doctest: +SKIP
     """
 
@@ -264,7 +264,7 @@ class DefaultSingletonEngine(SPMDEngine):
             )
 
     @classmethod
-    def create_or_get(cls) -> DefaultSingletonEngine:
+    def get_or_create(cls) -> DefaultSingletonEngine:
         """
         Return the live singleton, constructing one if needed.
 
@@ -311,10 +311,10 @@ class DefaultSingletonEngine(SPMDEngine):
 
         # Timeout fallback: the worker is hung mid-teardown and did not
         # clear the singleton slots itself. Clear them here so a fresh
-        # create_or_get() call can spawn a new worker.
+        # get_or_create() call can spawn a new worker.
         #
         # The leaked instance is intentionally left in _active_engines.
-        # That prevents subsequent create_or_get() calls, or any other
+        # That prevents subsequent get_or_create() calls, or any other
         # streaming engine, from starting while the previous rapidsmpf
         # Context remains in an indeterminate state.
         with _state.lock:

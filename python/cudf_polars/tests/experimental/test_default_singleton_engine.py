@@ -95,16 +95,16 @@ def _body_lifecycle() -> None:
 
     # Construction succeeds; isinstance check skips its parent's
     # ``check_no_live_default_singleton`` so SPMDEngine.__init__ runs cleanly.
-    with DefaultSingletonEngine.create_or_get() as engine:
+    with DefaultSingletonEngine.get_or_create() as engine:
         assert engine.nranks == 1
         assert engine.rank == 0
         assert isinstance(engine, SPMDEngine)
         assert isinstance(engine, pl.GPUEngine)
         # Get-or-create: a second call returns the same instance.
-        assert DefaultSingletonEngine.create_or_get() is engine
+        assert DefaultSingletonEngine.get_or_create() is engine
 
     # After context-manager exit, the slot is free.
-    e2 = DefaultSingletonEngine.create_or_get()
+    e2 = DefaultSingletonEngine.get_or_create()
     assert e2 is not engine
     e2.shutdown()
     e2.shutdown()  # idempotent
@@ -145,20 +145,20 @@ def _body_default_path_routing() -> None:
     first.shutdown()
 
     # An already-live user singleton is reused by the default path.
-    with DefaultSingletonEngine.create_or_get() as user_engine:
+    with DefaultSingletonEngine.get_or_create() as user_engine:
         pl.LazyFrame({"a": [1]}).collect(engine=engine)
         assert dse._state.instance is user_engine
 
 
 def _body_concurrent_warm_path() -> None:
-    """Concurrent ``create_or_get()`` calls return the same instance."""
+    """Concurrent ``get_or_create()`` calls return the same instance."""
     import threading
 
     from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
         DefaultSingletonEngine,
     )
 
-    main_engine = DefaultSingletonEngine.create_or_get()
+    main_engine = DefaultSingletonEngine.get_or_create()
     try:
         barrier = threading.Barrier(8)
         results: list[DefaultSingletonEngine] = []
@@ -167,7 +167,7 @@ def _body_concurrent_warm_path() -> None:
         def worker() -> None:
             barrier.wait()
             with results_lock:
-                results.append(DefaultSingletonEngine.create_or_get())
+                results.append(DefaultSingletonEngine.get_or_create())
 
         threads = [threading.Thread(target=worker) for _ in range(8)]
         for t in threads:
@@ -198,7 +198,7 @@ def _body_atexit_no_op() -> None:
     assert dse._state.instance is None
 
     # Construct, shutdown, then call the atexit hook again — still a no-op.
-    DefaultSingletonEngine.create_or_get().shutdown()
+    DefaultSingletonEngine.get_or_create().shutdown()
     assert dse._state.instance is None
     DefaultSingletonEngine.shutdown()
     assert dse._state.instance is None
@@ -206,7 +206,7 @@ def _body_atexit_no_op() -> None:
 
 def _body_singleton_blocked_when_explicit_alive() -> None:
     """
-    The reverse direction: ``create_or_get()`` refuses if any other
+    The reverse direction: ``get_or_create()`` refuses if any other
     ``StreamingEngine`` is alive when ``DefaultSingletonEngine.__init__``
     finishes. Plus the ``_active_engine_count`` accessor.
     """
@@ -225,11 +225,11 @@ def _body_singleton_blocked_when_explicit_alive() -> None:
         SPMDEngine(),
         pytest.raises(RuntimeError, match="explicit streaming engine"),
     ):
-        DefaultSingletonEngine.create_or_get()
+        DefaultSingletonEngine.get_or_create()
     assert StreamingEngine._active_engine_count() == 0
 
     # Active-count tracks DefaultSingletonEngine's own lifecycle too.
-    with DefaultSingletonEngine.create_or_get():
+    with DefaultSingletonEngine.get_or_create():
         assert StreamingEngine._active_engine_count() == 1
     assert StreamingEngine._active_engine_count() == 0
 
@@ -268,7 +268,7 @@ def _body_worker_thread_isolation() -> None:
         real_init(self, **kwargs)
 
     with patch.object(SPMDEngine, "__init__", recording_init):
-        engine = DefaultSingletonEngine.create_or_get()
+        engine = DefaultSingletonEngine.get_or_create()
     try:
         assert recorded["thread"] is not threading.current_thread()
         assert recorded["thread"].name.startswith("default-singleton-engine")
@@ -279,7 +279,7 @@ def _body_worker_thread_isolation() -> None:
     create_done = threading.Event()
 
     def creator() -> None:
-        DefaultSingletonEngine.create_or_get()
+        DefaultSingletonEngine.get_or_create()
         create_done.set()
 
     t = threading.Thread(target=creator)
@@ -300,10 +300,10 @@ def _body_worker_thread_isolation() -> None:
         patch.object(SPMDEngine, "__init__", broken_init),
         pytest.raises(RuntimeError, match="synthetic boom"),
     ):
-        DefaultSingletonEngine.create_or_get()
+        DefaultSingletonEngine.get_or_create()
     assert dse._state.instance is None
     assert dse._state.worker is None
-    DefaultSingletonEngine.create_or_get().shutdown()  # retry succeeds
+    DefaultSingletonEngine.get_or_create().shutdown()  # retry succeeds
 
 
 def _body_shutdown_timeout() -> None:
@@ -330,7 +330,7 @@ def _body_shutdown_timeout() -> None:
     real_shutdown = SPMDEngine.shutdown
 
     with patch.object(dse, "SHUTDOWN_TIMEOUT_SECONDS", 0.1):
-        engine = DefaultSingletonEngine.create_or_get()
+        engine = DefaultSingletonEngine.get_or_create()
 
         def hanging_super_shutdown(self: SPMDEngine) -> None:
             # Only the original ``engine`` should hang; any other
@@ -359,12 +359,12 @@ def _body_shutdown_timeout() -> None:
             assert dse._state.instance is None
             assert dse._state.worker is None
             with pytest.raises(RuntimeError, match="explicit streaming engine"):
-                DefaultSingletonEngine.create_or_get()
+                DefaultSingletonEngine.get_or_create()
             # Once the leaked worker returns it removes itself from the
             # registry; a fresh construction is allowed again.
             release_worker.set()
             real_done.wait()
-            DefaultSingletonEngine.create_or_get().shutdown()
+            DefaultSingletonEngine.get_or_create().shutdown()
 
 
 # ---------------------------------------------------------------------------
