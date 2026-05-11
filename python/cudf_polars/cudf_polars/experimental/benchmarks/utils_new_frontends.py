@@ -1752,15 +1752,15 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-io-threads",
-        default=2,
+        default=4,
         type=int,
-        help="Maximum number of IO threads for rapidsmpf runtime.",
+        help="Sets cudf_polars.utils.config.StreamingExecutor.max_io_threads.",
     )
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use C++ read_parquet nodes.",
+        default=False,
+        help="Sets cudf_polars.utils.config.ParquetOptions.use_rapidsmpf_native.",
     )
     parser.add_argument(
         "-o",
