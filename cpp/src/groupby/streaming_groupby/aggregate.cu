@@ -16,6 +16,7 @@
 #include <cuda/iterator>
 #include <thrust/for_each.h>
 
+#include <limits>
 #include <string>
 
 namespace cudf::groupby {
@@ -25,11 +26,14 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_str
   auto const batch_size = data.num_rows();
   if (batch_size == 0) { return; }
 
-  // Transient encoding `max_distinct_keys + row_idx` must fit alongside dense IDs
-  // in [0, max_distinct_keys), so a single batch can't exceed max_distinct_keys rows.
   CUDF_EXPECTS(batch_size <= _max_distinct_keys,
                "Batch size (" + std::to_string(batch_size) + ") exceeds max_distinct_keys (" +
                  std::to_string(_max_distinct_keys) + ").",
+               std::invalid_argument);
+
+  CUDF_EXPECTS(static_cast<int64_t>(_max_distinct_keys) + static_cast<int64_t>(batch_size) <=
+                 static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Transient key encoding (max_distinct_keys + batch_size) would overflow size_type.",
                std::invalid_argument);
 
   if (!_initialized) { initialize(data, stream); }

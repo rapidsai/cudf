@@ -141,6 +141,8 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
   test_sum_all_paths(keys, vals, expect_keys, expect_vals);
 }
 
+// streaming_groupby does not accept dictionary-typed value columns, so this case
+// runs only the stateless hash and sort paths via test_single_agg.
 TYPED_TEST(groupby_sum_test, dictionary)
 {
   using V = TypeParam;

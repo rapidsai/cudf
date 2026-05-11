@@ -27,7 +27,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <algorithm>
-#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -78,13 +77,6 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
     _d_agg_results{nullptr, +[](mutable_table_device_view*) {}}
 {
   CUDF_EXPECTS(max_distinct_keys > 0, "max_distinct_keys must be positive.", std::invalid_argument);
-  // Slot values use [0, max_distinct_keys) for stored dense IDs and [max_distinct_keys,
-  // 2*max_distinct_keys) for transient batch encoding within a single insert; the upper bound
-  // 2*max_distinct_keys must fit in size_type.
-  CUDF_EXPECTS(static_cast<int64_t>(max_distinct_keys) * 2 <=
-                 static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "max_distinct_keys is too large: transient encoding overflows size_type.",
-               std::invalid_argument);
   if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
   validate_requests(requests);
 
@@ -108,6 +100,13 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
     key_cols.push_back(data.column(idx));
   }
   _has_nested_keys = cudf::detail::has_nested_columns(table_view{key_cols});
+
+  std::vector<std::unique_ptr<column>> empty_key_cols;
+  empty_key_cols.reserve(key_cols.size());
+  for (auto const& kc : key_cols) {
+    empty_key_cols.push_back(cudf::empty_like(kc));
+  }
+  _empty_key_schema = std::make_unique<table>(std::move(empty_key_cols));
 
   auto agg_requests = build_aggregation_requests(_requests_clone, data);
 
@@ -226,7 +225,9 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(
 std::unique_ptr<table> streaming_groupby::impl::gather_distinct_keys(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
-  if (_compacted_batches.empty()) { return std::make_unique<table>(); }
+  if (_compacted_batches.empty()) {
+    return std::make_unique<table>(_empty_key_schema->view(), stream, mr);
+  }
   if (_compacted_batches.size() == 1) {
     return std::make_unique<table>(_compacted_batches[0]->view(), stream, mr);
   }

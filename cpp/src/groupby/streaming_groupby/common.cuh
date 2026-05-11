@@ -262,6 +262,10 @@ struct streaming_groupby::impl {
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
     _preprocessed_batches;
 
+  /// Empty (0-row) table preserving the key schema, used by gather_distinct_keys when
+  /// no batches produced any groups (e.g. first batch empty or fully null-excluded).
+  std::unique_ptr<table> _empty_key_schema;
+
   /// Companion vector indexed by dense ID, sized to max_distinct_keys.
   /// Each entry is {batch_id, row_in_compacted_batch}.
   std::unique_ptr<rmm::device_uvector<key_location_t>> _key_loc;

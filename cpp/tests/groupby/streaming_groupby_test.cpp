@@ -1045,6 +1045,29 @@ TEST_F(StreamingGroupbyTest, StringKeySumTwoBatches)
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
 
+TEST_F(StreamingGroupbyTest, StringKeyNonAsciiUtf8)
+{
+  using V = int32_t;
+
+  cudf::test::strings_column_wrapper keys1{"αλφα", "βητα", "γαμμα", "αλφα"};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
+
+  cudf::test::strings_column_wrapper keys2{"βητα", "δελτα", "αλφα", "🙂"};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 15, 25, 35};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_DISTINCT_KEYS);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
 TEST_F(StreamingGroupbyTest, StringKeyMinMaxTwoBatches)
 {
   cudf::test::strings_column_wrapper keys1{"cat", "dog", "cat"};
