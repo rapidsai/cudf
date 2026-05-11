@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import get_blocksize_mode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 
 def test_explode_multiple_raises():
@@ -44,12 +44,8 @@ def test_rename_duplicate_raises(mapping):
 
     q = df.rename(mapping)
 
-    if POLARS_VERSION_LT_131:
+    with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
         assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        # Now raises before translation
-        with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
-            assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(

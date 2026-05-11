@@ -33,7 +33,6 @@ from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
@@ -290,12 +289,11 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
-    if not POLARS_VERSION_LT_131:
-        deletion_files = file_options.deletion_files  # pragma: no cover
-        if deletion_files:  # pragma: no cover
-            raise NotImplementedError(
-                "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
-            )  # pragma: no cover
+    deletion_files = file_options.deletion_files
+    if deletion_files:  # pragma: no cover
+        raise NotImplementedError(
+            "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
+        )  # pragma: no cover
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 
@@ -796,9 +794,7 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
         return result_expr
-    elif not POLARS_VERSION_LT_131 and isinstance(
-        name, plrs._expr_nodes.StructFunction
-    ):
+    elif isinstance(name, plrs._expr_nodes.StructFunction):
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),

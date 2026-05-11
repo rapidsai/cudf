@@ -20,7 +20,6 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_135,
     POLARS_VERSION_LT_138,
 )
@@ -516,14 +515,8 @@ def test_scan_from_file_uri(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("chunked", [False, True])
 def test_scan_parquet_remote(
-    request, tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
+    tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
-        )
-    )
     path = tmp_path / "foo.parquet"
     df.write_parquet(path)
     bytes_ = path.read_bytes()
@@ -582,17 +575,10 @@ def test_scan_parquet_remote(
 
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
-    request: pytest.FixtureRequest,
     tmp_path: Path,
     df: pl.DataFrame,
     httpserver: HTTPServer,
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
-        )
-    )
     path = tmp_path / "foo.jsonl"
     df.write_ndjson(path)
     bytes_ = path.read_bytes()
