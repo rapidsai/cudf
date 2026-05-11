@@ -808,7 +808,7 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.api.extensions.ExtensionArray,),
+    bases=(NumpyExtensionArray, pd.api.extensions.ExtensionArray),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
