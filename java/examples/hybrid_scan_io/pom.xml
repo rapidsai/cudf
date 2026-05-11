@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+  SPDX-License-Identifier: Apache-2.0
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>ai.rapids</groupId>
+    <artifactId>cudf-hybrid-scan-io-example</artifactId>
+    <version>26.06.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>cudf hybrid_scan_io examples</name>
+    <description>
+        Java examples for the experimental cudf Parquet hybrid-scan reader. Requires
+        that the parent `ai.rapids:cudf` artifact has been built and installed
+        locally (e.g. via `mvn install` from the `java/` directory).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>ai.rapids</groupId>
+            <artifactId>cudf</artifactId>
+            <version>${project.version}</version>
+            <!-- The parent jar is installed with a CUDA classifier (computed from
+                 the local nvcc release by gmaven-plugin in java/pom.xml). Override
+                 with -Dcuda.classifier=cudaXX if your install uses a different one. -->
+            <classifier>${cuda.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <slf4j.version>1.7.30</slf4j.version>
+        <!-- Default to CUDA 12. Override on the command line with
+             `mvn ... -Dcuda.classifier=cuda11` if your local libcudf/cudf-java
+             install was built for a different CUDA major version. -->
+        <cuda.classifier>cuda12</cuda.classifier>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <!-- No default mainClass: callers must pass -Dexec.mainClass on the CLI.
+                     A hard-coded <mainClass> here would shadow -Dexec.mainClass because
+                     Maven plugin XML literals take precedence over user properties.
+                     Examples:
+                       mvn exec:java \
+                         -Dexec.mainClass=ai.rapids.cudf.examples.HybridScanIoExample \
+                         -Dexec.args="/path/to/file.parquet zip 50000"
+                       mvn exec:java \
+                         -Dexec.mainClass=ai.rapids.cudf.examples.HybridScanPipelineExample \
+                         -Dexec.args="/path/to/file.parquet 0 0"
+                -->
+            </plugin>
+        </plugins>
+    </build>
+</project>
