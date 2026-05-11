@@ -4944,7 +4944,7 @@ def interval_range(
         ):
             common_dtype = np.dtype("float64")
     else:
-        common_dtype = find_common_type(  # type: ignore[assignment]
+        common_dtype = find_common_type(
             [x for x in (start, end) if x is not None]
         )
         if all(is_integer(x) for x in (start, end) if x is not None):

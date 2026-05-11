@@ -291,7 +291,7 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
         return np.float64("nan")
 
 
-def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
+def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj:
     """
     Wrapper over np.result_type to handle cudf specific types.
 
@@ -302,12 +302,18 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
 
     Returns
     -------
-    dtype : np.dtype or None
-        None if input is empty
-        DtypeObj otherwise
+    dtype : DtypeObj
+
+    Raises
+    ------
+    ValueError
+        If ``dtypes`` is empty (matches ``pandas.core.dtypes.cast.find_common_type``).
     """
     if len(dtypes) == 0:  # type: ignore[arg-type]
-        return None
+        # Match pandas.core.dtypes.cast.find_common_type, which raises.
+        raise ValueError("no types given")
+
+    pandas_compatible = cudf.get_option("mode.pandas_compatible")
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
@@ -378,6 +384,25 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "Finding a common type for `ListDtype` or `StructDtype` is currently "
             "not supported"
         )
+
+    if pandas_compatible:
+        # cudf follows NumPy promotion: bool+int->int, bool+float->float,
+        # datetime64+timedelta64->datetime64. Pandas returns `object` for
+        # these mixes. Raise so that, when used as the cudf.pandas fast path
+        # for `pandas.core.dtypes.cast.find_common_type`, we fall back to
+        # pandas' implementation rather than silently producing a different
+        # answer.
+        kinds = {dtype.kind for dtype in dtypes if isinstance(dtype, np.dtype)}
+        if "b" in kinds and kinds & set("iuf"):
+            raise NotImplementedError(
+                "Common type of bool with numeric dtypes is not supported "
+                "in pandas-compatible mode."
+            )
+        if "M" in kinds and "m" in kinds:
+            raise NotImplementedError(
+                "Common type of datetime64 with timedelta64 is not supported "
+                "in pandas-compatible mode."
+            )
 
     try:
         common_dtype = np.result_type(*dtypes)  # noqa: TID251
