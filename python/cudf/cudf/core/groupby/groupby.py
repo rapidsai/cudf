@@ -9,7 +9,7 @@ import textwrap
 import warnings
 from collections.abc import Mapping
 from functools import cached_property, singledispatch
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy as cp
 import numpy as np
@@ -19,7 +19,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._internals import aggregation, binaryop, sorting
+from cudf.core._internals import aggregation, sorting
 from cudf.core.abc import Serializable
 from cudf.core.column import access_columns
 from cudf.core.column.column import (
@@ -65,6 +65,7 @@ if TYPE_CHECKING:
         MultiColumnAggType,
         ScalarLike,
     )
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.dataframe import DataFrame
     from cudf.core.series import Series
 
@@ -1284,120 +1285,89 @@ class GroupBy(Serializable, Reducible, Scannable):
         from cudf.core.series import Series
 
         is_series = isinstance(self.obj, Series)
-
-        def _concat_column(string_col):
-            # Group into a list<string> column using collect_list and then
-            # join the list elements per group.
-            requests = [
-                plc.groupby.GroupByRequest(
-                    string_col.plc_column,
-                    [plc.aggregation.collect_list()],
-                )
+        if is_series:
+            value_cols: list[tuple[Any, ColumnBase]] = [
+                (self.obj.name, self.obj._column)
             ]
-            with access_columns(string_col, mode="read", scope="internal"):
-                with self._groupby_manager as plc_groupby:
-                    keys, results = plc_groupby.aggregate(requests)
-            list_col = results[0].columns()[0]
-            sep = plc.Scalar.from_py("")
-            sep_narep = plc.Scalar.from_py("")
-            if skipna:
-                string_narep = plc.Scalar.from_py("")
-                empty_policy = (
-                    plc.strings.combine.OutputIfEmptyList.EMPTY_STRING
-                )
-            else:
-                string_narep = plc.Scalar.from_py(
-                    None, plc.DataType(plc.TypeId.STRING)
-                )
-                empty_policy = (
-                    plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT
-                )
+        else:
+            value_cols = []
+            for col_name in self.grouping._values_column_names:
+                col = self.obj._data[col_name]
+                if not isinstance(col.dtype, pd.StringDtype):
+                    # TODO: handle mixed dtype frames
+                    raise NotImplementedError(
+                        "sum on mixed string and non-string columns is "
+                        "not yet supported"
+                    )
+                value_cols.append((col_name, col))
+
+        # Build a single batched groupby aggregation: one request per value
+        # column, computing collect_list and (when min_count > 0) count.
+        aggs = [plc.aggregation.collect_list()]
+        if min_count > 0:
+            aggs.append(plc.aggregation.count())
+        requests = [
+            plc.groupby.GroupByRequest(col.plc_column, aggs)
+            for _, col in value_cols
+        ]
+        columns_for_access = [col for _, col in value_cols]
+        with access_columns(
+            *columns_for_access, mode="read", scope="internal"
+        ):
+            with self._groupby_manager as plc_groupby:
+                keys, results = plc_groupby.aggregate(requests)
+
+        sep = plc.Scalar.from_py("")
+        sep_narep = plc.Scalar.from_py("")
+        if skipna:
+            string_narep = plc.Scalar.from_py("")
+            empty_policy = plc.strings.combine.OutputIfEmptyList.EMPTY_STRING
+        else:
+            string_narep = plc.Scalar.from_py(
+                None, plc.DataType(plc.TypeId.STRING)
+            )
+            empty_policy = plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT
+        null_str = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
+
+        out_data: dict[Any, ColumnBase] = {}
+        for (col_name, col), table in zip(value_cols, results, strict=True):
+            agg_columns = table.columns()
             joined = plc.strings.combine.join_list_elements(
-                list_col,
+                agg_columns[0],
                 sep,
                 sep_narep,
                 string_narep,
                 plc.strings.combine.SeparatorOnNulls.YES,
                 empty_policy,
             )
-            return ColumnBase.create(joined, string_col.dtype), keys
-
-        def _apply_min_count(result_col, string_col, keys):
-            if min_count <= 0:
-                return result_col
-            count_req = [
-                plc.groupby.GroupByRequest(
-                    string_col.plc_column, [plc.aggregation.count()]
+            result_col = ColumnBase.create(joined, col.dtype)
+            if min_count > 0:
+                keep_mask_plc = plc.binaryop.binary_operation(
+                    agg_columns[1],
+                    plc.Scalar.from_py(min_count),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
                 )
-            ]
-            with access_columns(string_col, mode="read", scope="internal"):
-                with self._groupby_manager as plc_groupby:
-                    _, count_results = plc_groupby.aggregate(count_req)
-            count_plc = count_results[0].columns()[0]
-            count_col = ColumnBase.create(
-                count_plc, dtype_from_pylibcudf_column(count_plc)
-            )
-            keep_mask = binaryop.binaryop(
-                count_col,
-                plc.Scalar.from_py(min_count),
-                "__ge__",
-                np.dtype(np.bool_),
-            )
-            null_str = plc.Scalar.from_py(
-                None, plc.DataType(plc.TypeId.STRING)
-            )
-            return result_col.copy_if_else(null_str, keep_mask)
+                keep_mask = cast(
+                    "NumericalColumn",
+                    ColumnBase.create(keep_mask_plc, np.dtype(np.bool_)),
+                )
+                result_col = result_col.copy_if_else(null_str, keep_mask)
+            out_data[col_name] = result_col
 
-        # Key index is shared across all aggregations.
         key_dtypes = [col.dtype for col in self.grouping._key_columns]
-        keys_cache = None
-
-        def _group_and_join(string_col):
-            nonlocal keys_cache
-            result_col, keys = _concat_column(string_col)
-            if keys_cache is None:
-                keys_cache = keys
-            result_col = _apply_min_count(result_col, string_col, keys)
-            return result_col
+        index = self.grouping.keys._from_columns_like_self(
+            [
+                ColumnBase.create(key, dtype)
+                for key, dtype in zip(keys.columns(), key_dtypes, strict=True)
+            ]
+        )
 
         if is_series:
-            string_col = self.obj._column
-            out_col = _group_and_join(string_col)
-            assert keys_cache is not None
-            index = self.grouping.keys._from_columns_like_self(
-                [
-                    ColumnBase.create(key, dtype)
-                    for key, dtype in zip(
-                        keys_cache.columns(), key_dtypes, strict=True
-                    )
-                ]
-            )
             return Series._from_column(
-                out_col, name=self.obj.name, index=index
+                out_data[self.obj.name], name=self.obj.name, index=index
             )
-        else:
-            out_data = {}
-            for col_name in self.grouping._values_column_names:
-                col = self.obj._data[col_name]
-                if isinstance(col.dtype, pd.StringDtype):
-                    out_data[col_name] = _group_and_join(col)
-                else:
-                    # Non-string columns go through normal agg path.
-                    # TODO: handle mixed dtype frames
-                    raise NotImplementedError(
-                        "sum on mixed string and non-string columns is "
-                        "not yet supported"
-                    )
-            assert keys_cache is not None
-            index = self.grouping.keys._from_columns_like_self(
-                [
-                    ColumnBase.create(key, dtype)
-                    for key, dtype in zip(
-                        keys_cache.columns(), key_dtypes, strict=True
-                    )
-                ]
-            )
-            return DataFrame._from_data(out_data, index=index)
+        return DataFrame._from_data(out_data, index=index)
 
     aggregate = agg
 
