@@ -3248,23 +3248,8 @@ class DatetimeIndex(Index):
         )
         self._freq = _validate_freq(freq)
         # existing pandas index needs no additional validation
-        if self._freq is not None and not was_pd_index:
-            unique_vals = self.to_series().diff().unique()
-            if self._freq == cudf.DateOffset(months=1):
-                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            elif self._freq == cudf.DateOffset(years=1):
-                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            else:
-                if len(unique_vals) > 2 or (
-                    len(unique_vals) == 2
-                    and unique_vals[1].value
-                    != self._freq._maybe_as_fast_pandas_offset().nanos
-                ):
-                    raise ValueError("No unique frequency found")
+        if not was_pd_index:
+            self._validate_freq_against_data(self._freq)
 
     @_performance_tracking
     def serialize(self):
@@ -3504,13 +3489,49 @@ class DatetimeIndex(Index):
             else:
                 return self.inferred_freq
 
+    def _validate_freq_against_data(self, freq) -> None:
+        if freq is None:
+            return
+        unique_vals = cudf.Series._from_column(
+            self.to_series().diff()._column.unique()
+        )
+        if freq == cudf.DateOffset(months=1):
+            possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        elif freq == cudf.DateOffset(years=1):
+            possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        else:
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1].value
+                != freq._maybe_as_fast_pandas_offset().nanos
+            ):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+
     @property
     def freq(self) -> DateOffset | None:
         return self._freq
 
     @freq.setter
-    def freq(self) -> None:
-        raise NotImplementedError("Setting freq is currently not supported.")
+    def freq(self, value) -> None:
+        new_freq = _validate_freq(value)
+        self._validate_freq_against_data(new_freq)
+        self._freq = new_freq
 
     @property
     def freqstr(self) -> str:

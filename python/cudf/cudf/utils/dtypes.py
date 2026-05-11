@@ -554,6 +554,11 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     if isinstance(source_dtype, pd.ArrowDtype):
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        # Preserve StringDtype storage/na_value when target is also a StringDtype.
+        if isinstance(source_dtype, pd.StringDtype) and isinstance(
+            target_dtype, pd.StringDtype
+        ):
+            return source_dtype
         if (
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.na_value is np.nan
@@ -563,11 +568,6 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.storage == "pyarrow"
         ):
-            if (
-                isinstance(target_dtype, pd.StringDtype)
-                and source_dtype == target_dtype
-            ):
-                return source_dtype
             return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
@@ -624,29 +624,6 @@ def is_arrow_null_dtype(dtype: DtypeObj) -> bool:
     return isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
         dtype.pyarrow_dtype
     )
-
-
-def maybe_normalize_arrow_null(
-    col: plc.Column, dtype: DtypeObj
-) -> tuple[plc.Column, DtypeObj, DtypeObj | None]:
-    """Normalize ArrowDtype(pa.null()) columns for internal construction.
-
-    For pandas nullable null types (ArrowDtype wrapping pa.null()),
-    the column data is normalized and the dtype is replaced with
-    ``np.dtype("object")`` for internal dispatch. The original dtype
-    is returned as ``old_dtype`` so it can be stored on the column.
-
-    Returns
-    -------
-    tuple of (col, dtype, old_dtype)
-        ``old_dtype`` is the original dtype if normalization occurred,
-        otherwise ``None``.
-    """
-    from cudf.core.column.column import _normalize_types_column
-
-    if is_arrow_null_dtype(dtype):
-        return _normalize_types_column(col), np.dtype("object"), dtype
-    return col, dtype, None
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
