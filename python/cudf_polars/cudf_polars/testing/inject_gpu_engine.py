@@ -30,6 +30,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("in-memory", "spmd"),
         help="Which GPU engine variant to inject globally.",
     )
+    # TODO: We never run with --inject-gpu-engine-blocksize in ci/run_cudf_polars_polars_tests.sh. Remove?
     group.addoption(
         "--inject-gpu-engine-blocksize",
         action="store",
@@ -134,6 +135,7 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
+# TODO: This is just Mapping[str, str]?
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -305,7 +307,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 
 # Generally skip for:
 # 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
-# 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",

@@ -159,13 +159,12 @@ def set_memory_resource(
     """
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
-        # Use cuda async by default with the rapidsmpf runtime.
+        # Use cuda async by default with the streaming executor.
         if (
             memory_resource_config is None
             and executor.name == "streaming"
-            and executor.runtime == "rapidsmpf"
             and (device_size := get_total_device_memory()) is not None
-        ):  # pragma: no cover; Requires rapidsmpf runtime.
+        ):  # pragma: no cover
             memory_resource_config = MemoryResourceConfig(
                 qualname="rmm.mr.CudaAsyncMemoryResource",
                 options={

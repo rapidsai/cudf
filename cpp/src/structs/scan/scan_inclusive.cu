@@ -44,9 +44,10 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   // Gather the children columns of the input column. Must use `get_sliced_child` to properly
   // handle input in case it is a sliced view.
+  auto const structs_view   = structs_column_view{input};
   auto const input_children = [&] {
     auto const it = cudf::detail::make_counting_transform_iterator(
-      0, [structs_view = structs_column_view{input}, &stream](auto const child_idx) {
+      0, [&structs_view, &stream](auto const child_idx) {
         return structs_view.get_sliced_child(child_idx, stream);
       });
     return std::vector<column_view>(it, it + input.num_children());
