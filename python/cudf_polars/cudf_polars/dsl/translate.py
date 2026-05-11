@@ -33,7 +33,6 @@ from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
@@ -794,38 +793,28 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
-        if name == "log" or (
-            not POLARS_VERSION_LT_133
-            and name == "l"
+        if (
+            name == "l"
             and isinstance(options[0], str)
             and "".join((name, *options)) == "log"
         ):
-            if POLARS_VERSION_LT_133:  # pragma: no cover
-                (base,) = options
-                (child,) = children
-                return expr.BinOp(
-                    dtype,
-                    plc.binaryop.BinaryOperator.LOG_BASE,
-                    child,
-                    expr.Literal(dtype, base),
+            (child, base) = children
+            assert isinstance(base, expr.NamedExpr)
+            res = expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOG_BASE,
+                child,
+                expr.Literal(dtype, base.value),
+            )
+            return (
+                res
+                if not POLARS_VERSION_LT_134
+                else expr.Cast(
+                    DataType(pl.Float64()),
+                    True,  # noqa: FBT003
+                    res,
                 )
-            else:
-                (child, base) = children
-                res = expr.BinOp(
-                    dtype,
-                    plc.binaryop.BinaryOperator.LOG_BASE,
-                    child,
-                    expr.Literal(dtype, base.value),
-                )
-                return (
-                    res
-                    if not POLARS_VERSION_LT_134
-                    else expr.Cast(
-                        DataType(pl.Float64()),
-                        True,  # noqa: FBT003
-                        res,
-                    )
-                )
+            )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         return expr.UnaryFunction(dtype, name, options, *children)
@@ -1130,12 +1119,6 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
-    if (
-        POLARS_VERSION_LT_133
-        and plc.traits.is_boolean(dtype.plc_type)
-        and node.op == plrs._expr_nodes.Operator.TrueDivide
-    ):
-        dtype = DataType(pl.Float64())  # pragma: no cover
     if node.op == plrs._expr_nodes.Operator.TrueDivide and (
         plc.traits.is_fixed_point(left.dtype.plc_type)
         or plc.traits.is_fixed_point(right.dtype.plc_type)

@@ -16,7 +16,6 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
 )
@@ -791,10 +790,6 @@ def ldf_jsonlike():
 def test_json_decode(engine: pl.GPUEngine, ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
     assert_gpu_result_equal(q, engine=engine)
-
-    if POLARS_VERSION_LT_133:
-        q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))  # type: ignore[arg-type]
-        assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_json_decode_empty(engine: pl.GPUEngine):
