@@ -651,7 +651,7 @@ async def groupby_actor(
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             nranks,
-            indices=_key_indices(ir, ir.children[0].schema),
+            keys=_key_indices(ir, ir.children[0].schema),
         )
         require_tree = _require_tree(ir)
         fully_partitioned = bool(partitioning)

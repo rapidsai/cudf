@@ -127,10 +127,7 @@ def select(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    output_names = [next(names) for _ in range(len(exprs))]
-    named_exprs = [
-        NamedExpr(name, expr) for name, expr in zip(output_names, exprs, strict=True)
-    ]
+    named_exprs = [NamedExpr(next(names), expr) for expr in exprs]
     new_ir: IR = Select(
         {ne.name: ne.value.dtype for ne in named_exprs},
         named_exprs,
