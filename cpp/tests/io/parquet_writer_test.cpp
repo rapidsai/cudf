@@ -1118,7 +1118,6 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
   constexpr auto num_pages         = 10;
   constexpr auto page_size         = num_rows / num_pages;
   constexpr auto freq_pages        = num_pages - 2;
-  constexpr auto rare_pages        = num_pages - freq_pages;
   constexpr auto cardinality       = 64'000;
   constexpr auto frequent_set_size = 64;
 
@@ -1128,8 +1127,8 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
     using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
 
     // Hot pages contain values in [0, frequent_set_size - 1], (first `freq_pages` pages in the
-    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `rare_pages`
-    // pages in the chunk)
+    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `num_pages -
+    // freq_pages` pages in the chunk)
     std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
     std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
     auto constexpr threshold = freq_pages * page_size;
@@ -1199,12 +1198,13 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
 
     // Check expected number of freq and rare pages
     // TODO(mh): Race-dependent checks. Enable these along with cuDF PR #22323.
+
     // auto const total_page_count = static_cast<int>(page_dict_bits.size());
     // auto const freq_page_count  = static_cast<int>(
     //   std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits;
     //   }));
     // EXPECT_EQ(freq_page_count, freq_pages);
-    // EXPECT_EQ(total_page_count - freq_page_count, rare_pages);
+    // EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
   }
 }
 
