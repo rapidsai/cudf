@@ -167,6 +167,13 @@ class StreamingEngine(pl.GPUEngine):
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ):
+        # Refuse to construct if a ``DefaultSingletonEngine`` is alive
+        # (no-op for the singleton itself).
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            check_no_live_default_singleton,
+        )
+
+        check_no_live_default_singleton(self)
         self._nranks = nranks
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()

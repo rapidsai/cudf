@@ -30,9 +30,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     evaluate_on_rank,
     resolve_rapidsmpf_options,
 )
-from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
-    check_no_live_default_singleton,
-)
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
@@ -512,7 +509,6 @@ class RayEngine(StreamingEngine):
         ray_init_options: dict[str, Any] | None = None,
         num_ranks: int | None = None,
     ) -> None:
-        check_no_live_default_singleton(self)
         executor_options = executor_options or {}
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}

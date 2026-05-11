@@ -34,9 +34,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     evaluate_on_rank,
     resolve_rapidsmpf_options,
 )
-from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
-    check_no_live_default_singleton,
-)
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
@@ -597,7 +594,6 @@ class DaskEngine(StreamingEngine):
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
-        check_no_live_default_singleton(self)
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
