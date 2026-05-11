@@ -5533,12 +5533,14 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):
         if sort is no_default:
             sort = cudf.get_option("mode.pandas_compatible")
+        if group_keys is no_default:
+            group_keys = cudf.get_option("mode.pandas_compatible")
 
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
