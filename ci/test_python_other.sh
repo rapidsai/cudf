@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -41,10 +41,18 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term
 
+# Avoid oversubscribing the CPU
+num_processes=8
+num_cpus=$(nproc)
+export POLARS_MAX_THREADS=$(( num_cpus / num_processes ))
+if (( POLARS_MAX_THREADS < 1 )); then
+    export POLARS_MAX_THREADS=1
+fi
+
 rapids-logger "pytest cudf-polars"
 timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=8 \
+  --numprocesses=${num_processes} \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

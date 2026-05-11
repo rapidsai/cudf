@@ -57,8 +57,9 @@ fi
 DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 
 # Avoid oversubscribing the CPU
+num_processes=8
 num_cpus=$(nproc)
-export POLARS_MAX_THREADS=$(( num_cpus / 8 ))
+export POLARS_MAX_THREADS=$(( num_cpus / num_processes ))
 if (( POLARS_MAX_THREADS < 1 )); then
     export POLARS_MAX_THREADS=1
 fi
@@ -72,7 +73,7 @@ python -m pytest \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
-       -n 8 \
+       -n ${num_processes} \
        --dist=worksteal \
        -vv \
        --tb=native \

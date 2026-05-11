@@ -50,10 +50,18 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
+# Avoid oversubscribing the CPU
+num_processes=8
+num_cpus=$(nproc)
+export POLARS_MAX_THREADS=$(( num_cpus / num_processes ))
+if (( POLARS_MAX_THREADS < 1 )); then
+    export POLARS_MAX_THREADS=1
+fi
+
 rapids-logger "Running cudf_polars experimental tests (non-ci-blocking)"
 timeout 30m ./ci/run_cudf_polars_experimental_pytests.sh \
     --no-cov \
-    --numprocesses=8 \
+    --numprocesses=${num_processes} \
     --dist=worksteal \
     -v \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-rapidsmpf.xml"

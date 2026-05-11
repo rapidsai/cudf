@@ -39,6 +39,14 @@ rapids-logger "Run cudf_polars tests"
 available_polars_versions=$(python -m pip index versions polars --json | jq '.versions')
 POLARS_VERSIONS=$(python ci/utils/filter_package_versions.py dependencies.yaml run_cudf_polars polars "$available_polars_versions")
 
+# Avoid oversubscribing the CPU
+num_processes=8
+num_cpus=$(nproc)
+export POLARS_MAX_THREADS=$(( num_cpus / num_processes ))
+if (( POLARS_MAX_THREADS < 1 )); then
+    export POLARS_MAX_THREADS=1
+fi
+
 # shellcheck disable=SC2317
 function set_exitcode()
 {
@@ -73,7 +81,7 @@ for version in "${VERSIONS[@]}"; do
 
     timeout 1h ./ci/run_cudf_polars_pytests.sh \
         "${COVERAGE_ARGS[@]}" \
-        --numprocesses=8 \
+        --numprocesses=${num_processes} \
         --dist=worksteal \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
