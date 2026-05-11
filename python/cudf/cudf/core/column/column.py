@@ -223,6 +223,17 @@ def pylibcudf_result_dtype_policy(
     return dtype_from_pylibcudf_column(result)
 
 
+def pylibcudf_result_same_kind_dtype_policy(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    """Like ``pylibcudf_result_dtype_policy`` but preserves the first input
+    dtype's "kind" (pandas-nullable / ArrowDtype) on the result.
+    """
+    return get_dtype_of_same_kind(
+        dtypes[0], dtype_from_pylibcudf_column(result)
+    )
+
+
 def pandas_compatible_string_dtype_policy(
     target_dtype: np.dtype,
 ) -> "DtypePolicy":

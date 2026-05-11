@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
@@ -17,15 +16,12 @@ from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
     pylibcudf_result_dtype_policy,
+    pylibcudf_result_same_kind_dtype_policy,
     same_dtype_policy,
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils.dtypes import (
-    _get_nan_for_dtype,
-    dtype_from_pylibcudf_column,
-    get_dtype_of_same_kind,
-)
+from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -188,28 +184,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             # (e.g. nanosecond timestamps).
             plc_exact = exact and interpolation in {"linear", "midpoint"}
 
-            with ExitStack() as stack:
-                no_nans_acc = stack.enter_context(
-                    no_nans.access(mode="read", scope="internal")
-                )
-                indices_acc = stack.enter_context(
-                    indices.access(mode="read", scope="internal")
-                )
-                plc_result = plc.quantiles.quantile(
-                    no_nans_acc.plc_column,
-                    q,
-                    interpolation_type,
-                    indices_acc.plc_column,
-                    plc_exact,
-                )
-
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
-                ColumnBase.create(
-                    plc_result,
-                    get_dtype_of_same_kind(
-                        self.dtype, dtype_from_pylibcudf_column(plc_result)
-                    ),
+                PylibcudfFunction(
+                    plc.quantiles.quantile,
+                    pylibcudf_result_same_kind_dtype_policy,
+                ).execute_with_args(
+                    no_nans, q, interpolation_type, indices, plc_exact
                 ),
             )
         if return_scalar:
