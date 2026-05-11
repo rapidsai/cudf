@@ -792,13 +792,13 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
-        if (
+        if name == "log" or (
             name == "l"
             and isinstance(options[0], str)
             and "".join((name, *options)) == "log"
         ):
             (child, base) = children
-            assert isinstance(base, expr.NamedExpr)
+            assert isinstance(base, expr.Literal)
             return expr.BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.LOG_BASE,

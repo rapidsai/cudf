@@ -320,14 +320,12 @@ def test_over_broadcast_input_row_group_indices_aligned(engine: pl.GPUEngine):
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker()
     q = df.select(
         pl.col("x")
         .rank(method=method, descending=descending)
