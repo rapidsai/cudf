@@ -111,7 +111,7 @@ class reprog_device {
   [[nodiscard]] __device__ inline bool is_empty() const;
 
   /**
-   * @brief Returns true if this is a
+   * @brief Returns true if the instructions in this program can match an empty string
    */
   [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const
   {
