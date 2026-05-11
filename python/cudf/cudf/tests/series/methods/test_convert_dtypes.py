@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pandas as pd
 import pytest
@@ -43,3 +43,13 @@ def test_convert_integer_false_convert_floating_true():
         .to_pandas(nullable=True)
     )
     assert_eq(result, expected)
+
+
+def test_convert_dtypes_pyarrow_null():
+    pytest.importorskip("pyarrow")
+    data = [None, None]
+
+    expected = pd.Series(data).convert_dtypes(dtype_backend="pyarrow")
+    result = cudf.Series(data).convert_dtypes(dtype_backend="pyarrow")
+
+    assert_eq(result.to_pandas(), expected)

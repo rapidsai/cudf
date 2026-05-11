@@ -1308,7 +1308,10 @@ class IndexedFrame(Frame):
                 index=self.index if result_index is None else result_index,
                 columns=result_cols,
             )
-        return result.item()
+        # 0-d result: return a numpy scalar (e.g. np.int64) to match
+        # pandas' ``np.matmul(Series, Series)`` semantics rather than the
+        # Python ``int`` produced by ``cupy.ndarray.item``.
+        return result.get()[()]
 
     @_performance_tracking
     def __matmul__(self, other):
@@ -6576,12 +6579,16 @@ class IndexedFrame(Frame):
         if dtype_backend == "pyarrow":
             cols = []
             for col in self._columns:
-                arrow_dtype = pd.ArrowDtype(
-                    pa.null()
-                    if col.null_count == len(col)
-                    else cudf_dtype_to_pa_type(col.dtype)
-                )
-                cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
+                if len(col) == 0 and is_dtype_obj_string(col.dtype):
+                    cols.append(col)
+                    continue
+                if len(col) != 0 and col.null_count == len(col):
+                    cols.append(as_column(col, dtype=pd.ArrowDtype(pa.null())))
+                else:
+                    arrow_dtype = pd.ArrowDtype(
+                        cudf_dtype_to_pa_type(col.dtype)
+                    )
+                    cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
             )

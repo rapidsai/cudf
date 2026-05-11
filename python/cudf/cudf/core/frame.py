@@ -1723,25 +1723,32 @@ class Frame(BinaryOperand, Scannable, Serializable):
             right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
                 if left_is_column and right_is_column:
-                    # If both columns are nullable, pandas semantics dictate
-                    # that nulls that are present in both left_column and
-                    # right_column are not filled.
-                    if left_column.nullable and right_column.nullable:
+                    # ``has_nulls(include_nan=True)`` covers both validity-mask
+                    # nulls and NaN-as-null floats (the latter is how columns
+                    # are represented in ``mode.pandas_compatible``).
+                    left_has_nulls = left_column.has_nulls(include_nan=True)
+                    right_has_nulls = right_column.has_nulls(include_nan=True)
+                    if left_has_nulls and right_has_nulls:
+                        # Pandas semantics: nulls that are present in both
+                        # left and right at the same position remain null in
+                        # the output even when ``fill_value`` is given.
+                        output_validity = (
+                            left_column.notnull() | right_column.notnull()
+                        )
                         output_mask, output_null_count = (
-                            left_column._get_mask_as_column()
-                            | right_column._get_mask_as_column()
-                        ).as_mask()
+                            output_validity.as_mask()
+                        )
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
-                    elif left_column.nullable:
+                    elif left_has_nulls:
                         left_column = left_column.fillna(fill_value)
-                    elif right_column.nullable:
+                    elif right_has_nulls:
                         right_column = right_column.fillna(fill_value)
                 elif left_is_column:
-                    if left_column.nullable:
+                    if left_column.has_nulls(include_nan=True):
                         left_column = left_column.fillna(fill_value)
                 elif right_is_column:
-                    if right_column.nullable:
+                    if right_column.has_nulls(include_nan=True):
                         right_column = right_column.fillna(fill_value)
                 else:
                     assert False, "At least one operand must be a column."
