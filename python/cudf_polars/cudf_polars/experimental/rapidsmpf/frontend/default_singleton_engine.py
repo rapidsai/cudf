@@ -191,7 +191,7 @@ _state = _SingletonState()
 SHUTDOWN_TIMEOUT_SECONDS: float = 10.0
 
 
-def check_no_live_default_singleton(self_engine: object) -> None:
+def check_no_live_default_singleton(self_engine: Any) -> None:
     """
     Raise if the default singleton engine is alive.
 
@@ -275,8 +275,7 @@ class DefaultSingletonEngine(SPMDEngine):
         Raises
         ------
         RuntimeError
-            On the cold path, if any other :class:`StreamingEngine` is
-            currently alive.
+            If any other :class:`StreamingEngine` is currently alive.
         """
         with _state.lock:
             if _state.instance is not None:
