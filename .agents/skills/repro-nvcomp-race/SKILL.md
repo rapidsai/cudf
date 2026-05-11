@@ -3,7 +3,7 @@ name: repro-nvcomp-race
 description: Reproduce the nvCOMP/cuDF intermittent ZSTD decompression race condition in a cuDF devcontainer.
 ---
 
-# Instructions 
+# Instructions
 Activate when the user calls `/repro-nvcomp-race` or asks to reproduce, investigate, or debug the nvcomp ZSTD race or refers to SeanRooooney/nvcomp-zstd-reproducer.
 
 # Goal
