@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "src/io/parquet/arrow_filter_policy.cuh"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -16,8 +18,6 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/bloom_filter.cuh>
-
-#include <src/io/parquet/arrow_filter_policy.cuh>
 
 using StringType = cudf::string_view;
 

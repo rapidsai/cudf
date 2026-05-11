@@ -97,30 +97,16 @@ class arrow_filter_policy {
    */
   __device__ constexpr word_type word_pattern(hash_result_type hash, std::uint32_t word_index) const
   {
-    word_type const key = static_cast<word_type>(hash);
-    std::uint32_t salt{};
-
-    // Basically a switch (word_index) { case 0-7 ... }
-    // First split: 0..3 versus 4..7.
-    if (word_index < 4) {
-      // For indices 0..3, further split into 0..1 and 2..3.
-      if (word_index < 2) {
-        // word_index is 0 or 1.
-        salt = (word_index == 0) ? 0x47b6137bU : 0x44974d91U;
-      } else {
-        // word_index is 2 or 3.
-        salt = (word_index == 2) ? 0x8824ad5bU : 0xa2b7289dU;
-      }
-    } else {
-      // For indices 4..7, further split into 4..5 and 6..7.
-      if (word_index < 6) {
-        // word_index is 4 or 5.
-        salt = (word_index == 4) ? 0x705495c7U : 0x2df1424bU;
-      } else {
-        // word_index is 6 or 7.
-        salt = (word_index == 6) ? 0x9efc4947U : 0x5c6bfb31U;
-      }
-    }
+    constexpr std::uint32_t salts[words_per_block] = {0x47b6137bU,
+                                                      0x44974d91U,
+                                                      0x8824ad5bU,
+                                                      0xa2b7289dU,
+                                                      0x705495c7U,
+                                                      0x2df1424bU,
+                                                      0x9efc4947U,
+                                                      0x5c6bfb31U};
+    word_type const key                            = static_cast<word_type>(hash);
+    auto const salt                                = salts[word_index];
     return word_type{1} << ((key * salt) >> 27);
   }
 
