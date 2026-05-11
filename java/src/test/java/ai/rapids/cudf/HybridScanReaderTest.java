@@ -1002,6 +1002,43 @@ public class HybridScanReaderTest extends CudfTestBase {
   }
 
   // --------------------------------------------------------------------
+  // Tests: negative read-limit rejection (parameterized)
+  // --------------------------------------------------------------------
+
+  /** Verifies every setupChunking* / constructRowGroupPasses entry point rejects a negative chunkReadLimit or passReadLimit. */
+  @ParameterizedTest(name = "{0}RejectsNegativeReadLimits")
+  @MethodSource("negativeLimitInvocations")
+  void testRejectsNegativeReadLimits(String name, Consumer<HybridScanReader> action,
+                                     @TempDir Path tmp) throws IOException {
+    try (OpenReader open = OpenReader.standard(tmp)) {
+      assertThrows(IllegalArgumentException.class, () -> action.accept(open.reader));
+    }
+  }
+
+  static Stream<Arguments> negativeLimitInvocations() {
+    // Default cases use chunk=-1, pass=0; the swapped case (chunk=0, pass=-1) confirms
+    // both arguments are validated independently.
+    return Stream.of(
+        invocation("setupChunkingForFilterColumns", r -> r.setupChunkingForFilterColumns(
+            -1L, 0L, new int[]{0}, UseDataPageMask.NO,
+            HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[0])),
+        invocation("setupChunkingForPayloadColumns", r -> {
+          try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
+            r.setupChunkingForPayloadColumns(-1L, 0L, new int[]{0}, mask,
+                UseDataPageMask.NO, new DeviceMemoryBuffer[0]);
+          }
+        }),
+        invocation("setupChunkingForAllColumns", r ->
+            r.setupChunkingForAllColumns(-1L, 0L, new int[]{0}, new DeviceMemoryBuffer[0])),
+        invocation("constructRowGroupPasses", r ->
+            r.constructRowGroupPasses(new int[]{0}, -1L)),
+        invocation("setupChunkingForFilterColumnsPassLimit", r ->
+            r.setupChunkingForFilterColumns(0L, -1L, new int[]{0}, UseDataPageMask.NO,
+                HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[0]))
+    );
+  }
+
+  // --------------------------------------------------------------------
   // Tests: post-close behavior (parameterized)
   //
   // Every public method on HybridScanReader calls assertNotClosed() before reaching native
@@ -1150,10 +1187,17 @@ public class HybridScanReaderTest extends CudfTestBase {
         if (newFilter != null) newFilter.close();
         throw t;
       }
-      if (this.filter != null) this.filter.close();
-      this.reader.close();
+      // Swap fields before closing the old resources so that close() will still see and
+      // release the new ones if any of the old closes throws.
+      HybridScanReader oldReader = this.reader;
+      CompiledExpression oldFilter = this.filter;
       this.reader = newReader;
       this.filter = newFilter;
+      try {
+        if (oldFilter != null) oldFilter.close();
+      } finally {
+        oldReader.close();
+      }
       return this;
     }
 

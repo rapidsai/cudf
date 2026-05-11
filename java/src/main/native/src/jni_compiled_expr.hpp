@@ -47,6 +47,8 @@ class compiled_expr {
     return static_cast<cudf::ast::column_reference&>(*expressions.back());
   }
 
+  /** @brief Take ownership of @p ref_ptr; returns a reference stable for the lifetime of this
+   * compiled_expr. */
   cudf::ast::column_name_reference& add_column_name_ref(
     std::unique_ptr<cudf::ast::column_name_reference> ref_ptr)
   {

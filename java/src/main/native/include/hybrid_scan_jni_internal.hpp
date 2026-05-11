@@ -102,6 +102,10 @@ std::vector<cudf::device_span<uint8_t const>> make_device_spans(JNIEnv* env,
                                                                 jlongArray j_addrs,
                                                                 jlongArray j_lens);
 
+/** @brief Convert a jlong to size_t; throws Java IllegalArgumentException if @p value is negative
+ * (@p name is embedded in the message). */
+std::size_t checked_size_t(JNIEnv* env, jlong value, char const* name);
+
 }  // namespace hybrid_scan
 }  // namespace jni
 }  // namespace cudf

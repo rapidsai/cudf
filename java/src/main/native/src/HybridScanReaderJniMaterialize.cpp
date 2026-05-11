@@ -152,11 +152,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilt
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* wrapper = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
-    auto holder   = make_row_group_span(env, j_row_groups);
-    auto spans    = make_device_spans(env, j_addrs, j_lens);
-    auto stream   = cudf::get_default_stream();
-    auto mr       = cudf::get_current_device_resource_ref();
+    // Validate read limits up-front so we don't allocate the row mask column on the GPU
+    // before throwing on bad input.
+    auto const chunk_limit = checked_size_t(env, chunk_read_limit, "chunk_read_limit");
+    auto const pass_limit  = checked_size_t(env, pass_read_limit, "pass_read_limit");
+    auto* wrapper          = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+    auto holder            = make_row_group_span(env, j_row_groups);
+    auto spans             = make_device_spans(env, j_addrs, j_lens);
+    auto stream            = cudf::get_default_stream();
+    auto mr                = cudf::get_current_device_resource_ref();
     // Discard any prior chunked-filter row mask: starting a new chunked filter pipeline
     // implicitly ends the previous one.
     wrapper->chunked_filter_row_mask.reset();
@@ -170,8 +174,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilt
     }
     auto mode =
       use_data_page_mask ? exp_pq::use_data_page_mask::YES : exp_pq::use_data_page_mask::NO;
-    wrapper->reader->setup_chunking_for_filter_columns(static_cast<std::size_t>(chunk_read_limit),
-                                                       static_cast<std::size_t>(pass_read_limit),
+    wrapper->reader->setup_chunking_for_filter_columns(chunk_limit,
+                                                       pass_limit,
                                                        holder.span(),
                                                        row_mask_col->view(),
                                                        mode,
@@ -248,14 +252,16 @@ Java_ai_rapids_cudf_HybridScanReader_setupChunkingForPayloadColumns(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* wrapper  = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
-    auto holder    = make_row_group_span(env, j_row_groups);
-    auto spans     = make_device_spans(env, j_addrs, j_lens);
-    auto* row_mask = reinterpret_cast<cudf::column_view const*>(row_mask_view_handle);
+    auto const chunk_limit = checked_size_t(env, chunk_read_limit, "chunk_read_limit");
+    auto const pass_limit  = checked_size_t(env, pass_read_limit, "pass_read_limit");
+    auto* wrapper          = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+    auto holder            = make_row_group_span(env, j_row_groups);
+    auto spans             = make_device_spans(env, j_addrs, j_lens);
+    auto* row_mask         = reinterpret_cast<cudf::column_view const*>(row_mask_view_handle);
     auto mode =
       use_data_page_mask ? exp_pq::use_data_page_mask::YES : exp_pq::use_data_page_mask::NO;
-    wrapper->reader->setup_chunking_for_payload_columns(static_cast<std::size_t>(chunk_read_limit),
-                                                        static_cast<std::size_t>(pass_read_limit),
+    wrapper->reader->setup_chunking_for_payload_columns(chunk_limit,
+                                                        pass_limit,
                                                         holder.span(),
                                                         *row_mask,
                                                         mode,
@@ -298,11 +304,13 @@ Java_ai_rapids_cudf_HybridScanReader_setupChunkingForAllColumns(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* wrapper = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
-    auto holder   = make_row_group_span(env, j_row_groups);
-    auto spans    = make_device_spans(env, j_addrs, j_lens);
-    wrapper->reader->setup_chunking_for_all_columns(static_cast<std::size_t>(chunk_read_limit),
-                                                    static_cast<std::size_t>(pass_read_limit),
+    auto const chunk_limit = checked_size_t(env, chunk_read_limit, "chunk_read_limit");
+    auto const pass_limit  = checked_size_t(env, pass_read_limit, "pass_read_limit");
+    auto* wrapper          = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+    auto holder            = make_row_group_span(env, j_row_groups);
+    auto spans             = make_device_spans(env, j_addrs, j_lens);
+    wrapper->reader->setup_chunking_for_all_columns(chunk_limit,
+                                                    pass_limit,
                                                     holder.span(),
                                                     spans,
                                                     wrapper->options,
@@ -348,11 +356,11 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_HybridScanReader_constructRow
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* wrapper = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
-    auto holder   = make_row_group_span(env, j_row_groups);
-    auto passes   = wrapper->reader->construct_row_group_passes(
-      holder.span(), static_cast<std::size_t>(pass_read_limit));
-    jclass int_array_cls = env->FindClass("[I");
+    auto const pass_limit = checked_size_t(env, pass_read_limit, "pass_read_limit");
+    auto* wrapper         = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+    auto holder           = make_row_group_span(env, j_row_groups);
+    auto passes           = wrapper->reader->construct_row_group_passes(holder.span(), pass_limit);
+    jclass int_array_cls  = env->FindClass("[I");
     if (int_array_cls == nullptr) { return nullptr; }
     auto outer = env->NewObjectArray(passes.size(), int_array_cls, nullptr);
     if (outer == nullptr) { return nullptr; }

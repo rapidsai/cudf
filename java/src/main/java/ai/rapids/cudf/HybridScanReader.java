@@ -125,6 +125,9 @@ public class HybridScanReader implements AutoCloseable {
   }
 
   private final HybridScanReaderCleaner cleaner;
+  // Strong ref so the native options' raw pointer to the AST is not collected
+  // while this reader is alive.
+  private final CompiledExpression filter;
   private boolean isClosed = false;
 
   /**
@@ -138,7 +141,8 @@ public class HybridScanReader implements AutoCloseable {
    * @param opts         Parquet reader options. {@link ParquetOptions#DEFAULT} by default.
    * @param filter       optional compiled AST filter expression. May be {@code null}.
    *                     The expression typically uses {@link ai.rapids.cudf.ast.ColumnNameReference}
-   *                     to refer to columns by name.
+   *                     to refer to columns by name. If non-{@code null}, it must remain
+   *                     unclosed for the entire lifetime of this reader.
    */
   public HybridScanReader(HostMemoryBuffer footerBuffer,
                           ParquetOptions opts,
@@ -149,6 +153,7 @@ public class HybridScanReader implements AutoCloseable {
     if (opts == null) {
       opts = ParquetOptions.DEFAULT;
     }
+    this.filter = filter;
     long filterHandle = (filter != null) ? filter.getNativeHandle() : 0;
     String[] columnNames = opts.getIncludeColumnNames();
     boolean[] readBinaryAsString = opts.getReadBinaryAsString();

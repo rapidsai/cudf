@@ -11,6 +11,7 @@
 #include <cuda_runtime_api.h>
 
 #include <cstring>
+#include <string>
 #include <utility>
 
 namespace cudf {
@@ -158,14 +159,25 @@ std::vector<cudf::device_span<uint8_t const>> make_device_spans(JNIEnv* env,
 {
   cudf::jni::native_jlongArray addrs(env, j_addrs);
   cudf::jni::native_jlongArray lens(env, j_lens);
+  CUDF_EXPECTS(addrs.size() == lens.size(), "addrs and lens arrays must have the same length");
   std::vector<cudf::device_span<uint8_t const>> out;
   out.reserve(addrs.size());
   for (int i = 0; i < addrs.size(); ++i) {
-    out.emplace_back(reinterpret_cast<uint8_t const*>(addrs[i]), static_cast<size_t>(lens[i]));
+    out.emplace_back(reinterpret_cast<uint8_t const*>(addrs[i]),
+                     checked_size_t(env, lens[i], "byte range length"));
   }
   addrs.cancel();
   lens.cancel();
   return out;
+}
+
+std::size_t checked_size_t(JNIEnv* env, jlong value, char const* name)
+{
+  if (value < 0) {
+    auto const msg = std::string(name) + " must be non-negative, got " + std::to_string(value);
+    cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, msg.c_str());
+  }
+  return static_cast<std::size_t>(value);
 }
 
 }  // namespace hybrid_scan

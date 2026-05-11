@@ -371,7 +371,8 @@ public final class MemoryCleaner {
   }
 
   public static void register(HybridScanReader reader, Cleaner cleaner) {
-    all.put(cleaner.id, new CleanerWeakReference(reader, cleaner, collected, false));
+    // RMM blocker: wrapper can hold device memory (chunked_filter_row_mask).
+    all.put(cleaner.id, new CleanerWeakReference(reader, cleaner, collected, true));
   }
 
   static void register(HashJoin hashJoin, Cleaner cleaner) {
