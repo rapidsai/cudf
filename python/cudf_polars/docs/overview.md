@@ -741,7 +741,7 @@ features from structlog.
 
 Each rank has its own `QuentLogger`, which is constructed upon initialization of
 that rank's "worker" (`RankActor`, `_WorkerContext`). Each `StreamingEngine` subclass
-also has a `_quent_logger` attribute for "client-side" logs that records thigs like
+also has a `_quent_logger` attribute for "client-side" logs that records things like
 the engine start and exit events.
 
 Upon `StreamingEngine.shutdown`, all events are gathered from the workers and persisted
