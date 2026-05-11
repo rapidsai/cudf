@@ -5552,6 +5552,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       throw t;
     } finally {
+      // These are refcount handles to the parent ColumnView's device memory;
+      // closing them only decrements a refcount and does not deallocate, so
+      // they're safe to close regardless of stream state and do not need the
+      // sync-then-suppress treatment applied to host buffers above.
       if (currData != null) {
         currData.close();
       }
@@ -5685,6 +5689,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
         throw t;
       } finally {
+        // These are refcount handles to this ColumnView's device memory;
+        // closing them only decrements a refcount and does not deallocate, so
+        // they're safe to close regardless of stream state and do not need the
+        // sync-then-suppress treatment applied to host buffers above.
         if (data != null) {
           data.close();
         }
