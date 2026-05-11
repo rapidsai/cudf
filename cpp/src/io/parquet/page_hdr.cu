@@ -516,10 +516,10 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
   bs->page.temp_string_size     = 0;
   bs->page.temp_string_buf      = nullptr;
   bs->page.kernel_mask          = decode_kernel_mask::NONE;
-  bs->page.is_compressed        = true;
   bs->page.flags                = 0;
   bs->page.str_bytes_all        = 0;
   // zero out V2 info
+  bs->page.is_compressed                     = true;
   bs->page.num_nulls                         = 0;
   bs->page.lvl_bytes[level_type::DEFINITION] = 0;
   bs->page.lvl_bytes[level_type::REPETITION] = 0;
@@ -594,6 +594,7 @@ void __launch_bounds__(decode_page_headers_block_size)
       bs->page.str_bytes     = 0;
       bs->page.str_bytes_all = 0;
       // zero out V2 info
+      bs->page.is_compressed                     = true;
       bs->page.num_nulls                         = 0;
       bs->page.lvl_bytes[level_type::DEFINITION] = 0;
       bs->page.lvl_bytes[level_type::REPETITION] = 0;
