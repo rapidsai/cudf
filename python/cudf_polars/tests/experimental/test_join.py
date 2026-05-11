@@ -171,7 +171,7 @@ def test_join(left, right, how, reverse, streaming_engine_factory, options):
         assert_gpu_result_equal(q2, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize("zlice", [(0, 2)])  # , (2, 2), (-2, None)])
+@pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
 def test_join_and_slice(request, zlice, streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
