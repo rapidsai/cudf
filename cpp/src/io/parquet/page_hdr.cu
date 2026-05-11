@@ -583,6 +583,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     // Let all threads read before `parse_page_header_fn{}`
     warp.sync();
 
+    // Must be lane 0 here as `shuffle(values_found)` assumes lane 0 is the root
     if (lane_id == 0) {
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
@@ -695,6 +696,7 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
   while (values_found < num_values and bs->cur < bs->end) {
     // Let all threads read before `parse_page_header_fn{}`
     warp.sync();
+    // Must be lane 0 here as `shuffle(values_found)` assumes lane 0 is the root
     if (lane_id == 0) {
       if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size > 0) {
         if (not is_supported_encoding(bs->page.encoding)) {
