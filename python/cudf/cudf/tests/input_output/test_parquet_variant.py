@@ -123,7 +123,7 @@ def nested_variant_df(request, datadir):
 
 
 def test_nested_variant_shape(nested_variant_df):
-    shred_state, df = nested_variant_df
+    _, df = nested_variant_df
     assert df.shape == (3, 4)
     assert list(df.columns) == ["v_top", "v_list", "v_struct", "v_list_struct"]
 
