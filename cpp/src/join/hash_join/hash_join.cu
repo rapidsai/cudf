@@ -265,6 +265,7 @@ hash_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
   return _impl->partitioned_inner_join(context, stream, mr);
 }
 
@@ -274,6 +275,7 @@ hash_join::partitioned_left_join(cudf::join_partition_context const& context,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
   return _impl->partitioned_left_join(context, stream, mr);
 }
 
@@ -283,6 +285,7 @@ hash_join::partitioned_full_join(cudf::join_partition_context const& context,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
   return _impl->partitioned_full_join(context, stream, mr);
 }
 

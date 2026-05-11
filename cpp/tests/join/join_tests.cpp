@@ -3489,4 +3489,80 @@ TEST_F(JoinTest, HashJoinPartitionedWholeTable)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected_sort, *result_sort);
 }
 
+// Exercises both a sliced (non-zero offset) probe view and a partition size large enough
+// to span multiple kernel blocks.
+TEST_F(JoinTest, HashJoinPartitionedSlicedMultiBlock)
+{
+  auto constexpr probe_full_rows = 4000;
+  auto constexpr probe_offset    = 1234;
+  auto constexpr probe_rows      = 2500;
+  auto constexpr build_rows      = 300;
+
+  std::vector<int32_t> probe_vals(probe_full_rows);
+  for (cudf::size_type i = 0; i < probe_full_rows; ++i) {
+    probe_vals[i] = i % 200;
+  }
+  std::vector<int32_t> build_vals(build_rows);
+  for (cudf::size_type i = 0; i < build_rows; ++i) {
+    build_vals[i] = i;
+  }
+
+  column_wrapper<int32_t> probe_col(probe_vals.begin(), probe_vals.end());
+  column_wrapper<int32_t> build_col(build_vals.begin(), build_vals.end());
+
+  CVector cols_probe, cols_build;
+  cols_probe.push_back(probe_col.release());
+  cols_build.push_back(build_col.release());
+  Table probe_full(std::move(cols_probe));
+  Table build(std::move(cols_build));
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // Sliced probe view with non-zero offset
+  auto const probe_view =
+    cudf::slice(probe_full.view(), {probe_offset, probe_offset + probe_rows})[0];
+
+  // Reference: full inner join on the sliced probe
+  auto expected       = inner_join(cudf::table_view{probe_view}, build, {0}, {0});
+  auto expected_order = cudf::sorted_order(expected->view());
+  auto expected_sort  = cudf::gather(expected->view(), *expected_order);
+
+  cudf::hash_join hash_joiner(build.select({0}), cudf::null_equality::EQUAL, stream);
+  auto match_ctx = hash_joiner.inner_join_match_context(probe_view, stream, mr);
+  auto part_ctx  = cudf::join_partition_context{
+    std::make_unique<cudf::join_match_context>(std::move(match_ctx)), 0, 0};
+
+  // Two partitions covering the sliced probe; each is large enough to span multiple GPU blocks.
+  auto const mid                                                            = probe_rows / 2;
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const partitions = {{0, mid},
+                                                                               {mid, probe_rows}};
+
+  std::vector<std::unique_ptr<cudf::table>> partials;
+  std::vector<cudf::table_view> partial_views;
+  for (auto [s, e] : partitions) {
+    part_ctx.left_start_idx          = s;
+    part_ctx.left_end_idx            = e;
+    auto const [left_idx, right_idx] = hash_joiner.partitioned_inner_join(part_ctx, stream, mr);
+    auto left_col_view  = cudf::column_view{cudf::device_span<cudf::size_type const>{*left_idx}};
+    auto right_col_view = cudf::column_view{cudf::device_span<cudf::size_type const>{*right_idx}};
+    auto left_res       = cudf::gather(
+      cudf::table_view{probe_view}, left_col_view, cudf::out_of_bounds_policy::DONT_CHECK);
+    auto right_res = cudf::gather(build, right_col_view, cudf::out_of_bounds_policy::DONT_CHECK);
+    auto joined    = left_res->release();
+    auto right_c   = right_res->release();
+    joined.insert(joined.end(),
+                  std::make_move_iterator(right_c.begin()),
+                  std::make_move_iterator(right_c.end()));
+    partials.push_back(std::make_unique<cudf::table>(std::move(joined)));
+    partial_views.push_back(partials.back()->view());
+  }
+
+  auto concat       = cudf::concatenate(partial_views, stream, mr);
+  auto concat_order = cudf::sorted_order(concat->view());
+  auto concat_sort  = cudf::gather(concat->view(), *concat_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected_sort, *concat_sort);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

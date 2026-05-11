@@ -7,12 +7,12 @@
 
 #include "kernels_common.cuh"
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -241,7 +241,7 @@ launch_partitioned_retrieve(probe_key_type const* keys,
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
 
   // Global atomic counter claimed in bulk by each flushing-tile buffer flush.
-  rmm::device_scalar<size_type> output_counter(size_type{0}, stream);
+  cudf::detail::device_scalar<size_type> output_counter(size_type{0}, stream);
 
   auto constexpr tiles_in_block = DEFAULT_JOIN_BLOCK_SIZE / Ref::cg_size;
   auto const num_blocks = static_cast<unsigned int>((n + tiles_in_block - 1) / tiles_in_block);

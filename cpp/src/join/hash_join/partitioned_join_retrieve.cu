@@ -66,9 +66,21 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
     join == join_kind::INNER_JOIN || join == join_kind::LEFT_JOIN || join == join_kind::FULL_JOIN,
     "Unsupported join kind for partitioned retrieve");
 
+  CUDF_EXPECTS(context.left_table_context != nullptr,
+               "join_partition_context is missing left_table_context",
+               std::invalid_argument);
+
   auto const& match_ctx     = *context.left_table_context;
   auto const left_start_idx = context.left_start_idx;
   auto const left_end_idx   = context.left_end_idx;
+
+  CUDF_EXPECTS(match_ctx._match_counts != nullptr,
+               "join_match_context is missing match counts",
+               std::invalid_argument);
+  CUDF_EXPECTS(left_start_idx >= 0 && left_end_idx >= left_start_idx &&
+                 left_end_idx <= match_ctx._left_table.num_rows(),
+               "Invalid partition bounds",
+               std::invalid_argument);
 
   // Empty partition
   if (left_start_idx >= left_end_idx) {

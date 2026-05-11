@@ -14,6 +14,8 @@
 
 #include <cuco/static_multiset.cuh>
 
+#include <utility>
+
 namespace cudf::detail {
 
 // --- Equality types from the 3 dispatch paths ---

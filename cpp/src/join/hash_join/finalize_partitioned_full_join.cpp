@@ -5,6 +5,7 @@
 
 #include "join/join_common_utils.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/types.hpp>
@@ -26,6 +27,7 @@ hash_join::finalize_partitioned_full_join(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   return cudf::detail::finalize_full_join(
     left_partials, right_partials, left_table_num_rows, right_table_num_rows, stream, mr);
 }
