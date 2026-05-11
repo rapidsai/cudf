@@ -173,3 +173,48 @@ def test_numeric_alpha_value_counts():
         gdf.alpha.value_counts().sort_index(),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Float32",
+        "Float64",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+        "boolean",
+    ],
+)
+def test_value_counts_empty_pandas_nullable(dtype, normalize, dropna):
+    psr = pd.Series([], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.value_counts(dropna=dropna, normalize=normalize)
+    got = gsr.value_counts(dropna=dropna, normalize=normalize)
+
+    assert_eq(expected, got, check_dtype=True, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["Float64", "Int64", "UInt32", "boolean"],
+)
+def test_value_counts_all_null_pandas_nullable(dtype, normalize, dropna):
+    psr = pd.Series([pd.NA, pd.NA, pd.NA], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.value_counts(dropna=dropna, normalize=normalize)
+    got = gsr.value_counts(dropna=dropna, normalize=normalize)
+
+    assert_eq(
+        expected.sort_index(),
+        got.sort_index(),
+        check_dtype=True,
+        check_index_type=True,
+    )
