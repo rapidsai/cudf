@@ -215,7 +215,7 @@ def check_no_live_default_singleton(self_engine: Any) -> None:
                 'default GPU engine (e.g. `.collect(engine="gpu")`) is '
                 "active. While the default engine is in use, no explicit "
                 "streaming engines may exist. Shut down the default engine "
-                "first."
+                "first by calling `DefaultSingletonEngine.shutdown()`."
             )
 
 
@@ -299,14 +299,7 @@ class DefaultSingletonEngine(SPMDEngine):
             worker = _state.worker
         if instance is None:
             return
-
-        if worker is None:
-            # Synthetic instance bypassing the factory (test scaffolding).
-            with _state.lock:
-                _state.instance = None
-            SPMDEngine.shutdown(instance)
-            return
-
+        assert worker is not None
         future = worker.shutdown()
         try:
             future.result(timeout=SHUTDOWN_TIMEOUT_SECONDS)

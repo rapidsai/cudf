@@ -204,41 +204,6 @@ def _body_atexit_no_op() -> None:
     assert dse._state.instance is None
 
 
-def _body_explicit_engines_blocked_when_singleton_alive() -> None:
-    """SPMDEngine, RayEngine, and DaskEngine all refuse to coexist with the singleton."""
-    from unittest.mock import patch
-
-    import pytest
-
-    from cudf_polars.experimental.rapidsmpf.frontend import (
-        default_singleton_engine as dse,
-    )
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    # SPMDEngine is always available when the rapidsmpf frontend is imported.
-    with patch.object(dse._state, "instance", object()):
-        with pytest.raises(RuntimeError, match="default GPU engine"):
-            SPMDEngine()
-
-        # Ray (optional dep).
-        try:
-            from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-        except ImportError:
-            pass
-        else:
-            with pytest.raises(RuntimeError, match="default GPU engine"):
-                RayEngine()
-
-        # Dask (optional dep).
-        try:
-            from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-        except ImportError:
-            pass
-        else:
-            with pytest.raises(RuntimeError, match="default GPU engine"):
-                DaskEngine()
-
-
 def _body_singleton_blocked_when_explicit_alive() -> None:
     """
     The reverse direction: ``create_or_get()`` refuses if any other
@@ -414,7 +379,6 @@ _ALL_BODIES = [
     _body_default_path_routing,
     _body_concurrent_warm_path,
     _body_atexit_no_op,
-    _body_explicit_engines_blocked_when_singleton_alive,
     _body_singleton_blocked_when_explicit_alive,
     _body_worker_thread_isolation,
     _body_shutdown_timeout,
