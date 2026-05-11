@@ -26,8 +26,10 @@
 #include <cub/device/device_radix_sort.cuh>
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/atomic>
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
@@ -43,8 +45,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <limits>
 
 namespace cudf::io::json {
 namespace detail {
@@ -126,6 +126,22 @@ struct is_nested_end {
   __device__ auto operator()(NodeIndexT i) -> bool
   {
     return tokens[i] == token_t::StructEnd or tokens[i] == token_t::ListEnd;
+  }
+};
+
+struct checked_token_level_output {
+  bool* depth_out_of_range;
+
+  __device__ TreeDepthT operator()(int32_t level) const
+  {
+    if (level < static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::min()) ||
+        level > static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::max())) {
+      cuda::atomic_ref<bool, cuda::thread_scope_device> flag{*depth_out_of_range};
+      if (!flag.load(cuda::std::memory_order_relaxed)) {
+        flag.store(true, cuda::std::memory_order_relaxed);
+      }
+    }
+    return static_cast<TreeDepthT>(level);
   }
 };
 
@@ -280,14 +296,24 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
     auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
-      cuda::proclaim_return_type<size_type>(
-        [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+      cuda::proclaim_return_type<int32_t>(
+        [does_push, does_pop] __device__(PdaTokenT const token) -> int32_t {
           return does_push(token) - does_pop(token);
         }));
+    auto depth_out_of_range =
+      cudf::detail::device_scalar<bool>(false, stream, cudf::get_current_device_resource_ref());
+    auto const token_level_output_it = thrust::make_transform_output_iterator(
+      token_levels.begin(), checked_token_level_output{depth_out_of_range.data()});
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            push_pop_it,
                            push_pop_it + num_tokens,
-                           token_levels.begin());
+                           token_level_output_it,
+                           int32_t{0});
+    CUDF_EXPECTS(
+      !depth_out_of_range.value(stream),
+      "JSON token nesting depth is outside the supported range for TreeDepthT [" +
+        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::min())) + ", " +
+        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::max())) + "]");
 
     auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
                                                        token_levels.end(),
