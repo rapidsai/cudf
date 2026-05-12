@@ -600,7 +600,7 @@ class NumericalColumn(NumericalBaseColumn):
                     )
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
-            if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
+            if common_dtype.kind in {"b", "i", "u", "f"}:
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
                 return pa.scalar(
