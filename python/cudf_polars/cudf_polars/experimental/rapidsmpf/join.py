@@ -30,6 +30,7 @@ from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -47,7 +48,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     gather_in_task_group,
     maybe_remap_partitioning,
-    names_to_indices,
     process_children,
     recv_metadata,
     replay_buffered_channel,

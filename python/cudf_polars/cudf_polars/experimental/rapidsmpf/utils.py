@@ -39,6 +39,7 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
+from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -656,31 +657,6 @@ def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...
     """
     keys = list(schema.keys())
     return tuple(keys[i] for i in indices)
-
-
-def names_to_indices(
-    names: tuple[str | NamedExpr, ...], schema: Schema
-) -> tuple[int, ...]:
-    """
-    Return column indices for the given names in schema order.
-
-    Accepts either column names (str) or NamedExpr, so it can be used with
-    e.g. ir.left_on, ir.right_on as well as plain name tuples.
-
-    Parameters
-    ----------
-    names
-        The names to get indices for.
-    schema
-        The schema to get indices from.
-
-    Returns
-    -------
-    The column indices for each name in schema order.
-    """
-    keys = list(schema.keys())
-    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
-    return tuple(keys.index(n) for n in str_names)
 
 
 @dataclass(frozen=True)

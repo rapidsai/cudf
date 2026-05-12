@@ -20,7 +20,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Empty, Sort
-from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
@@ -37,7 +37,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     evaluate_batch,
     evaluate_chunk,
     gather_in_task_group,
-    names_to_indices,
     process_children,
     recv_metadata,
     replay_buffered_channel,

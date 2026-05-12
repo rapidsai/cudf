@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING, ClassVar, cast
 
 from cudf_polars.dsl.expr import Agg, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import IR, GroupBy, Select
-from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.experimental.groupby import combine, decompose
-from cudf_polars.experimental.rapidsmpf.utils import names_to_indices
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
