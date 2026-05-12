@@ -112,6 +112,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
 
@@ -370,36 +371,44 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        self._py_executor: ThreadPoolExecutor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
-            thread_name_prefix="spmd-executor",
-        )
         self._mr: RmmResourceAdaptor = mr
+        self._comm: Communicator | None = comm
+        self._ctx: Context | None = None
+        self._py_executor: ThreadPoolExecutor | None = None
         exit_stack = contextlib.ExitStack()
         try:
-            exit_stack.callback(self._py_executor.shutdown, wait=False)
             exit_stack.enter_context(set_memory_resource(mr))
-            # ``Context`` is *not* registered as a context manager so that
-            # :meth:`_reset` can swap it mid-life without leaving the
-            # exit-stack holding a stale reference. ``_cleanup_ctx`` is
-            # registered instead — it shuts down whatever ``self._ctx`` is
-            # at engine-shutdown time (i.e. the latest reset's Context).
-            ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
+
+            # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
+            # to at engine shutdown time, i.e. the `Context` from the latest reset.
+            self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
-            self._comm: Communicator | None = comm
-            self._ctx: Context | None = ctx
+
+            # Register after `_cleanup_ctx` so on teardown (LIFO) the
+            # executor shuts down first. `wait=True` is safe because
+            # rapidsmpf's `run_actor_network` awaits its only submitted
+            # future so by the time we reach shutdown the executor has no
+            # in-flight work and wait returns immediately.
+            self._py_executor = ThreadPoolExecutor(
+                max_workers=cast(int, executor_options.get("num_py_executors", 8)),
+                thread_name_prefix="spmd-executor",
+            )
+            exit_stack.callback(
+                self._py_executor.shutdown, wait=True, cancel_futures=True
+            )
+
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
                     **executor_options,
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
-                        comm=comm, context=ctx, py_executor=self._py_executor
+                        comm=comm, context=self._ctx, py_executor=self._py_executor
                     ),
                 },
                 engine_options={
                     **engine_options,
-                    "memory_resource": ctx.br().device_mr,
+                    "memory_resource": self._ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
             )
@@ -500,7 +509,7 @@ class SPMDEngine(StreamingEngine):
                 "spmd_context": SPMDContext(
                     comm=self._comm,
                     context=self._ctx,
-                    py_executor=self._py_executor,
+                    py_executor=self.py_executor,
                 ),
             },
             engine_options={
@@ -562,6 +571,24 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    @property
+    def py_executor(self) -> ThreadPoolExecutor:
+        """
+        The thread-pool executor used to drive the actor network.
+
+        Returns
+        -------
+        Active Python thread-pool executor.
+
+        Raises
+        ------
+        RuntimeError
+            If called after :meth:`shutdown`.
+        """
+        if self._py_executor is None:
+            raise RuntimeError("py_executor is not available after shutdown")
+        return self._py_executor
+
     def gather_cluster_info(self) -> list[ClusterInfo]:
         """
         Collect diagnostic information from every rank.
@@ -618,6 +645,7 @@ class SPMDEngine(StreamingEngine):
         super().shutdown()
         self._comm = None
         self._ctx = None
+        self._py_executor = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         data = json.dumps(func(*args, **kwargs)).encode()

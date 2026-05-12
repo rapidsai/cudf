@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import functools
 import logging
@@ -285,10 +284,15 @@ def _teardown_worker(
     if mp_ctx is not None:
         if mp_ctx.py_executor is not None:
             mp_ctx.py_executor.shutdown(wait=True, cancel_futures=True)
-        mp_ctx.ctx = None
-        mp_ctx.comm = None
-        mp_ctx.mr = None
-        with contextlib.suppress(AttributeError):
+        # Shut down the Context explicitly on the same thread that
+        # constructed it.
+        try:
+            if mp_ctx.ctx is not None:
+                mp_ctx.ctx.shutdown()
+        finally:
+            mp_ctx.ctx = None
+            mp_ctx.comm = None
+            mp_ctx.mr = None
             delattr(dask_worker, attr)
 
 
@@ -373,6 +377,7 @@ def _worker_evaluate(
     *,
     uid: str,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -393,6 +398,8 @@ def _worker_evaluate(
         per-worker context attribute.
     collect_metadata
         Whether to collect channel metadata.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -417,7 +424,8 @@ def _worker_evaluate(
         mp_ctx.py_executor,
         ir,
         config_options,
-        collect_metadata=True,
+        collect_metadata=collect_metadata,
+        query_id=query_id,
     )
     if mp_ctx.comm.rank != 0 and metadata and metadata[-1].duplicated:
         df = df.clear()
@@ -480,6 +488,7 @@ def evaluate_pipeline_dask_mode(
         ir,
         worker_config,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
     dfs: list[pl.DataFrame] = []
