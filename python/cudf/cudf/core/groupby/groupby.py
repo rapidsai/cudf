@@ -532,6 +532,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
+        self._selection: tuple[Any, ...] | None = None
 
         if isinstance(self._by, _Grouping):
             self._by._obj = self.obj
@@ -1262,13 +1263,13 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if min_count != 0:
-            raise NotImplementedError(
-                "min_count parameter is not implemented yet"
-            )
         if numeric_only:
             return self._reduce_numeric_only(op)
-        return self.agg(op)
+        result = self.agg(op)
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
     def _scan(self, op: str, *args, **kwargs):
         """{op_name} for each group."""
@@ -1735,6 +1736,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self, *, include_groups: bool = True):
+        from cudf.core.dataframe import DataFrame
+
         offsets, grouped_key_cols, grouped_value_cols = self._groups(
             itertools.chain(self.obj.index._columns, self.obj._columns)
         )
@@ -1750,9 +1753,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,  # type: ignore[arg-type]
         )
-        if not include_groups:
+        if not include_groups and isinstance(grouped_values, DataFrame):
+            selection = getattr(self, "_selection", None)
             for col_name in to_drop:
-                del grouped_values[col_name]
+                if col_name in grouped_values._column_names and (
+                    selection is None or col_name not in selection
+                ):
+                    del grouped_values[col_name]
         group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -1989,7 +1996,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     @_performance_tracking
     def apply(
-        self, func, *args, engine="auto", include_groups: bool = True, **kwargs
+        self,
+        func,
+        *args,
+        engine="auto",
+        include_groups: bool = False,
+        **kwargs,
     ):
         """Apply a python transformation function over the grouped chunk.
 
@@ -2014,10 +2026,9 @@ class GroupBy(Serializable, Reducible, Scannable):
           The default value `auto` will attempt to use the numba JIT pipeline
           where possible and will fall back to the iterative algorithm if
           necessary.
-        include_groups : bool, default True
+        include_groups : bool, default False
             When True, will attempt to apply ``func`` to the groupings in
-            the case that they are columns of the DataFrame. In the future,
-            this will default to ``False``.
+            the case that they are columns of the DataFrame.
         kwargs : dict
             Optional keyword arguments to pass to the function.
             Currently not supported
@@ -3065,13 +3076,20 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         return self[columns].agg(op)
 
     def __getitem__(self, key):
-        return self.obj[key].groupby(
+        new = self.obj[key].groupby(
             by=self.grouping.keys,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
             as_index=self._as_index,
         )
+        # Track explicit column selection so include_groups=False does not
+        # strip columns the user explicitly asked for (matches pandas
+        # behavior of returning group-key columns when reselected).
+        new._selection = (
+            tuple(key) if isinstance(key, (list, tuple)) else (key,)
+        )
+        return new
 
     def idxmin(
         self,

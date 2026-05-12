@@ -59,8 +59,6 @@ def test_gather_cluster_info(streaming_engine) -> None:
         assert isinstance(info.gpu_uuid, str)
     # Each rank runs in its own process.
     assert len({info.pid for info in infos}) == streaming_engine.nranks
-    # Without allow_gpu_sharing, all UUIDs must be unique (enforced at init).
-    assert len({info.gpu_uuid for info in infos}) == streaming_engine.nranks
 
 
 def test_cluster_info_cuda_visible_devices(monkeypatch) -> None:

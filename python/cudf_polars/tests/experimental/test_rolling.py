@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
@@ -46,10 +47,20 @@ def test_rolling_datetime(request, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
-def test_over_in_filter_unsupported(streaming_engine_factory) -> None:
+def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1, fallback_mode="warn"),
     )
+    if not isinstance(engine, SPMDEngine):
+        # On Dask/Ray the fallback warning fires on worker processes and is
+        # invisible to ``pytest.warns``; the multi-rank fallback also
+        # doesn't preserve row order.
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/22405",
+                strict=False,
+            )
+        )
     q = pl.concat(
         [
             pl.LazyFrame({"k": ["x", "y"], "v": [3, 2]}),

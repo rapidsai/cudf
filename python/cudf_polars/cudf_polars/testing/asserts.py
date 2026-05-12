@@ -14,7 +14,6 @@ from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import CollectKwargs
@@ -30,7 +29,6 @@ __all__: list[str] = [
 # Will be overriden by `conftest.py` with the value from the `--executor`
 # and `--cluster` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_RUNTIME = "tasks"
 DEFAULT_CLUSTER = "single"
 
 
@@ -128,11 +126,7 @@ def assert_gpu_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    tol_kwargs: dict[str, float]
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rtol, "atol": atol}
-    else:
-        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+    tol_kwargs: dict[str, float] = {"rel_tol": rtol, "abs_tol": atol}
 
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
@@ -200,7 +194,6 @@ def get_default_engine(
     executor = executor or DEFAULT_EXECUTOR
     if executor == "streaming":
         executor_options["cluster"] = DEFAULT_CLUSTER
-        executor_options["runtime"] = DEFAULT_RUNTIME
 
     return GPUEngine(
         raise_on_fail=True,
@@ -290,7 +283,8 @@ def assert_collect_raises(
         if polars_except != ():
             raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
-    engine = GPUEngine(raise_on_fail=True)
+    # TODO: https://github.com/rapidsai/cudf/issues/22346
+    engine = GPUEngine(executor="in-memory", raise_on_fail=True)
     try:
         lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
     except cudf_except:

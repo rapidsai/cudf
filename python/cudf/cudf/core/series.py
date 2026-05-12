@@ -1378,8 +1378,16 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, CategoricalDtype):
-            category_memory = lines[-1]
-            lines = lines[:-1]
+            # The trailing "Categories (...): [...]" block can wrap across
+            # multiple lines (e.g. for datetime categories), so capture every
+            # line from "Categories" onwards instead of just the last line.
+            for cat_start in range(len(lines) - 1, -1, -1):
+                if lines[cat_start].startswith("Categories"):
+                    break
+            else:
+                cat_start = len(lines) - 1
+            category_memory = "\n".join(lines[cat_start:])
+            lines = lines[:cat_start]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
                 lines = lines[:-1]
@@ -3511,7 +3519,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):

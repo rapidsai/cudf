@@ -457,6 +457,22 @@ def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
     assert_eq(expected, result)
 
 
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+@pytest.mark.parametrize("reflect", [False, True])
+def test_numeric_series_pd_nat_raises(op, reflect):
+    data = [0, 1, 2, 3, 4]
+    pser = pd.Series(data, dtype="int64")
+    gser = cudf.Series(data, dtype="int64")
+    pleft, pright = (pd.NaT, pser) if reflect else (pser, pd.NaT)
+    gleft, gright = (pd.NaT, gser) if reflect else (gser, pd.NaT)
+    assert_exceptions_equal(
+        lfunc=op,
+        rfunc=op,
+        lfunc_args_and_kwargs=([pleft, pright],),
+        rfunc_args_and_kwargs=([gleft, gright],),
+    )
+
+
 def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
     data = pa.array([None, 1, 3], pa.decimal128(3, 2))
     gser = cudf.Series(data)
@@ -2798,6 +2814,19 @@ def test_column_null_scalar_comparison(
 
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
+    # Ordering comparisons between a datetime64/timedelta64 series and a
+    # non-typed null (``None``) now raise ``TypeError`` to match pandas.
+    if (
+        null_scalar is None
+        and comparison_op.__name__ in {"lt", "le", "gt", "ge"}
+        and (
+            all_supported_types_as_str.startswith("datetime64")
+            or all_supported_types_as_str.startswith("timedelta64")
+        )
+    ):
+        with pytest.raises(TypeError, match="Invalid comparison"):
+            comparison_op(sr, null_scalar)
+        return
     result = comparison_op(sr, null_scalar)
     if all_supported_types_as_str.startswith(
         "datetime64"
@@ -3034,8 +3063,19 @@ def test_eq_ne_non_comparable_types(
 def test_binops_compare_stdlib_date_scalar(comparison_op):
     dt = datetime.date(2020, 1, 1)
     data = [dt]
-    result = comparison_op(cudf.Series(data), dt)
-    expected = comparison_op(pd.Series(data), dt)
+    sr = cudf.Series(data)
+    # cudf promotes ``date`` to ``datetime64``. pandas treats a bare
+    # ``date`` as not comparable with a datetime64 column: ordering ops
+    # raise, ``==``/``!=`` return all-False/True.
+    ps = pd.Series(data, dtype=sr.dtype)
+    if comparison_op.__name__ in {"lt", "le", "gt", "ge"}:
+        with pytest.raises(TypeError, match="Invalid comparison"):
+            comparison_op(sr, dt)
+        with pytest.raises(TypeError, match="Invalid comparison"):
+            comparison_op(ps, dt)
+        return
+    result = comparison_op(sr, dt)
+    expected = comparison_op(ps, dt)
     assert_eq(result, expected)
 
 

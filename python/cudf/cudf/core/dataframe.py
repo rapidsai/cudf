@@ -4857,7 +4857,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):

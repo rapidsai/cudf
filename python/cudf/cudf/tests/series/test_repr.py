@@ -289,6 +289,18 @@ def test_categorical_series_with_nan_repr():
     assert repr(series[2:]).split() == sliced_expected_repr.split()
 
 
+@pytest.mark.parametrize("tz", [None, "US/Eastern"])
+@pytest.mark.parametrize("ordered", [False, True])
+def test_categorical_series_repr_datetime_multiline(tz, ordered):
+    idx = pd.date_range(
+        "2011-01-01 09:00", freq="h", periods=5, tz=tz, unit="ns"
+    )
+    cat = pd.Categorical(idx, ordered=ordered)
+    expected = repr(pd.Series(cat))
+    got = repr(cudf.Series(cat))
+    assert got == expected
+
+
 def test_empty_series_name():
     ps = pd.Series([], name="abc", dtype="int")
     gs = cudf.from_pandas(ps)
