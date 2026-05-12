@@ -121,7 +121,7 @@ struct regex_program {
    *
    * @return Which fast-path is available and the associate literal string
    */
-  std::pair<literal_fast_path, std::string> get_literal_fast_path() const;
+  [[nodiscard]] std::pair<literal_fast_path, std::string> get_literal_fast_path() const;
 
  private:
   std::string _pattern;
