@@ -13,7 +13,6 @@ For the most part, the public API of `cudf-polars` is the polars API.
       ExecutorType,
       InMemoryExecutor,
       ParquetOptions,
-      ShuffleMethod,
       StreamingExecutor,
       StreamingFallbackMode,
 ```

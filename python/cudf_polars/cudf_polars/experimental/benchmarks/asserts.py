@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 import polars.testing
 
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
-
 if TYPE_CHECKING:
     from typing import Any
 
@@ -163,10 +161,7 @@ def assert_tpch_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rel_tol, "atol": abs_tol}
-    else:
-        tol_kwargs = {"rel_tol": rel_tol, "abs_tol": abs_tol}
+    tol_kwargs = {"rel_tol": rel_tol, "abs_tol": abs_tol}
     polars_kwargs.update(tol_kwargs)
 
     if left.columns != right.columns:

@@ -157,6 +157,7 @@ def test_chunked_sink_empty_table_to_parquet(tmp_path):
         pl.LazyFrame(),
         tmp_path / "out.parquet",
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={"chunked": True, "n_output_chunks": 2},
         ),

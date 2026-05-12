@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -16,6 +16,7 @@ from pylibcudf.libcudf.unary import \
 from .column cimport Column
 from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "UnaryOperator",
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 cpdef Column unary_operation(
-    Column input, unary_operator op, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, unary_operator op, object stream=None, DeviceMemoryResource mr=None
 ):
     """Perform a unary operation on a column.
 
@@ -53,16 +54,19 @@ cpdef Column unary_operation(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.unary_operation(input.view(), op, stream.view(), mr.get_mr())
+        result = cpp_unary.unary_operation(
+            input.view(), op, _cs, mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
-cpdef Column is_null(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_null(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Check whether elements of a column are null.
 
     For details, see :cpp:func:`is_null`.
@@ -83,16 +87,17 @@ cpdef Column is_null(Column input, Stream stream=None, DeviceMemoryResource mr=N
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_null(input.view(), stream.view(), mr.get_mr())
+        result = cpp_unary.is_null(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
-cpdef Column is_valid(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_valid(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Check whether elements of a column are valid.
 
     For details, see :cpp:func:`is_valid`.
@@ -113,17 +118,18 @@ cpdef Column is_valid(Column input, Stream stream=None, DeviceMemoryResource mr=
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_valid(input.view(), stream.view(), mr.get_mr())
+        result = cpp_unary.is_valid(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column cast(
-    Column input, DataType data_type, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, DataType data_type, object stream=None, DeviceMemoryResource mr=None
 ):
     """Cast a column to a different data type.
 
@@ -147,18 +153,19 @@ cpdef Column cast(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_unary.cast(
-            input.view(), data_type.c_obj, stream.view(), mr.get_mr()
+            input.view(), data_type.c_obj, _cs, mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
-cpdef Column is_nan(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_nan(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Check whether elements of a column are nan.
 
     For details, see :cpp:func:`is_nan`.
@@ -179,16 +186,17 @@ cpdef Column is_nan(Column input, Stream stream=None, DeviceMemoryResource mr=No
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_nan(input.view(), stream.view(), mr.get_mr())
+        result = cpp_unary.is_nan(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
-cpdef Column is_not_nan(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_not_nan(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Check whether elements of a column are not nan.
 
     For details, see :cpp:func:`is_not_nan`.
@@ -209,13 +217,14 @@ cpdef Column is_not_nan(Column input, Stream stream=None, DeviceMemoryResource m
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_not_nan(input.view(), stream.view(), mr.get_mr())
+        result = cpp_unary.is_not_nan(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef bool is_supported_cast(DataType from_, DataType to):
     """Check if a cast between datatypes is supported.
