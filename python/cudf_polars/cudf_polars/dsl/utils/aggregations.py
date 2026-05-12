@@ -247,8 +247,9 @@ def decompose_single_agg(
                 )
                 else expr.Col(agg.dtype, name)
             )
-            # Polars semantics for sum:
+            # Polars semantics for sum differ by context:
             # - GROUPBY: sum(all-null group) => 0; sum(empty group) => 0  (fill-null)
+            # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
             return [(named_expr, True)], expr.NamedExpr(
