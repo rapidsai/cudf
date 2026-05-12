@@ -1038,6 +1038,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError(
                 "Passing args to func is currently not supported."
             )
+        from cudf.core.dataframe import DataFrame
 
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
@@ -1112,14 +1113,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
                 data[key] = result_col
-        from cudf.core.dataframe import DataFrame
-
         # Preserve the column axis label-dtype/level_names from the source
         # DataFrame so that aggregations such as ``nunique`` keep the column
         # axis name (matching pandas behavior).
         if (
             not multilevel
-            and isinstance(self.obj, DataFrame)
+            and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
         ):
             data = ColumnAccessor(
@@ -2803,14 +2802,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 source_pd_cols.dtype.kind in {"i", "u"}
                 or source_pd_cols.dtype == object
             ):
-                try:
-                    positions = [
-                        source_pd_cols.get_loc(c) for c in result._column_names
-                    ]
-                except (KeyError, TypeError):
-                    positions = None
-                if positions is not None:
-                    taken = source_pd_cols.take(positions)
+                indexer = source_pd_cols.get_indexer(result._column_names)
+                if not (indexer == -1).any():
+                    taken = source_pd_cols.take(indexer)
                     if (
                         not isinstance(taken, pd.MultiIndex)
                         and taken.dtype != object

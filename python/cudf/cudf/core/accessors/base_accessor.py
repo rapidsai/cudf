@@ -99,12 +99,10 @@ class BaseAccessor(NotIterable):
                         attrs=self._parent.attrs,  # type: ignore[union-attr]
                     )
                     keys = (
-                        tuple(table.keys()) if hasattr(table, "keys") else ()
+                        tuple(table.keys()) if isinstance(table, dict) else ()
                     )
                     if len(table) == 0 or (
-                        keys
-                        and all(isinstance(k, int) for k in keys)
-                        and tuple(keys) == tuple(range(len(keys)))
+                        keys and keys == tuple(range(len(keys)))
                     ):
                         df._data.rangeindex = True
                     return df

@@ -11,7 +11,7 @@ import pandas as pd
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_list_like, is_scalar
+from cudf.api.types import is_list_like, is_scalar, is_string_dtype
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -25,6 +25,7 @@ from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
     min_unsigned_type,
 )
 
@@ -1072,7 +1073,8 @@ def pivot(
         if (
             len(data) == 0
             and not isinstance(index_data, cudf.MultiIndex)
-            and isinstance(index_data.dtype, pd.StringDtype)
+            and is_pandas_nullable_extension_dtype(index_data.dtype)
+            and is_string_dtype(index_data.dtype)
         ):
             index_data = cudf.Index(
                 pd.Index([], name=index_data.name, dtype=object)
@@ -1094,7 +1096,8 @@ def pivot(
     if (
         len(data) == 0
         and not isinstance(column_data, cudf.MultiIndex)
-        and isinstance(column_data.dtype, pd.StringDtype)
+        and is_pandas_nullable_extension_dtype(column_data.dtype)
+        and is_string_dtype(column_data.dtype)
     ):
         column_data = cudf.Index(
             pd.Index([], name=column_data.name, dtype=object)

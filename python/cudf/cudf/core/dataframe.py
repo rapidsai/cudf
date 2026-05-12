@@ -2129,7 +2129,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif (
             all(obj._data.rangeindex for obj in objs)
             and all(
-                tuple(obj._column_names) == tuple(range(obj._num_columns))
+                obj._num_columns == 0
+                or (
+                    obj._column_names[0] == 0
+                    and obj._column_names[-1] == obj._num_columns - 1
+                )
                 for obj in objs
             )
             and tuple(names) == tuple(range(len(names)))
@@ -4827,13 +4831,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             and isinstance(other_pd_cols, pd.CategoricalIndex)
             and self_pd_cols.dtype == other_pd_cols.dtype
         ):
-            df.columns = pd.CategoricalIndex(
-                list(self_pd_cols) + list(other_pd_cols),
-                dtype=self_pd_cols.dtype,
-                name=self_pd_cols.name
-                if self_pd_cols.name == other_pd_cols.name
-                else None,
-            )
+            df.columns = self_pd_cols.append(other_pd_cols)
         return df
 
     @_performance_tracking
