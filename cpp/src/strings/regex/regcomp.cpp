@@ -1071,7 +1071,6 @@ reprog reprog::create_from(std::string_view pattern,
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print() here to dump
   // out the instructions that have been created from the given pattern
-  // rtn.print();
   return rtn;
 }
 
@@ -1225,9 +1224,9 @@ std::string reprog::literal_only() const
   if (count < 2) { return literal; }
   auto inst = _insts[_startinst_id];
   while (inst.type == CHAR && inst.u1.c != 0) {
-    char utf8[5];  // max 4 bytes plus null terminator
-    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
-    literal += utf8;
+    std::array<char, 5> utf8                     = {};
+    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
+    literal += utf8.data();
     auto const id = inst.u2.next_id;
     if (id < 0 || id >= count) { break; }
     inst = _insts[id];
@@ -1247,9 +1246,9 @@ std::string reprog::starts_with_only() const
   if (inst.type != BOL) { return literal; }
   inst = _insts[inst.u2.next_id];
   while (inst.type == CHAR && inst.u1.c != 0) {
-    char utf8[5];  // max 4 bytes plus null terminator
-    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
-    literal += utf8;
+    std::array<char, 5> utf8                     = {};
+    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
+    literal += utf8.data();
     auto const id = inst.u2.next_id;
     if (id < 0 || id >= count) { break; }
     inst = _insts[id];
@@ -1267,9 +1266,9 @@ std::string reprog::ends_with_only() const
   if (count < 3) { return literal; }
   auto inst = _insts[_startinst_id];
   while (inst.type == CHAR && inst.u1.c != 0) {
-    char utf8[5];  // max 4 bytes plus null terminator
-    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
-    literal += utf8;
+    std::array<char, 5> utf8                     = {};
+    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
+    literal += utf8.data();
     auto const id = inst.u2.next_id;
     if (id < 0 || id >= count) { break; }
     inst = _insts[id];
@@ -1286,7 +1285,7 @@ std::string reprog::ends_with_only() const
   return literal;
 }
 
-// #ifndef NDEBUG
+#ifndef NDEBUG
 void reprog::print()
 {
   printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
@@ -1392,7 +1391,7 @@ void reprog::print()
   literal = ends_with_only();
   if (!literal.empty()) { printf("ends_with: %s\n", literal.c_str()); }
 }
-// #endif
+#endif
 
 }  // namespace detail
 }  // namespace strings

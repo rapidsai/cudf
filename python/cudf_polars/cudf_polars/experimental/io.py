@@ -4,13 +4,11 @@
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import itertools
 import math
 import statistics
 from collections import defaultdict
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -24,16 +22,14 @@ from cudf_polars.dsl.ir import (
     Empty,
     Scan,
     Sink,
-    Union,
 )
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
     SerializedDataSourceInfo,
-    get_key_name,
 )
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
@@ -62,36 +58,9 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_dataframescan_rapidsmpf
-
-        return lower_dataframescan_rapidsmpf(ir, rec)
-
-    rows_per_partition = config_options.executor.max_rows_per_partition
-    nrows = max(ir.df.shape()[0], 1)
-    count = math.ceil(nrows / rows_per_partition)
-
-    if count > 1:
-        length = math.ceil(nrows / count)
-        slices = [
-            DataFrameScan(
-                ir.schema,
-                ir.df.slice(offset, length),
-                ir.projection,
-            )
-            for offset in range(0, nrows, length)
-        ]
-        new_node = Union(ir.schema, None, *slices)
-        return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
-            new_node: PartitionInfo(count=count)
-        }
-
-    return ir, {ir: PartitionInfo(count=1)}
+    return lower_dataframescan_rapidsmpf(ir, rec)
 
 
 def scan_partition_plan(
@@ -285,84 +254,9 @@ def _(
 def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    partition_info: MutableMapping[IR, PartitionInfo]
-    config_options = rec.state["config_options"]
+    from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
 
-    # RapidsMPF runtime: Use rapidsmpf-specific lowering
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.io import lower_scan_rapidsmpf
-
-        return lower_scan_rapidsmpf(ir, rec)
-
-    if (
-        ir.typ in ("csv", "parquet", "ndjson")
-        and ir.n_rows == -1
-        and ir.skip_rows == 0
-        and ir.row_index is None
-    ):
-        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
-        paths = list(ir.paths)
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            # Disable chunked reader when splitting files
-            parquet_options = dataclasses.replace(
-                config_options.parquet_options,
-                chunked=False,
-            )
-
-            slices: list[SplitScan] = []
-            for path in paths:
-                base_scan = Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    [path],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    parquet_options,
-                )
-                slices.extend(
-                    SplitScan(
-                        ir.schema, base_scan, sindex, plan.factor, parquet_options
-                    )
-                    for sindex in range(plan.factor)
-                )
-            new_node = Union(ir.schema, None, *slices)
-            partition_info = {slice: PartitionInfo(count=1) for slice in slices} | {
-                new_node: PartitionInfo(count=len(slices))
-            }
-        else:
-            groups: list[Scan] = [
-                Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    paths[i : i + plan.factor],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    config_options.parquet_options,
-                )
-                for i in range(0, len(paths), plan.factor)
-            ]
-            new_node = Union(ir.schema, None, *groups)
-            partition_info = {group: PartitionInfo(count=1) for group in groups} | {
-                new_node: PartitionInfo(count=len(groups))
-            }
-        return new_node, partition_info
-
-    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+    return lower_scan_rapidsmpf(ir, rec)
 
 
 class StreamingSink(IR):
@@ -439,22 +333,6 @@ def _prepare_sink_directory(path: str) -> None:
     """Prepare for a multi-partition sink."""
     # TODO: Support cloud storage
     Path(path).mkdir(parents=True, exist_ok=True)
-
-
-def _sink_to_directory(
-    schema: Schema,
-    kind: str,
-    path: str,
-    parquet_options: ParquetOptions,
-    options: dict[str, Any],
-    df: DataFrame,
-    ready: None,
-    context: IRExecutionContext,
-) -> DataFrame:
-    """Sink a partition to a new file."""
-    return Sink.do_evaluate(
-        schema, kind, path, parquet_options, options, df, context=context
-    )
 
 
 def _sink_to_parquet_file(
@@ -543,106 +421,6 @@ def _sink_to_file(
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
     return True
-
-
-def _finalize_file_sink(
-    kind: str,
-    writer_state: Any,
-    df: DataFrame,
-) -> DataFrame:
-    """Finalize the file sink by closing the writer."""
-    if kind == "Parquet" and writer_state is not None:
-        writer_state.close([])
-    return df.slice((0, 0))
-
-
-def _file_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a single file."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-    if count == 1:
-        return {
-            (name, 0): (
-                partial(sink.do_evaluate, context=context),
-                *sink._non_child_args,
-                (child_name, 0),
-            )
-        }
-
-    sink_name = get_key_name(sink)
-    graph: MutableMapping[Any, Any] = {
-        (sink_name, i): (
-            _sink_to_file,
-            sink.kind,
-            sink.path,
-            sink.options,
-            None if i == 0 else (sink_name, i - 1),  # Writer state
-            (child_name, i),
-        )
-        for i in range(count)
-    }
-
-    # Finalize task closes the writer after all chunks are written
-    graph[(sink_name, "finalize")] = (
-        _finalize_file_sink,
-        sink.kind,
-        (sink_name, count - 1),  # Writer state from last task
-        (child_name, count - 1),  # Last source df for creating empty result
-    )
-
-    # Make sure final tasks point to finalize task
-    graph.update({(name, i): (sink_name, "finalize") for i in range(count)})
-    return graph
-
-
-def _directory_sink_graph(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    """Sink to a directory of files."""
-    name = get_key_name(ir)
-    count = partition_info[ir].count
-    child_name = get_key_name(ir.children[0])
-    sink = ir.sink
-
-    setup_name = f"setup-{name}"
-    suffix = sink.kind.lower()
-    width = math.ceil(math.log10(count))
-    graph: MutableMapping[Any, Any] = {
-        (name, i): (
-            _sink_to_directory,
-            sink.schema,
-            sink.kind,
-            f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
-            sink.parquet_options,
-            sink.options,
-            (child_name, i),
-            setup_name,
-            context,
-        )
-        for i in range(count)
-    }
-    graph[setup_name] = (_prepare_sink_directory, sink.path)
-    return graph
-
-
-@generate_ir_tasks.register(StreamingSink)
-def _(
-    ir: StreamingSink,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    context: IRExecutionContext,
-) -> MutableMapping[Any, Any]:
-    if ir.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info, context=context)
-    else:
-        return _file_sink_graph(ir, partition_info, context=context)
 
 
 class ParquetMetadata:

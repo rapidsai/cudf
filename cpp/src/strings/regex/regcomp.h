@@ -131,15 +131,15 @@ class reprog {
   void check_for_errors();
 
   /// If instructions are only include a sequence of characters
-  std::string literal_only() const;
+  [[nodiscard]] std::string literal_only() const;
   /// If literal plus beginning anchor only
-  std::string starts_with_only() const;
+  [[nodiscard]] std::string starts_with_only() const;
   /// If literal plus ending anchor only
-  std::string ends_with_only() const;
+  [[nodiscard]] std::string ends_with_only() const;
 
-  // #ifndef NDEBUG
+#ifndef NDEBUG
   void print();
-  // #endif
+#endif
 
  private:
   std::vector<reinst> _insts;           // instructions

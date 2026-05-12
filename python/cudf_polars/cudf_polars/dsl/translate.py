@@ -33,13 +33,8 @@ from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_132,
-    POLARS_VERSION_LT_133,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
-    POLARS_VERSION_LT_1323,
 )
 
 if TYPE_CHECKING:
@@ -290,12 +285,11 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
-    if not POLARS_VERSION_LT_131:
-        deletion_files = file_options.deletion_files  # pragma: no cover
-        if deletion_files:  # pragma: no cover
-            raise NotImplementedError(
-                "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
-            )  # pragma: no cover
+    deletion_files = file_options.deletion_files
+    if deletion_files:  # pragma: no cover
+        raise NotImplementedError(
+            "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
+        )  # pragma: no cover
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 
@@ -341,18 +335,13 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Cache, translator: Translator, schema: Schema) -> ir.IR:
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        refcount = node.cache_hits
-    else:
-        refcount = None
-
     # Make sure Cache nodes with the same id_
     # are actually the same object.
     if node.id_ not in translator._cache_nodes:
         translator._cache_nodes[node.id_] = ir.Cache(
             schema,
             node.id_,
-            refcount,
+            None,
             translator.translate_ir(n=node.input),
         )
     return translator._cache_nodes[node.id_]
@@ -643,9 +632,7 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
                 f"{sink_kind} compression ('{compression}') is not supported."
             )
 
-    if POLARS_VERSION_LT_132:  # pragma: no cover
-        path = file["target"]
-    elif POLARS_VERSION_LT_138:  # pragma: no cover
+    if POLARS_VERSION_LT_138:  # pragma: no cover
         path = file["target"]["Local"]
     else:
         path = file["target"]["inner"]
@@ -796,9 +783,7 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
         return result_expr
-    elif not POLARS_VERSION_LT_131 and isinstance(
-        name, plrs._expr_nodes.StructFunction
-    ):
+    elif isinstance(name, plrs._expr_nodes.StructFunction):
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),
@@ -808,37 +793,18 @@ def _(
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
         if name == "log" or (
-            not POLARS_VERSION_LT_133
-            and name == "l"
+            name == "l"
             and isinstance(options[0], str)
             and "".join((name, *options)) == "log"
         ):
-            if POLARS_VERSION_LT_133:  # pragma: no cover
-                (base,) = options
-                (child,) = children
-                return expr.BinOp(
-                    dtype,
-                    plc.binaryop.BinaryOperator.LOG_BASE,
-                    child,
-                    expr.Literal(dtype, base),
-                )
-            else:
-                (child, base) = children
-                res = expr.BinOp(
-                    dtype,
-                    plc.binaryop.BinaryOperator.LOG_BASE,
-                    child,
-                    expr.Literal(dtype, base.value),
-                )
-                return (
-                    res
-                    if not POLARS_VERSION_LT_134
-                    else expr.Cast(
-                        DataType(pl.Float64()),
-                        True,  # noqa: FBT003
-                        res,
-                    )
-                )
+            (child, base) = children
+            assert isinstance(base, expr.Literal)
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOG_BASE,
+                child,
+                expr.Literal(dtype, base.value),
+            )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         return expr.UnaryFunction(dtype, name, options, *children)
@@ -1143,12 +1109,6 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
-    if (
-        POLARS_VERSION_LT_133
-        and plc.traits.is_boolean(dtype.plc_type)
-        and node.op == plrs._expr_nodes.Operator.TrueDivide
-    ):
-        dtype = DataType(pl.Float64())  # pragma: no cover
     if node.op == plrs._expr_nodes.Operator.TrueDivide and (
         plc.traits.is_fixed_point(left.dtype.plc_type)
         or plc.traits.is_fixed_point(right.dtype.plc_type)
@@ -1166,8 +1126,7 @@ def _(
         )
 
     if (
-        not POLARS_VERSION_LT_134
-        and node.op == plrs._expr_nodes.Operator.Multiply
+        node.op == plrs._expr_nodes.Operator.Multiply
         and plc.traits.is_fixed_point(left.dtype.plc_type)
         and plc.traits.is_fixed_point(right.dtype.plc_type)
     ):

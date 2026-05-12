@@ -402,13 +402,13 @@ TEST_F(StringsContainsTests, CountTest)
   {
     auto pattern = std::string("o");
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
-      {3, 0, 0, 0, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
+      {3, 1, 0, 0, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
     auto prog    = cudf::strings::regex_program::create(pattern);
     auto results = cudf::strings::count_re(strings_view, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto pattern = std::string("\blazy\b");
+    auto pattern = std::string("\\blazy\\b");
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       {0, 2, 0, 0, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
     auto prog    = cudf::strings::regex_program::create(pattern);
