@@ -304,7 +304,7 @@ def _(
     if (
         Path(ir.path).exists()
         and executor_options.sink_to_directory
-        and executor_options.cluster == Cluster.SINGLE
+        and executor_options.cluster == Cluster.DEFAULT_SINGLETON
     ):
         # This lowering-time check can't be performed with the spmd / ray / dask
         # clusters, which lower on each worker independently. There's a race condition
