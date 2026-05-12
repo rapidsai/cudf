@@ -1225,7 +1225,7 @@ match_flags reprog::compute_match_flags() const
     if (inst.type == END) { return false; }
     if (non_consuming_inst_types.find(inst.type) == non_consuming_inst_types.end()) { return true; }
     if (inst.type == OR) {
-      return self(self, inst.u2.left_id, visited) || self(self, inst.u1.right_id, visited);
+      return self(self, inst.u2.left_id, visited) && self(self, inst.u1.right_id, visited);
     }
     return self(self, inst.u2.next_id, visited);
   };
