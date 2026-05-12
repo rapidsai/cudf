@@ -250,7 +250,7 @@ template <roaring_bitmap_type Type>
 }  // namespace
 
 /**
- * @copydoc cudf::iceberg::is_puffin_payload_normalized
+ * @copydoc cudf::iceberg::is_roaring_bitmap_normalized
  */
 bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload)
 {
