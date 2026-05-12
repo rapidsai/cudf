@@ -1114,15 +1114,15 @@ async def _choose_strategy(
     left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.left_on, ir.children[0].schema),
+        keys=names_to_indices(ir.left_on, ir.children[0].schema),
     )
     right_partitioning = NormalizedPartitioning.from_keys(
         right_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.right_on, ir.children[1].schema),
+        keys=names_to_indices(ir.right_on, ir.children[1].schema),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning):
+    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
         # We can use a chunkwise join
         chunkwise = True
         left_sample = JoinSideStats(total_chunks=left_metadata.local_count)

@@ -67,7 +67,7 @@ dependencies:
 - packaging
 - pandas>=2.0,<2.4.0
 - pandoc
-- polars>=1.30,<1.39
+- polars>=1.35,<1.39
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4
@@ -86,6 +86,7 @@ dependencies:
 - rapids-dask-dependency==26.6.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
 - rapidsmpf==26.6.*,>=0.0.0a0
+- ray-default>=2.55.1
 - rich
 - rmm==26.6.*,>=0.0.0a0
 - s3fs>=2022.3.0

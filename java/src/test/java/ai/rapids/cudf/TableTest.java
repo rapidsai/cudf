@@ -29,6 +29,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -9718,6 +9719,157 @@ public class TableTest extends CudfTestBase {
         assert (((GroupType) schema.getFields().get(3)).getFields().get(0).getId().intValue() == 31);
         assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
         assert (schema.getFields().get(4).getId().intValue() == 0);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnOuterListBinaryAndMap() throws IOException {
+    // Regression test for cudf #22347: parquet field IDs supplied via
+    // withBinaryColumn(name, nullable, id), listBuilder(name, nullable, id) and
+    // mapColumn(name, key, value, isNullable, id) must end up on the outer
+    // (list/map) column on disk, not on the inner element/key_value child.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withBinaryColumn("_c0", true, 1)
+        .withListColumn(listBuilder("_c1", true, 2)
+            .withColumn(false, "element", 22)
+            .build())
+        .withMapColumn(mapColumn("_c2",
+            new ColumnWriterOptions("key", false),
+            new ColumnWriterOptions("value"),
+            true, 3))
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-outer", ".parquet");
+    try {
+      List<Byte> bin1 = asList("ABC");
+      List<Byte> bin2 = asList("DEF");
+      HostColumnVector.ListType binType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType listOfInt = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.INT32));
+      HostColumnVector.StructType kvType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                        new HostColumnVector.BasicType(true, DType.STRING)));
+      HostColumnVector.ListType mapType = new HostColumnVector.ListType(true, kvType);
+
+      try (ColumnVector binCol = ColumnVector.fromLists(binType, bin1, bin2);
+           ColumnVector listCol = ColumnVector.fromLists(listOfInt,
+               Arrays.asList(1, 2, 3), Arrays.asList(4, 5));
+           ColumnVector mapCol = ColumnVector.fromLists(mapType,
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b"))),
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c", "d"))));
+           Table t0 = new Table(binCol, listCol, mapCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // The id supplied to the API must land on the outer (BINARY/LIST/MAP) column.
+        assertEquals(1, schema.getFields().get(0).getId().intValue());
+        assertEquals(2, schema.getFields().get(1).getId().intValue());
+        assertEquals(3, schema.getFields().get(2).getId().intValue());
+
+        // No nested descendant must inherit the outer id (catches "id placed on
+        // both outer and inner" regressions, including the original bug where
+        // withBinary(...id) attached the id to the inner BINARY_DATA child).
+        assertNoNestedIdEquals(schema.getFields().get(0), 1);
+        assertNoNestedIdEquals(schema.getFields().get(1), 2);
+        assertNoNestedIdEquals(schema.getFields().get(2), 3);
+
+        // The explicit child id on the LIST<INT> "element" must be preserved.
+        Type listElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(listElement);
+        assertEquals(22, listElement.getId().intValue());
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  private static void assertNoNestedIdEquals(Type type, int outerId) {
+    if (type.isPrimitive()) return;
+    for (Type child : type.asGroupType().getFields()) {
+      if (child.getId() != null) {
+        assertNotEquals(outerId, child.getId().intValue(),
+            "Field " + child.getName() + " unexpectedly inherited outer id " + outerId);
+      }
+      assertNoNestedIdEquals(child, outerId);
+    }
+  }
+
+  private static Type findDescendantByName(Type type, String name) {
+    if (type.isPrimitive()) {
+      return name.equals(type.getName()) ? type : null;
+    }
+    for (Type child : type.asGroupType().getFields()) {
+      if (name.equals(child.getName())) return child;
+      Type found = findDescendantByName(child, name);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnNestedArrayOfBinaryAndString() throws IOException {
+    // Regression test for cudf #22347: the original Spark-Rapids/Iceberg
+    // failure ("Missing required field ... optional binary element is not in
+    // the store") came from array<binary> / array<string> columns where
+    // iceberg looks the leaf up by its parquet field id. Lock that nested path
+    // down here in addition to the top-level cases.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withListColumn(listBuilder("arr_bin", true, 10)
+            .withBinaryColumn("element", true, 11)
+            .build())
+        .withListColumn(listBuilder("arr_str", true, 20)
+            .withColumn(true, "element", 21)
+            .build())
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-nested", ".parquet");
+    try {
+      HostColumnVector.ListType binEl = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType arrBinType = new HostColumnVector.ListType(true, binEl);
+      HostColumnVector.ListType arrStrType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (ColumnVector arrBinCol = ColumnVector.fromLists(arrBinType,
+               Arrays.asList(asList("ABC"), asList("DEF")),
+               Arrays.asList(asList("GHI")));
+           ColumnVector arrStrCol = ColumnVector.fromLists(arrStrType,
+               Arrays.asList("a", "b"),
+               Arrays.asList("c"));
+           Table t0 = new Table(arrBinCol, arrStrCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // Outer LIST ids must land on the outer list groups.
+        assertEquals(10, schema.getFields().get(0).getId().intValue());
+        assertEquals(20, schema.getFields().get(1).getId().intValue());
+
+        // Outer ids must not leak into nested descendants.
+        assertNoNestedIdEquals(schema.getFields().get(0), 10);
+        assertNoNestedIdEquals(schema.getFields().get(1), 20);
+
+        // Inner element ids must reach the leaf — this is the iceberg lookup
+        // path that broke before the fix on array<binary>.
+        Type binElement = findDescendantByName(schema.getFields().get(0), "element");
+        assertNotNull(binElement);
+        assertEquals(11, binElement.getId().intValue());
+        Type strElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(strElement);
+        assertEquals(21, strElement.getId().intValue());
       }
     } finally {
       tempFile.delete();
