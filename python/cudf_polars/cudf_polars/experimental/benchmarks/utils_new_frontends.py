@@ -80,6 +80,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.explain import SerializablePlan
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
     "check_column_order": True,
@@ -544,7 +545,7 @@ class RunConfig:
             duckdb_temp_dir=args.duckdb_temp_dir,
         )
 
-    def serialize(self, engine: pl.GPUEngine | None) -> dict:
+    def serialize(self, engine: StreamingEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         opts = self.streaming_options
         result: dict[str, Any] = {
@@ -583,7 +584,21 @@ class RunConfig:
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
-            result["config_options"] = dataclasses.asdict(config_options)
+            # Drop non-serializable contexts.
+            config_options = dataclasses.replace(
+                config_options,
+                executor=dataclasses.replace(
+                    config_options.executor,
+                    spmd_context=None,
+                    ray_context=None,
+                    dask_context=None,
+                ),
+            )
+            rapidsmpf_options = engine.rapidsmpf_options.get_strings()
+            result["config_options"] = {
+                "config_options": dataclasses.asdict(config_options),
+                "rapidsmpf_options": rapidsmpf_options,
+            }
         return result
 
     def summarize(self) -> None:
@@ -1060,6 +1075,7 @@ def _finalize_benchmark_run(
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
+    engine: StreamingEngine | None,
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1074,7 +1090,7 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1133,7 +1149,9 @@ def run_polars_spmd(
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
-        _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+        _finalize_benchmark_run(
+            args, run_config, validation_failures, query_failures, engine=engine
+        )
 
 
 def run_polars_ray(
@@ -1180,7 +1198,9 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
 
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def run_polars_dask(
@@ -1240,7 +1260,9 @@ def run_polars_dask(
     finally:
         if dask_client is not None:
             dask_client.close()
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def setup_logging(query_id: int, iteration: int) -> None:
