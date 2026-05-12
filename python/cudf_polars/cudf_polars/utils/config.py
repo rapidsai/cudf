@@ -131,17 +131,13 @@ class Cluster(enum.StrEnum):
     """
     The cluster configuration for the streaming executor.
 
-    * ``Cluster.SINGLE`` : Single-GPU execution. Uses a zero-dependency,
-      synchronous, single-threaded task scheduler.
-    * ``Cluster.SPMD`` : Multi-GPU SPMD execution via the rapidsmpf streaming
-      runtime.
-    * ``Cluster.RAY`` : Multi-GPU execution via Ray actors and the rapidsmpf
-      streaming runtime.
-    * ``Cluster.DASK`` : Multi-GPU execution via Dask workers and the rapidsmpf
-      streaming runtime.
+    * ``Cluster.DEFAULT_SINGLETON`` : Single-GPU execution via the DefaultSingletonEngine.
+    * ``Cluster.SPMD`` : Multi-GPU SPMD execution via the SPMDEngine.
+    * ``Cluster.RAY`` : Multi-GPU execution via the RayEngine.
+    * ``Cluster.DASK`` : Multi-GPU execution via the DaskEngine.
     """
 
-    SINGLE = "single"
+    DEFAULT_SINGLETON = "default_singleton"
     SPMD = "spmd"
     RAY = "ray"
     DASK = "dask"
@@ -527,9 +523,9 @@ class StreamingExecutor:
     ----------
     cluster
         The cluster configuration for the streaming executor.
-        ``Cluster.SINGLE`` by default.
+        ``Cluster.DEFAULT_SINGLETON`` by default.
 
-        * ``Cluster.SINGLE``: Single-GPU execution
+        * ``Cluster.DEFAULT_SINGLETON``: Single-GPU execution
         * ``Cluster.SPMD``: Multi-GPU SPMD execution
         * ``Cluster.RAY``: Multi-GPU Ray execution
         * ``Cluster.DASK``: Multi-GPU Dask execution
@@ -569,8 +565,7 @@ class StreamingExecutor:
     sink_to_directory
         Whether multi-partition sink operations write to a directory rather
         than a single file. For the spmd, ray, and dask clusters this is
-        always True; setting it to False raises a ValueError. Defaults to
-        False for the single-GPU cluster.
+        always True; setting it to False raises a ValueError.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -658,7 +653,7 @@ class StreamingExecutor:
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
-            object.__setattr__(self, "cluster", Cluster.SINGLE)
+            object.__setattr__(self, "cluster", Cluster.DEFAULT_SINGLETON)
         assert self.cluster is not None, "Expected cluster to be set."
 
         # frozen dataclass, so use object.__setattr__

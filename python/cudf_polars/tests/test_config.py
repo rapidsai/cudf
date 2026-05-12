@@ -74,7 +74,7 @@ def test_use_device_not_current(monkeypatch):
     # Fake that the current device is 1.
     monkeypatch.setattr(gpu, "getDevice", lambda: 1)
     q = pl.LazyFrame({})
-    assert_gpu_result_equal(q, engine=pl.GPUEngine(device=0))
+    assert_gpu_result_equal(q, engine=pl.GPUEngine(executor="in-memory", device=0))
 
 
 @pytest.mark.parametrize("device", [-1, "foo"])
@@ -118,7 +118,7 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
         monkeycontext.setenv(
             "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", enable_managed_memory
         )
-        result = q.collect(engine=pl.GPUEngine())
+        result = q.collect(engine=pl.GPUEngine(executor="in-memory"))
         mr = default_memory_resource(
             0,
             cuda_managed_memory=bool(enable_managed_memory == "1"),
@@ -136,7 +136,7 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
 def test_explicit_device_zero():
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
-    result = q.collect(engine=pl.GPUEngine(device=0))
+    result = q.collect(engine=pl.GPUEngine(executor="in-memory", device=0))
     assert_frame_equal(q.collect(), result)
 
 
@@ -152,7 +152,7 @@ def test_explicit_memory_resource():
     mr = rmm.mr.CallbackMemoryResource(allocate, upstream.deallocate)
 
     q = pl.LazyFrame({"a": [1, 2, 3]})
-    result = q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    result = q.collect(engine=pl.GPUEngine(executor="in-memory", memory_resource=mr))
     assert_frame_equal(q.collect(), result)
     assert n_allocations > 0
 
@@ -254,7 +254,7 @@ def test_validate_cluster() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.cluster == "single"
+    assert config.executor.cluster == "default_singleton"
 
     with pytest.raises(ValueError, match="'foo' is not a valid Cluster"):
         ConfigOptions.from_polars_engine(
@@ -332,7 +332,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "single")
+        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "default_singleton")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
@@ -342,7 +342,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
-        assert config.executor.cluster == "single"
+        assert config.executor.cluster == "default_singleton"
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100

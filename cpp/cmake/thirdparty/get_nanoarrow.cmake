@@ -19,6 +19,7 @@ function(find_and_configure_nanoarrow BUILD_SHARED EXCLUDE_FROM_ALL)
   )
   if(nanoarrow_ADDED)
     set_target_properties(nanoarrow_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
       BUILD nanoarrow "${nanoarrow_BINARY_DIR}" EXPORT_SET cudf-exports
     )
