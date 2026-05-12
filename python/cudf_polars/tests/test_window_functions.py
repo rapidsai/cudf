@@ -147,7 +147,7 @@ def test_rolling(
 def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
     """Test rolling window functions over time series."""
     window_expr = unsupported_agg_expr.rolling(period="2d", index_column="date")
-    result_name = f"{agg_expr!s}_rolling"
+    result_name = f"{unsupported_agg_expr!s}_rolling"
     window_expr = window_expr.alias(result_name)
 
     query = df.with_columns(window_expr)

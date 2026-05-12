@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 # Support requires polars <1.36 (via Window+RollingGroupOptions) or >=1.39 (via Rolling).
 skip_rolling_expr_136_to_138 = pytest.mark.skipif(
     not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
-    reason="Rolling window expressions are not accessible in polars 1.36-1.38",
+    reason="Rolling window expressions are not accessible in polars 1.36-1.38, see https://github.com/pola-rs/polars/pull/25117",
 )
 
 
@@ -43,13 +43,7 @@ def df():
 
 @skip_rolling_expr_136_to_138
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
-def test_rolling_datetime(engine: pl.GPUEngine, request, time_unit):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136,
-            reason="Polars translates this to AExpr::Rolling which is NotImplemented",
-        )
-    )
+def test_rolling_datetime(engine: pl.GPUEngine, time_unit):
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",
@@ -73,11 +67,7 @@ def test_rolling_datetime(engine: pl.GPUEngine, request, time_unit):
 
 
 @skip_rolling_expr_136_to_138
-def test_rolling_date(engine: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_rolling_date(engine: pl.GPUEngine):
     dates = [
         "2020-01-01",
         "2020-01-01",
@@ -100,11 +90,7 @@ def test_rolling_date(engine: pl.GPUEngine, request):
 
 @skip_rolling_expr_136_to_138
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
-def test_rolling_integral_orderby(engine: pl.GPUEngine, request, dtype):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_rolling_integral_orderby(engine: pl.GPUEngine, dtype):
     df = pl.LazyFrame(
         {
             "orderby": pl.Series([1, 4, 8, 10, 12, 13, 14, 22], dtype=dtype),
@@ -139,11 +125,7 @@ def test_rolling_collect_list_raises():
 
 
 @skip_rolling_expr_136_to_138
-def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine):
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -156,11 +138,7 @@ def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine, request):
 
 
 @skip_rolling_expr_136_to_138
-def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine):
     df = pl.LazyFrame({"orderby": [1, 2, 4, None], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -178,9 +156,8 @@ def test_invalid_duration_spec_raises_in_translation():
     assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
 
 
-def test_rolling_inside_groupby_raises(request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(pytest.mark.xfail(reason="not supported"))
+@pytest.mark.xfail(condition=not POLARS_VERSION_LT_136, reason="not supported")
+def test_rolling_inside_groupby_raises():
     df = pl.LazyFrame(
         {"keys": [1, 1, 1, 2], "orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]}
     )
@@ -193,11 +170,7 @@ def test_rolling_inside_groupby_raises(request):
 
 
 @skip_rolling_expr_136_to_138
-def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "orderby": [1, 2, 3, 4, 5, 6],
