@@ -449,6 +449,33 @@ class _GroupByContextManager:
         return False
 
 
+def _collect_series_key_column_names(obj, by) -> dict[int, Hashable]:
+    """For each Series grouping key in ``by``, map ``id`` of the Series'
+    underlying column to the name of the matching column in ``obj`` (when
+    one exists by object identity). Mirrors pandas' behavior of excluding
+    such columns from aggregation values.
+
+    Only applies when ``obj`` is a DataFrame: for Series inputs, the single
+    column *is* the value column, so identity-based exclusion would empty
+    the aggregation result. Keying by ``id(series._column)`` makes the
+    match robust to ordering, the presence of non-Series keys, and to
+    repeated Series keys.
+    """
+    import cudf
+
+    result: dict[int, Hashable] = {}
+    if not isinstance(obj, cudf.DataFrame):
+        return result
+    by_list = by if isinstance(by, list) else [by]
+    for key in by_list:
+        if isinstance(key, cudf.Series):
+            for col_name, col in obj._column_labels_and_values:
+                if col is key._column:
+                    result[id(key._column)] = col_name
+                    break
+    return result
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -523,6 +550,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        # Determine which column names in `obj` correspond to the grouping
+        # key Series by column identity (mirrors pandas' behavior).
+        # Must be done before ``nans_to_nulls`` which breaks identity.
+        by_series_col_names = _collect_series_key_column_names(obj, by)
+
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
         self.obj = obj
@@ -538,7 +570,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             self._by._obj = self.obj
             self.grouping = self._by
         else:
-            self.grouping = _Grouping(obj, self._by, level)
+            self.grouping = _Grouping(
+                obj, self._by, level, by_series_col_names
+            )
 
         self._groupby_manager = _GroupByContextManager(
             self.grouping, self._dropna
@@ -703,7 +737,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
-        if isinstance(getattr(self.obj, "dtype", None), pd.ArrowDtype):
+        obj_dtype = getattr(self.obj, "dtype", None)
+        if isinstance(obj_dtype, pd.ArrowDtype):
             # TODO: Remove once groupby.agg preserves pandas extension dtypes.
             arrow_dtype = pd.ArrowDtype(pa.int64())
             if isinstance(result, Series):
@@ -713,6 +748,23 @@ class GroupBy(Serializable, Reducible, Scannable):
             elif "size" in result._column_names:
                 result._data["size"] = ColumnBase.create(
                     result._data["size"].plc_column, arrow_dtype
+                )
+        elif (
+            isinstance(obj_dtype, pd.StringDtype)
+            and obj_dtype.storage == "pyarrow"
+            and obj_dtype.na_value is pd.NA
+        ):
+            # Series.groupby.size() on ``string[pyarrow]`` returns Int64.
+            int64_dtype = pd.Int64Dtype()
+            if isinstance(result, Series):
+                result = Series._from_column(
+                    ColumnBase.create(result._column.plc_column, int64_dtype),
+                    name=result.name,
+                    index=result.index,
+                )
+            elif "size" in result._column_names:
+                result._data["size"] = ColumnBase.create(
+                    result._data["size"].plc_column, int64_dtype
                 )
         if not self._as_index:
             result = result.rename("size").reset_index()
@@ -1084,9 +1136,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    cast_dtype = get_dtype_of_same_kind(
-                        orig_dtype, np.dtype(np.int64)
-                    )
+                    if isinstance(orig_dtype, pd.StringDtype):
+                        cast_dtype = np.dtype(np.int64)
+                    else:
+                        cast_dtype = get_dtype_of_same_kind(
+                            orig_dtype, np.dtype(np.int64)
+                        )
+                elif agg_kind == "NUNIQUE":
+                    cast_dtype = np.dtype(np.int64)
                 elif (
                     (
                         isinstance(agg_name, str)
@@ -3497,7 +3554,7 @@ class Grouper:
 
 
 class _Grouping(Serializable):
-    def __init__(self, obj, by=None, level=None):
+    def __init__(self, obj, by=None, level=None, series_key_column_names=None):
         self._obj = obj
         self._key_columns = []
         self.names = []
@@ -3505,6 +3562,11 @@ class _Grouping(Serializable):
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
         self._named_columns = []
+        # ``id(series._column)`` -> name of the matching ``obj`` column,
+        # for each Series-typed grouping key that is identical (by object
+        # identity) to one of ``obj``'s columns. Used by ``_handle_series``
+        # to mirror pandas' exclusion of such columns from value columns.
+        self._series_key_column_names = dict(series_key_column_names or {})
         self._handle_by_or_level(by, level)
 
         if len(obj) and not len(self._key_columns):
@@ -3583,9 +3645,17 @@ class _Grouping(Serializable):
         self.__init__(self._obj, by)
 
     def _handle_series(self, by):
+        # Mirror pandas: if the grouping Series' underlying column was one
+        # of the obj's columns (identity captured pre-transformation),
+        # exclude that column name from value columns during aggregation.
+        # Look up by ``id`` of the original column *before* alignment may
+        # produce a fresh column object.
+        matched = self._series_key_column_names.get(id(by._column))
         by = by._align_to_index(self._obj.index, how="right")
         self._key_columns.append(by._column)
         self.names.append(by.name)
+        if matched is not None:
+            self._named_columns.append(matched)
 
     def _handle_index(self, by):
         self._key_columns.extend(by._columns)

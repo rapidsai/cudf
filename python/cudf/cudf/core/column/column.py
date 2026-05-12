@@ -223,6 +223,17 @@ def pylibcudf_result_dtype_policy(
     return dtype_from_pylibcudf_column(result)
 
 
+def pylibcudf_result_same_kind_dtype_policy(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    """Like ``pylibcudf_result_dtype_policy`` but preserves the first input
+    dtype's "kind" (pandas-nullable / ArrowDtype) on the result.
+    """
+    return get_dtype_of_same_kind(
+        dtypes[0], dtype_from_pylibcudf_column(result)
+    )
+
+
 def pandas_compatible_string_dtype_policy(
     target_dtype: np.dtype,
 ) -> "DtypePolicy":
@@ -3084,6 +3095,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise TypeError(mixed_err)
 
             if other_col.dtype != self.dtype:
+                if cudf.get_option("mode.pandas_compatible") and (
+                    (
+                        self.dtype.kind in {"i", "u"}
+                        and other_col.dtype.kind == "f"
+                        and not other_col.can_cast_safely(self.dtype)
+                    )
+                    or (
+                        self.dtype.kind in {"M", "m"}
+                        and other_col.dtype.kind in {"i", "u", "f", "b"}
+                    )
+                ):
+                    raise TypeError(
+                        f"Invalid value '{other}' for dtype '{self.dtype}'"
+                    )
                 try:
                     warn = is_dtype_obj_string(
                         find_common_type((other_col.dtype, self.dtype)),
