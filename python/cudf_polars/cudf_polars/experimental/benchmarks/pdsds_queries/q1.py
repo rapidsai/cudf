@@ -74,7 +74,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
         .filter(pl.col("d_year") == year)
         .group_by(["sr_customer_sk", "sr_store_sk"])
-        .agg(pl.col("sr_return_amt").sum().alias("ctr_total_return"))
+        .agg(
+            # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+            # See https://github.com/rapidsai/cudf/issues/19560.
+            pl.when(pl.col("sr_return_amt").count() > 0)
+            .then(pl.col("sr_return_amt").sum())
+            .otherwise(None)
+            .alias("ctr_total_return")
+        )
         .rename(
             {
                 "sr_customer_sk": "ctr_customer_sk",

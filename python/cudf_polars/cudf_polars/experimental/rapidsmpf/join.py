@@ -205,9 +205,19 @@ async def _collect_small_side_for_broadcast(
             for s_id in range(len(chunks)):
                 inserter.insert(s_id, chunks.pop(0))
         stream = ir_context.get_cuda_stream()
+        gathered = await allgather.extract_concatenated(stream)
+        # When every rank inserted zero chunks, the AllGather has no schema
+        # to infer and returns a 0-column table. Substitute a properly typed
+        # empty table for the small side so downstream joins still match the
+        # expected schema.
+        table = (
+            empty_table_chunk(ir, context, stream).table_view()
+            if gathered.num_columns() == 0 and len(ir.schema) > 0
+            else gathered
+        )
         dfs = [
             DataFrame.from_table(
-                await allgather.extract_concatenated(stream),
+                table,
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
                 stream,
@@ -1104,15 +1114,15 @@ async def _choose_strategy(
     left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.left_on, ir.children[0].schema),
+        keys=names_to_indices(ir.left_on, ir.children[0].schema),
     )
     right_partitioning = NormalizedPartitioning.from_keys(
         right_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.right_on, ir.children[1].schema),
+        keys=names_to_indices(ir.right_on, ir.children[1].schema),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning):
+    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
         # We can use a chunkwise join
         chunkwise = True
         left_sample = JoinSideStats(total_chunks=left_metadata.local_count)

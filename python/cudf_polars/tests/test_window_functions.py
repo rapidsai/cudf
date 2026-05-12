@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 
 @pytest.fixture
@@ -120,7 +120,7 @@ def test_over_mapping_strategy(
             )
         ]
     )
-    if not POLARS_VERSION_LT_132 and mapping_strategy == "group_to_rows":
+    if mapping_strategy == "group_to_rows":
         assert_gpu_result_equal(q, engine=engine)
     else:
         assert_ir_translation_raises(q, NotImplementedError)

@@ -9,10 +9,13 @@ import dataclasses
 import json
 import os
 import socket
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+import threading
+import weakref
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
@@ -33,6 +36,7 @@ from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
@@ -48,6 +52,39 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
+
+
+def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
+    """
+    Resolve ``rapidsmpf_options`` and apply cross-frontend defaults.
+
+    If ``None`` is passed, constructs an ``Options`` instance from
+    environment variables. Then applies defaults that should be consistent
+    across SPMD, Ray, and Dask. Defaults are set via
+    ``Options.insert_if_absent``, so explicit values or environment
+    variables always take precedence.
+
+    Defaults applied:
+
+    - ``num_streaming_threads=4``: moderate worker count for the rapidsmpf
+      streaming runtime, shared across frontends.
+
+    Parameters
+    ----------
+    rapidsmpf_options
+        Existing options to resolve, or ``None`` to construct from environment
+        variables.
+
+    Returns
+    -------
+    Options
+        Resolved options with cross-frontend defaults applied.
+    """
+    if rapidsmpf_options is None:
+        rapidsmpf_options = Options(get_environment_variables())
+
+    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+    return rapidsmpf_options
 
 
 @dataclasses.dataclass(frozen=True)
@@ -116,6 +153,12 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    # Process-wide registry of every live :class:`StreamingEngine`. Used by
+    # :class:`DefaultSingletonEngine` to enforce that no other engine is
+    # alive when the singleton is constructed.
+    _active_engines: ClassVar[weakref.WeakSet[StreamingEngine]] = weakref.WeakSet()
+    _active_engines_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(
         self,
         *,
@@ -124,6 +167,13 @@ class StreamingEngine(pl.GPUEngine):
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ):
+        # Refuse to construct if a ``DefaultSingletonEngine`` is alive
+        # (no-op for the singleton itself).
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            check_no_live_default_singleton,
+        )
+
+        check_no_live_default_singleton(self)
         self._nranks = nranks
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
@@ -144,6 +194,24 @@ class StreamingEngine(pl.GPUEngine):
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
+        with StreamingEngine._active_engines_lock:
+            StreamingEngine._active_engines.add(self)
+
+    @classmethod
+    def _active_engine_count(cls) -> int:
+        """
+        Return the number of currently-live :class:`StreamingEngine` instances.
+
+        "Live" means constructed and not yet shut down (or garbage collected).
+        The count is process-wide and shared across all subclasses.
+
+        Returns
+        -------
+        Number of live engines, including ``self`` if called on a live
+        instance.
+        """
+        with StreamingEngine._active_engines_lock:
+            return len(StreamingEngine._active_engines)
 
     @property
     def nranks(self) -> int:
@@ -201,6 +269,66 @@ class StreamingEngine(pl.GPUEngine):
         """
         return Statistics.merge(self.gather_statistics(clear=clear))
 
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine with new options, keeping cluster resources alive.
+
+        The following inputs are fixed at construction time and cannot change:
+          - ``num_ranks``
+          - ``num_py_executors`` (in ``executor_options``)
+          - ``hardware_binding`` (in ``engine_options``)
+          - ``memory_resource_config`` (in ``engine_options``)
+
+        Subclasses must override this method. The override should:
+          1. Raise :class:`RuntimeError` if the engine is already shut down.
+          2. Call ``super()._reset(...)`` to apply the universal option validation below.
+          3. Perform the backend-specific rebuild.
+
+        Parameters
+        ----------
+        rapidsmpf_options
+            New :class:`Options` for each rank's :class:`Context`.
+            ``None`` is treated as an empty dict.
+        executor_options
+            New executor options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+        engine_options
+            New engine options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+
+        Raises
+        ------
+        ValueError
+            If ``executor_options`` or ``engine_options`` contains a
+            construction-time-only key (see list above), or if a
+            reserved key is set (via :func:`check_reserved_keys`).
+        """
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        check_reserved_keys(executor_options, engine_options)
+
+        _disallowed_exec = {"num_py_executors"} & executor_options.keys()
+        if _disallowed_exec:
+            raise ValueError(
+                f"executor_options keys {sorted(_disallowed_exec)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
+        _disallowed_engine = {
+            "hardware_binding",
+            "memory_resource_config",
+        } & engine_options.keys()
+        if _disallowed_engine:
+            raise ValueError(
+                f"engine_options keys {sorted(_disallowed_engine)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
+
     def shutdown(self) -> None:
         """
         Shut down engine and release all owned resources.
@@ -217,6 +345,8 @@ class StreamingEngine(pl.GPUEngine):
             self.device = None
             self.memory_resource = None
             self.config = {}
+            with StreamingEngine._active_engines_lock:
+                StreamingEngine._active_engines.discard(self)
 
     def __enter__(self) -> Self:
         """Enter the context manager, returning ``self``."""
@@ -257,6 +387,7 @@ def execute_ir_on_rank(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -285,6 +416,8 @@ def execute_ir_on_rank(
         Mapping from IR nodes to their pre-allocated collective operation IDs.
     collect_metadata
         Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -294,7 +427,9 @@ def execute_ir_on_rank(
         Collected channel metadata if ``collect_metadata`` is ``True``,
         otherwise ``None``.
     """
-    ir_context = IRExecutionContext(get_cuda_stream=ctx.get_stream_from_pool)
+    ir_context = IRExecutionContext(
+        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+    )
     metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
 
     nodes, output = generate_network(
@@ -342,7 +477,7 @@ def execute_ir_on_rank(
 
 
 _RESERVED_EXECUTOR_KEYS: frozenset[str] = frozenset(
-    {"runtime", "cluster", "spmd_context", "ray_context", "dask_context"}
+    {"cluster", "spmd_context", "ray_context", "dask_context"}
 )
 _RESERVED_ENGINE_KEYS: frozenset[str] = frozenset({"memory_resource", "executor"})
 
@@ -472,6 +607,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -498,6 +634,8 @@ def evaluate_on_rank(
         Executor configuration forwarded from the client.
     collect_metadata
         Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -526,4 +664,5 @@ def evaluate_on_rank(
             stats,
             collective_id_map,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )
