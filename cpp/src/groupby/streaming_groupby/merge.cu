@@ -90,6 +90,11 @@ struct merge_single_pass_aggs_fn {
 
 void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(!_invalidated,
+               "streaming_groupby is in an invalidated state from a prior failure; "
+               "no further aggregate()/merge() is allowed.  finalize() may still be called.");
+  CUDF_EXPECTS(!other._invalidated, "Cannot merge from an invalidated streaming_groupby.");
+
   if (!other._initialized || !other.has_state()) { return; }
   CUDF_EXPECTS(_initialized,
                "Cannot merge into an uninitialized streaming_groupby. "

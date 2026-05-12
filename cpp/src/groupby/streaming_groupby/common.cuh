@@ -51,19 +51,6 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
                                          cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>>;
 
 /*
- * N-table comparator for the persistent hash set.
- *
- * Slot values < max_distinct_keys are "stored" dense IDs resolved via the companion
- * vector key_loc[id] = {batch_id, row_within_batch} to a (compacted_batch_table,
- * row) location.  Slot values >= max_distinct_keys are transient batch values: row index
- * = value - max_distinct_keys in the current batch table.  The transient encoding lives
- * only for the duration of one probe_and_insert call; new keys are rewritten to
- * dense IDs before the next batch's insertion.
- *
- * Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
- * and stored in a device array.  Self-comparisons use batch_self_eq.
- */
-/*
  * Comparator for the first batch only.  All slot values are transient (encoded as
  * `max_distinct_keys + row_idx`) since no dense IDs exist yet; this wrapper subtracts
  * the offset and delegates to the batch self-equality.
@@ -79,6 +66,19 @@ struct first_batch_comparator {
   }
 };
 
+/*
+ * N-table comparator for the persistent hash set.
+ *
+ * Slot values < max_distinct_keys are "stored" dense IDs resolved via the companion
+ * vector key_loc[id] = {batch_id, row_within_batch} to a (compacted_batch_table,
+ * row) location.  Slot values >= max_distinct_keys are transient batch values: row index
+ * = value - max_distinct_keys in the current batch table.  The transient encoding lives
+ * only for the duration of one probe_and_insert call; new keys are rewritten to
+ * dense IDs before the next batch's insertion.
+ *
+ * Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
+ * and stored in a device array.  Self-comparisons use batch_self_eq.
+ */
 template <typename RowEqT>
 struct n_table_comparator {
   RowEqT batch_self_eq;           ///< Self-comparator on the current batch table
@@ -102,7 +102,9 @@ struct n_table_comparator {
       auto const loc = key_loc[lhs];
       return cross_eqs[loc.first](rhs - max_distinct_keys, loc.second);
     }
-    return lhs == rhs;
+    // During probe_and_insert, at least one operand is always the batch row being
+    // inserted (transient-encoded), so two dense IDs cannot be compared here.
+    CUDF_UNREACHABLE("n_table_comparator received two dense-ID operands");
   }
 };
 
@@ -248,6 +250,10 @@ struct streaming_groupby::impl {
   null_policy _null_handling;
 
   bool _initialized{false};
+  /// Set true once an `aggregate()` / `merge()` call has thrown after touching the
+  /// hash set.  Subsequent `aggregate()` / `merge()` calls fail fast; only
+  /// `finalize()` may still be called to recover partial results.
+  bool _invalidated{false};
   /*
    * Number of distinct keys accumulated so far.  Also serves as the high-water
    * mark of dense IDs in the persistent hash set: stored slot values are in

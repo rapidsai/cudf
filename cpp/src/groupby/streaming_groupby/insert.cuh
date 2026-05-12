@@ -92,11 +92,14 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   batch_local_indices.resize(new_distinct_keys, stream);
 
   if (new_distinct_keys > 0) {
-    // Check bounds BEFORE any persistent state mutation.
-    CUDF_EXPECTS(_distinct_keys + new_distinct_keys <= _max_distinct_keys,
-                 "Distinct key count (" + std::to_string(_distinct_keys + new_distinct_keys) +
-                   ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) +
-                   ").");
+    // Bound check: the hash set has already been written above (transient slot values),
+    // so on failure the object is left invalidated; further aggregate()/merge() calls
+    // will throw immediately while finalize() can still recover partial results.
+    if (_distinct_keys + new_distinct_keys > _max_distinct_keys) {
+      _invalidated = true;
+      CUDF_FAIL("Distinct key count (" + std::to_string(_distinct_keys + new_distinct_keys) +
+                ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").");
+    }
 
     // Gather compacted distinct keys from the batch.
     auto compacted = cudf::detail::gather(batch_keys,

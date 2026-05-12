@@ -23,6 +23,10 @@ namespace cudf::groupby {
 
 void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(!_invalidated,
+               "streaming_groupby is in an invalidated state from a prior failure; "
+               "no further aggregate()/merge() is allowed.  finalize() may still be called.");
+
   auto const batch_size = data.num_rows();
   if (batch_size == 0) { return; }
 

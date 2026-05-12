@@ -137,7 +137,7 @@ class groupby {
    * result is the same order as was specified in the request.
    *
    * The returned `table` contains the group labels for each group, i.e., the
-   * unique rows from `keys`. Element `i` across all aggregation results
+   * distinct rows from `keys`. Element `i` across all aggregation results
    * belongs to the group at row `i` in the group labels table.
    *
    * The order of the rows in the group labels is arbitrary. Furthermore,
@@ -169,7 +169,7 @@ class groupby {
    * perform
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
-   * @return Pair containing the table with each group's unique key and
+   * @return Pair containing the table with each group's distinct key and
    * a vector of aggregation_results for each request in the same order as
    * specified in `requests`.
    */
@@ -446,21 +446,21 @@ struct streaming_aggregation_request {
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
  * The `max_distinct_keys` parameter sets the upper bound on the number of distinct key
- * combinations across the lifetime of this object.  Total memory has two parts:
+ * combinations across the lifetime of this object.  The persistent state is sized to
+ * `max_distinct_keys` (constant for the lifetime of the object); the stored distinct
+ * keys grow with the number of distinct keys actually seen, so the incremental key
+ * storage is O(`distinct_keys()` × key_size) and does not scale with cumulative input
+ * rows.
  *
- *   - **Pre-allocated baseline, O(max_distinct_keys):** the hash set, the companion
- *     `(batch_id, row)` vector, and the aggregation results table are all sized
- *     to `max_distinct_keys` at the first `aggregate()` call regardless of the actual
- *     distinct-key count.  This is the memory cost the user opts into via
- *     `max_distinct_keys` and stays constant for the lifetime of the object.
- *   - **Incremental key data, O(distinct_keys × key_size):** the actual key
- *     payload is stored only for keys that have been seen.  Newly discovered
- *     keys append to per-batch compacted tables, so this part grows in step with
- *     `distinct_keys()` rather than with `max_distinct_keys`.
+ * Cumulative input rows are not bounded — only cumulative distinct keys.  A single
+ * batch may also not exceed `max_distinct_keys` rows; this is an implementation
+ * limit because each in-flight batch row is encoded as `max_distinct_keys + row_idx`
+ * inside the hash set, which must fit in `cudf::size_type`.
  *
- * Cumulative input rows are not bounded — only cumulative distinct keys.
  * All column types (including variable-width types such as strings, lists, and structs)
- * are supported for key columns. Only hash-based aggregation kinds are supported.
+ * are supported for key columns.  Only hash-based aggregation kinds are supported; use
+ * `is_streaming_groupby_supported()` to query a specific (value type, aggregation kind)
+ * combination.
  *
  * Supported aggregation kinds:
  *   SUM, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL,
@@ -575,6 +575,20 @@ class streaming_groupby {
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const;
 };
+
+/**
+ * @brief Returns true if `streaming_groupby` supports the given value type and
+ * aggregation kind combination.
+ *
+ * Use this to query support without constructing a `streaming_groupby`.  A `true`
+ * return implies that an `aggregate()` call with a value column of `values_type` and
+ * an aggregation of `kind` will not be rejected on type/kind grounds.
+ *
+ * @param values_type Type of the value column the aggregation would run on
+ * @param kind Aggregation kind
+ * @return True if the combination is supported, false otherwise
+ */
+[[nodiscard]] bool is_streaming_groupby_supported(data_type values_type, aggregation::Kind kind);
 
 /** @} */
 }  // namespace groupby
