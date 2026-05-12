@@ -445,10 +445,6 @@ def test_explain_logical_io_then_concat_then_groupby(explain_engine, tmp_path, k
 
 
 def test_serialize_query():
-    # this test is sensitive to the polars version.
-    # we get a different query plan for polars < 1.35.0.
-    pytest.importorskip("polars", minversion="1.35.0")
-
     left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
     right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
 
