@@ -167,7 +167,7 @@ def _evaluate_ir_broadcast_sync(
     ir_context: IRExecutionContext,
     br: BufferResource,
 ) -> TableChunk:
-    """Evaluate the Over node using a pre-computed global aggregate per GroupedWindow."""
+    """Map the per-group aggregate onto a chunk's rows to produce its Over output."""
     chunk_df = chunk_to_frame(chunk, ir.children[0])
     # global_agg_df and chunk_df may live on different streams (the former from
     # the upstream allgather/reduction on ir_context's stream, the latter from
@@ -185,7 +185,6 @@ def _evaluate_ir_broadcast_sync(
         result_cols = []
         for ne in ir.exprs:
             if isinstance(ne.value, GroupedWindow):
-                # gw.post.value.evaluate uses the post name, not ne.name
                 col = gw_results[ne.value].rename(ne.name)
             else:
                 col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
@@ -208,7 +207,7 @@ async def _evaluate_broadcast_chunk(
     gw_nodes: tuple[GroupedWindow, ...],
     ir_context: IRExecutionContext,
 ) -> TableChunk:
-    """Unspill the chunk and broadcast the global aggregate onto its rows."""
+    """Unspill the chunk and map the per-group aggregate onto its rows."""
     chunk, extra = await make_table_chunks_available_or_wait(
         context,
         chunk,
