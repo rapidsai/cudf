@@ -25,9 +25,7 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-# Aggregations whose partial results can be combined across partitions
-# without a pre-shuffle. n_unique is omitted because its decomposition
-# sets need_preshuffle=True (see groupby.decompose).
+# Aggregations whose partial results can be combined.
 _DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
     ("sum", "count", "mean", "min", "max", "std", "var")
 )
@@ -38,7 +36,7 @@ def _build_over_groupby_irs(
     child_ir: IR,
 ) -> tuple[GroupBy, GroupBy, Select]:
     """
-    Build piecewise, reduction, and (optionally) selection GroupBy IRs.
+    Build piecewise, reduction, and selection GroupBy IRs.
 
     Parameters
     ----------
@@ -104,8 +102,9 @@ def _build_over_groupby_irs(
         NamedExpr(ne.name, Col(pwise_schema[ne.name], ne.name))
         for ne in key_named_exprs
     ]
-    reduction_schema = {ne.name: pwise_schema[ne.name] for ne in key_named_exprs} | {
-        ne.name: ne.value.dtype for ne in reduction_exprs
+    reduction_schema = {
+        ne.name: ne.value.dtype
+        for ne in itertools.chain(reduction_key_exprs, reduction_exprs)
     }
     reduction_ir = GroupBy(
         reduction_schema,
@@ -120,8 +119,9 @@ def _build_over_groupby_irs(
         NamedExpr(ne.name, Col(reduction_schema[ne.name], ne.name))
         for ne in key_named_exprs
     ]
-    select_schema = {ne.name: reduction_schema[ne.name] for ne in key_named_exprs} | {
-        ne.name: ne.value.dtype for ne in selection_exprs
+    select_schema = {
+        ne.name: ne.value.dtype
+        for ne in itertools.chain(select_key_exprs, selection_exprs)
     }
     agg_select_ir = Select(
         select_schema,
@@ -279,16 +279,18 @@ def _fuse_over_nodes(
         ``partition_info`` augmented with entries for the merged Over
         nodes and merged Select nodes introduced by the rewrite.
     """
-    over_groups: defaultdict[tuple[tuple[int, ...], bool, IR], list[Select]] = (
-        defaultdict(list)
-    )
+    over_groups: defaultdict[
+        tuple[tuple[int, ...], bool, IR], list[tuple[Select, Over]]
+    ] = defaultdict(list)
     passthrough: list[Select] = []
 
     for sel in selections:
         child = sel.children[0]
         if isinstance(child, Over):
             input_ir = child.children[0]
-            over_groups[(child.key_indices, child.is_scalar, input_ir)].append(sel)
+            over_groups[(child.key_indices, child.is_scalar, input_ir)].append(
+                (sel, child)
+            )
         else:
             passthrough.append(sel)
 
@@ -297,12 +299,11 @@ def _fuse_over_nodes(
 
     result: list[Select] = []
     for (key_indices, is_scalar, input_ir), group in over_groups.items():
-        first_over = cast("Over", group[0].children[0])
+        first_over = group[0][1]
         pi = partition_info[first_over]
 
         combined_window_exprs: list[NamedExpr] = []
-        for sel in group:
-            over = cast("Over", sel.children[0])
+        for _, over in group:
             combined_window_exprs.extend(over.exprs)
 
         absorbed: list[Select] = []
@@ -325,7 +326,7 @@ def _fuse_over_nodes(
         )
         partition_info[merged_over] = pi
 
-        all_this_group = set(itertools.chain(absorbed, group))
+        all_this_group = set(itertools.chain(absorbed, (sel for sel, _ in group)))
         outer_exprs: list[NamedExpr] = []
         outer_schema: Schema = {}
         for sel in selections:

@@ -132,9 +132,18 @@ def test_over_colliding_internal_agg_names(engine):
     [{"executor_options": {"max_rows_per_partition": 2}}],
     indirect=True,
 )
-def test_over_noncol_key_fallback(engine, expr) -> None:
+def test_over_noncol_key_fallback(request, engine, expr) -> None:
     # Non-Col and mixed Col/expr partition-by keys are not yet supported for
     # multi-partition streaming and should fall back to single-partition.
+    if not isinstance(engine, SPMDEngine):
+        # On Dask/Ray the fallback warning fires on worker processes and is
+        # invisible to ``pytest.warns``.
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/22405",
+                strict=False,
+            )
+        )
     df = pl.LazyFrame(
         {
             "g": [1, 1, 2, 2, 2, 1],

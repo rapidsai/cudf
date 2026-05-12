@@ -183,9 +183,11 @@ def _evaluate_ir_broadcast_sync(
             col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
         result_cols.append(col)
 
-    result_df = DataFrame(result_cols, stream=chunk_df.stream)
     return TableChunk.from_pylibcudf_table(
-        result_df.table, result_df.stream, exclusive_view=True, br=br
+        plc.Table([c.obj for c in result_cols]),
+        chunk_df.stream,
+        exclusive_view=True,
+        br=br,
     )
 
 
@@ -359,7 +361,7 @@ def _split_by_chunk_index(
     )
 
     needles = plc.Column.from_iterable_of_py(
-        list(range(1, n_chunks)),
+        range(1, n_chunks),
         plc.types.DataType(plc.TypeId.INT32),
         stream=stream,
     )
