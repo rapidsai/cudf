@@ -436,7 +436,7 @@ jobs:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
-    # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+    # Tests for dask_cudf, cudf_polars, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build-noarch, changed-files]
     permissions:
       actions: read
@@ -449,6 +449,8 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
     with:
       build_type: pull-request
+      # https://github.com/rapidsai/cudf/pull/22381/changes#r3196736965
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       script: "ci/test_python_other.sh"
   # conda-java-tests:
   #   needs: [conda-cpp-build, changed-files]
