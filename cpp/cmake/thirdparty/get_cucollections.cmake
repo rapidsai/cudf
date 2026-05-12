@@ -9,7 +9,7 @@
 function(find_and_configure_cucollections)
   include(${rapids-cmake-dir}/cpm/cuco.cmake)
 
-  rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
+  rapids_cpm_cuco(${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG})
 endfunction()
 
 find_and_configure_cucollections()
