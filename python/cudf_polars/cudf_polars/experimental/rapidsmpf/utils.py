@@ -755,8 +755,10 @@ class NormalizedPartitioning:
             Number of ranks.
         keys
             Key column descriptors. Pass sequence of ``int`` values
-            (column indices) for hash-only matching. Pass a sequence of
-            ``OrderKey`` instances for ordered matching.
+            (column indices) to match by column index only (both
+            ``HashScheme`` and ``OrderScheme``). Pass a sequence of
+            ``OrderKey`` instances to match ``OrderScheme`` with full
+            order/null-order semantics.
         allow_subset
             If True, the metadata keys may be a prefix of ``keys``.
 
@@ -813,15 +815,17 @@ class NormalizedPartitioning:
             return target == current
 
         def _order_keys_match(scheme: OrderScheme) -> bool:
-            if not order_based:
-                return False  # hash-only caller; ORDER metadata is a mismatch
             if allow_subset:
-                n = min(len(scheme.keys), len(keys))
+                n = min(len(scheme.keys), len(key_indices))
             else:
-                if len(scheme.keys) != len(keys):
+                if len(scheme.keys) != len(key_indices):
                     return False
-                n = len(keys)
-            return all(ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True))
+                n = len(key_indices)
+            if order_based:
+                return all(
+                    ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True)
+                )
+            return tuple(k.column_index for k in scheme.keys[:n]) == key_indices[:n]
 
         def _keys_match(
             scheme: object,

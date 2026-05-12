@@ -514,7 +514,7 @@ def _make_order_scheme(context, *, key_index=0, values=(100, 200), strict=False)
             True,
             False,
         ),
-        ((0,), True, False),  # plain int → hash-only, won't match OrderScheme
+        ((0,), True, True),  # plain int → matches OrderScheme by column index
     ],
 )
 def test_from_keys_order_scheme(spmd_engine, keys, strict, should_match):

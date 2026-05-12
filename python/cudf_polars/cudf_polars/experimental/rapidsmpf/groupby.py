@@ -676,7 +676,7 @@ async def groupby_actor(
             keys=_key_indices(ir, ir.children[0].schema),
         )
         require_tree = _require_tree(ir)
-        fully_partitioned = bool(partitioning)
+        fully_partitioned = partitioning.is_strictly_partitioned()
         fallback_case = (
             # NOTE: This criteria means that we fell back
             # to one partition at lowering time.
