@@ -499,7 +499,9 @@ def _is_already_sorted(
     if not np:
         return False
     scheme = np.inter_rank_scheme
-    if isinstance(scheme, OrderScheme) and len(scheme.keys) < len(order_keys):
+    if not isinstance(scheme, OrderScheme):
+        return False
+    elif len(scheme.keys) < len(order_keys):
         # If we are only sorted on a subset of the keys,
         # we need to check if the boundaries are strict.
         return scheme.strict_boundaries
