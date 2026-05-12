@@ -170,6 +170,26 @@ class roaring_bitmap {
   std::unique_ptr<impl> _impl;
 };
 
+namespace iceberg {
+
+/**
+ * @brief Checks whether a Iceberg `DV-v1` blob payload is normalized
+ * for `cudf::roaring_bitmap`
+ *
+ * A roaring bitmap payload is considered normalized when every embedded 32-bit bucket uses the
+ * no-run cookie and includes an offset table.
+ *
+ * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
+ * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
+ * roaring bitmap bucket in the `DV-v1` blob  (32 bit)
+ * @return Whether the payload is already normalized
+ *
+ * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
+ */
+[[nodiscard]] bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload);
+
+}  // namespace iceberg
+
 /** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf
