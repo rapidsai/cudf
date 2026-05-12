@@ -666,6 +666,20 @@ std::
     is_enabled_lines
       ? adj[parent_node_sentinel][0]
       : (adj[adj[parent_node_sentinel][0]].empty() ? -1 : adj[adj[parent_node_sentinel][0]][0]);
+  auto add_top_level_schema_mismatch = [&](NodeIndexT col_id) {
+    while (col_id != parent_node_sentinel and col_id != -1) {
+      if (column_parent_ids[col_id] == named_level) {
+        auto const& col_name = column_names[col_id];
+        if (std::find(root.schema_mismatch_column_names.cbegin(),
+                      root.schema_mismatch_column_names.cend(),
+                      col_name) == root.schema_mismatch_column_names.cend()) {
+          root.schema_mismatch_column_names.push_back(col_name);
+        }
+        return;
+      }
+      col_id = column_parent_ids[col_id];
+    }
+  };
 
   // List children which are pruned mixed types, nullify parent list row.
   auto is_mixed_pruned = cudf::detail::make_host_vector<bool>(num_columns, stream);
@@ -861,6 +875,7 @@ std::
   // we start from its parent. `device_json_column_to_cudf_column` later copies this flag onto
   // the resulting top-level `column_name_info` so callers can implement their own policy.
   for (auto const mismatched_id : mismatched_col_ids) {
+    add_top_level_schema_mismatch(mismatched_id);
     auto ancestor_id = column_parent_ids[mismatched_id];
     while (ancestor_id != parent_node_sentinel and ancestor_id != -1) {
       auto const it = columns.find(ancestor_id);

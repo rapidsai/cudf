@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -167,6 +167,10 @@ struct device_json_column {
   // `table_metadata`. Consumers (e.g. spark-rapids-jni) can use this signal to implement their
   // own per-column policy on schema mismatch.
   bool had_schema_mismatch{false};
+  // Top-level output column names that encountered a schema mismatch. This is stored on the root
+  // column so metadata can still be flagged when the mismatched top-level column is fully pruned
+  // and materialized from the user schema as an all-null column.
+  std::vector<std::string> schema_mismatch_column_names;
 
   /**
    * @brief Construct a new d json column object

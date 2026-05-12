@@ -3642,7 +3642,6 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
 // flag is surfaced.
 // See https://github.com/rapidsai/cudf/issues/22423.
 
-namespace {
 // Build schema for: struct<c1: int64, c2: list<struct<c3: int64, c4: string>>>.
 // Pin column order so cuDF emits columns in (c1, c2) regardless of JSON-encounter order.
 cudf::io::schema_element make_nested_mismatch_schema_st()
@@ -3659,25 +3658,22 @@ cudf::io::schema_element make_nested_mismatch_schema_st()
     {{"c1", cudf::io::schema_element{cudf::data_type{cudf::type_id::INT64}}}, {"c2", st_c2}},
     std::vector<std::string>{"c1", "c2"}};
 }
-}  // namespace
 
 TEST_F(JsonReaderTest, SchemaMismatchDiagNoMismatchUnset)
 {
   // Well-formed nested JSON: schema matches everywhere, so the diagnostic stays unset
   // (std::nullopt) on every top-level column.
-  std::string const json =
-    "{\"data\": {\"c2\": [{\"c3\": 19, \"c4\": \"x\"}], \"c1\": 123456}}\n";
+  std::string const json = "{\"data\": {\"c2\": [{\"c3\": 19, \"c4\": \"x\"}], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
                                 {{"data", make_nested_mismatch_schema_st()}}};
-  auto opts =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .dtypes(root)
-      .prune_columns(true)
-      .build();
+  auto opts = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+                .dtypes(root)
+                .prune_columns(true)
+                .build();
   auto result = cudf::io::read_json(opts);
   ASSERT_EQ(result.metadata.schema_info.size(), 1u);
   EXPECT_FALSE(result.metadata.schema_info[0].had_schema_mismatch.has_value());
@@ -3692,15 +3688,14 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagNestedMismatchSet)
   std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
                                 {{"data", make_nested_mismatch_schema_st()}}};
-  auto opts =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .dtypes(root)
-      .prune_columns(true)
-      .build();
+  auto opts = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+                .dtypes(root)
+                .prune_columns(true)
+                .build();
   auto result = cudf::io::read_json(opts);
   ASSERT_EQ(result.metadata.schema_info.size(), 1u);
   ASSERT_TRUE(result.metadata.schema_info[0].had_schema_mismatch.has_value());
@@ -3717,15 +3712,14 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchSet)
   // unset (no descendant mismatch).
   std::string const json = "{\"c2\": [19], \"c1\": 123456}\n";
   auto root_schema       = make_nested_mismatch_schema_st();
-  auto opts =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .dtypes(root_schema)
-      .prune_columns(true)
-      .build();
+  auto opts              = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+                .dtypes(root_schema)
+                .prune_columns(true)
+                .build();
   auto result = cudf::io::read_json(opts);
   ASSERT_EQ(result.metadata.schema_info.size(), 2u);
   EXPECT_FALSE(result.metadata.schema_info[0].had_schema_mismatch.has_value());  // c1
@@ -3741,15 +3735,14 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagDescendantOnlyNotOnChildren)
   std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
                                 {{"data", make_nested_mismatch_schema_st()}}};
-  auto opts =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(json.data()), json.size()}})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .dtypes(root)
-      .prune_columns(true)
-      .build();
+  auto opts = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(json.data()), json.size()}})
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+                .dtypes(root)
+                .prune_columns(true)
+                .build();
   auto result = cudf::io::read_json(opts);
   ASSERT_EQ(result.metadata.schema_info.size(), 1u);
   // Top-level "data" has the flag.
