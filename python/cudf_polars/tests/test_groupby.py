@@ -16,7 +16,9 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import get_blocksize_mode, is_streaming_engine
-from cudf_polars.utils.versions import POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_136,
+)
 
 
 @pytest.fixture

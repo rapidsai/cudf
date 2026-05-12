@@ -560,7 +560,10 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
         assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("fill", [5, 999])
+@pytest.mark.parametrize(
+    "fill",
+    [5, 999],
+)
 def test_string_zfill_pl_129(engine: pl.GPUEngine, fill):
     ldf = pl.LazyFrame({"a": ["-1", "+2"]})
     q = ldf.select(pl.col("a").str.zfill(fill))

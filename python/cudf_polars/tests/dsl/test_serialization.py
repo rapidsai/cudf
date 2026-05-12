@@ -13,7 +13,9 @@ from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
 from cudf_polars.dsl.expressions.struct import StructFunction
-from cudf_polars.utils.versions import POLARS_VERSION_LT_138
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_138,
+)
 
 
 @pytest.fixture(

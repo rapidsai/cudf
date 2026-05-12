@@ -14,7 +14,9 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_136,
+)
 
 
 @pytest.fixture(
