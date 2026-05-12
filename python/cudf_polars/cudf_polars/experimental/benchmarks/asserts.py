@@ -250,6 +250,7 @@ def assert_tpch_result_equal(
                     details={"error": str(e)},
                 ) from e
 
+        # Sort by non-float columns first to avoid floating-point fuzziness.
         non_float_columns = [
             col
             for col in left.columns
