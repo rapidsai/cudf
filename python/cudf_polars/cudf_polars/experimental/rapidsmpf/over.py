@@ -808,7 +808,7 @@ async def over_actor(
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             comm.nranks,
-            indices=ir.key_indices,
+            keys=ir.key_indices,
             allow_subset=True,
         )
         if partitioning:
