@@ -3084,8 +3084,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise TypeError(mixed_err)
 
             if other_col.dtype != self.dtype:
+                pandas_compatible = cudf.get_option("mode.pandas_compatible")
                 if (
-                    cudf.get_option("mode.pandas_compatible")
+                    pandas_compatible
                     and self.dtype.kind in {"i", "u"}
                     and other_col.dtype.kind == "f"
                     and not other_col.can_cast_safely(self.dtype)
@@ -3094,7 +3095,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"Invalid value '{other}' for dtype '{self.dtype}'"
                     )
                 if (
-                    cudf.get_option("mode.pandas_compatible")
+                    pandas_compatible
                     and self.dtype.kind in {"M", "m"}
                     and other_col.dtype.kind in {"i", "u", "f", "b"}
                 ):

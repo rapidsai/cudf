@@ -262,12 +262,11 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            is_null_like = (
+            if (
                 value is cudf.NA
                 or value is None
                 or (isinstance(value, float) and np.isnan(value))
-            )
-            if is_null_like:
+            ):
                 if self.dtype.kind == "b" and cudf.get_option(
                     "mode.pandas_compatible"
                 ):

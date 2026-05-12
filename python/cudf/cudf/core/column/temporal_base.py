@@ -133,8 +133,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         elif cudf.get_option("mode.pandas_compatible"):
             # pyarrow silently coerces int/float to epoch values; pandas
             # raises TypeError for these.
+            value_is_scalar = is_scalar(value)
             if (
-                is_scalar(value)
+                value_is_scalar
                 and not is_na_like(value)
                 and not isinstance(value, (bool, np.bool_))
                 and isinstance(value, (int, float, np.integer, np.floating))
@@ -143,7 +144,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     f"Invalid value '{value}' for dtype '{self.dtype}'"
                 )
             if (
-                not is_scalar(value)
+                not value_is_scalar
                 and not isinstance(value, ColumnBase)
                 and getattr(getattr(value, "dtype", None), "kind", None)
                 in {"i", "u", "f", "b"}

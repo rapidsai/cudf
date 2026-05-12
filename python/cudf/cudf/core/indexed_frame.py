@@ -3834,12 +3834,11 @@ class IndexedFrame(Frame):
             col_dtype = self._data[col].dtype
             # pandas rejects nlargest/nsmallest on object, complex, string,
             # and categorical dtypes.
-            unsupported = (
+            if (
                 is_dtype_obj_string(col_dtype)
                 or getattr(col_dtype, "kind", None) in {"O", "c"}
                 or isinstance(col_dtype, pd.CategoricalDtype)
-            )
-            if unsupported:
+            ):
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
                         f"Column '{col}' has dtype {col_dtype}, "

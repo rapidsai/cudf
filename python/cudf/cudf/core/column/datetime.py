@@ -659,9 +659,13 @@ class DatetimeColumn(TemporalBaseColumn):
             return NotImplemented
 
         # tz-mismatch detection: pandas raises TypeError when comparing or
-        # adding/subtracting tz-naive vs tz-aware datetime-like operands.s
+        # adding/subtracting tz-naive vs tz-aware datetime-like operands.
         if pandas_compatible:
             self_is_tz = isinstance(self, DatetimeTZColumn)
+            # Ternary (True/False/None) is required here: True/False
+            # differentiate tz-aware vs tz-naive datetime-like operands, while
+            # None means the operand is not datetime-like at all (and so the
+            # tz-mismatch check should be skipped).
             other_is_tz_dt: bool | None = None
             if isinstance(other, DatetimeColumn):
                 other_is_tz_dt = isinstance(other, DatetimeTZColumn)
