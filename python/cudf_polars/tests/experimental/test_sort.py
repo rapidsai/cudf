@@ -7,35 +7,29 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    assert_gpu_result_equal,
-)
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.fixture(scope="module")
-def engine():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 3,
-            "cluster": DEFAULT_CLUSTER,
-            "fallback_mode": "raise",
-        },
+@pytest.fixture
+def engine(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        ),
     )
 
 
-@pytest.fixture(scope="module")
-def engine_large():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 2_100,
-            "cluster": DEFAULT_CLUSTER,
-            "fallback_mode": "raise",
-        },
+@pytest.fixture
+def engine_large(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2_100,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        ),
     )
 
 
@@ -130,16 +124,10 @@ def test_sort_slice(df, engine, offset):
         assert_gpu_result_equal(q, engine=engine)
 
 
-def test_sort_after_sparse_join():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": DEFAULT_CLUSTER,
-            "max_rows_per_partition": 4,
-        },
+def test_sort_after_sparse_join(streaming_engine_factory):
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=4, raise_on_fail=True),
     )
-
     left = pl.LazyFrame({"foo": list(range(5)), "bar": list(range(5))})
     right = pl.LazyFrame({"foo": list(range(1))})
     q = left.join(right, on="foo", how="inner").sort(by=["foo"])

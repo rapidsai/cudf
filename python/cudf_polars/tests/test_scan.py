@@ -30,7 +30,9 @@ if TYPE_CHECKING:
     from werkzeug import Request
 
 
-NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
+NO_CHUNK_ENGINE = pl.GPUEngine(
+    executor="in-memory", raise_on_fail=True, parquet_options={"chunked": False}
+)
 
 
 @pytest.fixture(
@@ -136,7 +138,11 @@ def test_scan(
         row_index_offset=offset,
         n_rows=n_rows,
     )
-    engine = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": is_chunked})
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={"chunked": is_chunked},
+    )
 
     if zlice is not None:
         q = q.slice(*zlice)
@@ -372,10 +378,8 @@ def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif format == "parquet":
-        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
     else:
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
 @pytest.fixture(
@@ -428,6 +432,7 @@ def test_scan_parquet_chunked(
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={
                 "chunked": True,
@@ -568,7 +573,12 @@ def test_scan_parquet_remote(
     q = pl.scan_parquet(httpserver.url_for(server_path))
 
     assert_gpu_result_equal(
-        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+        q,
+        engine=pl.GPUEngine(
+            executor="in-memory",
+            raise_on_fail=True,
+            parquet_options={"chunked": chunked},
+        ),
     )
 
 
@@ -697,15 +707,14 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 def test_scan_parquet_zero_width_with_limit(
     engine: pl.GPUEngine, tmp_path, custom_engine, request
 ):
+    active_engine = custom_engine if custom_engine is not None else engine
     request.applymarker(
         pytest.mark.xfail(
-            is_streaming_engine(engine) or custom_engine is not None,
+            is_streaming_engine(active_engine),
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )
     path = tmp_path / "zero_width.parquet"
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
-    assert_gpu_result_equal(
-        q, engine=custom_engine if custom_engine is not None else engine
-    )
+    assert_gpu_result_equal(q, engine=active_engine)

@@ -281,14 +281,6 @@ def pytest_addoption(parser):
         help="Executor to use for GPUEngine.",
     )
 
-    parser.addoption(
-        "--cluster",
-        action="store",
-        default="single",
-        choices=("single",),
-        help="Cluster to use for 'streaming' executor.",
-    )
-
 
 def pytest_configure(config):
     import cudf_polars.testing.asserts
@@ -311,7 +303,6 @@ def pytest_configure(config):
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
 
 
 def pytest_collection_modifyitems(items):
