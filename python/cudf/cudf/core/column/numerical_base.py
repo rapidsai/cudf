@@ -16,6 +16,7 @@ from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
     pylibcudf_result_dtype_policy,
+    pylibcudf_result_same_kind_dtype_policy,
     same_dtype_policy,
 )
 from cudf.core.missing import NA
@@ -151,6 +152,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         exact: bool,
         return_scalar: bool,
     ) -> NumericalBaseColumn:
+        if self.dtype.kind == "b":
+            raise NotImplementedError(
+                "quantile is not implemented for boolean dtype"
+            )
         if np.logical_or(q < 0, q > 1).any():
             raise ValueError(
                 "percentiles should all be in the interval [0, 1]"
@@ -172,13 +177,20 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
             interpolation_type = plc.types.Interpolation[interpolation.upper()]
 
+            # For non-arithmetic interpolations the chosen value is an
+            # actual element of the input - ask libcudf to preserve the
+            # input dtype rather than casting through float64, which
+            # would lose precision for int64 values exceeding 2**53
+            # (e.g. nanosecond timestamps).
+            plc_exact = exact and interpolation in {"linear", "midpoint"}
+
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
                 PylibcudfFunction(
                     plc.quantiles.quantile,
-                    pylibcudf_result_dtype_policy,
+                    pylibcudf_result_same_kind_dtype_policy,
                 ).execute_with_args(
-                    no_nans, q, interpolation_type, indices, exact
+                    no_nans, q, interpolation_type, indices, plc_exact
                 ),
             )
         if return_scalar:

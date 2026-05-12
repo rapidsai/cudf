@@ -441,7 +441,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return self._PD_SCALAR(result, unit=self.time_unit).as_unit(
+            ts = self._PD_SCALAR(result, unit=self.time_unit).as_unit(
                 self.time_unit
             )
+            # For tz-aware datetimes the underlying int64 stores UTC; the
+            # scalar above is tz-naive, so re-attach the original tz.
+            if (tz := getattr(self, "tz", None)) is not None:
+                ts = ts.tz_localize("UTC").tz_convert(tz)
+            return ts
         return result.astype(self.dtype)
