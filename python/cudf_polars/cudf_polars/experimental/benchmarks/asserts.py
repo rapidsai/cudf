@@ -226,9 +226,14 @@ def assert_tpch_result_equal(
         # columns *last* ensures that records that are close to each other appear in
         # (roughly) the same order, such that polar's approximate equality checks
         # will allow them to be considered equal (or not, if the aren't actually close).
+        #
+        # Sort keys are intersected with df.schema so callers can pre-project
+        # the frame (e.g. to compare only `sort_by` columns) without payload
+        # columns influencing the order.
+        local_sort_columns = [c for c in grouped_sort_columns if c in df.schema]
         return (
-            df.sort(by=grouped_sort_columns, nulls_last=nulls_last)
-            if grouped_sort_columns
+            df.sort(by=local_sort_columns, nulls_last=nulls_last)
+            if local_sort_columns
             else df
         )
 
@@ -355,8 +360,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    sort_for_comparison(result_ties).select(by),
-                    sort_for_comparison(expected_ties).select(by),
+                    sort_for_comparison(result_ties.select(by)),
+                    sort_for_comparison(expected_ties.select(by)),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
