@@ -252,15 +252,33 @@ def assert_tpch_result_equal(
 
         # We know that each dataframe is sorted on `sort_by` according to itself.
         # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
-        # any kind of sorting on floating-point columns, which introduces all sorts of
-        # fuzziness we don't want to deal with.
+        # any kind of fuzziness from sorting on floating-point columns.
+        #
+        # As long as we sort by the non-float columns *first*, we'll avoid any
+        # false positives / false negatives from comparing two tables that have the
+        # same values but happen to be in a different order. Sorting by floating-point
+        # columns *last* ensures that records that are close to each other appear in
+        # (roughly) the same order, such that polar's approximate equality checks
+        # will allow them to be considered equal (or not, if the aren't actually close).
         non_float_columns = [
             col
             for col in left.columns
             if left.schema[col] not in (pl.Float32, pl.Float64)
         ]
-        left_sorted = left.sort(by=non_float_columns, nulls_last=nulls_last)
-        right_sorted = right.sort(by=non_float_columns, nulls_last=nulls_last)
+        float_columns = [
+            col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
+        ]
+        grouped_sort_columns = [*non_float_columns, *float_columns]
+
+        def sort_for_comparison(df: pl.DataFrame) -> pl.DataFrame:
+            return (
+                df.sort(by=grouped_sort_columns, nulls_last=nulls_last)
+                if grouped_sort_columns
+                else df
+            )
+
+        left_sorted = sort_for_comparison(left)
+        right_sorted = sort_for_comparison(right)
 
         if limit is None or left.is_empty():
             try:
@@ -325,8 +343,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_first.sort(by=non_float_columns, nulls_last=nulls_last),
-                    expected_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    sort_for_comparison(result_first),
+                    sort_for_comparison(expected_first),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -344,12 +362,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
-                    expected_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
+                    sort_for_comparison(result_ties).select(by),
+                    sort_for_comparison(expected_ties).select(by),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -359,11 +373,31 @@ def assert_tpch_result_equal(
                 ) from e
 
     else:
-        # no sort_by, just a straight comparison.
+        non_float_columns = [
+            col
+            for col in left.columns
+            if left.schema[col] not in (pl.Float32, pl.Float64)
+        ]
+        float_columns = [
+            col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
+        ]
+        grouped_sort_columns = [*non_float_columns, *float_columns]
+        left_sorted = (
+            left.sort(by=grouped_sort_columns, nulls_last=nulls_last)
+            if grouped_sort_columns
+            else left
+        )
+        right_sorted = (
+            right.sort(by=grouped_sort_columns, nulls_last=nulls_last)
+            if grouped_sort_columns
+            else right
+        )
+
+        # no sort_by, compare after grouped sort to ignore nondeterministic row order.
         try:
             polars.testing.assert_frame_equal(
-                left,
-                right,
+                left_sorted,
+                right_sorted,
                 **polars_kwargs,  # type: ignore[arg-type]
             )
         except AssertionError as e:
