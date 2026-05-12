@@ -78,7 +78,11 @@ def test_evaluate_streaming(streaming_engine):
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
-    got_gpu = q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    # Use the in-memory executor for the GPU comparison: a vanilla
+    # ``pl.GPUEngine(raise_on_fail=True)`` defaults to ``executor="streaming"``,
+    # which routes through ``DefaultSingletonEngine`` and would fail while the
+    # session ``SPMDEngine`` from conftest is alive.
+    got_gpu = q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
     got_streaming = q.collect(engine=streaming_engine)
     assert_frame_equal(expected, got_gpu)
     assert_frame_equal(expected, got_streaming)
