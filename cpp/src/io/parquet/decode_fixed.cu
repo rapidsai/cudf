@@ -1016,7 +1016,7 @@ CUDF_HOST_DEVICE constexpr bool is_split_decode()
 }
 
 /**
- * @brief Kernel for computing fixed width non dictionary column data stored in the pages
+ * @brief Kernel for computing fixed width column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
