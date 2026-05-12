@@ -644,9 +644,23 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  // Decoded struct scalar produced by SUM_WITH_OVERFLOW reduction.
+  // sumValid=false models the cudf "no valid input" case (null sum child).
+  private static final class SumWithOverflowResult {
+    final boolean sumValid;
+    final long sumValue;
+    final boolean overflow;
+
+    SumWithOverflowResult(boolean sumValid, long sumValue, boolean overflow) {
+      this.sumValid = sumValid;
+      this.sumValue = sumValue;
+      this.overflow = overflow;
+    }
+  }
+
   // SUM_WITH_OVERFLOW reduction returns a struct scalar with children
   // {sum: INT64, overflow: BOOL8}. Helper closes the temporary children views.
-  private static long[] readSumWithOverflow(Scalar result) {
+  private static SumWithOverflowResult readSumWithOverflow(Scalar result) {
     assertEquals(DType.STRUCT, result.getType());
     assertTrue(result.isValid());
     ColumnView[] children = result.getChildrenFromStructScalar();
@@ -658,10 +672,10 @@ class ReductionTest extends CudfTestBase {
            ColumnVector ovfCol = children[1].copyToColumnVector();
            HostColumnVector sumHost = sumCol.copyToHost();
            HostColumnVector ovfHost = ovfCol.copyToHost()) {
-        long sumValid = sumHost.isNull(0) ? 0L : 1L;
-        long sumValue = sumHost.isNull(0) ? 0L : sumHost.getLong(0);
-        long ovfValue = ovfHost.getBoolean(0) ? 1L : 0L;
-        return new long[] { sumValid, sumValue, ovfValue };
+        boolean sumValid = !sumHost.isNull(0);
+        long sumValue = sumValid ? sumHost.getLong(0) : 0L;
+        boolean overflow = ovfHost.getBoolean(0);
+        return new SumWithOverflowResult(sumValid, sumValue, overflow);
       }
     } finally {
       for (ColumnView c : children) c.close();
@@ -672,29 +686,34 @@ class ReductionTest extends CudfTestBase {
   void testSumWithOverflowNoOverflow() {
     try (ColumnVector cv = ColumnVector.fromLongs(1L, 2L, 3L, 4L, 5L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
-      long[] r = readSumWithOverflow(result);
-      assertEquals(1L, r[0]);   // sum is valid
-      assertEquals(15L, r[1]);  // 1+2+3+4+5
-      assertEquals(0L, r[2]);   // no overflow
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(15L, r.sumValue);  // 1+2+3+4+5
+      assertFalse(r.overflow);
     }
   }
 
   @Test
   void testSumWithOverflowPositiveOverflow() {
+    // Long.MAX_VALUE + 1 wraps via two's complement to Long.MIN_VALUE.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
-      long[] r = readSumWithOverflow(result);
-      assertEquals(1L, r[0]);
-      assertEquals(1L, r[2]);   // overflow detected
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(Long.MIN_VALUE, r.sumValue);
+      assertTrue(r.overflow);
     }
   }
 
   @Test
   void testSumWithOverflowNegativeOverflow() {
+    // Long.MIN_VALUE + (-1) wraps via two's complement to Long.MAX_VALUE.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
-      long[] r = readSumWithOverflow(result);
-      assertEquals(1L, r[2]);
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(Long.MAX_VALUE, r.sumValue);
+      assertTrue(r.overflow);
     }
   }
 
@@ -702,18 +721,9 @@ class ReductionTest extends CudfTestBase {
   void testSumWithOverflowEmptyColumn() {
     try (ColumnVector cv = ColumnVector.fromLongs();
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
-      assertEquals(DType.STRUCT, result.getType());
-      assertTrue(result.isValid());
-      ColumnView[] children = result.getChildrenFromStructScalar();
-      try (ColumnVector sumCol = children[0].copyToColumnVector();
-           ColumnVector ovfCol = children[1].copyToColumnVector();
-           HostColumnVector sumHost = sumCol.copyToHost();
-           HostColumnVector ovfHost = ovfCol.copyToHost()) {
-        assertTrue(sumHost.isNull(0));         // empty input -> null sum
-        assertFalse(ovfHost.getBoolean(0));    // no overflow
-      } finally {
-        for (ColumnView c : children) c.close();
-      }
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // empty input -> null sum
+      assertFalse(r.overflow);
     }
   }
 
@@ -721,16 +731,9 @@ class ReductionTest extends CudfTestBase {
   void testSumWithOverflowAllNullColumn() {
     try (ColumnVector cv = ColumnVector.fromBoxedLongs(null, null, null);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
-      ColumnView[] children = result.getChildrenFromStructScalar();
-      try (ColumnVector sumCol = children[0].copyToColumnVector();
-           ColumnVector ovfCol = children[1].copyToColumnVector();
-           HostColumnVector sumHost = sumCol.copyToHost();
-           HostColumnVector ovfHost = ovfCol.copyToHost()) {
-        assertTrue(sumHost.isNull(0));
-        assertFalse(ovfHost.getBoolean(0));
-      } finally {
-        for (ColumnView c : children) c.close();
-      }
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // all-null input -> null sum
+      assertFalse(r.overflow);
     }
   }
 
