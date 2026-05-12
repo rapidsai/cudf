@@ -1272,6 +1272,22 @@ def test_groupby_series_self_does_not_exclude():
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("key_cols", [["a"], ["a", "b"]])
+def test_groupby_multi_series_identity_column_exclusion(key_cols):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3, 3],
+            "b": [10, 10, 20, 20, 30, 30],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby([gdf[c] for c in key_cols]).sum()
+    expect = pdf.groupby([pdf[c] for c in key_cols]).sum()
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3, 5])
 def test_groupby_reduce_min_count(op, min_count):
