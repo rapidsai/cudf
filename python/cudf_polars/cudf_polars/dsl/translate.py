@@ -38,6 +38,8 @@ from cudf_polars.utils.versions import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser
@@ -90,6 +92,7 @@ class Translator:
         self.errors: list[Exception] = []
         self._cache_nodes: dict[int, ir.Cache] = {}
         self._expr_context: ExecutionContext = ExecutionContext.FRAME
+        self._internal_name_gen: Generator[str, None, None] | None = None
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -247,6 +250,24 @@ class set_expr_context(AbstractContextManager[None]):
         self.translator._expr_context = self._prev
 
 
+class set_internal_name_gen(AbstractContextManager[None]):
+    """Share one internal-name generator across sibling expression translations."""
+
+    __slots__ = ("_prev", "schema", "translator")
+
+    def __init__(self, translator: Translator, schema: Schema) -> None:
+        self.translator = translator
+        self.schema = schema
+        self._prev: Generator[str, None, None] | None = None
+
+    def __enter__(self) -> None:
+        self._prev = self.translator._internal_name_gen
+        self.translator._internal_name_gen = unique_names(self.schema)
+
+    def __exit__(self, *args: Any) -> None:
+        self.translator._internal_name_gen = self._prev
+
+
 @singledispatch
 def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
     raise NotImplementedError(
@@ -362,9 +383,11 @@ def _(
 def _(node: plrs._ir_nodes.Select, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.expr
-        ]
+        with set_internal_name_gen(translator, inp.schema):
+            exprs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.expr
+            ]
     return ir.Select(schema, exprs, node.should_broadcast, inp)
 
 
@@ -478,9 +501,11 @@ def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.I
 def _(node: plrs._ir_nodes.HStack, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.exprs
-        ]
+        with set_internal_name_gen(translator, inp.schema):
+            exprs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.exprs
+            ]
     return ir.HStack(schema, exprs, node.should_broadcast, inp)
 
 
@@ -830,7 +855,7 @@ def _(
         # pl.col("a").rolling(...)
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)
-        name_generator = unique_names(schema)
+        name_generator = translator._internal_name_gen or unique_names(schema)
         aggs, named_post_agg = decompose_single_agg(
             expr.NamedExpr(next(name_generator), agg),
             name_generator,
@@ -875,7 +900,7 @@ def _(
         # not exposed until polars 1.39.
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
-        name_gen = unique_names(schema)
+        name_gen = translator._internal_name_gen or unique_names(schema)
         aggs, post = decompose_single_agg(
             expr.NamedExpr(next(name_gen), agg),
             name_gen,

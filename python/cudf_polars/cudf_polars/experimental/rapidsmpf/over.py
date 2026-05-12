@@ -107,7 +107,6 @@ class _ScalarOverPlan:
     piecewise_ir: GroupBy
     reduction_ir: GroupBy
     agg_select_ir: Select
-    name_remaps: dict[GroupedWindow, dict[str, str]]
 
 
 def _build_scalar_over_plan(ir: Over) -> _ScalarOverPlan:
@@ -116,7 +115,7 @@ def _build_scalar_over_plan(ir: Over) -> _ScalarOverPlan:
     # Lowering rejects non-Col partition-by keys, so every by-child here is a Col.
     by_children = gw_nodes[0].children[: gw_nodes[0].by_count]
     key_names = tuple(cast("Col", c).name for c in by_children)
-    piecewise_ir, reduction_ir, agg_select_ir, name_remaps = _build_over_groupby_irs(
+    piecewise_ir, reduction_ir, agg_select_ir = _build_over_groupby_irs(
         gw_nodes, ir.children[0]
     )
     return _ScalarOverPlan(
@@ -125,7 +124,6 @@ def _build_scalar_over_plan(ir: Over) -> _ScalarOverPlan:
         piecewise_ir=piecewise_ir,
         reduction_ir=reduction_ir,
         agg_select_ir=agg_select_ir,
-        name_remaps=name_remaps,
     )
 
 
@@ -134,7 +132,6 @@ def _broadcast_gw_sync(
     chunk_df: DataFrame,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    name_remap: dict[str, str],
 ) -> Any:
     """Broadcast the global aggregate for one GroupedWindow back to row positions."""
     by_exprs = gw.children[: gw.by_count]
@@ -150,12 +147,8 @@ def _broadcast_gw_sync(
     _, out_names, out_dtypes = gw._build_groupby_requests(
         scalar_named, chunk_df, by_cols=by_cols
     )
-    # ne.name is gw-local; look up the globally-unique remapped name in
-    # global_agg_df, but keep the gw-local name on the broadcasted output
-    # so gw.post.value.evaluate (which uses the gw-local name) sees it.
     value_tbls = [
-        plc.Table([global_agg_df.column_map[name_remap[ne.name]].obj])
-        for ne in scalar_named
+        plc.Table([global_agg_df.column_map[ne.name].obj]) for ne in scalar_named
     ]
 
     broadcasted_cols = gw._broadcast_agg_results(
@@ -171,14 +164,13 @@ def _evaluate_ir_broadcast_sync(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
-    name_remaps: dict[GroupedWindow, dict[str, str]],
     br: Any,
 ) -> TableChunk:
     """Evaluate the Over node using a pre-computed global aggregate per GroupedWindow."""
     chunk_df = chunk_to_frame(chunk, ir.children[0])
 
     gw_results: dict[GroupedWindow, Any] = {
-        gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, name_remaps[gw])
+        gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names)
         for gw in gw_nodes
     }
 
@@ -204,7 +196,6 @@ async def _evaluate_broadcast_chunk(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
-    name_remaps: dict[GroupedWindow, dict[str, str]],
 ) -> TableChunk:
     """Make chunk available then evaluate it against the pre-computed global aggregate."""
     chunk, extra = await make_table_chunks_available_or_wait(
@@ -221,7 +212,6 @@ async def _evaluate_broadcast_chunk(
             global_agg_df,
             key_names,
             gw_nodes,
-            name_remaps,
             context.br(),
         )
 
@@ -498,7 +488,6 @@ async def _allgather_and_broadcast(
             global_agg_df,
             plan.key_names,
             plan.gw_nodes,
-            plan.name_remaps,
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())

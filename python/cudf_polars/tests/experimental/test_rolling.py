@@ -245,11 +245,6 @@ def test_over_already_partitioned(engine, expr) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 1}}],
-    indirect=True,
-)
 def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1, fallback_mode="warn"),
