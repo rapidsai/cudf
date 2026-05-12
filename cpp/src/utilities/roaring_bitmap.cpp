@@ -252,7 +252,7 @@ template <roaring_bitmap_type Type>
 /**
  * @copydoc cudf::iceberg::is_puffin_payload_normalized
  */
-CUDF_EXPORT bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload)
+bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload)
 {
   // Dispatch based on the roaring bitmap type
   if (type == roaring_bitmap_type::BITS_32) {
