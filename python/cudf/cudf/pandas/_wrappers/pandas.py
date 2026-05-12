@@ -16,6 +16,7 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from pandas._libs.tslibs import offsets as liboffsets
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.compat._optional import import_optional_dependency
 from pandas.tseries.holiday import (
@@ -1948,6 +1949,19 @@ CustomBusinessMonthEnd = make_final_proxy_type(
     },
 )
 
+# Pandas stores DateOffset kwargs (e.g., `day`, `months`) and the resolved
+# `_offset` directly on the instance __dict__, so they don't appear in
+# dir(pd.DateOffset) and aren't picked up by the proxy machinery. Register
+# each one explicitly so attribute lookup falls back to the wrapped instance.
+_DATEOFFSET_INSTANCE_ATTRS = {
+    name: _FastSlowAttribute(name, private=name.startswith("_"))
+    for name in (
+        *liboffsets._relativedelta_kwds,
+        "_offset",
+        "_use_relativedelta",
+    )
+}
+
 DateOffset = make_final_proxy_type(
     "DateOffset",
     _Unusable,
@@ -1956,6 +1970,7 @@ DateOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
@@ -1967,6 +1982,7 @@ BaseOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
