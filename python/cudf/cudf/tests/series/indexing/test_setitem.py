@@ -893,3 +893,100 @@ def test_out_of_bounds_indexing():
         lambda: psr.__setitem__([0, 1, -4], 2),
         lambda: gsr.__setitem__([0, 1, -4], 2),
     )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "timedelta64[ns]", "timedelta64[us]"],
+)
+@pytest.mark.parametrize("value", [0, 1, 0.0, 1.5])
+def test_temporal_setitem_numeric_scalar_pandas_compat(dtype, value):
+    # cuDF must reject scalar int/float assignment into datetime/timedelta
+    # columns under pandas-compatible mode (pyarrow would silently coerce
+    # them to epoch values).
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.__setitem__,
+            rfunc=gsr.__setitem__,
+            lfunc_args_and_kwargs=([0, value], {}),
+            rfunc_args_and_kwargs=([0, value], {}),
+        )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "timedelta64[ns]", "timedelta64[us]"],
+)
+def test_temporal_setitem_numeric_array_pandas_compat(dtype):
+    # cuDF must reject numeric array assignment into temporal columns
+    # under pandas-compatible mode.
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.__setitem__,
+            rfunc=gsr.__setitem__,
+            lfunc_args_and_kwargs=([[0, 1], pd.Series([0, 1])], {}),
+            rfunc_args_and_kwargs=([[0, 1], cudf.Series([0, 1])], {}),
+        )
+
+
+@pytest.mark.parametrize("value", [None, np.nan, pd.NA])
+def test_bool_setitem_null_pandas_compat(value):
+    # bool dtype cannot hold NA without dtype change; pandas raises
+    # TypeError when assigning a null-like into a bool column.
+    psr = pd.Series([True, False, True])
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.__setitem__,
+            rfunc=gsr.__setitem__,
+            lfunc_args_and_kwargs=([0, value], {}),
+            rfunc_args_and_kwargs=([0, value], {}),
+        )
+
+
+@pytest.mark.parametrize("value", [1, 1.5, True, [1, 2]])
+def test_string_setitem_non_string_pandas_compat(value):
+    # pandas string dtype rejects non-string values (int/float/bool/etc.)
+    # cuDF must raise TypeError to match.
+    psr = pd.Series(["a", "b", "c"], dtype="str")
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        if isinstance(value, list):
+            assert_exceptions_equal(
+                lfunc=psr.__setitem__,
+                rfunc=gsr.__setitem__,
+                lfunc_args_and_kwargs=([[0, 1], value], {}),
+                rfunc_args_and_kwargs=([[0, 1], value], {}),
+            )
+        else:
+            assert_exceptions_equal(
+                lfunc=psr.__setitem__,
+                rfunc=gsr.__setitem__,
+                lfunc_args_and_kwargs=([0, value], {}),
+                rfunc_args_and_kwargs=([0, value], {}),
+            )
+
+
+@pytest.mark.parametrize("dtype", ["int8", "int16", "int32", "int64"])
+def test_int_setitem_lossy_float_array_pandas_compat(dtype):
+    # pandas rejects float→int array assignment when values can't be
+    # losslessly cast (have non-zero fractional parts).
+    psr = pd.Series([10, 11, 12], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.__setitem__,
+            rfunc=gsr.__setitem__,
+            lfunc_args_and_kwargs=(
+                [[0, 1], pd.Series([0.5, 1.5], index=[0, 1])],
+                {},
+            ),
+            rfunc_args_and_kwargs=(
+                [[0, 1], cudf.Series([0.5, 1.5], index=[0, 1])],
+                {},
+            ),
+        )

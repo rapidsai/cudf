@@ -3095,6 +3095,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise TypeError(mixed_err)
 
             if other_col.dtype != self.dtype:
+                if cudf.get_option("mode.pandas_compatible") and (
+                    (
+                        self.dtype.kind in {"i", "u"}
+                        and other_col.dtype.kind == "f"
+                        and not other_col.can_cast_safely(self.dtype)
+                    )
+                    or (
+                        self.dtype.kind in {"M", "m"}
+                        and other_col.dtype.kind in {"i", "u", "f", "b"}
+                    )
+                ):
+                    raise TypeError(
+                        f"Invalid value '{other}' for dtype '{self.dtype}'"
+                    )
                 try:
                     warn = is_dtype_obj_string(
                         find_common_type((other_col.dtype, self.dtype)),
