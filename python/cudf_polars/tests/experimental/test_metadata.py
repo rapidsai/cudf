@@ -574,6 +574,9 @@ def test_from_keys_order_scheme_single_rank(spmd_engine):
     part_2key = Partitioning(inter_rank=scheme_2key, local="inherit")
     result_rev = NormalizedPartitioning.from_keys(part_2key, nranks=4, keys=keys)
     assert result_rev.inter_rank_scheme is None
+    # Same check via Sequence[int] path
+    result_rev_int = NormalizedPartitioning.from_keys(part_2key, nranks=4, keys=(0,))
+    assert result_rev_int.inter_rank_scheme is None
 
 
 def test_remap_partitioning_order_scheme_select(spmd_engine, engine):

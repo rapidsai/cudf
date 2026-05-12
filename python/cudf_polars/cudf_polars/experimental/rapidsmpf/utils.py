@@ -825,7 +825,10 @@ class NormalizedPartitioning:
                 n = len(key_indices)
             if order_based:
                 return all(ok == k for ok, k in zip(scheme.keys, keys[:n], strict=True))
-            return tuple(k.column_index for k in scheme.keys) == key_indices[:n]
+            return all(
+                k.column_index == k_idx
+                for k, k_idx in zip(scheme.keys, key_indices[:n], strict=True)
+            )
 
         def _keys_match(
             scheme: object,
