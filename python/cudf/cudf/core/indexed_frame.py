@@ -80,6 +80,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
@@ -6686,21 +6687,10 @@ class IndexedFrame(Frame):
         2    <NA>
         dtype: string
         """
-        if dtype_backend == "pyarrow":
-            cols = []
-            for col in self._columns:
-                if len(col) == 0 and is_dtype_obj_string(col.dtype):
-                    cols.append(col)
-                    continue
-                if len(col) != 0 and col.null_count == len(col):
-                    cols.append(as_column(col, dtype=pd.ArrowDtype(pa.null())))
-                else:
-                    arrow_dtype = pd.ArrowDtype(
-                        cudf_dtype_to_pa_type(col.dtype)
-                    )
-                    cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
-            return self._from_data_like_self(
-                self._data._from_columns_like_self(cols, verify=False)
+        if dtype_backend not in (None, "numpy_nullable", "pyarrow"):
+            raise ValueError(
+                f"dtype_backend {dtype_backend} is invalid, only "
+                "'numpy_nullable' and 'pyarrow' are allowed."
             )
         numpy_to_nullable = {
             "int8": pd.Int8Dtype(),
@@ -6715,22 +6705,75 @@ class IndexedFrame(Frame):
             "float64": pd.Float64Dtype(),
         }
         cols = []
+        # Tracks whether each column was "selected" by the convert-* flags
+        # (used by the ``dtype_backend="pyarrow"`` path below to decide whether
+        # the column should be converted to ``pd.ArrowDtype``).
+        converted = []
         for col in self._columns:
             dtype = col.dtype
             new_col = None
-            if dtype == np.dtype("bool"):
+            # Map ``pd.ArrowDtype`` inputs to their numpy-nullable equivalents
+            # only when explicitly asked via ``dtype_backend="numpy_nullable"``.
+            # Otherwise keep ``pd.ArrowDtype`` columns unchanged (matches pandas).
+            if (
+                isinstance(dtype, pd.ArrowDtype)
+                and dtype_backend == "numpy_nullable"
+            ):
+                pa_dtype = dtype.pyarrow_dtype
+                pa_name = str(pa_dtype)
+                if pa_name in numpy_to_nullable:
+                    eff_dtype = numpy_to_nullable[pa_name]
+                elif pa.types.is_boolean(pa_dtype):
+                    eff_dtype = pd.BooleanDtype()
+                elif pa.types.is_string(pa_dtype) or pa.types.is_large_string(
+                    pa_dtype
+                ):
+                    eff_dtype = pd.StringDtype(na_value=pd.NA)
+                else:
+                    eff_dtype = dtype
+            else:
+                eff_dtype = dtype
+
+            # ``selected`` indicates that the column was actually transformed
+            # by one of the convert-* flags (used by the pyarrow-backend path
+            # to decide whether to map to ``pd.ArrowDtype``).
+            selected = False
+            if eff_dtype == np.dtype("bool") or isinstance(
+                eff_dtype, pd.BooleanDtype
+            ):
                 if convert_boolean:
+                    selected = True
                     new_col = col.astype(pd.BooleanDtype(), copy=False)
                 elif convert_integer:
+                    selected = True
                     new_col = col.astype(pd.Int64Dtype(), copy=False)
                 elif convert_floating:
+                    selected = True
                     new_col = col.astype(pd.Float64Dtype(), copy=False)
-            elif dtype.kind in ("i", "u") and dtype.name in numpy_to_nullable:
+            elif (
+                isinstance(eff_dtype, np.dtype)
+                and eff_dtype.kind in ("i", "u")
+                and eff_dtype.name in numpy_to_nullable
+            ):
                 if convert_integer:
+                    selected = True
                     new_col = col.astype(
-                        numpy_to_nullable[dtype.name], copy=False
+                        numpy_to_nullable[eff_dtype.name], copy=False
                     )
-            elif dtype.kind == "f" and dtype.name in numpy_to_nullable:
+            elif is_pandas_nullable_numpy_dtype(
+                eff_dtype
+            ) and eff_dtype.kind in (
+                "i",
+                "u",
+            ):
+                if convert_integer:
+                    selected = True
+                    new_col = col.astype(eff_dtype, copy=False)
+            elif (
+                isinstance(eff_dtype, np.dtype)
+                and eff_dtype.kind == "f"
+                and eff_dtype.name in numpy_to_nullable
+            ):
                 col_filled = col.fillna(0)
                 as_int = col_filled.astype(np.dtype(np.int64))
                 nan_blocks_int = (
@@ -6742,30 +6785,89 @@ class IndexedFrame(Frame):
                     and not nan_blocks_int
                     and bool(cp.allclose(col_filled, as_int))
                 ):
+                    selected = True
                     new_col = col.nans_to_nulls().astype(
                         pd.Int64Dtype(), copy=False
                     )
                 elif convert_floating:
+                    selected = True
                     new_col = col.astype(
-                        numpy_to_nullable[dtype.name], copy=False
+                        numpy_to_nullable[eff_dtype.name], copy=False
                     )
-            elif isinstance(dtype, pd.StringDtype):
-                if convert_string and dtype.na_value is not pd.NA:
-                    new_col = col.astype(
-                        pd.StringDtype(na_value=pd.NA), copy=False
-                    )
-            elif dtype == np.dtype("O"):
-                if convert_string:
+            elif (
+                is_pandas_nullable_numpy_dtype(eff_dtype)
+                and eff_dtype.kind == "f"
+            ):
+                if convert_floating:
+                    selected = True
+                    new_col = col.astype(eff_dtype, copy=False)
+            elif isinstance(eff_dtype, pd.StringDtype):
+                # Empty string columns have no values to infer from; pandas
+                # leaves the corresponding object column unchanged in that
+                # case. Match that behavior by skipping conversion.
+                if convert_string and len(col) > 0:
+                    selected = True
+                    if eff_dtype.na_value is not pd.NA:
+                        new_col = col.astype(
+                            pd.StringDtype(na_value=pd.NA), copy=False
+                        )
+            elif eff_dtype == np.dtype("O"):
+                # Empty object columns have no values to infer from, so
+                # pandas leaves them as object. Skip conversion to match.
+                if len(col) == 0:
+                    pass
+                elif convert_string:
+                    selected = True
                     new_col = col.astype(
                         pd.StringDtype(na_value=pd.NA), copy=False
                     )
                 elif infer_objects:
+                    selected = True
                     new_col = col.astype(
                         pd.StringDtype(na_value=np.nan), copy=False
                     )
+            was_converted = selected
             if new_col is None:
-                new_col = col
+                # No conversion applied: still return a copy so that
+                # modifications to the result don't propagate to ``self``
+                # (matches pandas' ``convert_dtypes`` copy semantics).
+                new_col = col.copy(deep=True)
+            elif new_col is col:
+                # ``astype(..., copy=False)`` can return the same column
+                # when the requested dtype already matches; ensure a copy.
+                new_col = col.copy(deep=True)
             cols.append(new_col)
+            converted.append(was_converted)
+
+        if dtype_backend == "pyarrow":
+            # Convert columns that the convert-* flags selected into the
+            # equivalent ``pd.ArrowDtype``; leave others untouched (matches
+            # pandas' ``test_pyarrow_backend_no_conversion`` semantics).
+            arrow_cols = []
+            for new_col, was_converted in zip(cols, converted, strict=True):
+                if not was_converted:
+                    arrow_cols.append(new_col)
+                    continue
+                # Empty object columns stay as object (matches pandas'
+                # ``test_pyarrow_dtype_empty_object``).
+                if len(new_col) == 0 and is_dtype_obj_string(new_col.dtype):
+                    arrow_cols.append(new_col)
+                    continue
+                if len(new_col) != 0 and new_col.null_count == len(new_col):
+                    arrow_cols.append(
+                        as_column(new_col, dtype=pd.ArrowDtype(pa.null()))
+                    )
+                elif isinstance(new_col.dtype, pd.ArrowDtype):
+                    arrow_cols.append(new_col)
+                else:
+                    arrow_dtype = pd.ArrowDtype(
+                        cudf_dtype_to_pa_type(new_col.dtype)
+                    )
+                    arrow_cols.append(
+                        ColumnBase.create(new_col.plc_column, arrow_dtype)
+                    )
+            cols = arrow_cols
+
         return self._from_data_like_self(
             self._data._from_columns_like_self(cols, verify=False)
         )
