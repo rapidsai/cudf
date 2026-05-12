@@ -71,22 +71,16 @@ _DAY_DIRECTIVES = set("dej")
 _WEEKDAY_DIRECTIVES = set("Aawu")
 
 
-def _iter_format_directives(format: str) -> list[str]:
-    """Yield the single-character directives in a strftime format string."""
-    out = []
+def _validate_format_directives(format: str) -> None:
+    """Raise ValueError for incompatible strftime directive combinations."""
+    directives: set[str] = set()
     i = 0
     while i < len(format):
         if format[i] == "%" and i + 1 < len(format):
-            out.append(format[i + 1])
+            directives.add(format[i + 1])
             i += 2
         else:
             i += 1
-    return out
-
-
-def _validate_format_directives(format: str) -> None:
-    """Raise ValueError for incompatible strftime directive combinations."""
-    directives = set(_iter_format_directives(format))
     has_G = "G" in directives
     has_V = "V" in directives
     has_Y = bool(directives & _YEAR_DIRECTIVES)
