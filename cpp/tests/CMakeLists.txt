@@ -682,7 +682,7 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 
 # ##################################################################################################
-# * compute columns tests
+# * transform LTO tests
 # -------------------------------------------------------------------------------------
 add_embed(cudf_test_fragments)
 
@@ -691,13 +691,10 @@ add_fragment(
 )
 
 add_fragment(
-  cudf_test_fragments FRAGMENT transform_invsqrt_operator SOURCE
-  transform/fragments/invsqrt.cu
+  cudf_test_fragments FRAGMENT transform_invsqrt_operator SOURCE transform/fragments/invsqrt.cu
 )
 
-add_fragment(
-  cudf_test_fragments FRAGMENT transform_tpcds_q7 SOURCE transform/fragments/tpcds_q7.cu
-)
+add_fragment(cudf_test_fragments FRAGMENT transform_tpcds_q7 SOURCE transform/fragments/tpcds_q7.cu)
 
 embed(cudf_test_fragments COMPRESSION none)
 

@@ -20,8 +20,11 @@ __device__ void store(void* outputs, int output_stride, int arg, T value)
 extern "C" __device__ int cudf_transform_operation(
   void*, long int, void const* inputs, int input_stride, void* outputs, int output_stride)
 {
-  auto input  = load<float>(inputs, input_stride, 0);
-  auto result = 1.0f / sqrtf(input);
-  store(outputs, output_stride, 0, result);
+  auto discount       = load<double>(inputs, input_stride, 0);
+  auto extended_price = load<double>(inputs, input_stride, 1);
+  auto supply_cost    = load<double>(inputs, input_stride, 2);
+  auto quantity       = load<double>(inputs, input_stride, 3);
+  auto amount         = extended_price * (1 - discount) - supply_cost * quantity;
+  store(outputs, output_stride, 0, amount);
   return 0;
 }

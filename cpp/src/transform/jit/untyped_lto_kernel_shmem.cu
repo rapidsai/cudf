@@ -81,58 +81,17 @@ __device__ void untyped_lto_transform_kernel_shmem(
   }
 }
 
-template <bool null_aware, int max_element_size, int max_elements>
-__device__ void untyped_lto_transform_kernel_stack(
-  size_type row_size,
-  bitmask_type const* __restrict__ stencil,
-  void* __restrict__ user_data,
-  column_device_view_core const* __restrict__ input_cols,
-  mutable_column_device_view_core const* __restrict__ output_cols,
-  size_type num_inputs,
-  size_type num_outputs,
-  size_type const* __restrict__ input_strides)
-{
-  using storage_t = element_storage<null_aware, max_element_size>;
-
-  storage_t storage[max_elements];
-  auto* __restrict__ input_storage  = storage;
-  auto* __restrict__ output_storage = storage + num_inputs;
-
-  auto start  = detail::grid_1d::global_thread_id();
-  auto stride = detail::grid_1d::grid_stride();
-
-  for (auto i = start; i < row_size; i += stride) {
-    if constexpr (!null_aware) {
-      if (stencil != nullptr && !bit_is_set(stencil, i)) { continue; }
-    }
-
-    // used only for null-aware
-    auto active_mask = null_aware ? __ballot_sync(0xFFFF'FFFFU, i < row_size) : 0xFFFF'FFFFU;
-
-    for (size_type c = 0; c < num_inputs; c++) {
-      load_element<null_aware, storage_t>(input_cols + c, i * input_strides[c], input_storage + c);
-    }
-
-    cudf_transform_operation(
-      user_data, i, input_storage, sizeof(storage_t), output_storage, sizeof(storage_t));
-
-    for (size_type c = 0; c < num_outputs; c++) {
-      store_element<null_aware, storage_t>(output_cols + c, output_storage + c, i, active_mask);
-    }
-  }
-}
-
 }  // namespace cudf
 
-extern "C" __global__ void cudf_kernel_entry(
-  cudf::size_type row_size,
-  cudf::bitmask_type const* __restrict__ stencil,
-  void* __restrict__ user_data,
-  cudf::column_device_view_core const* __restrict__ input_cols,
-  cudf::mutable_column_device_view_core const* __restrict__ output_cols,
-  cudf::size_type num_inputs,
-  cudf::size_type num_outputs,
-  cudf::size_type const* __restrict__ input_strides)
+extern "C" __launch_bounds__(256) __global__
+  void cudf_kernel_entry(cudf::size_type row_size,
+                         cudf::bitmask_type const* __restrict__ stencil,
+                         void* __restrict__ user_data,
+                         cudf::column_device_view_core const* __restrict__ input_cols,
+                         cudf::mutable_column_device_view_core const* __restrict__ output_cols,
+                         cudf::size_type num_inputs,
+                         cudf::size_type num_outputs,
+                         cudf::size_type const* __restrict__ input_strides)
 {
   CUDF_KERNEL_INSTANCE(
     row_size, stencil, user_data, input_cols, output_cols, num_inputs, num_outputs, input_strides);

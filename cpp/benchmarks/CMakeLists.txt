@@ -121,10 +121,17 @@ ConfigureNVBench(TRANSPOSE_NVBENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * nds-h benchmark --------------------------------------------------------------------------------
+
+add_embed(cudf_benchmark_fragments)
+add_fragment(cudf_benchmark_fragments FRAGMENT ndsh_q09 SOURCE ndsh/fragments/q09.cu)
+embed(cudf_benchmark_fragments COMPRESSION none)
+
 ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp ${cudf_benchmark_fragments_SOURCE_DIR}/cudf_benchmark_fragments.s)
+add_dependencies(NDSH_Q09_NVBENCH cudf_benchmark_fragments)
+target_include_directories(NDSH_Q09_NVBENCH PRIVATE ${cudf_benchmark_fragments_SOURCE_DIR})
 ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################

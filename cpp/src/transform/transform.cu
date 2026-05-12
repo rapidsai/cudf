@@ -24,6 +24,7 @@
 #include <cuda/iterator>
 
 #include <cudf_fragments.hpp>
+#include <jit/element_storage.cuh>
 #include <jit/helpers.hpp>
 #include <jit/jit.hpp>
 #include <jit/parser.hpp>
@@ -1092,10 +1093,22 @@ dispatch_untyped_lto_transform_kernel_shmem(bool null_aware,
     max_element_size = std::max(max_element_size, size);
   }
 
-  auto nullable_max_element_size = max_element_size * 2;  // type + boolean is_null struct
-
-  auto per_thread_shmem =
-    (null_aware ? nullable_max_element_size : max_element_size) * (inputs.size() + outputs.size());
+  auto kernel_shmem = [&](int max_storage_size) -> size_t {
+    switch (max_storage_size) {
+      case 4:
+        return null_aware ? sizeof(element_storage<true, 4>) : sizeof(element_storage<false, 4>);
+      case 8:
+        return null_aware ? sizeof(element_storage<true, 8>) : sizeof(element_storage<false, 8>);
+      case 16:
+        return null_aware ? sizeof(element_storage<true, 16>) : sizeof(element_storage<false, 16>);
+      case 32:
+        return null_aware ? sizeof(element_storage<true, 32>) : sizeof(element_storage<false, 32>);
+      default:
+        CUDF_FAIL(
+          std::format("Unsupported untyped LTO shmem max element size {}", max_storage_size),
+          std::invalid_argument);
+    }
+  };
 
   for (size_t i = 0; i < std::size(cudf_fragments::untyped_lto_transform_kernel_shmem_FILE_INDEX);
        i++) {
@@ -1103,7 +1116,8 @@ dispatch_untyped_lto_transform_kernel_shmem(bool null_aware,
     auto NULL_AWARE       = cudf_fragments::untyped_lto_transform_kernel_shmem_NULL_AWARE[i];
     auto MAX_ELEMENT_SIZE = cudf_fragments::untyped_lto_transform_kernel_shmem_MAX_ELEMENT_SIZE[i];
     if (null_aware == NULL_AWARE && max_element_size <= MAX_ELEMENT_SIZE) {
-      auto range = cudf_fragments::file_ranges[FILE_INDEX];
+      auto per_thread_shmem = kernel_shmem(MAX_ELEMENT_SIZE) * (inputs.size() + outputs.size());
+      auto range            = cudf_fragments::file_ranges[FILE_INDEX];
       return std::make_tuple(cudf_fragments::files.subspan(range[0], range[1]),
                              static_cast<size_t>(per_thread_shmem));
     }
@@ -1238,8 +1252,8 @@ std::unique_ptr<table> transform_lto(std::span<transform_input const> inputs,
   }
 
   void* args[] = {&num_rows,
-                  &user_data,
                   &p_stencil,
+                  &user_data,
                   &input_cols,
                   &output_cols,
                   &num_inputs,

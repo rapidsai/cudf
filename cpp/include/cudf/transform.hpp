@@ -227,8 +227,8 @@ std::unique_ptr<table> transform_lto(
   lto_binary_type binary_type,
   std::span<transform_output const> outputs,
   void* user_data,
-  null_aware is_null_aware          = null_aware::NO,
-  std::optional<size_type> row_size = std::nullopt,
+  null_aware is_null_aware,
+  std::optional<size_type> row_size,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

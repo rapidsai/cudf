@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 template <typename T>
 __device__ T load(void const* inputs, int input_stride, int arg)
 {

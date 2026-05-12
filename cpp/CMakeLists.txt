@@ -349,13 +349,13 @@ macro(add_fragment)
   endif()
 
   if(ARG_KERNEL_INSTANCE)
-    set(SPECIALIZATION_DIR "${CUDF_GENERATED_INCLUDE_DIR}/specializations/${ARG_FRAGMENT}")
+    set(INSTANTIATION_DIR "${CUDF_GENERATED_INCLUDE_DIR}/${TARGET}/instantiations/${ARG_FRAGMENT}")
     file(
       GENERATE
-      OUTPUT "${SPECIALIZATION_DIR}/cudf/detail/kernel-instance.hpp"
+      OUTPUT "${INSTANTIATION_DIR}/cudf/detail/kernel-instance.hpp"
       CONTENT "#pragma once\n#define CUDF_KERNEL_INSTANCE ${ARG_KERNEL_INSTANCE}"
     )
-    target_include_directories(${OBJECT_ID} PRIVATE ${SPECIALIZATION_DIR})
+    target_include_directories(${OBJECT_ID} PRIVATE ${INSTANTIATION_DIR})
   endif()
 
   target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
