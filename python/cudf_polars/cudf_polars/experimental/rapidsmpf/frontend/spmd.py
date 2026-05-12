@@ -24,7 +24,6 @@ from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import pylibcudf as plc
-import rmm.mr
 from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
@@ -42,7 +41,11 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
-from cudf_polars.utils.config import SPMDContext
+from cudf_polars.utils.config import (
+    MemoryResourceConfig,
+    SPMDContext,
+    StreamingExecutor,
+)
 
 if TYPE_CHECKING:
     import uuid
@@ -58,7 +61,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -348,14 +351,10 @@ class SPMDEngine(StreamingEngine):
         bind_to_gpu(hw_binding)
 
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
-        mr_config: MemoryResourceConfig | None = engine_options.get(
-            "memory_resource_config", None
+        mr_config: MemoryResourceConfig = engine_options.get(
+            "memory_resource_config", MemoryResourceConfig.default()
         )
-        base_mr = (
-            mr_config.create_memory_resource()
-            if mr_config is not None
-            else rmm.mr.get_current_device_resource()
-        )
+        base_mr = mr_config.create_memory_resource()
         mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
