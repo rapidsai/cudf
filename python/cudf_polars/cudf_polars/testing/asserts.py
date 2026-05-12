@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import polars as pl
 from polars import GPUEngine
@@ -14,7 +14,6 @@ from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import CollectKwargs
@@ -28,9 +27,8 @@ __all__: list[str] = [
 ]
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--cluster` command-line arguments
+# command-line argument.
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_CLUSTER = "single"
 
 
 def assert_gpu_result_equal(
@@ -127,11 +125,7 @@ def assert_gpu_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    tol_kwargs: dict[str, float]
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rtol, "atol": atol}
-    else:
-        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+    tol_kwargs: dict[str, float] = {"rel_tol": rtol, "abs_tol": atol}
 
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
@@ -195,15 +189,10 @@ def get_default_engine(
     assert_gpu_result_equal
     assert_sink_result_equal
     """
-    executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
-    if executor == "streaming":
-        executor_options["cluster"] = DEFAULT_CLUSTER
-
     return GPUEngine(
         raise_on_fail=True,
         executor=executor,
-        executor_options=executor_options,
     )
 
 
