@@ -827,7 +827,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==26.6.*,>=0.0.0a0
-          - *nvidia_ml_py
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
