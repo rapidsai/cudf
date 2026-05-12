@@ -207,6 +207,31 @@ def assert_tpch_result_equal(
     right = right.with_columns(*float_casts)
     left = left.with_columns(*float_casts)
 
+    non_float_columns = [
+        col for col in left.columns if left.schema[col] not in (pl.Float32, pl.Float64)
+    ]
+    float_columns = [
+        col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
+    ]
+    grouped_sort_columns = [*non_float_columns, *float_columns]
+
+    def sort_for_comparison(df: pl.DataFrame) -> pl.DataFrame:
+        # We know that each dataframe is sorted on `sort_by` according to itself.
+        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
+        # any kind of fuzziness from sorting on floating-point columns.
+        #
+        # As long as we sort by the non-float columns *first*, we'll avoid any
+        # false positives / false negatives from comparing two tables that have the
+        # same values but happen to be in a different order. Sorting by floating-point
+        # columns *last* ensures that records that are close to each other appear in
+        # (roughly) the same order, such that polar's approximate equality checks
+        # will allow them to be considered equal (or not, if the aren't actually close).
+        return (
+            df.sort(by=grouped_sort_columns, nulls_last=nulls_last)
+            if grouped_sort_columns
+            else df
+        )
+
     if sort_by:
         by, descending = list(zip(*sort_by, strict=True))
 
@@ -244,33 +269,6 @@ def assert_tpch_result_equal(
                     message=f"{side} dataframe is not sorted by {check_msg}",
                     details={"error": str(e)},
                 ) from e
-
-        # We know that each dataframe is sorted on `sort_by` according to itself.
-        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
-        # any kind of fuzziness from sorting on floating-point columns.
-        #
-        # As long as we sort by the non-float columns *first*, we'll avoid any
-        # false positives / false negatives from comparing two tables that have the
-        # same values but happen to be in a different order. Sorting by floating-point
-        # columns *last* ensures that records that are close to each other appear in
-        # (roughly) the same order, such that polar's approximate equality checks
-        # will allow them to be considered equal (or not, if the aren't actually close).
-        non_float_columns = [
-            col
-            for col in left.columns
-            if left.schema[col] not in (pl.Float32, pl.Float64)
-        ]
-        float_columns = [
-            col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
-        ]
-        grouped_sort_columns = [*non_float_columns, *float_columns]
-
-        def sort_for_comparison(df: pl.DataFrame) -> pl.DataFrame:
-            return (
-                df.sort(by=grouped_sort_columns, nulls_last=nulls_last)
-                if grouped_sort_columns
-                else df
-            )
 
         left_sorted = sort_for_comparison(left)
         right_sorted = sort_for_comparison(right)
@@ -368,25 +366,8 @@ def assert_tpch_result_equal(
                 ) from e
 
     else:
-        non_float_columns = [
-            col
-            for col in left.columns
-            if left.schema[col] not in (pl.Float32, pl.Float64)
-        ]
-        float_columns = [
-            col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
-        ]
-        grouped_sort_columns = [*non_float_columns, *float_columns]
-        left_sorted = (
-            left.sort(by=grouped_sort_columns, nulls_last=nulls_last)
-            if grouped_sort_columns
-            else left
-        )
-        right_sorted = (
-            right.sort(by=grouped_sort_columns, nulls_last=nulls_last)
-            if grouped_sort_columns
-            else right
-        )
+        left_sorted = sort_for_comparison(left)
+        right_sorted = sort_for_comparison(right)
 
         # no sort_by, compare after grouped sort to ignore nondeterministic row order.
         try:
