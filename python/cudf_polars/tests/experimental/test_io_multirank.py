@@ -7,16 +7,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_sink_result_equal
 from cudf_polars.utils.config import Cluster, StreamingExecutor
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable
     from pathlib import Path
 
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
@@ -39,43 +38,14 @@ def df() -> pl.LazyFrame:
     )
 
 
-@pytest.fixture(params=["spmd", "ray", "dask"])
+@pytest.fixture
 def engine(
-    request: pytest.FixtureRequest,
-    spmd_engine: SPMDEngine,
-) -> Iterator[StreamingEngine]:
-    """Yield each supported streaming engine."""
-    backend = request.param
-    executor_options = {"max_rows_per_partition": 1_000}
-
-    if backend == "spmd":
-        with SPMDEngine(
-            comm=spmd_engine.comm,
-            executor_options=executor_options,
-        ) as eng:
-            yield eng
-        return
-
-    if is_running_with_rrun():
-        pytest.skip(f"{backend}Engine must not be created from within an rrun cluster")
-
-    if backend == "ray":
-        pytest.importorskip("ray", reason="ray is not installed")
-        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-
-        with RayEngine(
-            executor_options=executor_options,
-            ray_init_options={"include_dashboard": False},
-        ) as eng:
-            yield eng
-        return
-
-    assert backend == "dask"
-    pytest.importorskip("distributed", reason="distributed is not installed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-
-    with DaskEngine(executor_options=executor_options) as eng:
-        yield eng
+    streaming_engine_factory: Callable[..., StreamingEngine],
+) -> StreamingEngine:
+    """Yield each supported streaming engine pinned to small partitions."""
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=1_000),
+    )
 
 
 def test_sink_parquet_directory(

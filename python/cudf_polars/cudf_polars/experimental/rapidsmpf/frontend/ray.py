@@ -34,7 +34,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.utils.config import RayContext
+from cudf_polars.utils.config import MemoryResourceConfig, RayContext
 
 if TYPE_CHECKING:
     import uuid
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_pipeline_ray_mode(
@@ -91,12 +91,8 @@ def evaluate_pipeline_ray_mode(
     Raises
     ------
     RuntimeError
-        If the configured executor runtime is not ``"rapidsmpf"``.
-    RuntimeError
         If ``config_options.executor.ray_context`` is not set.
     """
-    if config_options.executor.runtime != "rapidsmpf":
-        raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.ray_context is None:
         raise RuntimeError("ray_context must be set when cluster='ray'")
     rank_actors = config_options.executor.ray_context.rank_actors
@@ -120,6 +116,7 @@ def evaluate_pipeline_ray_mode(
                 ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
+                query_id=query_id,
             )
             for rank in rank_actors
         ]
@@ -160,6 +157,9 @@ class RankActor:
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
     hardware_binding
         Policy controlling topology-aware hardware binding.
+    memory_resource_config
+        Optional RMM memory resource configuration. If ``None``, defaults to
+        :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
 
     Notes
     -----
@@ -179,11 +179,10 @@ class RankActor:
         memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
         bind_to_gpu(hardware_binding)
-        base_mr = (
-            memory_resource_config.create_memory_resource()
-            if memory_resource_config is not None
-            else rmm.mr.CudaAsyncMemoryResource()
+        memory_resource_config = (
+            memory_resource_config or MemoryResourceConfig.default()
         )
+        base_mr = memory_resource_config.create_memory_resource()
         self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
@@ -283,11 +282,16 @@ class RankActor:
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         # Release resources in dependency order before exit_actor() terminates
-        # the process.
-        self._ctx = None
-        self._comm = None
-        self._mr = None
-        ray.actor.exit_actor()
+        # the process. Shut down the Context explicitly on the same thread
+        # that constructed it.
+        try:
+            if self._ctx is not None:
+                self._ctx.shutdown()
+        finally:
+            self._ctx = None
+            self._comm = None
+            self._mr = None
+            ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
         """
@@ -330,6 +334,7 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
+        query_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -347,6 +352,8 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
+        query_id
+            Unique identifier for the query, propagated into actor traces.
 
         Returns
         -------
@@ -374,6 +381,7 @@ class RankActor:
             ir,
             config_options,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -586,7 +594,6 @@ class RayEngine(StreamingEngine):
                 nranks=nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "ray",
                     "ray_context": RayContext(rank_actors),
                 },
@@ -641,7 +648,6 @@ class RayEngine(StreamingEngine):
             nranks=len(self._rank_actors),
             executor_options={
                 **executor_options,
-                "runtime": "rapidsmpf",
                 "cluster": "ray",
                 "ray_context": RayContext(self._rank_actors),
             },
