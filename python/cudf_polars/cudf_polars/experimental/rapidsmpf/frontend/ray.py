@@ -116,6 +116,7 @@ def evaluate_pipeline_ray_mode(
                 ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
+                query_id=query_id,
             )
             for rank in rank_actors
         ]
@@ -279,11 +280,16 @@ class RankActor:
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         # Release resources in dependency order before exit_actor() terminates
-        # the process.
-        self._ctx = None
-        self._comm = None
-        self._mr = None
-        ray.actor.exit_actor()
+        # the process. Shut down the Context explicitly on the same thread
+        # that constructed it.
+        try:
+            if self._ctx is not None:
+                self._ctx.shutdown()
+        finally:
+            self._ctx = None
+            self._comm = None
+            self._mr = None
+            ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
         """
@@ -326,6 +332,7 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
+        query_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
@@ -343,6 +350,8 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
+        query_id
+            Unique identifier for the query, propagated into actor traces.
 
         Returns
         -------
@@ -370,6 +379,7 @@ class RankActor:
             ir,
             config_options,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
