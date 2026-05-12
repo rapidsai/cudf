@@ -142,3 +142,13 @@ def test_convert_dtypes_dataframe_pyarrow_all_null_column():
 
 def test_convert_dtypes_dataframe_float_nan_as_null_to_int64():
     _compare_to_pandas({"a": ([10.0, np.nan, 20.0], "float64")}, {})
+
+
+def test_convert_dtypes_pyarrow_null():
+    pytest.importorskip("pyarrow")
+    data = {"a": [None, None]}
+
+    expected = pd.DataFrame(data).convert_dtypes(dtype_backend="pyarrow")
+    result = cudf.DataFrame(data).convert_dtypes(dtype_backend="pyarrow")
+
+    assert_eq(result.to_pandas(), expected)

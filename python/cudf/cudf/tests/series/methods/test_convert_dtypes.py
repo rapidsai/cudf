@@ -239,3 +239,13 @@ def test_convert_dtypes_matches_pandas_all_param_combinations(
         "convert_floating": convert_floating,
     }
     _compare_to_pandas(data, dtype, kwargs)
+
+
+def test_convert_dtypes_pyarrow_null():
+    pytest.importorskip("pyarrow")
+    data = [None, None]
+
+    expected = pd.Series(data).convert_dtypes(dtype_backend="pyarrow")
+    result = cudf.Series(data).convert_dtypes(dtype_backend="pyarrow")
+
+    assert_eq(result.to_pandas(), expected)
