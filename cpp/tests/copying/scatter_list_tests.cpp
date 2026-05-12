@@ -219,9 +219,9 @@ TEST_F(ScatterListsTest, ListsOfStrings)
 
 TEST_F(ScatterListsTest, ListsOfNullableStrings)
 {
-  auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
-    {true, true, true, false, true, false, true}};
+  auto src_strings_column =
+    cudf::test::strings_column_wrapper{{"all", "the", "leaves", "", "brown", "", "dreaming"},
+                                       {true, true, true, false, true, false, true}};
 
   auto src_list_column = cudf::make_lists_column(
     2,
@@ -244,14 +244,14 @@ TEST_F(ScatterListsTest, ListsOfNullableStrings)
                            cudf::table_view({target_list_column}));
 
   auto expected_strings =
-    cudf::test::strings_column_wrapper{{"california",
+    cudf::test::strings_column_wrapper{{"",
                                         "dreaming",
                                         "one",
                                         "one",
                                         "all",
                                         "the",
                                         "leaves",
-                                        "are",
+                                        "",
                                         "brown",
                                         "three",
                                         "three",
@@ -273,9 +273,9 @@ TEST_F(ScatterListsTest, ListsOfNullableStrings)
 
 TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
 {
-  auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
-    {true, true, true, false, true, false, true}};
+  auto src_strings_column =
+    cudf::test::strings_column_wrapper{{"all", "the", "leaves", "", "brown", "", "dreaming"},
+                                       {true, true, true, false, true, false, true}};
 
   auto src_list_column = cudf::make_lists_column(
     3,
@@ -298,14 +298,14 @@ TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
                            cudf::table_view({target_list_column}));
 
   auto expected_strings =
-    cudf::test::strings_column_wrapper{{"california",
+    cudf::test::strings_column_wrapper{{"",
                                         "dreaming",
                                         "one",
                                         "one",
                                         "all",
                                         "the",
                                         "leaves",
-                                        "are",
+                                        "",
                                         "brown",
                                         "three",
                                         "three",
@@ -325,9 +325,9 @@ TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
 
 TEST_F(ScatterListsTest, NullableListsOfNullableStrings)
 {
-  auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
-    {true, true, true, false, true, false, true}};
+  auto src_strings_column =
+    cudf::test::strings_column_wrapper{{"all", "the", "leaves", "", "brown", "", "dreaming"},
+                                       {true, true, true, false, true, false, true}};
 
   auto src_validity            = cudf::test::iterators::null_at(1);
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(src_validity, src_validity + 3);
@@ -352,14 +352,14 @@ TEST_F(ScatterListsTest, NullableListsOfNullableStrings)
                            cudf::table_view({target_list_column}));
 
   auto expected_strings =
-    cudf::test::strings_column_wrapper{{"california",
+    cudf::test::strings_column_wrapper{{"",
                                         "dreaming",
                                         "one",
                                         "one",
                                         "all",
                                         "the",
                                         "leaves",
-                                        "are",
+                                        "",
                                         "brown",
                                         "three",
                                         "three",
@@ -569,7 +569,7 @@ TYPED_TEST(TypedScatterListsTest, ListsOfStructsWithNullMembers)
   auto source_strings = cudf::test::strings_column_wrapper{
     {
       "nine",  "nine",  "nine", "nine",
-      "eight", "eight", "eight"
+      "eight", "", "eight"
     },
     cudf::test::iterators::null_at(5)
   };
@@ -627,7 +627,7 @@ TYPED_TEST(TypedScatterListsTest, ListsOfStructsWithNullMembers)
 
   auto expected_strings = cudf::test::strings_column_wrapper{
     {
-      "eight", "eight", "eight",
+      "eight", "", "eight",
       "one",   "one",
       "nine",  "nine",  "nine", "nine",
       "three", "three",
@@ -664,7 +664,7 @@ TYPED_TEST(TypedScatterListsTest, ListsOfNullStructs)
   auto source_strings = cudf::test::strings_column_wrapper{
     {
       "nine",  "nine",  "nine", "nine",
-      "eight", "eight", "eight"
+      "eight", "", "eight"
     },
     cudf::test::iterators::null_at(5)
   };
@@ -722,9 +722,9 @@ TYPED_TEST(TypedScatterListsTest, ListsOfNullStructs)
 
   auto expected_strings = cudf::test::strings_column_wrapper{
     {
-      "eight", "eight", "eight",
+      "eight", "", "eight",
       "one",   "one",
-      "nine",  "nine",  "nine", "nine",
+      "nine",  "",  "nine", "nine",
       "three", "three",
       "four",  "four",
       "five",  "five"
@@ -760,7 +760,7 @@ TYPED_TEST(TypedScatterListsTest, EmptyListsOfStructs)
   auto source_strings = cudf::test::strings_column_wrapper{
     {
       "nine",  "nine",  "nine", "nine",
-      "eight", "eight", "eight"
+      "eight", "", "eight"
     },
     cudf::test::iterators::null_at(5)
   };
@@ -817,9 +817,9 @@ TYPED_TEST(TypedScatterListsTest, EmptyListsOfStructs)
 
   auto expected_strings = cudf::test::strings_column_wrapper{
     {
-      "eight", "eight", "eight",
+      "eight", "", "eight",
       "one",   "one",
-      "nine",  "nine",  "nine", "nine",
+      "nine",  "",  "nine", "nine",
       "three", "three",
       "five",  "five"
     },
@@ -854,7 +854,7 @@ TYPED_TEST(TypedScatterListsTest, NullListsOfStructs)
   auto source_strings = cudf::test::strings_column_wrapper{
     {
       "nine",  "nine",  "nine", "nine",
-      "eight", "eight", "eight"
+      "eight", "", "eight"
     },
     cudf::test::iterators::null_at(5)
   };
@@ -917,9 +917,9 @@ TYPED_TEST(TypedScatterListsTest, NullListsOfStructs)
 
   auto expected_strings = cudf::test::strings_column_wrapper{
     {
-      "eight", "eight", "eight",
+      "eight", "", "eight",
       "one",   "one",
-      "nine",  "nine",  "nine", "nine",
+      "nine",  "",  "nine", "nine",
       "three", "three",
       "five",  "five"
     },

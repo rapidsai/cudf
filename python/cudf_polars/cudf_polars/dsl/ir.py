@@ -808,11 +808,13 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():
+                while reader.has_next():  # pragma: no cover
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(len(concatenated_columns) - 1, -1, -1):
+                    for i in range(  # pragma: no cover
+                        len(concatenated_columns) - 1, -1, -1
+                    ):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
@@ -829,7 +831,7 @@ class Scan(IR):
                     num_rows=num_rows,
                 )
                 if include_file_paths is not None:
-                    df = Scan.add_file_paths(
+                    df = Scan.add_file_paths(  # pragma: no cover
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
@@ -1153,7 +1155,7 @@ class Sink(IR):
             | plc.io.parquet.ParquetWriterOptionsBuilder
         )
 
-        if (
+        if (  # pragma: no cover
             parquet_options.chunked
             and parquet_options.n_output_chunks != 1
             and df.table.num_rows() != 0
@@ -2636,9 +2638,9 @@ class HStack(IR):
                 target_length=df.num_rows if df.num_columns != 0 else None,
                 stream=df.stream,
             )
-        else:
+        else:  # pragma: no cover; streaming rewrites HStack(False)
             # Polars ensures this is true, but let's make sure nothing
-            # went wrong. In this case, the parent node is a
+            # went wrong. In this case, the parent node is
             # guaranteed to be a Select which will take care of making
             # sure that everything is the same length. The result
             # table that might have mismatching column lengths will
@@ -3195,7 +3197,7 @@ class HConcat(IR):
 
     __slots__ = ("should_broadcast",)
     _non_child = ("schema", "should_broadcast")
-    _n_non_child_args = 1
+    _n_non_child_args = 2
 
     def __init__(
         self,
@@ -3205,7 +3207,7 @@ class HConcat(IR):
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (should_broadcast,)
+        self._non_child_args = (schema, should_broadcast)
         self.children = children
 
     @staticmethod
@@ -3246,6 +3248,7 @@ class HConcat(IR):
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
+        schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
@@ -3255,13 +3258,13 @@ class HConcat(IR):
             # Special should_broadcast case.
             # Used to recombine decomposed expressions
             if should_broadcast:
-                result = DataFrame(
-                    broadcast(
-                        *itertools.chain.from_iterable(df.columns for df in dfs),
-                        stream=stream,
-                    ),
+                bcols = broadcast(
+                    *itertools.chain.from_iterable(df.columns for df in dfs),
                     stream=stream,
                 )
+                by_name = {c.name: c for c in bcols}
+                ordered = [by_name[name] for name in schema]
+                result = DataFrame(ordered, stream=stream)
             else:
                 max_rows = max(df.num_rows for df in dfs)
                 # Horizontal concatenation extends shorter tables with nulls

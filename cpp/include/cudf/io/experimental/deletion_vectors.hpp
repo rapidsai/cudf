@@ -9,6 +9,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/roaring_bitmap.hpp>
 
 #include <queue>
 
@@ -60,9 +61,6 @@ struct deletion_vector_info {
  */
 class chunked_parquet_reader {
  public:
-  //! Forward declaration of the opaque wrapper of cuco's 64-bit roaring bitmap
-  struct roaring_bitmap_impl;
-
   /**
    * @brief Constructor for the chunked reader
    *
@@ -141,7 +139,7 @@ class chunked_parquet_reader {
   std::unique_ptr<cudf::io::chunked_parquet_reader> _reader;
   std::queue<size_t> _row_group_row_offsets;
   std::queue<size_type> _row_group_row_counts;
-  std::queue<roaring_bitmap_impl> _deletion_vectors;
+  std::queue<cudf::roaring_bitmap> _deletion_vectors;
   std::queue<size_type> _deletion_vector_row_counts;
   size_t _start_row;
   bool _is_unspecified_row_group_data;
@@ -176,7 +174,21 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   deletion_vector_info const& deletion_vector_info,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the number of rows deleted by the serialized 64-bit roaring bitmap deletion
+ * vectors
+ *
+ * @param deletion_vector_info Information about the deletion vectors and the index column
+ * @param max_chunk_rows Maximum number of rows to process at a time
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Number of rows deleted by the specified 64-bit roaring bitmap deletion vectors
+ */
+[[nodiscard]] size_t compute_num_deleted_rows(
+  deletion_vector_info const& deletion_vector_info,
+  cudf::size_type max_chunk_rows = std::numeric_limits<size_type>::max(),
+  rmm::cuda_stream_view stream   = cudf::get_default_stream());
 
 /** @} */  // end of group
 

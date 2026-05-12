@@ -25,6 +25,8 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
+      - depends_on_ray
       - depends_on_rmm
       - develop
       - docs
@@ -115,6 +117,7 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
+      - depends_on_ray
   test_java:
     output: none
     includes:
@@ -328,6 +331,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
   py_run_cudf_polars_experimental:
@@ -338,15 +342,14 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
-  py_run_cudf_polars_rapidsmpf:
+  py_run_cudf_polars_ray:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
-      key: rapidsmpf
+      key: ray
     includes:
-      - depends_on_rapidsmpf
-      - pyarrow_run
+      - depends_on_ray
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -512,7 +515,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp-dev==5.1.0.21
+          - libnvcomp-dev==5.2.0.10
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -522,14 +525,14 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - nvidia-libnvcomp-cu12==5.1.0.21
+              - nvidia-libnvcomp-cu12==5.2.0.13
           - matrix:
               cuda: "13.*"
             packages:
-              - nvidia-libnvcomp-cu13==5.1.0.21
+              - nvidia-libnvcomp-cu13==5.2.0.13
           - matrix:
             packages:
-              - nvidia-libnvcomp==5.1.0.21
+              - nvidia-libnvcomp==5.2.0.13
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -563,10 +566,10 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
       - output_types: [requirements, pyproject]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
   # 'cuda_version' intentionally does not contain fallback entries... we want
   # a loud error if an unsupported 'cuda' value is passed
   cuda_version:
@@ -649,6 +652,7 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
@@ -1252,6 +1256,14 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_ray:
+    common:
+      - output_types: conda
+        packages:
+          - ray-default>=2.55.1
+      - output_types: [requirements, pyproject]
+        packages:
+          - ray>=2.55.1
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]

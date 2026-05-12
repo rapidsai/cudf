@@ -49,8 +49,7 @@ def test_from_polars_all_names(function):
             "FieldByIndex",
             "MultipleFields",
         }
-    if function == StringFunction and POLARS_VERSION_LT_138:
-        # SplitRegex was added in polars 1.38
+    if POLARS_VERSION_LT_138 and function == StringFunction:
         cudf_polars_names_set = cudf_polars_names_set - {"SplitRegex"}
     assert polars_names_set == cudf_polars_names_set
     names = function.Name
@@ -59,8 +58,7 @@ def test_from_polars_all_names(function):
             StructFunction.Name.FieldByIndex,
             StructFunction.Name.MultipleFields,
         }
-    if function == StringFunction and POLARS_VERSION_LT_138:
-        # SplitRegex was added in polars 1.38
+    if POLARS_VERSION_LT_138 and function == StringFunction:
         names = set(names) - {StringFunction.Name.SplitRegex}
     for name in names:
         attr = getattr(polars_function, name.name)

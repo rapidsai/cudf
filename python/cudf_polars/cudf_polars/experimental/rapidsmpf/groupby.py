@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
     send_metadata,
@@ -222,6 +223,7 @@ async def _local_aggregation(
             ir_context=ir_context,
         )
         chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema, context.br())
+
         total_size += chunk.data_alloc_size()
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
@@ -307,13 +309,13 @@ async def _tree_reduce(
 
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
-
-        allgather.insert(
-            0,
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
-        )
-
-        allgather.insert_finished()
+        with allgather.inserting() as inserter:
+            inserter.insert(
+                0,
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+            )
 
         stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
@@ -433,32 +435,32 @@ async def _shuffle_reduce(
         modulus,
         collective_id,
     )
-
-    shuffle.insert_hash(
-        _enforce_schema(
-            aggregated,
-            decomposed.reduction_ir.schema,
-            context.br(),
-        ),
-        decomposed.shuffle_indices,
-    )
-    del aggregated
-
-    while not input_drained:
-        aggregated, input_drained, _ = await _local_aggregation(
-            context,
-            decomposed,
-            ir_context,
-            ch_in,
-            target_partition_size,
-        )
-        shuffle.insert_hash(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
+    async with shuffle.inserting() as inserter:
+        inserter.insert_hash(
+            _enforce_schema(
+                aggregated,
+                decomposed.reduction_ir.schema,
+                context.br(),
+            ),
             decomposed.shuffle_indices,
         )
         del aggregated
 
-    await shuffle.insert_finished()
+        while not input_drained:
+            aggregated, input_drained, _ = await _local_aggregation(
+                context,
+                decomposed,
+                ir_context,
+                ch_in,
+                target_partition_size,
+            )
+            inserter.insert_hash(
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+                decomposed.shuffle_indices,
+            )
+            del aggregated
     extract_irs = [decomposed.reduction_ir] + (
         [decomposed.select_ir] if decomposed.select_ir else []
     )
@@ -668,17 +670,13 @@ async def groupby_actor(
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks
-        partitioning = NormalizedPartitioning.from_indices(
+        partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             nranks,
-            indices=_key_indices(ir, ir.children[0].schema),
+            keys=_key_indices(ir, ir.children[0].schema),
         )
         require_tree = _require_tree(ir)
-        partitioned_inter_rank = bool(partitioning.inter_rank_modulus)
-        partitioned_local = partitioning.local_modulus is None or bool(
-            partitioning.local_modulus
-        )
-        fully_partitioned = partitioned_inter_rank and partitioned_local
+        fully_partitioned = bool(partitioning)
         fallback_case = (
             # NOTE: This criteria means that we fell back
             # to one partition at lowering time.
@@ -690,13 +688,20 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            metadata_out = ChannelMetadata(
+                local_count=metadata_in.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir, metadata_in.partitioning, child_ir=ir.children[0]
+                ),
+                duplicated=metadata_in.duplicated,
+            )
             await chunkwise_evaluate(
                 context,
                 ir,
                 ir_context,
                 ch_out,
                 ch_in,
-                metadata_in,
+                metadata_out,
                 tracer=tracer,
             )
             return
@@ -713,7 +718,9 @@ async def groupby_actor(
             allow_early_exit=not require_tree,
         )
 
-        skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
+        skip_global_comm = metadata_in.duplicated or isinstance(
+            partitioning.inter_rank_scheme, HashScheme
+        )
         output_count = await _choose_strategy(
             context,
             comm,

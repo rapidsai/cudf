@@ -34,6 +34,7 @@ struct noinline_adapter_fn {
   noinline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
   [[nodiscard]] __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
+    -> decltype(f(std::forward<Args>(args)...))
   {
     return f(std::forward<Args>(args)...);
   }
@@ -65,10 +66,16 @@ class arg_minmax_dispatcher {
     auto const pos = [&] {
       if constexpr (K == aggregation::ARGMIN) {
         return thrust::min_element(
-          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
+          rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+          it,
+          it + size,
+          std::forward<Args>(args)...);
       } else {
         return thrust::max_element(
-          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
+          rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+          it,
+          it + size,
+          std::forward<Args>(args)...);
       }
     }();
     return static_cast<size_type>(cuda::std::distance(it, pos));

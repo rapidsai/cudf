@@ -214,7 +214,6 @@ def decompose_single_agg(
                     child,
                 )
                 child_dtype = child.dtype.plc_type
-
         is_group_quantile_supported = plc.traits.is_integral(
             child_dtype
         ) or plc.traits.is_floating_point(child_dtype)
@@ -252,7 +251,6 @@ def decompose_single_agg(
             # - GROUPBY: sum(all-null group) => 0; sum(empty group) => 0  (fill-null)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
-            # Always fill top-level nulls with 0
             return [(named_expr, True)], expr.NamedExpr(
                 name, replace_nulls(col, 0, is_top=is_top)
             )

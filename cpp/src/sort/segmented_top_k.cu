@@ -105,8 +105,11 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
     size_data_type, total_elements, mask_state::UNALLOCATED, stream, mr);
   auto d_result = result->mutable_view().begin<size_type>();
   // remove the indices marked by resolve_segment_indices
-  thrust::remove_copy(
-    rmm::exec_policy_nosync(stream), d_indices, d_indices + indices->size(), d_result, -1);
+  thrust::remove_copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      d_indices,
+                      d_indices + indices->size(),
+                      d_result,
+                      -1);
 
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
   return make_lists_column(

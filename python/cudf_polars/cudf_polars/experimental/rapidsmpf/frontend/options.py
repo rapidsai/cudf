@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.config import Options
 from rapidsmpf.utils.string import parse_boolean
 
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -123,6 +126,15 @@ def _parse_memory_resource_config(value: str) -> MemoryResourceConfig:
     return MemoryResourceConfig(**json.loads(value))
 
 
+def _parse_hardware_binding(value: str) -> HardwareBindingPolicy:
+    """
+    Parse a JSON string into a :class:`HardwareBindingPolicy`.
+
+    Examples: ``'{"enabled": false}'``, ``'{"raise_on_fail": true}'``.
+    """
+    return HardwareBindingPolicy(**json.loads(value))
+
+
 @dataclasses.dataclass
 class StreamingOptions:
     """
@@ -131,7 +143,7 @@ class StreamingOptions:
     Options are grouped into three categories:
       - **RapidsMPF**: runtime and memory behavior (e.g. spilling, threading).
       - **Executor**: query execution and partitioning behavior.
-      - **Engine**: Polars integration and IO configuration.
+      - **Engine**: Polars integration, IO configuration, hardware binding.
 
     All fields default to :data:`UNSPECIFIED` and follow this precedence:
       1. Explicit value.
@@ -194,7 +206,7 @@ class StreamingOptions:
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
         Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
-        Default: ``1``.
+        Default: ``8``.
         Category: executor.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
@@ -222,10 +234,12 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
-    unique_fraction
-        Per-column uniqueness estimate (0-1). Defaults to ``1.0``.
-        Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
-        Default: ``{}``.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. The ``spmd``/``ray``/``dask`` engines
+        always use ``True``; passing ``False`` raises ``ValueError``.
+        Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
+        Default: ``True`` (forced by the streaming engines).
         Category: executor.
     raise_on_fail
         Raise instead of falling back to CPU.
@@ -244,6 +258,19 @@ class StreamingOptions:
     cuda_stream_policy
         CUDA stream policy (``"default"``, ``"pool"`` or config dict).
         Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
+        Category: engine.
+    hardware_binding
+        Hardware binding policy. Pass a
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
+        instance for fine-grained control.
+        Env: ``CUDF_POLARS__HARDWARE_BINDING`` (JSON object,
+        e.g. ``'{"enabled": false}'``).
+        Default: ``HardwareBindingPolicy()``.
+        Category: engine.
+    allow_gpu_sharing
+        When ``False`` (default), the engine raises if multiple ranks share the same physical GPU.
+        Env: ``CUDF_POLARS__ALLOW_GPU_SHARING``.
+        Default: ``False``.
         Category: engine.
 
     Examples
@@ -300,8 +327,8 @@ class StreamingOptions:
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
-    unique_fraction: dict[str, float] | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
+    sink_to_directory: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
@@ -309,6 +336,12 @@ class StreamingOptions:
     memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
     cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
         _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
+    )
+    hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
+        "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
+    )
+    allow_gpu_sharing: bool | Unspecified = _opt(
+        "engine", "CUDF_POLARS__ALLOW_GPU_SHARING", parse_boolean
     )
 
     # ------------------------------------------------------------------
@@ -467,13 +500,13 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
+            hardware_binding=_get("hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
             broadcast_join_limit=_get("broadcast_join_limit"),
             target_partition_size=target_partition_size,
             dynamic_planning=dynamic_planning,
-            unique_fraction=_get("unique_fraction"),
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
@@ -592,6 +625,17 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
         )
         g.add_argument(
+            "--hardware-binding",
+            dest="hardware_binding",
+            default=None,
+            type=_parse_hardware_binding,
+            help=textwrap.dedent("""\
+                Hardware binding policy as a JSON object
+                (e.g. '{"enabled": false}', '{"raise_on_fail": true}').
+                Env: CUDF_POLARS__HARDWARE_BINDING.
+                Built-in default: enabled with auto GPU detection."""),
+        )
+        g.add_argument(
             "--num-py-executors",
             dest="num_py_executors",
             default=None,
@@ -599,7 +643,7 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
                 Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
-                Built-in default: 1."""),
+                Built-in default: 8."""),
         )
         g.add_argument(
             "--raise-on-fail",
@@ -657,15 +701,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--unique-fraction",
-            dest="unique_fraction",
-            default=None,
-            type=json.loads,
-            help=textwrap.dedent("""\
-                Per-column uniqueness estimate as a JSON object (e.g. '{"col": 0.5}').
-                Env: CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION. Built-in default: {}."""),
         )
         g.add_argument(
             "--stream-policy",

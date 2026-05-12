@@ -97,7 +97,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def _year_totals_by_sk(
+def _year_total_sk(
     sales: pl.LazyFrame,
     date_dim: pl.LazyFrame,
     date_fk: str,
@@ -105,16 +105,9 @@ def _year_totals_by_sk(
     amount_col: str,
     year: int,
 ) -> pl.LazyFrame:
-    """
-    Aggregate sales stddev per customer_sk for a single year.
-
-    Groups by customer_sk only (not wide customer display columns) to
-    reduce intermediate cardinality. Customer display columns are joined
-    once at the end where needed.
-    """
-    year_dates = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
+    dates = date_dim.filter(pl.col("d_year") == year).select(["d_date_sk"])
     return (
-        sales.join(year_dates, left_on=date_fk, right_on="d_date_sk")
+        sales.join(dates, left_on=date_fk, right_on="d_date_sk")
         .group_by(customer_fk)
         .agg(pl.col(amount_col).std().alias("year_total"))
         .rename({customer_fk: "customer_sk"})
@@ -136,12 +129,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    # Build four separate per-(sale_type, year) aggregates, grouping by
-    # customer_sk (integer PK) rather than wide display-string columns.
-    # This mirrors the Q11 optimization: customer display columns are
-    # joined once at the very end.
     t_s_first = (
-        _year_totals_by_sk(
+        _year_total_sk(
             store_sales,
             date_dim,
             "ss_sold_date_sk",
@@ -149,21 +138,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             "ss_net_paid",
             year,
         )
-        .rename({"year_total": "s_first_year_total"})
-        .filter(pl.col("s_first_year_total") > 0)
+        .rename({"year_total": "s_first_total"})
+        .filter(pl.col("s_first_total") > 0)
     )
-
-    t_s_sec = _year_totals_by_sk(
+    t_s_sec = _year_total_sk(
         store_sales,
         date_dim,
         "ss_sold_date_sk",
         "ss_customer_sk",
         "ss_net_paid",
         year + 1,
-    ).rename({"year_total": "s_sec_year_total"})
-
+    ).rename({"year_total": "s_sec_total"})
     t_w_first = (
-        _year_totals_by_sk(
+        _year_total_sk(
             web_sales,
             date_dim,
             "ws_sold_date_sk",
@@ -171,18 +158,23 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             "ws_net_paid",
             year,
         )
-        .rename({"year_total": "w_first_year_total"})
-        .filter(pl.col("w_first_year_total") > 0)
+        .rename({"year_total": "w_first_total"})
+        .filter(pl.col("w_first_total") > 0)
     )
-
-    t_w_sec = _year_totals_by_sk(
+    t_w_sec = _year_total_sk(
         web_sales,
         date_dim,
         "ws_sold_date_sk",
         "ws_bill_customer_sk",
         "ws_net_paid",
         year + 1,
-    ).rename({"year_total": "w_sec_year_total"})
+    ).rename({"year_total": "w_sec_total"})
+
+    joined = (
+        t_s_first.join(t_s_sec, on="customer_sk")
+        .join(t_w_first, on="customer_sk")
+        .join(t_w_sec, on="customer_sk")
+    )
 
     sort_by = {
         "customer_id": False,
@@ -190,28 +182,28 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "customer_last_name": False,
     }
     limit = 100
-
     return QueryResult(
         frame=(
-            # Inner joins on customer_sk ensure only customers present in all
-            # four (sale_type, year) combinations survive, matching the SQL
-            # four-way self-join on customer_id.
-            t_s_sec.join(t_s_first, on="customer_sk")
-            .join(t_w_first, on="customer_sk")
-            .join(t_w_sec, on="customer_sk")
-            .filter(
-                pl.col("w_sec_year_total") / pl.col("w_first_year_total")
-                > pl.col("s_sec_year_total") / pl.col("s_first_year_total")
+            joined.filter(
+                pl.col("w_sec_total") / pl.col("w_first_total")
+                > pl.col("s_sec_total") / pl.col("s_first_total")
             )
-            .join(customer, left_on="customer_sk", right_on="c_customer_sk")
+            .join(
+                customer.select(
+                    ["c_customer_sk", "c_customer_id", "c_first_name", "c_last_name"]
+                ),
+                left_on="customer_sk",
+                right_on="c_customer_sk",
+            )
             .select(
-                [
-                    pl.col("c_customer_id").alias("customer_id"),
-                    pl.col("c_first_name").alias("customer_first_name"),
-                    pl.col("c_last_name").alias("customer_last_name"),
-                ]
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
             )
-            .sort(sort_by.keys(), nulls_last=True)
+            .sort(
+                ["customer_id", "customer_first_name", "customer_last_name"],
+                nulls_last=True,
+            )
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

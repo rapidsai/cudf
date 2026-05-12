@@ -35,9 +35,10 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [
-          polars,
+          "polars>=1.35,<1.39",
           "numpy",
           pyarrow-stubs,
+          "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
           types-cachetools,
           "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'",
@@ -118,7 +119,8 @@ repos:
             cpp/src/io/utilities/data_sink\.cpp|
             cpp/include/cudf/contiguous_split\.hpp|
             cpp/include/cudf/utilities/pinned_memory\.hpp|
-            cpp/include/cudf/utilities/error\.hpp
+            cpp/include/cudf/utilities/error\.hpp|
+            cpp/include/cudf/detail/utilities/cuda_memcpy\.hpp
           )$
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
@@ -134,7 +136,7 @@ repos:
         name: cudf-polars-ir-signatures
         description: 'Validate cudf-polars IR.do_evaluate signatures.'
         entry: ./ci/check_cudf_polars_ir.py
-        language: python
+        language: script
         files: ^python/cudf_polars/cudf_polars/(dsl/ir|experimental/(shuffle|io|sort))\.py$
         pass_filenames: true
         verbose: true
@@ -144,6 +146,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -155,6 +161,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -211,6 +221,7 @@ repos:
             pytest[.]ini$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
@@ -224,7 +235,8 @@ repos:
             cpp/src/io/comp/unbz2[.]hpp$|
             cpp/src/io/comp/gpuinflate[.]cu$|
             cpp/src/io/utilities/base64_utilities[.]cpp$|
-            cpp/src/io/utilities/base64_utilities[.]hpp$
+            cpp/src/io/utilities/base64_utilities[.]hpp$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-copyright
         name: verify-copyright-brotli
@@ -292,6 +304,10 @@ repos:
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.24.1
+    hooks:
+      - id: zizmor
 
 default_language_version:
       python: python3

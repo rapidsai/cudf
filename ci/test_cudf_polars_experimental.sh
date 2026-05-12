@@ -28,7 +28,7 @@ rapids-pip-retry install \
     -v \
     --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental,rapidsmpf]" \
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental,ray]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
@@ -51,7 +51,7 @@ trap set_exitcode ERR
 set +e
 
 rapids-logger "Running cudf_polars experimental tests (non-ci-blocking)"
-timeout 15m ./ci/run_cudf_polars_experimental_pytests.sh \
+timeout 30m ./ci/run_cudf_polars_experimental_pytests.sh \
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \

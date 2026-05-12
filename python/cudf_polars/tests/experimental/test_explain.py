@@ -445,10 +445,6 @@ def test_explain_logical_io_then_concat_then_groupby(explain_engine, tmp_path, k
 
 
 def test_serialize_query():
-    # this test is sensitive to the polars version.
-    # we get a different query plan for polars < 1.35.0.
-    pytest.importorskip("polars", minversion="1.35.0")
-
     left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
     right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
 
@@ -540,8 +536,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     dag = serialize_query(q, engine)
 
-    # walk Union -> Scan
-    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    node = dag.nodes[dag.roots[0]]
     assert node.type == "Scan"
     assert node.properties == expected_properties
 
@@ -673,7 +668,6 @@ def test_dynamic_planning_adds_repartition(df, op):
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "runtime": "rapidsmpf",
             "dynamic_planning": {},
             "max_rows_per_partition": 1_000_000,
         },
@@ -681,8 +675,8 @@ def test_dynamic_planning_adds_repartition(df, op):
     plan = explain_query(q, engine, physical=True)
 
     # With dynamic planning enabled, sum needs a REPARTITION to collapse
-    # partitions for global aggregation. Sort uses SHUFFLESORTED and does not.
+    # partitions for global aggregation. Sort does not.
     if op == "sort":
-        assert "SHUFFLESORTED" in plan
+        assert "SORT" in plan
     else:
         assert "REPARTITION" in plan

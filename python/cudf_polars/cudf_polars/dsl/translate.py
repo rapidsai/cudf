@@ -349,15 +349,13 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Cache, translator: Translator, schema: Schema) -> ir.IR:
-    refcount = None
-
     # Make sure Cache nodes with the same id_
     # are actually the same object.
     if node.id_ not in translator._cache_nodes:
         translator._cache_nodes[node.id_] = ir.Cache(
             schema,
             node.id_,
-            refcount,
+            None,
             translator.translate_ir(n=node.input),
         )
     return translator._cache_nodes[node.id_]
@@ -816,11 +814,12 @@ def _(
             and "".join((name, *options)) == "log"
         ):
             (child, base) = children
+            assert isinstance(base, expr.Literal)
             return expr.BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.LOG_BASE,
                 child,
-                expr.Literal(dtype, base.value),  # type: ignore[attr-defined]
+                expr.Literal(dtype, base.value),
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
@@ -883,6 +882,9 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, plrs._expr_nodes.WindowMapping):
         # pl.col("a").over(...)
+        # Note: pl.col("a").rolling(...).over("g") also lands here. But
+        # is not supported in polars < 1.39 since the AExpr::Rolling was
+        # not exposed until polars 1.39.
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
         name_gen = unique_names(schema)
@@ -927,7 +929,7 @@ def _(
             )
         ]
         children = (*by_exprs, *((order_by_expr,) if has_order_by else ()), *child_deps)
-        return expr.GroupedRollingWindow(
+        return expr.GroupedWindow(
             dtype,
             (mapping, has_order_by, descending, nulls_last),
             named_aggs,

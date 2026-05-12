@@ -41,22 +41,18 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
-from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
+from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import (
-    _dynamic_planning_on,
-    _get_unique_fractions,
-    _leaf_column_names,
-)
+from cudf_polars.experimental.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -129,10 +125,7 @@ def select(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    output_names = [next(names) for _ in range(len(exprs))]
-    named_exprs = [
-        NamedExpr(name, expr) for name, expr in zip(output_names, exprs, strict=True)
-    ]
+    named_exprs = [NamedExpr(next(names), expr) for expr in exprs]
     new_ir: IR = Select(
         {ne.name: ne.value.dtype for ne in named_exprs},
         named_exprs,
@@ -197,15 +190,6 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    unique_fraction_dict = _get_unique_fractions(
-        _leaf_column_names(child),
-        config_options.executor.unique_fraction,
-    )
-
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
-
     input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
@@ -218,7 +202,6 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        unique_fraction=unique_fraction,
     )
 
     return column, input_ir, partition_info
@@ -344,7 +327,6 @@ def _decompose_agg_node(
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
-                config_options.executor.shuffle_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(
@@ -463,6 +445,23 @@ def _decompose_expr_node(
             config_options,
             names=names,
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "null_count":
+        columns, input_ir, partition_info = select(
+            [expr],
+            input_ir,
+            partition_info,
+            names=names,
+            repartition=True,
+        )
+        (column,) = columns
+        columns, input_ir, partition_info = select(
+            [Agg(expr.dtype, "sum", None, ExecutionContext.FRAME, column)],
+            input_ir,
+            partition_info,
+            names=names,
+        )
+        (expr,) = columns
+        return expr, input_ir, partition_info
     else:
         # This is an un-supported expression - raise.
         raise NotImplementedError(
@@ -530,49 +529,14 @@ def _decompose(
     )
 
 
-def decompose_expr_graph(
-    named_expr: NamedExpr,
+def make_expr_decomposer(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     unique_names: Generator[str, None, None],
-) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Decompose a NamedExpr into stages.
-
-    Parameters
-    ----------
-    named_expr
-        The original NamedExpr to decompose.
-    input_ir
-        The input-IR node that ``named_expr`` will be
-        evaluated on.
-    partition_info
-        A mapping from all unique IR nodes to the
-        associated partitioning information.
-    config_options
-        GPUEngine configuration options.
-    unique_names
-        Generator of unique names for temporaries.
-
-    Returns
-    -------
-    named_expr
-        Decomposed NamedExpr object.
-    input_ir
-        The rewritten ``input_ir`` to be evaluated by ``named_expr``.
-    partition_info
-        A mapping from unique nodes in the new graph to associated
-        partitioning information.
-
-    Notes
-    -----
-    This function recursively decomposes ``named_expr.value`` and
-    ``input_ir`` into multiple partition-wise stages.
-
-    The state dictionary is an instance of :class:`State`.
-    """
-    mapper: ExprDecomposer = CachingVisitor(
+) -> ExprDecomposer:
+    """Create a caching expression decomposer for the given input IR."""
+    return CachingVisitor(
         _decompose,
         state={
             "input_ir": input_ir,
@@ -581,5 +545,32 @@ def decompose_expr_graph(
             "unique_names": unique_names,
         },
     )
+
+
+def decompose_expr_graph(
+    named_expr: NamedExpr,
+    *,
+    mapper: ExprDecomposer,
+) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a NamedExpr into stages using a shared expression decomposer.
+
+    Parameters
+    ----------
+    named_expr
+        The original NamedExpr to decompose.
+    mapper
+        Expression decomposer (from :func:`make_expr_decomposer`).
+
+    Returns
+    -------
+    named_expr
+        Decomposed NamedExpr object.
+    input_ir
+        The rewritten input IR to be evaluated by ``named_expr``.
+    partition_info
+        A mapping from unique nodes in the new graph to associated
+        partitioning information.
+    """
     expr, input_ir, partition_info = mapper(named_expr.value)
     return named_expr.reconstruct(expr), input_ir, partition_info

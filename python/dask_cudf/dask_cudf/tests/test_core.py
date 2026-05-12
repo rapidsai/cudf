@@ -369,6 +369,7 @@ def test_repartition_timeseries(start, stop):
         freq="1s",
         partition_freq=start,
         dtypes={"x": int, "y": float},
+        seed=1,
     )
     gdf = pdf.map_partitions(cudf.DataFrame)
 
