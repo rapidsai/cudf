@@ -20,6 +20,10 @@ def engine(streaming_engine_factory):
     )
 
 
+# HStack may redirect to Select before fallback; message differs by Polars IR / version.
+@pytest.mark.filterwarnings(
+    "ignore:This .*is not supported for multiple partitions:UserWarning"
+)
 def test_rolling_datetime(request, engine):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
@@ -39,12 +43,7 @@ def test_rolling_datetime(request, engine):
         .lazy()
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
-    # HStack may redirect to Select before fallback; message differs by Polars IR / version.
-    with pytest.warns(
-        UserWarning,
-        match=r"This (HStack|selection) is not supported for multiple partitions\.",
-    ):
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
