@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -356,9 +357,10 @@ void check_eq_compatibility(table_view const& input)
 {
   column_checker_fn_t check_column = [&](column_view const& c) {
     if (not is_nested(c.type())) {
-      CUDF_EXPECTS(is_equality_comparable(c.type()),
-                   "Cannot compare equality for a table with a column of type " +
-                     cudf::type_to_name(c.type()));
+      CUDF_EXPECTS(
+        is_equality_comparable(c.type()),
+        "Cannot compare equality for a table with a column of type " + cudf::type_to_name(c.type()),
+        std::invalid_argument);
     }
     for (auto child = c.child_begin(); child < c.child_end(); ++child) {
       check_column(*child);
