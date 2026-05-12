@@ -334,6 +334,7 @@ files:
       - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
+  # TODO: Eventually remove this alias in favor of dask
   py_run_cudf_polars_experimental:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -341,7 +342,15 @@ files:
       table: project.optional-dependencies
       key: experimental
     includes:
-      - run_cudf_polars_experimental
+      - run_cudf_polars_dask
+  py_run_cudf_polars_dask:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: dask
+    includes:
+      - run_cudf_polars_dask
   py_run_cudf_polars_ray:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -822,7 +831,7 @@ dependencies:
           - packaging
           - polars>=1.35,<1.39
           - typing_extensions>=4.0.0
-  run_cudf_polars_experimental:
+  run_cudf_polars_dask:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
