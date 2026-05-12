@@ -229,8 +229,8 @@ class DefaultSingletonEngine(SPMDEngine):
     Always constructs a single-rank communicator and uses default RapidsMPF,
     executor, and engine settings from the environment.
 
-    Users needing custom configuration should construct an :class:`SPMDEngine`
-    directly instead.
+    Users needing custom configuration should construct an engine explicitly.
+    See :class:`RayEngine`, :class:`DaskEngine`, and :class:`SPMDEngine`.
 
     Examples
     --------
