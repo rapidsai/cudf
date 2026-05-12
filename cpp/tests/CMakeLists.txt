@@ -683,8 +683,30 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 
 # ##################################################################################################
 # * compute columns tests
-#   -------------------------------------------------------------------------------------
-ConfigureTest(COMPUTE_COLUMNS_TEST transform/compute_columns_test.cpp)
+# -------------------------------------------------------------------------------------
+add_embed(cudf_test_fragments)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT transform_profit_operator SOURCE transform/fragments/profit.cu
+)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT transform_invsqrt_operator SOURCE
+  transform/fragments/invsqrt.cu
+)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT transform_tpcds_q7 SOURCE transform/fragments/tpcds_q7.cu
+)
+
+embed(cudf_test_fragments COMPRESSION none)
+
+ConfigureTest(
+  TRANSFORM_LTO_TEST transform/transform_lto_test.cpp
+  ${cudf_test_fragments_SOURCE_DIR}/cudf_test_fragments.s
+)
+add_dependencies(TRANSFORM_LTO_TEST cudf_test_fragments)
+target_include_directories(TRANSFORM_LTO_TEST PRIVATE ${cudf_test_fragments_SOURCE_DIR})
 
 # ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------

@@ -77,8 +77,7 @@ std::vector<std::string> input_type_names(
 
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
-                      std::string const& udf_cuda_source,
-                      std::vector<std::string> const& extra_options = {});
+                      std::string const& udf_cuda_source);
 
 }  // namespace jit
 }  // namespace cudf

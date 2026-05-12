@@ -7,6 +7,7 @@
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <nvtx3/nvtx3.hpp>
 
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -99,8 +100,15 @@
     }                                                                                         \
   } while (0)
 
+#define RTCX_FUNC_RANGE() \
+  ::nvtx3::scoped_range_in<::rtcx::nvtx_domain> rtcx_func_range__ { __func__ }
+
 namespace rtcx {
 namespace {
+
+struct nvtx_domain {
+  static constexpr char const* name = "rtcx";
+};
 
 enum class object_type : std::uint8_t { LIBRARY, BLOB };
 
@@ -328,13 +336,13 @@ struct LibNVRTC {
   LibNVRTC(LibNVRTC&&)                 = delete;
   LibNVRTC& operator=(LibNVRTC const&) = delete;
   LibNVRTC& operator=(LibNVRTC&&)      = delete;
-  ~LibNVRTC() { dlclose(_handle); }
+  ~LibNVRTC() { ::dlclose(_handle); }
 
   static void* _load()
   {
     auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
-    RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
+    RTCX_CHECK_CUDART(::cudaRuntimeGetVersion(&cuda_version));
     std::int32_t major = major_version(cuda_version);
     RTCX_EXPECTS(expected_major_version == major,
                  std::format("LibNVRTC Compatibility Error: CUDA major version mismatch. Expected "
@@ -378,7 +386,7 @@ struct LibNVJitLink {
   {
     auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
-    RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
+    RTCX_CHECK_CUDART(::cudaRuntimeGetVersion(&cuda_version));
     std::int32_t major = major_version(cuda_version);
     RTCX_EXPECTS(
       expected_major_version == major,
@@ -415,6 +423,8 @@ static std::optional<std::once_flag> teardown_libraries_flag{std::in_place};
 
 void initialize()
 {
+  RTCX_FUNC_RANGE();
+
   std::call_once(*init_libraries_flag, [] {
     cu.emplace(LibCuda::_load());
     RTCX_EXPECTS(
@@ -426,6 +436,8 @@ void initialize()
 
 void teardown()
 {
+  RTCX_FUNC_RANGE();
+
   std::call_once(*teardown_libraries_flag, [] {
     nvjitlink.reset();
     nvrtc.reset();
@@ -455,7 +467,7 @@ void log_nvrtc_result(compile_params const& params,
                       nvrtcProgram program,
                       nvrtcResult compile_result)
 {
-  if (program == nullptr || compile_result == NVRTC_SUCCESS) { return; }
+  if (program == nullptr) { return; }
 
   std::size_t log_size;
   if (auto errc = nvrtc->GetProgramLogSize(program, &log_size); errc != NVRTC_SUCCESS) {
@@ -465,22 +477,22 @@ void log_nvrtc_result(compile_params const& params,
               std::runtime_error);
   }
 
-  if (log_size <= 1) { return; }
-
   std::vector<char> log;
-  log.resize(log_size);
 
-  if (auto errc = nvrtc->GetProgramLog(program, log.data()); errc != NVRTC_SUCCESS) {
-    RTCX_FAIL(std::format("Failed to get NVRTC program log with error ({}): {}",
-                          static_cast<std::int64_t>(errc),
-                          nvrtc->GetErrorString(errc)),
-              std::runtime_error);
+  if (log_size > 1) {
+    log.resize(log_size);
+    if (auto errc = nvrtc->GetProgramLog(program, log.data()); errc != NVRTC_SUCCESS) {
+      RTCX_FAIL(std::format("Failed to get NVRTC program log with error ({}): {}",
+                            static_cast<std::int64_t>(errc),
+                            nvrtc->GetErrorString(errc)),
+                std::runtime_error);
+    }
   }
 
   log.resize(log_size == 0 ? 0 : (log_size - 1));
 
-  auto status_str = (compile_result == NVRTC_SUCCESS && !log.empty()) ? "completed with warning"
-                                                                      : "failed with error";
+  auto status_str =
+    (compile_result == NVRTC_SUCCESS && !log.empty()) ? "completed with" : "failed with";
 
   std::string headers_str;
   for (auto& header : params.header_include_names) {
@@ -491,6 +503,8 @@ void log_nvrtc_result(compile_params const& params,
   for (auto& option : params.options) {
     options_str = std::format("{}\t{}\n", options_str, option);
   }
+
+  if (log.empty()) { return; }
 
   auto msg = std::format(
     "NVRTC Compilation for `{}` {} ({}): {}.\nHeaders:\n{}\n\nOptions:\n{}\n\nLog:\n\t{}",
@@ -513,7 +527,7 @@ void log_nvJitLink_result(link_params const& params,
                           nvJitLinkHandle handle,
                           nvJitLinkResult link_result)
 {
-  if (handle == nullptr || link_result == NVJITLINK_SUCCESS) { return; }
+  if (handle == nullptr) { return; }
 
   std::size_t info_log_size;
   if (auto errc = nvjitlink->GetInfoLogSize(handle, &info_log_size); errc != NVJITLINK_SUCCESS) {
@@ -533,6 +547,7 @@ void log_nvJitLink_result(link_params const& params,
                 std::runtime_error);
     }
   }
+
   info_log.resize(info_log_size == 0 ? 0 : (info_log_size - 1));
 
   std::size_t error_log_size;
@@ -554,6 +569,7 @@ void log_nvJitLink_result(link_params const& params,
                 std::runtime_error);
     }
   }
+
   error_log.resize(error_log_size == 0 ? 0 : (error_log_size - 1));
 
   if (info_log.empty() && error_log.empty()) { return; }
@@ -572,10 +588,10 @@ void log_nvJitLink_result(link_params const& params,
     link_options_str = std::format("{}\t{}\n", link_options_str, option);
   }
 
-  auto status_str = error_log.empty() ? "completed with warnings" : "failed with errors";
+  auto status_str = link_result == NVJITLINK_SUCCESS ? "completed with" : "failed with";
 
   auto msg = std::format(
-    "(nvJitLink) Linking for `{}` ({}) {}, error code ({}): {}.\nFragments: \n{}\n"
+    "(nvJitLink) Linking for `{}` ({}) {} error code ({}): {}.\nFragments: \n{}\n"
     "Link Options: \n{}\n\nInfo Log:\n\t{}\n\nError Log:\n\t{}\n\n",
     params.name == nullptr ? "<unnamed>" : params.name,
     binary_type_string(params.output_type),
@@ -587,10 +603,16 @@ void log_nvJitLink_result(link_params const& params,
     std::string_view{info_log.data(), info_log.size()},
     std::string_view{error_log.data(), error_log.size()});
 
-  if (!error_log.empty()) {
-    log_error(msg);
+  bool needs_info_log =
+    std::find_if(
+      params.link_options.begin(), params.link_options.end(), [](std::string_view option) {
+        return option == "--verbose" || option == "-time";
+      }) != params.link_options.end();
+
+  if (link_result == NVJITLINK_SUCCESS) {
+    if (needs_info_log) { log_warning(msg); }
   } else {
-    log_warning(msg);
+    log_error(msg);
   }
 }
 
@@ -598,6 +620,8 @@ void log_nvJitLink_result(link_params const& params,
 
 byte_buffer compile(compile_params const& params)
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(params.name != nullptr, "Fragment name must not be null", std::logic_error);
   RTCX_EXPECTS(params.source != nullptr, "Fragment source must not be null", std::logic_error);
 
@@ -671,6 +695,8 @@ void kernel_ref::launch(cuda_dim3 grid_dim,
                         CUstream stream,
                         void** kernel_params) const
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(grid_dim.is_valid(), "Grid dimensions must be greater than zero", std::logic_error);
   RTCX_EXPECTS(
     block_dim.is_valid(), "Block dimensions must be greater than zero", std::logic_error);
@@ -698,6 +724,8 @@ void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
                                     CUstream stream,
                                     void** kernel_params) const
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(grid_dim.is_valid(), "Grid dimensions must be greater than zero", std::logic_error);
   RTCX_EXPECTS(
     block_dim.is_valid(), "Block dimensions must be greater than zero", std::logic_error);
@@ -723,6 +751,8 @@ library_t::~library_t()
 
 library load_library(std::span<std::uint8_t const> binary)
 {
+  RTCX_FUNC_RANGE();
+
   CUlibrary handle;
 
   RTCX_CHECK_CUDA(
@@ -741,6 +771,8 @@ library load_library(std::span<std::uint8_t const> binary)
 
 library load_library_from_file(char const* path)
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(path != nullptr, "Library path must not be null", std::logic_error);
 
   CUlibrary handle;
@@ -760,6 +792,8 @@ library load_library_from_file(char const* path)
 
 byte_buffer link_library(link_params const& params)
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(params.name != nullptr, "Link output name must not be null", std::logic_error);
   RTCX_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
                "Only CUBIN and PTX output types are supported for linking modules",
@@ -824,6 +858,8 @@ byte_buffer link_library(link_params const& params)
 
 kernel_ref library_t::get_kernel(char const* name) const
 {
+  RTCX_FUNC_RANGE();
+
   CUkernel kernel;
   RTCX_CHECK_CUDA(cu->LibraryGetKernel(&kernel, handle_, name));
   return kernel_ref{kernel};
@@ -913,6 +949,8 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir, object_type type
 
 std::optional<library> get_disk_library(std::string const& cache_dir, sha256 const& sha)
 {
+  RTCX_FUNC_RANGE();
+
   auto hex  = sha.to_hex_string();
   auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(object_type::LIBRARY));
 
@@ -953,6 +991,8 @@ void cache_blob_to_disk(std::string const& cache_dir,
                         sha256 const& sha,
                         std::span<std::uint8_t const> binary)
 {
+  RTCX_FUNC_RANGE();
+
   auto tmp_path = std::format("{}/rtcx-bin-XXXXXX", tmp_dir);
   (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
 
@@ -994,6 +1034,8 @@ void cache_blob_to_disk(std::string const& cache_dir,
 
 std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compile_func compile)
 {
+  RTCX_FUNC_RANGE();
+
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
@@ -1053,6 +1095,8 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
 std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
                                                         library_compile_func compile)
 {
+  RTCX_FUNC_RANGE();
+
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
@@ -1153,6 +1197,8 @@ std::size_t cache_t::get_library_count()
 
 void cache_t::clear_memory_store()
 {
+  RTCX_FUNC_RANGE();
+
   std::lock_guard guard{lock_};
 
   blobs_cache_.entries_.clear();
@@ -1161,6 +1207,8 @@ void cache_t::clear_memory_store()
 
 void cache_t::clear_disk_store()
 {
+  RTCX_FUNC_RANGE();
+
   auto entries = get_disk_entries(cache_dir_);
 
   for (auto const& path : entries) {
@@ -1174,6 +1222,8 @@ void cache_t::clear_disk_store()
 
 void cache_t::preload_from_disk()
 {
+  RTCX_FUNC_RANGE();
+
   auto entries = get_disk_entries(cache_dir_);
 
   auto load_count =
@@ -1245,6 +1295,8 @@ rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binar
                                   std::size_t uncompressed_size,
                                   std::string_view compression)
 {
+  RTCX_FUNC_RANGE();
+
   RTCX_EXPECTS(compression == "none" || compression == "zstd",
                std::format("Unsupported compression type specified: {}", compression),
                std::runtime_error);

@@ -17,6 +17,8 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <numeric>
 #include <span>
 #include <sstream>
 #include <stdexcept>
@@ -32,6 +34,14 @@ struct size_range {
   size_t size   = 0;
 };
 
+struct embed_output {
+  std::string cxx_header;
+  std::string asm_source;
+  std::vector<uint8_t> bin_file_data;
+};
+
+enum class value_type : int8_t { INT, STRING };
+
 std::pair<std::vector<uint8_t>, std::vector<size_range>> merge_bytes_with_null_terminators(
   std::span<std::vector<uint8_t> const> bytes_lists)
 {
@@ -46,13 +56,6 @@ std::pair<std::vector<uint8_t>, std::vector<size_range>> merge_bytes_with_null_t
 
   return {std::move(merged), std::move(ranges)};
 }
-
-struct embed_output {
-  std::string cxx_header;
-  std::string cxx_source;
-  std::string asm_source;
-  std::vector<uint8_t> bin_file_data;
-};
 
 std::vector<uint8_t> load_file_bytes(std::string_view file_path)
 {
@@ -121,7 +124,94 @@ std::string join_formatted(Container& items, std::string_view delimiter, Formatt
   return result.str();
 }
 
+std::string generate_arrays(std::span<std::string_view const> array_ids,
+                            std::span<std::string_view const> array_values)
+{
+  auto get_type = [](std::string_view value) -> value_type {
+    return std::isdigit(value[0]) ? value_type::INT : value_type::STRING;
+  };
+
+  using strings_t = std::vector<std::string_view>;
+  using ints_t    = std::vector<std::int64_t>;
+  using values_t  = std::variant<strings_t, ints_t>;
+
+  struct array_entry {
+    value_type type = value_type::INT;
+    values_t values;
+  };
+
+  std::map<std::string_view, array_entry> arrays;
+
+  for (size_t i = 0; i < array_ids.size(); ++i) {
+    auto id    = array_ids[i];
+    auto value = array_values[i];
+    if (auto array_it = arrays.find(id); array_it == arrays.end()) {
+      switch (get_type(value)) {
+        {
+          case value_type::INT:
+            arrays.emplace(id, array_entry(value_type::INT, std::vector<std::int64_t>{}));
+        }
+        break;
+        case value_type::STRING: {
+          arrays.emplace(id, array_entry(value_type::STRING, std::vector<std::string_view>{}));
+        } break;
+        default: throw std::logic_error("Unexpected constant type");
+      }
+    }
+
+    auto& array = arrays[id];
+
+    switch (array.type) {
+      case value_type::INT: {
+        std::int64_t int_value;
+        if (std::from_chars(value.data(), value.data() + value.size(), int_value).ec !=
+            std::errc()) {
+          throw std::invalid_argument(std::format("Invalid integer constant value: {}", value));
+        }
+        std::get<std::vector<std::int64_t>>(array.values).push_back(int_value);
+      } break;
+
+      case value_type::STRING: {
+        std::get<std::vector<std::string_view>>(array.values).push_back(value);
+      } break;
+
+      default: break;
+    }
+  }
+
+  std::string result;
+
+  for (auto& [id, array] : arrays) {
+    switch (array.type) {
+      case value_type::INT: {
+        auto& values = std::get<std::vector<std::int64_t>>(array.values);
+        result += std::format(
+          "constexpr std::int64_t {}[{}] = {{ {} }};\n\n",
+          id,
+          values.size(),
+          join_formatted(values, ", ", [](std::int64_t v) { return std::to_string(v); }));
+      } break;
+
+      case value_type::STRING: {
+        auto& values = std::get<std::vector<std::string_view>>(array.values);
+        result += std::format(
+          "constexpr char const* {}[{}] = {{ {} }};\n\n",
+          id,
+          values.size(),
+          join_formatted(values, ", ", [](auto s) { return std::format("\"{}\"", s); }));
+      } break;
+
+      default: break;
+    }
+  }
+
+  return result;
+}
+
 embed_output generate_cxx_source_files_data(std::string_view id,
+                                            std::span<std::string_view const> array_ids,
+                                            std::span<std::string_view const> array_values,
+                                            std::span<std::string_view const> file_ids,
                                             std::span<std::string_view const> file_paths,
                                             std::span<std::string_view const> file_dsts,
                                             std::span<std::string_view const> include_dirs,
@@ -133,7 +223,7 @@ embed_output generate_cxx_source_files_data(std::string_view id,
     file_bytes.emplace_back(load_file_bytes(path));
   }
 
-  auto [uncompressed_files_bytes, files_ranges] = merge_bytes_with_null_terminators(file_bytes);
+  auto [uncompressed_files_bytes, file_ranges] = merge_bytes_with_null_terminators(file_bytes);
 
   auto compress = compression != "none";
   std::vector<uint8_t> compressed_files_bytes =
@@ -171,13 +261,20 @@ embed_output generate_cxx_source_files_data(std::string_view id,
 
   auto include_dirs_list =
     join_formatted(include_dirs, ",\n", [](auto s) { return std::format("\"{}\"", s); });
-  auto dests_list =
+  auto file_dests_list =
     join_formatted(file_dsts, ",\n", [](auto s) { return std::format("\"{}\"", s); });
-  auto ranges_list = join_formatted(
-    files_ranges, ",\n", [](auto r) { return std::format("{{{}, {}}}", r.offset, r.size); });
-
+  auto file_ids_list =
+    join_formatted(file_ids, ",\n", [](auto s) { return std::format("\"{}\"", s); });
+  std::vector<size_t> file_indices(file_ids.size());
+  std::iota(file_indices.begin(), file_indices.end(), 0ULL);
+  auto file_indices_list = join_formatted(file_indices, "\n", [&](auto i) {
+    return std::format("constexpr std::size_t {} = {}ULL;", file_ids[i], i);
+  });
+  auto file_ranges_list  = join_formatted(
+    file_ranges, ",\n", [](auto r) { return std::format("{{{}, {}}}", r.offset, r.size); });
   auto hash_list = join_formatted(
     hash, ", ", [](uint8_t byte) { return std::format("0x{:02x}", static_cast<unsigned>(byte)); });
+  auto arrays_list = generate_arrays(array_ids, array_values);
 
   auto cxx_header = std::format(
     R"***(
@@ -189,44 +286,49 @@ embed_output generate_cxx_source_files_data(std::string_view id,
 #include <span>
 #include <string_view>
 
-namespace rtcx_embed {{
+namespace {} {{
 
-struct range {{
-  std::size_t offset = 0;
-  std::size_t size   = 0;
-}};
 
-constexpr char const * {}_include_directories[{}] =
+constexpr char const * include_directories[{}] =
 {{
 {}
 }};
 
-constexpr char const * {}_file_destinations[{}] =
+{}
+
+constexpr char const * file_ids[{}] =
 {{
 {}
 }};
 
-constexpr range {}_file_ranges[{}] =
+constexpr char const * file_destinations[{}] =
 {{
 {}
 }};
 
-constexpr std::size_t {}_files_uncompressed_size = {};
-
-constexpr char const * {}_files_compression = "{}";
-
-extern "C" std::uint8_t const rtcx_embed_{}_files_begin[];
-
-static std::span<std::uint8_t const> const {}_files =
+constexpr std::size_t file_ranges[{}][2] =
 {{
-rtcx_embed_{}_files_begin,
+{}
+}};
+
+constexpr std::size_t files_uncompressed_size = {};
+
+constexpr char const * files_compression = "{}";
+
+extern "C" std::uint8_t const {}_files_begin[];
+
+static std::span<std::uint8_t const> const files =
+{{
+{}_files_begin,
 {}L
 }};
 
-constexpr std::uint8_t {}_hash[{}] =
+constexpr std::uint8_t hash[{}] =
 {{
 {}
 }};
+
+{}
 
 }}
 )***",
@@ -234,29 +336,27 @@ constexpr std::uint8_t {}_hash[{}] =
     id,
     include_dirs.size(),
     include_dirs_list,
-    id,
+    file_indices_list,
+    file_ids.size(),
+    file_ids_list,
     file_dsts.size(),
-    dests_list,
-    id,
-    files_ranges.size(),
-    ranges_list,
-    id,
+    file_dests_list,
+    file_ranges.size(),
+    file_ranges_list,
     uncompressed_files_bytes.size(),
-    id,
     compression,
     id,
     id,
-    id,
     binary_size,
-    id,
     hash.size(),
-    hash_list);
+    hash_list,
+    arrays_list);
 
   auto asm_source = std::format(
     R"***(
 .section .rodata
-.global rtcx_embed_{}_files_begin
-rtcx_embed_{}_files_begin:
+.global {}_files_begin
+{}_files_begin:
 .incbin "{}.bin"
 
 .section .note.GNU-stack,"",@progbits
@@ -267,20 +367,22 @@ rtcx_embed_{}_files_begin:
 
   return embed_output{
     .cxx_header    = cxx_header,
-    .cxx_source    = "",
     .asm_source    = asm_source,
     .bin_file_data = compress ? compressed_files_bytes : uncompressed_files_bytes};
 }
 
 void generate_embed(std::string_view id,
+                    std::span<std::string_view const> array_ids,
+                    std::span<std::string_view const> array_values,
+                    std::span<std::string_view const> file_ids,
                     std::span<std::string_view const> file_paths,
                     std::span<std::string_view const> file_dsts,
                     std::span<std::string_view const> include_dirs,
                     std::string_view compression,
                     std::string_view output_directory)
 {
-  auto output =
-    generate_cxx_source_files_data(id, file_paths, file_dsts, include_dirs, compression);
+  auto output = generate_cxx_source_files_data(
+    id, array_ids, array_values, file_ids, file_paths, file_dsts, include_dirs, compression);
 
   std::filesystem::create_directories(std::filesystem::path(output_directory));
 
@@ -297,6 +399,7 @@ void generate_embed(std::string_view id,
 
 std::vector<std::string_view> split_string(std::string_view str, char delimiter)
 {
+  if (str.empty()) { return {}; }
   std::vector<std::string_view> tokens;
   std::size_t start = 0;
 

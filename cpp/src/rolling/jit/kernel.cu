@@ -113,15 +113,16 @@ CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
 }  // namespace rolling
 }  // namespace cudf
 
-extern "C" __global__ void cudf_kernel(cudf::size_type nrows,
-                                       void const* const __restrict__ in_col,
-                                       cudf::bitmask_type const* const __restrict__ in_col_valid,
-                                       void* __restrict__ out_col,
-                                       cudf::bitmask_type* __restrict__ out_col_valid,
-                                       cudf::size_type* __restrict__ output_valid_count,
-                                       cudf::detail::window_wrapper_base preceding_window_begin,
-                                       cudf::detail::window_wrapper_base following_window_begin,
-                                       cudf::size_type min_periods)
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type nrows,
+  void const* const __restrict__ in_col,
+  cudf::bitmask_type const* const __restrict__ in_col_valid,
+  void* __restrict__ out_col,
+  cudf::bitmask_type* __restrict__ out_col_valid,
+  cudf::size_type* __restrict__ output_valid_count,
+  cudf::detail::window_wrapper_base preceding_window_begin,
+  cudf::detail::window_wrapper_base following_window_begin,
+  cudf::size_type min_periods)
 {
   CUDF_KERNEL_INSTANCE(nrows,
                        in_col,

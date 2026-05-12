@@ -180,6 +180,14 @@ std::unique_ptr<table> multi_transform(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief The type of LTO Binary
+ */
+enum class lto_binary_type : uint8_t {
+  LTO_IR,  //< LTO-IR binary
+  FATBIN   //< FATBIN binary
+};
+
+/**
  * @brief Creates a new table by applying a transform function against every
  * element of the input columns.
  *
@@ -199,13 +207,12 @@ std::unique_ptr<table> multi_transform(
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param udf The LTO-IR string of the transform function to apply
- * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param user_data     User-defined device data to pass to the UDF.
  * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
+ * @param udf The LTO-IR string of the transform function to apply
+ * @param binary_type   The type of the LTO binary provided in `udf`
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param outputs       Specification of the output columns to be created
- * @param string_offsets For string output columns, the offsets can be pre-allocated and passed in
- * to prevent overhead of compacting string views into run-end strings column.
  * @param row_size The row size of the transform operation. If not provided, it is inferred from the
  * input columns.
  * @param stream        CUDA stream used for device memory operations and kernel launches
@@ -214,10 +221,11 @@ std::unique_ptr<table> multi_transform(
  * function to every element of the input according to the output specifications
  *
  */
-std::unique_ptr<table> compute_columns_jit(
+std::unique_ptr<table> transform_lto(
   std::span<transform_input const> inputs,
   std::span<uint8_t const> udf,
-  std::span<data_type const> output_types,
+  lto_binary_type binary_type,
+  std::span<transform_output const> outputs,
   void* user_data,
   null_aware is_null_aware          = null_aware::NO,
   std::optional<size_type> row_size = std::nullopt,

@@ -18,6 +18,7 @@
 
 #include <jit/column_accessor.cuh>
 #include <jit/column_device_view_wrappers.cuh>
+#include <jit/element_storage.cuh>
 #include <jit/sync.cuh>
 #include <jit/type_list.cuh>
 
@@ -35,75 +36,59 @@
 namespace cudf {
 namespace jit {
 
-template <bool has_user_data, typename Args>
-__device__ void execute_transform_op(void* user_data, size_type element_idx, Args args)
-{
-  // TODO: static assert invocable
-  if constexpr (has_user_data) {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
-                     cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, args));
-  } else {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
-  }
-}
-
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <null_aware is_null_aware,
-          bool has_user_data,
-          typename InputAccessors,
-          typename OutputAccessors>
+template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
 CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
                                   void* __restrict__ user_data,
                                   column_device_view_core const* __restrict__ input_cols,
                                   mutable_column_device_view_core const* __restrict__ output_cols)
 {
-  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   auto start  = detail::grid_1d::global_thread_id();
   auto stride = detail::grid_1d::grid_stride();
 
-  for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
-    if constexpr (is_null_aware == null_aware::NO) {
-      if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
+  for (auto row = start; row < row_size; row += stride) {
+    auto operation = [&]<typename Args>(Args const& args) {
+      if constexpr (has_user_data) {
+        cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
+                         cuda::std::tuple_cat(cuda::std::tuple{user_data, row}, args));
+      } else {
+        cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
+      }
+    };
+
+    if constexpr (!is_null_aware) {
+      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
       auto ins = InputAccessors::map(
-        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, element_idx)...}; });
+        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
 
-      auto outs = OutputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::output_arg(output_cols, element_idx)...};
-      });
+      auto outs = OutputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
 
-      auto out_ptrs =
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
-
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
+      operation(cuda::std::tuple_cat(
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs), ins));
 
       OutputAccessors::map([&]<typename... A>() {
-        (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
+        (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
       });
 
     } else {
-      auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
+      auto ins = InputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });
 
-      auto ins = InputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::nullable_element(input_cols, element_idx)...};
-      });
+      auto outs = OutputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::null_output_arg(output_cols, row)...}; });
 
-      auto outs = OutputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::null_output_arg(output_cols, element_idx)...};
-      });
+      operation(cuda::std::tuple_cat(
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs), ins));
 
-      auto out_ptrs =
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
-
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
+      auto active_mask = __ballot_sync(0xFFFF'FFFFU, row < row_size);
 
       OutputAccessors::map([&]<typename... A>() {
-        (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);
+        (A::assign(output_cols, row, *cuda::std::get<A::index>(outs)), ...);
         (warp_compact_validity<A>(
-           active_mask, output_cols, element_idx, cuda::std::get<A::index>(outs).has_value()),
+           active_mask, output_cols, row, cuda::std::get<A::index>(outs).has_value()),
          ...);
       });
     }
@@ -113,7 +98,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 }  // namespace jit
 }  // namespace cudf
 
-extern "C" __global__ void cudf_kernel(
+extern "C" __global__ void cudf_kernel_entry(
   cudf::size_type row_size,
   cudf::bitmask_type const* __restrict__ stencil,
   void* __restrict__ user_data,

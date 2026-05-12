@@ -323,11 +323,156 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
-set(CUDF_CXX_STANDARD 20)
-set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
+macro(add_fragment)
+  set(TARGET ${ARGV0})
+  set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE)
+  set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES)
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
+  if(NOT ARG_FRAGMENT)
+    message(FATAL_ERROR "add_fragment requires FRAGMENT argument")
+  endif()
+
+  if(NOT ARG_SOURCE)
+    message(FATAL_ERROR "add_fragment requires SOURCE argument")
+  endif()
+
+  set(OBJECT_ID ${TARGET}_${ARG_FRAGMENT})
+  add_library(${OBJECT_ID} OBJECT ${ARG_SOURCE})
+  target_compile_options(
+    ${OBJECT_ID} PRIVATE --compress-mode=size --expt-relaxed-constexpr --extended-lambda
+  )
+
+  if(DEFINED ARG_KERNEL_ONLY AND ARG_KERNEL_ONLY)
+    # ensure that the FATBIN symbols only contain the specified kernel
+    target_compile_options(${OBJECT_ID} PRIVATE -Xnvlink=--kernels-used=cudf_kernel_entry)
+  endif()
+
+  if(ARG_KERNEL_INSTANCE)
+    set(SPECIALIZATION_DIR "${CUDF_GENERATED_INCLUDE_DIR}/specializations/${ARG_FRAGMENT}")
+    file(
+      GENERATE
+      OUTPUT "${SPECIALIZATION_DIR}/cudf/detail/kernel-instance.hpp"
+      CONTENT "#pragma once\n#define CUDF_KERNEL_INSTANCE ${ARG_KERNEL_INSTANCE}"
+    )
+    target_include_directories(${OBJECT_ID} PRIVATE ${SPECIALIZATION_DIR})
+  endif()
+
+  target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
+  set_target_properties(
+    ${OBJECT_ID}
+    PROPERTIES CUDA_SEPARABLE_COMPILATION ON
+               CUDA_FATBIN_COMPILATION ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERPROCEDURAL_OPTIMIZATION ON
+               CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS ON
+               CXX_VISIBILITY_PRESET hidden
+               CUDA_STANDARD 20
+               CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
+  )
+  target_link_libraries(${OBJECT_ID} PRIVATE CCCL::CCCL)
+  target_include_directories(
+    ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+  )
+
+  embed_blob(
+    ${TARGET} FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST fragments/${ARG_FRAGMENT}.fatbin ID
+    ${ARG_FRAGMENT} ARRAY_IDS ${ARG_ARRAY_IDS} ARRAY_VALUES ${ARG_ARRAY_VALUES}
+  )
+endmacro()
+
+add_embed(cudf_fragments)
+
+foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 decimal32 decimal64 decimal128)
+  foreach(NULL_AWARE IN ITEMS 0 1)
+    set(FRAGMENT_NAME unop_lto_kernel)
+    set(VARIANT_NAME ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__element_${TYPE})
+    add_fragment(
+      cudf_fragments
+      FRAGMENT
+      ${VARIANT_NAME}
+      SOURCE
+      src/transform/jit/lto_kernel.cu
+      KERNEL_INSTANCE
+      "cudf::lto_transform_kernel<${NULL_AWARE}, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
+      ARRAY_IDS
+      ${FRAGMENT_NAME}_FILE_INDEX
+      ${FRAGMENT_NAME}_NULL_AWARE
+      ${FRAGMENT_NAME}_TYPE
+      ARRAY_VALUES
+      ${cudf_fragments_FILE_INDEX}
+      ${NULL_AWARE}
+      ${TYPE}
+    )
+  endforeach()
+endforeach()
+
+foreach(NULL_AWARE IN ITEMS 0 1)
+  foreach(MAX_ELEMENT_SIZE IN ITEMS 4 8)
+    foreach(MAX_ELEMENTS IN ITEMS 2 4)
+      set(FRAGMENT_NAME untyped_lto_transform_kernel_stack)
+      set(VARIANT_NAME
+          ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__max_element_size_${MAX_ELEMENT_SIZE}__max_elements_${MAX_ELEMENTS}
+      )
+      add_fragment(
+        cudf_fragments
+        FRAGMENT
+        ${VARIANT_NAME}
+        SOURCE
+        src/transform/jit/untyped_lto_kernel.cu
+        KERNEL_INSTANCE
+        "cudf::untyped_lto_transform_kernel_stack<${NULL_AWARE}, ${MAX_ELEMENT_SIZE}, ${MAX_ELEMENTS}>"
+        ARRAY_IDS
+        ${FRAGMENT_NAME}_FILE_INDEX
+        ${FRAGMENT_NAME}_NULL_AWARE
+        ${FRAGMENT_NAME}_MAX_ELEMENT_SIZE
+        ${FRAGMENT_NAME}_MAX_ELEMENTS
+        ARRAY_VALUES
+        ${cudf_fragments_FILE_INDEX}
+        ${NULL_AWARE}
+        ${MAX_ELEMENT_SIZE}
+        ${MAX_ELEMENTS}
+      )
+    endforeach()
+  endforeach()
+endforeach()
+
+foreach(MAX_ELEMENT_SIZE IN ITEMS 4 8 16 32)
+  foreach(NULL_AWARE IN ITEMS 0 1)
+    set(FRAGMENT_NAME untyped_lto_transform_kernel_shmem)
+    set(VARIANT_NAME
+        ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__max_element_size_${MAX_ELEMENT_SIZE}
+    )
+    add_fragment(
+      cudf_fragments
+      FRAGMENT
+      ${VARIANT_NAME}
+      SOURCE
+      src/transform/jit/untyped_lto_kernel.cu
+      KERNEL_INSTANCE
+      "cudf::untyped_lto_transform_kernel_shmem<${NULL_AWARE}, ${MAX_ELEMENT_SIZE}>"
+      ARRAY_IDS
+      ${FRAGMENT_NAME}_FILE_INDEX
+      ${FRAGMENT_NAME}_NULL_AWARE
+      ${FRAGMENT_NAME}_MAX_ELEMENT_SIZE
+      ARRAY_VALUES
+      ${cudf_fragments_FILE_INDEX}
+      ${NULL_AWARE}
+      ${MAX_ELEMENT_SIZE}
+    )
+  endforeach()
+endforeach()
+
+embed(cudf_fragments COMPRESSION none)
+
+add_embed(cudf_jit_embed)
+
+embed_includes(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
@@ -877,7 +1022,6 @@ add_library(
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
-  src/transform/compute_columns_jit.cu
   src/transform/compute_column_kernel_complex.cu
   src/transform/compute_column_kernel_null_complex.cu
   src/transform/compute_column_kernel_null_primitive.cu
@@ -909,13 +1053,10 @@ add_library(
   src/utilities/type_dispatcher.cpp
   librtcx/rtcx.cpp
   ${cudf_jit_embed_SOURCE_DIR}/cudf_jit_embed.s
+  ${cudf_fragments_SOURCE_DIR}/cudf_fragments.s
 )
 
-add_dependencies(cudf cudf_jit_embed)
-
-foreach(incbin_dir IN LISTS cudf_jit_embed_INCLUDE_DIRS)
-  target_compile_options(cudf PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,-I${incbin_dir}>)
-endforeach()
+add_dependencies(cudf cudf_jit_embed cudf_fragments)
 
 set_source_files_properties(
   src/binaryop/binaryop.cpp
@@ -997,6 +1138,7 @@ target_include_directories(
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
           "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_jit_embed_INCLUDE_DIRS}>"
+          "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
           "$<BUILD_INTERFACE:${CUDAToolkit_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )

@@ -11,6 +11,27 @@ if(NOT TARGET zstd)
   )
 endif()
 
+function(add_embed)
+  set(TARGET ${ARGV0})
+  set(OPTIONS "")
+  set(ONE_VALUE_ARGS)
+  set(MULTI_VALUE_ARGS)
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  set(${TARGET}_FILE_INDEX
+      0
+      PARENT_SCOPE
+  )
+  set(${TARGET}_INITIALIZED
+      TRUE
+      PARENT_SCOPE
+  )
+endfunction()
+
 # This function registers a directory of include files to be embedded for JIT compilation.
 function(embed_includes)
   set(TARGET ${ARGV0})
@@ -27,6 +48,10 @@ function(embed_includes)
 
   if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
   if(NOT ARG_COPY_DIRECTORY)
@@ -64,17 +89,30 @@ function(embed_includes)
 
   # Set scope variables to accumulate results
 
+  set(SOURCE_FILE_IDS ${${TARGET}__embed__source_file_ids})
   set(SOURCE_FILES ${${TARGET}__embed__source_files})
   set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
   set(INCLUDE_DIRECTORIES ${${TARGET}__embed__include_directories})
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
+    list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
+    list(APPEND SOURCE_FILE_IDS "include_${SOURCE_FILE_IDS_LENGTH}")
     list(APPEND SOURCE_FILES "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
     list(APPEND SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
   endforeach()
 
   list(APPEND INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
 
+  list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
+
+  set(${TARGET}_FILE_INDEX
+      ${SOURCE_FILE_IDS_LENGTH}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__source_file_ids
+      ${SOURCE_FILE_IDS}
+      PARENT_SCOPE
+  )
   set(${TARGET}__embed__source_files
       ${SOURCE_FILES}
       PARENT_SCOPE
@@ -94,12 +132,20 @@ endfunction()
 function(embed_blob)
   set(TARGET ${ARGV0})
   set(OPTIONS)
-  set(ONE_VALUE_ARGS FILE DEST)
-  set(MULTI_VALUE_ARGS "")
+  set(ONE_VALUE_ARGS ID FILE DEST)
+  set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
+  endif()
+
+  if(NOT ARG_ID)
+    message(FATAL_ERROR "ID argument is required")
   endif()
 
   if(NOT ARG_FILE)
@@ -110,9 +156,28 @@ function(embed_blob)
     message(FATAL_ERROR "DEST argument is required")
   endif()
 
+  set(SOURCE_FILE_IDS ${${TARGET}__embed__source_file_ids})
   set(SOURCE_FILES ${${TARGET}__embed__source_files})
   set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
   set(TARGET_DEPS ${${TARGET}__embed__target_deps})
+  set(ARRAY_IDS ${${TARGET}__embed__array_ids})
+  set(ARRAY_VALUES ${${TARGET}__embed__array_values})
+
+  if(ARG_ARRAY_IDS)
+    if(NOT ARG_ARRAY_VALUES)
+      message(FATAL_ERROR "ARRAY_VALUES argument is required when ARRAY_IDS is provided")
+    endif()
+
+    list(LENGTH ARG_ARRAY_IDS ARG_ARRAY_IDS_LENGTH)
+    list(LENGTH ARG_ARRAY_VALUES ARG_ARRAY_VALUES_LENGTH)
+
+    if(NOT ARG_ARRAY_IDS_LENGTH EQUAL ARG_ARRAY_VALUES_LENGTH)
+      message(FATAL_ERROR "ARRAY_IDS and ARRAY_VALUES must have the same length")
+    endif()
+
+    list(APPEND ARRAY_IDS ${ARG_ARRAY_IDS})
+    list(APPEND ARRAY_VALUES ${ARG_ARRAY_VALUES})
+  endif()
 
   if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
     # If the file is a generator expression for target objects add as dependency
@@ -122,9 +187,20 @@ function(embed_blob)
       message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
     endif()
   endif()
+  list(APPEND SOURCE_FILE_IDS ${ARG_ID})
   list(APPEND SOURCE_FILES ${ARG_FILE})
   list(APPEND SOURCE_FILE_DESTS ${ARG_DEST})
 
+  list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
+
+  set(${TARGET}_FILE_INDEX
+      ${SOURCE_FILE_IDS_LENGTH}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__source_file_ids
+      ${SOURCE_FILE_IDS}
+      PARENT_SCOPE
+  )
   set(${TARGET}__embed__source_files
       ${SOURCE_FILES}
       PARENT_SCOPE
@@ -135,6 +211,14 @@ function(embed_blob)
   )
   set(${TARGET}__embed__target_deps
       ${TARGET_DEPS}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__array_ids
+      ${ARRAY_IDS}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__array_values
+      ${ARRAY_VALUES}
       PARENT_SCOPE
   )
 
@@ -151,6 +235,10 @@ function(embed)
 
   if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
   if(NOT DEFINED ARG_COMPRESSION)
@@ -171,6 +259,9 @@ function(embed)
   set(EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
 
   set(EMBED_SCRIPT__ID "${TARGET}")
+  set(EMBED_SCRIPT__ARRAY_IDS "${${TARGET}__embed__array_ids}")
+  set(EMBED_SCRIPT__ARRAY_VALUES "${${TARGET}__embed__array_values}")
+  set(EMBED_SCRIPT__FILE_IDS "${${TARGET}__embed__source_file_ids}")
   set(EMBED_SCRIPT__FILE_PATHS "${${TARGET}__embed__source_files}")
   set(EMBED_SCRIPT__FILE_DESTS "${${TARGET}__embed__source_file_dests}")
   set(EMBED_SCRIPT__INCLUDE_DIRS "${${TARGET}__embed__include_directories}")

@@ -91,8 +91,7 @@ std::vector<std::string> input_type_names(
 
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
-                      std::string const& udf_cuda_source,
-                      std::vector<std::string> const& extra_options)
+                      std::string const& udf_cuda_source)
 {
   CUDF_FUNC_RANGE();
 
@@ -105,25 +104,11 @@ kernel get_udf_kernel(std::string const& source_file,
   char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
     {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
 
-  constexpr int min_pch_cuda_version     = 12800;  // CUDA 12.8
-  constexpr int min_minimal_cuda_version = 12800;  // CUDA 12.8
-
-  int runtime_version;
-  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
-
-  std::vector<std::string> options;
-  options.emplace_back("-arch=sm_.");
-
   return get_kernel(std::format("{}.jit.cu", source_file),
                     source_file,
                     include_names,
                     include_headers,
-                    kernel_name,
-                    true,  // TODO: use context config
-                    runtime_version >= min_pch_cuda_version,
-                    runtime_version >= min_minimal_cuda_version,
-                    false,  // TODO: use context config
-                    extra_options);
+                    kernel_name);
 }
 
 }  // namespace jit

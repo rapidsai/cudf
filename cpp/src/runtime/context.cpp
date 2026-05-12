@@ -112,11 +112,15 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
-    bool disable_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
-    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+    bool dump_codegen          = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit               = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool preload_jit_cache     = get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
+    bool disable_jit_cache     = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
+    bool clear_jit_cache       = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+    bool disable_cuda_cache    = get_bool_env_or("LIBCUDF_JIT_DISABLE_CUDA_CACHE", false);
+    bool jit_verbose           = get_bool_env_or("LIBCUDF_JIT_VERBOSE", false);
+    bool dump_jit_trace        = get_bool_env_or("LIBCUDF_JIT_DUMP_TRACE", false);
+    bool dump_jit_time_profile = get_bool_env_or("LIBCUDF_JIT_DUMP_TIME_PROFILE", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
 
@@ -132,6 +136,10 @@ void initialize(init_flags flags)
                        .preload_jit_cache          = preload_jit_cache,
                        .disable_jit_cache          = disable_jit_cache,
                        .clear_jit_cache            = clear_jit_cache,
+                       .disable_cuda_cache         = disable_cuda_cache,
+                       .jit_verbose                = jit_verbose,
+                       .dump_jit_trace             = dump_jit_trace,
+                       .dump_jit_time_profile      = dump_jit_time_profile,
                        .rtcx_cache_dir             = rtcx_cache_dir,
                        .jit_bundle_dir             = jit_bundle_dir,
                        .jit_pch_dir                = jit_pch_dir,

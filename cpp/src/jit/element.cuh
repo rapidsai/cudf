@@ -9,17 +9,12 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <jit/element_storage.cuh>
-#include <jit/lite/lite.cuh>
 #include <jit/sync.cuh>
 
-namespace cudf {
-
-template <typename Storage, typename ElementType>
-inline constexpr bool storage_compatible =
-  sizeof(ElementType) <= sizeof(Storage) && alignof(ElementType) <= alignof(Storage);
+namespace CUDF_EXPORT cudf {
 
 template <bool has_nulls, typename element_storage_t>
-__device__ void load_element(column_device_view const* column,
+__device__ void load_element(column_device_view_core const* column,
                              size_type element_index,
                              element_storage_t* storage)
 {
@@ -38,37 +33,37 @@ __device__ void load_element(column_device_view const* column,
   };
 
   switch (column->type().id()) {
-    case type_id::INT8: op.template operator()<int8_t>(); break;
-    case type_id::INT16: op.template operator()<int16_t>(); break;
-    case type_id::INT32: op.template operator()<int32_t>(); break;
-    case type_id::INT64: op.template operator()<int64_t>(); break;
-    case type_id::UINT8: op.template operator()<uint8_t>(); break;
+    case type_id::INT8:
+    case type_id::UINT8:
+    case type_id::BOOL8: op.template operator()<uint8_t>(); break;
+    case type_id::INT16:
     case type_id::UINT16: op.template operator()<uint16_t>(); break;
-    case type_id::UINT32: op.template operator()<uint32_t>(); break;
-    case type_id::UINT64: op.template operator()<uint64_t>(); break;
-    case type_id::FLOAT32: op.template operator()<float>(); break;
-    case type_id::FLOAT64: op.template operator()<double>(); break;
-    case type_id::BOOL8: op.template operator()<bool>(); break;
+    case type_id::INT32:
+    case type_id::UINT32:
+    case type_id::FLOAT32:
+    case type_id::TIMESTAMP_DAYS:
+    case type_id::DURATION_DAYS: op.template operator()<uint32_t>(); break;
+    case type_id::INT64:
+    case type_id::UINT64:
+    case type_id::FLOAT64:
+    case type_id::TIMESTAMP_SECONDS:
+    case type_id::TIMESTAMP_MILLISECONDS:
+    case type_id::TIMESTAMP_MICROSECONDS:
+    case type_id::TIMESTAMP_NANOSECONDS:
+    case type_id::DURATION_SECONDS:
+    case type_id::DURATION_MILLISECONDS:
+    case type_id::DURATION_MICROSECONDS:
+    case type_id::DURATION_NANOSECONDS: op.template operator()<uint64_t>(); break;
     case type_id::DECIMAL32: op.template operator()<numeric::decimal32>(); break;
     case type_id::DECIMAL64: op.template operator()<numeric::decimal64>(); break;
     case type_id::DECIMAL128: op.template operator()<numeric::decimal128>(); break;
-    case type_id::TIMESTAMP_DAYS: op.template operator()<timestamp_D>(); break;
-    case type_id::TIMESTAMP_SECONDS: op.template operator()<timestamp_s>(); break;
-    case type_id::TIMESTAMP_MILLISECONDS: op.template operator()<timestamp_ms>(); break;
-    case type_id::TIMESTAMP_MICROSECONDS: op.template operator()<timestamp_us>(); break;
-    case type_id::TIMESTAMP_NANOSECONDS: op.template operator()<timestamp_ns>(); break;
-    case type_id::DURATION_DAYS: op.template operator()<duration_D>(); break;
-    case type_id::DURATION_SECONDS: op.template operator()<duration_s>(); break;
-    case type_id::DURATION_MILLISECONDS: op.template operator()<duration_ms>(); break;
-    case type_id::DURATION_MICROSECONDS: op.template operator()<duration_us>(); break;
-    case type_id::DURATION_NANOSECONDS: op.template operator()<duration_ns>(); break;
     case type_id::STRING: op.template operator()<string_view>(); break;
     default: CUDF_UNREACHABLE();
   }
 }
 
 template <bool has_nulls, typename element_storage_t>
-__device__ void store_element(mutable_column_device_view const* column,
+__device__ void store_element(mutable_column_device_view_core const* column,
                               element_storage_t const* storage,
                               size_type element_index,
                               unsigned int active_mask)
@@ -95,32 +90,32 @@ __device__ void store_element(mutable_column_device_view const* column,
   };
 
   switch (column->type().id()) {
-    case type_id::INT8: op.template operator()<int8_t>(); break;
-    case type_id::INT16: op.template operator()<int16_t>(); break;
-    case type_id::INT32: op.template operator()<int32_t>(); break;
-    case type_id::INT64: op.template operator()<int64_t>(); break;
-    case type_id::UINT8: op.template operator()<uint8_t>(); break;
+    case type_id::INT8:
+    case type_id::UINT8:
+    case type_id::BOOL8: op.template operator()<uint8_t>(); break;
+    case type_id::INT16:
     case type_id::UINT16: op.template operator()<uint16_t>(); break;
-    case type_id::UINT32: op.template operator()<uint32_t>(); break;
-    case type_id::UINT64: op.template operator()<uint64_t>(); break;
-    case type_id::FLOAT32: op.template operator()<float>(); break;
-    case type_id::FLOAT64: op.template operator()<double>(); break;
-    case type_id::BOOL8: op.template operator()<bool>(); break;
+    case type_id::INT32:
+    case type_id::UINT32:
+    case type_id::FLOAT32:
+    case type_id::TIMESTAMP_DAYS:
+    case type_id::DURATION_DAYS: op.template operator()<uint32_t>(); break;
+    case type_id::INT64:
+    case type_id::UINT64:
+    case type_id::FLOAT64:
+    case type_id::TIMESTAMP_SECONDS:
+    case type_id::TIMESTAMP_MILLISECONDS:
+    case type_id::TIMESTAMP_MICROSECONDS:
+    case type_id::TIMESTAMP_NANOSECONDS:
+    case type_id::DURATION_SECONDS:
+    case type_id::DURATION_MILLISECONDS:
+    case type_id::DURATION_MICROSECONDS:
+    case type_id::DURATION_NANOSECONDS: op.template operator()<uint64_t>(); break;
     case type_id::DECIMAL32: op.template operator()<numeric::decimal32>(); break;
     case type_id::DECIMAL64: op.template operator()<numeric::decimal64>(); break;
     case type_id::DECIMAL128: op.template operator()<numeric::decimal128>(); break;
-    case type_id::TIMESTAMP_DAYS: op.template operator()<timestamp_D>(); break;
-    case type_id::TIMESTAMP_SECONDS: op.template operator()<timestamp_s>(); break;
-    case type_id::TIMESTAMP_MILLISECONDS: op.template operator()<timestamp_ms>(); break;
-    case type_id::TIMESTAMP_MICROSECONDS: op.template operator()<timestamp_us>(); break;
-    case type_id::TIMESTAMP_NANOSECONDS: op.template operator()<timestamp_ns>(); break;
-    case type_id::DURATION_DAYS: op.template operator()<duration_D>(); break;
-    case type_id::DURATION_SECONDS: op.template operator()<duration_s>(); break;
-    case type_id::DURATION_MILLISECONDS: op.template operator()<duration_ms>(); break;
-    case type_id::DURATION_MICROSECONDS: op.template operator()<duration_us>(); break;
-    case type_id::DURATION_NANOSECONDS: op.template operator()<duration_ns>(); break;
     default: CUDF_UNREACHABLE();
   }
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
