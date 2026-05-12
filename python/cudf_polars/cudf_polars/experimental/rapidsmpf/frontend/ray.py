@@ -372,17 +372,22 @@ class RankActor:
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        # Always collect the final metadata so we can suppress duplicated
-        # outputs on non-root ranks. The client concatenates per-rank results,
-        # so without this dedup an output marked ``duplicated=True`` would be
-        # N-counted.
+        #
+        # We always collect metadata internally (collect_metadata=True below)
+        # so we can read metadata[-1].duplicated to decide whether to suppress
+        # this rank's output. The client concatenates each rank's result, so
+        # without this dedup an output marked duplicated=True would appear N
+        # times. The external collect_metadata parameter still controls whether
+        # the collected list is returned to the client (see the return
+        # statement), which is the cost we care about saving when the caller
+        # doesn't need the metadata.
         df, metadata = evaluate_on_rank(
             self._ctx,
             self._comm,
             self._py_executor,
             ir,
             config_options,
-            collect_metadata=collect_metadata,
+            collect_metadata=True,
             query_id=query_id,
         )
         if self._comm.rank != 0 and metadata and metadata[-1].duplicated:
