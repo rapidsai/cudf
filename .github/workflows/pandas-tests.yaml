@@ -18,10 +18,15 @@ on:
         required: true
         type: string
 
+permissions: {}
+
 jobs:
   pandas-tests:
       # run the Pandas unit tests
-      secrets: inherit
+      permissions:
+        contents: read
+        id-token: write
+      secrets: inherit # zizmor: ignore[secrets-inherit]
       uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
       with:
         build_type: nightly
