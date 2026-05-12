@@ -162,7 +162,7 @@ class roaring_bitmap {
   void contains_async(cudf::column_view const& keys,
                       cudf::mutable_column_view const& output,
                       rmm::cuda_stream_view stream) const;
-  
+
  private:
   //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
   class impl;
@@ -173,16 +173,15 @@ class roaring_bitmap {
 namespace iceberg {
 
 /**
- * @brief Checks whether a portable serialized deletion vector payload is already in a
- * normalized format accepted by `cudf::roaring_bitmap`
+ * @brief Checks whether a Iceberg `DV-v1` blob payload is normalized
+ * for `cudf::roaring_bitmap`
  *
- * A deletion vector payload is considered normalized when every embedded 32-bit bucket uses the
- * no-run cookie and includes the offset table. Run-encoded bitmaps or no-run bitmaps with fewer
- * than 4 containers (which omit the offset table per the portable spec) are not considered
- * normalized.
+ * A roaring bitmap payload is considered normalized when every embedded 32-bit bucket uses the
+ * no-run cookie and includes an offset table.
  *
- * @param type The bitmap key type (BITS_32 or BITS_64)
- * @param payload A string view over the serialized Puffin blob bytes
+ * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
+ * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
+ * roaring bitmap bucket in the `DV-v1` blob  (32 bit)
  * @return Whether the payload is already normalized
  *
  * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
@@ -190,15 +189,14 @@ namespace iceberg {
 [[nodiscard]] bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload);
 
 /**
- * @brief Normalizes a portable serialized deletion vector payload into the normalized format
- * accepted by `cudf::roaring_bitmap`
+ * @brief Normalizes a Iceberg `DV-v1` blob payload for `cudf::roaring_bitmap`
  *
- * This converts all embedded 32-bit run-encoded containers to array/bitset format and injects
- * the offset table when it is missing (fewer than 4 containers). If the payload is already
- * normalized this function returns a copy of the input.
+ * Converts all embedded 32-bit run-encoded containers to array/bitset format and injects
+ * offset tables when missing.
  *
- * @param type The bitmap key type (BITS_32 or BITS_64)
- * @param payload A string view over the serialized Puffin blob bytes
+ * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
+ * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
+ * roaring bitmap bucket in the `DV-v1` blob  (32 bit)
  * @return A normalized copy of the payload
  *
  * @throws cudf::logic_error if the payload is too small or contains an invalid cookie

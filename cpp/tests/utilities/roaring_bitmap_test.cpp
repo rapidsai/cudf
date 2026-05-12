@@ -14,6 +14,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+#include <cstring>
+#include <ranges>
+#include <string_view>
+#include <unordered_set>
 #include <vector>
 
 template <typename T>
@@ -107,4 +112,296 @@ TEST_F(RoaringBitmapErrorTest, EmptyProbeKeys)
   auto probe_keys = cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT64});
   EXPECT_NO_THROW(std::ignore = bitmap.contains_async(
                     probe_keys->view(), stream, cudf::get_current_device_resource_ref()));
+}
+
+namespace {
+
+/**
+ * @brief Maps a `Key` type to its corresponding `roaring_bitmap_type`
+ */
+template <typename Key>
+constexpr auto bitmap_type_v =
+  std::is_same_v<Key, cuda::std::uint64_t> ? cudf::roaring_bitmap_type::BITS_64
+                                           : cudf::roaring_bitmap_type::BITS_32;
+
+/**
+ * @brief Composes a 32-bit or 64-bit key from a high-32-bit and low-32-bit half
+ */
+template <typename Key>
+Key make_key(uint32_t high_bits, uint32_t low_bits)
+{
+  if constexpr (std::is_same_v<Key, cuda::std::uint64_t>) {
+    return (static_cast<Key>(high_bits) << 32) | low_bits;
+  } else {
+    return low_bits;
+  }
+}
+
+/**
+ * @brief Builds a vector of `Key`s by pairing `high_bits` with each value in a range of low bits
+ */
+template <typename Key>
+auto make_keys(uint32_t high_bits, std::ranges::input_range auto&& low_bits)
+{
+  auto keys = std::vector<Key>{};
+  keys.reserve(std::ranges::distance(low_bits));
+  std::ranges::transform(low_bits, std::back_inserter(keys), [high_bits](uint32_t lo) {
+    return make_key<Key>(high_bits, lo);
+  });
+  return keys;
+}
+
+/**
+ * @brief Generates keys that span multiple roaring containers within a single 32-bit block
+ */
+template <typename Key>
+std::vector<Key> make_many_container_keys(uint32_t high_bits       = 0,
+                                          uint32_t keys_per_bucket = 100,
+                                          uint32_t num_buckets     = 4)
+{
+  auto low_bits = std::views::iota(uint32_t{0}, num_buckets * keys_per_bucket) |
+                  std::views::transform([&](auto i) {
+                    return ((i / keys_per_bucket) << 16) + (i % keys_per_bucket) * 2;
+                  });
+  return make_keys<Key>(high_bits, low_bits);
+}
+
+/**
+ * @brief Generates keys that fit in a single roaring container (sparse, even-valued lows)
+ */
+template <typename Key>
+std::vector<Key> make_single_container_keys(uint32_t high_bits = 0, uint32_t num_keys = 200)
+{
+  auto low_bits =
+    std::views::iota(uint32_t{0}, num_keys) | std::views::transform([](auto i) { return i * 2; });
+  return make_keys<Key>(high_bits, low_bits);
+}
+
+/**
+ * @brief Generates a dense run of consecutive keys to trigger run-container encoding
+ */
+template <typename Key>
+std::vector<Key> make_run_container_keys(uint32_t high_bits = 0,
+                                         uint32_t run_start = 10,
+                                         uint32_t run_size  = 500)
+{
+  return make_keys<Key>(high_bits, std::views::iota(run_start, run_start + run_size));
+}
+
+/**
+ * @brief Concatenates `lhs` and `rhs`
+ */
+template <typename Key>
+std::vector<Key> concat_keys(std::vector<Key> lhs, std::vector<Key> const rhs)
+{
+  lhs.insert(lhs.end(), rhs.begin(), rhs.end());
+  return lhs;
+}
+
+/**
+ * @brief Removes the offset table from the first 32-bit bitmap in a serialized payload, producing
+ * a portable-but-unnormalized payload
+ */
+std::vector<cuda::std::byte> strip_first_no_run_offset_table(cudf::roaring_bitmap_type bitmap_type,
+                                                             std::vector<cuda::std::byte> payload)
+{
+  constexpr uint32_t no_run_cookie            = 12'346;
+  constexpr std::size_t key_card_size         = sizeof(uint16_t) + sizeof(uint16_t);
+  constexpr std::size_t offset_size           = sizeof(uint32_t);
+  constexpr std::size_t no_run_prefix         = sizeof(uint32_t) + sizeof(uint32_t);
+  constexpr std::size_t offset_table_min_size = 4;
+
+  auto const load_uint32_t = [&](std::size_t offset) {
+    uint32_t value;
+    std::memcpy(&value, payload.data() + offset, sizeof(value));
+    return value;
+  };
+
+  auto const bitmap32_offset = bitmap_type == cudf::roaring_bitmap_type::BITS_64
+                                 ? sizeof(uint64_t) + sizeof(uint32_t)
+                                 : std::size_t{0};
+  EXPECT_EQ(load_uint32_t(bitmap32_offset), no_run_cookie);
+  auto const num_containers = load_uint32_t(bitmap32_offset + sizeof(uint32_t));
+  EXPECT_LT(num_containers, offset_table_min_size);
+
+  auto const offset_table_begin = bitmap32_offset + no_run_prefix + num_containers * key_card_size;
+  auto const offset_table_end   = offset_table_begin + num_containers * offset_size;
+  payload.erase(payload.begin() + offset_table_begin, payload.begin() + offset_table_end);
+  return payload;
+}
+
+/**
+ * @brief Verifies that `cudf::roaring_bitmap` correctly queries `expected_keys` given a serialized
+ * roaring bitmap `payload`
+ */
+template <typename Key>
+void verify_membership(cudf::host_span<cuda::std::byte const> payload,
+                       cudf::host_span<Key const> expected_keys,
+                       cudf::host_span<Key const> probe_keys)
+{
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  auto bitmap   = cudf::roaring_bitmap(bitmap_type_v<Key>, payload);
+  auto keys_col = cudf::test::fixed_width_column_wrapper<Key>(probe_keys.begin(), probe_keys.end());
+
+  auto result_col = bitmap.contains_async(keys_col, stream, mr);
+  auto results    = cudf::detail::make_host_vector_async(
+    cudf::device_span<bool const>(result_col->view().template data<bool>(), probe_keys.size()),
+    stream);
+  stream.synchronize();
+
+  auto const expected_set = std::unordered_set<Key>(expected_keys.begin(), expected_keys.end());
+  auto const indices      = std::views::iota(std::size_t{0}, probe_keys.size());
+  std::ranges::for_each(indices, [&](std::size_t i) {
+    EXPECT_EQ(static_cast<bool>(results[i]), expected_set.contains(probe_keys[i]))
+      << "mismatch at key index " << i << " (key=" << probe_keys[i] << ")";
+  });
+}
+
+/**
+ * @brief Checks that the payload is already normalized and queries against it
+ */
+template <typename Key>
+void verify_normalized_payload(cudf::host_span<cuda::std::byte const> payload,
+                               cudf::host_span<Key const> expected_keys,
+                               cudf::host_span<Key const> probe_keys)
+{
+  auto const type = bitmap_type_v<Key>;
+  auto const payload_sv =
+    std::string_view(reinterpret_cast<char const*>(payload.data()), payload.size_bytes());
+
+  EXPECT_TRUE(cudf::iceberg::is_roaring_bitmap_normalized(type, payload_sv));
+  auto const normalized = cudf::iceberg::normalize_roaring_bitmap(type, payload_sv);
+  EXPECT_EQ(normalized, payload_sv);
+
+  verify_membership<Key>(payload, expected_keys, probe_keys);
+}
+
+/**
+ * @brief Checks that the payload is not normalized, normalizes it, and queries against it
+ */
+template <typename Key>
+void verify_unnormalized_payload(cudf::host_span<cuda::std::byte const> payload,
+                                 cudf::host_span<Key const> expected_keys,
+                                 cudf::host_span<Key const> probe_keys)
+{
+  auto const type = bitmap_type_v<Key>;
+  auto const payload_sv =
+    std::string_view(reinterpret_cast<char const*>(payload.data()), payload.size_bytes());
+
+  EXPECT_FALSE(cudf::iceberg::is_roaring_bitmap_normalized(type, payload_sv));
+  auto const normalized = cudf::iceberg::normalize_roaring_bitmap(type, payload_sv);
+  EXPECT_TRUE(cudf::iceberg::is_roaring_bitmap_normalized(type, normalized));
+  EXPECT_NE(normalized, payload_sv);
+
+  auto const normalized_span = cudf::host_span<cuda::std::byte const>(
+    reinterpret_cast<cuda::std::byte const*>(normalized.data()), normalized.size());
+  verify_membership<Key>(normalized_span, expected_keys, probe_keys);
+}
+
+}  // namespace
+
+template <typename T>
+struct RoaringBitmapNormalizeTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(RoaringBitmapNormalizeTest, RoaringTypes);
+
+struct RoaringBitmapNormalizeTest64 : public cudf::test::BaseFixture {};
+
+// Many-container, no-run payload is already normalized
+TYPED_TEST(RoaringBitmapNormalizeTest, AlreadyNormalizedManyContainers)
+{
+  using Key             = TypeParam;
+  auto const keys       = make_many_container_keys<Key>();
+  auto const probe_keys = concat_keys(keys, make_run_container_keys<Key>());
+
+  // `serialize_roaring_bitmap` (CRoaring) includes the offset table when a 32-bit block has at
+  // least 4 containers and run optimization is disabled.
+  auto const serialized = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false);
+
+  verify_normalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// 64-bit normalized payload with multiple high-32-bit keys. Each embedded 32-bit bitmap is
+// normalized as well
+TEST_F(RoaringBitmapNormalizeTest64, AlreadyNormalizedMultipleHighKeys)
+{
+  using Key       = cuda::std::uint64_t;
+  auto const keys = concat_keys(make_many_container_keys<Key>(0), make_many_container_keys<Key>(1));
+  auto const probe_keys = concat_keys(
+    keys, concat_keys(make_single_container_keys<Key>(0), make_single_container_keys<Key>(1)));
+  auto const serialized = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false);
+
+  verify_normalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// No-run payload with fewer than 4 containers omits the offset table per the portable spec, but
+// cudf::roaring_bitmap requires it, so this is not normalized.
+TYPED_TEST(RoaringBitmapNormalizeTest, MissingOffsetTable)
+{
+  using Key             = TypeParam;
+  auto const keys       = make_single_container_keys<Key>();
+  auto const probe_keys = concat_keys(keys, make_run_container_keys<Key>());
+  auto const serialized = strip_first_no_run_offset_table(
+    bitmap_type_v<Key>, serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false));
+
+  verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// 64-bit payload is unnormalized if any embedded 32-bit bitmap is missing offsets.
+TEST_F(RoaringBitmapNormalizeTest64, MissingOffsetTableMultipleHighKeys)
+{
+  using Key = cuda::std::uint64_t;
+  auto const keys =
+    concat_keys(make_single_container_keys<Key>(0), make_many_container_keys<Key>(1));
+  auto const probe_keys = concat_keys(
+    keys, concat_keys(make_run_container_keys<Key>(0), make_run_container_keys<Key>(1)));
+  auto const serialized = strip_first_no_run_offset_table(
+    bitmap_type_v<Key>, serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false));
+
+  verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// Run-optimized payload uses the run cookie, so it must be normalized
+TYPED_TEST(RoaringBitmapNormalizeTest, RunEncodedSingleContainer)
+{
+  using Key             = TypeParam;
+  auto const keys       = make_run_container_keys<Key>();
+  auto const probe_keys = make_single_container_keys<Key>();
+  auto const serialized = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/true);
+
+  verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// Run-optimized payload with many containers uses the run cookie, so it is not normalized
+// even though the portable payload includes an offset table.
+TYPED_TEST(RoaringBitmapNormalizeTest, RunEncodedManyContainers)
+{
+  using Key                       = TypeParam;
+  constexpr auto num_buckets      = uint32_t{4};
+  constexpr auto keys_per_bucket  = uint32_t{500};
+  constexpr auto probe_per_bucket = uint32_t{600};
+  auto const bucket_lo            = [](uint32_t per_bucket) {
+    return std::views::iota(uint32_t{0}, num_buckets * per_bucket) |
+           std::views::transform(
+             [per_bucket](uint32_t k) { return ((k / per_bucket) << 16) + (k % per_bucket); });
+  };
+  auto const keys       = make_keys<Key>(0, bucket_lo(keys_per_bucket));
+  auto const probe_keys = make_keys<Key>(0, bucket_lo(probe_per_bucket));
+  auto const serialized = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/true);
+
+  verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
+}
+
+// 64-bit payload is unnormalized if any embedded 32-bit bitmap uses the run cookie
+TEST_F(RoaringBitmapNormalizeTest64, RunEncodedMultipleHighKeys)
+{
+  using Key       = cuda::std::uint64_t;
+  auto const keys = concat_keys(make_run_container_keys<Key>(0), make_many_container_keys<Key>(1));
+  auto const probe_keys =
+    concat_keys(make_single_container_keys<Key>(0), make_single_container_keys<Key>(1));
+  auto const serialized = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/true);
+
+  verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
 }

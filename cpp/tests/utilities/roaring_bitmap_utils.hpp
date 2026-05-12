@@ -12,9 +12,12 @@
 
 /**
  * @brief Constructs a 32 or 64-bit serialized roaring bitmap containing the given keys
+ *
+ * When `run_optimize` is true, the bitmap is run-optimized before serialization, which produces a
+ * payload that is not in the normalized format accepted by `cudf::roaring_bitmap`.
  */
 template <typename Key>
-inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys)
+inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys, bool run_optimize = false)
 {
   static_assert(
     std::is_same_v<Key, cuda::std::uint32_t> or std::is_same_v<Key, cuda::std::uint64_t>,
@@ -29,6 +32,8 @@ inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys)
       roaring::api::roaring_bitmap_add_bulk(bitmap, &ctx, key);
     }
 
+    if (run_optimize) { roaring::api::roaring_bitmap_run_optimize(bitmap); }
+
     auto const num_bytes = roaring::api::roaring_bitmap_portable_size_in_bytes(bitmap);
     serialized.resize(num_bytes);
     roaring::api::roaring_bitmap_portable_serialize(bitmap,
@@ -41,6 +46,8 @@ inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys)
     for (auto key : keys) {
       roaring::api::roaring64_bitmap_add_bulk(bitmap, &ctx, key);
     }
+
+    if (run_optimize) { roaring::api::roaring64_bitmap_run_optimize(bitmap); }
 
     auto const num_bytes = roaring::api::roaring64_bitmap_portable_size_in_bytes(bitmap);
     serialized.resize(num_bytes);
