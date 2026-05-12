@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/types.hpp>
 
 #include <cuda/std/algorithm>
 #include <cuda/std/limits>
@@ -52,7 +53,7 @@ class arrow_filter_policy {
    *
    * @param hash Hash function used to generate a key's fingerprint
    */
-  __host__ __device__ constexpr arrow_filter_policy(hasher hash = {}) : hash_{hash} {}
+  CUDF_HOST_DEVICE constexpr arrow_filter_policy(hasher hash = {}) : hash_{hash} {}
 
   /**
    * @brief Generates the hash value for a given key.
