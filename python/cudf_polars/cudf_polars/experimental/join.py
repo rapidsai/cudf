@@ -118,9 +118,7 @@ def _should_bcast_join(
 
     # Derive a partition-count threshold: how many target-sized partitions fit
     # in the broadcast byte budget?
-    bcast_partition_threshold = (
-        broadcast_limit // target_partition_size if target_partition_size > 0 else 0
-    )
+    bcast_partition_threshold = broadcast_limit // target_partition_size
 
     return (
         not large_shuffled

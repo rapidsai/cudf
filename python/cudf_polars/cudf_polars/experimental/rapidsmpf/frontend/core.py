@@ -103,13 +103,15 @@ class ClusterInfo:
         Value of ``CUDA_VISIBLE_DEVICES``, or ``None`` if unset.
     gpu_uuid
         UUID of the current CUDA device.
+    device_memory
+        Total device memory in bytes, or ``None`` if unknown.
     """
 
     pid: int
     hostname: str
     cuda_visible_devices: str | None
     gpu_uuid: str
-    device_memory: int = 0
+    device_memory: int | None = None
 
     @classmethod
     def local(cls) -> ClusterInfo:
@@ -125,7 +127,7 @@ class ClusterInfo:
             hostname=socket.gethostname(),
             cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
             gpu_uuid=cuda.core.Device().uuid,
-            device_memory=get_total_device_memory() or 0,
+            device_memory=get_total_device_memory(),
         )
 
 
@@ -184,12 +186,11 @@ class StreamingEngine(pl.GPUEngine):
 
         # Gather `min_device_size` from the cluster
         cluster_infos: list[ClusterInfo] = self.gather_cluster_info()
+        device_memories = [info.device_memory for info in cluster_infos]
         executor_options["min_device_size"] = (
-            min(
-                (info.device_memory for info in cluster_infos),
-                default=None,
-            )
-            or None
+            None
+            if any(dm is None for dm in device_memories)
+            else min(device_memories, default=None)
         )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't

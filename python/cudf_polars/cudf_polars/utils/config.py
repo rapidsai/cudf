@@ -271,7 +271,7 @@ def default_target_partition_size(min_device_size: int | None) -> int:
     if min_device_size is None:  # pragma: no cover
         return _DEFAULT_TARGET_PARTITION_SIZE
     # Limit to 2.5% of the minimum device memory across all ranks.
-    return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
+    return min(max(int(min_device_size * 0.025), 1), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
 def default_broadcast_limit(min_device_size: int | None) -> int:
@@ -281,7 +281,7 @@ def default_broadcast_limit(min_device_size: int | None) -> int:
     if min_device_size is None:  # pragma: no cover
         return _DEFAULT_BROADCAST_LIMIT
     # Limit to 15% of the minimum device memory across all ranks.
-    return min(int(min_device_size * 0.15), _DEFAULT_BROADCAST_LIMIT)
+    return min(max(int(min_device_size * 0.15), 1), _DEFAULT_BROADCAST_LIMIT)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -663,13 +663,16 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.target_partition_size == 0:
+        if (
+            isinstance(self.target_partition_size, int)
+            and self.target_partition_size < 1
+        ):
             object.__setattr__(
                 self,
                 "target_partition_size",
                 default_target_partition_size(self.min_device_size),
             )
-        if self.broadcast_limit == 0:
+        if isinstance(self.broadcast_limit, int) and self.broadcast_limit < 1:
             object.__setattr__(
                 self,
                 "broadcast_limit",
