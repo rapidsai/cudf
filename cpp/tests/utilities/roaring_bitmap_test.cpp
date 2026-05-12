@@ -222,7 +222,10 @@ std::vector<cuda::std::byte> strip_first_no_run_offset_table(cudf::roaring_bitma
                                  : std::size_t{0};
   EXPECT_EQ(load_uint32_t(bitmap32_offset), no_run_cookie);
   auto const num_containers = load_uint32_t(bitmap32_offset + sizeof(uint32_t));
-  EXPECT_LT(num_containers, offset_table_min_size);
+
+  // Per roaring portable format spec, the offset table is not emitted when
+  // `num_containers < offset_table_min_size` so already unnormalized.
+  if (num_containers < offset_table_min_size) { return payload; }
 
   auto const offset_table_begin = bitmap32_offset + no_run_prefix + num_containers * key_card_size;
   auto const offset_table_end   = offset_table_begin + num_containers * offset_size;

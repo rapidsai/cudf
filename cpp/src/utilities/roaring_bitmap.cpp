@@ -99,7 +99,7 @@ constexpr std::size_t num_runs_size = sizeof(uint16_t);
   std::size_t const header_end = no_run_header_prefix + num_containers * key_card_desc_size;
   if (payload.size() < header_end + num_containers * offset_entry_size) { return false; }
 
-  auto expected_offset = static_cast<uint32_t>(header_end + num_containers * offset_entry_size);
+  auto expected_offset = static_cast<size_t>(header_end + num_containers * offset_entry_size);
   return std::all_of(
     cuda::counting_iterator<uint32_t>(0),
     cuda::counting_iterator(num_containers),
@@ -114,6 +114,10 @@ constexpr std::size_t num_runs_size = sizeof(uint16_t);
       auto const card = static_cast<uint32_t>(card_minus1) + 1;
       expected_offset +=
         (card <= max_array_container_card) ? card * sizeof(uint16_t) : bitset_container_bytes;
+
+      // Verify the container's bytes fit within the payload
+      if (expected_offset > payload.size()) { return false; }
+
       return true;
     });
 }
@@ -221,6 +225,9 @@ template <roaring_bitmap_type Type>
 {
   auto const num_keys = unaligned_load<uint64_t>(payload);
 
+  // No keys, bitmap is normalized
+  if (num_keys == 0) { return true; }
+
   // Skip over the num_keys (8 bytes) field
   std::size_t pos = sizeof(uint64_t);
 
@@ -229,7 +236,8 @@ template <roaring_bitmap_type Type>
 
   return std::all_of(
     cuda::counting_iterator<uint64_t>(0), cuda::counting_iterator<uint64_t>(num_keys), [&](auto) {
-      if (pos + sizeof(uint32_t) > payload.size()) { return true; }
+      // A missing high-key indicates a truncated payload, reject it.
+      if (pos + sizeof(uint32_t) > payload.size()) { return false; }
       // Skip over the key (4 bytes)
       pos += sizeof(uint32_t);
       // Get the 32-bit roaring bitmap
