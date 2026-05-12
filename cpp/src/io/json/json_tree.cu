@@ -134,6 +134,7 @@ struct checked_token_level_output {
 
   __device__ TreeDepthT operator()(int32_t level) const
   {
+    static_assert(sizeof(TreeDepthT) < sizeof(int32_t));
     if (level < static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::min()) ||
         level > static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::max())) {
       cuda::atomic_ref<bool, cuda::thread_scope_device> flag{*depth_out_of_range};
@@ -309,11 +310,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                            push_pop_it + num_tokens,
                            token_level_output_it,
                            int32_t{0});
-    CUDF_EXPECTS(
-      !depth_out_of_range.value(stream),
-      "JSON token nesting depth is outside the supported range for TreeDepthT [" +
-        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::min())) + ", " +
-        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::max())) + "]");
 
     auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
                                                        token_levels.end(),
@@ -321,6 +317,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                                        node_levels.begin(),
                                                        is_node,
                                                        stream);
+    CUDF_EXPECTS(
+      !depth_out_of_range.value(stream),
+      "JSON token nesting depth is outside the supported range for TreeDepthT [" +
+        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::min())) + ", " +
+        std::to_string(static_cast<int32_t>(cuda::std::numeric_limits<TreeDepthT>::max())) + "]");
     CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) ==
                    static_cast<std::ptrdiff_t>(num_nodes),
                  "node level count mismatch");

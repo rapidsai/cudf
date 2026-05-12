@@ -1424,7 +1424,7 @@ TEST_F(JsonTest, RejectsUnquotedValuesWithInvalidLeadingChar)
 // Rejects JSON inputs whose nesting depth exceeds the supported maximum.
 TEST_F(JsonTest, DeeplyNestedInput)
 {
-  std::size_t const depth = std::numeric_limits<int8_t>::max() + 73;
+  std::size_t const depth = std::numeric_limits<int8_t>::max() + std::size_t{1};
   std::string s(depth, '[');
   s.append(depth, ']');
   auto const opts = cudf::io::json_reader_options::builder(
@@ -1437,7 +1437,7 @@ TEST_F(JsonTest, DeeplyNestedInput)
 // Accepts JSON inputs at the maximum supported nesting depth minus one.
 TEST_F(JsonTest, NestedInputBelowDepthLimit)
 {
-  std::size_t const depth = std::numeric_limits<int8_t>::max() - 1;
+  std::size_t const depth = std::numeric_limits<int8_t>::max();
   std::string s(depth, '[');
   s.append(depth, ']');
   auto const opts = cudf::io::json_reader_options::builder(
