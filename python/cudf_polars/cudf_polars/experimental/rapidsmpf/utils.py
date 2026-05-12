@@ -816,16 +816,16 @@ class NormalizedPartitioning:
 
         def _order_keys_match(scheme: OrderScheme) -> bool:
             if allow_subset:
-                n = min(len(scheme.keys), len(key_indices))
+                n = len(scheme.keys)
+                if n > len(key_indices):
+                    return False
             else:
                 if len(scheme.keys) != len(key_indices):
                     return False
                 n = len(key_indices)
             if order_based:
-                return all(
-                    ok == k for ok, k in zip(scheme.keys[:n], keys[:n], strict=True)
-                )
-            return tuple(k.column_index for k in scheme.keys[:n]) == key_indices[:n]
+                return all(ok == k for ok, k in zip(scheme.keys, keys[:n], strict=True))
+            return tuple(k.column_index for k in scheme.keys) == key_indices[:n]
 
         def _keys_match(
             scheme: object,
