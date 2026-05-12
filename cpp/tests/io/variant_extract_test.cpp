@@ -22,6 +22,15 @@
 
 namespace {
 
+// Wrap a single-row (metadata, value) pair as a VARIANT struct column.
+inline cudf::test::structs_column_wrapper wrap_single_variant(std::vector<uint8_t> const& meta,
+                                                              std::vector<uint8_t> const& val)
+{
+  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
+  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
+  return cudf::test::structs_column_wrapper{{m, v}};
+}
+
 // Three-row VARIANT fixture reused by multiple multi-row tests below.
 //   Row 0: dict {x,y}, value { x: INT32(7),  y: "hi"  }
 //   Row 1: dict {x,z}, value { x: INT32(42), z: INT32(99) }
@@ -32,23 +41,12 @@ inline cudf::test::structs_column_wrapper make_xyz_three_row_variant()
   std::vector<uint8_t> const v1 = {
     0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x07, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
   std::vector<uint8_t> const m2 = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'z'};
-  std::vector<uint8_t> const v2 = {0x02,
-                                   0x02,
-                                   0x00,
-                                   0x01,
-                                   0x00,
-                                   0x05,
-                                   0x0a,
-                                   0x14,
-                                   0x2a,
-                                   0x00,
-                                   0x00,
-                                   0x00,
-                                   0x14,
-                                   0x63,
-                                   0x00,
-                                   0x00,
-                                   0x00};
+  // clang-format off
+  std::vector<uint8_t> const v2 = {
+    0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x0a,
+    0x14, 0x2a, 0x00, 0x00, 0x00,
+    0x14, 0x63, 0x00, 0x00, 0x00};
+  // clang-format on
   std::vector<uint8_t> const m3 = {0x01, 0x01, 0x00, 0x01, 'y'};
   std::vector<uint8_t> const v3 = {0x02, 0x01, 0x00, 0x00, 0x04, 0x0d, 'z', 'z', 'z'};
 
@@ -65,12 +63,11 @@ struct VariantExtractTest : public cudf::test::BaseFixture {};
 
 TEST_F(VariantExtractTest, NullStructRow)
 {
-  cudf::test::lists_column_wrapper<uint8_t> meta{
-    {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')},
-    {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')}};
-  cudf::test::lists_column_wrapper<uint8_t> val{
-    {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00},
-    {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00}};
+  std::vector<uint8_t> const m = {0x01, 0x01, 0x00, 0x01, 'x'};
+  std::vector<uint8_t> const v = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> meta{{m.begin(), m.end()}, {0x00}};
+  cudf::test::lists_column_wrapper<uint8_t> val{{v.begin(), v.end()}, {0x00}};
+  // Use the validity vector to mask the second row null.
   cudf::test::structs_column_wrapper struc{{meta, val}, std::vector<bool>{true, false}};
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
@@ -85,9 +82,7 @@ TEST_F(VariantExtractTest, NonObjectValueYieldsNull)
   std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
   // Primitive int32 only (not wrapped in object)
   std::vector<uint8_t> const valb = {0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc                      = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
@@ -101,9 +96,7 @@ TEST_F(VariantExtractTest, InvalidMetadataYieldsNull)
   // Too short to be valid VARIANT metadata v1
   std::vector<uint8_t> const metab = {0x02};
   std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc                       = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
@@ -114,12 +107,10 @@ TEST_F(VariantExtractTest, InvalidMetadataYieldsNull)
 
 TEST_F(VariantExtractTest, UnsupportedMetadataVersionYieldsNull)
 {
-  // Header low nibble = 2 (variant version != v1) — must produce null on field lookup.
+  // Variant version != v1 must produce null on field lookup.
   std::vector<uint8_t> const metab = {0x02, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
   std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc                       = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
@@ -133,9 +124,7 @@ TEST_F(VariantExtractTest, TruncatedObjectValueYieldsNull)
   std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
   // Object header only (truncated)
   std::vector<uint8_t> const valb = {0x02};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc                      = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
@@ -144,9 +133,8 @@ TEST_F(VariantExtractTest, TruncatedObjectValueYieldsNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(VariantExtractTest, MultiRowDistinctKeysHandBuilt)
+TEST_F(VariantExtractTest, MultiRowDistinctKeys)
 {
-  // Same byte payloads as cpp/tests/scripts/parquet_variant_fixture_gen.py (varying dictionaries).
   auto struc  = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
   auto x      = cudf::io::parquet::experimental::extract_variant_field(
@@ -165,45 +153,16 @@ TEST_F(VariantExtractTest, MultiRowDistinctKeysHandBuilt)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*z, z_exp);
 }
 
-TEST_F(VariantExtractTest, MultiRowMixedKeys)
-{
-  // Row0: x=1, Row1: object missing x
-  std::vector<uint8_t> const m0 = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  std::vector<uint8_t> const v0 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x01, 0x00, 0x00, 0x00};
-  // Row1: only "y" in dictionary and object
-  std::vector<uint8_t> const m1 = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('y')};
-  std::vector<uint8_t> const v1 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x02, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta{{m0.begin(), m0.end()}, {m1.begin(), m1.end()}};
-  cudf::test::lists_column_wrapper<uint8_t> val{{v0.begin(), v0.end()}, {v1.begin(), v1.end()}};
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0}, {true, false});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
 TEST_F(VariantExtractTest, SlicedStructInputRespectsParentOffset)
 {
-  // 3 rows: row0 has x=1, row1 has x=2, row2 has x=3.  Slice to rows [1, 3) and
-  // verify the extracted column reflects the slice, not the underlying child rows.
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  std::vector<uint8_t> const v0    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x01, 0x00, 0x00, 0x00};
-  std::vector<uint8_t> const v1    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x02, 0x00, 0x00, 0x00};
-  std::vector<uint8_t> const v2    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x03, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta{
-    {metab.begin(), metab.end()}, {metab.begin(), metab.end()}, {metab.begin(), metab.end()}};
-  cudf::test::lists_column_wrapper<uint8_t> val{
-    {v0.begin(), v0.end()}, {v1.begin(), v1.end()}, {v2.begin(), v2.end()}};
-  cudf::test::structs_column_wrapper struc{{meta, val}};
-
+  // Slice rows [1, 3); extracted column must reflect the slice, not the underlying child rows.
+  auto const struc  = make_xyz_three_row_variant();
   auto const sliced = cudf::slice(struc, {1, 3}).front();
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     sliced, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{2, 3};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({42, 0}, {true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
@@ -239,9 +198,7 @@ TEST_F(VariantExtractTest, GetVariantFieldReturnsVariantStruct)
   std::vector<uint8_t> const metab = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'k'};
   std::vector<uint8_t> const valb  = {
     0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x07, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::get_variant_field(
     struc, "x", cudf::test::get_default_stream());
@@ -267,9 +224,7 @@ TEST_F(VariantExtractTest, GetVariantFieldMissingKeyAllNull)
 {
   std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
   std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc                       = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::get_variant_field(
     struc, "missing", cudf::test::get_default_stream());
@@ -579,15 +534,6 @@ inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
   return out;
 }
 
-// Wrap a single-row (metadata, value) pair as a VARIANT struct column.
-inline cudf::test::structs_column_wrapper wrap_single_variant(std::vector<uint8_t> const& meta,
-                                                              std::vector<uint8_t> const& val)
-{
-  cudf::test::lists_column_wrapper<uint8_t> m(meta.begin(), meta.end());
-  cudf::test::lists_column_wrapper<uint8_t> v(val.begin(), val.end());
-  return cudf::test::structs_column_wrapper{{m, v}};
-}
-
 // Shared fixture: Apache parquet-testing object_nested blob. See
 // apache_variant_fixtures.hpp for the underlying bytes and provenance.
 cudf::test::structs_column_wrapper make_apache_nested_col()
@@ -659,9 +605,7 @@ TEST_F(VariantExtractTest, GetNestedPathNonObjectIntermediate)
   std::vector<uint8_t> const valb  = {
     0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x05, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
 
-  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
-  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
-  cudf::test::structs_column_wrapper struc{{meta, val}};
+  auto struc = wrap_single_variant(metab, valb);
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.a.b", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
