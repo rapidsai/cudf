@@ -457,6 +457,22 @@ def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
     assert_eq(expected, result)
 
 
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+@pytest.mark.parametrize("reflect", [False, True])
+def test_numeric_series_pd_nat_raises(op, reflect):
+    data = [0, 1, 2, 3, 4]
+    pser = pd.Series(data, dtype="int64")
+    gser = cudf.Series(data, dtype="int64")
+    pleft, pright = (pd.NaT, pser) if reflect else (pser, pd.NaT)
+    gleft, gright = (pd.NaT, gser) if reflect else (gser, pd.NaT)
+    assert_exceptions_equal(
+        lfunc=op,
+        rfunc=op,
+        lfunc_args_and_kwargs=([pleft, pright],),
+        rfunc_args_and_kwargs=([gleft, gright],),
+    )
+
+
 def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
     data = pa.array([None, 1, 3], pa.decimal128(3, 2))
     gser = cudf.Series(data)

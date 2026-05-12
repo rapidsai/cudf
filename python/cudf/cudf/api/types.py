@@ -76,10 +76,7 @@ def is_numeric_dtype(obj):
         ):
             return False
     if isinstance(obj, cudf.Index):
-        return (
-            is_dtype_obj_numeric(obj.dtype, include_decimal=False)
-            and obj.dtype.kind != "b"
-        )
+        return is_dtype_obj_numeric(obj.dtype, include_decimal=False)
     return pd_types.is_numeric_dtype(obj)
 
 

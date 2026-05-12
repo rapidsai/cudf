@@ -1191,6 +1191,31 @@ def test_string_groupby_key_index():
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["min", "max", "first", "last"])
+def test_groupby_string_min_max_preserves_dtype(string_dtype, op):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": pd.array(["x", "y", "a", "b"], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+    assert got["b"].dtype == expect["b"].dtype
+
+
 @pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3, 5])
 def test_groupby_reduce_min_count(op, min_count):

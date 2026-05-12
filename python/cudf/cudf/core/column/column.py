@@ -85,11 +85,11 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
+    is_arrow_null_dtype,
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     is_pandas_nullable_numpy_dtype,
-    maybe_normalize_arrow_null,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
     pyarrow_dtype_to_cudf_dtype,
@@ -378,13 +378,9 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             "Normalize to np.dtype('O') before calling "
             "ColumnBase.create."
         )
-    if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-        dtype.pyarrow_dtype
-    ):
+    if is_arrow_null_dtype(dtype) and col.null_count() != col.size():
         raise ValueError(
-            f"dtype {dtype} is a pandas nullable string dtype with all nulls. "
-            "Normalize to an empty string column with the same pandas StringDtype "
-            "before calling ColumnBase.create."
+            f"dtype {dtype} can only be used with all-null columns."
         )
 
     dtype_kind = dtype.kind
@@ -961,15 +957,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         like copy-on-write. When validation is disabled, the caller is responsible for
         ensuring that col and its children are already normalized and wrapped.
         """
-        # For pandas nullable null types (ArrowDtype wrapping pa.null()),
-        # normalize the column data and dtype before construction.
-        col, dtype, old_dtype = maybe_normalize_arrow_null(col, dtype)
-
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
         self = target_cls.__new__(target_cls)
         self.plc_column = _wrap_and_validate(col, dtype) if validate else col
-        self._dtype = dtype if old_dtype is None else old_dtype
+        self._dtype = dtype
         self._distinct_count = {}
         self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
@@ -1419,6 +1411,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return self.copy()
 
     def to_arrow(self) -> pa.Array:
+        if is_arrow_null_dtype(self.dtype):
+            return pa.nulls(len(self))
         with self.access(mode="read", scope="internal"):
             return _handle_nulls(
                 self.plc_column.to_arrow(
@@ -3340,6 +3334,12 @@ def as_column(
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         if isinstance(arbitrary, pa.NullArray) and dtype is None:
             dtype = np.dtype("object")
+        elif is_arrow_null_dtype(dtype):
+            if arbitrary.null_count != len(arbitrary):
+                raise ValueError(
+                    f"dtype {dtype} can only be used with all-null data."
+                )
+            arbitrary = pa.nulls(len(arbitrary))
         column = ColumnBase.from_arrow(arbitrary)
         if nan_as_null is not False:
             column = column.nans_to_nulls()
@@ -3559,6 +3559,11 @@ def as_column(
             length = 1
         elif length < 0:
             raise ValueError(f"{length=} must be >=0.")
+
+        if is_arrow_null_dtype(dtype):
+            if is_na_like(arbitrary):
+                return column_empty(length, dtype=dtype)
+            pa.scalar(arbitrary, type=dtype.pyarrow_dtype)
 
         pa_type = None
         if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
@@ -3792,6 +3797,13 @@ def as_column(
 
     from_pandas = nan_as_null is None or nan_as_null
     if dtype is not None:
+        if is_arrow_null_dtype(dtype):
+            arbitrary = pa.array(
+                arbitrary,
+                type=dtype.pyarrow_dtype,
+                from_pandas=True,
+            )
+            return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
         try:
             arbitrary = pa.array(
                 arbitrary,
