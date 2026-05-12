@@ -783,8 +783,8 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
-            quent_logger=self._quent_logger,
             rapidsmpf_id=str(quent_context.engine.id),
+            quent_logger=self._quent_logger,
             owned_client=owned_client,
             owned_cluster=owned_cluster,
         )
@@ -934,9 +934,11 @@ class DaskEngine(StreamingEngine):
         Shut down all Dask workers' GPU resources.
 
         Drains buffered Quent events from all workers before tearing down,
-        then emits ``Engine.exit`` on the driver. If the cluster and client
-        were created by this engine, they are also closed. Safe to call more
-        than once. Must be called on the same thread that created the engine.
+        then emits ``Engine.exit`` on the client.
+
+        If the cluster and client were created by this engine, they are also
+        closed. Safe to call more than once. Must be called on the same thread
+        that created the engine.
 
         Raises
         ------
@@ -945,10 +947,8 @@ class DaskEngine(StreamingEngine):
         """
         if self._dask_context is None:
             return  # already shut down
-
         ctx = self._dask_context
         self._dask_context = None
-
         exceptions: list[Exception] = []
         try:
             # Teardown emits Worker.exit, then we drain all buffered events

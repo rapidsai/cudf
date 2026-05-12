@@ -54,6 +54,10 @@ class QuentContext:
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
 
+    @property
+    def _query_group_cache(self) -> set[uuid.UUID]:
+        return self._query_group_cache_  # type: ignore[attr-defined]
+
     def emit_engine_init_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine init event."""
         logger.emit(self.engine.init())
@@ -61,10 +65,6 @@ class QuentContext:
     def emit_engine_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine exit event."""
         logger.emit(self.engine.exit())
-
-    @property
-    def _query_group_cache(self) -> set[uuid.UUID]:
-        return self._query_group_cache_  # type: ignore[attr-defined]
 
     def emit_query_group_events(self, logger: QuentLogger) -> None:
         """
