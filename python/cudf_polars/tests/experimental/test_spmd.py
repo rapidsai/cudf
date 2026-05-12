@@ -16,6 +16,8 @@ import polars as pl
 
 import rmm.mr
 
+from cudf_polars.testing.asserts import assert_gpu_result_equal
+
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
@@ -309,8 +311,7 @@ def test_sort_slice_over_union_of_duplicated_streams(
         .agg(pl.col("score").sum())
     )
     lf = pl.concat([lf1, lf2]).sort("score").head(10)
-    result = lf.collect(engine=spmd_engine)
-    assert sorted(result["name"].to_list()) == ["alice", "bob"]
+    assert_gpu_result_equal(lf, engine=spmd_engine, check_row_order=False)
 
 
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:
