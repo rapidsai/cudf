@@ -1216,6 +1216,31 @@ def test_groupby_string_int_returning_aggs_dtype(string_dtype, op):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["min", "max", "first", "last"])
+def test_groupby_string_min_max_preserves_dtype(string_dtype, op):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": pd.array(["x", "y", "a", "b"], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+    assert got["b"].dtype == expect["b"].dtype
+
+
 def test_groupby_series_identity_column_exclusion():
     pdf = pd.DataFrame(
         {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}
@@ -1244,6 +1269,7 @@ def test_groupby_series_self_does_not_exclude():
     with cudf.option_context("mode.pandas_compatible", True):
         got = gsr.groupby(gsr).count()
     expect = psr.groupby(psr).count()
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])

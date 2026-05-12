@@ -691,6 +691,21 @@ class RollingGroupby(Rolling):
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
+    def __getitem__(self, arg) -> Self:
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        new = object.__new__(type(self))
+        # Preserve grouping context when subsetting columns.
+        Rolling.__init__(
+            new,
+            self.obj[arg],
+            self.window,
+            min_periods=self.min_periods,
+            center=self.center,
+        )
+        new._group_keys = self._group_keys
+        return new
+
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         index = MultiIndex._from_data(
             dict(
