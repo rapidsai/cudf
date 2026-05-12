@@ -234,7 +234,7 @@ class DefaultSingletonEngine(SPMDEngine):
 
     Examples
     --------
-    Routed through automatically by ``engine="gpu"``:
+    Constructed automatically when using ``engine="gpu"``:
 
     >>> result = df.lazy().collect(engine="gpu")  # doctest: +SKIP
 
