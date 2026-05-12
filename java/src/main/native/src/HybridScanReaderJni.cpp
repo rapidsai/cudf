@@ -40,10 +40,11 @@ Java_ai_rapids_cudf_HybridScanReader_createFromFooter(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
+    auto const len = checked_size_t(env, footer_length, "footerLength");
     auto opts =
       build_options(env, filter_handle, j_column_names, j_binary_as_str, time_unit_type_id);
     auto const* footer_ptr = reinterpret_cast<uint8_t const*>(footer_address);
-    cudf::host_span<uint8_t const> footer_bytes{footer_ptr, static_cast<size_t>(footer_length)};
+    cudf::host_span<uint8_t const> footer_bytes{footer_ptr, len};
     auto wrapper = std::make_unique<hybrid_scan_reader_wrapper>(footer_bytes, std::move(opts));
     return reinterpret_cast<jlong>(wrapper.release());
   }
@@ -93,9 +94,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupPageIndex(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
+    auto const len       = checked_size_t(env, buffer_length, "pageIndexBufferLength");
     auto* wrapper        = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
     auto const* host_ptr = reinterpret_cast<uint8_t const*>(buffer_address);
-    cudf::host_span<uint8_t const> bytes{host_ptr, static_cast<size_t>(buffer_length)};
+    cudf::host_span<uint8_t const> bytes{host_ptr, len};
     wrapper->reader->setup_page_index(bytes);
   }
   JNI_CATCH(env, );

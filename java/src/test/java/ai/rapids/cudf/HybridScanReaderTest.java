@@ -243,6 +243,7 @@ public class HybridScanReaderTest extends CudfTestBase {
   @Test
   void testSecondaryFiltersByteRangesEmptyForHighCardinalityInts(@TempDir Path tmp) throws IOException {
     try (OpenReader open = OpenReader.pageIndex(tmp).withFilter("zip_code", BinaryOperator.EQUAL, 12345)) {
+      open.withPageIndex();
       SecondaryFilterRanges sfr = open.reader.secondaryFiltersByteRanges(open.reader.allRowGroups());
       assertEquals(0, sfr.dictionaryPageRanges().length,
           "High-cardinality zip_code: ADAPTIVE policy skips dictionary emission "
@@ -333,6 +334,7 @@ public class HybridScanReaderTest extends CudfTestBase {
   @Test
   void testFilterRowGroupsWithDictionaryPagesThrowsForHighCardinality(@TempDir Path tmp) throws IOException {
     try (OpenReader open = OpenReader.pageIndex(tmp).withFilter("zip_code", BinaryOperator.EQUAL, 12345)) {
+      open.withPageIndex();
       int[] rgs = open.reader.allRowGroups();
       SecondaryFilterRanges sfr = open.reader.secondaryFiltersByteRanges(rgs);
       DeviceMemoryBuffer[] dictBufs = copyRangesToDevice(open.file, sfr.dictionaryPageRanges());

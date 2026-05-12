@@ -334,9 +334,14 @@ public class HybridScanReader implements AutoCloseable {
     long[] handles = materializeFilterColumnsWithKind(cleaner.nativeHandle, rowGroupIndices,
         addrs, lens, mode.getNativeValue(), allTrue);
     ColumnVector rowMask = new ColumnVector(handles[0]);
-    long[] tableHandles = Arrays.copyOfRange(handles, 1, handles.length);
-    Table table = new Table(tableHandles);
-    return new FilterMaterializationResult(table, rowMask);
+    try {
+      long[] tableHandles = Arrays.copyOfRange(handles, 1, handles.length);
+      Table table = new Table(tableHandles);
+      return new FilterMaterializationResult(table, rowMask);
+    } catch (Throwable t) {
+      rowMask.close();
+      throw t;
+    }
   }
 
   /**
@@ -393,6 +398,9 @@ public class HybridScanReader implements AutoCloseable {
    * <p>Calling this method again before {@link #takeFilterRowMask()} discards the previous
    * chunked-filter row mask.
    *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #takeFilterRowMask()} (or
+   * a re-setup); the native reader holds references to it across chunk calls.
+   *
    * @param chunkReadLimit  per-chunk byte limit, or 0 for no limit
    * @param passReadLimit   per-pass byte limit, or 0 for no limit
    * @param kind            how to initialise the row mask
@@ -445,6 +453,9 @@ public class HybridScanReader implements AutoCloseable {
   /**
    * Set up chunking state for payload-column materialization. Subsequent calls to
    * {@link #materializePayloadColumnsChunk(ColumnVector)} will yield successive chunks.
+   *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
+   * returns {@code false}; the native reader holds references to it across chunk calls.
    */
   public void setupChunkingForPayloadColumns(long chunkReadLimit,
                                              long passReadLimit,
@@ -473,6 +484,9 @@ public class HybridScanReader implements AutoCloseable {
   /**
    * Set up chunking state for all-column materialization (single-pass mode). Subsequent calls
    * to {@link #materializeAllColumnsChunk()} will yield successive chunks.
+   *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
+   * returns {@code false}; the native reader holds references to it across chunk calls.
    */
   public void setupChunkingForAllColumns(long chunkReadLimit,
                                          long passReadLimit,

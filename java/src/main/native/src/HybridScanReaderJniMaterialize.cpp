@@ -58,14 +58,18 @@ Java_ai_rapids_cudf_HybridScanReader_materializeFilterColumnsWithKind(JNIEnv* en
     auto result = wrapper->reader->materialize_filter_columns(
       holder.span(), spans, mut_view, mode, wrapper->options, stream, mr);
     // Pack: [row_mask_handle, table_col0, ..., table_colN]
-    auto table_handles = cudf::jni::convert_table_for_return(env, result.tbl);
-    cudf::jni::native_jlongArray table_arr(env, table_handles);
-    jsize n_table_cols = table_arr.size();
+    // Hold row_mask_col owned until after convert_table_for_return + the table-cols
+    // SetLongArrayRegion succeed; if either throws, the unique_ptr's destructor frees the
+    // row mask normally. Release only at the final SetLongArrayRegion, which has known-valid
+    // bounds and is the last possible throw point.
+    jsize n_table_cols = static_cast<jsize>(result.tbl->num_columns());
     jlongArray out     = env->NewLongArray(1 + n_table_cols);
     if (out == nullptr) { return nullptr; }
+    auto table_handles = cudf::jni::convert_table_for_return(env, result.tbl);
+    cudf::jni::native_jlongArray table_arr(env, table_handles);
+    env->SetLongArrayRegion(out, 1, n_table_cols, table_arr.data());
     jlong row_mask_handle = cudf::jni::release_as_jlong(std::move(row_mask_col));
     env->SetLongArrayRegion(out, 0, 1, &row_mask_handle);
-    env->SetLongArrayRegion(out, 1, n_table_cols, table_arr.data());
     return out;
   }
   JNI_CATCH(env, nullptr);
