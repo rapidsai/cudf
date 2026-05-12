@@ -322,7 +322,7 @@ TEST_F(RoaringBitmapNormalizeTest64, MissingOffsetTableMultipleHighKeys)
   verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
 }
 
-// Run-optimized payload uses the run cookie, so it must be normalized
+// Run-optimized payload uses the run cookie, so it must be unnormalized
 TYPED_TEST(RoaringBitmapNormalizeTest, RunEncodedSingleContainer)
 {
   using Key             = TypeParam;
