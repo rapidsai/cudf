@@ -94,7 +94,7 @@ def test_log_query_plan() -> None:
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": "single",
+            "cluster": "default_singleton",
             "max_rows_per_partition": 5,
         },
         memory_resource=rmm.mr.ManagedMemoryResource(),
