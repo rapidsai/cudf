@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from polars import Struct as pl_Struct, polars  # type: ignore[attr-defined]
+from polars import Struct as pl_Struct
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -23,13 +23,14 @@ from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
 )
 
 if TYPE_CHECKING:
     from typing import Self
+
+    from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -292,21 +293,6 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
-        elif self.name is StringFunction.Name.ZFill:
-            if isinstance(self.children[1], Literal):
-                _, width = self.children
-                assert isinstance(width, Literal)
-                if (
-                    POLARS_VERSION_LT_132
-                    and width.value is not None
-                    and width.value < 0
-                ):  # pragma: no cover
-                    dtypestr = polars.dtype_str_repr(width.dtype.polars_type)
-                    raise InvalidOperationError(
-                        f"conversion from `{dtypestr}` to `u64` "
-                        f"failed in column 'literal' for 1 out of "
-                        f"1 values: [{width.value}]"
-                    ) from None
 
     @staticmethod
     def _create_regex_program(
@@ -437,24 +423,6 @@ class StringFunction(Expr):
             else:
                 col_width = self.children[1].evaluate(df, context=context)
                 assert isinstance(col_width, Column)
-                all_gt_0 = plc.binaryop.binary_operation(
-                    col_width.obj,
-                    plc.Scalar.from_py(
-                        0, plc.DataType(plc.TypeId.INT64), stream=df.stream
-                    ),
-                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
-
-                if POLARS_VERSION_LT_132 and not plc.reduce.reduce(
-                    all_gt_0,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                ).to_py(stream=df.stream):  # pragma: no cover
-                    raise InvalidOperationError("fill conversion failed.")
-
                 return Column(
                     plc.strings.padding.zfill_by_widths(
                         column.obj, col_width.obj, stream=df.stream
@@ -981,21 +949,14 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            if POLARS_VERSION_LT_132:  # pragma: no cover
-                (column,) = columns
-                width_arg, char = self.options
-                pad_width = cast(int, width_arg)
-            else:
-                (column, width_col) = columns
-                (char,) = self.options
-                # TODO: Maybe accept a string scalar in
-                # cudf::strings::pad to avoid DtoH transfer
-                # See https://github.com/rapidsai/cudf/issues/20202
-                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
-                    stream=df.stream
-                )
-                assert width_py is not None
-                pad_width = int(width_py)
+            (column, width_col) = columns
+            (char,) = self.options
+            # TODO: Maybe accept a string scalar in
+            # cudf::strings::pad to avoid DtoH transfer
+            # See https://github.com/rapidsai/cudf/issues/20202
+            width_py = width_col.obj.to_scalar(stream=df.stream).to_py(stream=df.stream)
+            assert width_py is not None
+            pad_width = int(width_py)
 
             return Column(
                 plc.strings.padding.pad(
@@ -1008,20 +969,13 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            if POLARS_VERSION_LT_132:  # pragma: no cover
-                (column,) = columns
-                width_arg, char = self.options
-                pad_width = cast(int, width_arg)
-            else:
-                (column, width_col) = columns
-                (char,) = self.options
-                # TODO: Maybe accept a string scalar in
-                # cudf::strings::pad to avoid DtoH transfer
-                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
-                    stream=df.stream
-                )
-                assert width_py is not None
-                pad_width = int(width_py)
+            (column, width_col) = columns
+            (char,) = self.options
+            # TODO: Maybe accept a string scalar in
+            # cudf::strings::pad to avoid DtoH transfer
+            width_py = width_col.obj.to_scalar(stream=df.stream).to_py(stream=df.stream)
+            assert width_py is not None
+            pad_width = int(width_py)
 
             return Column(
                 plc.strings.padding.pad(
