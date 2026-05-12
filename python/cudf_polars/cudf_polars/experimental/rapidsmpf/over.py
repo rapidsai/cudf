@@ -32,8 +32,7 @@ Forward + return shuffle (non-decomposable aggregations)
     to the rank that originally received it (output channels are
     rank-local, so only the originating rank can emit), and the rows are
     reassembled in input order using stamps that travel with the data
-    through both shuffles. The forward shuffle is sized by sampling a few
-    input chunks so insertion can stream rather than buffering everything.
+    through both shuffles.
 """
 
 from __future__ import annotations
@@ -209,7 +208,7 @@ async def _evaluate_broadcast_chunk(
     gw_nodes: tuple[GroupedWindow, ...],
     ir_context: IRExecutionContext,
 ) -> TableChunk:
-    """Make chunk available then evaluate it against the pre-computed global aggregate."""
+    """Unspill the chunk and broadcast the global aggregate onto its rows."""
     chunk, extra = await make_table_chunks_available_or_wait(
         context,
         chunk,
@@ -468,8 +467,9 @@ async def _allgather_and_broadcast(
             reduction_ir, context, ir_context.get_cuda_stream()
         )
 
-    # AllGather the unreduced form so the final reduction operates over
-    # all ranks' partials; the post-aggregation step runs once after.
+    # AllGather the locally-reduced partials (pre post-aggregation) so a
+    # single global reduction combines them; the post-aggregation step
+    # runs once after.
     if comm.nranks > 1 and not metadata_in.duplicated:
         allgather = AllGatherManager(context, comm, collective_id)
         with allgather.inserting() as inserter:
@@ -561,8 +561,9 @@ async def _distribute_by_group(
     skip_insert: bool,  # noqa: FBT001
 ) -> list[int]:
     """Stream chunks from *ch_in* into the forward shuffle with origin stamps."""
-    # The replay channel re-sends metadata; we already have it, so discard.
-    await recv_metadata(ch_in, context)
+    # We already have the upstream metadata; signal we don't need the replay
+    # channel's copy.
+    await ch_in.shutdown_metadata(context)
 
     sequence_numbers: list[int] = []
     chunk_index = 0
