@@ -10,6 +10,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/experimental/variant.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -58,6 +59,22 @@ TEST_F(VariantExtractTest, InvalidMetadataYieldsNull)
 {
   // Too short to be valid VARIANT metadata v1
   std::vector<uint8_t> const metab = {0x02};
+  std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
+  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
+  cudf::test::structs_column_wrapper struc{{meta, val}};
+
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, UnsupportedMetadataVersionYieldsNull)
+{
+  // Header low nibble = 2 (variant version != v1) — must produce null on field lookup.
+  std::vector<uint8_t> const metab = {0x02, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
   std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
   cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
   cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
@@ -152,6 +169,29 @@ TEST_F(VariantExtractTest, MultiRowMixedKeys)
     struc, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0}, {true, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, SlicedStructInputRespectsParentOffset)
+{
+  // 3 rows: row0 has x=1, row1 has x=2, row2 has x=3.  Slice to rows [1, 3) and
+  // verify the extracted column reflects the slice, not the underlying child rows.
+  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
+  std::vector<uint8_t> const v0    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x01, 0x00, 0x00, 0x00};
+  std::vector<uint8_t> const v1    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x02, 0x00, 0x00, 0x00};
+  std::vector<uint8_t> const v2    = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x03, 0x00, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> meta{
+    {metab.begin(), metab.end()}, {metab.begin(), metab.end()}, {metab.begin(), metab.end()}};
+  cudf::test::lists_column_wrapper<uint8_t> val{
+    {v0.begin(), v0.end()}, {v1.begin(), v1.end()}, {v2.begin(), v2.end()}};
+  cudf::test::structs_column_wrapper struc{{meta, val}};
+
+  auto const sliced = cudf::slice(struc, {1, 3}).front();
+
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
+    sliced, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{2, 3};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
@@ -669,11 +709,11 @@ TEST_F(VariantExtractTest, GetNestedPathNonObjectIntermediate)
 TEST_F(VariantExtractTest, GetNestedPathEmptyThrows)
 {
   auto col = make_apache_nested_col();
-  EXPECT_THROW(
-    cudf::io::parquet::experimental::get_variant_field(col, "", cudf::test::get_default_stream()),
-    std::invalid_argument);
-  EXPECT_THROW(cudf::io::parquet::experimental::extract_variant_field(
-                 col, "", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream()),
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::get_variant_field(
+                 col, "", cudf::test::get_default_stream())),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::extract_variant_field(
+                 col, "", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream())),
                std::invalid_argument);
 }
 
@@ -767,10 +807,12 @@ TEST_F(VariantExtractTest, EmptyPathRejected)
 {
   auto struc  = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
-  EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, "", stream),
-               std::invalid_argument);
-  EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, "$", stream),
-               std::invalid_argument);
+  EXPECT_THROW(
+    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(struc, "", stream)),
+    std::invalid_argument);
+  EXPECT_THROW(
+    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(struc, "$", stream)),
+    std::invalid_argument);
 }
 
 TEST_F(VariantExtractTest, SyntaxErrors)
@@ -781,8 +823,9 @@ TEST_F(VariantExtractTest, SyntaxErrors)
   // for a follow-on phase and must currently throw, alongside obviously malformed paths.
   for (auto const* bad :
        {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.a.1bad", "$.", "$.'q'", "$['x']", "$.a[*]"}) {
-    EXPECT_THROW(cudf::io::parquet::experimental::get_variant_field(struc, bad, stream),
-                 std::invalid_argument)
+    EXPECT_THROW(
+      static_cast<void>(cudf::io::parquet::experimental::get_variant_field(struc, bad, stream)),
+      std::invalid_argument)
       << "path that should have thrown: " << bad;
   }
 }

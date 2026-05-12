@@ -37,7 +37,7 @@ namespace io::parquet::experimental {
  * Null is produced when the struct row is null, a name step's key is absent from the dictionary,
  * or the current value is not an object (`basic_type != 2`).
  *
- * Path grammar (object descent only — array indexing is reserved for a follow-on phase):
+ * Path grammar:
  *   path  := "$"? first_step ("." name)*
  *   first := name | "." name
  *   name  := [A-Za-z_][A-Za-z0-9_]*
@@ -56,7 +56,7 @@ namespace io::parquet::experimental {
  * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
  *         which are reserved for a later phase)
  */
-std::unique_ptr<column> get_variant_field(
+[[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,
   std::string_view path,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -76,7 +76,7 @@ std::unique_ptr<column> get_variant_field(
  * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
  */
-std::unique_ptr<column> cast_variant(
+[[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& variant_column,
   data_type desired_type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -97,7 +97,7 @@ std::unique_ptr<column> cast_variant(
  *
  * @throws std::invalid_argument on empty path or malformed syntax
  */
-std::unique_ptr<column> extract_variant_field(
+[[nodiscard]] std::unique_ptr<column> extract_variant_field(
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,

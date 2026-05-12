@@ -59,6 +59,7 @@ std::vector<variant_path_step> parse_variant_path(std::string_view path)
     char const c = path[pos];
     if (c == '.') {
       ++pos;
+      if (pos >= len) { throw_parse_error(path, pos - 1, "trailing '.' with no field name"); }
       std::string name;
       pos = read_unquoted_name(path, pos, name);
       steps.emplace_back(std::move(name));
