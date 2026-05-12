@@ -145,12 +145,11 @@ def _broadcast_gw_sync(
     by_tbl = plc.Table([c.obj for c in by_cols])
     group_keys_tbl = global_agg_df.select(key_names).table
 
-    scalar_named, _ = gw._split_named_expr()
-    _, out_names, out_dtypes = gw._build_groupby_requests(
-        scalar_named, chunk_df, by_cols=by_cols
+    out_names, out_dtypes = zip(
+        *((ne.name, ne.value.dtype) for ne in gw.named_aggs), strict=True
     )
     value_tbls = [
-        plc.Table([global_agg_df.column_map[ne.name].obj]) for ne in scalar_named
+        plc.Table([global_agg_df.column_map[ne.name].obj]) for ne in gw.named_aggs
     ]
 
     broadcasted_cols = gw._broadcast_agg_results(
