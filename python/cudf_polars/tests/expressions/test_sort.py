@@ -8,12 +8,8 @@ import pytest
 
 import polars as pl
 
-import pylibcudf as plc
-
-from cudf_polars import Translator
-from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 
 @pytest.mark.parametrize("descending", [False, True])
@@ -64,7 +60,7 @@ def test_sort_by_expression(
 @pytest.mark.parametrize("nulls_last", [False, True])
 @pytest.mark.parametrize("with_nulls", ["no_nulls", "nulls"])
 def test_setsorted(engine: pl.GPUEngine, request, descending, nulls_last, with_nulls):
-    if not POLARS_VERSION_LT_135 and POLARS_VERSION_LT_136:
+    if POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(
                 reason="See https://github.com/pola-rs/polars/pull/24981, "
@@ -80,28 +76,6 @@ def test_setsorted(engine: pl.GPUEngine, request, descending, nulls_last, with_n
     q = ldf.set_sorted("a", descending=descending)
 
     assert_gpu_result_equal(q, engine=engine)
-
-    if POLARS_VERSION_LT_135:
-        translator = Translator(q._ldf.visit(), pl.GPUEngine())
-
-        df = translator.translate_ir().evaluate(
-            cache={},
-            timer=None,
-            context=IRExecutionContext(),
-        )
-
-        a = df.column_map["a"]
-
-        assert a.is_sorted == plc.types.Sorted.YES
-        null_order = (
-            plc.types.NullOrder.AFTER
-            if (descending ^ nulls_last) and with_nulls == "nulls"
-            else plc.types.NullOrder.BEFORE
-        )
-        assert a.null_order == null_order
-        assert a.order == (
-            plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
-        )
 
 
 def test_sort_concat_filtered_to_empty(engine: pl.GPUEngine):

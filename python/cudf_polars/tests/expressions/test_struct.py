@@ -10,7 +10,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 
 @pytest.fixture
@@ -20,47 +19,23 @@ def ldf():
     )
 
 
-def test_field_getitem(engine: pl.GPUEngine, request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_field_getitem(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").struct[0])
     assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("fields", [("b",), ("b", "d"), ("^b.*|f.*$",)])
-def test_field(engine: pl.GPUEngine, request, ldf, fields):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_field(engine: pl.GPUEngine, ldf, fields):
     q = ldf.select(pl.col("a").struct.field(*fields))
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_unnest(engine: pl.GPUEngine, request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_unnest(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").struct.unnest())
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_json_encode(engine: pl.GPUEngine, request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_json_encode(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").struct.json_encode())
     assert_gpu_result_equal(q, engine=engine)
 
@@ -69,16 +44,10 @@ def test_json_encode(engine: pl.GPUEngine, request, ldf):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_json_encode_empty(engine: pl.GPUEngine, request):
+def test_json_encode_empty(engine: pl.GPUEngine):
     # ``write_json`` emits no lines for a zero-row input, so the
     # ``from_iterable_of_py(buff.split())`` round-trip cannot infer a
     # dtype. The expression short-circuits to an empty string column.
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
     ldf = pl.LazyFrame(
         {"a": pl.Series([], dtype=pl.Struct({"b": pl.String, "d": pl.String}))}
     )
@@ -86,13 +55,7 @@ def test_json_encode_empty(engine: pl.GPUEngine, request):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_rename_fields(engine: pl.GPUEngine, request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_rename_fields(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").struct.rename_fields(["1", "2", "3"]).struct.unnest())
     assert_gpu_result_equal(q, engine=engine)
 
@@ -109,13 +72,7 @@ def test_with_fields(ldf):
     [pl.col("a").name.prefix_fields, pl.col("a").name.suffix_fields],
     ids=lambda x: x.__name__,
 )
-def test_prefix_suffix_fields(engine: pl.GPUEngine, request, ldf, expr):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_prefix_suffix_fields(engine: pl.GPUEngine, ldf, expr):
     q = ldf.select(expr("foo").struct.unnest())
     assert_gpu_result_equal(q, engine=engine)
 
