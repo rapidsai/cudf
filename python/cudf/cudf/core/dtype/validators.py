@@ -35,6 +35,7 @@ def is_dtype_obj_string(obj: DtypeObj) -> bool:
             and (
                 pa.types.is_string(obj.pyarrow_dtype)
                 or pa.types.is_large_string(obj.pyarrow_dtype)
+                or pa.types.is_null(obj.pyarrow_dtype)
             )
         )
     )
