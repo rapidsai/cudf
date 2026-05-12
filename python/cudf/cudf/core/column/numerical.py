@@ -262,7 +262,25 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            if value is cudf.NA or value is None:
+            nan_value = isinstance(value, float) and np.isnan(value)
+            pandas_compatible = cudf.get_option("mode.pandas_compatible")
+            # Only treat ``np.nan`` as null in pandas-compatible mode. In
+            # legacy cudf mode, ``np.nan`` is stored as the float value
+            # ``nan`` in the data buffer (no null mask). Changing this
+            # silently turns any ``loc[...] = np.nan`` assignment into a
+            # masked-null, which breaks consumers that read the raw data
+            # buffer (e.g. the ``engine="jit"`` groupby kernel).
+            if (
+                value is cudf.NA
+                or value is None
+                or (nan_value and pandas_compatible)
+            ):
+                if self.dtype.kind == "b" and pandas_compatible:
+                    # pandas raises TypeError when setting a null into bool
+                    # because bool dtype cannot hold NA without dtype change.
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
                 scalar = pa.scalar(
                     None, type=cudf_dtype_to_pa_type(self.dtype)
                 )
@@ -288,6 +306,17 @@ class NumericalColumn(NumericalBaseColumn):
             if col.dtype.kind == "b" and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
+                )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and self.dtype.kind in {"i", "u"}
+                and col.dtype.kind == "f"
+                and not col.can_cast_safely(self.dtype)
+            ):
+                # pandas rejects float→int assignment when values can't be
+                # losslessly cast.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
                 )
             return col.astype(self.dtype)
 
