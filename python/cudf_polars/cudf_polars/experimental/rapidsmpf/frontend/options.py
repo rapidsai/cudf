@@ -383,10 +383,10 @@ class StreamingOptions:
         if bjl is not None:
             # TODO: Remove after nightlies adopt `default_broadcast_limit`
             warnings.warn(
-                "--broadcast-join-limit is deprecated; use --broadcast-limit instead. "
-                "--broadcast-limit accepts an absolute byte value, whereas "
-                "--broadcast-join-limit was a multiplier on --target-partition-size."
-                "--broadcast-join-limit is now IGNORED when --broadcast-limit is set.",
+                "broadcast_join_limit is deprecated; use broadcast_limit instead. "
+                "broadcast_limit accepts an absolute byte value, whereas "
+                "broadcast_join_limit was a multiplier on target_partition_size."
+                "broadcast_join_limit is now IGNORED when broadcast_limit is set.",
                 FutureWarning,
                 stacklevel=2,
             )

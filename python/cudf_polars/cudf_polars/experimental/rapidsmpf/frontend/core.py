@@ -34,11 +34,7 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import (
-    default_broadcast_limit,
-    default_target_partition_size,
-    get_total_device_memory,
-)
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     import uuid
@@ -186,34 +182,15 @@ class StreamingEngine(pl.GPUEngine):
             exit_stack or contextlib.ExitStack()
         )
 
-        # Choose good defaults for target_partition_size and broadcast_limit,
-        # but only when neither the key nor its backing env var is already set.
-        _auto_defaults = {
-            "target_partition_size": "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE",
-            "broadcast_limit": "CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT",
-        }
-        cluster_infos: list[ClusterInfo] | None = None
-        if need_defaults := {
-            key
-            for key, env in _auto_defaults.items()
-            if key not in executor_options and not os.getenv(env)
-        }:
-            cluster_infos = self.gather_cluster_info()
-            min_device_size = (
-                min(
-                    (info.device_memory for info in cluster_infos),
-                    default=None,
-                )
-                or None
+        # Gather `min_device_size` from the cluster
+        cluster_infos: list[ClusterInfo] = self.gather_cluster_info()
+        executor_options["min_device_size"] = (
+            min(
+                (info.device_memory for info in cluster_infos),
+                default=None,
             )
-            if "target_partition_size" in need_defaults:
-                executor_options["target_partition_size"] = (
-                    default_target_partition_size(min_device_size)
-                )
-            if "broadcast_limit" in need_defaults:
-                executor_options["broadcast_limit"] = default_broadcast_limit(
-                    min_device_size
-                )
+            or None
+        )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
         # accept it.
@@ -225,11 +202,6 @@ class StreamingEngine(pl.GPUEngine):
             **engine_options,
         )
         if nranks > 1 and not allow_gpu_sharing:
-            cluster_infos = (
-                cluster_infos
-                if cluster_infos is not None
-                else self.gather_cluster_info()
-            )
             uuids = [info.gpu_uuid for info in cluster_infos]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(

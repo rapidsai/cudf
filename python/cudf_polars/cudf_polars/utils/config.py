@@ -270,16 +270,18 @@ def default_target_partition_size(min_device_size: int | None) -> int:
     _DEFAULT_TARGET_PARTITION_SIZE = 1_500_000_000
     if min_device_size is None:  # pragma: no cover
         return _DEFAULT_TARGET_PARTITION_SIZE
-    else:
-        return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
+    # Limit to 2.5% of the minimum device memory across all ranks.
+    return min(int(min_device_size * 0.025), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
 def default_broadcast_limit(min_device_size: int | None) -> int:
     """Return the default broadcast limit."""
+    # TODO: Need empirical data to determine the optimal value.
+    _DEFAULT_BROADCAST_LIMIT = 16_000_000_000
     if min_device_size is None:  # pragma: no cover
-        return 6_000_000_000
-    # Target 15% of the minimum device memory across all ranks.
-    return int(min_device_size * 0.15)
+        return _DEFAULT_BROADCAST_LIMIT
+    # Limit to 15% of the minimum device memory across all ranks.
+    return min(int(min_device_size * 0.15), _DEFAULT_BROADCAST_LIMIT)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -556,9 +558,9 @@ class StreamingExecutor:
         the default ``target_partition_size`` will be 1.5GB.
     broadcast_limit
         The maximum number of bytes to broadcast in a single operation.
-        By default, cudf-polars uses 15% of the minimum device size in the cluster.
-        If pynvml cannot query the the device size(s), the default
-        ``broadcast_limit`` will be 6GB.
+        By default, cudf-polars uses the minimum of 16GB or 15% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``broadcast_limit`` will be 16GB.
     client_device_threshold
         Threshold for spilling data from device memory.
         Default is 50% of device memory on the client process.
@@ -647,6 +649,7 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+    min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
@@ -664,13 +667,13 @@ class StreamingExecutor:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_target_partition_size(get_total_device_memory()),
+                default_target_partition_size(self.min_device_size),
             )
         if self.broadcast_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_limit",
-                default_broadcast_limit(get_total_device_memory()),
+                default_broadcast_limit(self.min_device_size),
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
 
