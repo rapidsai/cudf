@@ -735,10 +735,12 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Pointer to the error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
                                    int32_t num_chunks,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream);
 
 /**

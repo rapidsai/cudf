@@ -13,7 +13,7 @@
 
 # This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp)
-  set(options DOWNLOAD_ONLY)
+  set(options DOWNLOAD_ONLY INSTALL_LIBRARY)
   set(one_value VERSION)
   cmake_parse_arguments(_NVCOMP "${options}" "${one_value}" "" ${ARGN})
 
@@ -22,9 +22,7 @@ function(find_and_configure_nvcomp)
     include("${rapids-cmake-dir}/find/package.cmake")
     rapids_find_package(
       nvcomp ${_NVCOMP_VERSION}
-      GLOBAL_TARGETS nvcomp::nvcomp
-      BUILD_EXPORT_SET cudf-exports
-      INSTALL_EXPORT_SET cudf-exports
+      GLOBAL_TARGETS nvcomp::nvcomp nvcomp::nvcomp_static
       FIND_ARGS QUIET
     )
     if(nvcomp_FOUND)
@@ -100,40 +98,49 @@ function(find_and_configure_nvcomp)
   include("${rapids-cmake-dir}/find/package.cmake")
   rapids_find_package(
     nvcomp ${_NVCOMP_VERSION}
-    GLOBAL_TARGETS nvcomp::nvcomp
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports
+    GLOBAL_TARGETS nvcomp::nvcomp nvcomp::nvcomp_static
     FIND_ARGS
     REQUIRED
   )
 
   include(GNUInstallDirs)
-  install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
-  install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
-          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-  )
-  if(EXISTS "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}")
-    install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}/"
-            DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  if(_NVCOMP_INSTALL_LIBRARY)
+    install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
+    install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+    if(EXISTS "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}")
+      install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}/"
+              DESTINATION "${CMAKE_INSTALL_BINDIR}"
+      )
+    endif()
+    install(
+      FILES "${nvcomp_ROOT}/NOTICE"
+      DESTINATION info/
+      RENAME NVCOMP_NOTICE
+    )
+    install(
+      FILES "${nvcomp_ROOT}/LICENSE"
+      DESTINATION info/
+      RENAME NVCOMP_LICENSE
     )
   endif()
-  install(
-    FILES "${nvcomp_ROOT}/NOTICE"
-    DESTINATION info/
-    RENAME NVCOMP_NOTICE
-  )
-  install(
-    FILES "${nvcomp_ROOT}/LICENSE"
-    DESTINATION info/
-    RENAME NVCOMP_LICENSE
-  )
-
-  include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(BUILD nvcomp "${nvcomp_ROOT}" EXPORT_SET cudf-exports)
-
 endfunction()
 
-find_and_configure_nvcomp(VERSION 5.2.0.10)
+set(_nvcomp_args VERSION 5.2.0.10)
+if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
+  list(APPEND _nvcomp_args DOWNLOAD_ONLY)
+endif()
+if(CUDF_INSTALL_LIBRARY_DEPS)
+  list(APPEND _nvcomp_args INSTALL_LIBRARY)
+endif()
+find_and_configure_nvcomp(${_nvcomp_args})
+
+if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
+  set(CUDF_nvcomp_TARGET nvcomp::nvcomp)
+else()
+  set(CUDF_nvcomp_TARGET nvcomp::nvcomp_static)
+endif()
 
 # Per-thread default stream
 if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
