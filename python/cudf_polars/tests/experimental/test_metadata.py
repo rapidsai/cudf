@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
@@ -21,7 +22,11 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
+from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select, Sort
+from cudf_polars.experimental.rapidsmpf.collectives.sort import (
+    _is_already_sorted,
+    _sort_to_order_keys,
+)
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -582,3 +587,91 @@ def test_remap_partitioning_order_scheme_drops_key(spmd_engine, engine):
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b",)), part)
     assert result is not None
     assert result.inter_rank is None
+
+
+@pytest.mark.parametrize(
+    "by,descending,nulls_last",
+    [
+        (["x"], [False], [True]),
+        (["x"], [True], [False]),
+        (["x", "y"], [False, False], [True, True]),
+    ],
+)
+def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            dynamic_planning=None,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
+    )
+    config_options = ConfigOptions.from_polars_engine(engine)
+    df = pl.LazyFrame({"x": list(range(10)), "y": [i * 2 for i in range(10)]})
+    q = df.sort(by=by, descending=descending, nulls_last=nulls_last)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+
+    metadata_collector = evaluate_logical_plan(
+        ir, config_options, collect_metadata=True
+    )[1]
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    metadata = metadata_collector[0]
+
+    scheme = metadata.partitioning.inter_rank
+    assert isinstance(scheme, OrderScheme)
+    assert metadata.partitioning.local == "inherit"
+
+    output_cols = list(ir.schema.keys())
+    assert len(scheme.keys) == len(by)
+    for i, col in enumerate(by):
+        assert scheme.keys[i].column_index == output_cols.index(col)
+    assert scheme.strict_boundaries is True
+
+
+@pytest.mark.parametrize(
+    "scheme_key_count,strict,expected",
+    [
+        (1, True, True),  # prefix match + strict → skip
+        (1, False, False),  # prefix match + non-strict → no skip
+        (2, True, True),  # exact match + strict → skip
+        (2, False, True),  # exact match + non-strict → skip (strict irrelevant)
+    ],
+)
+def test_is_already_sorted(spmd_engine, scheme_key_count, strict, expected) -> None:
+    df_lf = pl.LazyFrame({"x": list(range(5)), "y": list(range(5))})
+    base_ir = Translator(df_lf._ldf.visit(), spmd_engine).translate_ir()
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+
+    sort_xy = Sort(
+        base_ir.schema,
+        (
+            expr.NamedExpr("x", expr.Col(base_ir.schema["x"], "x")),
+            expr.NamedExpr("y", expr.Col(base_ir.schema["y"], "y")),
+        ),
+        (asc, asc),
+        (before, before),
+        stable=False,
+        zlice=None,
+        df=base_ir,
+    )
+
+    ctx = spmd_engine.context
+    stream = ctx.get_stream_from_pool()
+    keys = [OrderKey(i, asc, before) for i in range(scheme_key_count)]
+    boundary_chunk = TableChunk.from_pylibcudf_table(
+        DataFrame.from_polars(
+            pl.DataFrame({f"k{i}": [100, 200] for i in range(scheme_key_count)}),
+            stream,
+        ).table,
+        stream,
+        exclusive_view=False,
+        br=ctx.br(),
+    )
+    scheme = OrderScheme(keys, boundary_chunk, strict_boundaries=strict)
+    meta = ChannelMetadata(
+        3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
+    )
+
+    order_keys = _sort_to_order_keys(sort_xy)
+    assert _is_already_sorted(meta, order_keys, nranks=1) is expected
