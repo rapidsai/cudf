@@ -687,10 +687,6 @@ def evaluate_on_rank(
     )
 
     if local_quent_context is not None:
-        # Problem: each worker gets their own `plan.id` so we can't
-        # associate the physical plan with the logical plan on any
-        # rank other than 0.
-        # We would need to pass the plan ID in along with the IR...
         log_query_plan(ir, config_options)
         local_quent_context.context.emit_physical_plan_events(
             local_quent_context.logger,
