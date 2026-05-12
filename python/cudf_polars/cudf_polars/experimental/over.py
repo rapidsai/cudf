@@ -299,40 +299,35 @@ def _fuse_over_nodes(
 
     result: list[Select] = []
     for (key_indices, is_scalar, input_ir), group in over_groups.items():
-        first_over = group[0][1]
-        pi = partition_info[first_over]
-
-        combined_window_exprs: list[NamedExpr] = []
-        for _, over in group:
-            combined_window_exprs.extend(over.exprs)
+        pi = partition_info[group[0][1]]
 
         absorbed: list[Select] = []
         remaining: list[Select] = []
-        for p_sel in passthrough:
-            if p_sel.children[0] == input_ir:
-                absorbed.append(p_sel)
-            else:
-                remaining.append(p_sel)
+        for s in passthrough:
+            (absorbed if s.children[0] == input_ir else remaining).append(s)
         passthrough = remaining
 
-        passthrough_exprs: list[NamedExpr] = []
-        for p_sel in absorbed:
-            passthrough_exprs.extend(p_sel.exprs)
-
-        all_over_exprs = passthrough_exprs + combined_window_exprs
-        combined_schema = {ne.name: ne.value.dtype for ne in all_over_exprs}
+        over_exprs = tuple(
+            itertools.chain(
+                *(s.exprs for s in absorbed),
+                *(over.exprs for _, over in group),
+            )
+        )
         merged_over = Over(
-            combined_schema, key_indices, is_scalar, tuple(all_over_exprs), input_ir
+            {ne.name: ne.value.dtype for ne in over_exprs},
+            key_indices,
+            is_scalar,
+            over_exprs,
+            input_ir,
         )
         partition_info[merged_over] = pi
-
-        all_this_group = set(itertools.chain(absorbed, (sel for sel, _ in group)))
-        outer_exprs: list[NamedExpr] = []
-        outer_schema: Schema = {}
-        for sel in selections:
-            if sel in all_this_group:
-                outer_exprs.extend(sel.exprs)
-                outer_schema |= sel.schema
+        this_group = {*absorbed, *(sel for sel, _ in group)}
+        outer_exprs = tuple(
+            itertools.chain.from_iterable(
+                s.exprs for s in selections if s in this_group
+            )
+        )
+        outer_schema = {ne.name: ne.value.dtype for ne in outer_exprs}
 
         merged_sel = Select(outer_schema, outer_exprs, True, merged_over)  # noqa: FBT003
         partition_info[merged_sel] = pi
