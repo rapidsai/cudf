@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pandas as pd
 import pytest
@@ -45,3 +45,13 @@ def test_convert_dtypes():
     with pytest.raises(NotImplementedError):
         # category and datetime64[ns] are not nullable
         gdf[non_nullable_columns].convert_dtypes().to_pandas(nullable=True)
+
+
+def test_convert_dtypes_pyarrow_null():
+    pytest.importorskip("pyarrow")
+    data = {"a": [None, None]}
+
+    expected = pd.DataFrame(data).convert_dtypes(dtype_backend="pyarrow")
+    result = cudf.DataFrame(data).convert_dtypes(dtype_backend="pyarrow")
+
+    assert_eq(result.to_pandas(), expected)
