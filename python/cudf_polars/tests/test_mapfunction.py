@@ -121,8 +121,8 @@ def test_set_sorted_then_inner_join(engine: pl.GPUEngine):
 
 
 def test_explode_single_legacy_options():
-    # Cover the branch: len(self.options) == 1
-    # This branch is only reachable by direct construction
+    # Cover the branch: POLARS_VERSION_LT_136 or len(self.options) == 1
+    # On polars >= 1.36 this branch is only reachable by direct construction
     # with 1-element options (the old pre-1.36 format).
     df = pl.DataFrame({"a": [[1, 2], [3, 4]]})
     child = DataFrameScan({"a": DataType(pl.List(pl.Int64()))}, df._df, None)

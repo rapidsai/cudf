@@ -32,7 +32,7 @@ from pylibcudf import expressions as plc_expr
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.containers.dataframe import NamedColumn
-from cudf_polars.dsl.expressions import rolling
+from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
@@ -1408,8 +1408,11 @@ class DataFrameScan(IR):
         if projection is not None:
             df = df.select(projection)
 
+        # Zero-width dataframes lose their row count when converted through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if len(schema) == 0:
             return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
+
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
@@ -1797,6 +1800,16 @@ class GroupBy(IR):
         for dtype in schema.values():
             if _has_struct_in_list(dtype.polars_type):
                 raise NotImplementedError("Nested list[struct] types not supported")
+        for request in agg_requests:
+            expr = request.value
+            if (
+                POLARS_VERSION_LT_136
+                and isinstance(expr, unary.UnaryFunction)
+                and expr.name == "value_counts"
+            ):
+                raise NotImplementedError(
+                    "value_counts is not supported in groupby"
+                )  # pragma: no cover; Nested list[struct] types not supported
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
@@ -2982,6 +2995,7 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
+            "hint_sorted",
         ]
     )
 
@@ -3046,6 +3060,10 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
+        elif (
+            self.name == "hint_sorted"
+        ):  # pragma: no cover; polars prunes hints in some cases
+            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:

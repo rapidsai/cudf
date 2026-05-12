@@ -22,6 +22,7 @@ from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
     range_window_bounds,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -78,9 +79,14 @@ def to_request(
     elif isinstance(value, expr.Agg):
         child = value.children[0]
         col = child.evaluate(df, context=ExecutionContext.ROLLING)
-        if value.name == "var":
-            # Polars rolling var returns null when nvalues <= ddof; libcudf returns NaN.
-            # Setting min_periods = ddof+1 causes libcudf to emit null instead of NaN.
+        if POLARS_VERSION_LT_136 and value.name == "var":  # pragma: no cover
+            # Polars variance produces null if nvalues <= ddof
+            # libcudf produces NaN. However, we can get the polars
+            # behaviour by setting the minimum window size to ddof +
+            # 1.
+            #
+            # We still need this check, polars is not hitting it because
+            # of https://github.com/pola-rs/polars/pull/25117
             min_periods = value.options + 1
     else:
         col = value.evaluate(
@@ -90,7 +96,7 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
-class RollingWindow(Expr):
+class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling now
     __slots__ = (
         "closed_window",
         "following_ordinal",
@@ -140,10 +146,12 @@ class RollingWindow(Expr):
             raise NotImplementedError(
                 "Incorrect handling of empty groups for list collection"
             )
-        if not plc.rolling.is_valid_rolling_aggregation(
+        if POLARS_VERSION_LT_136 and not plc.rolling.is_valid_rolling_aggregation(
             agg.dtype.plc_type, agg.agg_request
         ):
-            raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
+            raise NotImplementedError(
+                f"Unsupported rolling aggregation {agg}"
+            )  # pragma: no cover; polars may raise ahead of time
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

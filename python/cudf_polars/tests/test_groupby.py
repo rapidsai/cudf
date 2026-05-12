@@ -408,7 +408,7 @@ def test_groupby_aggs_keep_unsupported_as_null(
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136 and "sum" in str(agg_expr),
+            condition="sum" in str(agg_expr) and not POLARS_VERSION_LT_136,
             reason="polars raises now",
         )
     )
