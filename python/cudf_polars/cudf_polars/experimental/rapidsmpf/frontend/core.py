@@ -9,8 +9,10 @@ import dataclasses
 import json
 import os
 import socket
+import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+import weakref
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
@@ -155,6 +157,11 @@ class StreamingEngine(pl.GPUEngine):
     """
 
     _quent_logger: cudf_polars.quent._logging.QuentLogger
+    # Process-wide registry of every live :class:`StreamingEngine`. Used by
+    # :class:`DefaultSingletonEngine` to enforce that no other engine is
+    # alive when the singleton is constructed.
+    _active_engines: ClassVar[weakref.WeakSet[StreamingEngine]] = weakref.WeakSet()
+    _active_engines_lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -164,6 +171,13 @@ class StreamingEngine(pl.GPUEngine):
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ):
+        # Refuse to construct if a ``DefaultSingletonEngine`` is alive
+        # (no-op for the singleton itself).
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            check_no_live_default_singleton,
+        )
+
+        check_no_live_default_singleton(self)
         self._nranks = nranks
         self._quent_events_raw: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
@@ -185,6 +199,24 @@ class StreamingEngine(pl.GPUEngine):
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
+        with StreamingEngine._active_engines_lock:
+            StreamingEngine._active_engines.add(self)
+
+    @classmethod
+    def _active_engine_count(cls) -> int:
+        """
+        Return the number of currently-live :class:`StreamingEngine` instances.
+
+        "Live" means constructed and not yet shut down (or garbage collected).
+        The count is process-wide and shared across all subclasses.
+
+        Returns
+        -------
+        Number of live engines, including ``self`` if called on a live
+        instance.
+        """
+        with StreamingEngine._active_engines_lock:
+            return len(StreamingEngine._active_engines)
 
     @property
     def nranks(self) -> int:
@@ -318,6 +350,8 @@ class StreamingEngine(pl.GPUEngine):
             self.device = None
             self.memory_resource = None
             self.config = {}
+            with StreamingEngine._active_engines_lock:
+                StreamingEngine._active_engines.discard(self)
 
     def __enter__(self) -> Self:
         """Enter the context manager, returning ``self``."""
@@ -364,6 +398,7 @@ def execute_ir_on_rank(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -392,6 +427,8 @@ def execute_ir_on_rank(
         Mapping from IR nodes to their pre-allocated collective operation IDs.
     collect_metadata
         Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -401,7 +438,9 @@ def execute_ir_on_rank(
         Collected channel metadata if ``collect_metadata`` is ``True``,
         otherwise ``None``.
     """
-    ir_context = IRExecutionContext(get_cuda_stream=ctx.get_stream_from_pool)
+    ir_context = IRExecutionContext(
+        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+    )
     metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
 
     nodes, output = generate_network(
@@ -580,6 +619,7 @@ def evaluate_on_rank(
     *,
     collect_metadata: bool = False,
     local_quent_context: cudf_polars.quent.LocalQuentContext,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -608,6 +648,8 @@ def evaluate_on_rank(
         Whether to collect channel metadata during execution.
     local_quent_context
         The local Quent context for this rank.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -672,4 +714,5 @@ def evaluate_on_rank(
             stats,
             collective_id_map,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )
