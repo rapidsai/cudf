@@ -87,6 +87,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -132,13 +133,14 @@ def _broadcast_gw_sync(
     chunk_df: DataFrame,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
+    stream: Stream,
 ) -> Any:
     """Broadcast the global aggregate for one GroupedWindow back to row positions."""
     by_exprs = gw.children[: gw.by_count]
     by_cols = broadcast(
         *(b.evaluate(chunk_df) for b in by_exprs),
         target_length=chunk_df.num_rows,
-        stream=chunk_df.stream,
+        stream=stream,
     )
     by_tbl = plc.Table([c.obj for c in by_cols])
     group_keys_tbl = global_agg_df.select(key_names).table
@@ -152,9 +154,9 @@ def _broadcast_gw_sync(
     ]
 
     broadcasted_cols = gw._broadcast_agg_results(
-        by_tbl, group_keys_tbl, value_tbls, out_names, out_dtypes, chunk_df.stream
+        by_tbl, group_keys_tbl, value_tbls, out_names, out_dtypes, stream
     )
-    temp_df = DataFrame(broadcasted_cols, stream=chunk_df.stream)
+    temp_df = DataFrame(broadcasted_cols, stream=stream)
     return gw.post.value.evaluate(temp_df, context=ExecutionContext.FRAME)
 
 
@@ -164,31 +166,39 @@ def _evaluate_ir_broadcast_sync(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
-    br: Any,
+    ir_context: IRExecutionContext,
+    br: BufferResource,
 ) -> TableChunk:
     """Evaluate the Over node using a pre-computed global aggregate per GroupedWindow."""
     chunk_df = chunk_to_frame(chunk, ir.children[0])
+    # global_agg_df and chunk_df may live on different streams (the former from
+    # the upstream allgather/reduction on ir_context's stream, the latter from
+    # the input message). Join them so the broadcast kernels read global_agg_df
+    # safely.
+    with ir_context.stream_ordered_after(chunk_df, global_agg_df) as stream:
+        chunk_df = DataFrame(chunk_df.columns, stream=stream)
+        global_agg_df = DataFrame(global_agg_df.columns, stream=stream)
 
-    gw_results: dict[GroupedWindow, Any] = {
-        gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names)
-        for gw in gw_nodes
-    }
+        gw_results = {
+            gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, stream)
+            for gw in gw_nodes
+        }
 
-    result_cols = []
-    for ne in ir.exprs:
-        if isinstance(ne.value, GroupedWindow) and ne.value in gw_results:
-            # gw.post.value.evaluate uses the post name, not ne.name
-            col = gw_results[ne.value].rename(ne.name)
-        else:
-            col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
-        result_cols.append(col)
+        result_cols = []
+        for ne in ir.exprs:
+            if isinstance(ne.value, GroupedWindow):
+                # gw.post.value.evaluate uses the post name, not ne.name
+                col = gw_results[ne.value].rename(ne.name)
+            else:
+                col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
+            result_cols.append(col)
 
-    return TableChunk.from_pylibcudf_table(
-        plc.Table([c.obj for c in result_cols]),
-        chunk_df.stream,
-        exclusive_view=True,
-        br=br,
-    )
+        return TableChunk.from_pylibcudf_table(
+            plc.Table([c.obj for c in result_cols]),
+            stream,
+            exclusive_view=True,
+            br=br,
+        )
 
 
 async def _evaluate_broadcast_chunk(
@@ -198,6 +208,7 @@ async def _evaluate_broadcast_chunk(
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
     gw_nodes: tuple[GroupedWindow, ...],
+    ir_context: IRExecutionContext,
 ) -> TableChunk:
     """Make chunk available then evaluate it against the pre-computed global aggregate."""
     chunk, extra = await make_table_chunks_available_or_wait(
@@ -214,6 +225,7 @@ async def _evaluate_broadcast_chunk(
             global_agg_df,
             key_names,
             gw_nodes,
+            ir_context,
             context.br(),
         )
 
@@ -221,11 +233,17 @@ async def _evaluate_broadcast_chunk(
 @dataclass(frozen=True)
 class OriginStamps:
     """
-    Per-row metadata appended before the forward shuffle.
+    Stamp column names that ride both shuffles for output reassembly.
 
-    ``chunk_index`` is a rank-local 0-based index into the input chunk
-    stream, *not* the upstream message ``sequence_number`` (which can
-    collide when the input is the output of a shuffle).
+    Parameters
+    ----------
+    chunk_index
+        Column name for a dense rank-local 0..N-1 counter identifying which
+        input chunk a row came from.
+    position
+        Column name for the row's position within its input chunk.
+    rank
+        Column name for the originating rank.
     """
 
     chunk_index: str
@@ -490,6 +508,7 @@ async def _allgather_and_broadcast(
             global_agg_df,
             plan.key_names,
             plan.gw_nodes,
+            ir_context,
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
