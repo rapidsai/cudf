@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -146,6 +146,26 @@ public final class GroupByAggregation {
    */
   public static GroupByAggregation standardDeviation() {
     return new GroupByAggregation(Aggregation.standardDeviation());
+  }
+
+  /**
+   * Create an ordering column aggregation for min_by operation.
+   * This must be paired with a valueForMinBy aggregation using the same multiInputId.
+   * @param multiInputId Correlation ID to pair with the corresponding value aggregation
+   * @return GroupByAggregation for the ordering column in min_by
+   */
+  public static GroupByAggregation orderingForMinBy(long multiInputId) {
+    return new GroupByAggregation(Aggregation.orderingForMinBy(multiInputId));
+  }
+
+  /**
+   * Create a value column aggregation for min_by operation.
+   * This must be paired with an orderingForMinBy aggregation using the same multiInputId.
+   * @param multiInputId Correlation ID to pair with the corresponding ordering aggregation
+   * @return GroupByAggregation for the value column in min_by
+   */
+  public static GroupByAggregation valueForMinBy(long multiInputId) {
+    return new GroupByAggregation(Aggregation.valueForMinBy(multiInputId));
   }
 
   /**
