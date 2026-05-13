@@ -108,15 +108,15 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
-    return evaluate_on_rank(
+    df, metadata = evaluate_on_rank(
         context,
         comm,
         py_executor,
         ir,
         config_options,
-        collect_metadata=collect_metadata,
         query_id=query_id,
     )
+    return df, metadata if collect_metadata else None
 
 
 def allgather_polars_dataframe(

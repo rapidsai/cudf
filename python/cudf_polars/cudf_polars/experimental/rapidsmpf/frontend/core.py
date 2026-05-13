@@ -401,9 +401,8 @@ def execute_ir_on_rank(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     *,
-    collect_metadata: bool = False,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
 
@@ -429,8 +428,6 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
-    collect_metadata
-        Whether to collect channel metadata during execution.
     query_id
         Unique identifier for the query, propagated into actor traces.
 
@@ -439,13 +436,12 @@ def execute_ir_on_rank(
     result
         This rank's output fragment as a Polars DataFrame.
     metadata
-        Collected channel metadata if ``collect_metadata`` is ``True``,
-        otherwise ``None``.
+        Collected channel metadata.
     """
     ir_context = IRExecutionContext(
         get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
     )
-    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
+    metadata_collector: list[ChannelMetadata] = []
 
     nodes, output = generate_network(
         ctx,
@@ -621,9 +617,8 @@ def evaluate_on_rank(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     *,
-    collect_metadata: bool = False,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Evaluate a polars IR plan on a single rank.
 
@@ -647,8 +642,6 @@ def evaluate_on_rank(
         Root of the **pre-lowered** IR graph.
     config_options
         Executor configuration forwarded from the client.
-    collect_metadata
-        Whether to collect channel metadata during execution.
     query_id
         Unique identifier for the query, propagated into actor traces.
 
@@ -657,8 +650,7 @@ def evaluate_on_rank(
     result
         This rank's output fragment as a Polars DataFrame.
     metadata
-        Collected channel metadata if *collect_metadata* is ``True``,
-        otherwise ``None``.
+        Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
     ir, partition_info = lower_ir_graph(ir, config_options, stats)
@@ -678,6 +670,5 @@ def evaluate_on_rank(
             config_options,
             stats,
             collective_id_map,
-            collect_metadata=collect_metadata,
             query_id=query_id,
         )
