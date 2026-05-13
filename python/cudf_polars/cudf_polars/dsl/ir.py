@@ -45,8 +45,7 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
-    get_joined_cuda_stream,
-    join_cuda_streams,
+    stream_ordered_after,
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
@@ -128,36 +127,11 @@ class IRExecutionContext:
         Yields
         ------
         A CUDA stream that is downstream of the given dataframes.
-
-        Notes
-        -----
-        This context manager provides two useful guarantees when working with
-        objects holding references to stream-ordered objects:
-
-        1. The stream yield upon entering the context manager is *downstream* of
-           all the input dataframes.  This ensures that you can safely perform
-           stream-ordered operations on any input using the yielded stream.
-        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
-           context manager exits. This ensures that all stream-ordered operations
-           submitted inside the context manager can complete before the memory
-           referenced by the inputs is deallocated.
-
-        Note that this does (deliberately) disconnect the dropping of the Python
-        object (by its refcount dropping to 0) from the actual stream-ordered
-        deallocation of the CUDA memory. This is precisely what we need to ensure
-        that the inputs are valid long enough for the stream-ordered operations to
-        complete.
         """
-        result_stream = get_joined_cuda_stream(
+        with stream_ordered_after(
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        yield result_stream
-
-        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
-        )
+        ) as result_stream:
+            yield result_stream
 
 
 _BINOPS = {

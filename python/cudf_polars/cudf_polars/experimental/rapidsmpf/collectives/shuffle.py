@@ -40,12 +40,13 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
 )
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
+from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.channel import Channel
 
     from rmm.pylibrmm.stream import Stream
@@ -129,25 +130,25 @@ class ShuffleManager:
                 target partition ID for each row. Must be row-aligned with
                 ``chunk``.
             """
-            stream = get_joined_cuda_stream(
+            with stream_ordered_after(
                 self._manager.context.get_stream_from_pool,
                 upstreams=(chunk.stream, partition_map.stream),
-            )
-            partition_map_col = partition_map.table_view().columns()[0]
-            reordered, offsets = plc.partitioning.partition(
-                chunk.table_view(),
-                partition_map_col,
-                self._manager.num_partitions,
-                stream=stream,
-            )
-            self._manager.shuffler.insert(
-                py_split_and_pack(
-                    table=reordered,
-                    splits=list(offsets[1:-1]),
+            ) as stream:
+                partition_map_col = partition_map.table_view().columns()[0]
+                reordered, offsets = plc.partitioning.partition(
+                    chunk.table_view(),
+                    partition_map_col,
+                    self._manager.num_partitions,
                     stream=stream,
-                    br=self._manager.context.br(),
                 )
-            )
+                self._manager.shuffler.insert(
+                    py_split_and_pack(
+                        table=reordered,
+                        splits=list(offsets[1:-1]),
+                        stream=stream,
+                        br=self._manager.context.br(),
+                    )
+                )
 
         async def __aenter__(self) -> ShuffleManager.Inserter:
             """Enter the context manager."""
@@ -207,7 +208,7 @@ class ShuffleManager:
             br=self.context.br(),
         )
 
-    def extract_pieces(self, partition_id: int) -> list:
+    def extract_pieces(self, partition_id: int) -> list[PackedData]:
         """
         Extract raw packed items for a partition without unpacking.
 
@@ -232,7 +233,7 @@ class LocalRepartitioner:
     ----------
     shuffle
         Completed inter-rank :class:`ShuffleManager` (insertion phase done).
-        Must own exactly one global partition.
+        The repartitioner consumes whatever local partitions this rank owns.
     local_count
         Number of local output partitions to produce.
     """
