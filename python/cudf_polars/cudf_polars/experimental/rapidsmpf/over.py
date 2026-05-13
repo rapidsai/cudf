@@ -560,17 +560,19 @@ async def _reassemble_input_chunks(
     n_exprs = len(ir.exprs)
     chunk_index_column = n_exprs
 
-    # TODO: thread ir_context through repartition_by_index and the extract
-    # loop below so each PackedData piece moves and each extracted chunk
-    # processes on its own pool stream, overlapping the per-piece /
-    # per-chunk work instead of serialising it on a single stream.
-    stream = ir_context.get_cuda_stream()
+    # TODO: thread ir_context through repartition_by_index so each
+    # PackedData piece moves on its own pool stream rather than sharing one.
     local = LocalRepartitioner(return_shuffle, local_count=n_chunks)
-    await local.repartition_by_index(partition_col=chunk_index_column, stream=stream)
+    await local.repartition_by_index(
+        partition_col=chunk_index_column, stream=ir_context.get_cuda_stream()
+    )
 
     for chunk_index, sequence_number in zip(
         local.local_partitions(), sequence_numbers, strict=True
     ):
+        # Distinct stream per chunk so downstream work on different
+        # chunks can overlap on the GPU.
+        stream = ir_context.get_cuda_stream()
         tbl = local.extract_chunk(chunk_index, stream)
         if tbl.num_rows() == 0:
             chunk = empty_table_chunk(ir, context, stream)
