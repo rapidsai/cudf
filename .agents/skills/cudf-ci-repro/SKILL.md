@@ -46,8 +46,7 @@ From the job JSON, note:
 - `name` — the job name (e.g. `conda-cpp-build / 12.9.1, 3.11, amd64, rockylinux8`)
 - `steps[].name` and `steps[].conclusion` — which steps ran and their outcome
 
-Download the full job log (the API returns a redirect to a zip archive, so
-extract it before reading):
+Download the full job log (`gh run view --log` writes plain text directly):
 
 ```bash
 gh run view "$RUN_ID" --repo rapidsai/cudf --job "$JOB_ID" --log > /tmp/ci_job_log.txt
@@ -95,8 +94,8 @@ Use `--dry-run` first to show the user the docker command before executing.
 Key flags:
 - `--pr` triggers `gh pr checkout` before running.
 - `--no-gpu` omits `--gpus all` (for build-only jobs).
-- `--local-build` rewrites artifact channels to use local conda build output (for full local build+test without CI artifacts).
-- `--gh-token` overrides the `GH_TOKEN` env var if needed.
+- `--local-build` rewrites artifact channels to use local conda build output (for full local build+test without CI artifacts). The patch is reverted on exit.
+- The `GH_TOKEN` environment variable is forwarded to the container automatically; do not pass tokens via CLI flags.
 
 ## Step 5: Analyze Output
 

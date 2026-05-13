@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -34,21 +35,26 @@ def parse(url: str) -> dict[str, str]:
 
     qs = parse_qs(parsed.query)
     if "pr" in qs:
-        result["PR_NUMBER"] = qs["pr"][0]
+        pr_number = qs["pr"][0]
+        if not pr_number.isdigit():
+            raise ValueError(
+                f"Invalid PR number in URL (expected digits): {pr_number!r}"
+            )
+        result["PR_NUMBER"] = pr_number
 
     return result
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print(
+        print(  # noqa: T201
             f"Usage: {sys.argv[0]} <github_actions_job_url>", file=sys.stderr
         )
         sys.exit(1)
 
     try:
         for key, value in parse(sys.argv[1]).items():
-            print(f"{key}={value}")
+            print(f"{key}={value}")  # noqa: T201
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(str(exc), file=sys.stderr)  # noqa: T201
         sys.exit(1)

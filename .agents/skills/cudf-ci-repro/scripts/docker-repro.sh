@@ -14,15 +14,15 @@ that runs specified CI scripts inside it.
 Required:
   --image IMAGE           CI container image (e.g. rapidsai/ci-conda:cuda12.9.1-rockylinux8-py3.11)
   --build-type TYPE       One of: pull-request, branch, nightly
-  --ref-name REF          e.g. pull-request/22144, main, release/26.06
+  --ref-name REF          e.g. pull-request/<PR_NUMBER>, main, release/<MAJOR>.<MINOR>
   --scripts SCRIPT,...    Comma-separated CI scripts to run (e.g. ./ci/build_cpp.sh,./ci/test_cpp.sh)
 
 Optional:
-  --pr PR_NUMBER          PR number — triggers `gh pr checkout`
+  --pr PR_NUMBER          PR number — triggers \`gh pr checkout\`
   --nightly-date DATE     Required when --build-type=nightly (YYYY-MM-DD)
   --no-gpu                Omit --gpus flag (for build-only jobs)
   --local-build           Rewrite artifact channels to use local conda build output
-  --gh-token TOKEN        GitHub token; defaults to GH_TOKEN env var
+                          (reverted on exit via \`git checkout -- ci/*.sh\`)
   --dry-run               Print the docker command without executing
   -h, --help              Show this help
 EOF
@@ -50,7 +50,6 @@ while [[ $# -gt 0 ]]; do
     --nightly-date) NIGHTLY_DATE="$2"; shift 2 ;;
     --no-gpu)       USE_GPU=0;         shift   ;;
     --local-build)  LOCAL_BUILD=1;     shift   ;;
-    --gh-token)     TOKEN="$2";        shift 2 ;;
     --dry-run)      DRY_RUN=1;         shift   ;;
     -h|--help)      usage 0 ;;
     *) echo "Unknown option: $1" >&2; usage 1 ;;
@@ -79,18 +78,23 @@ if [[ "$BUILD_TYPE" == "nightly" && -z "$NIGHTLY_DATE" ]]; then
 fi
 
 # --- Step 1: Checkout ---
-if [[ -n "$PR_NUMBER" ]]; then
-  echo ">>> Checking out PR #${PR_NUMBER}..."
-  gh pr checkout "$PR_NUMBER" --repo rapidsai/cudf
-fi
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo ">>> Dry-run: skipping checkout / tag fetch / ci script patch."
+else
+  if [[ -n "$PR_NUMBER" ]]; then
+    echo ">>> Checking out PR #${PR_NUMBER}..."
+    gh pr checkout "$PR_NUMBER" --repo rapidsai/cudf
+  fi
 
-echo ">>> Fetching tags..."
-git fetch https://github.com/rapidsai/cudf.git --tags 2>/dev/null || true
+  echo ">>> Fetching tags..."
+  git fetch https://github.com/rapidsai/cudf.git --tags 2>/dev/null || true
 
-# --- Step 2: Prepare local-build sed patch if requested ---
-if [[ "$LOCAL_BUILD" -eq 1 ]]; then
-  echo ">>> Patching ci/*.sh to use local conda build output..."
-  sed -ri '/rapids-download-conda-from-github/ s|^([[:space:]]*[A-Z_]*CHANNEL)=.*|\1=${RAPIDS_CONDA_BLD_OUTPUT_DIR}|' ci/*.sh
+  # --- Step 2: Prepare local-build sed patch if requested ---
+  if [[ "$LOCAL_BUILD" -eq 1 ]]; then
+    echo ">>> Patching ci/*.sh to use local conda build output (auto-reverted on exit)..."
+    trap 'echo ">>> Reverting ci/*.sh patches..."; git checkout -- ci/*.sh 2>/dev/null || true' EXIT
+    sed -ri '/rapids-download-conda-from-github/ s|^([[:space:]]*[A-Z_]*CHANNEL)=.*|\1=${RAPIDS_CONDA_BLD_OUTPUT_DIR}|' ci/*.sh
+  fi
 fi
 
 # --- Step 3: Build docker command ---
@@ -125,7 +129,12 @@ docker_cmd+=("$IMAGE" bash -c "$SCRIPT_CMD")
 
 echo ""
 echo ">>> Docker command:"
-echo "  ${docker_cmd[*]}"
+# Redact GH_TOKEN value when echoing so the secret never lands in logs/history.
+safe_cmd=("${docker_cmd[@]}")
+for i in "${!safe_cmd[@]}"; do
+  [[ "${safe_cmd[$i]}" == GH_TOKEN=* ]] && safe_cmd[$i]="GH_TOKEN=***REDACTED***"
+done
+echo "  ${safe_cmd[*]}"
 echo ""
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
