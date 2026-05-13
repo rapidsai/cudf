@@ -78,10 +78,6 @@ def evaluate_logical_plan(
             DefaultSingletonEngine,
         )
 
-        quent_context: cudf_polars.quent.QuentContext = (
-            config_options.executor.quent_context
-        )
-
         engine = DefaultSingletonEngine.get_or_create()
         config_options = dataclasses.replace(
             config_options,
@@ -91,7 +87,7 @@ def evaluate_logical_plan(
                     comm=engine.comm,
                     context=engine.context,
                     py_executor=engine.py_executor,
-                    engine_id=quent_context.engine.id,
+                    engine_id=config_options.executor.quent_context.engine.id,
                     worker_id=engine._quent_worker.id,
                     quent_logger=engine._quent_logger,
                 ),
