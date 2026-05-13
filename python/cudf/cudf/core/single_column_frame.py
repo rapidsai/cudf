@@ -254,11 +254,22 @@ class SingleColumnFrame(Frame, NotIterable):
     def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
 
+        unnamed_default = False
+        col_name: Hashable
         if name is no_default:
-            col_name = 0 if self.name is None else self.name
+            if self.name is None:
+                col_name = 0
+                unnamed_default = True
+            else:
+                col_name = self.name
         else:
             col_name = name
-        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        ca = ColumnAccessor(
+            {col_name: self._column},
+            multiindex=isinstance(col_name, tuple),
+            rangeindex=unnamed_default,
+            verify=False,
+        )
         # TODO: Avoid accessing DataFrame from the top level namespace
         return cudf.DataFrame._from_data(ca, index=index)
 

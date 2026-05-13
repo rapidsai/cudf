@@ -35,3 +35,23 @@ def test_series_update(index, other):
     ps.update(p_other)
     gs.update(g_other)
     assert_eq(gs, ps)
+
+
+@pytest.mark.parametrize("dtype", ["int8", "int16", "int32", "int64"])
+def test_series_update_lossy_float_to_int_pandas_compat(dtype):
+    # pandas raises TypeError when Series.update would cast float values
+    # with non-zero fractional parts into an integer column. cuDF must
+    # match this behavior under pandas-compatible mode.
+    from cudf.testing._utils import assert_exceptions_equal
+
+    psr = pd.Series([10, 11, 12], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    pother = pd.Series([61.1, 63.1], index=[1, 3])
+    gother = cudf.from_pandas(pother)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.update,
+            rfunc=gsr.update,
+            lfunc_args_and_kwargs=([pother], {}),
+            rfunc_args_and_kwargs=([gother], {}),
+        )
