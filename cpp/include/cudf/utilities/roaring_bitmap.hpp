@@ -180,6 +180,7 @@ namespace iceberg {
  *
  * A roaring bitmap payload is spec-compliant when every embedded 32-bit roaring bitmap is
  * spec-compliant, i.e. NOT a no-run cookie with non-zero containers and a stripped offset table.
+ * Undefined behavior if the offset table is present but internally inconsistent.
  *
  * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
  * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
@@ -194,7 +195,8 @@ namespace iceberg {
  * @brief Makes an Iceberg `DV-v1` blob payload spec-compliant for `cudf::roaring_bitmap`
  *
  * Injects the offset table for any embedded 32-bit roaring bitmap that is a no-run cookie with
- * non-zero containers and a stripped offset table.
+ * non-zero containers and a stripped offset table. Undefined behavior if the offset table is
+ * present but internally inconsistent.
  *
  * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
  * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
