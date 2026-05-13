@@ -221,7 +221,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
         # Typecast to decimal128 to avoid floating point precision issues
         # https://github.com/rapidsai/cudf/issues/17664
-        return (
+        result = (
             (self.astype(self._UNDERLYING_DTYPE) * conversion)
             .astype(
                 cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
@@ -229,6 +229,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
             .round(decimals=abs(int(math.log10(conversion))))
             .astype(np.dtype(np.float64))
         )
+        if isinstance(self.dtype, pd.ArrowDtype):
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.float64))
+            )
+        return result
 
     def as_datetime_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(

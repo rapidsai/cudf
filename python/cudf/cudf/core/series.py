@@ -5051,25 +5051,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         Return the data as a Series of :class:`datetime.datetime` objects.
         """
-        # cudf's columnar storage cannot hold a column of python
-        # datetime.datetime objects (they get re-inferred as datetime64),
-        # so return a pandas Series of object dtype to match the pandas API.
-        pa_arr = self.series._column.to_arrow()
-        py_objs = np.empty(len(pa_arr), dtype=object)
-        for i, s in enumerate(pa_arr):
-            v = s.as_py()
-            if v is None:
-                py_objs[i] = None
-            elif hasattr(v, "to_pydatetime"):
-                py_objs[i] = v.to_pydatetime()
-            else:
-                py_objs[i] = v
-        return pd.Series(
-            py_objs,
-            index=self.series.index.to_pandas(),
-            name=self.series.name,
-            dtype=object,
-        )
+        return self.series.to_pandas().dt.to_pydatetime()
 
 
 class TimedeltaProperties(BaseDatelikeProperties):
@@ -5371,12 +5353,9 @@ class TimedeltaProperties(BaseDatelikeProperties):
         >>> idx.total_seconds()
         Index([0.0, 86400.0, 172800.0, 259200.0, 345600.0], dtype='float64')
         """
-        col = self.series._column.total_seconds()
-        if isinstance(self.series.dtype, pd.ArrowDtype):
-            col = col.astype(
-                get_dtype_of_same_kind(self.series.dtype, np.dtype(np.float64))
-            )
-        return self._return_result_like_self(col)
+        return self._return_result_like_self(
+            self.series._column.total_seconds()
+        )
 
 
 @_performance_tracking
