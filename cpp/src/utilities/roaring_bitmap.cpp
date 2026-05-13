@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstring>
 #include <numeric>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
