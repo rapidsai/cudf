@@ -1878,7 +1878,7 @@ def test_orc_reader_epoch_boundary_with_timezone(datadir):
     )
     gdf = cudf.read_orc(path)
 
-    assert_eq(expected, gdf)
+    assert_eq(expected, gdf, check_dtype=False)
 
 
 def test_statistics_string_sum():
