@@ -125,6 +125,21 @@ constexpr auto bitmap_type_v =
                                            : cudf::roaring_bitmap_type::BITS_32;
 
 /**
+ * @brief Loads a fixed width value from a string view without assuming aligned memory.
+ */
+template <typename T>
+[[nodiscard]] T unaligned_load(cudf::host_span<cuda::std::byte const> payload,
+                               std::size_t offset = 0)
+{
+  static_assert(cudf::is_fixed_width<T>(), "T must be a fixed width type");
+  CUDF_EXPECTS(payload.size() >= offset + sizeof(T),
+               "Roaring bitmap payload is too small to load field");
+  T value;
+  std::memcpy(&value, payload.data() + offset, sizeof(T));
+  return value;
+}
+
+/**
  * @brief Composes a 32-bit or 64-bit key from a high-32-bit and low-32-bit half
  */
 template <typename Key>
@@ -210,22 +225,50 @@ std::vector<cuda::std::byte> strip_first_no_run_offset_table(cudf::roaring_bitma
   constexpr std::size_t offset_size   = sizeof(uint32_t);
   constexpr std::size_t no_run_prefix = sizeof(uint32_t) + sizeof(uint32_t);
 
-  auto const load_uint32_t = [&](std::size_t offset) {
-    uint32_t value;
-    std::memcpy(&value, payload.data() + offset, sizeof(value));
-    return value;
-  };
+  auto const bitmap32_offset = bitmap_type == cudf::roaring_bitmap_type::BITS_64
+                                 ? sizeof(uint64_t) + sizeof(uint32_t)
+                                 : std::size_t{0};
+  EXPECT_EQ(unaligned_load<uint32_t>(payload, bitmap32_offset), no_run_cookie);
+
+  // Stripping the offset table to produce a portable but non-compliant payload
+  auto const num_containers = unaligned_load<uint32_t>(payload, bitmap32_offset + sizeof(uint32_t));
+  auto const offset_table_begin = bitmap32_offset + no_run_prefix + num_containers * key_card_size;
+  auto const offset_table_end   = offset_table_begin + num_containers * offset_size;
+  payload.erase(payload.begin() + offset_table_begin, payload.begin() + offset_table_end);
+  return payload;
+}
+
+/**
+ * @brief Corrupts the specified entry of the first 32-bit bitmap's offset table by 1 byte, leaving
+ * the table present but internally inconsistent
+ */
+std::vector<cuda::std::byte> corrupt_no_run_offset_entry(cudf::roaring_bitmap_type bitmap_type,
+                                                         std::vector<cuda::std::byte> payload,
+                                                         uint32_t offset_idx)
+{
+  constexpr uint32_t no_run_cookie    = 12'346;
+  constexpr std::size_t key_card_size = sizeof(uint16_t) + sizeof(uint16_t);
+  constexpr std::size_t offset_size   = sizeof(uint32_t);
+  constexpr std::size_t no_run_prefix = sizeof(uint32_t) + sizeof(uint32_t);
 
   auto const bitmap32_offset = bitmap_type == cudf::roaring_bitmap_type::BITS_64
                                  ? sizeof(uint64_t) + sizeof(uint32_t)
                                  : std::size_t{0};
-  EXPECT_EQ(load_uint32_t(bitmap32_offset), no_run_cookie);
+  EXPECT_EQ(unaligned_load<uint32_t>(payload, bitmap32_offset), no_run_cookie);
 
-  // Stripping the offset table to produce a portable but non-compliant payload
-  auto const num_containers     = load_uint32_t(bitmap32_offset + sizeof(uint32_t));
+  auto const num_containers = unaligned_load<uint32_t>(payload, bitmap32_offset + sizeof(uint32_t));
+  EXPECT_GT(num_containers, offset_idx);
+
   auto const offset_table_begin = bitmap32_offset + no_run_prefix + num_containers * key_card_size;
-  auto const offset_table_end   = offset_table_begin + num_containers * offset_size;
-  payload.erase(payload.begin() + offset_table_begin, payload.begin() + offset_table_end);
+  auto const entry_begin        = offset_table_begin + offset_idx * offset_size;
+
+  // Bump the offset by 1 byte. The new value is still in `[offset_table_end, payload.size())`,
+  // so the range probe accepts the table as present, but the cardinality walk catches the
+  // mismatch and throws.
+  uint32_t stored;
+  std::memcpy(&stored, payload.data() + entry_begin, sizeof(stored));
+  stored += 1;
+  std::memcpy(payload.data() + entry_begin, &stored, sizeof(stored));
   return payload;
 }
 
@@ -354,6 +397,26 @@ TYPED_TEST(RoaringBitmapComplianceTest, MissingOffsetTableManyContainers)
     bitmap_type_v<Key>, serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false));
 
   verify_non_compliant_payload<Key>(serialized, keys, probe_keys);
+}
+
+// No-run + present but internally-inconsistent offset table
+TYPED_TEST(RoaringBitmapComplianceTest, InternallyInconsistentOffsetTable)
+{
+  using Key            = TypeParam;
+  auto const keys      = make_many_container_keys<Key>(0, 100, 5);
+  auto const compliant = serialize_roaring_bitmap<Key>(keys, /*run_optimize=*/false);
+  auto const type      = bitmap_type_v<Key>;
+  // Sweep across offset indices to corrupt
+  for (uint32_t offset_idx : {0u, 2u, 4u}) {
+    auto const corrupted = corrupt_no_run_offset_entry(type, compliant, offset_idx);
+    auto const payload_sv =
+      std::string_view(reinterpret_cast<char const*>(corrupted.data()), corrupted.size());
+
+    EXPECT_THROW(std::ignore = cudf::iceberg::is_roaring_bitmap_compliant(type, payload_sv),
+                 cudf::logic_error);
+    EXPECT_THROW(std::ignore = cudf::iceberg::make_compliant_roaring_bitmap(type, payload_sv),
+                 cudf::logic_error);
+  }
 }
 
 // Run cookie + single container

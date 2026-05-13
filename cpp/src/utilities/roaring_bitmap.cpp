@@ -100,8 +100,8 @@ template <typename T>
 }
 
 /**
- * @brief Returns whether all containers in a no-run 32-bit roaring bitmap have
- * valid offsets
+ * @brief Returns whether a no-run 32-bit roaring bitmap has a offset table present that is
+ * internally consistent
  */
 [[nodiscard]] bool no_run_bitmap_has_valid_offsets(std::string_view payload,
                                                    uint32_t num_containers)
@@ -112,17 +112,30 @@ template <typename T>
   std::size_t const offset_table_end = header_end + num_containers * offset_entry_size;
   if (payload.size() < offset_table_end) { return false; }
 
+  // The first offset of a present table always equals offset_table_end. Anything else can only
+  // be the leading bytes of an array container
+  if (unaligned_load<uint32_t>(payload, header_end) != static_cast<uint32_t>(offset_table_end)) {
+    return false;
+  }
+
+  // Every offset must match the running cumulative size, and the last container must fit inside the
+  // payload. Any failure here is a malformed payload.
   auto expected = static_cast<uint32_t>(offset_table_end);
   return std::all_of(
     cuda::counting_iterator<uint32_t>(0),
     cuda::counting_iterator<uint32_t>(num_containers),
     [&](uint32_t i) {
       auto const stored = unaligned_load<uint32_t>(payload, header_end + i * offset_entry_size);
-      if (stored != expected) { return false; }
+      CUDF_EXPECTS(
+        stored == expected,
+        "Roaring bitmap offset table is internally inconsistent at container " + std::to_string(i));
       auto const card = container_cardinality(payload, no_run_hdr_prefix, i);
       expected += static_cast<uint32_t>(
         (card <= max_array_container_card) ? card * sizeof(uint16_t) : bitset_container_bytes);
-      return expected <= payload.size();
+      CUDF_EXPECTS(
+        expected <= payload.size(),
+        "Roaring bitmap container extends past payload end at container " + std::to_string(i));
+      return true;
     });
 }
 
