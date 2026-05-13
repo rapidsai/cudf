@@ -6582,9 +6582,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         dtypes = [dtype for _, dtype in filtered._dtypes]
         is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes) if dtypes else None
         if (
             not numeric_only
+            and common_dtype is not None
             and is_dtype_obj_string(common_dtype)
             and any(not is_dtype_obj_string(dtype) for dtype in dtypes)
         ):
@@ -6731,10 +6732,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
-                # TODO: What happens if common_dtype is None?
-                common_dtype = find_common_type(source_dtypes)
+                common_dtype = (
+                    find_common_type(source_dtypes) if source_dtypes else None
+                )
                 if (
-                    is_dtype_obj_string(common_dtype)
+                    common_dtype is not None
+                    and is_dtype_obj_string(common_dtype)
                     and any(
                         not is_dtype_obj_string(dtype)
                         for dtype in source_dtypes
