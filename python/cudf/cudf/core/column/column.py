@@ -2550,6 +2550,26 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
+    def factorize(
+        self, sort: bool, use_na_sentinel: bool
+    ) -> tuple["cp.ndarray", Self]:
+        """
+        Column-level factorize. Returns ``(labels, cats_col)``.
+
+        ``cats_col`` is the column of unique values; ``labels`` are the
+        codes mapping each element of ``self`` to its position in
+        ``cats_col`` (with ``-1`` for nulls when ``use_na_sentinel=True``).
+        """
+        cats = self.dropna() if use_na_sentinel else self
+        cats = cast("Self", cats.unique().astype(self.dtype))
+        if sort:
+            cats = cast("Self", cats.sort_values())
+        labels = self._label_encoding(
+            cats=cats,
+            dtype=np.dtype("int64"),
+        ).values
+        return labels, cats
+
     def _is_sliced(self) -> bool:
         """
         Check if this column is a sliced view of a larger buffer.

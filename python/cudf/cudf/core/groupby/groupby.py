@@ -32,7 +32,10 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -1090,6 +1093,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError(
                 "Passing args to func is currently not supported."
             )
+        from cudf.core.dataframe import DataFrame
 
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
@@ -1169,11 +1173,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
                 data[key] = result_col
-        data = ColumnAccessor(data, multiindex=multilevel)
+        # Preserve the column axis label-dtype/level_names from the source
+        # DataFrame so that aggregations such as ``nunique`` keep the column
+        # axis name (matching pandas behavior).
+        if (
+            not multilevel
+            and self.obj.ndim == 2
+            and self.obj._data.level_names != (None,)
+        ):
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                label_dtype=self.obj._data.label_dtype,
+            )
+        else:
+            data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
-
-        from cudf.core.dataframe import DataFrame
 
         result = DataFrame._from_data(data, index=result_index)
 
@@ -2836,6 +2853,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
+        from cudf.core.dataframe import DataFrame
+
         result = self.obj._from_data(
             dict(
                 zip(
@@ -2845,6 +2864,28 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
+        # Pandas' groupby.ffill/bfill builds the result columns via a ``take``
+        # on the input columns, which converts integer-valued column labels
+        # to object dtype. Reproduce that here so column metadata matches.
+        if (
+            isinstance(result, DataFrame)
+            and isinstance(self.obj, DataFrame)
+            and result._num_columns < self.obj._num_columns
+        ):
+            source_pd_cols = self.obj._data.to_pandas_index
+            if (
+                source_pd_cols.dtype.kind in {"i", "u"}
+                or source_pd_cols.dtype == object
+            ):
+                indexer = source_pd_cols.get_indexer(result._column_names)
+                if not (indexer == -1).any():
+                    taken = source_pd_cols.take(indexer)
+                    if (
+                        not isinstance(taken, pd.MultiIndex)
+                        and taken.dtype != object
+                    ):
+                        taken = taken.astype(object)
+                    result.columns = taken
         return self._mimic_pandas_order(result)
 
     def ffill(self, limit: int | None = None):
@@ -3074,18 +3115,84 @@ class GroupBy(Serializable, Reducible, Scannable):
     def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("any is currently not implemented")
+        return self._bool_reduce("any", skipna=skipna, min_count=min_count)
 
     def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("all is currently not implemented")
+        return self._bool_reduce("all", skipna=skipna, min_count=min_count)
+
+    def _bool_reduce(self, op: str, *, skipna: bool, min_count: int):
+        """Implement all/any as min/max on bool-coerced value columns."""
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
+
+        agg_name = {"all": "min", "any": "max"}[op]
+        # Empty-group fill value: vacuously True for all, vacuously False for any
+        fill_value = op == "all"
+
+        is_series = isinstance(self.obj, Series)
+
+        # Coerce each value column to a (nullable) bool column so that
+        # nulls are preserved through the aggregation (min/max skip
+        # nulls). For ``skipna=False``, nulls are replaced with True so
+        # they don't flip ``all`` to False and always make ``any`` True.
+        bool_dtype = np.dtype(np.bool_)
+
+        def _to_bool_col(col):
+            if is_dtype_obj_string(col.dtype):
+                bool_col = col.count_characters() > np.int8(0)
+            else:
+                # For numeric/bool inputs, cast to bool preserving nulls.
+                bool_col = col != 0
+            # Normalize away pandas-extension bool dtypes so the downstream
+            # aggregation always sees ``np.bool_``.
+            bool_col = bool_col.astype(bool_dtype, copy=False)
+            if not skipna:
+                bool_col = bool_col.fillna(True)
+            return bool_col
+
+        if is_series:
+            new_obj = Series._from_column(
+                _to_bool_col(self.obj._column), name=self.obj.name
+            )
+        else:
+            new_data = {
+                col_name: _to_bool_col(self.obj._data[col_name])
+                for col_name in self.grouping._values_column_names
+            }
+            new_obj = DataFrame._from_data(new_data, index=self.obj.index)
+
+        # Reuse the same grouping so key columns match ``new_obj`` exactly,
+        # avoiding label-based lookup when the key column was excluded.
+        bool_gb = type(self)(
+            new_obj,
+            by=self.grouping,
+            level=None,
+            sort=self._sort,
+            as_index=self._as_index,
+            dropna=self._dropna,
+        )
+        result = bool_gb.agg(agg_name)
+
+        # Empty groups (skipna=True with all-NA values) yield NA from
+        # min/max — pandas treats these as ``True`` for ``all`` and
+        # ``False`` for ``any``.
+        bool_np = np.dtype(np.bool_)
+        if isinstance(result, Series):
+            result = result.fillna(fill_value).astype(bool_np)
+        else:
+            for col_name in result._column_names:
+                result[col_name] = (
+                    result[col_name].fillna(fill_value).astype(bool_np)
+                )
+
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
