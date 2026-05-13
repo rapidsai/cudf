@@ -1093,6 +1093,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError(
                 "Passing args to func is currently not supported."
             )
+        from cudf.core.dataframe import DataFrame
 
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
@@ -1172,11 +1173,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
                 data[key] = result_col
-        data = ColumnAccessor(data, multiindex=multilevel)
+        # Preserve the column axis label-dtype/level_names from the source
+        # DataFrame so that aggregations such as ``nunique`` keep the column
+        # axis name (matching pandas behavior).
+        if (
+            not multilevel
+            and self.obj.ndim == 2
+            and self.obj._data.level_names != (None,)
+        ):
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                label_dtype=self.obj._data.label_dtype,
+            )
+        else:
+            data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
-
-        from cudf.core.dataframe import DataFrame
 
         result = DataFrame._from_data(data, index=result_index)
 
@@ -2824,6 +2838,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
+        from cudf.core.dataframe import DataFrame
+
         result = self.obj._from_data(
             dict(
                 zip(
@@ -2833,6 +2849,28 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
+        # Pandas' groupby.ffill/bfill builds the result columns via a ``take``
+        # on the input columns, which converts integer-valued column labels
+        # to object dtype. Reproduce that here so column metadata matches.
+        if (
+            isinstance(result, DataFrame)
+            and isinstance(self.obj, DataFrame)
+            and result._num_columns < self.obj._num_columns
+        ):
+            source_pd_cols = self.obj._data.to_pandas_index
+            if (
+                source_pd_cols.dtype.kind in {"i", "u"}
+                or source_pd_cols.dtype == object
+            ):
+                indexer = source_pd_cols.get_indexer(result._column_names)
+                if not (indexer == -1).any():
+                    taken = source_pd_cols.take(indexer)
+                    if (
+                        not isinstance(taken, pd.MultiIndex)
+                        and taken.dtype != object
+                    ):
+                        taken = taken.astype(object)
+                    result.columns = taken
         return self._mimic_pandas_order(result)
 
     def ffill(self, limit: int | None = None):
