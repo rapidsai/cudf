@@ -663,6 +663,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
 
+            if to_dtype is not None and col.dtype != cudf.dtype(to_dtype):
+                col = col.astype(cudf.dtype(to_dtype))
+
             array = get_array(col)
 
             if (
