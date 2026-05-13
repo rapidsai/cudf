@@ -554,7 +554,7 @@ class DaskContext:
 
 def default_quent_context() -> QuentContext:
     # Just avoiding a circular import
-    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent import QuentContext
 
     return QuentContext()
 
