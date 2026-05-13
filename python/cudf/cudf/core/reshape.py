@@ -11,7 +11,7 @@ import pandas as pd
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_list_like, is_scalar, is_string_dtype
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core.column import (
     ColumnBase,
     as_column,
