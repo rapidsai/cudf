@@ -29,7 +29,7 @@ def test_executor_basics(streaming_engine):
     assert_gpu_result_equal(df, engine=streaming_engine)
 
 
-def test_cudf_cache_evaluate():
+def test_cudf_cache_evaluate(engine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -38,7 +38,7 @@ def test_cudf_cache_evaluate():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"), pl.col("a"))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    assert_gpu_result_equal(query, executor="in-memory")
+    assert_gpu_result_equal(query, engine=engine)
 
 
 def test_dask_experimental_map_function_get_hashable(streaming_engine):
@@ -61,7 +61,9 @@ def test_unknown_executor():
         pl.exceptions.ComputeError,
         match="ValueError: Unknown executor 'unknown-executor'",
     ):
-        assert_gpu_result_equal(df, executor="unknown-executor")
+        assert_gpu_result_equal(
+            df, engine=pl.GPUEngine(executor="unknown-executor", raise_on_fail=True)
+        )
 
 
 @pytest.mark.parametrize("executor", [None, "in-memory", "streaming"])
@@ -76,5 +78,6 @@ def test_unknown_executor_options(executor):
             engine=pl.GPUEngine(
                 executor=executor,
                 executor_options={"foo": None},
+                raise_on_fail=True,
             )
         )

@@ -38,7 +38,7 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
-def test_polars_verbose_warns(monkeypatch):
+def test_polars_verbose_warns(engine, monkeypatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
@@ -55,7 +55,7 @@ def test_polars_verbose_warns(monkeypatch):
         ),
     ):
         # And ensure that collecting issues the correct warning.
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
 
 
 def test_unsupported_config_raises():
