@@ -90,87 +90,57 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     store_sk = params["store_sk"]
 
-    # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # Step 1: Calculate benchmark (average profit for store with null demographics)
+    # Benchmark: global mean profit for the store with null demographics — single row.
+    # Use a constant-key equi-join instead of how="cross" so the streaming executor
+    # treats it as a broadcast join (1 row ≤ broadcast_join_limit) rather than a
+    # ConditionalJoin that falls back from multi-partition mode.
     benchmark = (
         store_sales.filter(
-            (pl.col("ss_store_sk") == store_sk) & (pl.col("ss_cdemo_sk").is_null())
+            (pl.col("ss_store_sk") == store_sk) & pl.col("ss_cdemo_sk").is_null()
         )
-        .group_by("ss_store_sk")
-        .agg(
-            [
-                pl.col("ss_net_profit").mean().alias("profit_mean"),
-                pl.col("ss_net_profit").count().alias("profit_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit_mean"))
-                .otherwise(None)
-                .alias("benchmark_profit")
-            ]
-        )
-        .select("benchmark_profit")
+        .select(pl.col("ss_net_profit").mean().alias("benchmark_profit"))
+        .with_columns(pl.lit(1, dtype=pl.Int32).alias("_key"))
     )
 
-    # Step 2: Calculate item-level average profits for store
+    # Item-level average profits, broadcast-joined with the 1-row benchmark.
     item_profits = (
         store_sales.filter(pl.col("ss_store_sk") == store_sk)
         .group_by("ss_item_sk")
-        .agg(
-            [
-                pl.col("ss_net_profit").mean().alias("profit_mean"),
-                pl.col("ss_net_profit").count().alias("profit_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit_mean"))
-                .otherwise(None)
-                .alias("avg(ss_net_profit)")
-            ]
-        )
-        .drop(["profit_mean", "profit_count"])
-        .join(benchmark, how="cross")
-        .filter(pl.col("avg(ss_net_profit)") > (0.9 * pl.col("benchmark_profit")))
+        .agg(pl.col("ss_net_profit").mean().alias("avg_profit"))
+        .with_columns(pl.lit(1, dtype=pl.Int32).alias("_key"))
+        .join(benchmark, on="_key")
+        .filter(pl.col("avg_profit") > 0.9 * pl.col("benchmark_profit"))
+        .select(["ss_item_sk", "avg_profit"])
     )
 
-    # Step 3: Create ascending ranking (worst to best)
     ascending_rank = (
         item_profits.with_columns(
-            [pl.col("avg(ss_net_profit)").rank(method="ordinal").alias("rnk")]
+            pl.col("avg_profit").rank(method="ordinal").alias("rnk")
         )
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
     )
 
-    # Step 4: Create descending ranking (best to worst)
     descending_rank = (
         item_profits.with_columns(
-            [
-                pl.col("avg(ss_net_profit)")
-                .rank(method="ordinal", descending=True)
-                .alias("rnk")
-            ]
+            pl.col("avg_profit").rank(method="ordinal", descending=True).alias("rnk")
         )
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
     )
 
+    item_cols = item.select(["i_item_sk", "i_product_name"])
     sort_by = {"rnk": False}
     limit = 100
-    # Step 5: Join rankings and get product names
     return QueryResult(
         frame=(
             ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
-            .join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
+            .join(item_cols, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
             .join(
-                item,
+                item_cols,
                 left_on="ss_item_sk_desc",
                 right_on="i_item_sk",
                 how="inner",

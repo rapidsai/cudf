@@ -105,19 +105,31 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select(pl.col("ca_zip").str.slice(0, 2).alias("ca_zip_prefix"))
     )
 
-    # Main query: join store_sales with date_dim, store, and filter by zip codes
+    # Pre-filter date_dim; d_year/d_qoy not needed after filter — semi-join.
+    filtered_dates = date_dim.filter(
+        (pl.col("d_year") == year) & (pl.col("d_qoy") == qoy)
+    ).select("d_date_sk")
+
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            store_sales.select(["ss_sold_date_sk", "ss_store_sk", "ss_net_profit"])
+            .join(
+                filtered_dates,
+                left_on="ss_sold_date_sk",
+                right_on="d_date_sk",
+                how="semi",
+            )
+            .join(
+                store.select(["s_store_sk", "s_store_name", "s_zip"]),
+                left_on="ss_store_sk",
+                right_on="s_store_sk",
+            )
             .with_columns(pl.col("s_zip").str.slice(0, 2).alias("s_zip_prefix"))
             .join(
                 intersect_zips,
                 left_on="s_zip_prefix",
                 right_on="ca_zip_prefix",
             )
-            .filter(pl.col("d_qoy") == qoy)
-            .filter(pl.col("d_year") == year)
             .group_by("s_store_name")
             .agg(pl.col("ss_net_profit").sum().alias("sum"))
             .sort("s_store_name", nulls_last=True)

@@ -97,23 +97,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    d1, d2 = [
-        date_dim.clone().select(
-            [
-                pl.col("d_date_sk").alias(f"{p}_date_sk"),
-                pl.col("d_moy").alias(f"{p}_moy"),
-                pl.col("d_year").alias(f"{p}_year"),
-            ]
-        )
-        for p in ("d1", "d2")
-    ]
-    d3 = date_dim.clone().select(
-        [
-            pl.col("d_date_sk").alias("d3_date_sk"),
-            pl.col("d_year").alias("d3_year"),
-        ]
-    )
-
     sort_by = {
         "i_item_id": False,
         "i_item_desc": False,
@@ -121,29 +104,106 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "s_store_name": False,
     }
     limit = 100
+
+    # d1: one specific month of the target year — most selective filter.
+    # d2: 4-month window of the target year.
+    # d3: 3-year window — less selective but still worth pushing before the cs shuffle join.
+    d1_dates = date_dim.filter(
+        (pl.col("d_moy") == month) & (pl.col("d_year") == year)
+    ).select("d_date_sk")
+    d2_dates = date_dim.filter(
+        pl.col("d_moy").is_between(month, month + 3) & (pl.col("d_year") == year)
+    ).select("d_date_sk")
+    d3_dates = date_dim.filter(
+        pl.col("d_year").is_in([year, year + 1, year + 2])
+    ).select("d_date_sk")
+
+    # store_returns [6] ≤ broadcast limit: apply d2 date filter, then use
+    # (customer, item) pairs to pre-filter ss and cs before shuffle joins.
+    store_returns_filtered = store_returns.join(
+        d2_dates, left_on="sr_returned_date_sk", right_on="d_date_sk", how="semi"
+    ).select(["sr_customer_sk", "sr_item_sk", "sr_ticket_number", "sr_return_quantity"])
+    sr_customer_item = store_returns_filtered.select(["sr_customer_sk", "sr_item_sk"])
+
+    store_sales_filtered = (
+        store_sales.join(
+            d1_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi"
+        )
+        .join(
+            sr_customer_item,
+            left_on=["ss_customer_sk", "ss_item_sk"],
+            right_on=["sr_customer_sk", "sr_item_sk"],
+            how="semi",
+        )
+        .select(
+            [
+                "ss_customer_sk",
+                "ss_item_sk",
+                "ss_store_sk",
+                "ss_ticket_number",
+                "ss_quantity",
+            ]
+        )
+        .join(
+            item.select(["i_item_sk", "i_item_id", "i_item_desc"]),
+            left_on="ss_item_sk",
+            right_on="i_item_sk",
+        )
+        .join(
+            store.select(["s_store_sk", "s_store_id", "s_store_name"]),
+            left_on="ss_store_sk",
+            right_on="s_store_sk",
+        )
+        .select(
+            [
+                "ss_customer_sk",
+                "ss_item_sk",
+                "ss_ticket_number",
+                "ss_quantity",
+                "i_item_id",
+                "i_item_desc",
+                "s_store_id",
+                "s_store_name",
+            ]
+        )
+    )
+
+    catalog_sales_filtered = (
+        catalog_sales.join(
+            d3_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+        )
+        .join(
+            sr_customer_item,
+            left_on=["cs_bill_customer_sk", "cs_item_sk"],
+            right_on=["sr_customer_sk", "sr_item_sk"],
+            how="semi",
+        )
+        .select(["cs_bill_customer_sk", "cs_item_sk", "cs_quantity"])
+    )
+
     return QueryResult(
         frame=(
-            store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-            .join(
-                store_returns,
+            store_sales_filtered.join(
+                store_returns_filtered,
                 left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
                 right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
             )
-            .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
+            .select(
+                [
+                    "ss_customer_sk",
+                    "ss_item_sk",
+                    "ss_quantity",
+                    "sr_return_quantity",
+                    "i_item_id",
+                    "i_item_desc",
+                    "s_store_id",
+                    "s_store_name",
+                ]
+            )
             .join(
-                catalog_sales,
+                catalog_sales_filtered,
                 left_on=["ss_customer_sk", "ss_item_sk"],
                 right_on=["cs_bill_customer_sk", "cs_item_sk"],
-            )
-            .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
-            .filter(
-                (pl.col("d1_moy") == month)
-                & (pl.col("d1_year") == year)
-                & (pl.col("d2_moy").is_between(month, month + 3))
-                & (pl.col("d2_year") == year)
-                & (pl.col("d3_year").is_in([year, year + 1, year + 2]))
             )
             .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
             .agg(

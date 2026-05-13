@@ -106,10 +106,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    # Project lookup tables to only the columns needed in each component.
+    date_cols = date_dim.select(["d_date_sk", "d_year", "d_qoy"])
+    item_cols = item.select(["i_item_sk", "i_category"])
+
     store_component = (
         store_sales.filter(pl.col(nullcol_ss).is_null())
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+        .join(date_cols, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(item_cols, left_on="ss_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("store").alias("channel"),
@@ -123,8 +129,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     web_component = (
         web_sales.filter(pl.col(nullcol_ws).is_null())
-        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .select(["ws_sold_date_sk", "ws_item_sk", "ws_ext_sales_price"])
+        .join(date_cols, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(item_cols, left_on="ws_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("web").alias("channel"),
@@ -138,8 +145,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     catalog_component = (
         catalog_sales.filter(pl.col(nullcol_cs).is_null())
-        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .select(["cs_sold_date_sk", "cs_item_sk", "cs_ext_sales_price"])
+        .join(date_cols, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(item_cols, left_on="cs_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("catalog").alias("channel"),
@@ -166,10 +174,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .agg(
                 [
                     pl.len().cast(pl.Int64).alias("sales_cnt"),
-                    pl.when(pl.col("ext_sales_price").count() > 0)
-                    .then(pl.col("ext_sales_price").sum())
-                    .otherwise(None)
-                    .alias("sales_amt"),
+                    pl.col("ext_sales_price").sum().alias("sales_amt"),
                 ]
             )
             .select(
