@@ -3908,6 +3908,36 @@ class BaseDatelikeProperties:
         return self.series._from_data_like_self(data)
 
 
+def _expand_pyarrow_subsecond(date_format: str, subsecond_format: str) -> str:
+    # pyarrow's strftime appends sub-second fractions after %S based on the
+    # timestamp resolution. Insert that fraction directly into the format
+    # string for libcudf, but only when %S is not already followed by a
+    # subsecond directive.
+    out: list[str] = []
+    i = 0
+    n = len(date_format)
+    while i < n:
+        ch = date_format[i]
+        if ch == "%" and i + 1 < n:
+            out.append(date_format[i : i + 2])
+            directive = date_format[i + 1]
+            i += 2
+            if directive == "S":
+                # Only append if not already followed by a subsecond directive.
+                if (
+                    i + 1 < n
+                    and date_format[i] == "."
+                    and date_format[i + 1] in "0123456789"
+                ):
+                    pass
+                else:
+                    out.append(subsecond_format)
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 class DatetimeProperties(BaseDatelikeProperties):
     """
     Accessor object for datetimelike properties of the Series values.
@@ -4374,9 +4404,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        return self._return_result_like_self(
-            self.series._column.is_leap_year.fillna(False)
-        )
+        col = self.series._column.is_leap_year
+        if not isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.fillna(False)
+        return self._return_result_like_self(col)
 
     @property
     @_performance_tracking
@@ -4439,9 +4470,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         7     Saturday
         dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_day_names(locale)
-        )
+        col = self.series._column.get_day_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def month_name(self, locale: str | None = None) -> Series:
@@ -4469,9 +4501,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         5    February
         dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_month_names(locale)
-        )
+        col = self.series._column.get_month_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def isocalendar(self) -> DataFrame:
@@ -4963,12 +4996,31 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            # pyarrow's strftime returns pa.string(), not pa.large_string().
+            target_dtype = pd.ArrowDtype(pa.string())
+            # pyarrow's "%S" includes the subsecond fraction at the
+            # timestamp's resolution. Translate to the equivalent libcudf
+            # format directive so the output matches.
+            unit = self.series.dtype.pyarrow_dtype.unit
+            subsecond_format = {
+                "s": "",
+                "ms": ".%3f",
+                "us": ".%6f",
+                "ns": ".%9f",
+            }.get(unit, "")
+            if subsecond_format:
+                date_format = _expand_pyarrow_subsecond(
+                    date_format, subsecond_format
+                )
+        else:
+            target_dtype = get_dtype_of_same_kind(
+                self.series.dtype, DEFAULT_STRING_DTYPE
+            )
         return self._return_result_like_self(
             self.series._column.strftime(
                 format=date_format,
-                dtype=get_dtype_of_same_kind(
-                    self.series.dtype, DEFAULT_STRING_DTYPE
-                ),
+                dtype=target_dtype,
             )
         )
 
@@ -4997,6 +5049,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         return self._return_result_like_self(
             self.series._column.tz_convert(tz)
         )
+
+    @_performance_tracking
+    def to_pydatetime(self) -> pd.Series:
+        """
+        Return the data as a Series of :class:`datetime.datetime` objects.
+        """
+        return self.series.to_pandas().dt.to_pydatetime()
 
 
 class TimedeltaProperties(BaseDatelikeProperties):
@@ -5066,6 +5125,13 @@ class TimedeltaProperties(BaseDatelikeProperties):
     4    0
     dtype: int64
     """
+
+    @_performance_tracking
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an array of native :class:`datetime.timedelta` objects.
+        """
+        return self.series.to_pandas().dt.to_pytimedelta()
 
     @property
     @_performance_tracking

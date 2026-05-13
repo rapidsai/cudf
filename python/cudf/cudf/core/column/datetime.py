@@ -28,6 +28,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
+    bool_same_kind_policy,
     int16_same_kind_policy,
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
@@ -287,14 +288,28 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def day_of_year(self) -> ColumnBase:
-        return PylibcudfFunction(
+        result = PylibcudfFunction(
             plc.datetime.day_of_year,
             pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            # pyarrow temporal kernels return int64; match pandas.
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+            )
+        return result
+
+    def _maybe_fillna_false(self, col: ColumnBase) -> ColumnBase:
+        # For nullable extension dtype sources (e.g. ArrowDtype), preserve
+        # nulls in the result to match pandas. Otherwise fill with False
+        # so the result is a plain bool column.
+        if isinstance(self.dtype, pd.ArrowDtype):
+            return col
+        return col.fillna(False)
 
     @functools.cached_property
     def is_month_start(self) -> ColumnBase:
-        return (self.day == 1).fillna(False)
+        return self._maybe_fillna_false(self.day == 1)
 
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
@@ -307,17 +322,19 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc_result,
                 dtype_from_pylibcudf_column(plc_result),
             )
-        return (self.day == cast("Self", last_day_col).day).fillna(False)
+        return self._maybe_fillna_false(
+            self.day == cast("Self", last_day_col).day
+        )
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
         last_month = self.month.isin([3, 6, 9, 12])
-        return (self.is_month_end & last_month).fillna(False)
+        return self._maybe_fillna_false(self.is_month_end & last_month)
 
     @functools.cached_property
     def is_quarter_start(self) -> ColumnBase:
         first_month = self.month.isin([1, 4, 7, 10])
-        return (self.is_month_start & first_month).fillna(False)
+        return self._maybe_fillna_false(self.is_month_start & first_month)
 
     @functools.cached_property
     def is_year_end(self) -> ColumnBase:
@@ -326,25 +343,33 @@ class DatetimeColumn(TemporalBaseColumn):
 
         leap = day_of_year == 366
         non_leap = day_of_year == 365
-        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
+        return self._maybe_fillna_false(
+            leap.copy_if_else(non_leap, leap_dates)
+        )
 
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.is_leap_year,
-            pylibcudf_result_dtype_policy,
+            bool_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
     def is_year_start(self) -> ColumnBase:
-        return (self.day_of_year == 1).fillna(False)
+        return self._maybe_fillna_false(self.day_of_year == 1)
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        return PylibcudfFunction(
+        result = PylibcudfFunction(
             plc.datetime.days_in_month,
             pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            # pyarrow temporal kernels return int64; match pandas.
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+            )
+        return result
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
@@ -410,7 +435,13 @@ class DatetimeColumn(TemporalBaseColumn):
                 ),
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
-            if result.dtype == np.dtype("int16"):
+            if isinstance(self.dtype, pd.ArrowDtype):
+                # pyarrow's temporal compute kernels return int64; match that
+                # when the source is an ArrowDtype.
+                result = result.astype(
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+                )
+            elif result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result
 
@@ -476,14 +507,23 @@ class DatetimeColumn(TemporalBaseColumn):
         return self._round_dt(plc.datetime.round_datetimes, freq)
 
     def isocalendar(self) -> dict[str, ColumnBase]:
-        return {
+        # pyarrow's isocalendar returns int64 fields and fills nulls with 0;
+        # pandas' isocalendar for datetime64 returns UInt32 with NA preserved.
+        is_arrow = isinstance(self.dtype, pd.ArrowDtype)
+        target_dtype: DtypeObj = (
+            np.dtype(np.int64) if is_arrow else np.dtype(np.uint32)
+        )
+        result = {
             field: self.strftime(
                 format=directive, dtype=np.dtype("object")
-            ).astype(np.dtype(np.uint32))
+            ).astype(get_dtype_of_same_kind(self.dtype, target_dtype))
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
             )
         }
+        if is_arrow:
+            result = {field: col.fillna(0) for field, col in result.items()}
+        return result
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
@@ -923,6 +963,7 @@ class DatetimeColumn(TemporalBaseColumn):
         ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
+        is_arrow = isinstance(self.dtype, pd.ArrowDtype)
         dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
         tzname = dtype.tz.key
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
@@ -944,6 +985,8 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
+        if is_arrow:
+            dtype = pd.ArrowDtype(pa.timestamp(self.time_unit, tz))  # type: ignore[call-overload]
         result = cast(
             DatetimeTZColumn, ColumnBase.create(gmt_data.plc_column, dtype)
         )
@@ -999,10 +1042,16 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
+        if isinstance(self.dtype, pd.ArrowDtype):
+            target_dtype: DtypeObj = pd.ArrowDtype(
+                pa.timestamp(self.time_unit)  # type: ignore[call-overload]
+            )
+        else:
+            target_dtype = _get_base_dtype(self.dtype)
         return cast(
             "DatetimeColumn",
             DatetimeColumn.create(
-                self.plc_column, _get_base_dtype(self.dtype), validate=False
+                self.plc_column, target_dtype, validate=False
             ),
         )
 
@@ -1116,12 +1165,15 @@ class DatetimeTZColumn(DatetimeColumn):
         elif tz == str(self.tz):
             return self.copy()
 
+        if isinstance(self.dtype, pd.ArrowDtype):
+            target_dtype: DtypeObj = pd.ArrowDtype(
+                pa.timestamp(self.time_unit, tz)  # type: ignore[call-overload]
+            )
+        else:
+            target_dtype = get_compatible_timezone(
+                pd.DatetimeTZDtype(self.time_unit, tz)
+            )
         return cast(
             DatetimeTZColumn,
-            ColumnBase.create(
-                self.plc_column,
-                get_compatible_timezone(
-                    pd.DatetimeTZDtype(self.time_unit, tz)
-                ),
-            ),
+            ColumnBase.create(self.plc_column, target_dtype),
         )

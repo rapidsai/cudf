@@ -209,6 +209,7 @@ def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
 bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
 int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
 int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
+int64_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int64))
 
 
 def list_dtype_policy(
