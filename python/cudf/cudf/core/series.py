@@ -525,7 +525,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
-            if dtype is None and index is not None:
+            if dtype is None and index is not None and len(index) > 0:
                 dtype = np.dtype("float64")
         if dtype is not None:
             dtype = cudf.dtype(dtype)
