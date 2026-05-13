@@ -13,8 +13,6 @@ import pytest
 
 import polars as pl
 
-import cudf_polars.testing.asserts
-
 structlog = pytest.importorskip("structlog")
 
 
@@ -44,7 +42,7 @@ def test_trace_basic(
     """)
 
     env = {
-        "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
+        "CUDF_POLARS__EXECUTOR": "in-memory",
         "CUDF_POLARS_LOG_TRACES": "1",
     }
 
@@ -55,10 +53,9 @@ def test_trace_basic(
     assert b"frames_input" in result
     assert b"total_bytes_output" in result
     assert b"total_bytes_input" in result
-    # TODO: With rapidsmpf are the rmm fields not supposed to be logged?
-    assert b"rmm_total_bytes_output" not in result
-    assert b"rmm_total_bytes_input" not in result
-    assert b"rmm_current_bytes_output" not in result
+    assert b"rmm_total_bytes_output" in result
+    assert b"rmm_total_bytes_input" in result
+    assert b"rmm_current_bytes_output" in result
     assert b"overhead_duration" in result
 
 

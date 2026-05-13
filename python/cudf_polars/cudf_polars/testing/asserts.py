@@ -26,10 +26,6 @@ __all__: list[str] = [
     "assert_sink_result_equal",
 ]
 
-# Will be overriden by `conftest.py` with the value from the `--executor`
-# command-line argument.
-DEFAULT_EXECUTOR = "in-memory"
-
 
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,

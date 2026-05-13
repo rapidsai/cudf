@@ -272,19 +272,7 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--executor",
-        action="store",
-        default="streaming",
-        choices=("in-memory", "streaming"),
-        help="Executor to use for GPUEngine.",
-    )
-
-
 def pytest_configure(config):
-    import cudf_polars.testing.asserts
-
     config.addinivalue_line(
         "markers",
         "skip_on_streaming_engine(reason, *, engine=None): skip the test for "
@@ -301,8 +289,6 @@ def pytest_configure(config):
     # test that shares a worker with a ray/dask test, so the suppression must
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
-
-    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
 
 
 def pytest_collection_modifyitems(items):
