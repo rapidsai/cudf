@@ -480,10 +480,14 @@ async def _extract_partitions_and_send(
 
 def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     """Convert Sort IR to list of OrderKeys."""
-    schema_names = list(ir.schema.keys())
     return [
-        OrderKey(schema_names.index(by.name), order, null_order)
-        for by, order, null_order in zip(ir.by, ir.order, ir.null_order, strict=False)
+        OrderKey(index, order, null_order)
+        for index, order, null_order in zip(
+            names_to_indices(ir.by, ir.schema),
+            ir.order,
+            ir.null_order,
+            strict=False,
+        )
     ]
 
 
@@ -497,6 +501,10 @@ def _is_already_sorted(
         metadata_in.partitioning, nranks, keys=order_keys
     )
     if not np:
+        # np is falsy if `order_keys` does not match
+        # any prefix of keys in `metadata_in.partitioning`.
+        # If `order_keys` is Sequence[OrderKey], the order
+        # and null_order attributes must also match.
         return False
     scheme = np.inter_rank_scheme
     if not isinstance(scheme, OrderScheme):
@@ -516,11 +524,14 @@ def _build_order_scheme(
     """Build output OrderScheme metadata."""
     n_keys = len(order_keys)
     stream = sort_boundaries_df.stream
+    # sort_boundaries_df will contain a tie-breaker column
     by_table = plc.Table(sort_boundaries_df.table.columns()[:n_keys])
     n_rows = by_table.num_rows()
 
     strict_boundaries = (
         n_rows == 0
+        # TODO: Use unique_count_table
+        # Requires https://github.com/rapidsai/cudf/pull/22487
         or plc.stream_compaction.unique(
             by_table,
             list(range(n_keys)),
