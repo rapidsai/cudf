@@ -506,6 +506,7 @@ def _decompose(
         input_ir = HConcat(
             schema,
             True,  # noqa: FBT003
+            False,  # noqa: FBT003
             *unique_input_irs,
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)

@@ -625,9 +625,14 @@ def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> ir.IR:
+    if POLARS_VERSION_LT_139:
+        strict = False
+    else:
+        _, strict, _ = node.options
     return ir.HConcat(
         schema,
         False,  # noqa: FBT003
+        strict,
         *(translator.translate_ir(n=n) for n in node.inputs),
     )
 

@@ -42,7 +42,7 @@ def test_hconcat_should_broadcast():
     child2 = DataFrameScan({"b": DataType(pl.Float64())}, df2._df, None)
 
     schema = {"a": DataType(pl.Int64()), "b": DataType(pl.Float64())}
-    node = HConcat(schema, True, child1, child2)  # noqa: FBT003
+    node = HConcat(schema, True, False, child1, child2)  # noqa: FBT003
     result = node.evaluate(cache={}, timer=None, context=context)
 
     polars_result = result.to_polars()
