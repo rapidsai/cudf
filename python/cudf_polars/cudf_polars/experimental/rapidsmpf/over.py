@@ -560,6 +560,10 @@ async def _reassemble_input_chunks(
     n_exprs = len(ir.exprs)
     chunk_index_column = n_exprs
 
+    # TODO: thread ir_context through repartition_by_index and the extract
+    # loop below so each PackedData piece moves and each extracted chunk
+    # processes on its own pool stream, overlapping the per-piece /
+    # per-chunk work instead of serialising it on a single stream.
     stream = ir_context.get_cuda_stream()
     local = LocalRepartitioner(return_shuffle, local_count=n_chunks)
     await local.repartition_by_index(partition_col=chunk_index_column, stream=stream)
