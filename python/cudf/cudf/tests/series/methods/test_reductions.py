@@ -197,6 +197,106 @@ def test_misc_quantiles(data, q):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("dtype", ["bool", "boolean", "bool[pyarrow]"])
+@pytest.mark.parametrize("q", [0.5, [0.25, 0.75]])
+def test_quantile_bool_raises(dtype, q, quantile_interpolation):
+    gs = cudf.Series([True, False, True], dtype=dtype)
+    with pytest.raises(NotImplementedError):
+        gs.quantile(q, interpolation=quantile_interpolation)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        # Larger than 2**53 — round-trips through float64 lose precision.
+        1577840461000001000,
+        9007199254740993,
+        -9007199254740993,
+    ],
+)
+@pytest.mark.parametrize("interpolation", ["lower", "higher", "nearest"])
+@pytest.mark.parametrize("q", [0.5, [0.5, 0.5]])
+def test_quantile_int64_non_interpolating_preserves_precision(
+    value, interpolation, q
+):
+    ps = pd.Series([value, value, value], dtype="int64")
+    gs = cudf.Series([value, value, value], dtype="int64")
+    expected = ps.quantile(q, interpolation=interpolation)
+    actual = gs.quantile(q, interpolation=interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+@pytest.mark.parametrize("interpolation", ["lower", "higher", "nearest"])
+@pytest.mark.parametrize("q", [0.5, [0.5, 0.5]])
+def test_quantile_datetime_non_interpolating_preserves_precision(
+    unit, interpolation, q
+):
+    # Repeats of a single timestamp whose underlying int64 exceeds 2**53.
+    # For non-arithmetic interpolations the result must equal the input
+    # value exactly (no float64 round-trip).
+    ts = pd.Timestamp("2020-01-01 01:01:01.000001").as_unit(unit)
+    ps = pd.Series([ts, ts, ts])
+    gs = cudf.Series([ts, ts, ts])
+    expected = ps.quantile(q, interpolation=interpolation)
+    actual = gs.quantile(q, interpolation=interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+@pytest.mark.parametrize("tz", ["US/Pacific", "US/Eastern", "UTC"])
+@pytest.mark.parametrize("q", [0.1, 0.5, [0.25, 0.75]])
+def test_quantile_datetime_tz_preserves_tz(
+    unit, tz, q, quantile_interpolation
+):
+    # Pre-compute via numpy datetime so we exercise both the scalar and
+    # column return paths.
+    ps = (
+        pd.Series([1, 2, 3])
+        .astype("datetime64[ns]")
+        .dt.tz_localize(tz)
+        .astype(f"datetime64[{unit}, {tz}]")
+    )
+    gs = cudf.Series(ps)
+    expected = ps.quantile(q, interpolation=quantile_interpolation)
+    actual = gs.quantile(q, interpolation=quantile_interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+        "Float32",
+        "Float64",
+        "int8[pyarrow]",
+        "int16[pyarrow]",
+        "int32[pyarrow]",
+        "int64[pyarrow]",
+        "uint8[pyarrow]",
+        "uint16[pyarrow]",
+        "uint32[pyarrow]",
+        "uint64[pyarrow]",
+        "float32[pyarrow]",
+        "float64[pyarrow]",
+    ],
+)
+@pytest.mark.parametrize("q", [0.5, [0.25, 0.5, 0.75]])
+def test_quantile_pandas_nullable_dtype(dtype, q, quantile_interpolation):
+    ps = pd.Series([1, 2, 3], dtype=dtype)
+    gs = cudf.Series([1, 2, 3], dtype=dtype)
+    expected = ps.quantile(q, interpolation=quantile_interpolation)
+    actual = gs.quantile(q, interpolation=quantile_interpolation)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "data",
     [

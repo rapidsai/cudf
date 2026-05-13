@@ -277,6 +277,18 @@ class Index(SingleColumnFrame):
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # Defer to Series (and DataFrame) which have higher priority than
+        # Index when participating in a numpy ufunc — pandas dispatches
+        # ``np.ufunc(Index, Series)`` to ``Series`` so the result is a
+        # ``Series``. Without this, cudf would handle it here and return an
+        # ``Index``.
+        if any(
+            isinstance(inp, (cudf.Series, cudf.DataFrame))
+            for inp in inputs
+            if inp is not self
+        ):
+            return NotImplemented
+
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
         if ret is not None:
@@ -2950,9 +2962,12 @@ class RangeIndex(Index):
         return max(min(len(ri), offset), 0)
 
     @_performance_tracking
-    def factorize(
-        self, sort: bool = False, use_na_sentinel: bool = True
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
     ) -> tuple[cupy.ndarray, Self]:
+        # Specialized: the uniques of a RangeIndex are the RangeIndex
+        # itself (or its reverse when ``sort`` flips a decreasing range),
+        # not a generic Index built from a materialized column.
         if sort and self.step < 0:
             codes = cupy.arange(len(self) - 1, -1, -1)
             uniques = self[::-1]
@@ -3236,23 +3251,8 @@ class DatetimeIndex(Index):
         )
         self._freq = _validate_freq(freq)
         # existing pandas index needs no additional validation
-        if self._freq is not None and not was_pd_index:
-            unique_vals = self.to_series().diff().unique()
-            if self._freq == cudf.DateOffset(months=1):
-                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            elif self._freq == cudf.DateOffset(years=1):
-                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            else:
-                if len(unique_vals) > 2 or (
-                    len(unique_vals) == 2
-                    and unique_vals[1].value
-                    != self._freq._maybe_as_fast_pandas_offset().nanos
-                ):
-                    raise ValueError("No unique frequency found")
+        if not was_pd_index:
+            self._validate_freq_against_data(self._freq)
 
     @_performance_tracking
     def serialize(self):
@@ -3492,13 +3492,49 @@ class DatetimeIndex(Index):
             else:
                 return self.inferred_freq
 
+    def _validate_freq_against_data(self, freq) -> None:
+        if freq is None:
+            return
+        unique_vals = cudf.Series._from_column(
+            self.to_series().diff()._column.unique()
+        )
+        if freq == cudf.DateOffset(months=1):
+            possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        elif freq == cudf.DateOffset(years=1):
+            possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        else:
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1].value
+                != freq._maybe_as_fast_pandas_offset().nanos
+            ):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+
     @property
     def freq(self) -> DateOffset | None:
         return self._freq
 
     @freq.setter
-    def freq(self) -> None:
-        raise NotImplementedError("Setting freq is currently not supported.")
+    def freq(self, value) -> None:
+        new_freq = _validate_freq(value)
+        self._validate_freq_against_data(new_freq)
+        self._freq = new_freq
 
     @property
     def freqstr(self) -> str:
@@ -4932,7 +4968,7 @@ def interval_range(
         ):
             common_dtype = np.dtype("float64")
     else:
-        common_dtype = find_common_type(  # type: ignore[assignment]
+        common_dtype = find_common_type(
             [x for x in (start, end) if x is not None]
         )
         if all(is_integer(x) for x in (start, end) if x is not None):

@@ -130,6 +130,37 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             value = self._PD_SCALAR(value)
         elif value is pd.NaT:
             value = None
+        elif cudf.get_option("mode.pandas_compatible"):
+            # pyarrow silently coerces int/float to epoch values; pandas
+            # raises TypeError for these.
+            value_is_scalar = is_scalar(value)
+            if (
+                value_is_scalar
+                and not is_na_like(value)
+                and not isinstance(value, (bool, np.bool_))
+                and isinstance(value, (int, float, np.integer, np.floating))
+            ):
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            if (
+                not value_is_scalar
+                and not isinstance(value, ColumnBase)
+                and getattr(getattr(value, "dtype", None), "kind", None)
+                in {"i", "u", "f", "b"}
+            ):
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            if isinstance(value, ColumnBase) and value.dtype.kind in {
+                "i",
+                "u",
+                "f",
+                "b",
+            }:
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
         return super()._cast_setitem_value(value)
 
     def _process_values_for_isin(
@@ -163,17 +194,16 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     arrow_type = cudf_dtype_to_pa_type(self.dtype)
                 return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
-                if other.tz is not None and not is_dtype_obj_datetime_tz(
-                    self.dtype
-                ):
-                    raise NotImplementedError(
-                        "Binary operations with timezone aware operands is not supported."
+                self_tz = getattr(self.dtype, "tz", None)
+                if (other.tz is None) != (self_tz is None):
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} "
+                        f"and {type(other).__name__}"
                     )
                 if other.tz is None:
                     other = other.to_numpy()
-                # else: leave the tz-aware Timestamp untouched; pa.scalar
-                # will carry its tz through and libcudf's binary op
-                # compares the underlying UTC integer values correctly.
+                else:
+                    return pa.scalar(other)
             elif self.dtype.kind == "M" and isinstance(other, str):
                 try:
                     ts = pd.Timestamp(other)
@@ -217,11 +247,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                 other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
-                if scalar.type.tz is not None and not is_dtype_obj_datetime_tz(
-                    self.dtype
-                ):
-                    raise NotImplementedError(
-                        "Binary operations with timezone aware operands is not supported."
+                self_tz = getattr(self.dtype, "tz", None)
+                if (scalar.type.tz is None) != (self_tz is None):
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} "
+                        f"and {type(other).__name__}"
                     )
                 return scalar
             elif pa.types.is_duration(scalar.type):
@@ -265,7 +295,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
         if isinstance(result, (datetime.datetime, datetime.timedelta)):
-            return self._PD_SCALAR(result)
+            return self._PD_SCALAR(result).as_unit(self.time_unit)
         return result
 
     def to_pandas(
@@ -282,6 +312,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if cudf.get_option("mode.pandas_compatible") and dtype.kind == "f":
+            # pandas raises TypeError for datetime/timedelta → float casts
+            # (only integer casts are allowed via Series constructor).
+            kind_name = "Datetime" if self.dtype.kind == "M" else "Timedelta"
+            raise TypeError(f"Cannot cast {kind_name}Array to dtype {dtype}")
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
@@ -441,7 +476,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return self._PD_SCALAR(result, unit=self.time_unit).as_unit(
+            ts = self._PD_SCALAR(result, unit=self.time_unit).as_unit(
                 self.time_unit
             )
+            # For tz-aware datetimes the underlying int64 stores UTC; the
+            # scalar above is tz-naive, so re-attach the original tz.
+            if (tz := getattr(self, "tz", None)) is not None:
+                ts = ts.tz_localize("UTC").tz_convert(tz)
+            return ts
         return result.astype(self.dtype)

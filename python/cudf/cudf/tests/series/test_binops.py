@@ -422,10 +422,10 @@ def test_timedelta_invalid_ops():
 def test_timdelta_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         op(s, pd_tz_timestamp)
     date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         op(s, date_tz_scalar)
 
 
@@ -455,6 +455,22 @@ def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
     with cudf.option_context("mode.pandas_compatible", True):
         result = comparison_op(gser, 2)
     assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+@pytest.mark.parametrize("reflect", [False, True])
+def test_numeric_series_pd_nat_raises(op, reflect):
+    data = [0, 1, 2, 3, 4]
+    pser = pd.Series(data, dtype="int64")
+    gser = cudf.Series(data, dtype="int64")
+    pleft, pright = (pd.NaT, pser) if reflect else (pser, pd.NaT)
+    gleft, gright = (pd.NaT, gser) if reflect else (gser, pd.NaT)
+    assert_exceptions_equal(
+        lfunc=op,
+        rfunc=op,
+        lfunc_args_and_kwargs=([pleft, pright],),
+        rfunc_args_and_kwargs=([gleft, gright],),
+    )
 
 
 def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
@@ -794,12 +810,92 @@ def test_datetime_invalid_ops():
 def test_datetime_binop_tz_timestamp(comparison_op):
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         comparison_op(s, pd_tz_timestamp)
 
     date_scalar = datetime.datetime.now(datetime.timezone.utc)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         comparison_op(s, date_scalar)
+
+
+def test_datetime_binop_tz_timestamp_pandas_compat(comparison_op):
+    # Under pandas-compatible mode, comparing a tz-naive datetime Series
+    # with a tz-aware Timestamp scalar must raise TypeError (matching
+    # pandas), not NotImplementedError. eq/ne return False/True without
+    # raising, matching pandas semantics.
+    if comparison_op in (operator.eq, operator.ne):
+        pytest.skip("eq/ne do not raise on tz mismatch")
+    psr = pd.Series([1, 2, 3], dtype="datetime64[ns]")
+    gsr = cudf.from_pandas(psr)
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=comparison_op,
+            rfunc=comparison_op,
+            lfunc_args_and_kwargs=([psr, pd_tz_timestamp],),
+            rfunc_args_and_kwargs=([gsr, pd_tz_timestamp],),
+        )
+
+
+@pytest.mark.parametrize(
+    "lhs_tz,rhs_tz",
+    [(None, "US/Pacific"), ("US/Pacific", None)],
+)
+def test_datetime_column_tz_mismatch_pandas_compat(
+    comparison_op, lhs_tz, rhs_tz
+):
+    # Column-vs-column comparison between tz-naive and tz-aware datetime
+    # Series must raise TypeError under pandas-compatible mode for the
+    # inequality ops; equality ops still return False/True.
+    if comparison_op in (operator.eq, operator.ne):
+        pytest.skip("eq/ne do not raise on tz mismatch")
+    psr_lhs = pd.Series(pd.date_range("2020-01-01", periods=3, tz=lhs_tz))
+    psr_rhs = pd.Series(pd.date_range("2020-01-01", periods=3, tz=rhs_tz))
+    gsr_lhs = cudf.from_pandas(psr_lhs)
+    gsr_rhs = cudf.from_pandas(psr_rhs)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=comparison_op,
+            rfunc=comparison_op,
+            lfunc_args_and_kwargs=([psr_lhs, psr_rhs],),
+            rfunc_args_and_kwargs=([gsr_lhs, gsr_rhs],),
+        )
+
+
+def test_datetime_sub_tz_mismatch_pandas_compat():
+    # Subtracting a tz-aware datetime Series from a tz-naive one must
+    # raise TypeError under pandas-compatible mode.
+    psr_naive = pd.Series(pd.date_range("2020-01-01", periods=3))
+    psr_aware = pd.Series(
+        pd.date_range("2020-01-01", periods=3, tz="US/Pacific")
+    )
+    gsr_naive = cudf.from_pandas(psr_naive)
+    gsr_aware = cudf.from_pandas(psr_aware)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=operator.sub,
+            rfunc=operator.sub,
+            lfunc_args_and_kwargs=([psr_naive, psr_aware],),
+            rfunc_args_and_kwargs=([gsr_naive, gsr_aware],),
+        )
+
+
+@pytest.mark.parametrize(
+    "op", [operator.lt, operator.le, operator.gt, operator.ge]
+)
+@pytest.mark.parametrize("scalar", [None, np.nan])
+def test_datetime_inequality_vs_none_pandas_compat(op, scalar):
+    # pandas raises TypeError on inequality ops between datetime Series
+    # and None / NaN scalars; cuDF must too under pandas-compatible mode.
+    psr = pd.Series(pd.date_range("2020-01-01", periods=3))
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=op,
+            rfunc=op,
+            lfunc_args_and_kwargs=([psr, scalar],),
+            rfunc_args_and_kwargs=([gsr, scalar],),
+        )
 
 
 def test_datetime_series_cmpops_pandas_compatibility(comparison_op):

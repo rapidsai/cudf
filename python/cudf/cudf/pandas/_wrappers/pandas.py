@@ -16,6 +16,7 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from pandas._libs.tslibs import offsets as liboffsets
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.compat._optional import import_optional_dependency
 from pandas.tseries.holiday import (
@@ -537,6 +538,9 @@ SparseArray = make_final_proxy_type(
     pd.arrays.SparseArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
+    },
 )
 
 CategoricalIndex = make_final_proxy_type(
@@ -612,6 +616,7 @@ DatetimeArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -658,6 +663,7 @@ try:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -673,6 +679,7 @@ except ImportError:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -688,6 +695,7 @@ TimedeltaArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -719,6 +727,7 @@ PeriodArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
@@ -808,7 +817,7 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.api.extensions.ExtensionArray,),
+    bases=(NumpyExtensionArray, pd.api.extensions.ExtensionArray),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -872,6 +881,7 @@ BooleanArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -900,6 +910,7 @@ IntegerArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -1037,6 +1048,7 @@ IntervalArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "_left": _FastSlowAttribute("_left", private=True),
         "_right": _FastSlowAttribute("_right", private=True),
     },
@@ -1076,6 +1088,7 @@ FloatingArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -1936,6 +1949,19 @@ CustomBusinessMonthEnd = make_final_proxy_type(
     },
 )
 
+# Pandas stores DateOffset kwargs (e.g., `day`, `months`) and the resolved
+# `_offset` directly on the instance __dict__, so they don't appear in
+# dir(pd.DateOffset) and aren't picked up by the proxy machinery. Register
+# each one explicitly so attribute lookup falls back to the wrapped instance.
+_DATEOFFSET_INSTANCE_ATTRS = {
+    name: _FastSlowAttribute(name, private=name.startswith("_"))
+    for name in (
+        *liboffsets._relativedelta_kwds,
+        "_offset",
+        "_use_relativedelta",
+    )
+}
+
 DateOffset = make_final_proxy_type(
     "DateOffset",
     _Unusable,
@@ -1944,6 +1970,7 @@ DateOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
@@ -1955,6 +1982,7 @@ BaseOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
@@ -2254,6 +2282,7 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
         "__invert__": _FastSlowAttribute("__invert__"),
         "__neg__": _FastSlowAttribute("__neg__"),
