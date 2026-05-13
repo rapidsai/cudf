@@ -3206,9 +3206,13 @@ class Series(SingleColumnFrame, IndexedFrame):
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
         if dropna and self._is_all_null:
+            count_dtype = get_dtype_of_same_kind(
+                self.dtype,
+                np.dtype(np.float64) if normalize else np.dtype(np.int64),
+            )
             return Series(
                 [],
-                dtype=np.int64,
+                dtype=count_dtype,
                 name=result_name,
                 index=cudf.Index([], dtype=self.dtype, name=self.name),
             )

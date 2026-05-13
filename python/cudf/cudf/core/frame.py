@@ -1797,6 +1797,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # dispatch those (or any other) functions that we could implement
         # without cupy.
 
+        from cudf.utils.dtypes import get_dtype_of_same_kind
+
         with access_columns(
             *(
                 col
@@ -1811,7 +1813,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
             for name, (left, right, _, _) in operands.items():
                 cupy_inputs = []
+                source_dtype = None
                 for inp in (left, right) if ufunc.nin == 2 else (left,):
+                    if (
+                        isinstance(inp, ColumnBase)
+                        and source_dtype is None
+                        and is_pandas_nullable_extension_dtype(inp.dtype)
+                    ):
+                        source_dtype = inp.dtype
                     if isinstance(inp, ColumnBase) and inp.has_nulls():
                         new_mask = inp._get_mask_as_column()
                         mask = new_mask if mask is None else mask & new_mask
@@ -1831,9 +1840,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 else:
                     mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
-                    data[i][name] = as_column(out).set_mask(
-                        mask_buff, null_count
+                    target_dtype = (
+                        get_dtype_of_same_kind(source_dtype, out.dtype)
+                        if source_dtype is not None
+                        else None
                     )
+                    data[i][name] = as_column(
+                        out, dtype=target_dtype
+                    ).set_mask(mask_buff, null_count)
             return data
 
     # Unary logical operators
