@@ -323,6 +323,10 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+# This macro is used to create object libraries for JIT compilation fragments, and embed them as
+# fatbins in the final library. It compiles the specified source file with the appropriate flags to
+# generate a fatbin containing the specified kernel instance, and then embeds that fatbin in the
+# final library with metadata that allows it to be looked up at runtime.
 macro(add_fragment)
   set(TARGET ${ARGV0})
   set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE)

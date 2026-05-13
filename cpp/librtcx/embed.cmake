@@ -11,6 +11,10 @@ if(NOT TARGET zstd)
   )
 endif()
 
+# This function initializes a target for JIT embedding. It must be called before any calls to
+# embed_includes() or embed_blob() for the target. It sets up necessary variables and state to track
+# the registered files and dependencies for the target. The TARGET argument specifies the name of
+# the target being initialized.
 function(add_embed)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
@@ -46,24 +50,17 @@ function(embed_includes)
   )
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET)
-    message(FATAL_ERROR "TARGET argument is required")
+  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
-  if(NOT ${TARGET}_INITIALIZED)
-    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
-  endif()
-
-  if(NOT ARG_COPY_DIRECTORY)
-    message(FATAL_ERROR "COPY_DIRECTORY argument is required")
-  endif()
-
-  if(NOT ARG_DEST_DIRECTORY)
-    message(FATAL_ERROR "DEST_DIRECTORY argument is required")
-  endif()
-
-  if(NOT ARG_INCLUDE_DIRECTORIES)
-    message(FATAL_ERROR "INCLUDE_DIRECTORIES argument is required")
+  if(NOT ARG_COPY_DIRECTORY
+     OR NOT ARG_DEST_DIRECTORY
+     OR NOT ARG_INCLUDE_DIRECTORIES
+  )
+    message(
+      FATAL_ERROR "COPY_DIRECTORY, DEST_DIRECTORY, and INCLUDE_DIRECTORIES arguments are required"
+    )
   endif()
 
   if(NOT ARG_FILES)
@@ -136,24 +133,15 @@ function(embed_blob)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET)
-    message(FATAL_ERROR "TARGET argument is required")
+  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
-  if(NOT ${TARGET}_INITIALIZED)
-    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
-  endif()
-
-  if(NOT ARG_ID)
-    message(FATAL_ERROR "ID argument is required")
-  endif()
-
-  if(NOT ARG_FILE)
-    message(FATAL_ERROR "FILE argument is required")
-  endif()
-
-  if(NOT ARG_DEST)
-    message(FATAL_ERROR "DEST argument is required")
+  if(NOT ARG_ID
+     OR NOT ARG_FILE
+     OR NOT ARG_DEST
+  )
+    message(FATAL_ERROR "ID, FILE, and DEST arguments are required")
   endif()
 
   set(SOURCE_FILE_IDS ${${TARGET}__embed__source_file_ids})
@@ -233,12 +221,8 @@ function(embed)
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET)
-    message(FATAL_ERROR "TARGET argument is required")
-  endif()
-
-  if(NOT ${TARGET}_INITIALIZED)
-    message(FATAL_ERROR "Target '${TARGET}' has not been initialized with add_embed()")
+  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
   if(NOT DEFINED ARG_COMPRESSION)
