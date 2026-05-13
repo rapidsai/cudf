@@ -6858,11 +6858,24 @@ class IndexedFrame(Frame):
             # Convert columns that the convert-* flags selected into the
             # equivalent ``pd.ArrowDtype``; leave others untouched (matches
             # pandas' ``test_pyarrow_backend_no_conversion`` semantics).
+            # Datetime / timedelta columns aren't matched by any convert-*
+            # flag, but pandas converts them when *any* flag is enabled.
+            any_convert = (
+                convert_floating
+                or convert_integer
+                or convert_boolean
+                or convert_string
+            )
             arrow_cols = []
             for new_col, was_converted in zip(cols, converted, strict=True):
                 if not was_converted:
-                    arrow_cols.append(new_col)
-                    continue
+                    dt = new_col.dtype
+                    is_datetimelike = (
+                        isinstance(dt, np.dtype) and dt.kind in ("M", "m")
+                    ) or isinstance(dt, pd.DatetimeTZDtype)
+                    if not (any_convert and is_datetimelike):
+                        arrow_cols.append(new_col)
+                        continue
                 # Empty object columns stay as object (matches pandas'
                 # ``test_pyarrow_dtype_empty_object``).
                 if len(new_col) == 0 and is_dtype_obj_string(new_col.dtype):

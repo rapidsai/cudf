@@ -1288,12 +1288,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         # dtype from the source object's row index — not from the values
         # being reduced. Cast the (non-key) result columns accordingly to
         # match pandas, where reducing an Int64 column still yields int64
-        # indices for a default RangeIndex.
+        # indices for a default RangeIndex. Skip the cast when the source
+        # uses a MultiIndex (no single representative dtype) to avoid
+        # lossy/unsupported casts.
+        from cudf.core.multiindex import MultiIndex
+
+        if isinstance(self.obj.index, MultiIndex):
+            return result
         index_dtype = self.obj.index.dtype
-        key_cols = set(self.grouping._named_columns)
+        key_names = set(self.grouping.names)
         if result.ndim == 2:
             for name, col in result._column_labels_and_values:
-                if name in key_cols:
+                if name in key_names:
                     continue
                 if col.dtype != index_dtype:
                     result._data[name] = col.astype(index_dtype)
