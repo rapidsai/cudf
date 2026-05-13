@@ -1975,18 +1975,19 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
                                               kTimestampNanoScale[secondary_val & 7]};
 
-              // Adjust seconds only for negative timestamps with positive nanoseconds.
-              // This compensates for the Apache writer's integer division truncating
-              // toward zero (rather than flooring) when splitting a sub-second value
-              // into `(seconds, nanos)`: for negative times with fractional seconds the
-              // stored seconds is one higher than the floor, and the stored nanos carry
-              // the remainder. The check must run in the `stored + writer_epoch` frame
-              // (i.e. before the writer-tz -> UTC conversion below), to match the
-              // Apache Java reader; the condition is `nanos > 999999` (not `!= 0`) for
-              // the same reason.
-              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
+              // ORC stores timestamps as a (seconds, nanos) pair where `nanos` is always
+              // non-negative. For a negative timestamp with a fractional part, the Apache writer
+              // rounds `seconds` toward zero and puts the leftover positive remainder into `nanos`.
+              // To recover the true value we subtract one second whenever `seconds < 0` and `nanos`
+              // contributes a non-zero fractional part.
+              //
+              // The threshold is 1 ms (not 1 ns) to match the Apache writer's nanos encoding:
+              // sub-millisecond values round to zero on write, so on read they must not trigger the
+              // borrow.
+              if (seconds.count() < 0 and nanos.count() >= 1'000'000) { seconds -= duration_s{1}; }
 
-              // Convert to UTC
+              // Convert to UTC after the adjustment above, because the adjustment must run in the
+              // writer's (stored seconds + writer epoch) frame
               seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
