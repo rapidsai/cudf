@@ -564,7 +564,9 @@ async def _reassemble_input_chunks(
     local = LocalRepartitioner(return_shuffle, local_count=n_chunks)
     await local.repartition_by_index(partition_col=chunk_index_column, stream=stream)
 
-    for chunk_index, sequence_number in enumerate(sequence_numbers):
+    for chunk_index, sequence_number in zip(
+        local.local_partitions(), sequence_numbers, strict=True
+    ):
         tbl = local.extract_chunk(chunk_index, stream)
         if tbl.num_rows() == 0:
             chunk = empty_table_chunk(ir, context, stream)
