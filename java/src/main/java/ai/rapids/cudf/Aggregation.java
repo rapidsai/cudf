@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -785,7 +785,11 @@ abstract class Aggregation {
     }
 
     /**
-     * Get the nth, non-null, element in a group.
+     * Get the nth element in a group.
+     * <p>
+     * NULL values are included (i.e. a NULL element can be returned). Use
+     * {@link #nth(int, NullPolicy)} to control NULL policy.
+     *
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */
