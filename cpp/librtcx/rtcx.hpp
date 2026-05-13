@@ -621,9 +621,6 @@ struct cache_t {  // NOLINT
    * initialization, allowing for faster retrieval of previously compiled kernels at runtime
    * @param disable A boolean flag indicating whether to disable the cache entirely, preventing any
    * caching of compiled blobs and libraries in memory
-   * @param materialize_all A boolean flag indicating whether to make the compiled kernels fully
-   * materialized in memory during preloading to improve runtime stability at the cost of increased
-   * memory usage
    */
   cache_t(std::string cache_dir,
           std::string tmp_dir,

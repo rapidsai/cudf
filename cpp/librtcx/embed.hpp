@@ -27,6 +27,13 @@
 #include <utility>
 #include <vector>
 
+#define RTCX_EMBED_EXPECTS(condition, message)                                         \
+  do {                                                                                 \
+    if (!(condition)) {                                                                \
+      throw std::runtime_error(std::format("{}:{}: {}", __FILE__, __LINE__, message)); \
+    }                                                                                  \
+  } while (false)
+
 namespace rtcx_embed {
 
 struct size_range {
@@ -61,28 +68,23 @@ std::vector<uint8_t> load_file_bytes(std::string_view file_path)
 {
   std::string path_str(file_path);
   std::ifstream file(path_str, std::ios::binary | std::ios::ate);
-  if (!file) {
-    throw std::runtime_error(std::format("Failed to open file at path: {}", file_path));
-  }
+  RTCX_EMBED_EXPECTS(file.is_open(), std::format("Failed to open file at path: {}", file_path));
   auto file_size = file.tellg();
-  if (file_size < 0) {
-    throw std::runtime_error(
-      std::format("Failed to determine size of file at path: {}", file_path));
-  }
+  RTCX_EMBED_EXPECTS(file_size >= 0,
+                     std::format("Failed to determine size of file at path: {}", file_path));
   file.seekg(0, std::ios::beg);
   std::vector<uint8_t> bytes(file_size);
-  if (!file.read(reinterpret_cast<char*>(bytes.data()), file_size)) {
-    throw std::runtime_error(std::format("Failed to read file at path: {}", file_path));
-  }
+  RTCX_EMBED_EXPECTS(file.read(reinterpret_cast<char*>(bytes.data()), file_size),
+                     std::format("Failed to read file at path: {}", file_path));
   return bytes;
 }
 
 std::vector<uint8_t> compress_bytes(std::span<uint8_t const> bytes, std::string_view compression)
 {
-  if (compression != "none" && compression != "zstd") {
-    throw std::invalid_argument(std::format(
-      "Invalid compression type: {}. Supported values are 'none' and 'zstd'", compression));
-  }
+  RTCX_EMBED_EXPECTS(
+    compression == "none" || compression == "zstd",
+    std::format("Invalid compression type: {}. Supported values are 'none' and 'zstd'",
+                compression));
 
   if (compression == "none") { return std::vector<uint8_t>(bytes.begin(), bytes.end()); }
 
@@ -91,10 +93,9 @@ std::vector<uint8_t> compress_bytes(std::span<uint8_t const> bytes, std::string_
   auto const compressed_size =
     ZSTD_compress(compressed.data(), compressed.size(), bytes.data(), bytes.size(), 22);
 
-  if (ZSTD_isError(compressed_size)) {
-    throw std::runtime_error(std::string("ZSTD compression failed: ") +
-                             ZSTD_getErrorName(compressed_size));
-  }
+  RTCX_EMBED_EXPECTS(
+    !ZSTD_isError(compressed_size),
+    std::format("Compression failed with error: {}", ZSTD_getErrorName(compressed_size)));
 
   compressed.resize(compressed_size);
   return compressed;
@@ -128,6 +129,7 @@ std::string generate_arrays(std::span<std::string_view const> array_ids,
                             std::span<std::string_view const> array_values)
 {
   auto get_type = [](std::string_view value) -> value_type {
+    RTCX_EMBED_EXPECTS(!value.empty(), "Value cannot be empty");
     return std::isdigit(value[0]) ? value_type::INT : value_type::STRING;
   };
 
@@ -164,10 +166,9 @@ std::string generate_arrays(std::span<std::string_view const> array_ids,
     switch (array.type) {
       case value_type::INT: {
         std::int64_t int_value;
-        if (std::from_chars(value.data(), value.data() + value.size(), int_value).ec !=
-            std::errc()) {
-          throw std::invalid_argument(std::format("Invalid integer constant value: {}", value));
-        }
+        RTCX_EMBED_EXPECTS(
+          std::from_chars(value.data(), value.data() + value.size(), int_value).ec == std::errc(),
+          std::format("Invalid integer constant value: {}", value));
         std::get<std::vector<std::int64_t>>(array.values).push_back(int_value);
       } break;
 
