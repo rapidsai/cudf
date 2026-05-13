@@ -1074,7 +1074,7 @@ def pivot(
             len(data) == 0
             and not isinstance(index_data, cudf.MultiIndex)
             and is_pandas_nullable_extension_dtype(index_data.dtype)
-            and is_string_dtype(index_data.dtype)
+            and is_dtype_obj_string(index_data.dtype)
         ):
             index_data = cudf.Index(
                 pd.Index([], name=index_data.name, dtype=object)
@@ -1097,7 +1097,7 @@ def pivot(
         len(data) == 0
         and not isinstance(column_data, cudf.MultiIndex)
         and is_pandas_nullable_extension_dtype(column_data.dtype)
-        and is_string_dtype(column_data.dtype)
+        and is_dtype_obj_string(column_data.dtype)
     ):
         column_data = cudf.Index(
             pd.Index([], name=column_data.name, dtype=object)
