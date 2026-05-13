@@ -1191,6 +1191,51 @@ def test_string_groupby_key_index():
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("op", ["all", "any"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [True, False, True, True, False, False],
+        [1, 0, 2, 3, 0, 0],
+        [1.0, 0.0, 2.5, 3.5, 0.0, 0.0],
+    ],
+)
+def test_groupby_all_any(op, data):
+    pdf = pd.DataFrame({"a": [1, 1, 2, 2, 3, 3], "b": data})
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_groupby_all_any_string(op):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": ["x", "", "", "", "y", "z"]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_groupby_all_any_empty(op):
+    pdf = pd.DataFrame(
+        {
+            "a": pd.array([], dtype="int64"),
+            "b": pd.array([], dtype="bool"),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got, check_index_type=False)
+
+
 @pytest.mark.parametrize(
     "string_dtype",
     [
