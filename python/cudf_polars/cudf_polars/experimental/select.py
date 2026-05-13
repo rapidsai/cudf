@@ -434,8 +434,9 @@ def _(
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
         # Use Empty as the input so the streaming network's metadata flows
-        # `duplicated=True` end-to-end. Without that, every rank emits the
-        # literal once and the client concatenates N copies.
+        # duplicated=True end to end. Without that, the literal expression
+        # would be evaluated chunkwise over child and emit one row per input
+        # chunk instead of a single row globally.
         input_ir: IR = Empty({})
         new_node = Select(
             {named_expr.name: named_expr.value.dtype},

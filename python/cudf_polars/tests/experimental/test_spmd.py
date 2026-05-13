@@ -22,6 +22,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
 )
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -292,6 +293,24 @@ def test_comm_and_context_unavailable_after_shutdown(comm: Communicator) -> None
 def test_run(spmd_engine: SPMDEngine) -> None:
     result = spmd_engine._run(os.getpid)
     assert result == [os.getpid()]
+
+
+def test_sort_slice_over_union_of_duplicated_streams(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """Sort+head over a concat of two group-by branches returns the global result on every rank."""
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf = pl.concat([lf1, lf2]).sort("score").head(10)
+    assert_gpu_result_equal(lf, engine=spmd_engine, check_row_order=False)
 
 
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:

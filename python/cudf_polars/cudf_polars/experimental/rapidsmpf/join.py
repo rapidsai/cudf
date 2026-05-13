@@ -195,7 +195,7 @@ async def _collect_small_side_for_broadcast(
         stream = ir_context.get_cuda_stream()
         gathered = await allgather.extract_concatenated(stream)
         # When every rank inserted zero chunks, the AllGather has no schema
-        # to infer and returns a 0-column table. Substitute a properly typed
+        # to infer and returns a 0 column table. Substitute a properly typed
         # empty table for the small side so downstream joins still match the
         # expected schema.
         table = (
