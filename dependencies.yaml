@@ -334,7 +334,7 @@ files:
       - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
-  # TODO: Eventually remove this alias in favor of dask
+  # TODO(26.10): Remove this alias in favor of dask
   py_run_cudf_polars_experimental:
     output: pyproject
     pyproject_dir: python/cudf_polars
