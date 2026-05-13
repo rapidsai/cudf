@@ -55,7 +55,9 @@ def test_polars_verbose_warns(monkeypatch):
         ),
     ):
         # And ensure that collecting issues the correct warning.
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(
+            q, engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+        )
 
 
 def test_unsupported_config_raises():

@@ -45,7 +45,6 @@ def assert_gpu_result_equal(
     rtol: float = 1e-05,
     atol: float = 1e-08,
     categorical_as_str: bool = False,
-    executor: str | None = None,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -83,9 +82,6 @@ def assert_gpu_result_equal(
         Absolute tolerance for float comparisons
     categorical_as_str
         Decat categoricals to strings before comparing
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
 
     Raises
     ------
@@ -94,7 +90,6 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
-    engine = engine or get_default_engine(executor)
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
@@ -165,35 +160,6 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
-
-
-def get_default_engine(
-    executor: str | None = None,
-) -> GPUEngine:
-    """
-    Get the default engine used for testing.
-
-    Parameters
-    ----------
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
-
-    Returns
-    -------
-    engine
-        A polars GPUEngine configured with the default settings for tests.
-
-    See Also
-    --------
-    assert_gpu_result_equal
-    assert_sink_result_equal
-    """
-    executor = executor or DEFAULT_EXECUTOR
-    return GPUEngine(
-        raise_on_fail=True,
-        executor=executor,
-    )
 
 
 def _process_kwargs(
@@ -314,7 +280,6 @@ def assert_sink_result_equal(
     engine: GPUEngine,
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
-    executor: str | None = None,
 ) -> None:
     """
     Assert that writing a LazyFrame via sink produces the same output.
@@ -332,9 +297,6 @@ def assert_sink_result_equal(
         Optional keyword arguments to pass to the corresponding `pl.read_*` function.
     write_kwargs
         Optional keyword arguments to pass to the corresponding `sink_*` function.
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
 
     Raises
     ------
@@ -343,7 +305,6 @@ def assert_sink_result_equal(
     ValueError
         If the file extension is not one of the supported formats.
     """
-    engine = engine or get_default_engine(executor)
     path = Path(path)
     read_kwargs = read_kwargs or {}
     write_kwargs = write_kwargs or {}
