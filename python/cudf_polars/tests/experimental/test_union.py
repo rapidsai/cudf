@@ -17,3 +17,19 @@ def test_union_shared_fanout_no_deadlock(streaming_engine):
     project = df.select("key", "val")
     q = pl.concat([gb, project])
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
+def test_sort_slice_over_union_of_duplicated_streams(streaming_engine):
+    # Sort+head over a concat of two group-by branches.
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    q = pl.concat([lf1, lf2]).sort("score").head(10)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
