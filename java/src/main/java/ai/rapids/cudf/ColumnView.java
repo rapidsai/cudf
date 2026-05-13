@@ -5461,6 +5461,41 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Drain {@code stream} and clean up host-side resources after a failure in
+   * {@link #copyToHostAsync} or {@link #copyToHostAsyncNestedHelper}. Sync
+   * failures and close failures are recorded as suppressed on {@code primary}
+   * so the original cause is preserved.
+   *
+   * <p>If the recovery sync itself fails, the CUDA stream is in an error state
+   * and pending DMA writes into the host buffers may not have completed.
+   * Closing them then would risk a use-after-free (the DMA engine writing into
+   * freed memory), so the host buffers are intentionally leaked — the process
+   * is already in a broken state (sticky CUDA error usually requires a
+   * restart), and a leak beats silent corruption.
+   */
+  private static void syncAndCleanup(Cuda.Stream stream, Throwable primary,
+      List<HostColumnVectorCore> children,
+      HostMemoryBuffer hostData, HostMemoryBuffer hostOffsets, HostMemoryBuffer hostValid) {
+    boolean drained = false;
+    try {
+      stream.sync();
+      drained = true;
+    } catch (Throwable syncFailure) {
+      primary.addSuppressed(syncFailure);
+    }
+    if (drained) {
+      if (children != null) {
+        for (HostColumnVectorCore child : children) {
+          CleanupHelpers.closeAndSuppress(child, primary);
+        }
+      }
+      CleanupHelpers.closeAndSuppress(hostData, primary);
+      CleanupHelpers.closeAndSuppress(hostOffsets, primary);
+      CleanupHelpers.closeAndSuppress(hostValid, primary);
+    }
+  }
+
   private static HostColumnVectorCore copyToHostAsyncNestedHelper(
       Cuda.Stream stream, ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
@@ -5503,29 +5538,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       return new HostColumnVectorCore(currType, currRows, nullCount, hostData,
           hostValid, hostOffsets, children);
     } catch (Throwable t) {
-      // Async D->H copies may still be in flight into these host buffers;
-      // sync before closing to avoid a use-after-free on pinned memory.
-      // Preserve the original cause; record secondary failures as suppressed.
-      boolean drained = false;
-      try {
-        stream.sync();
-        drained = true;
-      } catch (Throwable syncFailure) {
-        t.addSuppressed(syncFailure);
-      }
-      // If the recovery sync threw, the CUDA stream is in an error state
-      // and pending DMA writes into the host buffers may not have completed.
-      // Closing them now risks the DMA engine writing into freed memory.
-      // Leak instead — the process is already in a broken state (sticky CUDA
-      // error usually requires a restart), and a leak beats silent corruption.
-      if (drained) {
-        for (HostColumnVectorCore child : children) {
-          Closeables.closeAndSuppress(child, t);
-        }
-        Closeables.closeAndSuppress(hostData, t);
-        Closeables.closeAndSuppress(hostOffsets, t);
-        Closeables.closeAndSuppress(hostValid, t);
-      }
+      syncAndCleanup(stream, t, children, hostData, hostOffsets, hostValid);
       throw t;
     } finally {
       // These are refcount handles to the parent ColumnView's device memory;
@@ -5614,31 +5627,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer, children);
         }
       } catch (Throwable t) {
-        // Async D->H copies may still be in flight into these host buffers;
-        // sync before closing to avoid a use-after-free on pinned memory.
-        // Preserve the original cause; record secondary failures as suppressed.
-        boolean drained = false;
-        try {
-          stream.sync();
-          drained = true;
-        } catch (Throwable syncFailure) {
-          t.addSuppressed(syncFailure);
-        }
-        // If the recovery sync threw, the CUDA stream is in an error state
-        // and pending DMA writes into the host buffers may not have completed.
-        // Closing them now risks the DMA engine writing into freed memory.
-        // Leak instead — the process is already in a broken state (sticky CUDA
-        // error usually requires a restart), and a leak beats silent corruption.
-        if (drained) {
-          if (children != null) {
-            for (HostColumnVectorCore child : children) {
-              Closeables.closeAndSuppress(child, t);
-            }
-          }
-          Closeables.closeAndSuppress(hostOffsetsBuffer, t);
-          Closeables.closeAndSuppress(hostDataBuffer, t);
-          Closeables.closeAndSuppress(hostValidityBuffer, t);
-        }
+        syncAndCleanup(stream, t, children, hostDataBuffer, hostOffsetsBuffer, hostValidityBuffer);
         throw t;
       } finally {
         // These are refcount handles to this ColumnView's device memory;

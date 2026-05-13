@@ -5,16 +5,16 @@
 
 package ai.rapids.cudf;
 
-/** Utility methods for closing resources during exception handling. */
-public final class Closeables {
-  private Closeables() {}
+/** Utility methods for cleaning up resources during exception handling. */
+final class CleanupHelpers {
+  private CleanupHelpers() {}
 
   /**
    * Close {@code resource} on a cleanup path, attaching any close-time failure
    * as a suppressed exception on {@code primary} so the original cause is
    * preserved. No-op if {@code resource} is null.
    */
-  public static void closeAndSuppress(AutoCloseable resource, Throwable primary) {
+  static void closeAndSuppress(AutoCloseable resource, Throwable primary) {
     if (resource == null) {
       return;
     }

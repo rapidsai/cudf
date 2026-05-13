@@ -917,7 +917,7 @@ public class JCudfSerialization {
       // error usually requires a restart), and a leak beats silent corruption.
       if (drained) {
         for (int i = 0; i < onHost.length; i++) {
-          Closeables.closeAndSuppress(onHost[i], t);
+          CleanupHelpers.closeAndSuppress(onHost[i], t);
         }
       }
       throw t;
