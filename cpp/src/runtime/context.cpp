@@ -6,10 +6,10 @@
 #include "runtime/context.hpp"
 
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <memory>
@@ -58,8 +58,8 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit      = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool dump_codegen = cudf::detail::get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit      = cudf::detail::get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
