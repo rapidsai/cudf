@@ -9,7 +9,7 @@ import textwrap
 import warnings
 from collections.abc import Mapping
 from functools import cached_property, singledispatch
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy as cp
 import numpy as np
@@ -68,7 +68,6 @@ if TYPE_CHECKING:
         MultiColumnAggType,
         ScalarLike,
     )
-    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.dataframe import DataFrame
     from cudf.core.series import Series
 
@@ -1415,7 +1414,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc.strings.combine.SeparatorOnNulls.YES,
                 empty_policy,
             )
-            result_col = ColumnBase.create(joined, col.dtype)
             if min_count > 0:
                 keep_mask_plc = plc.binaryop.binary_operation(
                     agg_columns[1],
@@ -1423,12 +1421,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                     plc.binaryop.BinaryOperator.GREATER_EQUAL,
                     plc.DataType(plc.TypeId.BOOL8),
                 )
-                keep_mask = cast(
-                    "NumericalColumn",
-                    ColumnBase.create(keep_mask_plc, np.dtype(np.bool_)),
+                joined = plc.copying.copy_if_else(
+                    joined, null_str, keep_mask_plc
                 )
-                result_col = result_col.copy_if_else(null_str, keep_mask)
-            out_data[col_name] = result_col
+            out_data[col_name] = ColumnBase.create(joined, col.dtype)
 
         key_dtypes = [col.dtype for col in self.grouping._key_columns]
         index = self.grouping.keys._from_columns_like_self(
