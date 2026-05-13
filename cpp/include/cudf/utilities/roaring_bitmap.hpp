@@ -18,6 +18,7 @@
 #include <cuda/std/cstddef>
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 namespace CUDF_EXPORT cudf {
@@ -174,36 +175,36 @@ class roaring_bitmap {
 namespace iceberg {
 
 /**
- * @brief Checks whether a Iceberg `DV-v1` blob payload is normalized
- * for `cudf::roaring_bitmap`
+ * @brief Checks whether an Iceberg `DV-v1` blob payload is spec-compliant for
+ * `cudf::roaring_bitmap`
  *
- * A roaring bitmap payload is considered normalized when every embedded 32-bit bucket uses the
- * no-run cookie and includes an offset table.
+ * A roaring bitmap payload is spec-compliant when every embedded 32-bit roaring bitmap is
+ * spec-compliant, i.e. NOT a no-run cookie with non-zero containers and a stripped offset table.
  *
  * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
  * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
  * roaring bitmap bucket in the `DV-v1` blob  (32 bit)
- * @return Whether the payload is already normalized
+ * @return Whether the payload is already spec-compliant
  *
  * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
  */
-[[nodiscard]] bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload);
+[[nodiscard]] bool is_roaring_bitmap_compliant(roaring_bitmap_type type, std::string_view payload);
 
 /**
- * @brief Normalizes a Iceberg `DV-v1` blob payload for `cudf::roaring_bitmap`
+ * @brief Makes an Iceberg `DV-v1` blob payload spec-compliant for `cudf::roaring_bitmap`
  *
- * Converts all embedded 32-bit run-encoded containers to array/bitset format and injects
- * offset tables when missing.
+ * Injects the offset table for any embedded 32-bit roaring bitmap that is a no-run cookie with
+ * non-zero containers and a stripped offset table.
  *
  * @param type Roaring bitmap key type (`BITS_32` or `BITS_64`)
  * @param payload A string view of the Iceberg `DV-v1` blob payload (64 bit) or an embedded 32-bit
  * roaring bitmap bucket in the `DV-v1` blob  (32 bit)
- * @return A normalized copy of the payload
+ * @return A spec-compliant copy of the payload
  *
  * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
  */
-[[nodiscard]] std::string normalize_roaring_bitmap(roaring_bitmap_type type,
-                                                   std::string_view payload);
+[[nodiscard]] std::string make_compliant_roaring_bitmap(roaring_bitmap_type type,
+                                                        std::string_view payload);
 
 }  // namespace iceberg
 

@@ -13,8 +13,9 @@
 /**
  * @brief Constructs a 32 or 64-bit serialized roaring bitmap containing the given keys
  *
- * When `run_optimize` is true, the bitmap is run-optimized before serialization, which produces a
- * payload that is not in the normalized format accepted by `cudf::roaring_bitmap`.
+ * @param keys Keys to serialize
+ * @param run_optimize Whether to run-optimize (produces run cookie) the bitmap before serialization
+ * @return Vector of serialized bitmap bytes
  */
 template <typename Key>
 inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys, bool run_optimize = false)

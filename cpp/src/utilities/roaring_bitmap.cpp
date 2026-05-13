@@ -6,15 +6,14 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/roaring_bitmap.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <cuda/iterator>
 
 #include <algorithm>
-#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <numeric>
-#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -23,460 +22,262 @@ namespace cudf::iceberg {
 
 namespace {
 
+/// Roaring portable-format constants
+constexpr uint32_t no_run_cookie             = 12'346;
+constexpr uint32_t run_cookie                = 12'347;
+constexpr uint32_t cookie_mask               = 0xFFFF;
+constexpr uint32_t no_offset_threshold       = 4;
+constexpr uint32_t max_array_container_card  = 4'096;
+constexpr std::size_t bitset_container_bytes = 8'192;
+
+constexpr std::size_t cookie_size         = sizeof(uint32_t);
+constexpr std::size_t no_run_hdr_prefix   = 2 * sizeof(uint32_t);  // cookie + num_containers
+constexpr std::size_t key_card_desc_size  = 2 * sizeof(uint16_t);  // key + card_minus_1
+constexpr std::size_t offset_entry_size   = sizeof(uint32_t);
+constexpr std::size_t run_descriptor_size = 2 * sizeof(uint16_t);  // start + length_minus_1
+
 /**
- * @brief Loads a fixed width value from a string view without assuming aligned
- * memory
+ * @brief Loads a fixed width value from a string view without assuming aligned memory.
  */
 template <typename T>
-  requires(std::is_integral_v<T>)
 [[nodiscard]] T unaligned_load(std::string_view payload, std::size_t offset = 0)
 {
-  CUDF_EXPECTS(
-    payload.size() >= offset + sizeof(T),
-    "Roaring bitmap payload is too small to load field of type " + std::string(typeid(T).name()));
+  static_assert(cudf::is_fixed_width<T>(), "T must be a fixed width type");
+  CUDF_EXPECTS(payload.size() >= offset + sizeof(T),
+               "Roaring bitmap payload is too small to load field");
   T value;
   std::memcpy(&value, payload.data() + offset, sizeof(T));
   return value;
 }
 
-/// Roaring bitmap cookie related constants
-constexpr uint32_t no_run_cookie  = 12'346;
-constexpr uint32_t run_cookie     = 12'347;
-constexpr uint32_t cookie_mask    = 0xFFFF;
-constexpr std::size_t cookie_size = sizeof(uint32_t);
-
 /**
- * @brief Parses the first 4 or 8 bytes of a 32-bit roaring bitmap in portable format to
- * extract the cookie and container count
+ * @brief Parses the first bytes of a 32-bit roaring bitmap in portable format to extract the
+ * cookie and the number of containers it encodes.
  *
- * - No-run (cookie == 12346): followed by a 4-byte num_containers field.
- * - Run (cookie & 0xFFFF == 12347): upper 16 bits encode num_containers - 1.
+ * - No-run (cookie == 12346): the next 4 bytes carry `num_containers`.
+ * - Run (cookie & 0xFFFF == 12347): `num_containers - 1` is packed into the upper 16 bits of the
+ *   cookie itself.
  */
-std::pair<uint32_t, uint32_t> parse_roaring32_cookie(std::string_view payload)
+[[nodiscard]] auto parse_cookie(std::string_view payload)
 {
   auto const cookie = unaligned_load<uint32_t>(payload);
-
   if (cookie == no_run_cookie) {
-    auto const num_containers = unaligned_load<uint32_t>(payload.substr(cookie_size));
-    return {cookie, num_containers};
-  } else if ((cookie & cookie_mask) == run_cookie) {
-    return {cookie, (cookie >> 16) + 1};
+    return std::pair{cookie, unaligned_load<uint32_t>(payload, cookie_size)};
   }
-
+  if ((cookie & cookie_mask) == run_cookie) { return std::pair{cookie, (cookie >> 16) + 1}; }
   CUDF_FAIL("Invalid 32-bit roaring bitmap cookie: " + std::to_string(cookie));
 }
 
 /**
- * @brief Checks whether a container is a run container
- *
- * @param payload The payload of the 32-bit roaring bitmap
- * @param container The index of the container
- * @return Whether the container is a run container
+ * @brief Returns the cardinality of the specified container by reading the key-card descriptor at
+ * `key_cards_offset + i * key_card_desc_size + sizeof(uint16_t)`.
  */
-[[nodiscard]] inline bool is_run_container(std::string_view payload, uint32_t container)
+[[nodiscard]] auto container_cardinality(std::string_view payload,
+                                         std::size_t key_cards_offset,
+                                         uint32_t i)
 {
-  auto const run_bitmap_byte = unaligned_load<uint8_t>(payload, cookie_size + container / CHAR_BIT);
-  return (run_bitmap_byte & (1 << (container % CHAR_BIT))) != 0;
+  auto const card_minus_1 =
+    unaligned_load<uint16_t>(payload, key_cards_offset + i * key_card_desc_size + sizeof(uint16_t));
+  return static_cast<uint32_t>(card_minus_1) + 1;
 }
 
-/// 32-bit roaring bitmap related constants
-constexpr uint32_t no_offset_threshold      = 4;
-constexpr uint32_t max_array_container_card = 4'096;
-constexpr uint32_t bitset_container_bytes   = 8'192;
-
-constexpr std::size_t container_count_size = sizeof(uint32_t);
-constexpr std::size_t no_run_header_prefix = cookie_size + container_count_size;
-constexpr std::size_t key_card_desc_size   = sizeof(uint16_t) + sizeof(uint16_t);
-constexpr std::size_t offset_entry_size    = sizeof(uint32_t);
-
-constexpr std::size_t run_pair_size = sizeof(uint16_t) + sizeof(uint16_t);
-constexpr std::size_t num_runs_size = sizeof(uint16_t);
+/**
+ * @brief Computes the block size of a no-run 32-bit roaring bitmap whose offset table has been
+ * stripped (the only non-compliant case).
+ */
+[[nodiscard]] auto no_run_bitmap_stripped_block_size(std::string_view payload,
+                                                     uint32_t num_containers)
+{
+  return std::accumulate(
+    cuda::counting_iterator<uint32_t>(0),
+    cuda::counting_iterator<uint32_t>(num_containers),
+    std::size_t{no_run_hdr_prefix + num_containers * key_card_desc_size},
+    [&](std::size_t acc, uint32_t container) {
+      auto const card = container_cardinality(payload, no_run_hdr_prefix, container);
+      return acc + ((card <= max_array_container_card) ? card * sizeof(uint16_t)
+                                                       : bitset_container_bytes);
+    });
+}
 
 /**
- * @brief Checks whether a no-run bitmap contains a valid offset table
+ * @brief Returns whether all containers in a no-run 32-bit roaring bitmap have
+ * valid offsets
  */
-[[nodiscard]] bool no_run_has_valid_offsets(std::string_view payload, uint32_t num_containers)
+[[nodiscard]] bool no_run_bitmap_has_valid_offsets(std::string_view payload,
+                                                   uint32_t num_containers)
 {
-  std::size_t const header_end = no_run_header_prefix + num_containers * key_card_desc_size;
-  if (payload.size() < header_end + num_containers * offset_entry_size) { return false; }
+  if (num_containers == 0 or payload.empty()) { return true; }
 
-  auto expected_offset = static_cast<size_t>(header_end + num_containers * offset_entry_size);
+  std::size_t const header_end       = no_run_hdr_prefix + num_containers * key_card_desc_size;
+  std::size_t const offset_table_end = header_end + num_containers * offset_entry_size;
+  if (payload.size() < offset_table_end) { return false; }
+
+  auto expected = static_cast<uint32_t>(offset_table_end);
   return std::all_of(
     cuda::counting_iterator<uint32_t>(0),
-    cuda::counting_iterator(num_containers),
-    [&](auto container) mutable {
-      auto const offset =
-        unaligned_load<uint32_t>(payload, header_end + container * offset_entry_size);
-      if (offset != expected_offset) { return false; }
-
-      // Update the expected offset for the next container
-      auto const card_minus1 = unaligned_load<uint16_t>(
-        payload, no_run_header_prefix + container * key_card_desc_size + sizeof(uint16_t));
-      auto const card = static_cast<uint32_t>(card_minus1) + 1;
-      expected_offset +=
-        (card <= max_array_container_card) ? card * sizeof(uint16_t) : bitset_container_bytes;
-
-      // Verify the container's bytes fit within the payload
-      if (expected_offset > payload.size()) { return false; }
-
-      return true;
+    cuda::counting_iterator<uint32_t>(num_containers),
+    [&](uint32_t i) {
+      auto const stored = unaligned_load<uint32_t>(payload, header_end + i * offset_entry_size);
+      if (stored != expected) { return false; }
+      auto const card = container_cardinality(payload, no_run_hdr_prefix, i);
+      expected += static_cast<uint32_t>(
+        (card <= max_array_container_card) ? card * sizeof(uint16_t) : bitset_container_bytes);
+      return expected <= payload.size();
     });
 }
 
 /**
- * @brief Computes the total serialized block size for a block with no-run cookie
- * by walking the key-card descriptors to sum up container data sizes
+ * @brief Computes the block size of a spec-compliant 32-bit roaring bitmap by walking every
+ * container
  *
- * Roaring32 portable layout (no-run variant):
- *   [cookie          4B]  (uint32 == 12346)
- *   [num_containers  4B]  (uint32)
- *   [key-card descriptors  num_containers * 4B]  (key:u16, card_minus1:u16)
- *   [offset table    num_containers * 4B]  (only if num_containers >= 4)
- *   [container data  variable]
+ * The walk inspects each container's type (array, bitset, or run-encoded) and accumulates its body
+ * size. Run-encoded containers (only present under the run cookie) embed their size as a leading
+ * `num_runs` uint16 followed by `num_runs` (start, length_minus1) pairs; array containers use
+ * `cardinality * 2` bytes; bitset containers use a fixed 8192 bytes.
  */
-[[nodiscard]] std::size_t no_run_block_size(std::string_view payload,
-                                            uint32_t num_containers,
-                                            bool has_offsets)
+[[nodiscard]] auto compliant_block_size(std::string_view payload)
 {
-  std::size_t hdr = no_run_header_prefix + num_containers * key_card_desc_size;
-  if (has_offsets) { hdr += num_containers * offset_entry_size; }
+  auto const [cookie, num_containers] = parse_cookie(payload);
+  if (cookie == no_run_cookie and num_containers == 0) { return no_run_hdr_prefix; }
+
+  auto const has_run                  = (cookie & cookie_mask) == run_cookie;
+  std::size_t const run_bitmap_offset = cookie_size;
+  auto const run_bitmap_size =
+    has_run ? cudf::util::div_rounding_up_safe<std::size_t>(num_containers, 8) : std::size_t{0};
+  std::size_t const key_cards_offset =
+    (has_run ? cookie_size : no_run_hdr_prefix) + run_bitmap_size;
+  std::size_t const header_end = key_cards_offset + num_containers * key_card_desc_size;
+  bool const offsets_present   = (not has_run) or num_containers >= no_offset_threshold;
+  std::size_t const containers_start =
+    header_end + (offsets_present ? num_containers * offset_entry_size : std::size_t{0});
 
   return std::accumulate(
     cuda::counting_iterator<uint32_t>(0),
-    cuda::counting_iterator(num_containers),
-    hdr,
-    [&](std::size_t data_pos, auto container) {
-      auto const card_minus1 = unaligned_load<uint16_t>(
-        payload, no_run_header_prefix + container * key_card_desc_size + sizeof(uint16_t));
-      auto const card = static_cast<uint32_t>(card_minus1) + 1;
-      return data_pos + ((card <= max_array_container_card) ? card * sizeof(uint16_t)
-                                                            : bitset_container_bytes);
-    });
-}
-
-/**
- * @brief Computes the total serialized block size for a block with run cookie (12347)
- * by walking each container's serialized data
- *
- * Roaring32 portable layout (run variant):
- *   [cookie          4B]  (lower 16 bits == 12347, upper 16 = num_containers-1)
- *   [run bitmap      ceil(num_containers/8) B]
- *   [key-card descriptors  num_containers * 4B]
- *   [offset table    num_containers * 4B]  (only if num_containers >= 4)
- *   [container data  variable]  (run, array, or bitset depending on the run bitmap and cardinality)
- */
-[[nodiscard]] std::size_t run_block_size(std::string_view payload, uint32_t num_containers)
-{
-  // Run bitmap follows the 4-byte cookie, one bit per container.
-  std::size_t const run_bitmap_size = (num_containers + 7) / 8;
-  std::size_t const kc_offset       = cookie_size + run_bitmap_size;
-  bool const has_offsets            = (num_containers >= no_offset_threshold);
-  std::size_t hdr                   = kc_offset + num_containers * key_card_desc_size;
-  if (has_offsets) { hdr += num_containers * offset_entry_size; }
-
-  return std::accumulate(
-    cuda::counting_iterator<uint32_t>(0),
-    cuda::counting_iterator(num_containers),
-    hdr,
-    [&](std::size_t data_pos, auto container) {
-      auto const card_minus1 = unaligned_load<uint16_t>(
-        payload, kc_offset + container * key_card_desc_size + sizeof(uint16_t));
-      auto const card = static_cast<uint32_t>(card_minus1) + 1;
-      if (is_run_container(payload, container)) {
-        auto const num_runs = unaligned_load<uint16_t>(payload, data_pos);
-        return data_pos + num_runs_size + num_runs * run_pair_size;
+    cuda::counting_iterator<uint32_t>(num_containers),
+    containers_start,
+    [&](std::size_t pos, uint32_t i) {
+      bool const is_run_container =
+        has_run and ((static_cast<uint8_t>(payload[run_bitmap_offset + i / 8]) >> (i % 8)) & 1u);
+      if (is_run_container) {
+        auto const num_runs = unaligned_load<uint16_t>(payload, pos);
+        return pos + sizeof(uint16_t) + num_runs * run_descriptor_size;
       }
-      return data_pos + ((card <= max_array_container_card) ? card * sizeof(uint16_t)
-                                                            : bitset_container_bytes);
+      auto const card = container_cardinality(payload, key_cards_offset, i);
+      return pos + ((card <= max_array_container_card) ? card * sizeof(uint16_t)
+                                                       : bitset_container_bytes);
     });
 }
 
 /**
- * @brief Computes the total serialized block size for a 32-bit roaring bitmap
+ * @brief Injects the missing offset table into a no-run 32-bit roaring bitmap with at least one
+ * container. The offset table is placed between the key-card descriptors and the container data.
  */
-[[nodiscard]] std::size_t roaring32_block_size(std::string_view payload)
+[[nodiscard]] std::string inject_no_run_offsets(std::string_view payload,
+                                                uint32_t num_containers,
+                                                std::size_t block_size)
 {
-  // Dispatch block size computation based on the cookie type
-  auto const [cookie, num_containers] = parse_roaring32_cookie(payload);
-  if ((cookie & cookie_mask) == run_cookie) { return run_block_size(payload, num_containers); }
-  return no_run_block_size(
-    payload, num_containers, no_run_has_valid_offsets(payload, num_containers));
-}
+  std::size_t const header_end       = no_run_hdr_prefix + num_containers * key_card_desc_size;
+  std::size_t const offset_table_len = num_containers * offset_entry_size;
 
-/**
- * @brief Checks whether a 32-bit roaring bitmap payload is normalized for cudf::roaring_bitmap
- */
-template <roaring_bitmap_type Type>
-[[nodiscard]] inline bool is_bitmap_normalized(std::string_view payload)
-  requires(Type == roaring_bitmap_type::BITS_32)
-{
-  auto const [cookie, num_containers] = parse_roaring32_cookie(payload);
+  std::string compliant_payload;
+  compliant_payload.reserve(block_size + offset_table_len);
+  compliant_payload.append(payload.data(), header_end);
 
-  // 32-bit roaring bitmap is normalized if it has a no-run cookie and a valid offset table
-  return (cookie == no_run_cookie) and no_run_has_valid_offsets(payload, num_containers);
-}
-
-/**
- * @brief Checks whether all embedded 32-bit roaring bitmaps in a 64-bit
- * roaring bitmap payload are normalized for cudf::roaring_bitmap
- */
-template <roaring_bitmap_type Type>
-[[nodiscard]] inline bool is_bitmap_normalized(std::string_view payload)
-  requires(Type == roaring_bitmap_type::BITS_64)
-{
-  auto const num_keys = unaligned_load<uint64_t>(payload);
-
-  // No keys, bitmap is normalized
-  if (num_keys == 0) { return true; }
-
-  // Skip over the num_keys (8 bytes) field
-  std::size_t pos = sizeof(uint64_t);
-
-  CUDF_EXPECTS(pos + sizeof(uint32_t) <= payload.size(),
-               "Roaring bitmap payload is too small to contain the `key` field");
-
-  return std::all_of(
-    cuda::counting_iterator<uint64_t>(0), cuda::counting_iterator<uint64_t>(num_keys), [&](auto) {
-      // A missing high-key indicates a truncated payload, reject it.
-      if (pos + sizeof(uint32_t) > payload.size()) { return false; }
-      // Skip over the key (4 bytes)
-      pos += sizeof(uint32_t);
-      // Get the 32-bit roaring bitmap
-      auto const payload32 = payload.substr(pos);
-      pos += roaring32_block_size(payload32);
-      return is_bitmap_normalized<roaring_bitmap_type::BITS_32>(payload32);
-    });
-}
-
-/**
- * @brief Injects the missing offset table into a no-run bitmap whose
- * num_containers < no_offset_threshold. The offset table is placed between the key-card descriptors
- and the container data.
- */
-[[nodiscard]] std::string inject_no_run_offsets(std::string_view payload, uint32_t num_containers)
-{
-  std::size_t const header_end = no_run_header_prefix + num_containers * key_card_desc_size;
-  std::size_t const offset_section_size = num_containers * offset_entry_size;
-  std::string out;
-  out.reserve(payload.size() + offset_section_size);
-  out.append(payload.data(), header_end);
-
-  // Compute cumulative offsets; base starts right after the injected offsets.
-  std::accumulate(cuda::counting_iterator<uint32_t>(0),
-                  cuda::counting_iterator<uint32_t>(num_containers),
-                  static_cast<uint32_t>(header_end + offset_section_size),
-                  [&](uint32_t base, auto container) {
-                    out.append(reinterpret_cast<char const*>(&base), offset_entry_size);
-                    auto const card_minus1 = unaligned_load<uint16_t>(
-                      payload,
-                      no_run_header_prefix + container * key_card_desc_size + sizeof(uint16_t));
-                    auto const card = static_cast<uint32_t>(card_minus1) + 1;
-                    return base + ((card <= max_array_container_card) ? card * sizeof(uint16_t)
-                                                                      : bitset_container_bytes);
-                  });
-
-  out.append(payload.data() + header_end, payload.size() - header_end);
-  return out;
-}
-
-/**
- * @brief Converts a run-encoded 32-bit roaring bitmap (cookie 12347, num_containers < 4) to
- * a no-run 32-bit roaring bitmap (cookie 12346, num_containers >= 4)
- *
- * cudf::roaring_bitmap's metadata parser rejects run bitmaps with < 4 containers outright, so we
- * must expand runs into sorted arrays. The result always includes an offset table.
- */
-[[nodiscard]] std::string convert_run_to_no_run(std::string_view payload, uint32_t num_containers)
-{
-  // In the run variant the key-card descriptors start after the cookie and the per-container run
-  // bitmap
-  auto const run_bitmap_size = cudf::util::div_rounding_up_safe<size_t>(num_containers, CHAR_BIT);
-  auto const kc_offset       = cookie_size + run_bitmap_size;
-
-  struct container_info {
-    uint16_t key;
-    std::vector<uint16_t> expanded_values;
-  };
-
-  std::vector<container_info> containers(num_containers);
-
-  // Run data follows the key-card descriptors (and offsets, if present)
-  std::size_t data_pos = kc_offset + num_containers * key_card_desc_size;
-  if (num_containers >= no_offset_threshold) { data_pos += num_containers * offset_entry_size; }
-
-  std::ranges::for_each(std::views::iota(uint32_t{0}, num_containers), [&](uint32_t c) {
-    containers[c].key = unaligned_load<uint16_t>(payload, kc_offset + c * key_card_desc_size);
-    auto& vals        = containers[c].expanded_values;
-    auto const card_minus1 =
-      unaligned_load<uint16_t>(payload, kc_offset + c * key_card_desc_size + sizeof(uint16_t));
-    uint32_t const card = static_cast<uint32_t>(card_minus1) + 1;
-
-    if (is_run_container(payload, c)) {
-      auto const num_runs = unaligned_load<uint16_t>(payload, data_pos);
-      data_pos += num_runs_size;
-      // For each run, extract the start and length and add the values to the container
-      std::ranges::for_each(std::views::iota(uint16_t{0}, num_runs), [&](uint16_t) {
-        auto const start  = static_cast<uint32_t>(unaligned_load<uint16_t>(payload, data_pos));
-        auto const length = unaligned_load<uint16_t>(payload, data_pos + sizeof(uint16_t)) + 1;
-        data_pos += run_pair_size;
-        std::ranges::transform(std::views::iota(start, start + length),
-                               std::back_inserter(vals),
-                               [](uint32_t v) { return static_cast<uint16_t>(v); });
-      });
-    } else if (card <= max_array_container_card) {
-      vals.reserve(card);
-      std::ranges::for_each(std::views::iota(uint32_t{0}, card), [&](uint32_t) {
-        vals.push_back(unaligned_load<uint16_t>(payload, data_pos));
-        data_pos += sizeof(uint16_t);
-      });
-    } else {
-      vals.reserve(card);
-      std::ranges::for_each(std::views::iota(uint32_t{0}, bitset_container_bytes),
-                            [&](uint32_t byte) {
-                              auto const bits = unaligned_load<uint8_t>(payload, data_pos + byte);
-                              for (uint32_t bit = 0; bit < CHAR_BIT; ++bit) {
-                                if ((bits & (1 << bit)) != 0) {
-                                  vals.push_back(static_cast<uint16_t>(byte * CHAR_BIT + bit));
-                                }
-                              }
-                            });
-      data_pos += bitset_container_bytes;
-    }
-  });
-
-  // Emit a no-run portable block with offsets always included.
-  std::string out;
-  auto const cookie = no_run_cookie;
-  out.append(reinterpret_cast<char const*>(&cookie), cookie_size);
-  out.append(reinterpret_cast<char const*>(&num_containers), container_count_size);
-
-  for (auto const& ci : containers) {
-    auto const card_minus1 = static_cast<uint16_t>(ci.expanded_values.size() - 1);
-    out.append(reinterpret_cast<char const*>(&ci.key), sizeof(uint16_t));
-    out.append(reinterpret_cast<char const*>(&card_minus1), sizeof(uint16_t));
-  }
-
-  // Offset table: each entry points to the start of that container's data.
+  // Compute cumulative offsets; base starts right after the injected offset table.
   std::ignore = std::accumulate(
-    containers.begin(),
-    containers.end(),
-    static_cast<uint32_t>(no_run_header_prefix + num_containers * key_card_desc_size +
-                          num_containers * offset_entry_size),
-    [&](uint32_t base, auto const& ci) {
-      out.append(reinterpret_cast<char const*>(&base), offset_entry_size);
-      auto const card = ci.expanded_values.size();
+    cuda::counting_iterator<uint32_t>(0),
+    cuda::counting_iterator<uint32_t>(num_containers),
+    static_cast<uint32_t>(header_end + offset_table_len),
+    [&](uint32_t base, uint32_t i) {
+      compliant_payload.append(reinterpret_cast<char const*>(&base), offset_entry_size);
+      auto const card = container_cardinality(payload, no_run_hdr_prefix, i);
       return base + static_cast<uint32_t>((card <= max_array_container_card)
                                             ? card * sizeof(uint16_t)
                                             : bitset_container_bytes);
     });
 
-  for (auto const& ci : containers) {
-    if (ci.expanded_values.size() <= max_array_container_card) {
-      for (auto const v : ci.expanded_values) {
-        out.append(reinterpret_cast<char const*>(&v), sizeof(uint16_t));
-      }
-    } else {
-      auto bits = std::vector<uint8_t>(bitset_container_bytes);
-      for (auto const v : ci.expanded_values) {
-        bits[v / CHAR_BIT] |= uint8_t{1} << (v % CHAR_BIT);
-      }
-      out.append(reinterpret_cast<char const*>(bits.data()), bits.size());
-    }
-  }
-
-  return out;
-}
-
-/**
- * @brief Normalizes a single 32-bit roaring bitmap for cudf::roaring_bitmap
- */
-template <roaring_bitmap_type Type>
-std::string normalize_roaring(std::string_view payload)
-  requires(Type == roaring_bitmap_type::BITS_32)
-{
-  auto const [cookie, num_containers] = parse_roaring32_cookie(payload);
-
-  // Return if already normalized - same check as in `is_roaring_bitmap_normalized`
-  if (cookie == no_run_cookie and no_run_has_valid_offsets(payload, num_containers)) {
-    return std::string{payload};
-  }
-  // Run cookie(12347): cudf::roaring_bitmap only accepts the no-run portable format
-  else if ((cookie & cookie_mask) == run_cookie) {
-    return convert_run_to_no_run(payload, num_containers);
-  }
-
-  // No-run cookie (12346), num_containers in [1,3]: offset table is omitted per the portable spec
-  // but cudf::roaring_bitmap requires it; must inject dummy offsets.
-  auto const block_size = no_run_block_size(payload, num_containers, false);
-  return inject_no_run_offsets(payload.substr(0, block_size), num_containers);
-}
-
-/**
- * @brief Walks the 64-bit roaring bitmap payload and normalizes each 32-bit
- * roaring bitmap bucket for cudf::roaring_bitmap
- */
-template <roaring_bitmap_type Type>
-std::string normalize_roaring(std::string_view payload)
-  requires(Type == roaring_bitmap_type::BITS_64)
-{
-  auto const num_keys = unaligned_load<uint64_t>(payload);
-
-  std::string normalized;
-  normalized.reserve(payload.size() + num_keys * 16);
-  normalized.append(payload.data(), sizeof(uint64_t));
-  std::size_t pos = sizeof(uint64_t);
-
-  std::ranges::for_each(std::views::iota(uint64_t{0}, num_keys), [&](uint64_t) {
-    // Skip over the key (4 bytes)
-    if (pos + sizeof(uint32_t) > payload.size()) { return; }
-    // Append the cookie
-    normalized.append(payload.data() + pos, cookie_size);
-    pos += cookie_size;
-
-    // TODO(mh): Append the remaining data if less than 4 bytes are left.
-    // Should we throw here instead?
-    if (pos + sizeof(uint32_t) > payload.size()) {
-      normalized.append(payload.data() + pos, payload.size() - pos);
-      return;
-    }
-
-    auto const payload32  = payload.substr(pos);
-    auto const block_size = roaring32_block_size(payload32);
-    // Append the 32-bit roaring bitmap
-    if (is_bitmap_normalized<roaring_bitmap_type::BITS_32>(payload32)) {
-      normalized.append(payload32.data(), block_size);
-    } else {
-      normalized.append(
-        normalize_roaring<roaring_bitmap_type::BITS_32>(payload32.substr(0, block_size)));
-    }
-    pos += block_size;
-  });
-
-  return normalized;
+  compliant_payload.append(payload.data() + header_end, block_size - header_end);
+  return compliant_payload;
 }
 
 }  // namespace
 
 /**
- * @copydoc cudf::iceberg::is_roaring_bitmap_normalized
+ * @copydoc cudf::iceberg::is_roaring_bitmap_compliant
  */
-bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload)
+bool is_roaring_bitmap_compliant(roaring_bitmap_type type, std::string_view payload)
 {
   if (type == roaring_bitmap_type::BITS_32) {
-    return is_bitmap_normalized<roaring_bitmap_type::BITS_32>(payload);
+    auto const [cookie, num_containers] = parse_cookie(payload);
+    return not(cookie == no_run_cookie and num_containers > 0 and
+               not no_run_bitmap_has_valid_offsets(payload, num_containers));
+  } else {
+    auto constexpr bucket_key_field_size = sizeof(uint32_t);
+
+    auto const num_keys = unaligned_load<uint64_t>(payload);
+    if (num_keys == 0) { return true; }
+
+    std::size_t data_pos = sizeof(uint64_t);
+
+    return std::all_of(
+      cuda::counting_iterator<uint64_t>(0), cuda::counting_iterator<uint64_t>(num_keys), [&](auto) {
+        CUDF_EXPECTS(data_pos + bucket_key_field_size <= payload.size(),
+                     "Roaring bitmap payload is too small to contain the bucket key");
+        data_pos += bucket_key_field_size;
+
+        auto const bucket = std::string_view(payload).substr(data_pos);
+        if (not is_roaring_bitmap_compliant(roaring_bitmap_type::BITS_32, bucket)) { return false; }
+        data_pos += compliant_block_size(bucket);
+        return true;
+      });
   }
-  return is_bitmap_normalized<roaring_bitmap_type::BITS_64>(payload);
 }
 
 /**
- * @copydoc cudf::iceberg::normalize_roaring_bitmap
+ * @copydoc cudf::iceberg::make_compliant_roaring_bitmap
  */
-std::string normalize_roaring_bitmap(roaring_bitmap_type type, std::string_view payload)
+std::string make_compliant_roaring_bitmap(roaring_bitmap_type type, std::string_view payload)
 {
   if (type == roaring_bitmap_type::BITS_32) {
-    return normalize_roaring<roaring_bitmap_type::BITS_32>(payload);
+    if (is_roaring_bitmap_compliant(roaring_bitmap_type::BITS_32, payload)) {
+      return std::string{payload};
+    }
+    auto const [_, num_containers] = parse_cookie(payload);
+    auto const block_size          = no_run_bitmap_stripped_block_size(payload, num_containers);
+    return inject_no_run_offsets(payload.substr(0, block_size), num_containers, block_size);
+  } else {
+    auto const num_keys = unaligned_load<uint64_t>(payload);
+
+    std::string out;
+    // Generous reserve: an injected offset table grows a bucket by at most `num_containers * 4`
+    // bytes, which is always smaller than the bucket's own container body. Doubling is plenty.
+    out.reserve(payload.size() * 2);
+    out.append(payload.data(), sizeof(uint64_t));
+
+    std::size_t pos = sizeof(uint64_t);
+    std::for_each(
+      cuda::counting_iterator<uint64_t>(0), cuda::counting_iterator<uint64_t>(num_keys), [&](auto) {
+        CUDF_EXPECTS(pos + sizeof(uint32_t) <= payload.size(),
+                     "Roaring bitmap payload is too small to contain the bucket key");
+        out.append(payload.data() + pos, sizeof(uint32_t));
+        pos += sizeof(uint32_t);
+
+        auto const bucket = std::string_view(payload).substr(pos);
+        if (not is_roaring_bitmap_compliant(roaring_bitmap_type::BITS_32, bucket)) {
+          auto const [_, num_containers] = parse_cookie(bucket);
+          auto const block_size = no_run_bitmap_stripped_block_size(bucket, num_containers);
+          out.append(
+            inject_no_run_offsets(bucket.substr(0, block_size), num_containers, block_size));
+          pos += block_size;
+        } else {
+          auto const block_size = compliant_block_size(bucket);
+          out.append(bucket.data(), block_size);
+          pos += block_size;
+        }
+      });
+
+    return out;
   }
-  return normalize_roaring<roaring_bitmap_type::BITS_64>(payload);
 }
 
 }  // namespace cudf::iceberg
