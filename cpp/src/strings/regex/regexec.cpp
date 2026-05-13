@@ -147,7 +147,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 {
   _buffer       = buffer;
   _thread_count = thread_count;
-  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+  _max_insts    = max_insts > 0 ? max_insts : _insts_count;
 }
 
 int32_t reprog_device::compute_shared_memory_size() const
