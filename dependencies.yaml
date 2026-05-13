@@ -889,7 +889,7 @@ dependencies:
               - numba-cuda==0.22.2,<0.29.0
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==3.0.2
+              - pandas==3.0.3
           - matrix:
             packages:
       - output_types: conda
