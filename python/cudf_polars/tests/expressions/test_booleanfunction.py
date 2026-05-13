@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -269,12 +268,7 @@ def test_is_in_shape_mismatch_raises(needles, haystack):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_boolean_is_close(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_132, reason="Not supported until polars 1.32"
-        )
-    )
+def test_boolean_is_close():
     ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
