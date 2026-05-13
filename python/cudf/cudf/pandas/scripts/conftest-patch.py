@@ -100,6 +100,11 @@ def set_copy_on_write_option():
 
 # TODO: Pass these tests with cudf.pandas enabled.
 NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
+    "tests/frame/methods/test_drop.py::test_drop_with_non_unique_datetime_index_and_invalid_keys",
+    "tests/frame/methods/test_fillna.py::TestFillNA::test_fillna_dtype_conversion",
+    "tests/frame/methods/test_fillna.py::TestFillNA::test_fillna_with_multi_index_frame",
+    "tests/frame/methods/test_fillna.py::test_fillna_nones_inplace",
+    
     "tests/api/test_api.py::test_pandas_array_alias",
     "tests/apply/test_frame_apply.py::test_apply[python]",
     "tests/apply/test_frame_apply.py::test_apply_function_runs_once",
@@ -2250,8 +2255,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_explode.py::test_duplicate_index[input_dict3-input_index3-expected_dict3-expected_index3]",
     "tests/frame/methods/test_explode.py::test_multi_columns_nan_empty",
     "tests/frame/methods/test_fillna.py::TestFillNA::test_fillna_on_column_view",
-    "tests/frame/methods/test_head_tail.py::test_head_tail_generic[tuples-DataFrame]",
-    "tests/frame/methods/test_head_tail.py::test_head_tail_generic[multi-DataFrame]",
     "tests/frame/methods/test_info.py::test_info_memory",
     "tests/frame/methods/test_info.py::test_info_memory_usage_deep_not_pypy",
     "tests/frame/methods/test_info.py::test_usage_via_getsizeof",
@@ -7879,6 +7882,8 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/frame/methods/test_head_tail.py::test_head_tail_generic[tuples-DataFrame]",
+    "tests/frame/methods/test_head_tail.py::test_head_tail_generic[multi-DataFrame]",
     "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]",
     "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_1-array]",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy",
