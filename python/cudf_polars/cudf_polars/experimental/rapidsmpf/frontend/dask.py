@@ -411,20 +411,19 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    # We always collect metadata internally (collect_metadata=True below) so
-    # we can read metadata[-1].duplicated to decide whether to suppress this
-    # rank's output. The client concatenates each rank's result, so without
-    # this dedup an output marked duplicated=True would appear N times. The
-    # external collect_metadata parameter still controls whether the collected
-    # list is returned to the client (see the return statement), which is the
-    # cost we care about saving when the caller doesn't need the metadata.
+    # evaluate_on_rank always collects metadata internally so we can read
+    # metadata[-1].duplicated to decide whether to suppress this rank's output.
+    # The client concatenates each rank's result, so without this dedup an
+    # output marked duplicated=True would appear N times. The external
+    # collect_metadata parameter still controls whether the collected list is
+    # returned to the client (see the return statement), which is the cost we
+    # care about saving when the caller doesn't need the metadata.
     df, metadata = evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
         ir,
         config_options,
-        collect_metadata=True,
         query_id=query_id,
     )
     if mp_ctx.comm.rank != 0 and metadata and metadata[-1].duplicated:

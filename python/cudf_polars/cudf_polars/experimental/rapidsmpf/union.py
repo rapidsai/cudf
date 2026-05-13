@@ -50,8 +50,7 @@ async def union_node(
     context
         The rapidsmpf context.
     comm
-        The communicator. Used to suppress duplicated children's row content
-        on non root ranks.
+        The communicator.
     ir
         The Union IR node.
     ir_context
