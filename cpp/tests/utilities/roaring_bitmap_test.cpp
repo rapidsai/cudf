@@ -205,11 +205,10 @@ std::vector<Key> concat_keys(std::vector<Key> lhs, std::vector<Key> const rhs)
 std::vector<cuda::std::byte> strip_first_no_run_offset_table(cudf::roaring_bitmap_type bitmap_type,
                                                              std::vector<cuda::std::byte> payload)
 {
-  constexpr uint32_t no_run_cookie            = 12'346;
-  constexpr std::size_t key_card_size         = sizeof(uint16_t) + sizeof(uint16_t);
-  constexpr std::size_t offset_size           = sizeof(uint32_t);
-  constexpr std::size_t no_run_prefix         = sizeof(uint32_t) + sizeof(uint32_t);
-  constexpr std::size_t offset_table_min_size = 4;
+  constexpr uint32_t no_run_cookie    = 12'346;
+  constexpr std::size_t key_card_size = sizeof(uint16_t) + sizeof(uint16_t);
+  constexpr std::size_t offset_size   = sizeof(uint32_t);
+  constexpr std::size_t no_run_prefix = sizeof(uint32_t) + sizeof(uint32_t);
 
   auto const load_uint32_t = [&](std::size_t offset) {
     uint32_t value;
@@ -221,9 +220,9 @@ std::vector<cuda::std::byte> strip_first_no_run_offset_table(cudf::roaring_bitma
                                  ? sizeof(uint64_t) + sizeof(uint32_t)
                                  : std::size_t{0};
   EXPECT_EQ(load_uint32_t(bitmap32_offset), no_run_cookie);
-  auto const num_containers = load_uint32_t(bitmap32_offset + sizeof(uint32_t));
-  EXPECT_LT(num_containers, offset_table_min_size);
 
+  // Stripping the offset table to produce a portable-but-unnormalized payload
+  auto const num_containers     = load_uint32_t(bitmap32_offset + sizeof(uint32_t));
   auto const offset_table_begin = bitmap32_offset + no_run_prefix + num_containers * key_card_size;
   auto const offset_table_end   = offset_table_begin + num_containers * offset_size;
   payload.erase(payload.begin() + offset_table_begin, payload.begin() + offset_table_end);
@@ -363,7 +362,7 @@ TEST_F(RoaringBitmapNormalizeTest64, MissingOffsetTableMultipleHighKeys)
   verify_unnormalized_payload<Key>(serialized, keys, probe_keys);
 }
 
-// Run-optimized payload uses the run cookie, so it must be normalized
+// Run-optimized payload uses the run cookie, so it must be unnormalized
 TYPED_TEST(RoaringBitmapNormalizeTest, RunEncodedSingleContainer)
 {
   using Key             = TypeParam;

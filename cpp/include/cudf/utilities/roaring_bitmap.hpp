@@ -18,6 +18,7 @@
 #include <cuda/std/cstddef>
 
 #include <memory>
+#include <string_view>
 
 namespace CUDF_EXPORT cudf {
 

@@ -654,7 +654,6 @@ add_library(
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/row_selection.cpp
-  src/utilities/roaring_bitmap.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
@@ -895,6 +894,7 @@ add_library(
   src/structs/utilities.cu
   src/table/table.cpp
   src/table/table_device_view.cu
+  src/table/table_equal.cu
   src/table/table_view.cpp
   src/text/deduplicate.cu
   src/text/detokenize.cu
@@ -937,6 +937,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
+  src/utilities/roaring_bitmap.cpp
   src/utilities/roaring_bitmap.cu
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
