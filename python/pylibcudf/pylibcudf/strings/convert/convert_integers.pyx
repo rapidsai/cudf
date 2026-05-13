@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -12,6 +12,7 @@ from pylibcudf.types cimport DataType
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "from_integers",
@@ -23,7 +24,7 @@ __all__ = [
 ]
 
 cpdef Column to_integers(
-    Column input, DataType output_type, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, DataType output_type, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new integer numeric column parsing integer values from the
@@ -48,7 +49,8 @@ cpdef Column to_integers(
         New column with integers converted from strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -56,16 +58,16 @@ cpdef Column to_integers(
             cpp_convert_integers.to_integers(
                 input.view(),
                 output_type.c_obj,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column from_integers(
-    Column integers, Stream stream=None, DeviceMemoryResource mr=None
+    Column integers, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new strings column converting the integer values from the
@@ -87,25 +89,26 @@ cpdef Column from_integers(
         New strings column with integers as strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.from_integers(
                 integers.view(),
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column is_integer(
     Column input,
     DataType int_type=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -133,7 +136,8 @@ cpdef Column is_integer(
         New column of boolean results for each string.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if int_type is None:
@@ -141,7 +145,7 @@ cpdef Column is_integer(
             c_result = move(
                 cpp_convert_integers.is_integer(
                     input.view(),
-                    stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
@@ -151,16 +155,16 @@ cpdef Column is_integer(
                 cpp_convert_integers.is_integer(
                     input.view(),
                     int_type.c_obj,
-                    stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column hex_to_integers(
-    Column input, DataType output_type, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, DataType output_type, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new integer numeric column parsing hexadecimal values
@@ -185,7 +189,8 @@ cpdef Column hex_to_integers(
         New column with integers converted from strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -193,15 +198,15 @@ cpdef Column hex_to_integers(
             cpp_convert_integers.hex_to_integers(
                 input.view(),
                 output_type.c_obj,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column is_hex(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_hex(Column input, object stream=None, DeviceMemoryResource mr=None):
     """
     Returns a boolean column identifying strings in which all
     characters are valid for conversion to integers from hex.
@@ -222,23 +227,24 @@ cpdef Column is_hex(Column input, Stream stream=None, DeviceMemoryResource mr=No
         New column of boolean results for each string.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.is_hex(
                 input.view(),
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column integers_to_hex(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new strings column converting integer columns to hexadecimal
@@ -260,16 +266,17 @@ cpdef Column integers_to_hex(
         New strings column with hexadecimal characters.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.integers_to_hex(
                 input.view(),
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

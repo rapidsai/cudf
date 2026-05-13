@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod, RoundMethod
@@ -126,15 +125,11 @@ def test_null_count(engine: pl.GPUEngine):
 @pytest.mark.parametrize("descending", [False, True])
 def test_rank_supported(
     engine: pl.GPUEngine,
-    request,
     ldf: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
 ):
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
     assert_gpu_result_equal(q, engine=engine)
@@ -145,17 +140,12 @@ def test_rank_supported(
 @pytest.mark.parametrize("test", ["with_nulls", "with_ties"])
 def test_rank_methods_with_nulls_or_ties(
     engine: pl.GPUEngine,
-    request,
     ldf: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     test: str,
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
-
     base = pl.col("a")
     if test == "with_nulls":
         expr = pl.when((base % 2) == 0).then(None).otherwise(base)

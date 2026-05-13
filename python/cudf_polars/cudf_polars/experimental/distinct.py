@@ -17,8 +17,6 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.utils import (
     _dynamic_planning_on,
-    _fallback_inform,
-    _get_unique_fractions,
     _lower_ir_fallback,
 )
 
@@ -35,8 +33,6 @@ def lower_distinct(
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    *,
-    unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -56,9 +52,6 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    unique_fraction
-        Fraction of unique values to total values. Used for algorithm selection.
-        A value of `1.0` means the column is unique.
 
     Returns
     -------
@@ -68,69 +61,24 @@ def lower_distinct(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
-    distinct_keys = tuple(
-        NamedExpr(name, Col(ir.schema[name], name))
-        for name in ir.schema
-        if name in subset
-    )
-
     child_count = partition_info[child].count
-    shuffled = partition_info[child].partitioned_on == distinct_keys
 
-    # Check for ordering requirements (shuffle is not stable)
-    require_tree_reduction = ir.stable or ir.keep in (
-        plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-        plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-    )
-
-    output_count = 1
-    n_ary = 32  # Arbitrary default (for now)
+    n_ary = 32
     if ir.zlice is not None and ir.zlice[1] is not None:
-        # Head/tail slice operation has been pushed into Distinct
-        # (caller ensures only simple slices reach here)
         n_ary = max(1_000_000 // ir.zlice[1], 2)
-    elif unique_fraction is not None:
-        # Use unique_fraction to determine partitioning
-        n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
-        output_count = max(int(unique_fraction * child_count), 1)
-
-    if output_count > 1 and require_tree_reduction:
-        # Need to reduce down to a single partition even
-        # if the unique_fraction is large.
-        output_count = 1
-        _fallback_inform(
-            "Unsupported unique options for multiple partitions.",
-            config_options,
-        )
 
     # Partition-wise unique
     count = child_count
     new_node: IR = ir.reconstruct([child])
     partition_info[new_node] = PartitionInfo(count=count)
 
-    if shuffled or output_count == 1:
-        # Tree reduction
-        while count > output_count:
-            new_node = Repartition(new_node.schema, new_node)
-            count = max(math.ceil(count / n_ary), output_count)
-            partition_info[new_node] = PartitionInfo(count=count)
-            new_node = ir.reconstruct([new_node])
-            partition_info[new_node] = PartitionInfo(count=count)
-    else:
-        # Shuffle
-        new_node = Shuffle(
-            new_node.schema,
-            distinct_keys,
-            config_options.executor.shuffle_method,
-            new_node,
-        )
-        partition_info[new_node] = PartitionInfo(count=output_count)
+    # Tree reduction
+    while count > 1:
+        new_node = Repartition(new_node.schema, new_node)
+        count = max(math.ceil(count / n_ary), 1)
+        partition_info[new_node] = PartitionInfo(count=count)
         new_node = ir.reconstruct([new_node])
-        partition_info[new_node] = PartitionInfo(
-            count=output_count,
-            partitioned_on=distinct_keys,
-        )
+        partition_info[new_node] = PartitionInfo(count=count)
 
     return new_node, partition_info
 
@@ -172,7 +120,6 @@ def _(
             child = Shuffle(
                 child.schema,
                 distinct_keys,
-                config_options.executor.shuffle_method,
                 child,
             )
             partition_info[child] = PartitionInfo(
@@ -202,19 +149,9 @@ def _(
         )
         return dynamic_node, partition_info
 
-    # Non-dynamic planning: use unique_fraction heuristics
-    unique_fraction_dict = _get_unique_fractions(
-        tuple(subset),
-        config_options.executor.unique_fraction,
-    )
-    unique_fraction = (
-        max(unique_fraction_dict.values()) if unique_fraction_dict else None
-    )
-
     return lower_distinct(
         ir,
         child,
         partition_info,
         config_options,
-        unique_fraction=unique_fraction,
     )

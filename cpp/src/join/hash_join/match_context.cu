@@ -25,19 +25,18 @@ struct clamp_zero_to_one {
 }  // namespace
 
 std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
-  table_view const& build,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  table_view const& right,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_right,
   cudf::detail::hash_table_t const& hash_table,
   bool is_empty,
   bool has_nulls,
   null_equality compare_nulls,
   join_kind join,
-  table_view const& probe,
+  table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto match_counts =
-    std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
+  auto match_counts = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
 
   if (is_empty) {
     thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
@@ -47,19 +46,19 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
     return match_counts;
   }
 
-  CUDF_EXPECTS(has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.",
+  CUDF_EXPECTS(has_nulls || !cudf::has_nested_nulls(left),
+               "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const preprocessed_probe =
-    cudf::detail::row::equality::preprocessed_table::create(probe, stream);
-  auto const probe_table_num_rows = probe.num_rows();
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream);
+  auto const left_table_num_rows = left.num_rows();
 
   auto count_matches = [&](auto equality, auto d_hasher) {
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
     if (join == join_kind::INNER_JOIN) {
       hash_table.count_each(iter,
-                            iter + probe_table_num_rows,
+                            iter + left_table_num_rows,
                             equality,
                             hash_table.hash_function(),
                             match_counts->begin(),
@@ -69,7 +68,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
       auto const output =
         thrust::make_transform_output_iterator(match_counts->begin(), clamp_zero_to_one{});
       hash_table.count_each(iter,
-                            iter + probe_table_num_rows,
+                            iter + left_table_num_rows,
                             equality,
                             hash_table.hash_function(),
                             output,
@@ -78,7 +77,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   };
 
   dispatch_join_comparator(
-    build, probe, preprocessed_build, preprocessed_probe, has_nulls, compare_nulls, count_matches);
+    right, left, preprocessed_right, preprocessed_left, has_nulls, compare_nulls, count_matches);
 
   return match_counts;
 }
@@ -86,18 +85,18 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
 template <typename Hasher>
 std::unique_ptr<rmm::device_uvector<size_type>> hash_join<Hasher>::make_match_counts(
   join_kind join,
-  cudf::table_view const& probe,
+  cudf::table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  return make_join_match_counts(_build,
-                                _preprocessed_build,
+  return make_join_match_counts(_right,
+                                _preprocessed_right,
                                 _impl->_hash_table,
                                 _is_empty,
                                 _has_nulls,
                                 _nulls_equal,
                                 join,
-                                probe,
+                                left,
                                 stream,
                                 mr);
 }
