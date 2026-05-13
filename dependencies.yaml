@@ -821,7 +821,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.30,<1.39
+          - polars>=1.35,<1.39
           - typing_extensions>=4.0.0
   run_cudf_polars_experimental:
     common:
@@ -889,7 +889,7 @@ dependencies:
               - numba-cuda==0.22.2,<0.29.0
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==3.0.2
+              - pandas==3.0.3
           - matrix:
             packages:
       - output_types: conda

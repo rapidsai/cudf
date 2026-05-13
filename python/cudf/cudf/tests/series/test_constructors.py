@@ -796,6 +796,26 @@ def test_series_empty_index_rangeindex(data):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("index", [None, []])
+def test_series_no_data_empty_index_defaults_to_object(index):
+    # When no data is supplied and the index is empty (None or []), the
+    # resulting dtype should be object to match pandas. Only a non-empty
+    # index without explicit dtype should default to float64.
+    expected = pd.Series(index=index)
+    result = cudf.Series(index=index)
+    assert result.dtype == np.dtype("object")
+    assert_eq(result, expected)
+
+
+def test_series_no_data_nonempty_index_defaults_to_float64():
+    # Sanity check: a non-empty index without explicit dtype keeps the
+    # float64 default that pandas uses.
+    expected = pd.Series(index=[1, 2, 3])
+    result = cudf.Series(index=[1, 2, 3])
+    assert result.dtype == np.dtype("float64")
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "pandas_type",
     [
