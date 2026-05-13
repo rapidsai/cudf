@@ -34,7 +34,7 @@ DEFAULT_EXECUTOR = "in-memory"
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
-    engine: GPUEngine | None = None,
+    engine: GPUEngine,
     collect_kwargs: CollectKwargs | None = None,
     polars_collect_kwargs: CollectKwargs | None = None,
     cudf_collect_kwargs: CollectKwargs | None = None,
@@ -311,7 +311,7 @@ def assert_sink_result_equal(
     lazydf: pl.LazyFrame,
     path: str | Path,
     *,
-    engine: str | GPUEngine | None = None,
+    engine: GPUEngine,
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
     executor: str | None = None,
