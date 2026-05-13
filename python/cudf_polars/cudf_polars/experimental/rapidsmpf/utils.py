@@ -41,6 +41,7 @@ from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -506,6 +507,49 @@ async def evaluate_chunk(
                 _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
+
+
+async def allgather_and_reduce(
+    context: Context,
+    comm: Communicator,
+    collective_id: int,
+    local_chunk: TableChunk,
+    reduce_ir: IR,
+    ir_context: IRExecutionContext,
+) -> TableChunk:
+    """
+    AllGather ``local_chunk`` across ranks and apply ``reduce_ir`` to the result.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    comm
+        The communicator.
+    collective_id
+        Collective operation ID for the AllGather.
+    local_chunk
+        The locally-reduced chunk this rank contributes.
+    reduce_ir
+        IR node applied to the concatenated AllGather output.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The chunk produced by evaluating ``reduce_ir`` on the gathered result.
+    """
+    allgather = AllGatherManager(context, comm, collective_id)
+    with allgather.inserting() as inserter:
+        inserter.insert(0, local_chunk)
+    stream = ir_context.get_cuda_stream()
+    concat_chunk = TableChunk.from_pylibcudf_table(
+        await allgather.extract_concatenated(stream),
+        stream,
+        exclusive_view=True,
+        br=context.br(),
+    )
+    return await evaluate_chunk(context, concat_chunk, reduce_ir, ir_context=ir_context)
 
 
 async def concat_batch(

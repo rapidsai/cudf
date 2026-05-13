@@ -61,7 +61,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.over import Over, _build_over_groupby_irs
-from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -70,6 +69,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
     _evaluate_chunk_sync,
     _sample_chunks,
+    allgather_and_reduce,
     allgather_reduce,
     chunk_to_frame,
     chunkwise_evaluate,
@@ -469,18 +469,8 @@ async def _allgather_and_broadcast(
     # single global reduction combines them; the post-aggregation step
     # runs once after.
     if comm.nranks > 1 and not metadata_in.duplicated:
-        allgather = AllGatherManager(context, comm, collective_id)
-        with allgather.inserting() as inserter:
-            inserter.insert(0, local_agg)
-        stream = ir_context.get_cuda_stream()
-        concat_chunk = TableChunk.from_pylibcudf_table(
-            await allgather.extract_concatenated(stream),
-            stream,
-            exclusive_view=True,
-            br=context.br(),
-        )
-        global_agg = await evaluate_chunk(
-            context, concat_chunk, reduction_ir, ir_context=ir_context
+        global_agg = await allgather_and_reduce(
+            context, comm, collective_id, local_agg, reduction_ir, ir_context
         )
     else:
         global_agg = local_agg

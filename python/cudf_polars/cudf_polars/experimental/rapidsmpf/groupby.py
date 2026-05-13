@@ -25,7 +25,6 @@ from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.groupby import combine, decompose
-from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -34,6 +33,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
     _make_hash_shuffle_metadata,
+    allgather_and_reduce,
     allgather_reduce,
     chunkwise_evaluate,
     empty_table_chunk,
@@ -308,26 +308,13 @@ async def _tree_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     if need_allgather:
-        allgather = AllGatherManager(context, comm, collective_id)
-        with allgather.inserting() as inserter:
-            inserter.insert(
-                0,
-                _enforce_schema(
-                    aggregated, decomposed.reduction_ir.schema, context.br()
-                ),
-            )
-
-        stream = ir_context.get_cuda_stream()
-        aggregated = await evaluate_chunk(
+        aggregated = await allgather_and_reduce(
             context,
-            TableChunk.from_pylibcudf_table(
-                await allgather.extract_concatenated(stream),
-                stream,
-                exclusive_view=True,
-                br=context.br(),
-            ),
+            comm,
+            collective_id,
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
             decomposed.reduction_ir,
-            ir_context=ir_context,
+            ir_context,
         )
 
     if decomposed.select_ir is not None:
