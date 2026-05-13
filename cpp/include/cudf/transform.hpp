@@ -188,11 +188,11 @@ enum class lto_binary_type : uint8_t {
 };
 
 /**
- * @brief Creates a new table by applying a transform function against every
+ * @brief Creates a new column by applying a transform function against every
  * element of the input columns.
  *
  * Computes:
- * `(outputs[i]...) =  UDF(inputs[i]...)`.
+ * `(output[i]) =  UDF(input[i])`.
  *
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
@@ -207,28 +207,66 @@ enum class lto_binary_type : uint8_t {
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
+ * @param input        Immutable view of the input to transform
+ * @param output       Specification of the output column to be created
  * @param udf The LTO-IR string of the transform function to apply
  * @param binary_type   The type of the LTO binary provided in `udf`
- * @param user_data     User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param outputs       Specification of the output columns to be created
- * @param row_size The row size of the transform operation. If not provided, it is inferred from the
- * input columns.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              A table containing the columns resulting from applying the transform
- * function to every element of the input according to the output specifications
+ * @return              A column resulting from applying the transform function to every element of
+ * the input according to the output specifications
  *
  */
-std::unique_ptr<table> transform_lto(
-  std::span<transform_input const> inputs,
+std::unique_ptr<column> unary_op_lto(
+  column_view input,
+  transform_output output,
   std::span<uint8_t const> udf,
   lto_binary_type binary_type,
-  std::span<transform_output const> outputs,
-  void* user_data,
   null_aware is_null_aware,
-  std::optional<size_type> row_size,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
+ *
+ * Computes:
+ * `(output[i]...) =  UDF(inputs[i]...)`.
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
+ * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
+ * this case.
+ * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
+ * if the number of string offsets does not match the number of output columns.
+ *
+ * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
+ * the input and pre-allocated output columns.
+ *
+ * @param lhs        Immutable view of the left-hand side input to transform
+ * @param rhs        Immutable view of the right-hand side input to transform (can be a column or
+ * scalar)
+ * @param output       Specification of the output column to be created
+ * @param udf The LTO-IR string of the transform function to apply
+ * @param binary_type   The type of the LTO binary provided in `udf`
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              A column resulting from applying the transform function to every element of
+ * the input according to the output specifications
+ *
+ */
+std::unique_ptr<column> binary_op_lto(
+  column_view lhs,
+  transform_input rhs,
+  transform_output output,
+  std::span<uint8_t const> udf,
+  lto_binary_type binary_type,
+  null_aware is_null_aware,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

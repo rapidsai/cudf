@@ -17,10 +17,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <cudf_benchmark_fragments.hpp>
 #include <nvbench/nvbench.cuh>
 
-enum class engine_type : int32_t { BINARYOP = 0, AST = 1, TRANSFORM = 2, TRANSFORM_LTO = 3 };
+enum class engine_type : int32_t { BINARYOP = 0, AST = 1, TRANSFORM = 2 };
 
 engine_type engine_from_string(std::string const& str)
 {
@@ -30,8 +29,6 @@ engine_type engine_from_string(std::string const& str)
     return engine_type::AST;
   } else if (str == "transform") {
     return engine_type::TRANSFORM;
-  } else if (str == "transform_lto") {
-    return engine_type::TRANSFORM_LTO;
   } else {
     CUDF_FAIL("unrecognized engine enum: " + str);
   }
@@ -200,38 +197,6 @@ struct q9_data {
   return cudf::compute_column(table, result, stream, mr);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_transform_lto(
-  cudf::column_view const& discount,
-  cudf::column_view const& extendedprice,
-  cudf::column_view const& supplycost,
-  cudf::column_view const& quantity,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-{
-  CUDF_BENCHMARK_RANGE();
-
-  cudf::transform_input inputs[] = {discount, extendedprice, supplycost, quantity};
-
-  cudf::transform_output outputs[] = {
-    {cudf::data_type{cudf::type_id::FLOAT64}, cudf::output_nullability::PRESERVE}};
-
-  auto const range = cudf_benchmark_fragments::file_ranges[cudf_benchmark_fragments::ndsh_q09];
-  std::span<uint8_t const> udf{cudf_benchmark_fragments::files.subspan(range[0], range[1])};
-
-  auto result = cudf::transform_lto(inputs,
-                                    udf,
-                                    cudf::lto_binary_type::FATBIN,
-                                    outputs,
-                                    nullptr,
-                                    cudf::null_aware::NO,
-                                    std::nullopt,
-                                    stream,
-                                    mr);
-
-  auto table = result->release();
-  return std::move(table.front());
-}
-
 [[nodiscard]] std::unique_ptr<cudf::column> compute_amount(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
@@ -248,9 +213,6 @@ struct q9_data {
       return compute_amount_ast(discount, extendedprice, supplycost, quantity, stream, mr);
     case engine_type::TRANSFORM:
       return compute_amount_transform(discount, extendedprice, supplycost, quantity, stream, mr);
-    case engine_type::TRANSFORM_LTO:
-      return compute_amount_transform_lto(
-        discount, extendedprice, supplycost, quantity, stream, mr);
     default: CUDF_UNREACHABLE("invalid engine_type enum");
   }
 }
@@ -414,14 +376,14 @@ void ndsh_q9_amount(nvbench::state& state)
 NVBENCH_BENCH(ndsh_q9)
   .set_name("ndsh_q9")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("engine", {"binaryop", "ast", "transform", "transform_lto"});
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});
 
 NVBENCH_BENCH(ndsh_q9_noio)
   .set_name("ndsh_q9_noio")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("engine", {"binaryop", "ast", "transform", "transform_lto"});
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});
 
 NVBENCH_BENCH(ndsh_q9_amount)
   .set_name("ndsh_q9_amount")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("engine", {"binaryop", "ast", "transform", "transform_lto"});
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});

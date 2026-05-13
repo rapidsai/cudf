@@ -24,7 +24,6 @@
 #include <cuda/iterator>
 
 #include <cudf_fragments.hpp>
-#include <jit/element_storage.cuh>
 #include <jit/helpers.hpp>
 #include <jit/jit.hpp>
 #include <jit/parser.hpp>
@@ -965,33 +964,6 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                             mr);
 }
 
-type_id as_storage_type(type_id id)
-{
-  switch (id) {
-    case type_id::INT8:
-    case type_id::UINT8: return type_id::UINT8;
-    case type_id::INT16:
-    case type_id::UINT16: return type_id::UINT16;
-    case type_id::INT32:
-    case type_id::UINT32:
-    case type_id::FLOAT32:
-    case type_id::TIMESTAMP_DAYS:
-    case type_id::DURATION_DAYS: return type_id::UINT32;
-    case type_id::INT64:
-    case type_id::UINT64:
-    case type_id::FLOAT64:
-    case type_id::TIMESTAMP_SECONDS:
-    case type_id::TIMESTAMP_MILLISECONDS:
-    case type_id::TIMESTAMP_MICROSECONDS:
-    case type_id::TIMESTAMP_NANOSECONDS:
-    case type_id::DURATION_SECONDS:
-    case type_id::DURATION_MILLISECONDS:
-    case type_id::DURATION_MICROSECONDS:
-    case type_id::DURATION_NANOSECONDS: return type_id::UINT64;
-    default: return id;
-  }
-}
-
 std::string_view as_tag(type_id id)
 {
   switch (id) {
@@ -1024,22 +996,12 @@ std::string_view as_tag(type_id id)
   }
 }
 
-struct element_size_fn {
-  template <typename T>
-  int32_t operator()()
-  {
-    return sizeof(T);
-  }
-};
-
-int32_t element_size(type_id id) { return type_dispatcher(data_type{id}, element_size_fn{}); }
-
 std::optional<std::span<uint8_t const>> dispatch_unop_lto_kernel(
   bool null_aware,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs)
 {
-  auto input_type = as_storage_type(std::visit([](auto& c) { return c.type().id(); }, inputs[0]));
+  auto input_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
 
   for (size_t i = 0; i < std::size(cudf_fragments::unop_lto_kernel_FILE_INDEX); i++) {
     auto FILE_INDEX = cudf_fragments::unop_lto_kernel_FILE_INDEX[i];
@@ -1054,26 +1016,23 @@ std::optional<std::span<uint8_t const>> dispatch_unop_lto_kernel(
   return std::nullopt;
 }
 
-std::optional<std::span<uint8_t const>> dispatch_untyped_lto_transform_kernel_stack(
+std::optional<std::span<uint8_t const>> dispatch_binop_lto_kernel(
   bool null_aware,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs)
 {
-  int32_t max_element_size = 0;
-  for (auto& input : inputs) {
-    auto size        = element_size(std::visit([](auto& c) { return c.type().id(); }, input));
-    max_element_size = std::max(max_element_size, size);
-  }
-  int32_t elements = inputs.size() + outputs.size();
+  auto input_type    = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+  auto lhs_is_scalar = std::holds_alternative<scalar_column_view>(inputs[0]);
+  auto rhs_is_scalar = std::holds_alternative<scalar_column_view>(inputs[1]);
 
-  for (size_t i = 0; i < std::size(cudf_fragments::untyped_lto_transform_kernel_stack_FILE_INDEX);
-       i++) {
-    auto FILE_INDEX       = cudf_fragments::untyped_lto_transform_kernel_stack_FILE_INDEX[i];
-    auto NULL_AWARE       = cudf_fragments::untyped_lto_transform_kernel_stack_NULL_AWARE[i];
-    auto MAX_ELEMENT_SIZE = cudf_fragments::untyped_lto_transform_kernel_stack_MAX_ELEMENT_SIZE[i];
-    auto MAX_ELEMENTS     = cudf_fragments::untyped_lto_transform_kernel_stack_MAX_ELEMENTS[i];
-    if (null_aware == NULL_AWARE && max_element_size <= MAX_ELEMENT_SIZE &&
-        elements <= MAX_ELEMENTS) {
+  if (lhs_is_scalar) { return std::nullopt; }
+
+  for (size_t i = 0; i < std::size(cudf_fragments::binop_lto_kernel_FILE_INDEX); i++) {
+    auto FILE_INDEX    = cudf_fragments::binop_lto_kernel_FILE_INDEX[i];
+    auto NULL_AWARE    = cudf_fragments::binop_lto_kernel_NULL_AWARE[i];
+    auto TYPE          = cudf_fragments::binop_lto_kernel_TYPE[i];
+    auto RHS_IS_SCALAR = cudf_fragments::binop_lto_kernel_RHS_IS_SCALAR[i];
+    if (as_tag(input_type) == TYPE && null_aware == NULL_AWARE && rhs_is_scalar == RHS_IS_SCALAR) {
       auto range = cudf_fragments::file_ranges[FILE_INDEX];
       return cudf_fragments::files.subspan(range[0], range[1]);
     }
@@ -1082,94 +1041,28 @@ std::optional<std::span<uint8_t const>> dispatch_untyped_lto_transform_kernel_st
   return std::nullopt;
 }
 
-std::optional<std::tuple<std::span<uint8_t const>, size_t>>
-dispatch_untyped_lto_transform_kernel_shmem(bool null_aware,
-                                            std::span<transform_input const> inputs,
-                                            std::span<transform_output const> outputs)
-{
-  int32_t max_element_size = 0;
-  for (auto& input : inputs) {
-    auto size        = element_size(std::visit([](auto& c) { return c.type().id(); }, input));
-    max_element_size = std::max(max_element_size, size);
-  }
-
-  auto kernel_shmem = [&](int max_storage_size) -> size_t {
-    switch (max_storage_size) {
-      case 4:
-        return null_aware ? sizeof(element_storage<true, 4>) : sizeof(element_storage<false, 4>);
-      case 8:
-        return null_aware ? sizeof(element_storage<true, 8>) : sizeof(element_storage<false, 8>);
-      case 16:
-        return null_aware ? sizeof(element_storage<true, 16>) : sizeof(element_storage<false, 16>);
-      case 32:
-        return null_aware ? sizeof(element_storage<true, 32>) : sizeof(element_storage<false, 32>);
-      default:
-        CUDF_FAIL(
-          std::format("Unsupported untyped LTO shmem max element size {}", max_storage_size),
-          std::invalid_argument);
-    }
-  };
-
-  for (size_t i = 0; i < std::size(cudf_fragments::untyped_lto_transform_kernel_shmem_FILE_INDEX);
-       i++) {
-    auto FILE_INDEX       = cudf_fragments::untyped_lto_transform_kernel_shmem_FILE_INDEX[i];
-    auto NULL_AWARE       = cudf_fragments::untyped_lto_transform_kernel_shmem_NULL_AWARE[i];
-    auto MAX_ELEMENT_SIZE = cudf_fragments::untyped_lto_transform_kernel_shmem_MAX_ELEMENT_SIZE[i];
-    if (null_aware == NULL_AWARE && max_element_size <= MAX_ELEMENT_SIZE) {
-      auto per_thread_shmem = kernel_shmem(MAX_ELEMENT_SIZE) * (inputs.size() + outputs.size());
-      auto range            = cudf_fragments::file_ranges[FILE_INDEX];
-      return std::make_tuple(cudf_fragments::files.subspan(range[0], range[1]),
-                             static_cast<size_t>(per_thread_shmem));
-    }
-  }
-
-  return std::nullopt;
-}
-
-rtcx::kernel_occupancy_config configure_shmem(cudf::kernel const& transform_kernel,
-                                              size_t dynamic_smem_per_thread)
-{
-  size_t static_shmem_per_thread = 0;
-
-  auto shmem_for_block = [&](int block_size) -> size_t {
-    return (static_shmem_per_thread + dynamic_smem_per_thread) * block_size;
-  };
-
-  int min_grid_size;
-  int block_size;
-
-  CUDF_CUDA_TRY(cudaOccupancyMaxPotentialBlockSizeVariableSMem(
-    &min_grid_size, &block_size, transform_kernel.get().get(), shmem_for_block, 0));
-
-  return {.min_grid_size = static_cast<uint32_t>(min_grid_size),
-          .block_size    = static_cast<uint32_t>(block_size)};
-}
-
 // Dispatches to the appropriate LTO kernel based on the number of inputs and outputs, their types,
 // and nullability.
-std::tuple<std::span<uint8_t const>, size_t> dispatch_lto_kernel(
-  bool null_aware,
-  std::span<transform_input const> inputs,
-  std::span<transform_output const> outputs)
+std::span<uint8_t const> dispatch_lto_kernel(bool null_aware,
+                                             std::span<transform_input const> inputs,
+                                             std::span<transform_output const> outputs)
 {
   if (inputs.size() == 1 && outputs.size() == 1) {
-    auto input0_type =
-      as_storage_type(std::visit([](auto& c) { return c.type().id(); }, inputs[0]));
-    auto output_type = as_storage_type(outputs[0].type.id());
-
+    auto input0_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+    auto output_type = outputs[0].type.id();
     if (input0_type == output_type && is_fixed_width(data_type{input0_type})) {
-      if (auto kernel = dispatch_unop_lto_kernel(null_aware, inputs, outputs)) {
-        return {*kernel, 0};
-      }
+      if (auto kernel = dispatch_unop_lto_kernel(null_aware, inputs, outputs)) { return *kernel; }
     }
   }
 
-  if (auto kernel = dispatch_untyped_lto_transform_kernel_stack(null_aware, inputs, outputs)) {
-    return {*kernel, 0};
-  }
-
-  if (auto kernel = dispatch_untyped_lto_transform_kernel_shmem(null_aware, inputs, outputs)) {
-    return *kernel;
+  if (inputs.size() == 2 && outputs.size() == 1) {
+    auto input0_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+    auto input1_type = std::visit([](auto& c) { return c.type().id(); }, inputs[1]);
+    auto output_type = outputs[0].type.id();
+    if (input0_type == output_type && input1_type == output_type &&
+        is_fixed_width(data_type{input0_type})) {
+      if (auto kernel = dispatch_binop_lto_kernel(null_aware, inputs, outputs)) { return *kernel; }
+    }
   }
 
   CUDF_FAIL("No suitable LTO kernel found for the given transform parameters",
@@ -1192,7 +1085,6 @@ std::unique_ptr<table> transform_lto(std::span<transform_input const> inputs,
                                      std::span<uint8_t const> udf,
                                      lto_binary_type binary_type,
                                      std::span<transform_output const> outputs,
-                                     void* user_data,
                                      null_aware is_null_aware,
                                      std::optional<size_type> in_row_size,
                                      rmm::cuda_stream_view stream,
@@ -1207,26 +1099,7 @@ std::unique_ptr<table> transform_lto(std::span<transform_input const> inputs,
     make_outputs(is_null_aware, row_size, inputs, outputs, output_may_be_nullable, {}, stream, mr);
   auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
-
-  std::vector<cudf::size_type> input_strides;
-
-  for (auto& input : inputs) {
-    if (std::holds_alternative<scalar_column_view>(input)) {
-      input_strides.push_back(0);
-    } else {
-      input_strides.push_back(1);
-    }
-  }
-
-  rmm::device_uvector<cudf::size_type> d_input_strides(input_strides.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_input_strides.data(),
-                                input_strides.data(),
-                                input_strides.size() * sizeof(cudf::size_type),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
-
-  auto [kernel_fatbin, shmem_requirement_per_thread] =
-    dispatch_lto_kernel(is_null_aware == null_aware::YES, inputs, outputs);
+  auto kernel_fatbin     = dispatch_lto_kernel(is_null_aware == null_aware::YES, inputs, outputs);
 
   rtcx::memory_fragment fragments[] = {
     {.data = kernel_fatbin, .type = rtcx::binary_type::FATBIN, .name = "kernel"},
@@ -1241,31 +1114,49 @@ std::unique_ptr<table> transform_lto(std::span<transform_input const> inputs,
   auto* input_cols              = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  cudf::size_type* p_input_strides = d_input_strides.data();
 
-  rtcx::kernel_occupancy_config cfg;
+  auto cfg        = kernel.max_occupancy_config(0, 0);
+  void* user_data = nullptr;
 
-  if (shmem_requirement_per_thread > 0) {
-    cfg = configure_shmem(kernel, shmem_requirement_per_thread);
-  } else {
-    cfg = kernel.max_occupancy_config(0, 0);
-  }
+  void* args[] = {&num_rows, &p_stencil, &user_data, &input_cols, &output_cols};
 
-  void* args[] = {&num_rows,
-                  &p_stencil,
-                  &user_data,
-                  &input_cols,
-                  &output_cols,
-                  &num_inputs,
-                  &num_outputs,
-                  &p_input_strides};
-
-  auto per_block_shmem = shmem_requirement_per_thread * cfg.block_size;
-
-  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, per_block_shmem, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
   return std::make_unique<table>(std::move(finalized));
+}
+
+std::unique_ptr<column> unary_op_lto(column_view input,
+                                     transform_output output,
+                                     std::span<uint8_t const> udf,
+                                     lto_binary_type binary_type,
+                                     null_aware is_null_aware,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
+  transform_input inputs[]   = {input};
+  transform_output outputs[] = {output};
+  auto table =
+    transform_lto(inputs, udf, binary_type, outputs, is_null_aware, std::nullopt, stream, mr);
+  auto cols = table->release();
+  return std::move(cols[0]);
+}
+
+std::unique_ptr<column> binary_op_lto(column_view lhs,
+                                      transform_input rhs,
+                                      transform_output output,
+                                      std::span<uint8_t const> udf,
+                                      lto_binary_type binary_type,
+                                      null_aware is_null_aware,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  transform_input inputs[]   = {lhs, rhs};
+  transform_output outputs[] = {output};
+  auto table =
+    transform_lto(inputs, udf, binary_type, outputs, is_null_aware, std::nullopt, stream, mr);
+  auto cols = table->release();
+  return std::move(cols[0]);
 }
 
 }  // namespace cudf

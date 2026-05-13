@@ -686,15 +686,15 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 # -------------------------------------------------------------------------------------
 add_embed(cudf_test_fragments)
 
+add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
+
 add_fragment(
-  cudf_test_fragments FRAGMENT transform_profit_operator SOURCE transform/fragments/profit.cu
+  cudf_test_fragments FRAGMENT sum_of_squares SOURCE transform/fragments/sum_of_squares.cu
 )
 
 add_fragment(
-  cudf_test_fragments FRAGMENT transform_invsqrt_operator SOURCE transform/fragments/invsqrt.cu
+  cudf_test_fragments FRAGMENT decimal_square SOURCE transform/fragments/decimal_square.cu
 )
-
-add_fragment(cudf_test_fragments FRAGMENT transform_tpcds_q7 SOURCE transform/fragments/tpcds_q7.cu)
 
 embed(cudf_test_fragments COMPRESSION none)
 

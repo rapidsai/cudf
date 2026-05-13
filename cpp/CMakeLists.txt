@@ -387,7 +387,9 @@ endmacro()
 
 add_embed(cudf_fragments)
 
-foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 decimal32 decimal64 decimal128)
+foreach(TYPE IN ITEMS uint8 uint16 uint32 int8 int16 int32 int64 float32 float64 uint64 decimal32
+                      decimal64 decimal128
+)
   foreach(NULL_AWARE IN ITEMS 0 1)
     set(FRAGMENT_NAME unop_lto_kernel)
     set(VARIANT_NAME ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__element_${TYPE})
@@ -396,9 +398,11 @@ foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 decimal32 decimal64 decimal128)
       FRAGMENT
       ${VARIANT_NAME}
       SOURCE
-      src/transform/jit/lto_kernel.cu
+      src/transform/jit/kernel.cu
       KERNEL_INSTANCE
-      "cudf::lto_transform_kernel<${NULL_AWARE}, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
+      "cudf::jit::transform_kernel<${NULL_AWARE}, false, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
+      DEFINITIONS
+      CUDF_LTO_MODE
       ARRAY_IDS
       ${FRAGMENT_NAME}_FILE_INDEX
       ${FRAGMENT_NAME}_NULL_AWARE
@@ -411,59 +415,37 @@ foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 decimal32 decimal64 decimal128)
   endforeach()
 endforeach()
 
-foreach(NULL_AWARE IN ITEMS 0 1)
-  foreach(MAX_ELEMENT_SIZE IN ITEMS 4 8)
-    foreach(MAX_ELEMENTS IN ITEMS 2 4)
-      set(FRAGMENT_NAME untyped_lto_transform_kernel_stack)
+foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 int8 int16 int32 int64 float32 float64 decimal32
+                      decimal64 decimal128
+)
+  foreach(NULL_AWARE IN ITEMS 0 1)
+    foreach(RHS_IS_SCALAR IN ITEMS 0 1)
+      set(FRAGMENT_NAME binop_lto_kernel)
       set(VARIANT_NAME
-          ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__max_element_size_${MAX_ELEMENT_SIZE}__max_elements_${MAX_ELEMENTS}
+          ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__element_${TYPE}__rhs_is_scalar_${RHS_IS_SCALAR}
       )
       add_fragment(
         cudf_fragments
         FRAGMENT
         ${VARIANT_NAME}
         SOURCE
-        src/transform/jit/untyped_lto_kernel.cu
+        src/transform/jit/kernel.cu
         KERNEL_INSTANCE
-        "cudf::untyped_lto_transform_kernel_stack<${NULL_AWARE}, ${MAX_ELEMENT_SIZE}, ${MAX_ELEMENTS}>"
+        "cudf::jit::transform_kernel<${NULL_AWARE}, false, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>, cudf::jit::column_accessor<1, cudf::column_device_view_core, cudf::tags::${TYPE}, ${RHS_IS_SCALAR}>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
+        DEFINITIONS
+        CUDF_LTO_MODE
         ARRAY_IDS
         ${FRAGMENT_NAME}_FILE_INDEX
         ${FRAGMENT_NAME}_NULL_AWARE
-        ${FRAGMENT_NAME}_MAX_ELEMENT_SIZE
-        ${FRAGMENT_NAME}_MAX_ELEMENTS
+        ${FRAGMENT_NAME}_TYPE
+        ${FRAGMENT_NAME}_RHS_IS_SCALAR
         ARRAY_VALUES
         ${cudf_fragments_FILE_INDEX}
         ${NULL_AWARE}
-        ${MAX_ELEMENT_SIZE}
-        ${MAX_ELEMENTS}
+        ${TYPE}
+        ${RHS_IS_SCALAR}
       )
     endforeach()
-  endforeach()
-endforeach()
-
-foreach(MAX_ELEMENT_SIZE IN ITEMS 4 8 16 32)
-  foreach(NULL_AWARE IN ITEMS 0 1)
-    set(FRAGMENT_NAME untyped_lto_transform_kernel_shmem)
-    set(VARIANT_NAME
-        ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__max_element_size_${MAX_ELEMENT_SIZE}
-    )
-    add_fragment(
-      cudf_fragments
-      FRAGMENT
-      ${VARIANT_NAME}
-      SOURCE
-      src/transform/jit/untyped_lto_kernel.cu
-      KERNEL_INSTANCE
-      "cudf::untyped_lto_transform_kernel_shmem<${NULL_AWARE}, ${MAX_ELEMENT_SIZE}>"
-      ARRAY_IDS
-      ${FRAGMENT_NAME}_FILE_INDEX
-      ${FRAGMENT_NAME}_NULL_AWARE
-      ${FRAGMENT_NAME}_MAX_ELEMENT_SIZE
-      ARRAY_VALUES
-      ${cudf_fragments_FILE_INDEX}
-      ${NULL_AWARE}
-      ${MAX_ELEMENT_SIZE}
-    )
   endforeach()
 endforeach()
 

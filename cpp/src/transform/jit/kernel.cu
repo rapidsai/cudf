@@ -6,6 +6,8 @@
 #include <cudf/ast/detail/operator_functor.cuh>
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/jit/transform_operator.cuh>
+#include <cudf/jit/type_tags.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -18,7 +20,6 @@
 
 #include <jit/column_accessor.cuh>
 #include <jit/column_device_view_wrappers.cuh>
-#include <jit/element_storage.cuh>
 #include <jit/sync.cuh>
 #include <jit/type_list.cuh>
 
@@ -38,16 +39,18 @@ namespace jit {
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
 template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
-CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  bitmask_type const* __restrict__ stencil,
-                                  void* __restrict__ user_data,
-                                  column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols)
+__device__ void transform_kernel(size_type row_size,
+                                 bitmask_type const* __restrict__ stencil,
+                                 void* __restrict__ user_data,
+                                 column_device_view_core const* __restrict__ input_cols,
+                                 mutable_column_device_view_core const* __restrict__ output_cols)
 {
   auto start  = detail::grid_1d::global_thread_id();
   auto stride = detail::grid_1d::grid_stride();
 
   for (auto row = start; row < row_size; row += stride) {
+#ifndef CUDF_LTO_MODE
+
     auto operation = [&]<typename Args>(Args const& args) {
       if constexpr (has_user_data) {
         cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
@@ -56,6 +59,25 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
       }
     };
+
+#else
+
+    auto operation = [&]<typename Args>(Args const& args) {
+      static_assert(!has_user_data);
+      static_assert(OutputAccessors::size == 1);
+      static_assert(InputAccessors::size == 2 || InputAccessors::size == 1);
+      cuda::std::apply(
+        [&](auto... a) {
+          if constexpr (InputAccessors::size == 1) {
+            cudf::lto::unary_operator(a...);
+          } else if constexpr (InputAccessors::size == 2) {
+            cudf::lto::binary_operator(a...);
+          }
+        },
+        args);
+    };
+
+#endif
 
     if constexpr (!is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
