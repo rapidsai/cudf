@@ -66,6 +66,7 @@ from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManage
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    ChunkStore,
     NormalizedPartitioning,
     _evaluate_chunk_sync,
     _sample_chunks,
@@ -433,9 +434,7 @@ async def _allgather_and_broadcast(
     reduction_ir = plan.reduction_ir
     agg_select_ir = plan.agg_select_ir
 
-    # Making the chunk available consumes the spilled handle, so we keep
-    # the available chunk and reuse it for both buffering and piecewise eval.
-    buffered: list[tuple[int, TableChunk]] = []
+    buffer = ChunkStore(context)
     partial_aggs: list[TableChunk] = []
 
     while (msg := await ch_in.recv(context)) is not None:
@@ -446,7 +445,6 @@ async def _allgather_and_broadcast(
             reserve_extra=chunk.data_alloc_size(),
             net_memory_delta=0,
         )
-        buffered.append((msg.sequence_number, chunk))
         with opaque_memory_usage(extra):
             partial = await asyncio.to_thread(
                 _evaluate_chunk_sync,
@@ -456,6 +454,7 @@ async def _allgather_and_broadcast(
                 context.br(),
             )
         partial_aggs.append(partial)
+        buffer.insert(Message(msg.sequence_number, chunk))
 
     if partial_aggs:
         local_agg = await evaluate_batch(
@@ -498,10 +497,10 @@ async def _allgather_and_broadcast(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    for seq_num, chunk in buffered:
+    for msg in buffer:
         result = await _evaluate_broadcast_chunk(
             context,
-            chunk,
+            TableChunk.from_message(msg, br=context.br()),
             ir,
             global_agg_df,
             plan.key_names,
@@ -510,7 +509,7 @@ async def _allgather_and_broadcast(
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await ch_out.send(context, Message(msg.sequence_number, result))
 
     await ch_out.drain(context)
 

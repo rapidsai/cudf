@@ -10,6 +10,7 @@ import itertools
 import operator
 import struct
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from functools import reduce
@@ -44,7 +45,14 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator, Sequence
+    from collections.abc import (
+        AsyncIterator,
+        Callable,
+        Coroutine,
+        Generator,
+        Iterator,
+        Sequence,
+    )
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -62,6 +70,23 @@ if TYPE_CHECKING:
 
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
+
+
+class ChunkStore:
+    """Ordered spillable buffer for TableChunk messages."""
+
+    def __init__(self, ctx: Context) -> None:
+        self._mids: deque[int] = deque()
+        self._store = ctx.spillable_messages()
+
+    def insert(self, msg: Message) -> None:
+        """Insert a message into the store."""
+        self._mids.append(self._store.insert(msg))
+
+    def __iter__(self) -> Generator[Message, None, None]:
+        """Yield messages in insertion order, draining the store."""
+        while self._mids:
+            yield self._store.extract(mid=self._mids.popleft())
 
 
 @contextlib.contextmanager
