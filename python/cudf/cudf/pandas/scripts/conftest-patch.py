@@ -104,7 +104,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_fillna.py::TestFillNA::test_fillna_dtype_conversion",
     "tests/frame/methods/test_fillna.py::TestFillNA::test_fillna_with_multi_index_frame",
     "tests/frame/methods/test_fillna.py::test_fillna_nones_inplace",
-    
     "tests/api/test_api.py::test_pandas_array_alias",
     "tests/apply/test_frame_apply.py::test_apply[python]",
     "tests/apply/test_frame_apply.py::test_apply_function_runs_once",
