@@ -373,7 +373,12 @@ macro(add_fragment)
                CUDA_STANDARD_REQUIRED ON
                CUDA_VISIBILITY_PRESET hidden
   )
-  target_link_libraries(${OBJECT_ID} PRIVATE CCCL::CCCL)
+  target_link_libraries(
+    ${OBJECT_ID}
+    PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+    PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+            ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
+  )
   target_include_directories(
     ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"

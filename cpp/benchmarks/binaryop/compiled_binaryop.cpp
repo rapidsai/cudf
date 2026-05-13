@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -141,7 +141,7 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
                                     cudf::lto_binary_type::FATBIN,
                                     null_aware ? cudf::null_aware::YES : cudf::null_aware::NO
                                    );
- 
+
   // use number of bytes read and written to global memory
   state.add_global_memory_reads<TypeLhs>(num_rows);
   state.add_global_memory_reads<TypeRhs>(num_rows);
@@ -167,7 +167,7 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
     .set_name("lto_binary_op_" BM_STRINGIFY(name))                       \
     .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
 
-    
+
 #define build_name_lto(a, b, c, d) a##_##b##_##c##_##d##_lto
 
 
