@@ -61,7 +61,10 @@ from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.over import Over, _build_over_groupby_irs
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
+    LocalRepartitioner,
+    ShuffleManager,
+)
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
@@ -347,76 +350,6 @@ def _partition_by_origin_rank(
     )
 
 
-def _split_by_chunk_index(
-    chunk: TableChunk,
-    n_chunks: int,
-    output_indices: list[int],
-    chunk_index_column: int,
-    position_column: int,
-    ir_context: IRExecutionContext,
-    br: Any,
-) -> dict[int, TableChunk]:
-    """
-    Sort by ``(chunk_index, position)`` and split at chunk-index transitions.
-
-    Returns a mapping from chunk index in ``[0, n_chunks)`` to its rows.
-    Chunk indices with no rows are absent from the result.
-    """
-    table = chunk.table_view()
-    if table.num_rows() == 0:
-        return {}
-
-    stream = ir_context.get_cuda_stream()
-    columns = table.columns()
-    sorted_table = plc.sorting.stable_sort_by_key(
-        table,
-        plc.Table([columns[chunk_index_column], columns[position_column]]),
-        [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
-        [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
-        stream=stream,
-    )
-
-    needles = plc.Column.from_iterable_of_py(
-        range(1, n_chunks),
-        plc.types.DataType(plc.TypeId.INT32),
-        stream=stream,
-    )
-    split_position_col = plc.search.lower_bound(
-        plc.Table([sorted_table.columns()[chunk_index_column]]),
-        plc.Table([needles]),
-        [plc.types.Order.ASCENDING],
-        [plc.types.NullOrder.AFTER],
-        stream=stream,
-    )
-    split_positions = (
-        DataFrame.from_table(
-            plc.Table([split_position_col]),
-            ["p"],
-            [DataType(pl.Int32())],
-            stream=stream,
-        )
-        .to_polars()["p"]
-        .to_list()
-    )
-
-    output_table = plc.Table([sorted_table.columns()[i] for i in output_indices])
-    pieces = plc.copying.split(output_table, split_positions, stream=stream)
-
-    by_chunk_index: dict[int, TableChunk] = {}
-    for chunk_index, piece in enumerate(pieces):
-        if piece.num_rows() == 0:
-            continue
-        # ``split`` returns zero-copy views into ``output_table``; copy to
-        # materialise an independent buffer.
-        by_chunk_index[chunk_index] = TableChunk.from_pylibcudf_table(
-            piece.copy(stream=stream),
-            stream,
-            exclusive_view=True,
-            br=br,
-        )
-    return by_chunk_index
-
-
 async def _allgather_and_broadcast(
     context: Context,
     comm: Communicator,
@@ -604,69 +537,45 @@ async def _evaluate_and_route_to_origin(
                 inserter.insert_split(routed, splits)
 
 
-async def _collect_returned_rows(
-    context: Context,
-    return_shuffle: ShuffleManager,
-    ir_context: IRExecutionContext,
-) -> TableChunk | None:
-    """Concatenate the local partitions of the return shuffle into a single chunk."""
-    partition_ids = return_shuffle.local_partitions()
-    if not partition_ids:
-        return None
-    stream = ir_context.get_cuda_stream()
-    chunks = [
-        TableChunk.from_pylibcudf_table(
-            return_shuffle.extract_chunk(pid, stream),
-            stream,
-            exclusive_view=True,
-            br=context.br(),
-        )
-        for pid in partition_ids
-    ]
-    if len(chunks) == 1:
-        return chunks[0]
-    return TableChunk.from_pylibcudf_table(
-        plc.concatenate.concatenate([c.table_view() for c in chunks], stream=stream),
-        stream,
-        exclusive_view=True,
-        br=context.br(),
-    )
-
-
 async def _reassemble_input_chunks(
     context: Context,
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
-    received: TableChunk | None,
+    return_shuffle: ShuffleManager,
     sequence_numbers: list[int],
     ir: Over,
     tracer: Any,
 ) -> None:
-    """Split received rows by chunk index and emit one output chunk per input chunk."""
-    n_exprs = len(ir.exprs)
-    output_indices = list(range(n_exprs))
-    chunk_index_column = n_exprs
-    position_column = n_exprs + 1
+    """Emit one output chunk per input chunk, in original order."""
     n_chunks = len(sequence_numbers)
+    if n_chunks == 0:
+        return
 
-    by_chunk_index: dict[int, TableChunk] = {}
-    if received is not None and received.table_view().num_rows() > 0:
-        by_chunk_index = await asyncio.to_thread(
-            _split_by_chunk_index,
-            received,
-            n_chunks,
-            output_indices,
-            chunk_index_column,
-            position_column,
-            ir_context,
-            context.br(),
-        )
+    n_exprs = len(ir.exprs)
+    chunk_index_column = n_exprs
 
     stream = ir_context.get_cuda_stream()
+    local = LocalRepartitioner(return_shuffle, local_count=n_chunks)
+    await local.repartition_by_index(partition_col=chunk_index_column, stream=stream)
+
     for chunk_index, sequence_number in enumerate(sequence_numbers):
-        chunk = by_chunk_index.get(chunk_index) or empty_table_chunk(
-            ir, context, stream
-        )
+        tbl = local.extract_chunk(chunk_index, stream)
+        if tbl.num_rows() == 0:
+            chunk = empty_table_chunk(ir, context, stream)
+        else:
+            sorted_tbl = plc.sorting.stable_sort_by_key(
+                tbl,
+                plc.Table([tbl.columns()[n_exprs]]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.AFTER],
+                stream=stream,
+            )
+            chunk = TableChunk.from_pylibcudf_table(
+                plc.Table(sorted_tbl.columns()[:n_exprs]),
+                stream,
+                exclusive_view=True,
+                br=context.br(),
+            )
         if tracer is not None:
             tracer.add_chunk(table=chunk.table_view())
         await ch_out.send(context, Message(sequence_number, chunk))
@@ -745,9 +654,8 @@ async def _shuffle_and_reassemble(
         comm.nranks,
         stamps,
     )
-    received = await _collect_returned_rows(context, return_shuffle, ir_context)
     await _reassemble_input_chunks(
-        context, ch_out, ir_context, received, sequence_numbers, ir, tracer
+        context, ch_out, ir_context, return_shuffle, sequence_numbers, ir, tracer
     )
 
     await ch_out.drain(context)
