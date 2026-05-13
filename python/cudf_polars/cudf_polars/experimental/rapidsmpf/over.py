@@ -495,6 +495,12 @@ async def _distribute_by_group(
             ).make_available_and_spill(context.br(), allow_overbooking=True)
             sequence_numbers.append(msg.sequence_number)
             if not skip_insert:
+                # TODO: For duplicated input only rank 0 inserts here, and
+                # every row is stamped with origin_rank=0, so the return
+                # shuffle routes all output back to rank 0 and ranks
+                # 1..nranks-1 sit idle on emit. Slice the duplicated input
+                # across ranks (e.g. stripe by row index) and stamp each
+                # slice with its target origin rank to distribute emit work.
                 stamped = await asyncio.to_thread(
                     _append_origin_stamps,
                     chunk,
