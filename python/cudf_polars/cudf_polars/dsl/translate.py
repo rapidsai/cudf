@@ -35,6 +35,7 @@ from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
@@ -43,6 +44,29 @@ if TYPE_CHECKING:
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
+
+
+def _align_decimal_float_for_comparison(
+    *operands: expr.Expr,
+) -> tuple[expr.Expr, ...]:
+    """
+    Cast Decimal operands to Float64 when mixed with Float operands.
+
+    libcudf does not produce correct results for Decimal vs Float
+    comparisons. This matches Polars' supertype resolution where
+    Decimal + Float yields Float64.
+    """
+    has_decimal = any(plc.traits.is_fixed_point(op.dtype.plc_type) for op in operands)
+    has_float = any(plc.traits.is_floating_point(op.dtype.plc_type) for op in operands)
+    if has_decimal and has_float:
+        f64 = DataType(pl.Float64())
+        return tuple(
+            expr.Cast(f64, False, op)  # noqa: FBT003
+            if plc.traits.is_fixed_point(op.dtype.plc_type)
+            else op
+            for op in operands
+        )
+    return operands
 
 
 def _check_compression(data: bytes) -> str | None:
@@ -764,6 +788,10 @@ def _(
             )
             (closed,) = options
             lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            if not POLARS_VERSION_LT_139:
+                # IsBetween type coercion does not
+                # insert casts for Decimal/Float comparisons.
+                column, lo, hi = _align_decimal_float_for_comparison(column, lo, hi)
             return expr.BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.LOGICAL_AND,
