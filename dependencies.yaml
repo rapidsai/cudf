@@ -480,7 +480,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &cmake_ver cmake>=3.30.4
+          - &cmake_ver cmake>=4.0
           - &ninja ninja
   build_all:
     common:
