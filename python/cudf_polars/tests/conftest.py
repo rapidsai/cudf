@@ -2,22 +2,39 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import importlib.util
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import pytest
 
 import polars as pl
 
 import cudf_polars.callback
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.testing.engine_utils import (
+    ALL_ENGINE_FIXTURE_PARAMS,
+    STREAMING_ENGINE_FIXTURE_PARAMS,
+    EngineFixtureParam,
+    build_streaming_engine,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from rapidsmpf.communicator.communicator import Communicator
+    from collections.abc import Callable, Generator, Mapping
+    from typing import TypeAlias
 
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    # Read-only view over the per-backend streaming engines owned by the
+    # ``streaming_engines`` session fixture. Only that fixture mutates the
+    # underlying dict; consumers (``spmd_engine``, ``streaming_engine_factory``,
+    # ``engine``) only look up by backend name.
+    StreamingEngines: TypeAlias = Mapping[str, StreamingEngine]
+
+
+# Number of ranks for multi-rank streaming engines that share one GPU
+# (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
+# ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
+NUM_RANKS = 2
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -39,27 +56,9 @@ def clear_memory_resource_cache():
     cudf_polars.callback.default_memory_resource.cache_clear()
 
 
-@pytest.fixture
-def using_streaming_engine(engine: pl.GPUEngine) -> bool:
-    """True when the active ``engine`` fixture is a :class:`StreamingEngine`."""
-    try:
-        from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-
-        return isinstance(engine, StreamingEngine)
-    except ImportError:
-        return False
-
-
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
-    # Do not use `pytest.importorskip` here: this fixture is autouse, so an
-    # import-based skip would skip every test in the suite on environments
-    # without rapidsmpf (e.g. the coverage CI job), masking real coverage.
-    # We only want to gate the nranks>1 check on rapidsmpf being available.
-    if importlib.util.find_spec("rapidsmpf") is None:
-        return
-
     from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
 
     if (
@@ -71,132 +70,206 @@ def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
 
 
 @pytest.fixture(scope="session")
-def spmd_comm() -> Communicator:
-    """Session-scoped communicator — bootstrapped once and shared across all tests.
+def streaming_engines() -> Generator[StreamingEngines, None, None]:
+    """Return a session-scoped mapping of engine name to engine instance.
 
-    Sharing a single communicator avoids the file-based bootstrap race that can
-    cause hangs when ``create_ucxx_comm()`` is called repeatedly in the same
-    ``rrun`` session (stale barrier files / stale ``ucxx_root_address`` KV entry).
+    The returned :class:`StreamingEngines` is a dict that maps each engine
+    name to a single shared engine instance, which is reused across the entire
+    test session.
     """
-    pytest.importorskip("rapidsmpf")
     from rapidsmpf import bootstrap
     from rapidsmpf.communicator.single import new_communicator as single_communicator
     from rapidsmpf.config import Options, get_environment_variables
     from rapidsmpf.progress_thread import ProgressThread
 
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
     if bootstrap.is_running_with_rrun():
-        return bootstrap.create_ucxx_comm(
+        comm = bootstrap.create_ucxx_comm(
             progress_thread=ProgressThread(),
             type=bootstrap.BackendType.AUTO,
         )
-    return single_communicator(Options(get_environment_variables()), ProgressThread())
+    else:
+        comm = single_communicator(
+            Options(get_environment_variables()), ProgressThread()
+        )
+
+    engines: dict[str, StreamingEngine] = {"spmd": SPMDEngine(comm=comm)}
+
+    if "dask" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+        engines["dask"] = DaskEngine(engine_options={"allow_gpu_sharing": True})
+
+    if "ray" in STREAMING_ENGINE_FIXTURE_PARAMS:  # pragma: no cover
+        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+        # Always pin ``num_ranks`` so the cached engine has a deterministic
+        # actor count regardless of how many GPUs the host happens to have;
+        # otherwise ``RayEngine`` defaults to ``get_num_gpus_in_ray_cluster()``
+        # and tests that depend on rank-count behavior (e.g. fast-count
+        # parquet, concat) become non-portable. Pinning ``num_ranks`` requires
+        # ``allow_gpu_sharing=True`` (production guard).
+        engines["ray"] = RayEngine(
+            num_ranks=NUM_RANKS,
+            engine_options={"allow_gpu_sharing": True},
+            ray_init_options={"include_dashboard": False},
+        )
+
+    try:
+        yield engines
+    finally:
+        while engines:
+            _, engine = engines.popitem()
+            engine.shutdown()
 
 
 @pytest.fixture
-def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"]:
-    """Blocksize mode for the streaming executor.
+def spmd_engine(streaming_engines: StreamingEngines) -> SPMDEngine:
+    """Return the shared :class:`SPMDEngine` reset to default options."""
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
-    Defaults to ``"default"``. Tests can override this via ``indirect``
-    parametrization with ``["default", "small"]`` to run under both the
-    standard and small-partition configurations. In addition, the
-    ``engine="spmd-small"`` variant of the ``engine`` fixture implicitly
-    selects ``"small"`` mode so that every streaming-engine test exercises
-    tiny-partition / fallback paths without per-test opt-in. Explicit
-    indirect parametrization always wins over the implicit engine-derived
-    value.
+    engine = streaming_engines["spmd"]
+    assert isinstance(engine, SPMDEngine)
+    engine._reset()
+    return engine
+
+
+@pytest.fixture
+def spmd_engine_factory(
+    streaming_engines: StreamingEngines,
+) -> Callable[..., SPMDEngine]:
     """
-    if hasattr(request, "param"):
-        return request.param
-    callspec = getattr(request.node, "callspec", None)
-    if callspec is not None and callspec.params.get("engine") == "spmd-small":
-        return "small"
-    return "default"
+    Return a factory that yields the shared :class:`SPMDEngine`.
+
+    Use this in place of :func:`streaming_engine_factory` for tests that
+    must run on SPMD only.
+    """
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    param = EngineFixtureParam(full_name="spmd")
+
+    def factory(options: StreamingOptions | None = None) -> SPMDEngine:
+        engine = build_streaming_engine(param, streaming_engines, options)
+        assert isinstance(engine, SPMDEngine)
+        return engine
+
+    return factory
+
+
+@pytest.fixture(params=STREAMING_ENGINE_FIXTURE_PARAMS)
+def _streaming_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
+    """Parametrization helper to run tests for each streaming engine variant."""
+    return EngineFixtureParam(full_name=request.param)
+
+
+@pytest.fixture(params=ALL_ENGINE_FIXTURE_PARAMS)
+def _all_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
+    """Parametrization helper to run tests for each engine variant."""
+    return EngineFixtureParam(full_name=request.param)
+
+
+@pytest.fixture
+def streaming_engine_factory(
+    _streaming_engine_param: EngineFixtureParam,
+    streaming_engines: StreamingEngines,
+) -> Callable[..., StreamingEngine]:
+    """
+    Return a factory that yields a shared :class:`StreamingEngine`.
+
+    Parameters
+    ----------
+    _streaming_engine_param
+        Parametrized engine descriptor controlling backend and block size mode.
+    streaming_engines
+        Session-scoped engine collection to look up the shared engine in.
+
+    Returns
+    -------
+    Factory function that returns the shared :class:`StreamingEngine`.
+    """
+
+    def factory(options: StreamingOptions | None = None) -> StreamingEngine:
+        return build_streaming_engine(
+            _streaming_engine_param, streaming_engines, options
+        )
+
+    return factory
 
 
 @pytest.fixture
 def streaming_engine(
-    request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
-    blocksize_mode: Literal["default", "small"],
-) -> Generator[StreamingEngine, None, None]:
-    """Yield an :class:`SPMDEngine` configured for streaming-only tests.
-
-    Options can be overridden via ``indirect`` parametrization by passing
-    a dict with any of the keys ``"executor_options"``,
-    ``"engine_options"``, or ``"rapidsmpf_options"``.
+    streaming_engine_factory: Callable[..., StreamingEngine],
+) -> StreamingEngine:
     """
-    from rapidsmpf.config import Options
+    Return a default-configured :class:`StreamingEngine`.
 
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    Inherits the parametrization of :func:`streaming_engine_factory`, so
+    tests using this fixture run once per ``(backend, blocksize_mode)``
+    combination.
 
-    params: dict[str, Any] = getattr(request, "param", {}) or {}
-    executor_options: dict[str, Any] = {
-        "max_rows_per_partition": 50,
-        "dynamic_planning": {},
-        "target_partition_size": 1_000_000,
-    }
-    if blocksize_mode == "small":
-        executor_options.update(
-            max_rows_per_partition=4,
-            target_partition_size=10,
-            # We expect many tests to fall back, so silence the warnings
-            fallback_mode=StreamingFallbackMode.SILENT,
-        )
-    executor_options.update(params.get("executor_options", {}))
-    rapidsmpf_options = (
-        Options(params.get("rapidsmpf_options"))
-        if "rapidsmpf_options" in params
-        else None
-    )
-    engine_options: dict[str, Any] = {"raise_on_fail": True}
-    engine_options.update(params.get("engine_options", {}))
-    with SPMDEngine(
-        comm=spmd_comm,
-        rapidsmpf_options=rapidsmpf_options,
-        executor_options=executor_options,
-        engine_options=engine_options,
-    ) as engine:
-        yield engine
+    Parameters
+    ----------
+    streaming_engine_factory
+        Factory fixture used to construct streaming engines.
+
+    Returns
+    -------
+    A streaming engine created with the parametrized baseline and no
+    per-test overrides.
+    """
+    return streaming_engine_factory()
 
 
-_ENGINE_PARAMS = ["in-memory"]
-if importlib.util.find_spec("rapidsmpf") is not None:
-    _ENGINE_PARAMS.extend(["spmd", "spmd-small"])
-
-
-@pytest.fixture(params=_ENGINE_PARAMS)
+@pytest.fixture
 def engine(
     request: pytest.FixtureRequest,
-) -> Generator[pl.GPUEngine, None, None]:
-    """Yield a :class:`polars.GPUEngine` for each engine variant under test.
-
-    Use this fixture for tests that support any ``GPUEngine``. The test runs
-    once per available variant: always with the in-memory executor, and, if
-    ``rapidsmpf`` is installed, a streaming :class:`SPMDEngine` at the
-    default blocksize (``"spmd"``) and a second streaming engine with
-    tiny-partition / silent-fallback settings (``"spmd-small"``). The
-    ``"spmd-small"`` variant forces ``blocksize_mode="small"`` via the
-    ``blocksize_mode`` fixture, so every test using ``engine`` exercises
-    multi-partition paths for free.
-
-    For tests that require a ``StreamingEngine``, use the ``streaming_engine``
-    fixture instead.
+    _all_engine_param: EngineFixtureParam,
+) -> pl.GPUEngine:
     """
-    if request.param == "in-memory":
-        yield pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-    else:
-        yield request.getfixturevalue("streaming_engine")
+    Return a :class:`polars.GPUEngine` for each engine variant under test.
+
+    Parameters
+    ----------
+    request
+        Pytest fixture request object used to access dependent fixtures.
+    _all_engine_param
+        Parametrized engine descriptor covering both in-memory and streaming
+        variants.
+
+    Returns
+    -------
+    Engine instance matching the parametrized variant.
+
+    Notes
+    -----
+    For tests that require a :class:`StreamingEngine` only, use the
+    :func:`streaming_engine` fixture instead.
+    """
+    if _all_engine_param.engine_name == "in-memory":
+        return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+
+    engines: StreamingEngines = request.getfixturevalue("streaming_engines")
+    return build_streaming_engine(_all_engine_param, engines)
 
 
 @pytest.fixture
 def engine_raise_on_fail() -> pl.GPUEngine:
-    """Yield a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
-
-    Intended for error-path tests that assert specific exceptions propagate
-    from ``.collect()``. Uses the default (in-memory) executor so errors are
-    not wrapped by a streaming task group.
     """
-    return pl.GPUEngine(raise_on_fail=True)
+    Return a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
+
+    Returns
+    -------
+    In-memory engine configured to raise exceptions on failure.
+
+    Notes
+    -----
+    Intended for error-path tests that assert specific exceptions propagate
+    from ``.collect()``. Uses the in-memory executor so errors are not wrapped
+    by a streaming task group.
+    """
+    # TODO: We should be testing will all supported engine variants
+    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
 def pytest_addoption(parser):
@@ -208,32 +281,15 @@ def pytest_addoption(parser):
         help="Executor to use for GPUEngine.",
     )
 
-    parser.addoption(
-        "--runtime",
-        action="store",
-        default="tasks",
-        choices=("tasks", "rapidsmpf"),
-        help="Runtime to use for the 'streaming' executor.",
-    )
-
-    parser.addoption(
-        "--cluster",
-        action="store",
-        default="single",
-        choices=("single", "distributed"),
-        help="Cluster to use for 'streaming' executor.",
-    )
-
 
 def pytest_configure(config):
     import cudf_polars.testing.asserts
 
     config.addinivalue_line(
         "markers",
-        "skip_on_streaming_engine(reason): skip the test when the `engine` "
-        "fixture resolves to a streaming engine variant (e.g. 'spmd'). "
-        "Use for tests exercising operations that have no multi-partition "
-        "implementation.",
+        "skip_on_streaming_engine(reason, *, engine=None): skip the test for "
+        'streaming ``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``, '
+        '``"dask"``, ``"ray"``) while still allowing the in-memory variant to run.',
     )
 
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
@@ -246,28 +302,11 @@ def pytest_configure(config):
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
 
-    if (
-        config.getoption("--cluster") == "distributed"
-        and config.getoption("--executor") != "streaming"
-    ):
-        raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
-
-    if config.getoption("--runtime") == "rapidsmpf":
-        if config.getoption("--executor") == "in-memory":
-            raise pytest.UsageError("Rapidsmpf runtime requires --executor='streaming'")
-
-        if importlib.util.find_spec("rapidsmpf") is None:
-            raise pytest.UsageError(
-                "Rapidsmpf runtime requires the 'rapidsmpf' package"
-            )
-
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
-    cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
 
 
 def pytest_collection_modifyitems(items):
-    """Apply ``skip_on_streaming_engine`` markers to parametrized ``engine`` items."""
+    """Apply ``skip_on_streaming_engine`` markers to streaming ``engine`` items."""
     for item in items:
         marker = item.get_closest_marker("skip_on_streaming_engine")
         if marker is None:
@@ -275,9 +314,23 @@ def pytest_collection_modifyitems(items):
         callspec = getattr(item, "callspec", None)
         if callspec is None:
             continue
-        engine_param = callspec.params.get("engine")
+        # Tests bind to either ``engine`` (parametrized via ``_all_engine_param``)
+        # or ``streaming_engine`` / ``streaming_engine_factory`` (parametrized via
+        # ``_streaming_engine_param``). Check both.
+        engine_param = callspec.params.get("_all_engine_param") or callspec.params.get(
+            "_streaming_engine_param"
+        )
         if engine_param is None or engine_param == "in-memory":
             continue
+        engine_filter = marker.kwargs.get("engine")
+        if engine_filter is not None:
+            if isinstance(engine_filter, str):
+                engine_filter = (engine_filter,)
+            # Strip the ``-small`` suffix so ``"spmd-small"`` matches
+            # ``engine=("spmd",)``.
+            engine_name = engine_param.removesuffix("-small")
+            if engine_name not in engine_filter:
+                continue
         reason = (
             marker.args[0]
             if marker.args

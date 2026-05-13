@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -13,6 +13,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["contains", "lower_bound", "upper_bound"]
 
@@ -21,7 +22,7 @@ cpdef Column lower_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
@@ -52,7 +53,8 @@ cpdef Column lower_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -61,10 +63,10 @@ cpdef Column lower_bound(
             needles.view(),
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column upper_bound(
@@ -72,7 +74,7 @@ cpdef Column upper_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
@@ -103,7 +105,8 @@ cpdef Column upper_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -112,14 +115,14 @@ cpdef Column upper_bound(
             needles.view(),
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column contains(
-    Column haystack, Column needles, Stream stream=None, DeviceMemoryResource mr=None
+    Column haystack, Column needles, object stream=None, DeviceMemoryResource mr=None
 ):
     """Check whether needles are present in haystack.
 
@@ -143,14 +146,15 @@ cpdef Column contains(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_search.contains(
             haystack.view(),
             needles.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

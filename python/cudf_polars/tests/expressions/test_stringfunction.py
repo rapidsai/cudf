@@ -14,10 +14,8 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_132,
-    POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
 )
@@ -351,14 +349,7 @@ def test_replace_re(ldf):
 )
 def test_replace_many(engine: pl.GPUEngine, ldf, target, repl):
     q = ldf.select(pl.col("a").str.replace_many(target, repl))
-    _need_support_for_implode_agg = isinstance(repl, list)
-    if _need_support_for_implode_agg:
-        assert_gpu_result_equal(q, engine=engine)
-    elif POLARS_VERSION_LT_131:
-        assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        # Polars 1.31 now gives us replacement argument as a list
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -557,15 +548,10 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
     q = ldf.select(pl.col("a").str.zfill(fill))
 
     if fill is not None and fill < 0:
-        cudf_except = (
-            pl.exceptions.InvalidOperationError
-            if not POLARS_VERSION_LT_132
-            else pl.exceptions.ComputeError
-        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=cudf_except,
+            cudf_except=pl.exceptions.InvalidOperationError,
         )
     else:
         assert_gpu_result_equal(q, engine=engine)
@@ -573,14 +559,7 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
 
 @pytest.mark.parametrize(
     "fill",
-    [
-        5
-        if not POLARS_VERSION_LT_131
-        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
-        999
-        if not POLARS_VERSION_LT_131
-        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
-    ],
+    [5, 999],
 )
 def test_string_zfill_pl_129(engine: pl.GPUEngine, fill):
     ldf = pl.LazyFrame({"a": ["-1", "+2"]})
@@ -594,12 +573,8 @@ def test_string_zfill_pl_129(engine: pl.GPUEngine, fill):
         0,
         1,
         2,
-        5
-        if not POLARS_VERSION_LT_131
-        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
-        999
-        if not POLARS_VERSION_LT_131
-        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        5,
+        999,
         -1,
         pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
     ],
@@ -613,13 +588,10 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
     ).lazy()
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
-        cudf_except = (
-            pl.exceptions.InvalidOperationError if POLARS_VERSION_LT_132 else ()
-        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=cudf_except,
+            cudf_except=(),
         )
     else:
         assert_gpu_result_equal(q, engine=engine)
@@ -661,8 +633,8 @@ def test_string_zfill_forbidden_chars():
         ),
     ],
 )
-def test_string_pad_start(engine: pl.GPUEngine, width, char, using_streaming_engine):
-    if using_streaming_engine:
+def test_string_pad_start(engine: pl.GPUEngine, width, char):
+    if is_streaming_engine(engine):
         pytest.skip(
             "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
         )
@@ -763,6 +735,15 @@ def test_contains_any(engine: pl.GPUEngine, ldf, ascii_case_insensitive):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_contains_any_empty(engine: pl.GPUEngine):
+    # libcudf's ``contains_multiple`` asserts ``num_blocks > 0`` and crashes
+    # on a zero-row input, so the expression short-circuits to an empty
+    # bool column.
+    ldf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = ldf.select(pl.col("a").str.contains_any(["a", "b"]))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_count_matches(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").str.count_matches("a"))
     assert_gpu_result_equal(q, engine=engine)
@@ -810,9 +791,15 @@ def test_json_decode(engine: pl.GPUEngine, ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
     assert_gpu_result_equal(q, engine=engine)
 
-    if POLARS_VERSION_LT_133:
-        q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))  # type: ignore[arg-type]
-        assert_ir_translation_raises(q, NotImplementedError)
+
+def test_json_decode_empty(engine: pl.GPUEngine):
+    # libcudf's ``read_json_from_string_column`` raises
+    # "Generated token count exceeds the expected token count" on a
+    # zero-row input, so the expression short-circuits to an empty
+    # struct column with the requested schema.
+    ldf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = ldf.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.Int64()})))
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])

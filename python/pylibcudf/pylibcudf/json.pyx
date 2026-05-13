@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -15,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["GetJsonObjectOptions", "get_json_object"]
 
@@ -120,7 +121,7 @@ cpdef Column get_json_object(
     Column col,
     Scalar json_path,
     GetJsonObjectOptions options=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -155,7 +156,8 @@ cpdef Column get_json_object(
         options = GetJsonObjectOptions()
 
     cdef cpp_json.get_json_object_options c_options = options.options
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -163,8 +165,8 @@ cpdef Column get_json_object(
             col.view(),
             dereference(c_json_path),
             c_options,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

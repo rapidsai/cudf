@@ -25,6 +25,8 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
+      - depends_on_ray
       - depends_on_rmm
       - develop
       - docs
@@ -115,6 +117,7 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
+      - depends_on_ray
   test_java:
     output: none
     includes:
@@ -147,13 +150,6 @@ files:
       - develop
       - iwyu
       - py_version
-  stream_tests:
-    output: none
-    includes:
-      - build_all
-      - build_base
-      - cuda
-      - cuda_version
   docs:
     output: none
     includes:
@@ -335,6 +331,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
   py_run_cudf_polars_experimental:
@@ -345,15 +342,14 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
-  py_run_cudf_polars_rapidsmpf:
+  py_run_cudf_polars_ray:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
-      key: rapidsmpf
+      key: ray
     includes:
-      - depends_on_rapidsmpf
-      - pyarrow_run
+      - depends_on_ray
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -656,6 +652,7 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
@@ -824,7 +821,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.30,<1.39
+          - polars>=1.35,<1.39
           - typing_extensions>=4.0.0
   run_cudf_polars_experimental:
     common:
@@ -1259,6 +1256,14 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_ray:
+    common:
+      - output_types: conda
+        packages:
+          - ray-default>=2.55.1
+      - output_types: [requirements, pyproject]
+        packages:
+          - ray>=2.55.1
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]

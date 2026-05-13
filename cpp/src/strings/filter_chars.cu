@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -123,8 +123,8 @@ std::unique_ptr<column> filter_characters(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  rmm::device_uvector<char_range> table = cudf::detail::make_device_uvector_async(
-    htable, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<char_range> table =
+    cudf::detail::make_device_uvector(htable, stream, cudf::get_current_device_resource_ref());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 

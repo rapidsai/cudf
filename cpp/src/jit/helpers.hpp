@@ -67,7 +67,7 @@ column_views_to_device(std::span<ColumnView const> views,
   }
 
   rmm::device_uvector<DeviceView> device_array{handles.size(), stream, mr};
-  cudf::detail::cuda_memcpy_async<DeviceView>(device_array, host_array, stream);
+  cudf::detail::cuda_memcpy<DeviceView>(device_array, host_array, stream);
 
   return std::make_tuple(std::move(handles), std::move(device_array));
 }

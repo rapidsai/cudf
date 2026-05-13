@@ -16,26 +16,25 @@ from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import Filter, HStack
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import warns_on_spmd
+from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
 
 
-@pytest.fixture(scope="module")
-def engine():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 3,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
+@pytest.fixture
+def engine(streaming_engine_factory):
+    # Override ``fallback_mode`` because the ``spmd-small`` baseline sets
+    # it to ``SILENT``, which would swallow the ``UserWarning`` that
+    # ``test_hstack_non_scalar_cse_fallback`` asserts on.
+    return streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            raise_on_fail=True,
+            fallback_mode=StreamingFallbackMode.WARN,
+        ),
     )
 
 
@@ -72,7 +71,9 @@ def test_hstack_non_scalar_cse_fallback(df, engine):
         pl.col("a").head(5).min().alias("min_5"),
         pl.col("a").head(5).max().alias("max_5"),
     )
-    with pytest.warns(UserWarning, match="not supported for multiple partitions"):
+    with warns_on_spmd(
+        engine, UserWarning, match="not supported for multiple partitions"
+    ):
         assert_gpu_result_equal(q, engine=engine)
 
 
@@ -105,7 +106,7 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
 
 def test_with_columns_scalar_upstream_20981(engine):
     # Based on upstream-Polars unit test.
-    lf = pl.LazyFrame({"a": [1.0, 2.0, 3.0]})
+    lf = pl.LazyFrame({"a": [1.0, 2.0, 3.0, 4.0, 5.0]})
     q = lf.with_columns(pl.col.a.mean())
     assert_gpu_result_equal(q, engine=engine)
 

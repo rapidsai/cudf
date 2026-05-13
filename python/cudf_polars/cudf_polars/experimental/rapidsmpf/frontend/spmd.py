@@ -15,7 +15,7 @@ from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
-from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.communicator.ucxx import barrier
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
@@ -23,12 +23,10 @@ from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
-import polars as pl
-
 import pylibcudf as plc
-import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
@@ -36,26 +34,34 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     all_gather_host_data,
     check_reserved_keys,
     evaluate_on_rank,
+    resolve_rapidsmpf_options,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
-from cudf_polars.utils.config import SPMDContext
+from cudf_polars.utils.config import (
+    MemoryResourceConfig,
+    SPMDContext,
+    StreamingExecutor,
+)
 
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.config import Options
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+
+    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -96,8 +102,6 @@ def evaluate_pipeline_spmd_mode(
     The concatenated output DataFrame and, if ``collect_metadata`` is
     True, the list of channel metadata objects; otherwise ``None``.
     """
-    if config_options.executor.runtime != "rapidsmpf":
-        raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.spmd_context is None:
         raise RuntimeError("spmd_context must be set for SPMD mode")
     comm = config_options.executor.spmd_context.comm
@@ -111,6 +115,7 @@ def evaluate_pipeline_spmd_mode(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
 
@@ -153,8 +158,9 @@ def allgather_polars_dataframe(
     ctx = engine.context
     stream = ctx.get_stream_from_pool()
     col_names = local_df.columns
+    dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
-    plc_table = plc.Table.from_arrow(local_df.to_arrow())
+    plc_table = plc.Table.from_arrow(local_df, stream=stream)
 
     packed_data = PackedData.from_cudf_packed_columns(
         pack(plc_table, stream),
@@ -174,9 +180,12 @@ def allgather_polars_dataframe(
     plc_result = unpack_and_concat(results, stream, ctx.br())
 
     # pylibcudf Table -> pl.DataFrame (restore column names)
-    ret = pl.from_arrow(plc_result.to_arrow(col_names))
-    assert isinstance(ret, pl.DataFrame)
-    return ret
+    return DataFrame.from_table(
+        plc_result,
+        col_names,
+        dtypes,
+        stream,
+    ).to_polars()
 
 
 class SPMDEngine(StreamingEngine):
@@ -341,19 +350,11 @@ class SPMDEngine(StreamingEngine):
         )
         bind_to_gpu(hw_binding)
 
-        rapidsmpf_options = (
-            rapidsmpf_options
-            if rapidsmpf_options is not None
-            else Options(get_environment_variables())
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        mr_config: MemoryResourceConfig = engine_options.get(
+            "memory_resource_config", MemoryResourceConfig.default()
         )
-        mr_config: MemoryResourceConfig | None = engine_options.get(
-            "memory_resource_config", None
-        )
-        base_mr = (
-            mr_config.create_memory_resource()
-            if mr_config is not None
-            else rmm.mr.get_current_device_resource()
-        )
+        base_mr = mr_config.create_memory_resource()
         mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
@@ -369,38 +370,61 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
-            thread_name_prefix="spmd-executor",
-        )
+        self._mr: RmmResourceAdaptor = mr
+        self._comm: Communicator | None = comm
+        self._ctx: Context | None = None
+        self._py_executor: ThreadPoolExecutor | None = None
         exit_stack = contextlib.ExitStack()
         try:
-            exit_stack.callback(py_executor.shutdown, wait=False)
             exit_stack.enter_context(set_memory_resource(mr))
-            ctx = exit_stack.enter_context(
-                Context.from_options(comm.logger, mr, rapidsmpf_options)
+
+            # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
+            # to at engine shutdown time, i.e. the `Context` from the latest reset.
+            self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
+            exit_stack.callback(self._cleanup_ctx)
+
+            # Register after `_cleanup_ctx` so on teardown (LIFO) the
+            # executor shuts down first. `wait=True` is safe because
+            # rapidsmpf's `run_actor_network` awaits its only submitted
+            # future so by the time we reach shutdown the executor has no
+            # in-flight work and wait returns immediately.
+            self._py_executor = ThreadPoolExecutor(
+                max_workers=cast(int, executor_options.get("num_py_executors", 8)),
+                thread_name_prefix="spmd-executor",
             )
-            self._comm: Communicator | None = comm
-            self._ctx: Context | None = ctx
+            exit_stack.callback(
+                self._py_executor.shutdown, wait=True, cancel_futures=True
+            )
+
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
                     **executor_options,
-                    "runtime": "rapidsmpf",
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
-                        comm=comm, context=ctx, py_executor=py_executor
+                        comm=comm, context=self._ctx, py_executor=self._py_executor
                     ),
                 },
                 engine_options={
                     **engine_options,
-                    "memory_resource": ctx.br().device_mr,
+                    "memory_resource": self._ctx.br().device_mr,
                 },
                 exit_stack=exit_stack,
             )
         except Exception:
             exit_stack.close()
             raise
+
+    def _cleanup_ctx(self) -> None:
+        """
+        Shut down the current ``self._ctx`` if any; called from exit-stack.
+
+        ``Context.shutdown()`` is idempotent on the rapidsmpf C++ side, so this is
+        safe even if a prior ``_reset`` already shut down a now-replaced Context.
+        """
+        if self._ctx is not None:
+            self._ctx.shutdown()
+            self._ctx = None
 
     @classmethod
     def from_options(cls, options: StreamingOptions) -> SPMDEngine:
@@ -434,6 +458,64 @@ class SPMDEngine(StreamingEngine):
             rapidsmpf_options=options.to_rapidsmpf_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
+        )
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine; see :meth:`StreamingEngine._reset` for the contract.
+
+        Must be called collectively on all ranks. A barrier ensures no
+        rank tears down its Context while peers may still be using it.
+        """
+        if self._ctx is None:
+            raise RuntimeError("Cannot reset a shut-down engine")
+        assert self._comm is not None
+        super()._reset(
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options=engine_options,
+        )
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+
+        # Collective: synchronize all ranks before tearing down the Context.
+        if self._comm.nranks > 1:
+            barrier(self._comm)
+        # Same-thread shutdown, _reset runs on the thread that built the
+        # Context (the test driver's main thread). The per-engine RMM
+        # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
+        self._ctx.shutdown()
+        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+
+        # Re-run ``StreamingEngine.__init__`` on the existing instance to
+        # reconfigure the polars ``GPUEngine`` layer (``self.config``,
+        # ``self.device``, etc.) with the new options. Pass the existing
+        # ``self._exit_stack`` so any registered callbacks (notably
+        # ``_cleanup_ctx`` and ``set_memory_resource``) survive.
+        StreamingEngine.__init__(
+            self,
+            nranks=self._comm.nranks,
+            executor_options={
+                **executor_options,
+                "cluster": "spmd",
+                "spmd_context": SPMDContext(
+                    comm=self._comm,
+                    context=self._ctx,
+                    py_executor=self.py_executor,
+                ),
+            },
+            engine_options={
+                **engine_options,
+                "memory_resource": self._ctx.br().device_mr,
+            },
+            exit_stack=self._exit_stack,
         )
 
     @property
@@ -488,6 +570,24 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    @property
+    def py_executor(self) -> ThreadPoolExecutor:
+        """
+        The thread-pool executor used to drive the actor network.
+
+        Returns
+        -------
+        Active Python thread-pool executor.
+
+        Raises
+        ------
+        RuntimeError
+            If called after :meth:`shutdown`.
+        """
+        if self._py_executor is None:
+            raise RuntimeError("py_executor is not available after shutdown")
+        return self._py_executor
+
     def gather_cluster_info(self) -> list[ClusterInfo]:
         """
         Collect diagnostic information from every rank.
@@ -536,9 +636,15 @@ class SPMDEngine(StreamingEngine):
         """
         if self._ctx is None:
             return  # already shut down
+
+        # Order matters: ``super().shutdown()`` closes ``self._exit_stack``,
+        # which invokes ``self._cleanup_ctx``. That requires ``self._ctx`` to
+        # still be set so the rapidsmpf Context can be shut down correctly.
+        # Clear the references only after shutdown completes.
+        super().shutdown()
         self._comm = None
         self._ctx = None
-        super().shutdown()
+        self._py_executor = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         data = json.dumps(func(*args, **kwargs)).encode()
