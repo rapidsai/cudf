@@ -6,6 +6,7 @@ from functools import reduce
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
@@ -196,6 +197,94 @@ def test_ufunc_cudf_series_error_with_out_kwarg():
     cudf_s3 = cudf.Series(data=[0, 0, 0, 0])
     with pytest.raises(TypeError):
         np.add(x1=cudf_s1, x2=cudf_s2, out=cudf_s3)
+
+
+@pytest.mark.parametrize(
+    "ufunc", [np.cos, np.sin, np.exp, np.log, np.sqrt, np.sign, np.abs]
+)
+@pytest.mark.parametrize(
+    "input_dtype",
+    [
+        "Float32",
+        "Float64",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+    ],
+)
+def test_unary_ufunc_preserves_pandas_nullable_dtype(
+    request, ufunc, input_dtype
+):
+    # Match pandas behavior: a unary ufunc on a Series with a pandas-nullable
+    # dtype should return a Series whose dtype is the corresponding
+    # pandas-nullable dtype (Float64 for transcendental ops on integers, same
+    # dtype family for sign/abs, etc.).
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                input_dtype in {"Int8", "UInt8"}
+                and ufunc in {np.cos, np.sin, np.exp, np.log, np.sqrt}
+            ),
+            reason=(
+                "cupy promotes 8-bit ints to float16 for transcendental ops, "
+                "which cudf does not support."
+            ),
+        )
+    )
+    psr = pd.Series([1, 2, 3, pd.NA], dtype=input_dtype)
+    gsr = cudf.from_pandas(psr)
+
+    with np.errstate(invalid="ignore"):
+        expected = ufunc(psr)
+        got = ufunc(gsr)
+
+    assert expected.dtype == got.dtype
+    assert_eq(expected, got, check_dtype=True)
+
+
+@pytest.mark.parametrize("ufunc", [np.add, np.subtract, np.multiply])
+@pytest.mark.parametrize(
+    "left_dtype, right_dtype",
+    [
+        ("Float64", "Float64"),
+        ("Int64", "Int64"),
+        ("Float64", "Int64"),
+        ("Int32", "Float32"),
+    ],
+)
+def test_binary_ufunc_preserves_pandas_nullable_dtype(
+    ufunc, left_dtype, right_dtype
+):
+    pa = pd.Series([1, 2, 3, pd.NA], dtype=left_dtype)
+    pb = pd.Series([4, 5, pd.NA, 7], dtype=right_dtype)
+    ga = cudf.from_pandas(pa)
+    gb = cudf.from_pandas(pb)
+
+    expected = ufunc(pa, pb)
+    got = ufunc(ga, gb)
+
+    assert expected.dtype == got.dtype
+    assert_eq(expected, got, check_dtype=True)
+
+
+@pytest.mark.parametrize("ufunc", [np.cos, np.sqrt, np.sign])
+def test_unary_ufunc_plain_numpy_dtype_unchanged(ufunc):
+    # Sanity check: plain numpy dtypes still produce plain numpy dtype outputs
+    # (no accidental upcast to pandas-nullable).
+    psr = pd.Series([1.0, 2.0, 3.0])
+    gsr = cudf.from_pandas(psr)
+
+    with np.errstate(invalid="ignore"):
+        expected = ufunc(psr)
+        got = ufunc(gsr)
+
+    assert expected.dtype == got.dtype
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
