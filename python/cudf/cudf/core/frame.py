@@ -668,9 +668,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 and cudf.dtype(to_dtype).kind != "O"
                 and col.dtype != cudf.dtype(to_dtype)
             ):
-                # Skip the in-cudf cast when the target is numpy ``object``:
-                # in cudf ``cudf.dtype(object)`` is the string dtype, so
-                # casting would stringify values. ``module.asarray(..., dtype=object)``
+                # Skip the in-cudf cast when the target is numpy object:
+                # in cudf cudf.dtype(object) is the string dtype, so
+                # casting would stringify values. module.asarray(..., dtype=object)
                 # below correctly boxes the host values as Python objects.
                 col = col.astype(cudf.dtype(to_dtype))
 

@@ -180,9 +180,9 @@ def test_to_array_dtype_matches_astype(method, source, out_dtype):
     ],
 )
 def test_to_numpy_object_dtype_boxes_values(constructor, data, dtype):
-    # GH: requesting ``dtype=object`` from ``to_numpy`` should box the
+    # requesting dtype=object from to_numpy should box the
     # native Python values, matching pandas — not stringify them (which
-    # would happen if we routed through ``cudf.dtype(object)``, the
+    # would happen if we routed through cudf.dtype(object), the
     # string dtype).
     pd_obj = getattr(pd, constructor)(data, dtype=dtype)
     cudf_obj = getattr(cudf, constructor)(data, dtype=dtype)
