@@ -573,8 +573,6 @@ class RayEngine(StreamingEngine):
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}
 
-        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
                 "RayEngine must not be created from within an rrun cluster. Instead "
@@ -583,6 +581,15 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
+        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
+            "quent_context", cudf_polars.quent.QuentContext()
+        )
+        executor_options.setdefault("quent_context", quent_context)
+        quent_context.emit_engine_init_events(self._quent_logger)
 
         if num_ranks is not None:
             if num_ranks < 1:
@@ -612,14 +619,6 @@ class RayEngine(StreamingEngine):
             ray.init(**ray_init_options)
             # Ensure Ray is shut down when RayEngine shuts down.
             exit_stack.callback(ray.shutdown)
-
-        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
-        # a typed config object here.
-        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
-            "quent_context", cudf_polars.quent.QuentContext()
-        )
-        executor_options.setdefault("quent_context", quent_context)
-        quent_context.emit_engine_init_events(self._quent_logger)
 
         try:
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
