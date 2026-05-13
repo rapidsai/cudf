@@ -693,6 +693,23 @@ class _FastSlowProxy:
 
     def __setattr__(self, name, value):
         if name.startswith("_"):
+            # If the class declares this private name as a
+            # ``_FastSlowAttribute``, forward the write to the wrapped
+            # object so that behaviors driven by that attribute
+            # (e.g. ``_readonly`` propagation in
+            # ``ArrowExtensionArray.__getitem__``) are preserved.
+            descriptor = inspect.getattr_static(type(self), name, None)
+            if isinstance(descriptor, _FastSlowAttribute):
+                try:
+                    wrapped = object.__getattribute__(self, "_fsproxy_wrapped")
+                except AttributeError:
+                    wrapped = None
+                if wrapped is not None:
+                    try:
+                        setattr(wrapped, name, value)
+                        return
+                    except (AttributeError, TypeError):
+                        pass
             object.__setattr__(self, name, value)
             return
         return _FastSlowAttribute("__setattr__").__get__(self, type(self))(

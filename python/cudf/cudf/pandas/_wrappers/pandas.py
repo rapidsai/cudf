@@ -538,6 +538,9 @@ SparseArray = make_final_proxy_type(
     pd.arrays.SparseArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
+    },
 )
 
 CategoricalIndex = make_final_proxy_type(
@@ -613,6 +616,7 @@ DatetimeArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -659,6 +663,7 @@ try:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -674,6 +679,7 @@ except ImportError:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -689,6 +695,7 @@ TimedeltaArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -720,6 +727,7 @@ PeriodArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
@@ -873,6 +881,7 @@ BooleanArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -901,6 +910,7 @@ IntegerArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -1038,6 +1048,7 @@ IntervalArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "_left": _FastSlowAttribute("_left", private=True),
         "_right": _FastSlowAttribute("_right", private=True),
     },
@@ -1077,6 +1088,7 @@ FloatingArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -2270,6 +2282,7 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
         "__invert__": _FastSlowAttribute("__invert__"),
         "__neg__": _FastSlowAttribute("__neg__"),
