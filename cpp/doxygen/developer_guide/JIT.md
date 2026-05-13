@@ -2,13 +2,40 @@
 
 
 # Terminologies
+## IR
 
-FATBIN
-CUBIN
-LTO-IR
-PTX
-OBJ
-SASS
+
+## CUDF ROW-IR
+
+
+## LTO-IR
+
+
+## NVVM-IR
+
+
+## PTX
+
+
+## .so
+
+
+## SASS
+
+
+## FATBIN
+
+
+## CUBIN
+
+
+## JIT-Compilation
+
+
+## JIT-Linking
+
+
+## PCH
 
 # Normal CUDA Kernel
 
