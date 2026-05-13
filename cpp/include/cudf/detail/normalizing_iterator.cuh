@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#ifndef CUDF_RUNTIME_JIT
 
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -13,7 +13,7 @@
 
 #include <cudf/utilities/traits.hpp>
 
-#include <cuda/std/type_traits>
+#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -30,10 +30,10 @@ namespace detail {
 template <class Derived, typename Integer>
 struct alignas(16) base_normalator {
   static_assert(cudf::is_index_type<Integer>());
-  using difference_type   = cuda::std::ptrdiff_t;
+  using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
   using pointer           = Integer*;
-  using iterator_category = cuda::std::random_access_iterator_tag;
+  using iterator_category = std::random_access_iterator_tag;
 
   base_normalator()                                  = default;
   base_normalator(base_normalator const&)            = default;
@@ -216,7 +216,7 @@ struct alignas(16) base_normalator {
   };
 
  protected:
-#if !defined(__CUDACC_RTC__)
+#ifndef CUDF_RUNTIME_JIT  // TODO: refactor type_dispatcher to support NVRTC
 
   /**
    * @brief Constructor assigns width and type member variables for base class.

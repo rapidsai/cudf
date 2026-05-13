@@ -8,6 +8,7 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/limits>
+#include <cuda_runtime.h>
 
 /**
  * @file

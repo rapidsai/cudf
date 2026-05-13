@@ -20,7 +20,7 @@ rapids_cuda_init_architectures(CUDF)
 project(
   CUDF
   VERSION "${RAPIDS_VERSION}"
-  LANGUAGES C CXX CUDA ASM
+  LANGUAGES C CXX CUDA
 )
 
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
@@ -38,6 +38,7 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
@@ -109,6 +110,7 @@ message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
+message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
@@ -343,6 +345,9 @@ endif()
 
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
+# find jitify
+include(cmake/thirdparty/get_jitify.cmake)
+
 # find NVTX
 include(cmake/thirdparty/get_nvtx.cmake)
 
@@ -372,6 +377,9 @@ if(CUDF_BUILD_TESTUTIL)
   include(cmake/thirdparty/get_gtest.cmake)
 endif()
 
+# preprocess jitify-able kernels
+include(cmake/Modules/JitifyPreprocessKernels.cmake)
+
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 
@@ -383,9 +391,6 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
-
-# JIT Embedding helper functions
-include(librtcx/embed.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -403,193 +408,6 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
-
-# This macro is used to create object libraries for JIT compilation fragments, and embed them as
-# fatbins in the final library. It compiles the specified source file with the appropriate flags to
-# generate a fatbin containing the specified kernel instance, and then embeds that fatbin in the
-# final library with metadata that allows it to be looked up at runtime.
-macro(add_fragment)
-  set(TARGET ${ARGV0})
-  set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE)
-  set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES)
-  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
-
-  if(NOT ARG_FRAGMENT)
-    message(FATAL_ERROR "add_fragment requires FRAGMENT argument")
-  endif()
-
-  if(NOT ARG_SOURCE)
-    message(FATAL_ERROR "add_fragment requires SOURCE argument")
-  endif()
-
-  set(OBJECT_ID ${TARGET}_${ARG_FRAGMENT})
-  add_library(${OBJECT_ID} OBJECT ${ARG_SOURCE})
-  target_compile_options(
-    ${OBJECT_ID} PRIVATE --compress-mode=size --expt-relaxed-constexpr --extended-lambda
-  )
-
-  if(DEFINED ARG_KERNEL_ONLY AND ARG_KERNEL_ONLY)
-    # ensure that the FATBIN symbols only contain the specified kernel
-    target_compile_options(${OBJECT_ID} PRIVATE -Xnvlink=--kernels-used=cudf_kernel_entry)
-  endif()
-
-  if(ARG_KERNEL_INSTANCE)
-    set(INSTANTIATION_DIR "${CUDF_GENERATED_INCLUDE_DIR}/${TARGET}/instantiations/${ARG_FRAGMENT}")
-    file(
-      GENERATE
-      OUTPUT "${INSTANTIATION_DIR}/cudf/detail/kernel-instance.hpp"
-      CONTENT "#pragma once\n#define CUDF_KERNEL_INSTANCE ${ARG_KERNEL_INSTANCE}"
-    )
-    target_include_directories(${OBJECT_ID} PRIVATE ${INSTANTIATION_DIR})
-  endif()
-
-  target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
-  set_target_properties(
-    ${OBJECT_ID}
-    PROPERTIES CUDA_SEPARABLE_COMPILATION ON
-               CUDA_FATBIN_COMPILATION ON
-               POSITION_INDEPENDENT_CODE ON
-               INTERPROCEDURAL_OPTIMIZATION ON
-               CXX_STANDARD 20
-               CXX_STANDARD_REQUIRED ON
-               CXX_EXTENSIONS ON
-               CXX_VISIBILITY_PRESET hidden
-               CUDA_STANDARD 20
-               CUDA_STANDARD_REQUIRED ON
-               CUDA_VISIBILITY_PRESET hidden
-  )
-  target_link_libraries(
-    ${OBJECT_ID}
-    PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-    PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco>
-            ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
-  )
-  target_include_directories(
-    ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  )
-
-  embed_blob(
-    ${TARGET} FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST fragments/${ARG_FRAGMENT}.fatbin ID
-    ${ARG_FRAGMENT} ARRAY_IDS ${ARG_ARRAY_IDS} ARRAY_VALUES ${ARG_ARRAY_VALUES}
-  )
-endmacro()
-
-add_embed(cudf_fragments)
-
-foreach(TYPE IN ITEMS uint8 uint16 uint32 int8 int16 int32 int64 float32 float64 uint64 decimal32
-                      decimal64 decimal128
-)
-  foreach(NULL_AWARE IN ITEMS 0 1)
-    set(FRAGMENT_NAME unop_lto_kernel)
-    set(VARIANT_NAME ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__element_${TYPE})
-    add_fragment(
-      cudf_fragments
-      FRAGMENT
-      ${VARIANT_NAME}
-      SOURCE
-      src/transform/jit/kernel.cu
-      KERNEL_INSTANCE
-      "cudf::jit::transform_kernel<${NULL_AWARE}, false, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
-      DEFINITIONS
-      CUDF_LTO_MODE
-      ARRAY_IDS
-      ${FRAGMENT_NAME}_FILE_INDEX
-      ${FRAGMENT_NAME}_NULL_AWARE
-      ${FRAGMENT_NAME}_TYPE
-      ARRAY_VALUES
-      ${cudf_fragments_FILE_INDEX}
-      ${NULL_AWARE}
-      ${TYPE}
-    )
-  endforeach()
-endforeach()
-
-foreach(TYPE IN ITEMS uint8 uint16 uint32 uint64 int8 int16 int32 int64 float32 float64 decimal32
-                      decimal64 decimal128
-)
-  foreach(NULL_AWARE IN ITEMS 0 1)
-    foreach(RHS_IS_SCALAR IN ITEMS 0 1)
-      set(FRAGMENT_NAME binop_lto_kernel)
-      set(VARIANT_NAME
-          ${FRAGMENT_NAME}__null_aware_${NULL_AWARE}__element_${TYPE}__rhs_is_scalar_${RHS_IS_SCALAR}
-      )
-      add_fragment(
-        cudf_fragments
-        FRAGMENT
-        ${VARIANT_NAME}
-        SOURCE
-        src/transform/jit/kernel.cu
-        KERNEL_INSTANCE
-        "cudf::jit::transform_kernel<${NULL_AWARE}, false, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::column_device_view_core, cudf::tags::${TYPE}, false>, cudf::jit::column_accessor<1, cudf::column_device_view_core, cudf::tags::${TYPE}, ${RHS_IS_SCALAR}>>, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::mutable_column_device_view_core, cudf::tags::${TYPE}, false>>>"
-        DEFINITIONS
-        CUDF_LTO_MODE
-        ARRAY_IDS
-        ${FRAGMENT_NAME}_FILE_INDEX
-        ${FRAGMENT_NAME}_NULL_AWARE
-        ${FRAGMENT_NAME}_TYPE
-        ${FRAGMENT_NAME}_RHS_IS_SCALAR
-        ARRAY_VALUES
-        ${cudf_fragments_FILE_INDEX}
-        ${NULL_AWARE}
-        ${TYPE}
-        ${RHS_IS_SCALAR}
-      )
-    endforeach()
-  endforeach()
-endforeach()
-
-embed(cudf_fragments COMPRESSION none)
-
-add_embed(cudf_jit_embed)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
-  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
-  cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY cudf/cpp/src/jit
-  INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
-  cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
-  cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
-  cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-embed_includes(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
-  cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
-
-foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
-  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
-
-  embed_includes(
-    cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
-    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
-  )
-endforeach()
-
-embed(cudf_jit_embed COMPRESSION zstd)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -838,8 +656,8 @@ add_library(
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
+  src/jit/cache.cpp
   src/jit/helpers.cpp
-  src/jit/jit.cpp
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
@@ -1124,13 +942,10 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
-  librtcx/rtcx.cpp
-  ${cudf_jit_embed_SOURCE_DIR}/cudf_jit_embed.s
-  ${cudf_fragments_SOURCE_DIR}/cudf_fragments.s
 )
 
-add_dependencies(cudf cudf_jit_embed cudf_fragments)
-
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
 set_source_files_properties(
   src/binaryop/binaryop.cpp
   src/jit/cache.cpp
@@ -1139,6 +954,7 @@ set_source_files_properties(
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
   src/transform/transform.cu
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_property(
@@ -1203,16 +1019,14 @@ target_compile_options(
 # Specify include paths for the current target and dependents
 target_include_directories(
   cudf
-  PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+  PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
-          "$<BUILD_INTERFACE:${cudf_jit_embed_INCLUDE_DIRS}>"
-          "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
-          "$<BUILD_INTERFACE:${CUDAToolkit_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1220,6 +1034,20 @@ target_compile_definitions(
   cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
               "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
+
+# Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
+target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
+
+if(JITIFY_USE_CACHE)
+  # Instruct src/jit/cache what version of cudf we are building so it can compute a cal-ver cache
+  # directory. We isolate this definition to the single source so it doesn't effect compiling
+  # caching for all of libcudf
+  set_property(
+    SOURCE src/jit/cache.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
+  )
+endif()
 
 # Per-thread default stream
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
@@ -1249,6 +1077,9 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
+
+# Compile stringified JIT sources first
+add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(

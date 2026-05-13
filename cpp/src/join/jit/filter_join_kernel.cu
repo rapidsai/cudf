@@ -22,7 +22,6 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
-#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -94,15 +93,3 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
 }
 
 }  // namespace cudf::join::jit
-
-extern "C" __global__ void cudf_kernel_entry(
-  cudf::jit::device_span<cudf::size_type const> left_indices,
-  cudf::jit::device_span<cudf::size_type const> right_indices,
-  cudf::column_device_view_core const* left_tables,
-  cudf::column_device_view_core const* right_tables,
-  bool* predicate_results,
-  void* user_data)
-{
-  CUDF_KERNEL_INSTANCE(
-    left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
-}
