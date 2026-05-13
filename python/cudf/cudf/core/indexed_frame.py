@@ -3831,16 +3831,22 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if is_dtype_obj_string(self._data[col].dtype):
+            col_dtype = self._data[col].dtype
+            # pandas rejects nlargest/nsmallest on object, complex, string,
+            # and categorical dtypes.
+            if (
+                is_dtype_obj_string(col_dtype)
+                or getattr(col_dtype, "kind", None) in {"O", "c"}
+                or isinstance(col_dtype, pd.CategoricalDtype)
+            ):
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
-                        f"Column '{col}' has dtype {self._data[col].dtype}, "
+                        f"Column '{col}' has dtype {col_dtype}, "
                         f"cannot use method '{method}' with this dtype"
                     )
                 else:
                     error_msg = (
-                        f"Cannot use method '{method}' with "
-                        f"dtype {self._data[col].dtype}"
+                        f"Cannot use method '{method}' with dtype {col_dtype}"
                     )
                 raise TypeError(error_msg)
         if len(self) == 0:
@@ -4016,11 +4022,13 @@ class IndexedFrame(Frame):
 
         index = index if index is not None else df.index
 
+        label_dtype = None
         if column_names is None:
             names = list(df._column_names)
             level_names = self._data.level_names
             multiindex = self._data.multiindex
             rangeindex = self._data.rangeindex
+            label_dtype = self._data.label_dtype
         elif isinstance(column_names, (pd.Index, cudf.Index)):
             if isinstance(column_names, (pd.MultiIndex, cudf.MultiIndex)):
                 multiindex = True
@@ -4037,6 +4045,12 @@ class IndexedFrame(Frame):
                 rangeindex = isinstance(
                     column_names, (pd.RangeIndex, cudf.RangeIndex)
                 )
+                if not rangeindex:
+                    label_dtype = (
+                        column_names.dtype
+                        if isinstance(column_names, pd.Index)
+                        else column_names.to_pandas().dtype
+                    )
             level_names = tuple(column_names.names)
         else:
             names = column_names
@@ -4069,6 +4083,7 @@ class IndexedFrame(Frame):
                 multiindex=multiindex,
                 level_names=level_names,
                 rangeindex=rangeindex,
+                label_dtype=label_dtype,
             ),
             index=index,
             attrs=self.attrs,
@@ -5536,12 +5551,14 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):
         if sort is no_default:
             sort = cudf.get_option("mode.pandas_compatible")
+        if group_keys is no_default:
+            group_keys = cudf.get_option("mode.pandas_compatible")
 
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")

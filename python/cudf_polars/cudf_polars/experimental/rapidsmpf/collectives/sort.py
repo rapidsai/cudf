@@ -112,7 +112,14 @@ async def _simple_top_or_bottom_k(
                 ir_context=ir_context,
             )
         )
-    chunk: TableChunk = await evaluate_batch(chunks, context, ir, ir_context=ir_context)
+    chunk: TableChunk
+    if chunks:
+        chunk = await evaluate_batch(chunks, context, ir, ir_context=ir_context)
+    else:
+        # This rank received no input partitions. Produce an empty chunk
+        # with the IR's output schema so the AllGather below still has
+        # something to insert (and other ranks don't deadlock waiting).
+        chunk = empty_table_chunk(ir, context, ir_context.get_cuda_stream())
     chunks.clear()
 
     if comm.nranks > 1 and not metadata_in.duplicated:
