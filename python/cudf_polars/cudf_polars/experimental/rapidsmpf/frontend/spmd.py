@@ -213,6 +213,39 @@ def allgather_polars_dataframe(
     ).to_polars()
 
 
+def synchronize_quent_context_engine_id(
+    *,
+    comm: Communicator,
+    context: Context,
+    quent_context: cudf_polars.quent.QuentContext,
+) -> cudf_polars.quent.QuentContext:
+    """
+    Ensure all ranks use the same Quent engine ID.
+
+    Rank 0 selects the engine ID (from its local ``quent_context``), then all
+    ranks participate in an AllGather so every process converges on that value.
+    """
+    if comm.nranks == 1:
+        return quent_context
+
+    if comm.rank == 0:
+        data = str(quent_context.engine.id).encode()
+    else:
+        data = b""
+
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, context.br(), op_id, data)
+
+    engine_id = uuid.UUID(all_data[0].decode())
+    if quent_context.engine.id == engine_id:
+        return quent_context
+
+    return dataclasses.replace(
+        quent_context,
+        engine=dataclasses.replace(quent_context.engine, id=engine_id),
+    )
+
+
 class SPMDEngine(StreamingEngine):
     """
     Multi-GPU Polars engine for SPMD executions.
@@ -405,12 +438,6 @@ class SPMDEngine(StreamingEngine):
 
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
-        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
-            "quent_context", cudf_polars.quent.QuentContext()
-        )
-        executor_options.setdefault("quent_context", quent_context)
-        quent_context.emit_engine_init_events(self._quent_logger)
-
         try:
             exit_stack.enter_context(set_memory_resource(mr))
 
@@ -418,6 +445,18 @@ class SPMDEngine(StreamingEngine):
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
             self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
+
+            quent_context: cudf_polars.quent.QuentContext = executor_options.get(
+                "quent_context", cudf_polars.quent.QuentContext()
+            )
+            quent_context = synchronize_quent_context_engine_id(
+                comm=comm,
+                context=self._ctx,
+                quent_context=quent_context,
+            )
+            executor_options["quent_context"] = quent_context
+            quent_context.emit_engine_init_events(self._quent_logger)
+
             self._quent_worker = cudf_polars.quent.Worker(
                 id=uuid.uuid4(),
                 engine=quent_context.engine,
@@ -458,7 +497,6 @@ class SPMDEngine(StreamingEngine):
                 exit_stack=exit_stack,
             )
 
-            # TODO: ranks need to choose the same engine ID!
             self._quent_logger.emit(self._quent_worker.init())
         except Exception:
             exit_stack.close()
@@ -535,7 +573,6 @@ class SPMDEngine(StreamingEngine):
         quent_context: cudf_polars.quent.QuentContext = executor_options.get(
             "quent_context", cudf_polars.quent.QuentContext()
         )
-        executor_options.setdefault("quent_context", quent_context)
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
         # Collective: synchronize all ranks before tearing down the Context.
@@ -546,6 +583,12 @@ class SPMDEngine(StreamingEngine):
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
         self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+        quent_context = synchronize_quent_context_engine_id(
+            comm=self._comm,
+            context=self._ctx,
+            quent_context=quent_context,
+        )
+        executor_options["quent_context"] = quent_context
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
