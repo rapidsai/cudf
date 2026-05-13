@@ -3,16 +3,26 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
+from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
+    LocalRepartitioner,
+    ShuffleManager,
+)
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import allgather_polars_dataframe
 from cudf_polars.experimental.rapidsmpf.utils import (
     _is_already_partitioned,
 )
@@ -130,3 +140,133 @@ def test_is_already_partitioned():
         ),
     )
     assert _is_already_partitioned(metadata_local, columns, modulus, nranks) is False
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize("local_count", [1, 2, 4])
+def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+
+    pl_df = pl.DataFrame({"key": list(range(4)) * 3, "val": list(range(12))})
+    col_names = pl_df.columns
+    dtypes = [DataType(dt) for dt in pl_df.dtypes]
+
+    results: list[tuple[int, pl.DataFrame]] = []
+
+    async def _run() -> None:
+        stream = context.get_stream_from_pool()
+        cudf_df = DataFrame.from_polars(pl_df, stream)
+        with reserve_op_id() as op_id:
+            shuffle = ShuffleManager(
+                context, comm, num_partitions=comm.nranks, collective_id=op_id
+            )
+            async with shuffle.inserting() as inserter:
+                inserter.insert_hash(
+                    TableChunk.from_pylibcudf_table(
+                        cudf_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
+                    columns_to_hash=(0,),
+                )
+
+            local = LocalRepartitioner(shuffle, local_count=local_count)
+            await local.repartition_by_hash(columns_to_hash=(0,), stream=stream)
+
+            for pid in local.local_partitions():
+                tbl = local.extract_chunk(pid, stream)
+                results.append(
+                    (
+                        pid,
+                        DataFrame.from_table(
+                            tbl, col_names, dtypes, stream
+                        ).to_polars(),
+                    )
+                )
+
+    asyncio.run(_run())
+
+    assert len(results) == local_count
+
+    # Same key always lands in the same local partition.
+    key_to_pid: dict[int, int] = {}
+    for pid, df in results:
+        for key_val in df["key"].to_list():
+            assert key_to_pid.setdefault(key_val, pid) == pid
+
+    # AllGather across ranks: every rank inserts 12 rows, all must survive.
+    local_df = pl.concat([df for _, df in results])
+    with reserve_op_id() as op_id:
+        global_df = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local_df, op_id=op_id
+        )
+    assert global_df.height == 12 * comm.nranks
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize("local_count", [1, 2, 4])
+def test_local_repartitioner_index(spmd_engine, local_count) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+
+    pl_payload = pl.DataFrame(
+        {
+            "local_part": [i % local_count for i in range(12)],
+            "val": list(range(12)),
+        }
+    )
+    pl_rank_part = pl.DataFrame({"rank_part": [i % comm.nranks for i in range(12)]})
+    out_col_names = ["val"]
+    out_dtypes = [DataType(pl.Int32())]
+
+    results: list[tuple[int, pl.DataFrame]] = []
+
+    async def _run() -> None:
+        stream = context.get_stream_from_pool()
+        payload_df = DataFrame.from_polars(pl_payload, stream)
+        rank_part_df = DataFrame.from_polars(pl_rank_part, stream)
+
+        with reserve_op_id() as op_id:
+            shuffle = ShuffleManager(
+                context, comm, num_partitions=comm.nranks, collective_id=op_id
+            )
+            async with shuffle.inserting() as inserter:
+                inserter.insert_index(
+                    TableChunk.from_pylibcudf_table(
+                        payload_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
+                    TableChunk.from_pylibcudf_table(
+                        rank_part_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
+                )
+
+            local = LocalRepartitioner(shuffle, local_count=local_count)
+            await local.repartition_by_index(partition_col=0, stream=stream)
+
+            for pid in local.local_partitions():
+                tbl = local.extract_chunk(pid, stream)
+                results.append(
+                    (
+                        pid,
+                        DataFrame.from_table(
+                            tbl, out_col_names, out_dtypes, stream
+                        ).to_polars(),
+                    )
+                )
+
+    asyncio.run(_run())
+
+    assert len(results) == local_count
+
+    # Routing: val=v must land in local partition v % local_count (== local_part).
+    for pid, df in results:
+        assert df.columns == ["val"]
+        for val in df["val"].to_list():
+            assert val % local_count == pid
+
+    # Global: every inserted row survives.
+    local_df = pl.concat([df for _, df in results])
+    with reserve_op_id() as op_id:
+        global_df = allgather_polars_dataframe(
+            engine=spmd_engine, local_df=local_df, op_id=op_id
+        )
+    assert global_df.height == 12 * comm.nranks
