@@ -3706,11 +3706,10 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagNestedMismatchSet)
 
 TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchSet)
 {
-  // df1 case from SPARK-33134: {"c2":[19],"c1":123456}
-  // Mismatch is on c2 (the schema's depth-1 child for the user-level top-level columns).
-  // The c1/c2 emitted by the reader are top-level — c2's diagnostic should be `true`, c1's stays
-  // unset (no descendant mismatch).
-  std::string const json = "{\"c2\": [19], \"c1\": 123456}\n";
+  // c2 is a scalar while the schema requests list<struct>. This fully prunes c2 from the parsed
+  // device column tree, so the reader synthesizes it from the schema as an all-null top-level
+  // column. The diagnostic must still be `true` for c2, while c1 stays unset.
+  std::string const json = "{\"c2\": 19, \"c1\": 123456}\n";
   auto root_schema       = make_nested_mismatch_schema_st();
   auto opts              = cudf::io::json_reader_options::builder(
                 cudf::io::source_info{cudf::host_span<std::byte const>{
@@ -3725,6 +3724,8 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchSet)
   EXPECT_FALSE(result.metadata.schema_info[0].had_schema_mismatch.has_value());  // c1
   ASSERT_TRUE(result.metadata.schema_info[1].had_schema_mismatch.has_value());   // c2
   EXPECT_TRUE(*result.metadata.schema_info[1].had_schema_mismatch);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(result.tbl->get_column(1).null_count(), 1);
 }
 
 TEST_F(JsonReaderTest, SchemaMismatchDiagDescendantOnlyNotOnChildren)
