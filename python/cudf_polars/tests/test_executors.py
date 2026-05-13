@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_executor_basics(streaming_engine_factory):
+def test_executor_basics(streaming_engine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([[1, 2], [3]], dtype=pl.List(pl.Int8())),
@@ -26,7 +26,7 @@ def test_executor_basics(streaming_engine_factory):
         }
     )
 
-    assert_gpu_result_equal(df, engine=streaming_engine_factory())
+    assert_gpu_result_equal(df, engine=streaming_engine)
 
 
 def test_cudf_cache_evaluate():
@@ -41,7 +41,7 @@ def test_cudf_cache_evaluate():
     assert_gpu_result_equal(query, executor="in-memory")
 
 
-def test_dask_experimental_map_function_get_hashable(streaming_engine_factory):
+def test_dask_experimental_map_function_get_hashable(streaming_engine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
@@ -51,7 +51,7 @@ def test_dask_experimental_map_function_get_hashable(streaming_engine_factory):
         }
     )
     q = df.unpivot(index="d")
-    assert_gpu_result_equal(q, engine=streaming_engine_factory())
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 def test_unknown_executor():
