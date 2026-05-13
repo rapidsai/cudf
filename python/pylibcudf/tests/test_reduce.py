@@ -168,3 +168,31 @@ def test_unique_count_exclude_nulls():
         plc.types.NanPolicy.NAN_IS_VALID,
     )
     assert result == 2
+
+
+def test_count_nulls_unequal():
+    table = plc.Table(
+        [
+            plc.Column.from_iterable_of_py(
+                [1, 1, None, None, 2, 2], dtype=plc.DataType(plc.TypeId.INT64)
+            )
+        ]
+    )
+    result = plc.reduce.unique_count_table(
+        table, plc.types.NullEquality.UNEQUAL
+    )
+    assert result == 4
+
+
+def test_distinct_count_nulls_unequal():
+    table = plc.Table(
+        [
+            plc.Column.from_iterable_of_py(
+                [1, None, 1, 2, None, 2], dtype=plc.DataType(plc.TypeId.INT64)
+            )
+        ]
+    )
+    result = plc.reduce.distinct_count_table(
+        table, plc.types.NullEquality.UNEQUAL
+    )
+    assert result == 4
