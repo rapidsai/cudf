@@ -438,6 +438,29 @@ class MemoryResourceConfig:
     def __hash__(self) -> int:
         return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
 
+    @classmethod
+    def default(cls) -> MemoryResourceConfig:
+        """
+        The default memory resource config.
+
+        This defaults to a CUDA Async Memory Resource with
+
+        - No initial pool size
+        - A release threshold equal to 90% of the size of the device's memory.
+        """
+        if (device_size := get_total_device_memory()) is None:  # pragma: no cover
+            # System doesn't have proper "GPU memory".
+            # We probably want to use the default async memory resource.
+            release_threshold = None
+        else:
+            release_threshold = int(0.9 * device_size)
+        return cls(
+            qualname="rmm.mr.CudaAsyncMemoryResource",
+            options={
+                "release_threshold": release_threshold,
+            },
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class SPMDContext:
