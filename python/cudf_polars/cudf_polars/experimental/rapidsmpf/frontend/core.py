@@ -664,40 +664,36 @@ def evaluate_on_rank(
 
     physical_plan_id = uuid.uuid4()
 
-    if local_quent_context is not None:
-        # TODO: split out build from emit.
-        plan, ops, ports, logical_op_by_id = build_plan(
-            ir,
-            config_options,
-            query=local_quent_context.context.query,
-            # plan_id=local_quent_context.context.logical_plan_id,
-            plan_id=logical_plan_id,
-            worker=local_quent_context.worker,
-            instance_name="logical",
-            parent_plan=None,
-            parent_operators_by_node_id=None,
+    plan, ops, ports, logical_op_by_id = build_plan(
+        ir,
+        config_options,
+        query=local_quent_context.context.query,
+        plan_id=logical_plan_id,
+        worker=local_quent_context.worker,
+        instance_name="logical",
+        parent_plan=None,
+        parent_operators_by_node_id=None,
+    )
+    if comm.rank == 0:
+        local_quent_context.context.emit_plan_declarations(
+            local_quent_context.logger, plan, ops, ports
         )
-        if comm.rank == 0:
-            local_quent_context.context.emit_plan_declarations(
-                local_quent_context.logger, plan, ops, ports
-            )
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
     )
 
-    if local_quent_context is not None:
-        log_query_plan(ir, config_options)
-        local_quent_context.context.emit_physical_plan_events(
-            local_quent_context.logger,
-            ir,
-            config_options,
-            plan_id=physical_plan_id,
-            worker=local_quent_context.worker,
-            parent_plan=plan,
-            node_map=node_map,
-            logical_op_by_id=logical_op_by_id,
-        )
+    log_query_plan(ir, config_options)
+    local_quent_context.context.emit_physical_plan_events(
+        local_quent_context.logger,
+        ir,
+        config_options,
+        plan_id=physical_plan_id,
+        worker=local_quent_context.worker,
+        parent_plan=plan,
+        node_map=node_map,
+        logical_op_by_id=logical_op_by_id,
+    )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
