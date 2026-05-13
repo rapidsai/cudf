@@ -65,6 +65,10 @@ _dtype_to_format_conversion = {
     "datetime64[us]": "%Y-%m-%d %H:%M:%S.%6f",
     "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
+    "timestamp[ns][pyarrow]": "%Y-%m-%d %H:%M:%S.%9f",
+    "timestamp[us][pyarrow]": "%Y-%m-%d %H:%M:%S.%6f",
+    "timestamp[ms][pyarrow]": "%Y-%m-%d %H:%M:%S.%3f",
+    "timestamp[s][pyarrow]": "%Y-%m-%d %H:%M:%S",
 }
 
 
@@ -621,6 +625,24 @@ class DatetimeColumn(TemporalBaseColumn):
             other = cudf.DateOffset._from_pandas_ticks_or_weeks(other)
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
+
+        pandas_compatible = cudf.get_option("mode.pandas_compatible")
+
+        # pandas raises TypeError on inequality ops against None / NaN
+        # (which are not datetime-like). Equality ops still allow these
+        # by returning False/True.
+        if (
+            pandas_compatible
+            and op in {"__lt__", "__le__", "__gt__", "__ge__"}
+            and (
+                other is None or (isinstance(other, float) and np.isnan(other))
+            )
+        ):
+            raise TypeError(
+                f"Invalid comparison between dtype={self.dtype} and "
+                f"{type(other).__name__}"
+            )
+
         _raise_on_invalid_ordering_scalar(self.dtype, other, op)
         # pandas treats a bare ``datetime.date`` as not comparable with a
         # datetime64 column — ``==`` yields all False, ``!=`` yields all
@@ -639,6 +661,33 @@ class DatetimeColumn(TemporalBaseColumn):
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
+
+        # tz-mismatch detection: pandas raises TypeError when comparing or
+        # adding/subtracting tz-naive vs tz-aware datetime-like operands.
+        if pandas_compatible:
+            self_is_tz = isinstance(self, DatetimeTZColumn)
+            # Ternary (True/False/None) is required here: True/False
+            # differentiate tz-aware vs tz-naive datetime-like operands, while
+            # None means the operand is not datetime-like at all (and so the
+            # tz-mismatch check should be skipped).
+            other_is_tz_dt: bool | None = None
+            if isinstance(other, DatetimeColumn):
+                other_is_tz_dt = isinstance(other, DatetimeTZColumn)
+            elif isinstance(other, pa.Scalar) and pa.types.is_timestamp(
+                other.type
+            ):
+                other_is_tz_dt = other.type.tz is not None
+            if other_is_tz_dt is not None and self_is_tz != other_is_tz_dt:
+                if op in {"__lt__", "__le__", "__gt__", "__ge__"}:
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} and "
+                        f"{type(other).__name__}"
+                    )
+                if op in {"__sub__"}:
+                    raise TypeError(
+                        "Cannot subtract tz-naive and tz-aware "
+                        "datetime-like objects"
+                    )
 
         other_is_null_scalar = False
         if reflect:

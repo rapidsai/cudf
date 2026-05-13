@@ -6547,9 +6547,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         dtypes = [dtype for _, dtype in filtered._dtypes]
         is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes) if dtypes else None
         if (
             not numeric_only
+            and common_dtype is not None
             and is_dtype_obj_string(common_dtype)
             and any(not is_dtype_obj_string(dtype) for dtype in dtypes)
         ):
@@ -6696,10 +6697,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
-                # TODO: What happens if common_dtype is None?
-                common_dtype = find_common_type(source_dtypes)
+                common_dtype = (
+                    find_common_type(source_dtypes) if source_dtypes else None
+                )
                 if (
-                    is_dtype_obj_string(common_dtype)
+                    common_dtype is not None
+                    and is_dtype_obj_string(common_dtype)
                     and any(
                         not is_dtype_obj_string(dtype)
                         for dtype in source_dtypes
@@ -6728,6 +6731,23 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # For max/min operations, preserve the original dtype since
                 # Python scalars (int, float) would otherwise widen to int64/float64
                 result_dtype = common_dtype if op in {"max", "min"} else None
+                # For duration/timestamp reductions, preserve the kind so
+                # NaT scalars don't default to datetime64[s]
+                if (
+                    result_dtype is None
+                    and common_dtype is not None
+                    and (
+                        (
+                            common_dtype.kind == "m"
+                            and op in {"sum", "mean", "median", "std"}
+                        )
+                        or (
+                            common_dtype.kind == "M"
+                            and op in {"mean", "median"}
+                        )
+                    )
+                ):
+                    result_dtype = common_dtype
                 res = as_column(
                     axis_0_results,
                     nan_as_null=False,
@@ -6750,6 +6770,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             elif (
                                 common_dtype is not None
                                 and common_dtype.kind == "u"
+                            ):
+                                res_dtype = np.dtype("uint64")
+                            elif (
+                                common_dtype is not None
+                                and common_dtype.kind == "b"
+                                and isinstance(common_dtype, pd.ArrowDtype)
                             ):
                                 res_dtype = np.dtype("uint64")
                             else:
@@ -6778,6 +6804,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                 res_dtype = np.dtype("float64")
                         elif op in {"max", "min"}:
                             res_dtype = common_dtype
+                    elif (
+                        common_dtype is not None
+                        and common_dtype.kind == "m"
+                        and op
+                        in {"sum", "mean", "median", "std", "max", "min"}
+                    ):
+                        res_dtype = common_dtype
+                    elif (
+                        common_dtype is not None
+                        and common_dtype.kind == "M"
+                        and op in {"mean", "median", "max", "min"}
+                    ):
+                        res_dtype = common_dtype
                     if op in {"any", "all"}:
                         res_dtype = np.dtype(np.bool_)
                 res = res.nans_to_nulls()

@@ -335,6 +335,28 @@ def test_timedelta_astype_object_raises_pandas_compat():
             sr.astype(np.dtype("object"))
 
 
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "datetime64[us]", "timedelta64[ns]"]
+)
+@pytest.mark.parametrize(
+    "target_dtype", ["float32", "float64", np.float64, np.float32]
+)
+def test_temporal_astype_float_raises_pandas_compat(dtype, target_dtype):
+    # pandas raises TypeError when casting datetime/timedelta to float;
+    # cuDF must match this under pandas-compatible mode.
+    from cudf.testing._utils import assert_exceptions_equal
+
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.astype,
+            rfunc=gsr.astype,
+            lfunc_args_and_kwargs=([target_dtype], {}),
+            rfunc_args_and_kwargs=([target_dtype], {}),
+        )
+
+
 def test_timedelta_astype_unicode_dtype_pandas_compat():
     sr = cudf.Series([1000000000], dtype="timedelta64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
