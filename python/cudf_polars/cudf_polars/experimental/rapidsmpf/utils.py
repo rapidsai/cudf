@@ -10,8 +10,9 @@ import itertools
 import operator
 import struct
 import time
+from collections import deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
@@ -39,11 +40,20 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
+from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator, Sequence
+    from collections.abc import (
+        AsyncIterator,
+        Callable,
+        Coroutine,
+        Generator,
+        Iterator,
+        Sequence,
+    )
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -61,6 +71,23 @@ if TYPE_CHECKING:
 
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
+
+
+class ChunkStore:
+    """Ordered spillable buffer for TableChunk messages."""
+
+    def __init__(self, ctx: Context) -> None:
+        self._mids: deque[int] = deque()
+        self._store = ctx.spillable_messages()
+
+    def insert(self, msg: Message) -> None:
+        """Insert a message into the store."""
+        self._mids.append(self._store.insert(msg))
+
+    def __iter__(self) -> Generator[Message, None, None]:
+        """Yield messages in insertion order, draining the store."""
+        while self._mids:
+            yield self._store.extract(mid=self._mids.popleft())
 
 
 @contextlib.contextmanager
@@ -354,6 +381,54 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     return ChannelMetadata.from_message(msg)
 
 
+def _make_hash_shuffle_metadata(
+    comm: Communicator,
+    key_indices: tuple[int, ...],
+    modulus: int,
+    metadata_in: ChannelMetadata,
+) -> ChannelMetadata:
+    """
+    Build output ChannelMetadata for a hash shuffle by key_indices.
+
+    Parameters
+    ----------
+    comm
+        The communicator.
+    key_indices
+        Column indices to hash-partition on.
+    modulus
+        Number of output partitions (must be >= comm.nranks).
+    metadata_in
+        Input channel metadata (used for duplicated flag and, on a
+        single-rank run, to preserve the existing inter-rank scheme).
+
+    Returns
+    -------
+    ChannelMetadata
+        Ready to pass to send_metadata.
+    """
+    nranks = comm.nranks
+    if nranks == 1:
+        inter_rank_scheme = (
+            None
+            if metadata_in.partitioning is None
+            else metadata_in.partitioning.inter_rank
+        )
+        local_scheme: HashScheme | str = HashScheme(
+            column_indices=key_indices, modulus=modulus
+        )
+        local_output_count = modulus
+    else:
+        inter_rank_scheme = HashScheme(column_indices=key_indices, modulus=modulus)
+        local_scheme = "inherit"
+        local_output_count = (modulus - comm.rank + nranks - 1) // nranks
+    return ChannelMetadata(
+        local_count=local_output_count,
+        partitioning=Partitioning(inter_rank_scheme, local_scheme),
+        duplicated=metadata_in.duplicated,
+    )
+
+
 def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
@@ -432,6 +507,49 @@ async def evaluate_chunk(
                 _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
+
+
+async def allgather_and_reduce(
+    context: Context,
+    comm: Communicator,
+    collective_id: int,
+    local_chunk: TableChunk,
+    reduce_ir: IR,
+    ir_context: IRExecutionContext,
+) -> TableChunk:
+    """
+    AllGather ``local_chunk`` across ranks and apply ``reduce_ir`` to the result.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    comm
+        The communicator.
+    collective_id
+        Collective operation ID for the AllGather.
+    local_chunk
+        The locally-reduced chunk this rank contributes.
+    reduce_ir
+        IR node applied to the concatenated AllGather output.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The chunk produced by evaluating ``reduce_ir`` on the gathered result.
+    """
+    allgather = AllGatherManager(context, comm, collective_id)
+    with allgather.inserting() as inserter:
+        inserter.insert(0, local_chunk)
+    stream = ir_context.get_cuda_stream()
+    concat_chunk = TableChunk.from_pylibcudf_table(
+        await allgather.extract_concatenated(stream),
+        stream,
+        exclusive_view=True,
+        br=context.br(),
+    )
+    return await evaluate_chunk(context, concat_chunk, reduce_ir, ir_context=ir_context)
 
 
 async def concat_batch(
@@ -610,29 +728,71 @@ def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...
     return tuple(keys[i] for i in indices)
 
 
-def names_to_indices(
-    names: tuple[str | NamedExpr, ...], schema: Schema
-) -> tuple[int, ...]:
-    """
-    Return column indices for the given names in schema order.
+@dataclass(frozen=True)
+class TableSizeStats:
+    """Sampled chunks and aggregate size/row stats for a table channel."""
 
-    Accepts either column names (str) or NamedExpr, so it can be used with
-    e.g. ir.left_on, ir.right_on as well as plain name tuples.
+    chunks: dict[int, TableChunk] = field(default_factory=dict)
+    """The sampled chunks, keyed by sequence number."""
+    total_size: int = 0
+    """The total estimated size of the table in bytes."""
+    total_rows: int = 0
+    """The total estimated number of rows in the table."""
+    total_chunks: int = 0
+    """The total estimated number of chunks in the table."""
+
+
+async def _sample_chunks(
+    context: Context,
+    ch: Channel[TableChunk],
+    max_sample_chunks: int,
+    max_sample_bytes: int,
+    local_count: int,
+) -> TableSizeStats:
+    """
+    Sample chunks from a channel and extrapolate to a per-rank size estimate.
 
     Parameters
     ----------
-    names
-        The names to get indices for.
-    schema
-        The schema to get indices from.
+    context
+        The context.
+    ch
+        The channel to sample from.
+    max_sample_chunks
+        The maximum number of chunks to sample.
+    max_sample_bytes
+        The maximum number of bytes to sample.
+    local_count
+        The expected number of local chunks (used for extrapolation).
 
     Returns
     -------
-    The column indices for each name in schema order.
+    Sampled chunks and the extrapolated total size/rows for this rank.
     """
-    keys = list(schema.keys())
-    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
-    return tuple(keys.index(n) for n in str_names)
+    sampled_chunks: dict[int, TableChunk] = {}
+    total_size = 0
+    total_rows = 0
+    for _ in range(max_sample_chunks):
+        msg = await ch.recv(context)
+        if msg is None:
+            break
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        sampled_chunks[msg.sequence_number] = chunk
+        total_size += chunk.data_alloc_size()
+        total_rows += chunk.shape[0]
+        if total_size >= max_sample_bytes:
+            break
+    if sampled_chunks:
+        total_size = int((total_size / len(sampled_chunks)) * local_count)
+        total_rows = int((total_rows / len(sampled_chunks)) * local_count)
+    return TableSizeStats(
+        chunks=sampled_chunks,
+        total_size=total_size,
+        total_rows=total_rows,
+        total_chunks=local_count,
+    )
 
 
 async def replay_buffered_channel(

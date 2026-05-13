@@ -615,13 +615,17 @@ class GroupedWindow(Expr):
         local = self._sorted_grouper(by_cols_for_scan)
         return order_index, by_cols_for_scan, local
 
+    # TODO: this is an ordered left-join that drops the join keys.
+    # Rename it and replace the manual scatter+gather with the Join IR's
+    # _reorder_maps helper (lifted to a shared utility) so the streaming
+    # and in-memory over paths share the same primitive.
     def _broadcast_agg_results(
         self,
         by_tbl: plc.Table,
         group_keys_tbl: plc.Table,
         value_tbls: list[plc.Table],
-        names: list[str],
-        dtypes: list[DataType],
+        names: Sequence[str],
+        dtypes: Sequence[DataType],
         stream: Stream,
     ) -> list[Column]:
         # We do a left-join between the input keys to group-keys
