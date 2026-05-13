@@ -1840,14 +1840,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 else:
                     mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
-                    out_col = as_column(out).set_mask(mask_buff, null_count)
-                    if source_dtype is not None:
-                        target_dtype = get_dtype_of_same_kind(
-                            source_dtype, out_col.dtype
-                        )
-                        if target_dtype != out_col.dtype:
-                            out_col = out_col.astype(target_dtype)
-                    data[i][name] = out_col
+                    target_dtype = (
+                        get_dtype_of_same_kind(source_dtype, out.dtype)
+                        if source_dtype is not None
+                        else None
+                    )
+                    data[i][name] = as_column(
+                        out, dtype=target_dtype
+                    ).set_mask(mask_buff, null_count)
             return data
 
     # Unary logical operators
