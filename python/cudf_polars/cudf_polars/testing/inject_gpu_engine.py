@@ -135,8 +135,7 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
-# TODO: This is just Mapping[str, str]?
-EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
+EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
@@ -475,15 +474,5 @@ def pytest_collection_modifyitems(
             is not None
         ):
             item.add_marker(pytest.mark.xfail(reason=s_reason))
-        elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
-            if isinstance(entry, tuple):
-                # the second entry in the tuple is the condition to xfail on
-                reason, condition = entry
-                item.add_marker(
-                    pytest.mark.xfail(
-                        condition=condition,
-                        reason=reason,
-                    ),
-                )
-            else:
-                item.add_marker(pytest.mark.xfail(reason=entry))
+        elif (reason := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
+            item.add_marker(pytest.mark.xfail(reason=reason))
