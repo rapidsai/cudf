@@ -776,7 +776,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto const batch_size = db->values_per_mb;
   if (db->error or batch_size > max_delta_mini_block_size) {
     if (block.thread_rank() == 0) {
-      set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
     }
     return;
   }
