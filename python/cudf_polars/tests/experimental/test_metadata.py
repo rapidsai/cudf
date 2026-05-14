@@ -481,14 +481,17 @@ def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None
     assert result.inter_rank.modulus == 8
 
 
-def _make_order_scheme(context, *, key_index=0, values=(100, 200), strict=False):
+def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=False):
     stream = context.get_stream_from_pool()
-    df = DataFrame.from_polars(pl.DataFrame({"k": list(values)}), stream)
+    df = DataFrame.from_polars(
+        pl.DataFrame({f"k{i}": list(values) for i in key_indices}), stream
+    )
     chunk = TableChunk.from_pylibcudf_table(
         df.table, stream, exclusive_view=False, br=context.br()
     )
-    key = OrderKey(key_index, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
-    return OrderScheme([key], chunk, strict_boundaries=strict)
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    keys = [OrderKey(i, asc, before) for i in key_indices]
+    return OrderScheme(keys, chunk, strict_boundaries=strict)
 
 
 @pytest.mark.parametrize(
@@ -514,7 +517,7 @@ def _make_order_scheme(context, *, key_index=0, values=(100, 200), strict=False)
             True,
             False,
         ),
-        ((0,), True, False),  # plain int → hash-only, won't match OrderScheme
+        ((0,), True, True),  # plain int → matches OrderScheme by column index
     ],
 )
 def test_from_keys_order_scheme(spmd_engine, keys, strict, should_match):
@@ -553,7 +556,8 @@ def test_is_aligned_with_order_scheme(spmd_engine):
 
 
 def test_from_keys_order_scheme_single_rank(spmd_engine):
-    keys = (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),)
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    keys = (OrderKey(0, asc, before),)
     local_scheme = _make_order_scheme(spmd_engine.context, strict=True)
     # Single-rank: local OrderScheme promoted to inter-rank
     part = Partitioning(inter_rank=None, local=local_scheme)
@@ -563,11 +567,22 @@ def test_from_keys_order_scheme_single_rank(spmd_engine):
     # Multi-rank without inter-rank OrderScheme → no partitioning
     result_multi = NormalizedPartitioning.from_keys(part, nranks=4, keys=keys)
     assert result_multi.inter_rank_scheme is None
+    # Reversed prefix: scheme has 2 keys, query has 1 → must not match
+    scheme_2key = _make_order_scheme(
+        spmd_engine.context, key_indices=(0, 1), strict=True
+    )
+    part_2key = Partitioning(inter_rank=scheme_2key, local="inherit")
+    result_rev = NormalizedPartitioning.from_keys(part_2key, nranks=4, keys=keys)
+    assert result_rev.inter_rank_scheme is None
+    # Same check via Sequence[int] path
+    result_rev_int = NormalizedPartitioning.from_keys(part_2key, nranks=4, keys=(0,))
+    assert result_rev_int.inter_rank_scheme is None
 
 
 def test_remap_partitioning_order_scheme_select(spmd_engine, engine):
     part = Partitioning(
-        inter_rank=_make_order_scheme(spmd_engine.context, key_index=0), local="inherit"
+        inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
+        local="inherit",
     )
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
     assert result is not None
@@ -577,7 +592,8 @@ def test_remap_partitioning_order_scheme_select(spmd_engine, engine):
 
 def test_remap_partitioning_order_scheme_drops_key(spmd_engine, engine):
     part = Partitioning(
-        inter_rank=_make_order_scheme(spmd_engine.context, key_index=0), local="inherit"
+        inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
+        local="inherit",
     )
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b",)), part)
     assert result is not None
