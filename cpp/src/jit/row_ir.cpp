@@ -194,7 +194,10 @@ node::node(opcode op, std::optional<int32_t> target_scale, std::vector<std::uniq
                std::runtime_error);
 }
 
-node::node(input_reference input) : reference_{input}, op_{opcode::GET_INPUT} {}
+node::node(input_reference input)
+  : reference_{input}, op_{opcode::GET_INPUT}  // NOLINT(modernize-use-default-member-init)
+{
+}
 
 node::node(output_reference reference, std::unique_ptr<node> arg)
   : reference_{reference}, op_{opcode::SET_OUTPUT}
