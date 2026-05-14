@@ -8,7 +8,6 @@ import pytest
 
 import polars as pl
 
-import cudf_polars.callback
 from cudf_polars.testing.engine_utils import (
     ALL_ENGINE_FIXTURE_PARAMS,
     STREAMING_ENGINE_FIXTURE_PARAMS,
@@ -33,22 +32,8 @@ NUM_RANKS = 2
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
-def with_nulls(request):
+def with_nulls(request: pytest.FixtureRequest):
     return request.param
-
-
-@pytest.fixture
-def clear_memory_resource_cache():
-    """
-    Clear the cudf_polars.callback.default_memory_resource cache before and after a test.
-
-    This function caches memory resources for the duration of the process. Any test that
-    creates a pool (e.g. ``CudaAsyncMemoryResource``) should use this fixture to ensure that
-    the pool is freed after the test.
-    """
-    cudf_polars.callback.default_memory_resource.cache_clear()
-    yield
-    cudf_polars.callback.default_memory_resource.cache_clear()
 
 
 @pytest.fixture(autouse=True)
@@ -280,7 +265,7 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
         "skip_on_streaming_engine(reason, *, engine=None): skip the test for "
