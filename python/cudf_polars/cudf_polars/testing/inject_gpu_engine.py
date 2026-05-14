@@ -255,7 +255,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
-    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. Fixed in 1.39.",
+    "tests/unit/functions/test_concat.py::test_concat_with_empty_dataframes_strict_25725": "https://github.com/rapidsai/cudf/issues/21644",
 }
 
 
