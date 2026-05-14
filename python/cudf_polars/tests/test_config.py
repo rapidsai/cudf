@@ -38,7 +38,7 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
-def test_polars_verbose_warns(monkeypatch):
+def test_polars_verbose_warns(engine, monkeypatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
@@ -55,9 +55,7 @@ def test_polars_verbose_warns(monkeypatch):
         ),
     ):
         # And ensure that collecting issues the correct warning.
-        assert_gpu_result_equal(
-            q, engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-        )
+        assert_gpu_result_equal(q, engine=engine)
 
 
 def test_unsupported_config_raises():
@@ -107,13 +105,30 @@ def test_invalid_memory_resource_raises(mr, monkeypatch):
         q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
+@pytest.fixture
+def clear_memory_resource_cache():
+    """
+    Clear the cudf_polars.callback.default_memory_resource cache before and after a test.
+
+    This function caches memory resources for the duration of the process. Any test that
+    creates a pool (e.g. ``CudaAsyncMemoryResource``) should use this fixture to ensure that
+    the pool is freed after the test.
+    """
+    cudf_polars.callback.default_memory_resource.cache_clear()
+    try:
+        yield
+    finally:
+        cudf_polars.callback.default_memory_resource.cache_clear()
+
+
 @pytest.mark.skipif(
     not _is_concurrent_managed_access_supported(),
     reason="managed memory not supported",
 )
 @pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
-@pytest.mark.usefixtures("clear_memory_resource_cache")
-def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_memory):
+def test_cudf_polars_enable_disable_managed_memory(
+    monkeypatch, enable_managed_memory, clear_memory_resource_cache
+):
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
     with monkeypatch.context() as monkeycontext:
@@ -272,7 +287,7 @@ def test_validate_cluster() -> None:
     [
         "max_rows_per_partition",
         "target_partition_size",
-        "broadcast_join_limit",
+        "broadcast_limit",
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
@@ -338,7 +353,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
-        m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
+        m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", "44")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         engine = pl.GPUEngine()
@@ -348,7 +363,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
-        assert config.executor.broadcast_join_limit == 44
+        assert config.executor.broadcast_limit == 44
         assert config.cuda_stream_policy is None
 
 

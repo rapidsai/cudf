@@ -5,15 +5,17 @@
 
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pytest
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -31,8 +33,9 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     assert nbytes % 4 == 0, "nbytes must be divisible by 4 for float32"
     # Create a simple table with one column of random float32 data
     num_elements = nbytes // 4
-    data = np.random.random(num_elements).astype(np.float32)
-    return plc.Table([plc.Column.from_array(data, stream=stream)])
+    rng = random.Random(42)
+    pl_data = pl.Series([rng.random() for _ in range(num_elements)], dtype=pl.Float32())
+    return plc.Table([plc.Column.from_arrow(pl_data, stream=stream)])
 
 
 @pytest.mark.parametrize(

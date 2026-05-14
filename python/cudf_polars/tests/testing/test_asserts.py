@@ -155,6 +155,36 @@ def test_assert_tpch_result_equal_ties_multi_column_sort_by() -> None:
     )
 
 
+def test_assert_tpch_result_equal_ties_payload_does_not_drive_order() -> None:
+    # Within the ties partition, payload column values must not determine
+    # the row order used to compare the sort_by columns. Both sides have
+    # the same set of v values in the tolerance band around the split
+    # point, but the payload column k is aligned with v in opposite orders.
+    # Sorting the full ties frame by k before projecting to v would put the
+    # v values in opposite orders on the two sides and fail the
+    # approximate comparison even though the result is correct.
+    left = pl.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.099, 3.100, 3.101],
+            "k": ["a", "b", "x", "y", "z"],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.099, 3.100, 3.101],
+            "k": ["a", "b", "z", "y", "x"],
+        }
+    )
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("v", False)],
+        abs_tol=1e-3,
+        check_exact=False,
+        limit=5,
+    )
+
+
 @pytest.mark.parametrize("limit", [None, 5])
 def test_assert_tpch_result_equal_float_sort_raises(limit: int | None) -> None:
     # Sort on a floating point column with a limit,
@@ -423,4 +453,36 @@ def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
             sort_by=[("lochierarchy", True), ("i_category", False)],
             sort_keys=sort_keys,
             nulls_last=True,
+        )
+
+
+@pytest.mark.parametrize("sort_by", [[("a", True)], []])
+@pytest.mark.parametrize("drop_columns", [[], ["b"], ["a", "b"]])
+def test_assert_tpch_result_equal_grouped_float_sort(
+    sort_by: list[tuple[str, bool]], drop_columns: list[str]
+) -> None:
+    # https://github.com/rapidsai/cudf/issues/22129
+    # Same non-float values with float values reordered inside each non-float group.
+    left = pl.DataFrame({"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.0, 3.0]})
+    right = pl.DataFrame({"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.999, 2.0]})
+
+    if drop_columns:
+        left = left.drop(drop_columns)
+        right = right.drop(drop_columns)
+        if "a" in drop_columns:
+            sort_by = []
+
+    assert_tpch_result_equal(
+        left, right, sort_by=sort_by, abs_tol=0.01, check_exact=False
+    )
+
+    # But this table is different, since row 3.0 - 2.9 > abs_tol.
+    right_different = pl.DataFrame(
+        {"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.90, 2.0]}
+    )
+    if drop_columns:
+        right_different = right_different.drop(drop_columns)
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left, right_different, sort_by=sort_by, abs_tol=0.01, check_exact=False
         )

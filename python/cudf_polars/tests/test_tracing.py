@@ -38,11 +38,14 @@ def test_trace_basic(
     import rmm
 
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.ManagedMemoryResource()))
+    q.collect(
+        engine=pl.GPUEngine(
+            executor="streaming", memory_resource=rmm.mr.ManagedMemoryResource()
+        )
+    )
     """)
 
     env = {
-        "CUDF_POLARS__EXECUTOR": "in-memory",
         "CUDF_POLARS_LOG_TRACES": "1",
     }
 
