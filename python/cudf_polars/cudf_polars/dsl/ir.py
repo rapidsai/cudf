@@ -156,7 +156,6 @@ class IR(Node["IR"]):
     _n_non_child_args: ClassVar[int]
     schema: Schema
     """Mapping from column names to their data types."""
-    _stable_plan_id: uuid.UUID
 
     def get_hashable(self) -> Hashable:
         """
