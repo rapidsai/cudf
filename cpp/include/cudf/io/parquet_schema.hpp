@@ -255,7 +255,8 @@ struct LogicalType {
     INTEGER = 10,
     UNKNOWN,
     JSON,
-    BSON
+    BSON,
+    VARIANT = 16,
   };
 
   /// Logical type

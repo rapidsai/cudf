@@ -96,9 +96,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     # INTERSECT: Get common zip codes between target list and preferred customer zips
-    intersect_zips = target_zips_5char.join(
-        preferred_customer_zips, on="ca_zip", how="inner"
-    ).select("ca_zip")
+    intersect_zips = (
+        target_zips_5char.join(preferred_customer_zips, on="ca_zip", how="inner")
+        # TODO: The 2-char zip prefix is materialized here rather than passed as a join
+        # expression key. Using `right_on=pl.col("ca_zip").str.slice(0, 2)` in the join
+        # below produces non-deterministic wrong sums under the streaming executor. We need
+        # to root-cause this.
+        .select(pl.col("ca_zip").str.slice(0, 2).alias("ca_zip_prefix"))
+    )
 
     # Pre-filter date_dim; d_year/d_qoy not needed after filter — semi-join.
     filtered_dates = date_dim.filter(
@@ -115,14 +120,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 how="semi",
             )
             .join(
-                store.select(["s_store_sk", "s_store_name", "s_zip"]),
+                store.select(
+                    [
+                        "s_store_sk",
+                        "s_store_name",
+                        pl.col("s_zip").str.slice(0, 2).alias("s_zip_prefix"),
+                    ]
+                ),
                 left_on="ss_store_sk",
                 right_on="s_store_sk",
             )
             .join(
                 intersect_zips,
-                left_on=pl.col("s_zip").str.slice(0, 2),
-                right_on=pl.col("ca_zip").str.slice(0, 2),
+                left_on="s_zip_prefix",
+                right_on="ca_zip_prefix",
             )
             .group_by("s_store_name")
             .agg(pl.col("ss_net_profit").sum().alias("sum"))

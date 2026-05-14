@@ -663,6 +663,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
 
+            if (
+                to_dtype is not None
+                and cudf.dtype(to_dtype).kind != "O"
+                and col.dtype != cudf.dtype(to_dtype)
+            ):
+                # Skip the in-cudf cast when the target is numpy object:
+                # in cudf cudf.dtype(object) is the string dtype, so
+                # casting would stringify values. module.asarray(..., dtype=object)
+                # below correctly boxes the host values as Python objects.
+                col = col.astype(cudf.dtype(to_dtype))
+
             array = get_array(col)
 
             if (
@@ -826,6 +837,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._num_columns > 1
             and na_value is None
             and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
+            and (dtype is None or dtype == self._columns[0].dtype)
             and all(
                 not col.nullable and col.dtype == self._columns[0].dtype
                 for col in self._columns

@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import functools
 import logging
@@ -39,7 +38,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.utils.config import DaskContext
+from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,7 +51,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def _get_visible_gpu_ids() -> list[str]:
@@ -156,11 +155,8 @@ def _setup_root(
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
     bind_to_gpu(hardware_binding)
-    base_mr = (
-        memory_resource_config.create_memory_resource()
-        if memory_resource_config is not None
-        else rmm.mr.CudaAsyncMemoryResource()
-    )
+    memory_resource_config = memory_resource_config or MemoryResourceConfig.default()
+    base_mr = memory_resource_config.create_memory_resource()
     mr = RmmResourceAdaptor(base_mr)
     comm = new_communicator(
         nranks=nranks,
@@ -211,7 +207,7 @@ def _setup_worker(
         Policy controlling topology-aware hardware binding.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
-        :class:`rmm.mr.CudaAsyncMemoryResource`.
+        :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -224,11 +220,10 @@ def _setup_worker(
     if mp_ctx is None:
         # Non-root worker: create communicator now.
         bind_to_gpu(hardware_binding)
-        base_mr = (
-            memory_resource_config.create_memory_resource()
-            if memory_resource_config is not None
-            else rmm.mr.CudaAsyncMemoryResource()
+        memory_resource_config = (
+            memory_resource_config or MemoryResourceConfig.default()
         )
+        base_mr = memory_resource_config.create_memory_resource()
         mr = RmmResourceAdaptor(base_mr)
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
@@ -285,10 +280,15 @@ def _teardown_worker(
     if mp_ctx is not None:
         if mp_ctx.py_executor is not None:
             mp_ctx.py_executor.shutdown(wait=True, cancel_futures=True)
-        mp_ctx.ctx = None
-        mp_ctx.comm = None
-        mp_ctx.mr = None
-        with contextlib.suppress(AttributeError):
+        # Shut down the Context explicitly on the same thread that
+        # constructed it.
+        try:
+            if mp_ctx.ctx is not None:
+                mp_ctx.ctx.shutdown()
+        finally:
+            mp_ctx.ctx = None
+            mp_ctx.comm = None
+            mp_ctx.mr = None
             delattr(dask_worker, attr)
 
 
@@ -373,6 +373,7 @@ def _worker_evaluate(
     *,
     uid: str,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -393,6 +394,8 @@ def _worker_evaluate(
         per-worker context attribute.
     collect_metadata
         Whether to collect channel metadata.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -408,14 +411,24 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    return evaluate_on_rank(
+    # evaluate_on_rank always collects metadata internally so we can read
+    # metadata[-1].duplicated to decide whether to suppress this rank's output.
+    # The client concatenates each rank's result, so without this dedup an
+    # output marked duplicated=True would appear N times. The external
+    # collect_metadata parameter still controls whether the collected list is
+    # returned to the client (see the return statement), which is the cost we
+    # care about saving when the caller doesn't need the metadata.
+    df, metadata = evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
         ir,
         config_options,
-        collect_metadata=collect_metadata,
+        query_id=query_id,
     )
+    if mp_ctx.comm.rank != 0 and metadata and metadata[-1].duplicated:
+        df = df.clear()
+    return df, metadata if collect_metadata else None
 
 
 def evaluate_pipeline_dask_mode(
@@ -474,6 +487,7 @@ def evaluate_pipeline_dask_mode(
         ir,
         worker_config,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
 
     dfs: list[pl.DataFrame] = []
@@ -688,7 +702,6 @@ class DaskEngine(StreamingEngine):
             nranks=nranks,
             executor_options={
                 **executor_options,
-                "runtime": "rapidsmpf",
                 "cluster": "dask",
                 "dask_context": dask_ctx,
             },
@@ -736,7 +749,6 @@ class DaskEngine(StreamingEngine):
             nranks=self._nranks,
             executor_options={
                 **executor_options,
-                "runtime": "rapidsmpf",
                 "cluster": "dask",
                 "dask_context": ctx,
             },

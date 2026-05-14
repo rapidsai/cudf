@@ -18,6 +18,7 @@ from cudf_polars.experimental.explain import (
     explain_query,
     serialize_query,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 
@@ -36,15 +37,14 @@ def df():
     )
 
 
-@pytest.fixture(scope="module")
-def explain_engine():
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "target_partition_size": 10_000,
-            "max_rows_per_partition": 1_000,
-        },
+@pytest.fixture
+def explain_engine(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=10_000,
+            max_rows_per_partition=1_000,
+            raise_on_fail=True,
+        )
     )
 
 
@@ -445,10 +445,6 @@ def test_explain_logical_io_then_concat_then_groupby(explain_engine, tmp_path, k
 
 
 def test_serialize_query():
-    # this test is sensitive to the polars version.
-    # we get a different query plan for polars < 1.35.0.
-    pytest.importorskip("polars", minversion="1.35.0")
-
     left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
     right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
 
@@ -540,8 +536,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     dag = serialize_query(q, engine)
 
-    # walk Union -> Scan
-    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    node = dag.nodes[dag.roots[0]]
     assert node.type == "Scan"
     assert node.properties == expected_properties
 
@@ -673,7 +668,6 @@ def test_dynamic_planning_adds_repartition(df, op):
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "runtime": "rapidsmpf",
             "dynamic_planning": {},
             "max_rows_per_partition": 1_000_000,
         },
