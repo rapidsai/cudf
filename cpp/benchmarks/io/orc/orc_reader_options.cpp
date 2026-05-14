@@ -51,6 +51,9 @@ void BM_orc_read_varying_options(nvbench::state& state,
   auto const use_np_dtypes = UsesNumpyDType == uses_numpy_dtype::YES;
   auto const ts_type       = cudf::data_type{Timestamp};
 
+  auto const stripe_size_bytes = state.get_int64("stripe_size_bytes");
+  auto const stripe_size_rows  = state.get_int64("stripe_size_rows");
+
   // skip_rows is not supported on nested types
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
@@ -65,6 +68,9 @@ void BM_orc_read_varying_options(nvbench::state& state,
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   cudf::io::orc_writer_options options =
     cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
+  // Sentinel 0 == use cuDF default.
+  if (stripe_size_bytes > 0) options.set_stripe_size_bytes(stripe_size_bytes);
+  if (stripe_size_rows > 0) options.set_stripe_size_rows(stripe_size_rows);
   cudf::io::write_orc(options);
 
   auto const cols_to_read =
@@ -133,7 +139,9 @@ NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
   .set_name("orc_read_column_selection")
   .set_type_axes_names(
     {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("stripe_size_bytes", {0})
+  .add_int64_axis("stripe_size_rows", {0});
 
 using row_selections =
   nvbench::enum_type_list<row_selection::ALL, row_selection::NROWS, row_selection::STRIPES>;
@@ -146,7 +154,11 @@ NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
   .set_name("orc_read_row_selection")
   .set_type_axes_names(
     {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  // NOTE: row_selection::STRIPES reads a fraction of stripes; non-zero
+  // stripe sizing values here change what each chunk reads.
+  .add_int64_axis("stripe_size_bytes", {0})
+  .add_int64_axis("stripe_size_rows", {0});
 
 NVBENCH_BENCH_TYPES(
   BM_orc_read_varying_options,
@@ -159,4 +171,6 @@ NVBENCH_BENCH_TYPES(
   .set_name("orc_read_misc_options")
   .set_type_axes_names(
     {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("stripe_size_bytes", {0})
+  .add_int64_axis("stripe_size_rows", {0});
