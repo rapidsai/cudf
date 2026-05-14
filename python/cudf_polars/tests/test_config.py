@@ -270,7 +270,7 @@ def test_validate_cluster() -> None:
     [
         "max_rows_per_partition",
         "target_partition_size",
-        "broadcast_join_limit",
+        "broadcast_limit",
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
@@ -336,7 +336,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
-        m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
+        m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", "44")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         engine = pl.GPUEngine()
@@ -346,7 +346,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
-        assert config.executor.broadcast_join_limit == 44
+        assert config.executor.broadcast_limit == 44
         assert config.cuda_stream_policy is None
 
 
