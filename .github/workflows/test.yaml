@@ -69,7 +69,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: ci/test_cpp_benchmarks.sh
   conda-cpp-memcheck-tests:
     permissions:
@@ -87,7 +87,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: "ci/test_cpp_memcheck.sh"
   cpp-linters:
     permissions:
@@ -152,7 +152,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     permissions:
@@ -170,7 +170,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     permissions:
@@ -232,7 +232,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
       continue-on-error: true
@@ -248,29 +248,10 @@ jobs:
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      script: "ci/test_wheel_cudf_polars.sh"
-  wheel-tests-cudf-polars-with-rapidsmpf:
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
-      # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: ${{ inputs.build_type }}
-      branch: ${{ inputs.branch }}
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_cudf_polars_experimental.sh"
-      continue-on-error: true
+      script: "ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     permissions:
       actions: read
@@ -301,5 +282,5 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.08-latest"
       script: ci/test_narwhals.sh

@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 import polars.testing
 
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
-
 if TYPE_CHECKING:
     from typing import Any
 
@@ -163,10 +161,7 @@ def assert_tpch_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rel_tol, "atol": abs_tol}
-    else:
-        tol_kwargs = {"rel_tol": rel_tol, "abs_tol": abs_tol}
+    tol_kwargs = {"rel_tol": rel_tol, "abs_tol": abs_tol}
     polars_kwargs.update(tol_kwargs)
 
     if left.columns != right.columns:
@@ -212,6 +207,36 @@ def assert_tpch_result_equal(
     right = right.with_columns(*float_casts)
     left = left.with_columns(*float_casts)
 
+    non_float_columns = [
+        col for col in left.columns if left.schema[col] not in (pl.Float32, pl.Float64)
+    ]
+    float_columns = [
+        col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
+    ]
+    grouped_sort_columns = [*non_float_columns, *float_columns]
+
+    def sort_for_comparison(df: pl.DataFrame) -> pl.DataFrame:
+        # We know that each dataframe is sorted on `sort_by` according to itself.
+        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
+        # any kind of fuzziness from sorting on floating-point columns.
+        #
+        # As long as we sort by the non-float columns *first*, we'll avoid any
+        # false positives / false negatives from comparing two tables that have the
+        # same values but happen to be in a different order. Sorting by floating-point
+        # columns *last* ensures that records that are close to each other appear in
+        # (roughly) the same order, such that polar's approximate equality checks
+        # will allow them to be considered equal (or not, if the aren't actually close).
+        #
+        # Sort keys are intersected with df.schema so callers can pre-project
+        # the frame (e.g. to compare only `sort_by` columns) without payload
+        # columns influencing the order.
+        local_sort_columns = [c for c in grouped_sort_columns if c in df.schema]
+        return (
+            df.sort(by=local_sort_columns, nulls_last=nulls_last)
+            if local_sort_columns
+            else df
+        )
+
     if sort_by:
         by, descending = list(zip(*sort_by, strict=True))
 
@@ -250,17 +275,8 @@ def assert_tpch_result_equal(
                     details={"error": str(e)},
                 ) from e
 
-        # We know that each dataframe is sorted on `sort_by` according to itself.
-        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
-        # any kind of sorting on floating-point columns, which introduces all sorts of
-        # fuzziness we don't want to deal with.
-        non_float_columns = [
-            col
-            for col in left.columns
-            if left.schema[col] not in (pl.Float32, pl.Float64)
-        ]
-        left_sorted = left.sort(by=non_float_columns, nulls_last=nulls_last)
-        right_sorted = right.sort(by=non_float_columns, nulls_last=nulls_last)
+        left_sorted = sort_for_comparison(left)
+        right_sorted = sort_for_comparison(right)
 
         if limit is None or left.is_empty():
             try:
@@ -325,8 +341,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_first.sort(by=non_float_columns, nulls_last=nulls_last),
-                    expected_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    sort_for_comparison(result_first),
+                    sort_for_comparison(expected_first),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -344,12 +360,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
-                    expected_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
+                    sort_for_comparison(result_ties.select(by)),
+                    sort_for_comparison(expected_ties.select(by)),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -359,11 +371,14 @@ def assert_tpch_result_equal(
                 ) from e
 
     else:
-        # no sort_by, just a straight comparison.
+        left_sorted = sort_for_comparison(left)
+        right_sorted = sort_for_comparison(right)
+
+        # no sort_by, compare after grouped sort to ignore nondeterministic row order.
         try:
             polars.testing.assert_frame_equal(
-                left,
-                right,
+                left_sorted,
+                right_sorted,
                 **polars_kwargs,  # type: ignore[arg-type]
             )
         except AssertionError as e:
