@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
@@ -25,7 +25,7 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from rmm.pylibrmm.stream import Stream
 
@@ -372,14 +372,6 @@ class GroupedWindow(Expr):
             _, rank_tables = grouper.scan(rank_requests)
         return rank_out_names, rank_out_dtypes, rank_tables
 
-    _CUM_AGG_FUNCTIONS: ClassVar[
-        dict[str, Callable[[], plc.aggregation.Aggregation]]
-    ] = {
-        "cum_sum": plc.aggregation.sum,
-        "cum_min": plc.aggregation.min,
-        "cum_max": plc.aggregation.max,
-    }
-
     @_apply_unary_op.register
     def _(  # type: ignore[no-untyped-def]
         self,
@@ -388,72 +380,28 @@ class GroupedWindow(Expr):
         _,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         named_exprs = op.named_exprs
-        local_grouper = op.local_grouper
-        assert isinstance(local_grouper, plc.groupby.GroupBy)
 
-        plc_cols: list[plc.Column] = []
-        for ne in named_exprs:
-            child = ne.value.children[0]
-            # When a cumulative agg (cum_sum/cum_min/cum_max) is wrapped
-            # in fill_null_with_strategy (Polars SQL OVER ORDER BY),
-            # the scan must run in ORDER BY order, not original row order.
-            if (
-                isinstance(child, expr.UnaryFunction)
-                and (cum_agg_factory := self._CUM_AGG_FUNCTIONS.get(child.name))
-                is not None
-            ):
-                inner_col = (
-                    child.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
-                )
-                if op.order_index is not None:
-                    (inner_col,) = plc.copying.gather(
-                        plc.Table([inner_col]),
-                        op.order_index,
-                        plc.copying.OutOfBoundsPolicy.NULLIFY,
-                        stream=df.stream,
-                    ).columns()
-                _, [scan_tbl] = local_grouper.scan(
-                    [plc.groupby.GroupByRequest(inner_col, [cum_agg_factory()])],
-                    stream=df.stream,
-                )
-                (scan_col,) = scan_tbl.columns()
-                _, filled_tbl = local_grouper.replace_nulls(
-                    plc.Table([scan_col]), [op.policy], stream=df.stream
-                )
-                (filled_col,) = filled_tbl.columns()
-                plc_cols.append(filled_col)
-            else:
-                plc_cols.append(child.evaluate(df, context=ExecutionContext.FRAME).obj)
-
-        # Fill nulls for non-cumulative children (already appended raw)
-        non_cum_indices = [
-            i
-            for i, ne in enumerate(named_exprs)
-            if not (
-                isinstance(ne.value.children[0], expr.UnaryFunction)
-                and ne.value.children[0].name in self._CUM_AGG_FUNCTIONS
-            )
+        plc_cols = [
+            ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+            for ne in named_exprs
         ]
-        if non_cum_indices:
-            raw_cols = [plc_cols[i] for i in non_cum_indices]
-            if op.order_index is not None:
-                raw_tbl = plc.copying.gather(
-                    plc.Table(raw_cols),
-                    op.order_index,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                    stream=df.stream,
-                )
-            else:
-                raw_tbl = plc.Table(raw_cols)
-            _, filled_tbl = local_grouper.replace_nulls(
-                raw_tbl,
-                [op.policy] * len(raw_cols),
+        if op.order_index is not None:
+            vals_tbl = plc.copying.gather(
+                plc.Table(plc_cols),
+                op.order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
                 stream=df.stream,
             )
-            for j, col in zip(non_cum_indices, filled_tbl.columns(), strict=True):
-                plc_cols[j] = col
+        else:
+            vals_tbl = plc.Table(plc_cols)
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, filled_tbl = local_grouper.replace_nulls(
+            vals_tbl,
+            [op.policy] * len(plc_cols),
+        )
 
-        tables = [plc.Table([column]) for column in plc_cols]
+        tables = [plc.Table([column]) for column in filled_tbl.columns()]
         names = [ne.name for ne in named_exprs]
         dtypes = [ne.value.dtype for ne in named_exprs]
         return names, dtypes, tables
