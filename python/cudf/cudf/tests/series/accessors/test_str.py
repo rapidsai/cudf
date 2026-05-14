@@ -1535,7 +1535,7 @@ def test_string_replace_multi():
     ps = pd.Series(["hello", "goodbye"])
     gs = cudf.Series(["hello", "goodbye"])
     expect = ps.str.replace("e", "E").str.replace("o", "O")
-    got = gs.str.replace(["e", "o"], ["E", "O"])
+    got = gs.str.replace(["e", "o"], ["E", "O"], regex=False)
 
     assert_eq(expect, got)
 
@@ -1543,7 +1543,7 @@ def test_string_replace_multi():
     gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
-    got = gs.str.replace(["f."], ["ba"], regex=True)
+    got = gs.str.replace("f.", "ba", regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])

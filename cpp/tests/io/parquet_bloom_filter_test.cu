@@ -1,7 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "src/io/parquet/arrow_filter_policy.cuh"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -16,7 +18,6 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/bloom_filter.cuh>
-#include <cuco/bloom_filter_policies.cuh>
 
 using StringType = cudf::string_view;
 
@@ -25,7 +26,7 @@ class ParquetBloomFilterTest : public cudf::test::BaseFixture {};
 TEST_F(ParquetBloomFilterTest, TestStrings)
 {
   using key_type    = StringType;
-  using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+  using policy_type = cudf::io::parquet::detail::arrow_filter_policy<key_type>;
   using word_type   = policy_type::word_type;
 
   std::size_t constexpr num_filter_blocks = 4;

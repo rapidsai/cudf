@@ -13,8 +13,6 @@ import pytest
 
 import polars as pl
 
-import cudf_polars.testing.asserts
-
 structlog = pytest.importorskip("structlog")
 
 
@@ -40,11 +38,14 @@ def test_trace_basic(
     import rmm
 
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.ManagedMemoryResource()))
+    q.collect(
+        engine=pl.GPUEngine(
+            executor="streaming", memory_resource=rmm.mr.ManagedMemoryResource()
+        )
+    )
     """)
 
     env = {
-        "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
         "CUDF_POLARS_LOG_TRACES": "1",
     }
 
@@ -94,7 +95,7 @@ def test_log_query_plan() -> None:
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": "single",
+            "cluster": "default_singleton",
             "max_rows_per_partition": 5,
         },
         memory_resource=rmm.mr.ManagedMemoryResource(),

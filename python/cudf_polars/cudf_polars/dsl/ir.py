@@ -45,12 +45,9 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
-    get_joined_cuda_stream,
-    join_cuda_streams,
+    stream_ordered_after,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
     POLARS_VERSION_LT_138,
@@ -128,36 +125,11 @@ class IRExecutionContext:
         Yields
         ------
         A CUDA stream that is downstream of the given dataframes.
-
-        Notes
-        -----
-        This context manager provides two useful guarantees when working with
-        objects holding references to stream-ordered objects:
-
-        1. The stream yield upon entering the context manager is *downstream* of
-           all the input dataframes.  This ensures that you can safely perform
-           stream-ordered operations on any input using the yielded stream.
-        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
-           context manager exits. This ensures that all stream-ordered operations
-           submitted inside the context manager can complete before the memory
-           referenced by the inputs is deallocated.
-
-        Note that this does (deliberately) disconnect the dropping of the Python
-        object (by its refcount dropping to 0) from the actual stream-ordered
-        deallocation of the CUDA memory. This is precisely what we need to ensure
-        that the inputs are valid long enough for the stream-ordered operations to
-        complete.
         """
-        result_stream = get_joined_cuda_stream(
+        with stream_ordered_after(
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        yield result_stream
-
-        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
-        )
+        ) as result_stream:
+            yield result_stream
 
 
 _BINOPS = {
@@ -505,16 +477,7 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if (
-            any(str(p).startswith("https:/") for p in self.paths)
-            and POLARS_VERSION_LT_131
-        ):  # pragma: no cover; polars passed us the wrong URI
-            # https://github.com/pola-rs/polars/issues/22766
-            raise NotImplementedError("Read from https")
-        if any(
-            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
-            for p in self.paths
-        ):
+        if any(str(p).startswith("file://") for p in self.paths):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
@@ -1980,19 +1943,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child
@@ -3040,16 +2999,6 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR
-            old, new, strict = self.options
-            if len(new) != len(set(new)) or (
-                set(new) & (set(df.schema.keys()) - set(old))
-            ):
-                raise NotImplementedError(
-                    "Duplicate new names in rename."
-                )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -3123,11 +3072,6 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
-            # final tag is "swapping" which is useful for the
-            # optimiser (it blocks some pushdown operations)
-            old, new, _ = options
-            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif name == "explode":
             ((to_explode,),) = options
             index = df.column_names.index(to_explode)
