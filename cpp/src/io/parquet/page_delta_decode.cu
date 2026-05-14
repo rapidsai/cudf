@@ -772,8 +772,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
   block.sync();
 
-  // Propagate malformed-header errors from the underlying DELTA_BINARY_PACKED decoder
-  if (db->error) {
+  // sanity check to make sure we can process this page
+  auto const batch_size = db->values_per_mb;
+  if (db->error or batch_size > max_delta_mini_block_size) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
     }
@@ -782,12 +783,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   int const leaf_level_index = s->col.max_nesting_depth - 1;
 
-  // sanity check to make sure we can process this page
-  auto const batch_size = db->values_per_mb;
-  if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
-    return;
-  }
   // db->init_binary_block below resets db->values_per_mb
   block.sync();
   // if this is a bounds page, then we need to decode up to the first mini-block
