@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import asyncio
 
-import numpy as np
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -24,7 +25,13 @@ async def _test_allgather(engine) -> None:
 
     # Create simple test tables with different sizes
     tables = [
-        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])
+        plc.Table(
+            [
+                plc.Column.from_arrow(
+                    pl.Series([i] * num_elements, dtype=pl.Int32()), stream=stream
+                )
+            ]
+        )
         for i, num_elements in enumerate([100, 200, 300])
     ]
 

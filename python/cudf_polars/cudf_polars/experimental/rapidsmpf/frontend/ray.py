@@ -408,7 +408,7 @@ class RankActor:
         RuntimeError
             If :meth:`setup_worker` has not been called first.
         """
-        if self._ctx is None:
+        if self._ctx is None or self._comm is None:
             raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
         # Ray transfers the returned Polars DataFrame back to the client via the
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
@@ -419,7 +419,15 @@ class RankActor:
             worker=self._quent_worker,
             logger=self._quent_logger,
         )
-        return evaluate_on_rank(
+        # evaluate_on_rank always collects metadata internally so we can read
+        # metadata[-1].duplicated to decide whether to suppress this rank's
+        # output. The client concatenates each rank's result, so without this
+        # dedup an output marked duplicated=True would appear N times. The
+        # external collect_metadata parameter still controls whether the
+        # collected list is returned to the client (see the return statement),
+        # which is the cost we care about saving when the caller doesn't need
+        # the metadata.
+        df, metadata = evaluate_on_rank(
             self._ctx,
             self._comm,
             self._py_executor,
@@ -429,6 +437,9 @@ class RankActor:
             local_quent_context=local_quent_context,
             query_id=query_id,
         )
+        if self._comm.rank != 0 and metadata and metadata[-1].duplicated:
+            df = df.clear()
+        return df, metadata if collect_metadata else None
 
     def _drain_quent_events(self) -> list[dict[str, Any]]:
         """

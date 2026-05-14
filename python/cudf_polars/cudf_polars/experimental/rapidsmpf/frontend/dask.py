@@ -476,7 +476,14 @@ def _worker_evaluate(
         worker=mp_ctx.quent_worker,
         logger=mp_ctx.quent_logger,
     )
-    return evaluate_on_rank(
+    # evaluate_on_rank always collects metadata internally so we can read
+    # metadata[-1].duplicated to decide whether to suppress this rank's output.
+    # The client concatenates each rank's result, so without this dedup an
+    # output marked duplicated=True would appear N times. The external
+    # collect_metadata parameter still controls whether the collected list is
+    # returned to the client (see the return statement), which is the cost we
+    # care about saving when the caller doesn't need the metadata.
+    df, metadata = evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
@@ -486,6 +493,9 @@ def _worker_evaluate(
         local_quent_context=local_quent_context,
         query_id=query_id,
     )
+    if mp_ctx.comm.rank != 0 and metadata and metadata[-1].duplicated:
+        df = df.clear()
+    return df, metadata if collect_metadata else None
 
 
 def drain_quent_events(

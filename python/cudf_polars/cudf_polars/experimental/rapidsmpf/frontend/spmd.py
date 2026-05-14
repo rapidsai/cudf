@@ -128,7 +128,7 @@ def evaluate_pipeline_spmd_mode(
         logger=config_options.executor.spmd_context.quent_logger,
     )
 
-    result = evaluate_on_rank(
+    df, metadata = evaluate_on_rank(
         context,
         comm,
         py_executor,
@@ -141,7 +141,7 @@ def evaluate_pipeline_spmd_mode(
     quent_context.emit_query_exit_events(
         config_options.executor.spmd_context.quent_logger
     )
-    return result
+    return df, metadata if collect_metadata else None
 
 
 def allgather_polars_dataframe(

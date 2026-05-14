@@ -603,7 +603,7 @@ class RunConfig:
                 print(f"native_parquet: {self.native_parquet}")
                 print(f"n_workers: {self.n_workers}")
                 print(f"target_partition_size: {opts.get('target_partition_size')}")
-                print(f"broadcast_join_limit: {opts.get('broadcast_join_limit')}")
+                print(f"broadcast_limit: {opts.get('broadcast_limit')}")
                 print(f"dynamic_planning: {opts.get('dynamic_planning', 'default')}")
             valid_durations = [
                 record.duration for record in records if record.status == "success"
