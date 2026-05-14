@@ -569,6 +569,9 @@ class SPMDEngine(StreamingEngine):
             engine_options=engine_options,
         )
         executor_options = executor_options or {}
+        existing_executor_options = self.config.get("executor_options", {})
+        if isinstance(existing_executor_options, dict):
+            executor_options = {**existing_executor_options, **executor_options}
         engine_options = engine_options or {}
         quent_context: cudf_polars.quent.QuentContext = executor_options.get(
             "quent_context", cudf_polars.quent.QuentContext()
