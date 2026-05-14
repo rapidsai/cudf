@@ -320,11 +320,21 @@ struct expression_evaluator {
           return ReturnType{numeric::scaled_integer<rep>{rep_val, scale}};
         }
       } else {
-        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
-        // Using a temporary variable ensures that the compiler knows the result is aligned
-        ReturnType tmp;
-        memcpy(&tmp, &intermediate, sizeof(ReturnType));
-        return tmp;
+        if constexpr (has_nulls) {
+          // Mirror the explicit construction done in resolve_output: extract the
+          // int64_t value from optional<int64_t> and rebuild optional<Element>.
+          if (!intermediate.has_value()) { return ReturnType{}; }
+          Element val{};
+          auto const rep = *intermediate;
+          memcpy(&val, &rep, sizeof(Element));
+          return ReturnType{val};
+        } else {
+          // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
+          // Using a temporary variable ensures that the compiler knows the result is aligned
+          ReturnType tmp;
+          memcpy(&tmp, &intermediate, sizeof(ReturnType));
+          return tmp;
+        }
       }
     }
     // Unreachable return used to silence compiler warnings.
@@ -621,11 +631,23 @@ struct expression_evaluator {
         output_object.template set_value<Element>(row_index, result);
       } else {  // Assumes device_data_reference.reference_type ==
                 // detail::device_data_reference_type::INTERMEDIATE
-        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
-        // Using a temporary variable ensures that the compiler knows the result is aligned.
-        IntermediateDataType<has_nulls> tmp;
-        memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
-        thread_intermediate_storage[device_data_reference.data_index] = tmp;
+        if constexpr (has_nulls) {
+          if (result.has_value()) {
+            std::int64_t rep{};
+            memcpy(&rep, &*result, sizeof(Element));
+            thread_intermediate_storage[device_data_reference.data_index] =
+              IntermediateDataType<has_nulls>{rep};
+          } else {
+            thread_intermediate_storage[device_data_reference.data_index] =
+              IntermediateDataType<has_nulls>{};
+          }
+        } else {
+          // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+          // Using a temporary variable ensures that the compiler knows the result is aligned.
+          IntermediateDataType<has_nulls> tmp;
+          memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
+          thread_intermediate_storage[device_data_reference.data_index] = tmp;
+        }
       }
     }
 
