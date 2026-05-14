@@ -188,12 +188,17 @@ def test_over_mixed_keys(engine) -> None:
 )
 @pytest.mark.parametrize(
     "engine",
-    [{"executor_options": {"max_rows_per_partition": 1}}],
+    [
+        {"executor_options": {"max_rows_per_partition": 1}},
+        {"executor_options": {"max_rows_per_partition": 2}},
+    ],
     indirect=True,
 )
 def test_over_many_partitions(engine, expr) -> None:
-    # max_rows_per_partition=1 forces one chunk per row, exercising the AllGather
-    # (scalar broadcast) and sort-and-split (non-scalar) paths across many partitions.
+    # Small max_rows_per_partition forces many chunks, exercising the AllGather
+    # (scalar broadcast) and sort-and-split (non-scalar) paths across many
+    # partitions. Two values cover both single-row chunks and multi-row chunks
+    # so the within-chunk position sort is also exercised.
     df = pl.LazyFrame(
         {
             "g": [1, 1, 2, 2, 2, 1],
