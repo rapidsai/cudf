@@ -847,7 +847,7 @@ std::
                  column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
-  cudf::detail::cuda_memcpy_async<NodeT>(d_column_tree.node_categories, expected_types, stream);
+  cudf::detail::cuda_memcpy<NodeT>(d_column_tree.node_categories, expected_types, stream);
 
   return {is_pruned, is_mixed_pruned, columns};
 }

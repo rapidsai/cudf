@@ -3419,6 +3419,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column where, for each row {@code i}, all occurrences of
+   * {@code targets[i]} within {@code input[i]} are replaced with {@code repls[i]}.
+   *
+   * Unlike {@link #stringReplace(ColumnView, ColumnView)}, which searches every row for a
+   * shared list of target strings, this method pairs each input row with its own
+   * target/replacement pair.
+   *
+   * The {@code targets} and {@code repls} columns must have the same number of rows as this
+   * column. Output row {@code i} is null if any of {@code input[i]}, {@code targets[i]},
+   * or {@code repls[i]} is null. If {@code targets[i]} is an empty string, {@code input[i]}
+   * is copied unchanged.
+   *
+   * @param targets Per-row strings to search for within each input string.
+   * @param repls Per-row replacement strings used when the corresponding target is found.
+   * @return A new column vector containing the replaced strings.
+   */
+  public final ColumnVector stringReplacePerRow(ColumnView targets, ColumnView repls) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets != null : "targets column may not be null";
+    assert targets.getType().equals(DType.STRING) : "targets column must be a string column";
+    assert repls != null : "repls column may not be null";
+    assert repls.getType().equals(DType.STRING) : "repls column must be a string column";
+    assert targets.getRowCount() == getRowCount() : "targets must have the same number of rows as this column";
+    assert repls.getRowCount() == getRowCount() : "repls must have the same number of rows as this column";
+
+    return new ColumnVector(stringReplacePerRow(getNativeView(), targets.getNativeView(),
+        repls.getNativeView()));
+  }
+
+  /**
    * For each string, replaces any character sequence matching the given pattern using the
    * replacement string scalar.
    *
@@ -4753,6 +4783,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replsCV handle of column containing the strings to replace (can optionally contain a single string).
    */
   private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
+
+  /**
+   * Native method for per-row string replacement.
+   * @param inputCV native handle of the cudf::column_view being operated on.
+   * @param targetsCV handle of column containing the per-row target strings.
+   * @param replsCV handle of column containing the per-row replacement strings.
+   */
+  private static native long stringReplacePerRow(long inputCV, long targetsCV, long replsCV) throws CudfException;
 
   /**
    * Native method for replacing each regular expression pattern match with the specified

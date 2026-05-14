@@ -4,11 +4,11 @@
 from typing import Any
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class Table:
     def __init__(self, column: list[Column]): ...
@@ -18,22 +18,22 @@ class Table:
     def columns(self) -> list[Column]: ...
     def copy(
         self,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Table: ...
     def to_arrow(
         self,
         metadata: list[ColumnMetadata | str] | None = None,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
     def _to_schema(self, metadata: Any = None) -> Any: ...
-    def _to_host_array(self, stream: Stream) -> Any: ...
+    def _to_host_array(self, stream: CudaStreamLike) -> Any: ...
     @staticmethod
     def from_arrow(
         arrow_like: ArrowLike,
         dtype: DataType | None = None,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Table: ...

@@ -13,7 +13,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
@@ -22,6 +22,8 @@ from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
+    OrderKey,
+    OrderScheme,
     Partitioning,
 )
 from rapidsmpf.streaming.cudf.table_chunk import (
@@ -38,9 +40,10 @@ from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -53,7 +56,11 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType, Schema
+    from cudf_polars.typing import Schema
+
+
+InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
+PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
 
 
 @contextlib.contextmanager
@@ -175,40 +182,56 @@ async def shutdown_on_error(
             )
 
 
-def _remap_scheme_select(
-    select: Select, scheme: HashScheme | None | str
-) -> HashScheme | None | str:
-    # We must check if this Select node preserves partitioning
-    # before we return a remapped scheme.
+def _scheme_column_indices(scheme: HashScheme | OrderScheme) -> tuple[int, ...]:
     if isinstance(scheme, HashScheme):
-        # Mapping from old to new names for "col" selection
+        return scheme.column_indices
+    return tuple(k.column_index for k in scheme.keys)
+
+
+def _update_scheme_indices(
+    scheme: HashScheme | OrderScheme, new_indices: tuple[int, ...]
+) -> HashScheme | OrderScheme:
+    if isinstance(scheme, HashScheme):
+        return HashScheme(new_indices, scheme.modulus)
+    return scheme.with_keys(
+        [
+            OrderKey(idx, k.order, k.null_order)
+            for k, idx in zip(scheme.keys, new_indices, strict=False)
+        ]
+    )
+
+
+def _remap_scheme_select(
+    select: Select, scheme: PartitioningScheme
+) -> PartitioningScheme:
+    if isinstance(scheme, (HashScheme, OrderScheme)):
         old_to_new_names = {
             ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
         }
-        old_keys = indices_to_names(scheme.column_indices, select.children[0].schema)
-        if set(old_keys).issubset(set(old_to_new_names)):
-            new_keys = names_to_indices(
-                tuple(old_to_new_names[o] for o in old_keys), select.schema
+        old_key_names = indices_to_names(
+            _scheme_column_indices(scheme), select.children[0].schema
+        )
+        if set(old_key_names).issubset(set(old_to_new_names)):
+            new_indices = names_to_indices(
+                tuple(old_to_new_names[n] for n in old_key_names), select.schema
             )
-            return HashScheme(new_keys, scheme.modulus)
+            return _update_scheme_indices(scheme, new_indices)
         return None
-    elif scheme not in (None, "inherit"):  # pragma: no cover
-        return None  # Guard against new/unsupported scheme types
+    if scheme not in (None, "inherit"):  # pragma: no cover
+        return None  # Guard against future/unsupported scheme types
     return scheme
 
 
 def _remap_scheme_simple(
-    ir: IR, scheme: HashScheme | None | str, child: IR
-) -> HashScheme | None | str:
-    # Called when we know the IR node preserves partitioning.
-    # Just remap to the new schema if possible.
-    if isinstance(scheme, HashScheme):
-        old_keys = indices_to_names(scheme.column_indices, child.schema)
+    ir: IR, scheme: PartitioningScheme, child: IR
+) -> PartitioningScheme:
+    if isinstance(scheme, (HashScheme, OrderScheme)):
+        old_key_names = indices_to_names(_scheme_column_indices(scheme), child.schema)
         try:
-            new_indices = names_to_indices(old_keys, ir.schema)
+            new_indices = names_to_indices(old_key_names, ir.schema)
         except (ValueError, IndexError):
-            return None  # Column missing in child or output schema
-        return HashScheme(new_indices, scheme.modulus)
+            return None
+        return _update_scheme_indices(scheme, new_indices)
     return scheme  # None or "inherit" passes through unchanged
 
 
@@ -659,8 +682,8 @@ class NormalizedPartitioning:
     "inherit" when local layout follows from inter-rank.
     """
 
-    inter_rank_scheme: HashScheme | None
-    local_scheme: HashScheme | None | Literal["inherit"]
+    inter_rank_scheme: InterRankScheme
+    local_scheme: PartitioningScheme
 
     def __bool__(self) -> bool:
         """True when both inter-rank and local schemes are present."""
@@ -675,32 +698,42 @@ class NormalizedPartitioning:
             and self.local_scheme == other.local_scheme
         )
 
-    def is_aligned_with(self, other: NormalizedPartitioning) -> bool:
-        """True when both sides share a compatible hash layout for a chunkwise operation."""
-        if not bool(self) or not bool(other):
-            return False  # Neither side is "properly" partitioned
+    def is_strictly_partitioned(self) -> bool:
+        """True if data is strictly partitioned with no boundary straddling."""
+        if not self:
+            return False
+        for scheme in [self.inter_rank_scheme, self.local_scheme]:
+            if isinstance(scheme, OrderScheme) and not scheme.strict_boundaries:
+                return False
+        return True
 
-        # Check inter-rank alignment
-        lhs_inter = self.inter_rank_scheme
-        rhs_inter = other.inter_rank_scheme
-        if not isinstance(lhs_inter, HashScheme) or not isinstance(
-            rhs_inter, HashScheme
-        ):
-            # TODO: Support OrderScheme when implemented
-            return False  # Not hash partitioned
-        if lhs_inter.modulus != rhs_inter.modulus:
-            return False  # Different moduli
-        if len(lhs_inter.column_indices) != len(rhs_inter.column_indices):
-            return False  # Different key-column counts
+    def is_aligned_with(
+        self, other: NormalizedPartitioning, br: BufferResource
+    ) -> bool:
+        """True when both sides share identical inter-rank and local chunk layouts."""
 
-        # Check local alignment
-        lhs_loc = self.local_scheme
-        rhs_loc = other.local_scheme
-        if isinstance(lhs_loc, HashScheme) and isinstance(rhs_loc, HashScheme):
-            return lhs_loc.modulus == rhs_loc.modulus and len(
-                lhs_loc.column_indices
-            ) == len(rhs_loc.column_indices)
-        return lhs_loc == rhs_loc == "inherit"
+        def _schemes_aligned(
+            lhs: PartitioningScheme,
+            rhs: PartitioningScheme,
+        ) -> bool:
+            if isinstance(lhs, OrderScheme):
+                return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(
+                    rhs, br
+                )
+            elif isinstance(lhs, HashScheme):
+                return (
+                    isinstance(rhs, HashScheme)
+                    and lhs.modulus == rhs.modulus
+                    and len(lhs.column_indices) == len(rhs.column_indices)
+                )
+            return lhs == "inherit" and rhs == "inherit"
+
+        return (
+            self.is_strictly_partitioned()
+            and other.is_strictly_partitioned()
+            and _schemes_aligned(self.inter_rank_scheme, other.inter_rank_scheme)
+            and _schemes_aligned(self.local_scheme, other.local_scheme)
+        )
 
     @classmethod
     def from_keys(
@@ -708,7 +741,7 @@ class NormalizedPartitioning:
         partitioning_metadata: Partitioning | None,
         nranks: int,
         *,
-        indices: tuple[int, ...],
+        keys: Sequence[int | OrderKey],
         allow_subset: bool = True,
     ) -> NormalizedPartitioning:
         """
@@ -720,10 +753,14 @@ class NormalizedPartitioning:
             The channel partitioning metadata.
         nranks
             Number of ranks.
-        indices
-            Key column indices for the operation.
+        keys
+            Key column descriptors. Pass sequence of ``int`` values
+            (column indices) to match by column index only (both
+            ``HashScheme`` and ``OrderScheme``). Pass a sequence of
+            ``OrderKey`` instances to match ``OrderScheme`` with full
+            order/null-order semantics.
         allow_subset
-            If True, the metadata keys may be a prefix of indices.
+            If True, the metadata keys may be a prefix of ``keys``.
 
         Returns
         -------
@@ -731,54 +768,105 @@ class NormalizedPartitioning:
             The resolved inter-rank and local partitioning schemes.
         """
         inter_rank_scheme, local_scheme = NormalizedPartitioning._normalize_schemes(
-            partitioning_metadata, indices, nranks, allow_subset=allow_subset
+            partitioning_metadata,
+            keys,
+            nranks,
+            allow_subset=allow_subset,
         )
         return cls(inter_rank_scheme=inter_rank_scheme, local_scheme=local_scheme)
 
     @staticmethod
     def _normalize_schemes(
         partitioning_metadata: Partitioning | None,
-        key_indices: tuple[int, ...],
+        keys: Sequence[int | OrderKey],
         nranks: int,
         *,
         allow_subset: bool = False,
-    ) -> tuple[HashScheme | None, HashScheme | None | Literal["inherit"]]:
+    ) -> tuple[
+        InterRankScheme,
+        PartitioningScheme,
+    ]:
         """Translate Partitioning metadata into normalized partitioning schemes."""
-        trivial = HashScheme(key_indices, 1) if nranks == 1 else None
+        if not keys:
+            return None, None
+        order_based = isinstance(keys[0], OrderKey)
+        if order_based:
+            if not all(isinstance(k, OrderKey) for k in keys):
+                raise TypeError("keys must be all int or all OrderKey")
+            key_indices: tuple[int, ...] = tuple(
+                k.column_index for k in cast("Sequence[OrderKey]", keys)
+            )
+        else:
+            if not all(isinstance(k, int) for k in keys):
+                raise TypeError("keys must be all int or all OrderKey")
+            key_indices = tuple(keys)
+        # On a single rank, hash queries are trivially partitioned into one bucket.
+        # For order queries, single-rank does not imply sorted — we rely on local
+        # scheme promotion below to handle that case.
+        trivial = (
+            HashScheme(key_indices, 1) if (nranks == 1 and not order_based) else None
+        )
         if partitioning_metadata is None:
             return trivial, None
 
-        def _keys_match(scheme: object) -> bool:
-            if not isinstance(scheme, HashScheme):
-                return False
+        def _hash_keys_match(scheme: HashScheme) -> bool:
             current = scheme.column_indices
             target = key_indices[: len(current)] if allow_subset else key_indices
             return target == current
 
+        def _order_keys_match(scheme: OrderScheme) -> bool:
+            if allow_subset:
+                n = len(scheme.keys)
+                if n > len(key_indices):
+                    return False
+            else:
+                if len(scheme.keys) != len(key_indices):
+                    return False
+                n = len(key_indices)
+            if order_based:
+                return all(ok == k for ok, k in zip(scheme.keys, keys[:n], strict=True))
+            return all(
+                k.column_index == k_idx
+                for k, k_idx in zip(scheme.keys, key_indices[:n], strict=True)
+            )
+
+        def _keys_match(
+            scheme: object,
+        ) -> InterRankScheme:
+            if isinstance(scheme, HashScheme) and _hash_keys_match(scheme):
+                return scheme
+            if isinstance(scheme, OrderScheme) and _order_keys_match(scheme):
+                return scheme
+            return None
+
         inter_rank = partitioning_metadata.inter_rank
-        strict_inter_rank = inter_rank if _keys_match(inter_rank) else None
-        inter_rank_scheme: HashScheme | None = strict_inter_rank or trivial
-        if inter_rank_scheme is None:
+        strict_inter_rank = _keys_match(inter_rank)
+        inter_rank_scheme: InterRankScheme = strict_inter_rank or trivial
+        if inter_rank_scheme is None and nranks > 1:
             # Partitioning is meaningless without inter-rank partitioning
             return None, None
 
         local = partitioning_metadata.local
-        local_scheme: HashScheme | None | Literal["inherit"]
-        if _keys_match(local):
-            assert isinstance(local, HashScheme)
-            local_scheme = local
+        local_scheme: PartitioningScheme
+        matched_local = _keys_match(local)
+        if matched_local is not None:
+            local_scheme = matched_local
         elif local == "inherit":
             local_scheme = "inherit"
         else:
             local_scheme = None
 
-        # Single-rank normalization: When there is no real inter-rank
-        # scheme, local and inter-rank partitioning are equivalent
-        if strict_inter_rank is None and trivial is not None:
+        # Single-rank normalization: when there is no real inter-rank scheme,
+        # local and inter-rank partitioning are equivalent. This applies to both
+        # hash (trivial modulus=1) and order queries (a sorted local scheme is
+        # globally sorted when nranks==1).
+        if strict_inter_rank is None and nranks == 1:
             if local_scheme not in (None, "inherit"):
-                # Translate: (trivial, Scheme) → (Scheme, "inherit")
+                # Translate: (trivial/None, Scheme) → (Scheme, "inherit")
                 return local_scheme, "inherit"
-            return trivial, None
+            if trivial is not None:
+                return trivial, None
+            return None, None
 
         return inter_rank_scheme, local_scheme
 
@@ -863,38 +951,6 @@ def process_children(
     return nodes, channels
 
 
-def _make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
-    """
-    Create an empty (0-row) column, including for nested types.
-
-    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT,
-    so we build those by hand with the correct child structure.
-
-    Parameters
-    ----------
-    dtype
-        The cudf-polars DataType (carries child-type metadata for nested types).
-    stream
-        CUDA stream for any device allocations.
-    """
-    if dtype.id() == plc.TypeId.LIST:
-        offsets = plc.Column.from_scalar(
-            plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
-            1,
-            stream=stream,
-        )
-        child = _make_empty_column(dtype.children[0], stream)
-        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, [offsets, child])
-
-    if dtype.id() == plc.TypeId.STRUCT:
-        children = [
-            _make_empty_column(child_dtype, stream) for child_dtype in dtype.children
-        ]
-        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, children)
-
-    return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
-
-
 def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     """
     Make an empty table chunk.
@@ -912,7 +968,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     -------
     The empty table chunk.
     """
-    empty_columns = [_make_empty_column(dtype, stream) for dtype in ir.schema.values()]
+    empty_columns = [make_empty_column(dtype, stream) for dtype in ir.schema.values()]
     empty_table = plc.Table(empty_columns)
 
     return TableChunk.from_pylibcudf_table(
@@ -962,7 +1018,7 @@ def _is_already_partitioned(
     partitioning = NormalizedPartitioning.from_keys(
         metadata.partitioning,
         nranks,
-        indices=columns_to_hash,
+        keys=columns_to_hash,
         allow_subset=False,
     )
     return (

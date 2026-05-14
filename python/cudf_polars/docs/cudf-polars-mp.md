@@ -132,7 +132,9 @@ When no `memory_resource_config` is provided:
 - **SPMDEngine** uses `rmm.mr.get_current_device_resource()` (the in-process
   default — useful when user code has already configured a resource).
 - **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
-  (workers start in a fresh process with no pre-configured resource).
+  (workers start in a fresh process with no pre-configured resource). The initial
+  pool size is null and the release threshold is set to 90% of the device's
+  memory.
 
 ### Hardware binding
 

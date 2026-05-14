@@ -10,6 +10,7 @@ import dataclasses
 import json
 import os
 import textwrap
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.config import Options
@@ -234,11 +235,6 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
-    unique_fraction
-        Per-column uniqueness estimate (0-1). Defaults to ``1.0``.
-        Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
-        Default: ``{}``.
-        Category: executor.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. The ``spmd``/``ray``/``dask`` engines
@@ -326,14 +322,14 @@ class StreamingOptions:
     broadcast_join_limit: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", int
     )
+    broadcast_limit: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", int
+    )
     target_partition_size: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", int
     )
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
-    )
-    unique_fraction: dict[str, float] | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
     )
     sink_to_directory: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
@@ -376,8 +372,29 @@ class StreamingOptions:
         Only fields that are not :data:`UNSPECIFIED` are included.
         ``StreamingExecutor`` reads ``CUDF_POLARS__EXECUTOR__*`` environment
         variables for any omitted fields.
+
+        ``broadcast_join_limit`` (legacy) is converted to ``broadcast_limit``
+        here: ``broadcast_limit = broadcast_join_limit * target_partition_size``.
+        ``broadcast_join_limit`` is then dropped so it never reaches
+        ``StreamingExecutor``.
         """
-        return _category_opts(self, "executor")
+        opts = _category_opts(self, "executor")
+        bjl = opts.pop("broadcast_join_limit", None)
+        if bjl is not None:
+            # TODO: Remove after nightlies adopt `default_broadcast_limit`
+            warnings.warn(
+                "broadcast_join_limit is deprecated; use broadcast_limit instead. "
+                "broadcast_limit accepts an absolute byte value, whereas "
+                "broadcast_join_limit was a multiplier on target_partition_size."
+                "broadcast_join_limit is now IGNORED when broadcast_limit is set.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if "broadcast_limit" not in opts:
+                target = opts.get("target_partition_size")
+                if target:
+                    opts["broadcast_limit"] = bjl * target
+        return opts
 
     def to_engine_options(self) -> dict[str, Any]:
         """
@@ -513,9 +530,9 @@ class StreamingOptions:
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
             broadcast_join_limit=_get("broadcast_join_limit"),
+            broadcast_limit=_get("broadcast_limit"),
             target_partition_size=target_partition_size,
             dynamic_planning=dynamic_planning,
-            unique_fraction=_get("unique_fraction"),
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
@@ -651,8 +668,8 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__NUM_PY_EXECUTORS.
-                Built-in default: 1."""),
+                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
+                Built-in default: 8."""),
         )
         g.add_argument(
             "--raise-on-fail",
@@ -690,8 +707,17 @@ class StreamingOptions:
             default=None,
             type=int,
             help=textwrap.dedent("""\
-                Maximum number of partitions eligible for broadcast joins.
-                Env: CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT. Built-in default: auto."""),
+                Deprecated. Use --broadcast-limit instead.
+                Env: CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT."""),
+        )
+        g.add_argument(
+            "--broadcast-limit",
+            dest="broadcast_limit",
+            default=None,
+            type=int,
+            help=textwrap.dedent("""\
+                Maximum byte size for broadcast joins. 0 = auto.
+                Env: CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT."""),
         )
         g.add_argument(
             "--target-partition-size",
@@ -710,15 +736,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--unique-fraction",
-            dest="unique_fraction",
-            default=None,
-            type=json.loads,
-            help=textwrap.dedent("""\
-                Per-column uniqueness estimate as a JSON object (e.g. '{"col": 0.5}').
-                Env: CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION. Built-in default: {}."""),
         )
         g.add_argument(
             "--stream-policy",

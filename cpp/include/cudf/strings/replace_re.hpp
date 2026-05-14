@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -53,6 +53,8 @@ std::unique_ptr<column> replace_re(
  * @brief For each string, replaces any character sequence matching the given patterns
  * with the corresponding string in the `replacements` column.
  *
+ * @deprecated in 26.06. To be removed in a future release.
+ *
  * Any null string entries return corresponding null output column entries.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
@@ -65,7 +67,7 @@ std::unique_ptr<column> replace_re(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column
  */
-std::unique_ptr<column> replace_re(
+[[deprecated]] std::unique_ptr<column> replace_re(
   strings_column_view const& input,
   std::vector<std::string> const& patterns,
   strings_column_view const& replacements,
