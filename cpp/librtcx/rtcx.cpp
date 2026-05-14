@@ -1082,14 +1082,8 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       // have already reserved a spot in the cache for this sha
       lock.unlock();
 
-      std::shared_ptr<blob_t> result = nullptr;
-
-      try {
-        result = compile();
-        promise.set_value(result);
-      } catch (...) {
-        promise.set_exception(std::current_exception());
-      }
+      auto result = compile();
+      promise.set_value(result);
 
       cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::BLOB, sha, result->view());
 
@@ -1152,15 +1146,8 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       // have already reserved a spot in the cache for this sha
       lock.unlock();
 
-      std::shared_ptr<library_t> library = nullptr;
-      std::shared_ptr<blob_t> blob       = nullptr;
-
-      try {
-        std::tie(library, blob) = compile();
-        promise.set_value(library);
-      } catch (...) {
-        promise.set_exception(std::current_exception());
-      }
+      auto [library, blob] = compile();
+      promise.set_value(library);
 
       // store result to disk
       cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::LIBRARY, sha, blob->view());
