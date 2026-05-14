@@ -947,7 +947,6 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
-
             if engine is not None:
                 quent_context = engine.config["executor_options"]["quent_context"]
                 engine.config["executor_options"]["quent_context"] = (
@@ -1121,7 +1120,6 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
-
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1155,7 +1153,6 @@ def run_polars_spmd(
         )
         if engine.rank > 0:
             sys.exit(1 if (query_failures or validation_failures) else 0)
-
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
