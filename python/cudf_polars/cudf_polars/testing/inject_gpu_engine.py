@@ -301,12 +301,12 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # Short term adds in the aftermath of the rapidsmpf switch to get CI passing
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async": "Flaky, otherwise TBD",
     "tests/unit/operations/test_join.py::test_join_where_nested_expr_21066": "Flaky, otherwise TBD",
-    "tests/unit/io/test_scan.py::test_scan_metrics[True-parquet]": "Specific to IO metrics on Polars CPU",
-    "tests/unit/io/test_scan.py::test_scan_metrics[True-csv]": "Specific to IO metrics on Polars CPU",
-    "tests/unit/io/test_scan.py::test_scan_metrics[True-ndjson]": "Specific to IO metrics on Polars CPU",
-    "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Specific to IO metrics on Polars CPU",
-    "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Specific to IO metrics on Polars CPU",
-    "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Specific to IO metrics on Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-ndjson]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
 }
 
 
