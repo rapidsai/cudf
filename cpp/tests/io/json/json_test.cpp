@@ -1605,7 +1605,7 @@ TEST_F(JsonReaderTest, TestColumnOrder)
   // Verify root column order before accessing schema entries.
   ASSERT_EQ(new_reader_table.metadata.schema_info.size(), root_col_names.size());
 
-  for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
+  for (std::size_t i = 0; i < root_col_names.size(); i++) {
     auto const& root_col_name = root_col_names[i];
     EXPECT_EQ(new_reader_table.metadata.schema_info[i].name, root_col_name);
   }

@@ -609,6 +609,8 @@ struct PdaSymbolToSymbolGroupId {
     // escape, comma, colon or whitespace characters.
     auto constexpr newline    = '\n';
     auto constexpr whitespace = ' ';
+    // Cast to unsigned char first so high-bit bytes (>= 0x80) are not sign-extended to negative
+    // int32_t values, which would underflow the min() clamp used as the lookup index.
     auto const symbol_position =
       symbol == delimiter
         ? static_cast<int32_t>(newline)

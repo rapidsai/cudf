@@ -1359,7 +1359,6 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
   }
 }
 
-// Parses string values that contain non-ASCII bytes (>= 0x80).
 TEST_F(JsonTest, StringContainingNonAsciiBytes)
 {
   for (int b : {0x80, 0xA0, 0xC3, 0xE2, 0xF0, 0xFF}) {
@@ -1422,7 +1421,7 @@ TEST_F(JsonTest, RejectsUnquotedValuesWithInvalidLeadingChar)
 }
 
 // Rejects JSON inputs whose nesting depth exceeds the supported maximum.
-TEST_F(JsonTest, DeeplyNestedInput)
+TEST_F(JsonTest, NestedInputAboveDepthLimit)
 {
   std::size_t const depth = std::numeric_limits<int8_t>::max() + std::size_t{1};
   std::string s(depth, '[');
@@ -1434,8 +1433,8 @@ TEST_F(JsonTest, DeeplyNestedInput)
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
 }
 
-// Accepts JSON inputs at the maximum supported nesting depth minus one.
-TEST_F(JsonTest, NestedInputBelowDepthLimit)
+// Accepts JSON inputs at the maximum supported nesting depth.
+TEST_F(JsonTest, NestedInputAtDepthLimit)
 {
   std::size_t const depth = std::numeric_limits<int8_t>::max();
   std::string s(depth, '[');
