@@ -98,7 +98,7 @@ def evaluate_pipeline_spmd_mode(
     collect_metadata
         Whether to collect runtime metadata.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------

@@ -440,7 +440,7 @@ def execute_ir_on_rank(
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
@@ -660,7 +660,7 @@ def evaluate_on_rank(
     local_quent_context
         The local Quent context for this rank.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
