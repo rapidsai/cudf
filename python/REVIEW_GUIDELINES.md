@@ -59,6 +59,7 @@
 ### pylibcudf (Cython Bindings)
 - Incorrect Cython object lifetime management
 - Exceptions not handled correctly across Python/C++ boundary (missing `+libcudf_exception_handler` if not `noexcept`)
+- Cython binding of a C++ function declaring `noexcept` when the C++ function can raise exceptions
 - Incorrect GIL handling for CUDA operations
 - Cython bindings not matching the C++ API
 - Using pylibcudf or Polars APIs that require pyarrow (like `to_arrow`) when cudf_polars containers should be used instead
