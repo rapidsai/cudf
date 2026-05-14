@@ -254,60 +254,6 @@ TEST_F(ExtractVariantFieldTest, ApacheObjectEmpty)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-namespace {
-
-// INT32 primitive blob: header 0x14, little-endian 4-byte payload.
-inline std::vector<uint8_t> enc_int32(int32_t v)
-{
-  auto const u = static_cast<uint32_t>(v);
-  return {0x14,
-          static_cast<uint8_t>(u & 0xff),
-          static_cast<uint8_t>((u >> 8) & 0xff),
-          static_cast<uint8_t>((u >> 16) & 0xff),
-          static_cast<uint8_t>((u >> 24) & 0xff)};
-}
-
-// Short-string primitive blob. Supports length < 64 (single-byte header).
-inline std::vector<uint8_t> enc_short_string(std::string_view s)
-{
-  std::vector<uint8_t> out{static_cast<uint8_t>(0x01 | (s.size() << 2))};
-  out.insert(out.end(), s.begin(), s.end());
-  return out;
-}
-
-// Build a single-field object value wrapping `inner` under field id `fid`.
-// field_off_size=1, field_id_size=1, is_large=false; inner.size() must be < 256.
-inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
-                                                      std::vector<uint8_t> const& inner)
-{
-  // Header, num_elements, field_id, offset 0, sentinel = inner.size().
-  std::vector<uint8_t> out{0x02, 0x01, fid, 0x00, static_cast<uint8_t>(inner.size())};
-  out.insert(out.end(), inner.begin(), inner.end());
-  return out;
-}
-
-// Build a metadata blob (version 1, offset_size=1) for the given ordered string dictionary.
-// Caller is responsible for sorting keys lexicographically if strict Variant compliance is wanted.
-inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
-{
-  std::vector<uint8_t> out{0x01, static_cast<uint8_t>(keys.size())};
-
-  std::vector<uint8_t> offs{0x00};
-  uint8_t running = 0;
-  for (auto const& k : keys) {
-    running = static_cast<uint8_t>(running + k.size());
-    offs.push_back(running);
-  }
-  out.insert(out.end(), offs.begin(), offs.end());
-
-  for (auto const& k : keys) {
-    out.insert(out.end(), k.begin(), k.end());
-  }
-  return out;
-}
-
-}  // namespace
-
 TEST_F(ExtractVariantFieldTest, ApacheObjectNestedChainedCalls)
 {
   auto col    = make_apache_variant(afv::object_nested);
@@ -340,14 +286,13 @@ TEST_F(ExtractVariantFieldTest, ApacheObjectNestedMissingIntermediate)
 
 TEST_F(ExtractVariantFieldTest, NestedPathNonObjectIntermediate)
 {
-  // Dict = {a, b}; value = { a: INT32(5), b: "hi" }. Descending into "a" fails because it is
-  // a primitive, not an object.
+  // Dict = {a, b}; value = { a: INT32(5), b: "hi" }
   std::vector<uint8_t> const metab = {0x01, 0x02, 0x00, 0x01, 0x02, 'a', 'b'};
   std::vector<uint8_t> const valb  = {
     0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x05, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
 
   auto struc = wrap_single_variant(metab, valb);
-
+  // Descending into "a" fails because it is a primitive, not an object.
   auto got = cudf::io::parquet::experimental::extract_variant_field(
     struc, "$.a.b", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
@@ -360,27 +305,79 @@ TEST_F(ExtractVariantFieldTest, BareNameEqualsDollarPath)
   auto struc  = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
 
-  // "x" and "$.x" must be equivalent single-step paths.
   auto bare   = cudf::io::parquet::experimental::get_variant_field(struc, "x", stream);
   auto dollar = cudf::io::parquet::experimental::get_variant_field(struc, "$.x", stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *dollar);
 }
 
+namespace {
+
+// INT32 primitive blob: header 0x14, little-endian 4-byte payload.
+inline std::vector<uint8_t> enc_int32(int32_t v)
+{
+  auto const u = static_cast<uint32_t>(v);
+  return {0x14,
+          static_cast<uint8_t>(u & 0xff),
+          static_cast<uint8_t>((u >> 8) & 0xff),
+          static_cast<uint8_t>((u >> 16) & 0xff),
+          static_cast<uint8_t>((u >> 24) & 0xff)};
+}
+
+// Short-string primitive blob (single-byte header).
+inline std::vector<uint8_t> enc_short_string(std::string_view s)
+{
+  CUDF_EXPECTS(s.size() < 64, "short-string length must fit in 6 bits of the single-byte header");
+  std::vector<uint8_t> out{static_cast<uint8_t>(0x01 | (s.size() << 2))};
+  out.insert(out.end(), s.begin(), s.end());
+  return out;
+}
+
+// Build a single-field object value wrapping `inner` under field id `fid`.
+// field_off_size=1, field_id_size=1, is_large=false.
+inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
+                                                      std::vector<uint8_t> const& inner)
+{
+  CUDF_EXPECTS(inner.size() < 256, "inner blob too large for 1-byte offset header");
+  // Header, num_elements, field_id, offset 0, sentinel = inner.size().
+  std::vector<uint8_t> out{0x02, 0x01, fid, 0x00, static_cast<uint8_t>(inner.size())};
+  out.insert(out.end(), inner.begin(), inner.end());
+  return out;
+}
+
+// Build a metadata blob (version 1, offset_size=1) for the given ordered string dictionary.
+inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
+{
+  std::vector<uint8_t> out{0x01, static_cast<uint8_t>(keys.size())};
+
+  std::vector<uint8_t> offs{0x00};
+  uint8_t running = 0;
+  for (auto const& k : keys) {
+    running = static_cast<uint8_t>(running + k.size());
+    offs.push_back(running);
+  }
+  out.insert(out.end(), offs.begin(), offs.end());
+
+  for (auto const& k : keys) {
+    out.insert(out.end(), k.begin(), k.end());
+  }
+  return out;
+}
+
+}  // namespace
+
 TEST_F(ExtractVariantFieldTest, NestedPathMultiRowMixedNulls)
 {
-  // Row 0: { a: { b: INT32(1) } } -> path {"a","b"} = 1
-  std::vector<uint8_t> const m0 = {0x01, 0x02, 0x00, 0x01, 0x02, 'a', 'b'};
-  std::vector<uint8_t> const v0 = {
-    0x02, 0x01, 0x00, 0x00, 0x0a, 0x02, 0x01, 0x01, 0x00, 0x05, 0x14, 0x01, 0x00, 0x00, 0x00};
-
-  // Row 1: { a: INT32(5) } -> non-object intermediate -> null
-  std::vector<uint8_t> const m1 = {0x01, 0x01, 0x00, 0x01, 'a'};
-  std::vector<uint8_t> const v1 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x05, 0x00, 0x00, 0x00};
-
+  // Row 0: { a: { b: INT32(1) } } -> path "$.a.b" = 1
+  auto const m0 = build_metadata({"a", "b"});
+  auto const v0 =
+    build_single_field_object(/*fid=a*/ 0, build_single_field_object(/*fid=b*/ 1, enc_int32(1)));
+  // Row 1: { a: INT32(5) } -> non-object intermediate at "a" -> null
+  auto const m1 = build_metadata({"a"});
+  auto const v1 = build_single_field_object(/*fid=a*/ 0, enc_int32(5));
   // Row 2: { q: INT32(7) } -> key "a" missing from dict -> null
-  std::vector<uint8_t> const m2 = {0x01, 0x01, 0x00, 0x01, 'q'};
-  std::vector<uint8_t> const v2 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
+  auto const m2 = build_metadata({"q"});
+  auto const v2 = build_single_field_object(/*fid=q*/ 0, enc_int32(7));
 
   cudf::test::lists_column_wrapper<uint8_t> meta{
     {m0.begin(), m0.end()}, {m1.begin(), m1.end()}, {m2.begin(), m2.end()}};
@@ -394,10 +391,6 @@ TEST_F(ExtractVariantFieldTest, NestedPathMultiRowMixedNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0, 0}, {true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
-
-// ---------------------------------------------------------------------------
-// Path-string / parser tests (exercised through the public API)
-// ---------------------------------------------------------------------------
 
 TEST_F(ExtractVariantFieldTest, EmptyPathRejected)
 {
@@ -419,7 +412,7 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
   auto struc  = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
   // Only object-key descent is supported — array indexing, bracket steps, and quoted keys should
-  // throw, alongside obviously malformed paths.
+  // throw, alongside malformed paths.
   for (auto const* bad :
        {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.a.1bad", "$.", "$.'q'", "$['x']", "$.a[*]"}) {
     EXPECT_THROW(
