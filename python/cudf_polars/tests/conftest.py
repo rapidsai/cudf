@@ -66,7 +66,14 @@ def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
 
 @pytest.fixture(scope="session")
 def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
-    """Decoded engine variant selected by pytest parametrization."""
+    """Decoded engine variant selected by pytest parametrization.
+
+    :func:`pytest_generate_tests` inspects all tests and then filters those
+    with ``_engine_param`` in their fixture list according to the public
+    engine fixture being used. For example, if a given test requests the
+    :func:`spmd_engine` fixture then its underlying ``_engine_param`` is
+    rebound to only loop over spmd engines for that test.
+    """
     return EngineFixtureParam(full_name=request.param)
 
 
@@ -74,6 +81,29 @@ def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 def _unconfigured_engine(
     _engine_param: EngineFixtureParam,
 ) -> Generator[tuple[pl.GPUEngine, StreamingOptions | None], None, None]:
+    """
+    Fixture generating an engine resource and options to apply before use.
+
+    Parameters
+    ----------
+    _engine_param
+        The parameterisation of the engine
+
+    Returns
+    -------
+    tuple
+        Of an engine and options to apply to the engine to configure it (or
+        None if no configuration is needed).
+
+    Notes
+    -----
+    This session-scoped fixture keeps the heavy state of an engine alive
+    for the lifetime of its use, shutting it down once the particular
+    engine is not required any more. Tests should not use this fixture
+    directly, but rather one of the parameterised "public" engine fixtures.
+    Those take care of applying the configuration to the base engine each
+    time it is used in a test.
+    """
     if _engine_param.engine_name == "in-memory":
         yield pl.GPUEngine(executor="in-memory", raise_on_fail=True), None
     else:
@@ -269,36 +299,33 @@ def pytest_configure(config):
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
 
 
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc: pytest.Metafunc):
     """Parametrize the shared engine fixture without cartesian products."""
-    if "_engine_param" not in metafunc.fixturenames:
+    fixtures = set(metafunc.fixturenames)
+    if "_engine_param" not in fixtures:
         return
 
-    if (
-        "spmd_engine" in metafunc.fixturenames
-        or "spmd_engine_factory" in metafunc.fixturenames
-    ):
-        params = ["spmd"]
-    elif (
-        "streaming_engine" in metafunc.fixturenames
-        or "streaming_engine_factory" in metafunc.fixturenames
-    ):
-        params = STREAMING_ENGINE_FIXTURE_PARAMS
-    elif "engine" in metafunc.fixturenames:
-        params = ALL_ENGINE_FIXTURE_PARAMS
+    if "spmd_engine" in fixtures or "spmd_engine_factory" in fixtures:
+        engines = ["spmd"]
+    elif "streaming_engine" in fixtures or "streaming_engine_factory" in fixtures:
+        engines = STREAMING_ENGINE_FIXTURE_PARAMS
+    elif "engine" in fixtures:
+        engines = ALL_ENGINE_FIXTURE_PARAMS
     else:
-        params = STREAMING_ENGINE_FIXTURE_PARAMS
+        raise AssertionError("Unknown engine fixture")
 
     metafunc.parametrize(
         "_engine_param",
-        params,
+        engines,
         indirect=True,
-        ids=params,
+        ids=engines,
         scope="session",
     )
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(
+    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
+):
     """Apply ``skip_on_streaming_engine`` markers to streaming engine items."""
     for item in items:
         marker = item.get_closest_marker("skip_on_streaming_engine")

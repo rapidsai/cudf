@@ -149,7 +149,7 @@ def merge_streaming_options(
     base: StreamingOptions, overrides: StreamingOptions
 ) -> StreamingOptions:
     """
-    Merge override options into a some base streaming options.
+    Merge override options into the base streaming options.
 
     Parameters
     ----------
