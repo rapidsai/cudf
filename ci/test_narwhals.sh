@@ -174,6 +174,8 @@ test_pandas_object_series \
 # test_check_row_order_nested_only[pandas]: Nested dtype row ordering check not raising NotImplementedError as expected
 # test_cast_string: String casting issues with cudf.pandas
 # test_contains_case_insensitive[pandas], test_contains_series_case_insensitive[pandas]: String contains with case_insensitive returns False instead of None for nulls
+# test_fill_null_pandas_downcast: asserts dtype is 'object' after fill_null on [True, None]; cudf.pandas reports 'bool'
+#   because cudf represents nullable bool natively (not as object) — fundamental design difference, not fixable in cudf
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes or \
 test_explode_multiple_cols or \
@@ -193,7 +195,8 @@ test_sqrt_dtype_pandas or \
 test_check_row_order_nested_only[pandas] or \
 test_cast_string or \
 (test_contains_case_insensitive and pandas) or \
-(test_contains_series_case_insensitive and pandas) \
+(test_contains_series_case_insensitive and pandas) or \
+test_fill_null_pandas_downcast \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \

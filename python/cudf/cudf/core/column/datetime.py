@@ -1075,6 +1075,24 @@ class DatetimeTZColumn(DatetimeColumn):
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)
 
+    def strftime(self, format: str, dtype: DtypeObj) -> StringColumn:
+        if len(self) == 0:
+            return super().strftime(format, dtype)
+        if re.search(r"(?<!%)%[zZ]", format):
+            # The cudf strftime kernel operates on raw timestamps and has no
+            # knowledge of the column's timezone, so it would format ``%z`` as
+            # ``+0000`` and ``%Z`` as ``UTC``. Materialize through pandas to
+            # get correct local times with timezone designators. This is the
+            # slow path but it matches pandas semantics including DST.
+            pd_result = self.to_pandas().strftime(format)
+            return cast(
+                "StringColumn",
+                as_column(pd_result, dtype=dtype),
+            )
+        # No tz designator in the format; formatting on the local-time view
+        # (wall-clock, tz-naive) produces the right answer.
+        return self._local_time.strftime(format, dtype)
+
     def as_datetime_column(
         self, dtype: pd.ArrowDtype | pd.DatetimeTZDtype
     ) -> DatetimeColumn:

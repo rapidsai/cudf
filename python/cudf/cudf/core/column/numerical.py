@@ -561,7 +561,14 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
             and not is_pandas_nullable_extension_dtype(self.dtype)
+            and self.dtype.kind != "b"
         ):
+            # For numeric dtypes, pandas converts nulls to NaN and the
+            # comparison follows NumPy semantics (NaN == anything is False,
+            # NaN != anything is True). Fill so we match that. Bool dtype
+            # is excluded: a nullable cudf bool column maps to pandas'
+            # ``boolean`` extension dtype, which preserves nulls in
+            # comparisons.
             res = res.fillna(op == "__ne__")
         return res
 
