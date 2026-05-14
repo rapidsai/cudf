@@ -406,7 +406,7 @@ TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
     auto result = left_semi_join(
       nonempty_table, empty_right_table, {0}, {}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_left_table, expected_indices_col);
+    auto expected             = cudf::gather(nonempty_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
   // Empty left table
