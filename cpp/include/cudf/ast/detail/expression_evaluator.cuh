@@ -305,13 +305,27 @@ struct expression_evaluator {
       }
     } else {  // Assumes input_reference.reference_type ==
               // detail::device_data_reference_type::INTERMEDIATE
-      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
-      // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
         thread_intermediate_storage[input_reference.data_index];
-      ReturnType tmp;
-      memcpy(&tmp, &intermediate, sizeof(ReturnType));
-      return tmp;
+      if constexpr (cudf::is_fixed_point<Element>()) {
+        using rep        = typename Element::rep;
+        auto const scale = numeric::scale_type{input_reference.data_type.scale()};
+        if constexpr (has_nulls) {
+          if (!intermediate.has_value()) { return ReturnType{}; }
+          return ReturnType{
+            Element{numeric::scaled_integer<rep>{static_cast<rep>(*intermediate), scale}}};
+        } else {
+          rep rep_val;
+          memcpy(&rep_val, &intermediate, sizeof(rep));
+          return ReturnType{numeric::scaled_integer<rep>{rep_val, scale}};
+        }
+      } else {
+        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
+        // Using a temporary variable ensures that the compiler knows the result is aligned
+        ReturnType tmp;
+        memcpy(&tmp, &intermediate, sizeof(ReturnType));
+        return tmp;
+      }
     }
     // Unreachable return used to silence compiler warnings.
     return {};

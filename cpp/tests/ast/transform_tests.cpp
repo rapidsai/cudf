@@ -11,6 +11,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -1389,6 +1390,36 @@ TYPED_TEST(TransformTest, NonDefaultStream)
   stream.synchronize();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, LessConsumesMulOfDecimals)
+{
+  auto const scale = numeric::scale_type{-2};
+  // Values at scale=-2:  col_a in {1, 2, 5, 10, 25, 50}.00,
+  // col_thresh = 0.20, col_avg = 25.00.  Expected: col_a < 5.00 → [1,1,0,0,0,0].
+  auto col_a =
+    cudf::test::fixed_point_column_wrapper<int64_t>({100, 200, 500, 1000, 2500, 5000}, scale);
+  auto col_thresh =
+    cudf::test::fixed_point_column_wrapper<int64_t>({20, 20, 20, 20, 20, 20}, scale);
+  auto col_avg =
+    cudf::test::fixed_point_column_wrapper<int64_t>({2500, 2500, 2500, 2500, 2500, 2500}, scale);
+  auto table = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  // Path 1: single fused AST -- col_a < (col_thresh * col_avg)
+  auto ra         = cudf::ast::column_reference(0);
+  auto rt         = cudf::ast::column_reference(1);
+  auto rv         = cudf::ast::column_reference(2);
+  auto mul        = cudf::ast::operation(cudf::ast::ast_operator::MUL, rt, rv);
+  auto lt         = cudf::ast::operation(cudf::ast::ast_operator::LESS, ra, mul);
+  auto ast_result = cudf::compute_column(table, lt);
+
+  // Path 2: chained binary_operation, no AST intermediate
+  auto tmp = cudf::binary_operation(
+    col_thresh, col_avg, cudf::binary_operator::MUL, cudf::data_type{cudf::type_id::DECIMAL64, -4});
+  auto ref_result = cudf::binary_operation(
+    col_a, tmp->view(), cudf::binary_operator::LESS, cudf::data_type{cudf::type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(ast_result->view(), ref_result->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
