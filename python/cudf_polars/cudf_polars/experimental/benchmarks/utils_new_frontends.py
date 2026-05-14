@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pprint
+import shlex
 import sys
 import textwrap
 import time
@@ -429,6 +430,7 @@ class RunConfig:
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
+    command_line: str
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.io_mode == "hot" and self.iterations < 2:
@@ -542,6 +544,7 @@ class RunConfig:
             duckdb_threads=args.duckdb_threads,
             duckdb_memory_limit=args.duckdb_memory_limit,
             duckdb_temp_dir=args.duckdb_temp_dir,
+            command_line=shlex.join(sys.argv),
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -566,6 +569,7 @@ class RunConfig:
             "extra_info": self.extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
+            "command_line": self.command_line,
             "streaming_options": {
                 "rapidsmpf": opts.to_rapidsmpf_options().get_strings(),
                 "executor": opts.to_executor_options(),
