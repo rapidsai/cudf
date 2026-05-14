@@ -77,6 +77,10 @@ if [[ "$BUILD_TYPE" == "nightly" && -z "$NIGHTLY_DATE" ]]; then
   exit 1
 fi
 
+if [[ "$LOCAL_BUILD" -eq 1 ]]; then
+  : "${RAPIDS_CONDA_BLD_OUTPUT_DIR:?Error: set RAPIDS_CONDA_BLD_OUTPUT_DIR in the host env when using --local-build}"
+fi
+
 # --- Step 1: Checkout ---
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo ">>> Dry-run: skipping checkout / tag fetch / ci script patch."
@@ -91,6 +95,10 @@ else
 
   # --- Step 2: Prepare local-build sed patch if requested ---
   if [[ "$LOCAL_BUILD" -eq 1 ]]; then
+    if ! git diff --quiet -- ci/*.sh; then
+      echo "Error: uncommitted changes detected in ci/*.sh. Stash or commit them before using --local-build (the script rewrites these files in place)." >&2
+      exit 1
+    fi
     echo ">>> Patching ci/*.sh to use local conda build output (auto-reverted on exit)..."
     trap 'echo ">>> Reverting ci/*.sh patches..."; git checkout -- ci/*.sh 2>/dev/null || true' EXIT
     sed -ri '/rapids-download-conda-from-github/ s|^([[:space:]]*[A-Z_]*CHANNEL)=.*|\1=${RAPIDS_CONDA_BLD_OUTPUT_DIR}|' ci/*.sh
@@ -124,6 +132,7 @@ docker_cmd+=(
 
 [[ -n "$TOKEN" ]]        && docker_cmd+=(--env "GH_TOKEN=$TOKEN")
 [[ -n "$NIGHTLY_DATE" ]] && docker_cmd+=(--env "RAPIDS_NIGHTLY_DATE=$NIGHTLY_DATE")
+[[ "$LOCAL_BUILD" -eq 1 ]] && docker_cmd+=(--env "RAPIDS_CONDA_BLD_OUTPUT_DIR=$RAPIDS_CONDA_BLD_OUTPUT_DIR")
 
 docker_cmd+=("$IMAGE" bash -c "$SCRIPT_CMD")
 
