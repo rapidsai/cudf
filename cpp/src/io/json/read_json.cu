@@ -5,12 +5,12 @@
 
 #include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
-#include "io/utilities/getenv_or.hpp"
 #include "read_json.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -43,8 +43,8 @@ namespace pools {
 
 BS::thread_pool& tpool()
 {
-  static std::size_t pool_size =
-    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", std::thread::hardware_concurrency());
+  static std::size_t pool_size = cudf::detail::getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS",
+                                                         std::thread::hardware_concurrency());
   static BS::thread_pool _tpool(pool_size);
   return _tpool;
 }
@@ -173,7 +173,8 @@ std::size_t get_batch_size(std::size_t chunk_size)
   auto const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
   auto const batch_limit       = static_cast<std::size_t>(std::numeric_limits<int32_t>::max()) -
                            (max_subchunks_prealloced * size_per_subchunk);
-  return std::min(batch_limit, getenv_or<std::size_t>("LIBCUDF_JSON_BATCH_SIZE", batch_limit));
+  return std::min(batch_limit,
+                  cudf::detail::getenv_or<std::size_t>("LIBCUDF_JSON_BATCH_SIZE", batch_limit));
 }
 
 /**
@@ -278,6 +279,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     return std::make_pair(datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf)),
                           std::nullopt);
   } else if (!should_load_till_last_source) {
+    // Pulled out of the post-loop block below so we can also use it as an upper bound on the
+    // reallocate-and-retry buffer growth (see safeguard inside the loop).
+    auto const batch_size = cudf::detail::getenv_or<std::size_t>(
+      "LIBCUDF_JSON_BATCH_SIZE", static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
+
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
@@ -310,6 +316,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
           buffer_size = std::min(total_source_size,
                                  buffer_size + num_subchunks_prealloced * size_per_subchunk) +
                         num_extra_delimiters;
+          // Bail out before resizing the GPU buffer if the new buffer would extend the bytes read
+          // past the end of the original byte range by more than the batch size limit
+          auto const trailing_bytes = buffer_size - chunk_size - num_extra_delimiters;
+          CUDF_EXPECTS(trailing_bytes < batch_size,
+                       "A single JSON line cannot be larger than the batch size limit");
           buffer.resize(buffer_size, stream);
           bufspan = device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size());
         }
@@ -324,8 +335,6 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     // lines.
     // As long as the size of no record exceeds the batch size limit placed, we are guaranteed that
     // the returned buffer(s) will be below the batch limit.
-    auto const batch_size = getenv_or<std::size_t>(
-      "LIBCUDF_JSON_BATCH_SIZE", static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
     if (static_cast<std::size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
         batch_size) {
       auto buffer_data = buffer.data();

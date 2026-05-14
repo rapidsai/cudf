@@ -602,7 +602,7 @@ class RunConfig:
                 print(f"native_parquet: {self.native_parquet}")
                 print(f"n_workers: {self.n_workers}")
                 print(f"target_partition_size: {opts.get('target_partition_size')}")
-                print(f"broadcast_join_limit: {opts.get('broadcast_join_limit')}")
+                print(f"broadcast_limit: {opts.get('broadcast_limit')}")
                 print(f"dynamic_planning: {opts.get('dynamic_planning', 'default')}")
             valid_durations = [
                 record.duration for record in records if record.status == "success"
@@ -1752,15 +1752,15 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-io-threads",
-        default=2,
+        default=4,
         type=int,
-        help="Maximum number of IO threads for rapidsmpf runtime.",
+        help="Sets cudf_polars.utils.config.StreamingExecutor.max_io_threads.",
     )
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use C++ read_parquet nodes.",
+        default=False,
+        help="Sets cudf_polars.utils.config.ParquetOptions.use_rapidsmpf_native.",
     )
     parser.add_argument(
         "-o",
