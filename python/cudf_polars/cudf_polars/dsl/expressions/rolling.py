@@ -471,48 +471,37 @@ class GroupedWindow(Expr):
         requests: list[plc.groupby.GroupByRequest] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
-        evaluated = [
-            ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME)
-            for ne in cum_named
-        ]
-        is_scalar = [c.obj.size() <= 1 for c in evaluated]
-        evaluated = broadcast(*evaluated, target_length=df.num_rows, stream=df.stream)
+
+        # Instead of calling self._gather_columns, let's call plc.copying.gather directly
+        # since we need plc.Column objects, not cudf_polars Column objects
         if order_index is not None:
+            plc_cols = [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]
             val_cols = plc.copying.gather(
-                plc.Table([c.obj for c in evaluated]),
+                plc.Table(plc_cols),
                 order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 stream=df.stream,
             ).columns()
         else:
-            val_cols = [c.obj for c in evaluated]
+            val_cols = [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]
+        agg = plc.aggregation.sum()
 
-        scan_requests: list[tuple[int, plc.Column]] = []
-        for i, (is_slr, ne, val_col) in enumerate(
-            zip(is_scalar, cum_named, val_cols, strict=True)
-        ):
+        for ne, val_col in zip(cum_named, val_cols, strict=True):
+            requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
             out_names.append(ne.name)
             out_dtypes.append(ne.value.dtype)
-            if not is_slr:
-                scan_requests.append((i, val_col))
 
-        result_tables: list[plc.Table] = [plc.Table([c]) for c in val_cols]
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, tables = local_grouper.scan(requests)
 
-        if scan_requests:
-            agg = plc.aggregation.sum()
-            requests.extend(
-                plc.groupby.GroupByRequest(val_col, [agg])
-                for _, val_col in scan_requests
-            )
-
-            local_grouper = op.local_grouper
-            assert isinstance(local_grouper, plc.groupby.GroupBy)
-            _, scan_tables = local_grouper.scan(requests, stream=df.stream)
-
-            for (idx, _), tbl in zip(scan_requests, scan_tables, strict=True):
-                result_tables[idx] = tbl
-
-        return out_names, out_dtypes, result_tables
+        return out_names, out_dtypes, tables
 
     def _reorder_to_input(
         self,
