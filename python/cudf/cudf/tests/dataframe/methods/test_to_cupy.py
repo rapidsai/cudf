@@ -147,3 +147,51 @@ def test_to_array_categorical(method, value, constructor):
         getattr(cudf, constructor)(data, dtype="category"), method
     )()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["to_cupy", "to_numpy"])
+@pytest.mark.parametrize(
+    "source,out_dtype",
+    [
+        (cudf.Series(["1", "2", "3"]), "float32"),
+        (cudf.Series(["1", "2", "3"]), "int64"),
+        (
+            cudf.Series(["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"),
+            "int64",
+        ),
+        (cudf.Series([True, False, True]), "int32"),
+        (cudf.Series([1, 2, 3], dtype="int32"), "float64"),
+    ],
+)
+def test_to_array_dtype_matches_astype(method, source, out_dtype):
+    expected = getattr(source.astype(out_dtype), method)()
+    result = getattr(source, method)(dtype=out_dtype)
+    assert str(result.dtype) == out_dtype
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("constructor", ["DataFrame", "Series"])
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        ([1, 2, 3], "int64"),
+        ([1.5, 2.5, 3.5], "float64"),
+        ([True, False, True], "bool"),
+    ],
+)
+def test_to_numpy_object_dtype_boxes_values(constructor, data, dtype):
+    # requesting dtype=object from to_numpy should box the
+    # native Python values, matching pandas — not stringify them (which
+    # would happen if we routed through cudf.dtype(object), the
+    # string dtype).
+    pd_obj = getattr(pd, constructor)(data, dtype=dtype)
+    cudf_obj = getattr(cudf, constructor)(data, dtype=dtype)
+
+    expected = pd_obj.to_numpy(dtype=object)
+    result = cudf_obj.to_numpy(dtype=object)
+
+    assert result.dtype == np.dtype("O")
+    assert_eq(result, expected)
+    # Ensure boxed values are real Python scalars, not strings.
+    for value in result.flat:
+        assert not isinstance(value, str)

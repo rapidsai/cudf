@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     import uuid
@@ -102,12 +103,15 @@ class ClusterInfo:
         Value of ``CUDA_VISIBLE_DEVICES``, or ``None`` if unset.
     gpu_uuid
         UUID of the current CUDA device.
+    device_memory
+        Total device memory in bytes, or ``None`` if unknown.
     """
 
     pid: int
     hostname: str
     cuda_visible_devices: str | None
     gpu_uuid: str
+    device_memory: int | None = None
 
     @classmethod
     def local(cls) -> ClusterInfo:
@@ -123,6 +127,7 @@ class ClusterInfo:
             hostname=socket.gethostname(),
             cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
             gpu_uuid=cuda.core.Device().uuid,
+            device_memory=get_total_device_memory(),
         )
 
 
@@ -178,6 +183,16 @@ class StreamingEngine(pl.GPUEngine):
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
+
+        # Gather `min_device_size` from the cluster
+        cluster_infos: list[ClusterInfo] = self.gather_cluster_info()
+        device_memories = [info.device_memory for info in cluster_infos]
+        executor_options["min_device_size"] = (
+            None
+            if any(dm is None for dm in device_memories)
+            else min(device_memories, default=None)
+        )
+
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
         # accept it.
         engine_options = dict(engine_options)
@@ -188,7 +203,7 @@ class StreamingEngine(pl.GPUEngine):
             **engine_options,
         )
         if nranks > 1 and not allow_gpu_sharing:
-            uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
+            uuids = [info.gpu_uuid for info in cluster_infos]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
                     "Multiple ranks share the same GPU (UUID collision detected). "
@@ -386,9 +401,8 @@ def execute_ir_on_rank(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     *,
-    collect_metadata: bool = False,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
 
@@ -414,8 +428,6 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
-    collect_metadata
-        Whether to collect channel metadata during execution.
     query_id
         Unique identifier for the query, propagated into actor traces.
 
@@ -424,13 +436,12 @@ def execute_ir_on_rank(
     result
         This rank's output fragment as a Polars DataFrame.
     metadata
-        Collected channel metadata if ``collect_metadata`` is ``True``,
-        otherwise ``None``.
+        Collected channel metadata.
     """
     ir_context = IRExecutionContext(
         get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
     )
-    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
+    metadata_collector: list[ChannelMetadata] = []
 
     nodes, output = generate_network(
         ctx,
@@ -606,9 +617,8 @@ def evaluate_on_rank(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     *,
-    collect_metadata: bool = False,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Evaluate a polars IR plan on a single rank.
 
@@ -632,8 +642,6 @@ def evaluate_on_rank(
         Root of the **pre-lowered** IR graph.
     config_options
         Executor configuration forwarded from the client.
-    collect_metadata
-        Whether to collect channel metadata during execution.
     query_id
         Unique identifier for the query, propagated into actor traces.
 
@@ -642,8 +650,7 @@ def evaluate_on_rank(
     result
         This rank's output fragment as a Polars DataFrame.
     metadata
-        Collected channel metadata if *collect_metadata* is ``True``,
-        otherwise ``None``.
+        Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
     ir, partition_info = lower_ir_graph(ir, config_options, stats)
@@ -663,6 +670,5 @@ def evaluate_on_rank(
             config_options,
             stats,
             collective_id_map,
-            collect_metadata=collect_metadata,
             query_id=query_id,
         )
