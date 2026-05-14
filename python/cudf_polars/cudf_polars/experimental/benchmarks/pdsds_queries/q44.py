@@ -117,16 +117,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     ascending_rank = (
-        item_profits.with_columns(
-            pl.col("avg_profit").rank(method="ordinal").alias("rnk")
-        )
+        item_profits.with_columns(pl.col("avg_profit").rank(method="min").alias("rnk"))
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
     )
 
     descending_rank = (
         item_profits.with_columns(
-            pl.col("avg_profit").rank(method="ordinal", descending=True).alias("rnk")
+            pl.col("avg_profit").rank(method="min", descending=True).alias("rnk")
         )
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
