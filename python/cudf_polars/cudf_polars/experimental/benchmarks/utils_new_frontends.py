@@ -23,7 +23,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
-from typing import TYPE_CHECKING, Any, Literal, assert_never
+from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
 
@@ -109,7 +109,7 @@ else:
     _HAS_STRUCTLOG = True
 
 
-ExecutorType = Literal["in-memory", "streaming", "cpu"]
+_STREAMING_FRONTENDS = frozenset({"spmd", "ray", "dask"})
 
 
 @dataclasses.dataclass
@@ -387,8 +387,7 @@ class RunConfig:
     qualification: bool = False
 
     # Execution mode
-    executor: ExecutorType  # "in-memory" | "streaming" | "cpu"
-    frontend: str  # "spmd" | "ray" | "duckdb"
+    frontend: Literal["cpu", "in-memory", "spmd", "ray", "dask", "duckdb"]
     connect: str | None = None
     num_gpus: int | None = None
 
@@ -512,7 +511,7 @@ class RunConfig:
         if args.engine == "duckdb":
             engine_name = "duckdb"
         elif args.engine == "polars":
-            if args.executor == "cpu":
+            if args.frontend == "cpu":
                 engine_name = "polars-cpu"
             else:
                 engine_name = "cudf-polars"
@@ -527,7 +526,6 @@ class RunConfig:
             scale_factor=scale_factor,
             suffix=args.suffix,
             qualification=args.qualification,
-            executor=args.executor,
             frontend=args.frontend,
             iterations=args.iterations,
             io_mode=args.io_mode,
@@ -555,7 +553,6 @@ class RunConfig:
             "scale_factor": self.scale_factor,
             "suffix": self.suffix,
             "qualification": self.qualification,
-            "executor": self.executor,
             "frontend": self.frontend,
             "iterations": self.iterations,
             "io_mode": self.io_mode,
@@ -595,9 +592,8 @@ class RunConfig:
             print(f"query: {query}")
             print(f"path: {self.dataset_path}")
             print(f"scale_factor: {self.scale_factor}")
-            print(f"executor: {self.executor}")
             print(f"frontend: {self.frontend}")
-            if self.executor == "streaming":
+            if self.frontend in _STREAMING_FRONTENDS:
                 opts = self.streaming_options.to_executor_options()
                 print(f"native_parquet: {self.native_parquet}")
                 print(f"n_workers: {self.n_workers}")
@@ -652,7 +648,7 @@ def print_query_plan(
 ) -> tuple[str | None, str | None]:
     """Print the query plan."""
     logical_plan = plan = None
-    if run_config.executor == "cpu":
+    if run_config.frontend == "cpu":
         if args.explain_logical:
             logical_plan = q.explain()
         if args.explain:
@@ -661,7 +657,7 @@ def print_query_plan(
         assert isinstance(engine, pl.GPUEngine)
         if args.explain_logical:
             logical_plan = explain_query(q, engine, physical=False)
-        if args.explain and run_config.executor == "streaming":
+        if args.explain and run_config.frontend in _STREAMING_FRONTENDS:
             plan = explain_query(q, engine)
     else:
         raise RuntimeError(
@@ -714,7 +710,7 @@ def execute_query(
         domain="cudf_polars",
         color="green",
     ):
-        if run_config.executor == "cpu":
+        if run_config.frontend == "cpu":
             t0 = time.monotonic()
             result = q.collect(engine="streaming")
             t1 = time.monotonic()
@@ -725,13 +721,13 @@ def execute_query(
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
                 context = IRExecutionContext()
-                if run_config.executor == "in-memory":
+                if run_config.frontend == "in-memory":
                     t0 = time.monotonic()
                     result = ir.evaluate(
                         cache={}, timer=None, context=context
                     ).to_polars()
                     t1 = time.monotonic()
-                elif run_config.executor == "streaming":
+                elif run_config.frontend in _STREAMING_FRONTENDS:
                     t0 = time.monotonic()
                     result = evaluate_streaming(
                         ir,
@@ -739,7 +735,9 @@ def execute_query(
                     )
                     t1 = time.monotonic()
                 else:
-                    assert_never(run_config.executor)
+                    raise ValueError(
+                        f"--debug is not supported with --frontend {run_config.frontend}"
+                    )
             else:
                 t0 = time.monotonic()
                 result = q.collect(engine=engine)
@@ -814,9 +812,15 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
-def _collect_statistics(engine: StreamingEngine | None) -> dict[str, Any] | None:
+def _collect_statistics(engine: pl.GPUEngine | None) -> dict[str, Any] | None:
     """Gather + clear per-rank rapidsmpf statistics into a merged dict."""
-    return None if engine is None else engine.global_statistics(clear=True).to_dict()
+    if engine is None:
+        return None
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+
+    if not isinstance(engine, StreamingEngine):
+        return None
+    return engine.global_statistics(clear=True).to_dict()
 
 
 def run_polars_query_iteration(
@@ -825,7 +829,7 @@ def run_polars_query_iteration(
     q: pl.LazyFrame,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: StreamingEngine | None,
+    engine: pl.GPUEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
@@ -882,7 +886,7 @@ def run_polars_query(
     benchmark: Any,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: StreamingEngine | None,
+    engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -943,7 +947,11 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
-            if engine is not None:
+            from cudf_polars.experimental.rapidsmpf.frontend.core import (
+                StreamingEngine,
+            )
+
+            if isinstance(engine, StreamingEngine):
                 engine._run(setup_logging, q_id, i)
 
         try:
@@ -999,7 +1007,7 @@ def _run_query_loop(
     benchmark: Any,
     args: argparse.Namespace,
     run_config: RunConfig,
-    engine: StreamingEngine | None,
+    engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -1064,7 +1072,7 @@ def _finalize_benchmark_run(
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
         run_config.summarize()
-    if args.validate and run_config.executor != "cpu":
+    if args.validate and run_config.frontend != "cpu":
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
@@ -1077,6 +1085,60 @@ def _finalize_benchmark_run(
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_cpu(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: Any,
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using the Polars CPU streaming engine."""
+    records, plans, validation_failures, query_failures = _run_query_loop(
+        benchmark,
+        args,
+        run_config,
+        engine=None,
+        numeric_type=numeric_type,
+        date_type=date_type,
+        validation_files=validation_files,
+    )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+
+
+def run_polars_in_memory(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: Any,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using a single-process GPU in-memory engine."""
+    engine_options = {
+        **run_config.streaming_options.to_engine_options(),
+        "parquet_options": parquet_options,
+    }
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        **engine_options,
+    )
+    records, plans, validation_failures, query_failures = _run_query_loop(
+        benchmark,
+        args,
+        run_config,
+        engine=engine,
+        numeric_type=numeric_type,
+        date_type=date_type,
+        validation_files=validation_files,
+    )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def run_polars_spmd(
@@ -1626,12 +1688,11 @@ def _query_type(num_queries: int) -> Any:
 
 
 def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
-    """Build the argument parser for PDS-H/PDS-DS benchmarks (new-frontend)."""
+    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H/PDS-DS Benchmarks",
-        description="Experimental streaming-executor benchmarks (SPMD / Ray / DuckDB).",
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
@@ -1678,28 +1739,18 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Default: .parquet"""),
     )
     parser.add_argument(
-        "-e",
-        "--executor",
-        default="streaming",
-        type=str,
-        choices=["in-memory", "streaming", "cpu"],
-        help=textwrap.dedent("""\
-            Query executor backend:
-                - in-memory : Evaluate query in GPU memory
-                - streaming : Partitioned evaluation (default)
-                - cpu       : Use Polars CPU engine"""),
-    )
-    parser.add_argument(
         "--frontend",
         required=True,
         type=str,
-        choices=["spmd", "ray", "dask", "duckdb"],
+        choices=["cpu", "in-memory", "spmd", "ray", "dask", "duckdb"],
         help=textwrap.dedent("""\
             Execution frontend:
-                - spmd   : SPMD execution via rrun launcher
-                - ray    : Ray actor-based multi-GPU execution
-                - dask   : Dask distributed multi-GPU execution
-                - duckdb : DuckDB CPU execution"""),
+                - cpu       : Polars CPU streaming engine (no GPU)
+                - in-memory : Single-process GPU, in-memory evaluation
+                - spmd      : SPMD execution via rrun launcher
+                - ray       : Ray actor-based multi-GPU execution
+                - dask      : Dask distributed multi-GPU execution
+                - duckdb    : DuckDB CPU execution"""),
     )
     parser.add_argument(
         "--connect",
@@ -1961,6 +2012,25 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     )
     numeric_type, date_type = check_input_data_type(run_config)
     match args.frontend:
+        case "cpu":
+            run_polars_cpu(
+                benchmark,
+                args,
+                run_config,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
+        case "in-memory":
+            run_polars_in_memory(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
         case "spmd":
             run_polars_spmd(
                 benchmark,
