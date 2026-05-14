@@ -3501,6 +3501,17 @@ struct ReduceWithOverflowTest : public cudf::test::BaseFixture {
     return cudf::test::fixed_point_column_wrapper<Rep>(values, std::cbegin(validity), scale);
   }
 
+  cudf::test::fixed_width_column_wrapper<T> make_col_from_vec(std::vector<Rep> const& values)
+    requires(!cudf::is_fixed_point<T>())
+  {
+    return cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end());
+  }
+  cudf::test::fixed_point_column_wrapper<Rep> make_col_from_vec(std::vector<Rep> const& values)
+    requires(cudf::is_fixed_point<T>())
+  {
+    return cudf::test::fixed_point_column_wrapper<Rep>(values.begin(), values.end(), scale);
+  }
+
   std::unique_ptr<cudf::scalar> make_init_scalar(Rep value)
   {
     if constexpr (cudf::is_fixed_point<T>()) {
@@ -3679,6 +3690,84 @@ TYPED_TEST(ReduceWithOverflowTest, InitialValueNegativeOverflow)
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
+}
+
+TYPED_TEST(ReduceWithOverflowTest, SlicedColumn)
+{
+  using Rep = typename TestFixture::Rep;
+  auto full =
+    this->make_col({Rep{50}, Rep{60}, Rep{1}, Rep{2}, Rep{3}, Rep{4}, Rep{5}, Rep{70}, Rep{80}});
+  auto sliced = cudf::slice(full, {2, 7});
+  ASSERT_EQ(sliced.size(), 1);
+
+  auto result = cudf::reduce(sliced.front(),
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
+
+  auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_EQ(this->get_sum_value(sum_result), Rep{15});
+  EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
+}
+
+TYPED_TEST(ReduceWithOverflowTest, SlicedColumnWithNulls)
+{
+  using Rep = typename TestFixture::Rep;
+  auto full = this->make_null_col(
+    {Rep{50}, Rep{60}, Rep{1}, Rep{2}, Rep{3}, Rep{4}, Rep{5}, Rep{70}, Rep{80}},
+    {true, true, true, false, true, false, true, true, true});
+  auto sliced = cudf::slice(full, {2, 7});
+  ASSERT_EQ(sliced.size(), 1);
+
+  auto result = cudf::reduce(sliced.front(),
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
+
+  auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_EQ(this->get_sum_value(sum_result), Rep{9});  // 1 + 3 + 5
+  EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
+}
+
+TYPED_TEST(ReduceWithOverflowTest, MultiBlockInputNoOverflow)
+{
+  using Rep = typename TestFixture::Rep;
+  // Alternating +1/-1 exercises both pairwise-overflow branches on every combine; the
+  // closed-form sum (-1 for odd N, 0 for even N) fits in every supported DeviceType.
+  constexpr cudf::size_type N = 100'001;
+  std::vector<Rep> data;
+  data.reserve(N);
+  for (cudf::size_type i = 0; i < N; ++i) {
+    data.push_back(static_cast<Rep>(i % 2 == 0 ? 1 : -1));
+  }
+  auto col = this->make_col_from_vec(data);
+
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
+
+  auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_EQ(this->get_sum_value(sum_result), Rep{1});
+  EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
+}
+
+TYPED_TEST(ReduceWithOverflowTest, InvalidInit)
+{
+  using Rep = typename TestFixture::Rep;
+  auto col  = this->make_col({Rep{1}, Rep{2}, Rep{3}});
+
+  auto init_scalar = this->make_init_scalar(Rep{0});
+  init_scalar->set_valid_async(false, cudf::get_default_stream());
+
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT},
+                             *init_scalar);
+
+  auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
+  EXPECT_FALSE(sum_result->is_valid());
+  EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
 // Non-typed fixture used by the error-handling test.

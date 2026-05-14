@@ -42,19 +42,18 @@ struct overflow_sum_op {
   __device__ sum_overflow_result<DeviceType> operator()(
     sum_overflow_result<DeviceType> const& lhs, sum_overflow_result<DeviceType> const& rhs) const
   {
+    // Skip the add if either side already overflowed, or if it would overflow now.
     if (lhs.overflow || rhs.overflow) {
-      return sum_overflow_result<DeviceType>{static_cast<DeviceType>(lhs.sum + rhs.sum), true};
+      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
-
-    bool overflow_detected = false;
     if (rhs.sum > 0 && lhs.sum > cuda::std::numeric_limits<DeviceType>::max() - rhs.sum) {
-      overflow_detected = true;
-    } else if (rhs.sum < 0 && lhs.sum < cuda::std::numeric_limits<DeviceType>::min() - rhs.sum) {
-      overflow_detected = true;
+      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
+    }
+    if (rhs.sum < 0 && lhs.sum < cuda::std::numeric_limits<DeviceType>::min() - rhs.sum) {
+      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
 
-    return sum_overflow_result<DeviceType>{static_cast<DeviceType>(lhs.sum + rhs.sum),
-                                           overflow_detected};
+    return sum_overflow_result<DeviceType>{static_cast<DeviceType>(lhs.sum + rhs.sum), false};
   }
 };
 
@@ -119,6 +118,11 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
 {
   using DeviceType = device_storage_type_t<Source>;
 
+  if (init.has_value() && !init.value().get().is_valid(stream)) {
+    return make_sum_overflow_struct_scalar<Source>(
+      DeviceType{0}, false, /*sum_is_valid=*/false, col.type(), stream, mr);
+  }
+
   if (col.size() == 0 || col.size() == col.null_count()) {
     return make_sum_overflow_struct_scalar<Source>(
       DeviceType{0}, false, /*sum_is_valid=*/false, col.type(), stream, mr);
@@ -127,7 +131,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
   auto dcol = cudf::column_device_view::create(col, stream);
 
   sum_overflow_result<DeviceType> initial_value{DeviceType{0}, false};
-  if (init.has_value() && init.value().get().is_valid(stream)) {
+  if (init.has_value()) {
     auto const& init_scalar = static_cast<cudf::scalar_type_t<Source> const&>(init.value().get());
     initial_value.sum       = static_cast<DeviceType>(init_scalar.value(stream));
   }
