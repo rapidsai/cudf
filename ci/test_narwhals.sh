@@ -44,6 +44,12 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_first_last_expr_over_order_by[cudf] - now passing but tests expect failure
 # test_cast_datetime_tz_aware[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/21451
 # test_nested_structures: Passes as of https://github.com/rapidsai/cudf/pull/21514
+# test_group_by_depth_1_agg_bool_ops[cudf-*]: xpass(strict) - cudf groupby any/all on nullable bool now passes
+# test_replace_time_zone[cudf], test_replace_time_zone_series[cudf]: xpass(strict) - cudf tz replace + strftime now correct
+# test_convert_time_zone[cudf], test_convert_time_zone_series[cudf], test_convert_time_zone_from_none[cudf]: xpass(strict) - cudf tz convert + strftime now correct
+# test_contains_case_sensitive[cudf], test_contains_series_case_sensitive[cudf], test_contains_literal[cudf], test_contains_series_literal[cudf]:
+#   cudf's default ``str`` dtype mirrors pandas 3 ``str`` (fills nulls with False on ``str.contains``); narwhals
+#   expects ``None`` because it treats cudf strings as nullable. Compatibility mismatch, not a cudf bug.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
@@ -69,7 +75,14 @@ test_first_last_expr_over_order_by[cudf] or \
 test_series_rfloordiv_by_zero[cudf-0] or \
 test_expr_rfloordiv_by_zero[cudf-0] or \
 test_cast_datetime_tz_aware[cudf] or \
-test_nested_structures \
+test_nested_structures or \
+(test_group_by_depth_1_agg_bool_ops and cudf) or \
+(test_replace_time_zone and cudf) or \
+(test_convert_time_zone and cudf) or \
+(test_contains_case_sensitive and cudf) or \
+(test_contains_series_case_sensitive and cudf) or \
+(test_contains_literal and cudf) or \
+(test_contains_series_literal and cudf) \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
