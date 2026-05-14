@@ -217,40 +217,31 @@ TEST_F(ExtractVariantFieldTest, ApacheObjectPrimitiveIntField)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(ExtractVariantFieldTest, ApacheObjectNestedObservationStringFields)
+TEST_F(ExtractVariantFieldTest, ApacheObjectNestedFields)
 {
-  auto struc  = make_apache_variant(afv::object_nested);
-  auto stream = cudf::test::get_default_stream();
-
-  for (auto const& [path, expected_str] : {std::pair{"$.observation.location", "In the Volcano"},
-                                           std::pair{"$.observation.time", "12:34:56"}}) {
+  auto struc       = make_apache_variant(afv::object_nested);
+  auto stream      = cudf::test::get_default_stream();
+  auto const check = [&](char const* path, auto expected_val) {
+    using T = decltype(expected_val);
     SCOPED_TRACE(std::string{"path: "} + path);
-    auto got = cudf::io::parquet::experimental::extract_variant_field(
-      struc, path, cudf::data_type{cudf::type_id::STRING}, stream);
-    cudf::test::strings_column_wrapper expected({expected_str});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-  }
-}
+    if constexpr (std::is_same_v<T, char const*>) {
+      auto got = cudf::io::parquet::experimental::extract_variant_field(
+        struc, path, cudf::data_type{cudf::type_id::STRING}, stream);
+      cudf::test::strings_column_wrapper expected({expected_val});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+    } else {
+      auto got = cudf::io::parquet::experimental::extract_variant_field(
+        struc, path, cudf::data_type{cudf::type_to_id<T>()}, stream);
+      cudf::test::fixed_width_column_wrapper<T> expected{expected_val};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+    }
+  };
 
-TEST_F(ExtractVariantFieldTest, ApacheObjectNestedSpeciesPopulation)
-{
-  auto struc = make_apache_variant(afv::object_nested);
-  auto got =
-    cudf::io::parquet::experimental::extract_variant_field(struc,
-                                                           "$.species.population",
-                                                           cudf::data_type{cudf::type_id::INT16},
-                                                           cudf::test::get_default_stream());
-  cudf::test::fixed_width_column_wrapper<int16_t> expected{int16_t{6789}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-}
-
-TEST_F(ExtractVariantFieldTest, ApacheObjectNestedId)
-{
-  auto struc = make_apache_variant(afv::object_nested);
-  auto got   = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "$.id", cudf::data_type{cudf::type_id::INT8}, cudf::test::get_default_stream());
-  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  check("$.observation.location", "In the Volcano");
+  check("$.observation.time", "12:34:56");
+  check("$.species.name", "lava monster");
+  check("$.species.population", int16_t{6789});
+  check("$.id", int8_t{1});
 }
 
 TEST_F(ExtractVariantFieldTest, ApacheObjectEmpty)
@@ -316,34 +307,11 @@ inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 
 }  // namespace
 
-TEST_F(ExtractVariantFieldTest, ApacheNestedPathSpeciesName)
+TEST_F(ExtractVariantFieldTest, ApacheNestedPathChainedEqualsSingleCall)
 {
   auto col    = make_apache_variant(afv::object_nested);
   auto stream = cudf::test::get_default_stream();
 
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    col, "$.species.name", cudf::data_type{cudf::type_id::STRING}, stream);
-
-  cudf::test::strings_column_wrapper expected({"lava monster"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
-
-  // Parity: single-call path equals chained calls.
-  auto chained_species = cudf::io::parquet::experimental::get_variant_field(col, "species", stream);
-  auto chained_name =
-    cudf::io::parquet::experimental::get_variant_field(chained_species->view(), "name", stream);
-  auto chained_str = cudf::io::parquet::experimental::cast_variant(
-    chained_name->view(), cudf::data_type{cudf::type_id::STRING}, stream);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *chained_str);
-}
-
-TEST_F(ExtractVariantFieldTest, ApacheNestedPathThreeLevel)
-{
-  auto col    = make_apache_variant(afv::object_nested);
-  auto stream = cudf::test::get_default_stream();
-
-  // Depth 3: observation.value.temperature. The encoded value is INT8 (header 0x0c, byte 0x7b),
-  // which cast_variant does not support, so we compare raw VARIANT bytes against the chained
-  // result.
   auto single = cudf::io::parquet::experimental::get_variant_field(
     col, "$.observation.value.temperature", stream);
 
@@ -352,13 +320,12 @@ TEST_F(ExtractVariantFieldTest, ApacheNestedPathThreeLevel)
   auto chained =
     cudf::io::parquet::experimental::get_variant_field(vobj->view(), "temperature", stream);
 
-  // Both columns must be VARIANT structs with the same value child contents.
   EXPECT_EQ(single->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(chained->type().id(), cudf::type_id::STRUCT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(single->view().child(1), chained->view().child(1));
 }
 
-TEST_F(ExtractVariantFieldTest, ApacheNestedPathMissingIntermediate)
+TEST_F(ExtractVariantFieldTest, ApacheObjectNestedMissingIntermediate)
 {
   auto col    = make_apache_variant(afv::object_nested);
   auto stream = cudf::test::get_default_stream();
