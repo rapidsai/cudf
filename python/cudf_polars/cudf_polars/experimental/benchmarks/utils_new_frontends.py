@@ -638,7 +638,9 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     executor_options["max_io_threads"] = run_config.max_io_threads
-    executor_options["quent_context"] = cudf_polars.quent.QuentContext()
+    executor_options["quent_context"] = cudf_polars.quent.QuentContext(
+        engine=cudf_polars.quent.Engine(id=run_config.run_id)
+    )
 
     return executor_options
 
@@ -1160,7 +1162,7 @@ def run_polars_spmd(
         )
 
     if _HAS_STRUCTLOG and run_config.collect_traces and is_rank_0:
-        _write_quent_traces(engine=engine)
+        _write_quent_traces(engine=engine, run_id=run_config.run_id)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1210,7 +1212,7 @@ def run_polars_ray(
         run_config = _consolidate_logs(run_config, engine=engine)
 
     if _HAS_STRUCTLOG and run_config.collect_traces:
-        _write_quent_traces(engine=engine)
+        _write_quent_traces(engine=engine, run_id=run_config.run_id)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1271,7 +1273,7 @@ def run_polars_dask(
             run_config = _consolidate_logs(run_config, engine)
 
         if _HAS_STRUCTLOG and run_config.collect_traces:
-            _write_quent_traces(engine=engine)
+            _write_quent_traces(engine=engine, run_id=run_config.run_id)
     finally:
         if dask_client is not None:
             dask_client.close()
@@ -1351,18 +1353,14 @@ def setup_logging(query_id: int, iteration: int) -> None:
         )
 
 
-def _write_quent_traces(engine: StreamingEngine) -> None:
+def _write_quent_traces(engine: StreamingEngine, run_id: uuid.UUID) -> None:
     """Write collected Quent events to logs/{run_id}.ndjson."""
     quent_logs = list(engine._quent_events)
 
-    # The quent UI currently requires the Run ID to match the engine's ID.
+    # The quent UI currently requires the filename to match the engine's ID.
     for log in quent_logs:
-        if "Init" in log.get("data", {}).get("Engine"):
-            run_id = log["id"]
-            break
-    else:
-        print("No engine init log found in Quent events", file=sys.stderr)
-        run_id = str(uuid.uuid4())
+        if log.get("data", {}).get("Engine", {}).get("Init"):
+            assert log["id"] == str(run_id)
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
