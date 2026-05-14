@@ -20,9 +20,7 @@ namespace cudf::join::jit {
  * @tparam Accessors type list of accessors for columns used in the predicate
  * @param left_indices Device span of left table indices
  * @param right_indices Device span of right table indices
- * @param left_table Device view of left table columns
- * @param right_table Device view of right table columns
- * @param scalars Device view of scalar values used in the predicate
+ * @param columns Device view of all columns involved in the predicate
  * @param predicate_results Output array for predicate evaluation results
  * @param user_data Optional user data for predicate function
  */
