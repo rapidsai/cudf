@@ -29,7 +29,6 @@
 #include <vector>
 
 namespace cudf::detail {
-namespace {
 
 /**
  * @brief Predicate to find indices at which LEAD/LAG evaluated to null.
@@ -59,8 +58,6 @@ is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type in
   return is_null_index_predicate_impl<GatherMapIter>{input_size, gather};
 }
 
-}  // namespace
-
 /**
  * @brief Helper function to calculate LEAD/LAG for nested-type input columns.
  *
@@ -75,7 +72,7 @@ is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type in
  * @param[in] row_offset Lead/Lag offset, indicating which row after/before
  *                       the current row is to be returned
  * @param[in] stream CUDA stream for device memory operations/allocations
- * @param[in] mr device_memory_resource for device memory allocations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  */
 template <typename PrecedingIter, typename FollowingIter>
 std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,

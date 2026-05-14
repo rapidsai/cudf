@@ -59,8 +59,12 @@ def _hstack_chain_to_select(ir: Select) -> Select | None:
 
     col_defs: dict[str, expr.Expr] = {}
     for hstack in reversed(hstack_chain):
+        # with_columns semantics: snapshot so expressions see the input frame,
+        # not each other's outputs. CSE placeholders use col_defs directly since
+        # later placeholders may reference earlier ones.
+        defs = dict(col_defs) if hstack.should_broadcast else col_defs
         for ne in hstack.columns:
-            col_defs[ne.name] = _sub_expr(ne.value, col_defs)
+            col_defs[ne.name] = _sub_expr(ne.value, defs)
 
     new_exprs = tuple(
         expr.NamedExpr(ne.name, _sub_expr(ne.value, col_defs)) for ne in ir.exprs
@@ -427,13 +431,18 @@ def _(
         )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
+        # Use Empty as the input so the streaming network's metadata flows
+        # duplicated=True end to end. Without that, the literal expression
+        # would be evaluated chunkwise over child and emit one row per input
+        # chunk instead of a single row globally.
+        input_ir: IR = Empty({})
         new_node = Select(
             {named_expr.name: named_expr.value.dtype},
             [named_expr],
             should_broadcast=True,
-            df=child,
+            df=input_ir,
         )
-        partition_info[new_node] = PartitionInfo(count=1)
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
     if not any(

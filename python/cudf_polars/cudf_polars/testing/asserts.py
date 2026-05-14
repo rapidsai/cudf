@@ -6,18 +6,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import polars as pl
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
-    from cudf_polars.typing import OptimizationArgs
+    from cudf_polars.typing import CollectKwargs
 
 
 __all__: list[str] = [
@@ -27,21 +26,14 @@ __all__: list[str] = [
     "assert_sink_result_equal",
 ]
 
-# Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--cluster` command-line arguments
-DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_RUNTIME = "tasks"
-DEFAULT_CLUSTER = "single"
-DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
-
 
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
-    engine: GPUEngine | None = None,
-    collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-    polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-    cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
+    engine: GPUEngine,
+    collect_kwargs: CollectKwargs | None = None,
+    polars_collect_kwargs: CollectKwargs | None = None,
+    cudf_collect_kwargs: CollectKwargs | None = None,
     check_row_order: bool = True,
     check_column_order: bool = True,
     check_dtypes: bool = True,
@@ -49,8 +41,6 @@ def assert_gpu_result_equal(
     rtol: float = 1e-05,
     atol: float = 1e-08,
     categorical_as_str: bool = False,
-    executor: str | None = None,
-    blocksize_mode: Literal["small", "default"] | None = None,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -88,15 +78,6 @@ def assert_gpu_result_equal(
         Absolute tolerance for float comparisons
     categorical_as_str
         Decat categoricals to strings before comparing
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
-    blocksize_mode
-        The "mode" to use for choosing the blocksize for the streaming executor.
-        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
-        Set to "small" to configure small values for ``max_rows_per_partition``
-        and ``target_partition_size``, which will typically cause many partitions
-        to be created while executing the query.
 
     Raises
     ------
@@ -105,7 +86,6 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
-    engine = engine or get_default_engine(executor, blocksize_mode)
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
@@ -136,11 +116,7 @@ def assert_gpu_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    tol_kwargs: dict[str, float]
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rtol, "atol": atol}
-    else:
-        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+    tol_kwargs: dict[str, float] = {"rel_tol": rtol, "abs_tol": atol}
 
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
@@ -182,61 +158,11 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
 
 
-def get_default_engine(
-    executor: str | None = None,
-    blocksize_mode: Literal["small", "default"] | None = None,
-) -> GPUEngine:
-    """
-    Get the default engine used for testing.
-
-    Parameters
-    ----------
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
-    blocksize_mode
-        The "mode" to use for choosing the blocksize for the streaming executor.
-        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
-        Set to "small" to configure small values for ``max_rows_per_partition``
-        and ``target_partition_size``, which will typically cause many partitions
-        to be created while executing the query.
-
-    Returns
-    -------
-    engine
-        A polars GPUEngine configured with the default settings for tests.
-
-    See Also
-    --------
-    assert_gpu_result_equal
-    assert_sink_result_equal
-    """
-    executor_options: dict[str, Any] = {}
-    executor = executor or DEFAULT_EXECUTOR
-    if executor == "streaming":
-        executor_options["cluster"] = DEFAULT_CLUSTER
-        executor_options["runtime"] = DEFAULT_RUNTIME
-
-        blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
-
-        if blocksize_mode == "small":  # pragma: no cover
-            executor_options["max_rows_per_partition"] = 4
-            executor_options["target_partition_size"] = 10
-            # We expect many tests to fall back, so silence the warnings
-            executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
-
-    return GPUEngine(
-        raise_on_fail=True,
-        executor=executor,
-        executor_options=executor_options,
-    )
-
-
 def _process_kwargs(
-    collect_kwargs: dict[OptimizationArgs, bool] | None,
-    polars_collect_kwargs: dict[OptimizationArgs, bool] | None,
-    cudf_collect_kwargs: dict[OptimizationArgs, bool] | None,
-) -> tuple[dict[OptimizationArgs, bool], dict[OptimizationArgs, bool]]:
+    collect_kwargs: CollectKwargs | None,
+    polars_collect_kwargs: CollectKwargs | None,
+    cudf_collect_kwargs: CollectKwargs | None,
+) -> tuple[CollectKwargs, CollectKwargs]:
     if collect_kwargs is None:
         collect_kwargs = {}
     final_polars_collect_kwargs = collect_kwargs.copy()
@@ -253,9 +179,9 @@ def assert_collect_raises(
     *,
     polars_except: type[Exception] | tuple[type[Exception], ...],
     cudf_except: type[Exception] | tuple[type[Exception], ...],
-    collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-    polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-    cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
+    collect_kwargs: CollectKwargs | None = None,
+    polars_collect_kwargs: CollectKwargs | None = None,
+    cudf_collect_kwargs: CollectKwargs | None = None,
 ) -> None:
     """
     Assert that collecting the result of a query raises the expected exceptions.
@@ -313,7 +239,8 @@ def assert_collect_raises(
         if polars_except != ():
             raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
-    engine = GPUEngine(raise_on_fail=True)
+    # TODO: https://github.com/rapidsai/cudf/issues/22346
+    engine = GPUEngine(executor="in-memory", raise_on_fail=True)
     try:
         lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
     except cudf_except:
@@ -346,11 +273,9 @@ def assert_sink_result_equal(
     lazydf: pl.LazyFrame,
     path: str | Path,
     *,
-    engine: str | GPUEngine | None = None,
+    engine: GPUEngine,
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
-    executor: str | None = None,
-    blocksize_mode: Literal["small", "default"] | None = None,
 ) -> None:
     """
     Assert that writing a LazyFrame via sink produces the same output.
@@ -368,15 +293,6 @@ def assert_sink_result_equal(
         Optional keyword arguments to pass to the corresponding `pl.read_*` function.
     write_kwargs
         Optional keyword arguments to pass to the corresponding `sink_*` function.
-    executor
-        The executor configuration to pass to `GPUEngine`. If not specified
-        uses the module level `Executor` attribute.
-    blocksize_mode
-        The "mode" to use for choosing the blocksize for the streaming executor.
-        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
-        Set to "small" to configure small values for ``max_rows_per_partition``
-        and ``target_partition_size``, which will typically cause many partitions
-        to be created while executing the query.
 
     Raises
     ------
@@ -385,7 +301,6 @@ def assert_sink_result_equal(
     ValueError
         If the file extension is not one of the supported formats.
     """
-    engine = engine or get_default_engine(executor, blocksize_mode)
     path = Path(path)
     read_kwargs = read_kwargs or {}
     write_kwargs = write_kwargs or {}

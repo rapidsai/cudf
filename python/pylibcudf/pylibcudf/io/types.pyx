@@ -33,7 +33,6 @@ from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from pylibcudf.span import is_span
 
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-from rmm.pylibrmm.stream cimport Stream
 
 import codecs
 import errno
@@ -396,7 +395,7 @@ cdef class TableWithMetadata:
     @staticmethod
     cdef TableWithMetadata from_libcudf(
         table_with_metadata& tbl_with_meta,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""

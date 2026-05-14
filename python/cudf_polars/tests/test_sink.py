@@ -7,10 +7,10 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
-    DEFAULT_BLOCKSIZE_MODE,
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
@@ -28,13 +28,22 @@ def df():
 @pytest.mark.parametrize("null_value", [None, "NA"])
 @pytest.mark.parametrize("line_terminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("separator", [",", "|"])
-def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, separator):
-    if line_terminator == "\n\n" and DEFAULT_BLOCKSIZE_MODE == "small":
+def test_sink_csv(
+    engine: pl.GPUEngine,
+    df,
+    tmp_path,
+    include_header,
+    null_value,
+    line_terminator,
+    separator,
+):
+    if line_terminator == "\n\n" and get_blocksize_mode(engine) == "small":
         # We end up with an extra row per partition.
         pytest.skip("Multi-line terminator not supported with small blocksize")
     assert_sink_result_equal(
         df,
         tmp_path / "out.csv",
+        engine=engine,
         write_kwargs={
             "include_header": include_header,
             "null_value": null_value,
@@ -69,10 +78,11 @@ def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
     )
 
 
-def test_sink_ndjson(df, tmp_path):
+def test_sink_ndjson(engine: pl.GPUEngine, df, tmp_path):
     assert_sink_result_equal(
         df,
         tmp_path / "out.ndjson",
+        engine=engine,
     )
 
 
@@ -93,6 +103,7 @@ def test_sink_parquet(
             "row_group_size": row_group_size,
         },
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={"chunked": is_chunked, "n_output_chunks": n_output_chunks},
         ),
@@ -115,12 +126,14 @@ def test_sink_parquet_compression_type(df, tmp_path, compression, compression_le
                 "compression": compression,
                 "compression_level": compression_level,
             },
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     elif compression in {"snappy", "lz4", "uncompressed"}:
         assert_sink_result_equal(
             df,
             tmp_path / "compression.parquet",
             write_kwargs={"compression": compression},
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     else:
         assert_sink_ir_translation_raises(
@@ -147,6 +160,7 @@ def test_chunked_sink_empty_table_to_parquet(tmp_path):
         pl.LazyFrame(),
         tmp_path / "out.parquet",
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={"chunked": True, "n_output_chunks": 2},
         ),

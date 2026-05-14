@@ -6,7 +6,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.9", "13.1"]
+      cuda: ["12.9", "13.2"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -25,6 +25,8 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
+      - depends_on_ray
       - depends_on_rmm
       - develop
       - docs
@@ -115,6 +117,7 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
+      - depends_on_ray
   test_java:
     output: none
     includes:
@@ -328,8 +331,10 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
+  # TODO(26.10): Remove this alias in favor of dask
   py_run_cudf_polars_experimental:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -337,16 +342,23 @@ files:
       table: project.optional-dependencies
       key: experimental
     includes:
-      - run_cudf_polars_experimental
-  py_run_cudf_polars_rapidsmpf:
+      - run_cudf_polars_dask
+  py_run_cudf_polars_dask:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
-      key: rapidsmpf
+      key: dask
     includes:
-      - depends_on_rapidsmpf
-      - pyarrow_run
+      - run_cudf_polars_dask
+  py_run_cudf_polars_ray:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: ray
+    includes:
+      - depends_on_ray
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -356,7 +368,6 @@ files:
     includes:
       - cuda_version
       - depends_on_dask_cuda
-      - numpy_run
       - test_python_common
       - test_python_cudf_polars
       - cudf_polars_trace
@@ -563,10 +574,10 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
       - output_types: [requirements, pyproject]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
   # 'cuda_version' intentionally does not contain fallback entries... we want
   # a loud error if an unsupported 'cuda' value is passed
   cuda_version:
@@ -597,6 +608,10 @@ dependencies:
               cuda: "13.1"
             packages:
               - cuda-version=13.1
+          - matrix:
+              cuda: "13.2"
+            packages:
+              - cuda-version=13.2
       - output_types: requirements
         matrices:
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
@@ -642,6 +657,11 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.1.*
+          - matrix:
+              cuda: "13.2"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit==13.2.*
   cuda:
     common:
       - output_types: [conda]
@@ -649,6 +669,7 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
@@ -817,14 +838,13 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.30,<1.39
+          - polars>=1.35,<1.39
           - typing_extensions>=4.0.0
-  run_cudf_polars_experimental:
+  run_cudf_polars_dask:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==26.6.*,>=0.0.0a0
-          - *nvidia_ml_py
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1252,6 +1272,14 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_ray:
+    common:
+      - output_types: conda
+        packages:
+          - ray-default>=2.55.1
+      - output_types: [requirements, pyproject]
+        packages:
+          - ray>=2.55.1
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]

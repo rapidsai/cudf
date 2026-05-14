@@ -3,35 +3,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
 import pytest
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture
-def engine(
-    request: pytest.FixtureRequest,
-) -> Generator[StreamingEngine, None, None]:
-    params: dict[str, Any] = getattr(request, "param", {})
-    executor_options = {
-        "max_rows_per_partition": 3,
-        "fallback_mode": "warn",
-        "dynamic_planning": {},
-        **params.get("executor_options", {}),
-    }
-    with SPMDEngine(executor_options=executor_options) as engine:
-        yield engine
+def engine(streaming_engine_factory):
+    return streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
+    )
 
 
 def test_rolling_datetime(request, engine):
@@ -54,19 +41,28 @@ def test_rolling_datetime(request, engine):
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
     # HStack may redirect to Select before fallback; message differs by Polars IR / version.
-    with pytest.warns(
+    with warns_on_spmd(
+        engine,
         UserWarning,
         match=r"This (HStack|selection) is not supported for multiple partitions\.",
     ):
         assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 1}}],
-    indirect=True,
-)
-def test_over_in_filter_unsupported(engine) -> None:
+def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=1, fallback_mode="warn"),
+    )
+    if not isinstance(engine, SPMDEngine):
+        # On Dask/Ray the fallback warning fires on worker processes and is
+        # invisible to ``pytest.warns``; the multi-rank fallback also
+        # doesn't preserve row order.
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/22405",
+                strict=False,
+            )
+        )
     q = pl.concat(
         [
             pl.LazyFrame({"k": ["x", "y"], "v": [3, 2]}),

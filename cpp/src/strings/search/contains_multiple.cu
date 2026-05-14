@@ -244,7 +244,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       });
     auto host_results_pointers =
       std::vector<bool*>(host_results_pointer_iter, host_results_pointer_iter + results.size());
-    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+    return cudf::detail::make_device_uvector(host_results_pointers, stream, mr);
   }();
 
   constexpr cudf::thread_index_type block_size = 256;

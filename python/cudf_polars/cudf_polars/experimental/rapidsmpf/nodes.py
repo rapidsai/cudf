@@ -352,7 +352,9 @@ async def fanout_node_unbounded(
         )
 
         # Spillable FIFO buffer for each output channel
-        output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
+        output_buffers: list[SpillableMessages] = [
+            SpillableMessages(context.br()) for _ in chs_out
+        ]
         num_outputs = len(chs_out)
 
         # Track message IDs in FIFO order for each output buffer
@@ -730,20 +732,10 @@ async def metadata_drain_node(
     ):
         # Drain metadata channel (we don't need it after this point)
         metadata = await recv_metadata(ch_in, context)
-        send_empty = metadata.duplicated and comm.rank != 0
         if metadata_collector is not None:
             metadata_collector.append(metadata)
 
-        # Forward non-duplicated data messages
         while (msg := await ch_in.recv(context)) is not None:
-            if not send_empty:
-                await ch_out.send(context, msg)
-
-        # Send empty data if needed
-        if send_empty:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.send(
-                context, Message(0, empty_table_chunk(ir, context, stream))
-            )
+            await ch_out.send(context, msg)
 
         await ch_out.drain(context)

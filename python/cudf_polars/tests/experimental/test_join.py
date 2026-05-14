@@ -14,9 +14,12 @@ from cudf_polars.dsl.ir import Cache, Join
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.join import _use_pwise_join
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -44,30 +47,28 @@ def right():
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full"])
 @pytest.mark.parametrize(
-    "engine",
+    "options",
     [
-        {"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 2}},
+        StreamingOptions(max_rows_per_partition=3, broadcast_limit=48),
+        StreamingOptions(max_rows_per_partition=5, broadcast_limit=48),
     ],
-    indirect=True,
 )
-def test_dynamic_join_how(left, right, engine, how):
+def test_dynamic_join_how(left, right, streaming_engine_factory, options, how):
     """Dynamic join path: all join types including Right and Full."""
+    streaming_engine = streaming_engine_factory(options)
     q = left.join(right, on="y", how=how)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("how", ["right", "full"])
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}}],
-    indirect=True,
-)
-def test_dynamic_join_right_full_reverse(left, right, engine, how):
+def test_dynamic_join_right_full_reverse(left, right, streaming_engine_factory, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=3, broadcast_limit=48),
+    )
     # Reverse so "right" frame is larger; exercises right-side preservation
     q = right.join(left, on="y", how=how)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 # ---------------------------------------------------------------------------
@@ -75,61 +76,40 @@ def test_dynamic_join_right_full_reverse(left, right, engine, how):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 2, "broadcast_join_limit": 1}}],
-    indirect=True,
-)
-def test_join_then_shuffle(left, right, engine):
+def test_join_then_shuffle(left, right, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, broadcast_limit=24),
+    )
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
         pl.col("xx").mean(),
         pl.col("y").n_unique(),
         (pl.col("y") * pl.col("y")).n_unique().alias("y2"),
     )
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("reverse", [True, False])
-@pytest.mark.parametrize(
-    "max_rows_per_partition,engine",
-    [
-        (
-            3,
-            {
-                "executor_options": {
-                    "max_rows_per_partition": 3,
-                    "fallback_mode": "warn",
-                    "dynamic_planning": None,
-                }
-            },
+@pytest.mark.parametrize("max_rows_per_partition", [3, 9])
+def test_join_conditional(reverse, max_rows_per_partition, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=max_rows_per_partition,
+            fallback_mode="warn",
+            dynamic_planning=None,
         ),
-        (
-            9,
-            {
-                "executor_options": {
-                    "max_rows_per_partition": 9,
-                    "fallback_mode": "warn",
-                    "dynamic_planning": None,
-                }
-            },
-        ),
-    ],
-    indirect=["engine"],
-)
-def test_join_conditional(reverse, max_rows_per_partition, engine):
+    )
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
     right = pl.LazyFrame({"xx": range(9), "yy": [2, 4, 3] * 3})
     if reverse:
         left, right = right, left
     q = left.join_where(right, pl.col("y") < pl.col("yy"))
-    if max_rows_per_partition == 3:
-        with pytest.warns(
-            UserWarning, match="ConditionalJoin not supported for multiple partitions."
-        ):
-            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-    else:
-        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    with warns_on_spmd(
+        streaming_engine,
+        UserWarning,
+        match="ConditionalJoin not supported for multiple partitions.",
+    ):
+        assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 # ---------------------------------------------------------------------------
@@ -140,41 +120,42 @@ def test_join_conditional(reverse, max_rows_per_partition, engine):
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize(
-    "engine",
+    "options",
     [
-        {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 1}},
-        {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 16}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 1}},
-        {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 16}},
-        {"executor_options": {"max_rows_per_partition": 10, "broadcast_join_limit": 1}},
-        {
-            "executor_options": {
-                "max_rows_per_partition": 10,
-                "broadcast_join_limit": 16,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 15,
-                "broadcast_join_limit": 1,
-            }
-        },
-        {
-            "executor_options": {
-                "max_rows_per_partition": 15,
-                "broadcast_join_limit": 16,
-            }
-        },
+        StreamingOptions(
+            max_rows_per_partition=1, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=1, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=5, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=5, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=10, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=10, target_partition_size=24, broadcast_limit=384
+        ),
+        StreamingOptions(
+            max_rows_per_partition=15, target_partition_size=24, broadcast_limit=24
+        ),
+        StreamingOptions(
+            max_rows_per_partition=15, target_partition_size=24, broadcast_limit=384
+        ),
     ],
-    indirect=True,
 )
-def test_join(left, right, how, reverse, engine):
+def test_join(left, right, how, reverse, streaming_engine_factory, options):
+    streaming_engine = streaming_engine_factory(options)
     if reverse:
         left, right = right, left
 
     q = left.join(right, on="y", how=how)
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
     # Join again on the same key.
     # (covers code path that avoids redundant shuffles)
@@ -187,24 +168,29 @@ def test_join(left, right, how, reverse, engine):
             }
         )
         q2 = q.join(right2, left_on="y", right_on="yyy", how=how)
-        assert_gpu_result_equal(q2, engine=engine, check_row_order=False)
+        assert_gpu_result_equal(q2, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
-@pytest.mark.parametrize(
-    "engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 3,
-                "broadcast_join_limit": 100,
-                "fallback_mode": "warn",
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_join_and_slice(zlice, engine):
+def test_join_and_slice(request, zlice, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            target_partition_size=64,
+            broadcast_limit=6400,
+            fallback_mode="warn",
+        ),
+    )
+    if streaming_engine.nranks > 1:
+        # The multi-rank fallback for slice doesn't preserve row order
+        # within equal-key groups, so the slice can pick different rows
+        # than the CPU baseline.
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/22405",
+                strict=False,
+            )
+        )
     left = pl.LazyFrame(
         {
             "a": [1, 2, 3, 1, None],
@@ -222,50 +208,63 @@ def test_join_and_slice(zlice, engine):
     q = left.join(right, on="a", how="inner").slice(*zlice)
     # Check that we get the correct row count
     # See: https://github.com/rapidsai/cudf/issues/19153
-    if zlice in {(2, 2), (-2, None)}:
-        with pytest.warns(
-            UserWarning, match="This slice not supported for multiple partitions."
-        ):
-            assert q.collect(engine=engine).height == q.collect().height
-    else:
-        assert q.collect(engine=engine).height == q.collect().height
+    with warns_on_spmd(
+        streaming_engine,
+        UserWarning,
+        match="This slice not supported for multiple partitions.",
+        when=zlice in {(2, 2), (-2, None)},
+    ):
+        assert q.collect(engine=streaming_engine).height == q.collect().height
 
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
-    if zlice == (2, 2):
-        with pytest.warns(
-            UserWarning,
-            match="does not support a multi-partition slice with an offset.",
-        ):
-            assert_gpu_result_equal(q, engine=engine)
-    else:
-        assert_gpu_result_equal(q, engine=engine)
+    with warns_on_spmd(
+        streaming_engine,
+        UserWarning,
+        match="This slice not supported for multiple partitions.",
+        when=zlice == (2, 2),
+    ):
+        assert_gpu_result_equal(q, engine=streaming_engine)
+
+
+@pytest.mark.parametrize("how", ["inner", "semi", "left", "right"])
+def test_bloom_filter_join(how, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            broadcast_limit=10,
+            target_partition_size=10,
+        ),
+    )
+    dim = pl.LazyFrame({"key": range(10), "val": range(10)})
+    fact = pl.LazyFrame({"key": range(200), "data": range(200)})
+    left, right = (dim, fact) if how == "right" else (fact, dim)
+    q = left.join(right, on="key", how=how)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
-@pytest.mark.parametrize(
-    "engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 3,
-                "broadcast_join_limit": 1,
-                "fallback_mode": "warn",
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_join_maintain_order_fallback_streaming(left, right, maintain_order, engine):
+def test_join_maintain_order_fallback_streaming(
+    left, right, maintain_order, streaming_engine_factory
+):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3,
+            target_partition_size=64,
+            broadcast_limit=64,
+            fallback_mode="warn",
+        ),
+    )
     q = left.join(right, on="y", how="inner", maintain_order=maintain_order)
 
-    with pytest.warns(
+    with warns_on_spmd(
+        streaming_engine,
         UserWarning,
         match=r"Join\(maintain_order=.*\) not supported for multiple partitions\.",
     ):
-        assert_gpu_result_equal(q, engine=engine)
+        assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -273,14 +272,17 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order, eng
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(left, right, broadcast_join_limit):
+@pytest.mark.parametrize("broadcast_limit", [1, 48, 128, 1024])
+def test_broadcast_limit(left, right, broadcast_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "broadcast_join_limit": broadcast_join_limit,
+            # target_partition_size=1 makes broadcast_limit/1 = broadcast_limit
+            # partitions, giving a clean partition-count threshold for this test.
+            "target_partition_size": 1,
+            "broadcast_limit": broadcast_limit,
             "dynamic_planning": None,  # Requires static planning
         },
     )
@@ -300,19 +302,22 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
     )
 
     q = left.join(right, on="y", how="inner")
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    config_options = ConfigOptions.from_polars_engine(engine)
     shuffle_nodes = [
         type(node)
         for node in lower_ir_graph(
-            Translator(q._ldf.visit(), engine).translate_ir(),
-            ConfigOptions.from_polars_engine(engine),
+            ir,
+            config_options,
+            collect_statistics(ir, config_options),
         )[1]
         if isinstance(node, Shuffle)
     ]
 
     # NOTE: Expect small table to have 3 partitions (9 / 3).
     # Therefore, we will get a shuffle-based join if our
-    # "broadcast_join_limit" config is less than 3.
-    if broadcast_join_limit < 3:
+    # "broadcast_limit" config is less than 3 (with target_partition_size=1).
+    if broadcast_limit < 3:
         # Expect shuffle-based join
         assert len(shuffle_nodes) == 2
     else:
@@ -344,7 +349,9 @@ def test_cache_preserves_partitioning_join():
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    lowered_ir, partition_info, _ = lower_ir_graph(ir, config_options)
+    lowered_ir, partition_info = lower_ir_graph(
+        ir, config_options, collect_statistics(ir, config_options)
+    )
 
     # Cache should preserve partitioning on 'key'
     cache_partitioning = [
