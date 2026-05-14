@@ -504,7 +504,7 @@ void validate_variant_struct(column_view const& variant_column)
 }
 
 // Marshal a parsed path into parallel host-side arrays the kernels expect: a flat byte buffer of
-// concatenated key names plus an offsets table. (Phase A: object-key steps only.)
+// concatenated key names plus an offsets table.
 struct marshalled_path {
   std::string name_bytes;
   std::vector<size_type> name_offsets;

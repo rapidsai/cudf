@@ -217,7 +217,7 @@ TEST_F(ExtractVariantFieldTest, ApacheObjectPrimitiveIntField)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(ExtractVariantFieldTest, ApacheObjectNestedFields)
+TEST_F(ExtractVariantFieldTest, ApacheObjectNested)
 {
   auto struc       = make_apache_variant(afv::object_nested);
   auto stream      = cudf::test::get_default_stream();
@@ -239,6 +239,7 @@ TEST_F(ExtractVariantFieldTest, ApacheObjectNestedFields)
 
   check("$.observation.location", "In the Volcano");
   check("$.observation.time", "12:34:56");
+  check("$.observation.value.temperature", int8_t{123});
   check("$.species.name", "lava monster");
   check("$.species.population", int16_t{6789});
   check("$.id", int8_t{1});
@@ -307,7 +308,7 @@ inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 
 }  // namespace
 
-TEST_F(ExtractVariantFieldTest, ApacheNestedPathChainedEqualsSingleCall)
+TEST_F(ExtractVariantFieldTest, ApacheObjectNestedChainedCalls)
 {
   auto col    = make_apache_variant(afv::object_nested);
   auto stream = cudf::test::get_default_stream();
@@ -354,7 +355,7 @@ TEST_F(ExtractVariantFieldTest, NestedPathNonObjectIntermediate)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(ExtractVariantFieldTest, NestedPathSingleKeyMatchesOldApi)
+TEST_F(ExtractVariantFieldTest, BareNameEqualsDollarPath)
 {
   auto struc  = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
@@ -417,8 +418,8 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
 {
   auto struc  = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
-  // Phase A supports object-key descent only — bracket steps and quoted keys are reserved
-  // for a follow-on phase and must currently throw, alongside obviously malformed paths.
+  // Only object-key descent is supported — array indexing, bracket steps, and quoted keys should
+  // throw, alongside obviously malformed paths.
   for (auto const* bad :
        {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.a.1bad", "$.", "$.'q'", "$['x']", "$.a[*]"}) {
     EXPECT_THROW(
@@ -426,38 +427,6 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
       std::invalid_argument)
       << "path that should have thrown: " << bad;
   }
-}
-
-TEST_F(ExtractVariantFieldTest, DeepObjectPathSmokeCheck)
-{
-  // Hand-built four-level pure-object descent — analogous to the deep paths in the
-  // workload-scale benchmark fixtures, but with arrays excluded for Phase A.
-  //   { "item016": { "item017": { "item085": { "item018": "found" } } } }
-  //
-  // Dictionary sorted lexicographically: item016(0) < item017(1) < item018(2) < item085(3).
-  auto const meta = build_metadata({"item016", "item017", "item018", "item085"});
-
-  auto const leaf_str    = enc_short_string("found");
-  auto const item085_obj = build_single_field_object(/*fid=*/2, leaf_str);
-  auto const item017_obj = build_single_field_object(/*fid=*/3, item085_obj);
-  auto const item016_obj = build_single_field_object(/*fid=*/1, item017_obj);
-  auto const root        = build_single_field_object(/*fid=*/0, item016_obj);
-  auto struc             = wrap_single_variant(meta, root);
-  auto stream            = cudf::test::get_default_stream();
-
-  auto nested = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "$.item016.item017.item085.item018", cudf::data_type{cudf::type_id::STRING}, stream);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nested, cudf::test::strings_column_wrapper{"found"});
-
-  // Purely-object prefix.
-  auto raw_item017 =
-    cudf::io::parquet::experimental::get_variant_field(struc, "$.item016.item017", stream);
-  EXPECT_EQ(raw_item017->type().id(), cudf::type_id::STRUCT);
-
-  // Bare-name first step equivalent to `$.item016`.
-  auto bare   = cudf::io::parquet::experimental::get_variant_field(struc, "item016", stream);
-  auto dollar = cudf::io::parquet::experimental::get_variant_field(struc, "$.item016", stream);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*bare, *dollar);
 }
 
 namespace {
@@ -716,7 +685,7 @@ TEST_F(CastVariantTest, ApacheShortString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(CastVariantTest, ApacheLongString)
+TEST_F(CastVariantTest, ApachePrimitiveString)
 {
   auto struc = make_apache_variant(afv::primitive_string);
 

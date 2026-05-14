@@ -54,7 +54,7 @@ namespace io::parquet::experimental {
  * @return VARIANT struct column with the extracted field's encoded bytes
  *
  * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
- *         which are reserved for a later phase)
+ *         which require array-indexing support that is not yet implemented)
  */
 [[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,
