@@ -893,15 +893,15 @@ cdef class FilteredJoin:
             Deprecated alias for ``right``. Use ``right`` instead.
         """
         if build is not None:
+            if right is not None:
+                raise TypeError(
+                    "Cannot specify both 'right' and 'build'; use 'right'."
+                )
             warnings.warn(
                 "The 'build' parameter is deprecated; use 'right' instead.",
                 FutureWarning,
                 stacklevel=2,
             )
-            if right is not None:
-                raise TypeError(
-                    "Cannot specify both 'right' and 'build'; use 'right'."
-                )
             right = build
         if right is None:
             raise TypeError(
@@ -954,15 +954,15 @@ cdef class FilteredJoin:
             A column containing the row indices from the left table after the join.
         """
         if probe is not None:
+            if left is not None:
+                raise TypeError(
+                    "Cannot specify both 'left' and 'probe'; use 'left'."
+                )
             warnings.warn(
                 "The 'probe' parameter is deprecated; use 'left' instead.",
                 FutureWarning,
                 stacklevel=2,
             )
-            if left is not None:
-                raise TypeError(
-                    "Cannot specify both 'left' and 'probe'; use 'left'."
-                )
             left = probe
         if left is None:
             raise TypeError("semi_join requires the 'left' argument.")
@@ -1014,15 +1014,15 @@ cdef class FilteredJoin:
             A column containing the row indices from the left table after the join.
         """
         if probe is not None:
+            if left is not None:
+                raise TypeError(
+                    "Cannot specify both 'left' and 'probe'; use 'left'."
+                )
             warnings.warn(
                 "The 'probe' parameter is deprecated; use 'left' instead.",
                 FutureWarning,
                 stacklevel=2,
             )
-            if left is not None:
-                raise TypeError(
-                    "Cannot specify both 'left' and 'probe'; use 'left'."
-                )
             left = probe
         if left is None:
             raise TypeError("anti_join requires the 'left' argument.")
