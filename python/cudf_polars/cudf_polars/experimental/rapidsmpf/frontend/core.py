@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     import uuid
@@ -102,12 +103,15 @@ class ClusterInfo:
         Value of ``CUDA_VISIBLE_DEVICES``, or ``None`` if unset.
     gpu_uuid
         UUID of the current CUDA device.
+    device_memory
+        Total device memory in bytes, or ``None`` if unknown.
     """
 
     pid: int
     hostname: str
     cuda_visible_devices: str | None
     gpu_uuid: str
+    device_memory: int | None = None
 
     @classmethod
     def local(cls) -> ClusterInfo:
@@ -123,6 +127,7 @@ class ClusterInfo:
             hostname=socket.gethostname(),
             cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
             gpu_uuid=cuda.core.Device().uuid,
+            device_memory=get_total_device_memory(),
         )
 
 
@@ -178,6 +183,16 @@ class StreamingEngine(pl.GPUEngine):
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
+
+        # Gather `min_device_size` from the cluster
+        cluster_infos: list[ClusterInfo] = self.gather_cluster_info()
+        device_memories = [info.device_memory for info in cluster_infos]
+        executor_options["min_device_size"] = (
+            None
+            if any(dm is None for dm in device_memories)
+            else min(device_memories, default=None)
+        )
+
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
         # accept it.
         engine_options = dict(engine_options)
@@ -188,7 +203,7 @@ class StreamingEngine(pl.GPUEngine):
             **engine_options,
         )
         if nranks > 1 and not allow_gpu_sharing:
-            uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
+            uuids = [info.gpu_uuid for info in cluster_infos]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
                     "Multiple ranks share the same GPU (UUID collision detected). "

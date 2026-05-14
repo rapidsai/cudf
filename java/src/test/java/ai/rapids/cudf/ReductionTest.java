@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -13,11 +13,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigInteger;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReductionTest extends CudfTestBase {
   public static final double DELTAD = 0.00001;
@@ -637,6 +641,137 @@ class ReductionTest extends CudfTestBase {
          ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
          Scalar result = cv.standardDeviation(DType.FLOAT32)) {
       assertEquals(expected, result);
+    }
+  }
+
+  // Decoded struct scalar produced by SUM_WITH_OVERFLOW reduction.
+  // sumValid=false models the cudf "no valid input" case (null sum child).
+  private static final class SumWithOverflowResult {
+    final boolean sumValid;
+    final long sumValue;
+    final boolean overflow;
+
+    SumWithOverflowResult(boolean sumValid, long sumValue, boolean overflow) {
+      this.sumValid = sumValid;
+      this.sumValue = sumValue;
+      this.overflow = overflow;
+    }
+  }
+
+  // SUM_WITH_OVERFLOW reduction returns a struct scalar with children
+  // {sum: INT64, overflow: BOOL8}. Helper closes the temporary children views.
+  private static SumWithOverflowResult readSumWithOverflow(Scalar result) {
+    assertEquals(DType.STRUCT, result.getType());
+    assertTrue(result.isValid());
+    ColumnView[] children = result.getChildrenFromStructScalar();
+    try {
+      assertEquals(2, children.length);
+      assertEquals(DType.INT64, children[0].getType());
+      assertEquals(DType.BOOL8, children[1].getType());
+      try (ColumnVector sumCol = children[0].copyToColumnVector();
+           ColumnVector ovfCol = children[1].copyToColumnVector();
+           HostColumnVector sumHost = sumCol.copyToHost();
+           HostColumnVector ovfHost = ovfCol.copyToHost()) {
+        boolean sumValid = !sumHost.isNull(0);
+        long sumValue = sumValid ? sumHost.getLong(0) : 0L;
+        boolean overflow = ovfHost.getBoolean(0);
+        return new SumWithOverflowResult(sumValid, sumValue, overflow);
+      }
+    } finally {
+      for (ColumnView c : children) c.close();
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNoOverflow() {
+    try (ColumnVector cv = ColumnVector.fromLongs(1L, 2L, 3L, 4L, 5L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(15L, r.sumValue);  // 1+2+3+4+5
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowPositiveOverflow() {
+    // Long.MAX_VALUE + 1 wraps via two's complement to Long.MIN_VALUE.
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(Long.MIN_VALUE, r.sumValue);
+      assertTrue(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNegativeOverflow() {
+    // Long.MIN_VALUE + (-1) wraps via two's complement to Long.MAX_VALUE.
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(Long.MAX_VALUE, r.sumValue);
+      assertTrue(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowEmptyColumn() {
+    try (ColumnVector cv = ColumnVector.fromLongs();
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // empty input -> null sum
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowAllNullColumn() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(null, null, null);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // all-null input -> null sum
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowRejectsNonInt64() {
+    try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3)) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
+    }
+  }
+
+  // The reduction path of cudf::SUM_WITH_OVERFLOW is INT64-only (see
+  // cpp/src/reductions/reductions.cpp's `requires(std::is_same_v<Source, int64_t>)`).
+  // The three tests below pin down the throw contract for fixed-point inputs;
+  // if a future cudf change broadens that requires-clause to accept decimals,
+  // these tests will start failing — the signal to expose decimal reduction.
+  @Test
+  void testSumWithOverflowReductionRejectsDecimal32() {
+    try (ColumnVector cv = ColumnVector.decimalFromInts(-2, 100, 200, 300)) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
+    }
+  }
+
+  @Test
+  void testSumWithOverflowReductionRejectsDecimal64() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(-4, 100L, 200L, 300L)) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
+    }
+  }
+
+  @Test
+  void testSumWithOverflowReductionRejectsDecimal128() {
+    try (ColumnVector cv = ColumnVector.decimalFromBigInt(-10,
+             BigInteger.valueOf(100), BigInteger.valueOf(200), BigInteger.valueOf(300))) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
     }
   }
 }
