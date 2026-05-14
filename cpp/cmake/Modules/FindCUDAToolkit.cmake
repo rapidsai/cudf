@@ -1025,9 +1025,7 @@ else()
     endif()
   elseif(CUDAToolkit_NVCC_EXECUTABLE)
     # Compute the version by invoking nvcc
-    execute_process(COMMAND ${CUDAToolkit_NVCC_EXECUTABLE} "--version"
-      OUTPUT_VARIABLE NVCC_OUT
-      RESULT_VARIABLE _nvcc_version_result)
+    execute_process(COMMAND ${CUDAToolkit_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
     if(NVCC_OUT MATCHES [=[ V([0-9]+)\.([0-9]+)\.([0-9]+)]=])
       set(CUDAToolkit_VERSION_MAJOR "${CMAKE_MATCH_1}")
       set(CUDAToolkit_VERSION_MINOR "${CMAKE_MATCH_2}")
@@ -1489,12 +1487,7 @@ if(CUDAToolkit_FOUND)
   endif()
 
   _CUDAToolkit_find_and_add_import_lib(nvml ALT nvidia-ml nvml)
-  if(NOT TARGET CUDA::nvml_static)
-    _CUDAToolkit_find_and_add_import_lib(nvml_static ONLY_SEARCH_FOR libnvidia-ml.a libnvml.a)
-    if(TARGET CUDA::nvml_static)
-      target_link_libraries(CUDA::nvml_static INTERFACE ${CMAKE_DL_LIBS})
-    endif()
-  endif()
+  _CUDAToolkit_find_and_add_import_lib(nvml_static ONLY_SEARCH_FOR libnvidia-ml.a libnvml.a)
 
   if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL 10.0)
     # Header-only variant. Uses dlopen().
@@ -1546,24 +1539,22 @@ if(CUDAToolkit_FOUND)
     set_property(TARGET CUDA::bin2c PROPERTY IMPORTED_LOCATION "${CUDA_bin2c_EXECUTABLE}")
   endif()
 
-  if(NOT TARGET CUDA::sanitizer)
-    _CUDAToolkit_find_and_add_import_lib(
-      sanitizer
-      ONLY_SEARCH_FOR sanitizer-public
-      EXTRA_PATH_SUFFIXES
-        "../compute-sanitizer"
-        "../../../compute-sanitizer"
-        "../Sanitizer"
-        "../../../Sanitizer"
-        "../extras/Sanitizer"
-        "../../../extras/Sanitizer"
-      EXTRA_INCLUDE_DIRS "${CUDAToolkit_CUPTI_INCLUDE_DIR}"
-    )
-    if(TARGET CUDA::sanitizer)
-      get_property(loc TARGET CUDA::sanitizer PROPERTY IMPORTED_LOCATION)
-      get_filename_component(sanitizer_dir "${loc}" DIRECTORY)
-      target_include_directories(CUDA::sanitizer INTERFACE "${sanitizer_dir}/include")
-    endif()
+  _CUDAToolkit_find_and_add_import_lib(
+    sanitizer
+    ONLY_SEARCH_FOR sanitizer-public
+    EXTRA_PATH_SUFFIXES
+      "../compute-sanitizer"
+      "../../../compute-sanitizer"
+      "../Sanitizer"
+      "../../../Sanitizer"
+      "../extras/Sanitizer"
+      "../../../extras/Sanitizer"
+    EXTRA_INCLUDE_DIRS "${CUDAToolkit_CUPTI_INCLUDE_DIR}"
+  )
+  if(TARGET CUDA::sanitizer)
+    get_property(loc TARGET CUDA::sanitizer PROPERTY IMPORTED_LOCATION)
+    get_filename_component(sanitizer_dir "${loc}" DIRECTORY)
+    target_include_directories(CUDA::sanitizer INTERFACE "${sanitizer_dir}/include")
   endif()
 endif()
 
