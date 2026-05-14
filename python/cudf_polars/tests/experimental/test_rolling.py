@@ -10,6 +10,7 @@ import polars as pl
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 
@@ -40,7 +41,8 @@ def test_rolling_datetime(request, engine):
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
     # HStack may redirect to Select before fallback; message differs by Polars IR / version.
-    with pytest.warns(
+    with warns_on_spmd(
+        engine,
         UserWarning,
         match=r"This (HStack|selection) is not supported for multiple partitions\.",
     ):

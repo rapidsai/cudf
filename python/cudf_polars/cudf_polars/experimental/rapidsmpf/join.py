@@ -929,7 +929,7 @@ async def _choose_strategy_from_samples(
     # - Full: cannot broadcast (must shuffle both to preserve both sides)
 
     # Determine which sides may be broadcasted
-    broadcast_threshold = executor.target_partition_size * executor.broadcast_join_limit
+    broadcast_threshold = executor.broadcast_limit
     left_size_ok = left_total < broadcast_threshold and (
         left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
     )
