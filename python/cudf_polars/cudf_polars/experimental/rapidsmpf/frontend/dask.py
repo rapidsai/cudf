@@ -827,7 +827,9 @@ class DaskEngine(StreamingEngine):
         executor_options = executor_options or {}
         existing_executor_options = self.config.get("executor_options", {})
         if isinstance(existing_executor_options, dict):
-            executor_options = {**existing_executor_options, **executor_options}
+            existing_quent_context = existing_executor_options.get("quent_context")
+            if existing_quent_context is not None:
+                executor_options.setdefault("quent_context", existing_quent_context)
         engine_options = engine_options or {}
 
         rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
