@@ -365,17 +365,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
   block.sync();
 
-  // Exit if the DELTA_BINARY_PACKED header is malformed
-  if (db->error) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
-    return;
-  }
-
   auto const batch_size = db->values_per_mb;
-  if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
+  if (db->error or batch_size > max_delta_mini_block_size) {
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
 
@@ -385,9 +380,6 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   while (s->error == 0 &&
          (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
-    int const prev_input_value_count = s->input_value_count;
-    uint32_t const prev_src_pos      = s->src_pos;
-
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
@@ -442,13 +434,6 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     }
 
     block.sync();
-
-    // Ensure we advanced position and input value count in this iteration.
-    if (s->input_value_count == prev_input_value_count and s->src_pos == prev_src_pos) {
-      cg::invoke_one(block, [&] { s->set_error_code(decode_error::DELTA_PARAMS_UNSUPPORTED); });
-      block.sync();
-      break;
-    }
   }
 
   if (has_repetition) {
@@ -565,8 +550,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Propagate malformed-header errors from either underlying DELTA_BINARY_PACKED decoder.
   if (prefix_db->error or suffix_db->error) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
 
@@ -586,8 +573,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // sanity check to make sure we can process this page
   auto const batch_size = prefix_db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
 
@@ -785,7 +774,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Propagate malformed-header errors from the underlying DELTA_BINARY_PACKED decoder
   if (db->error) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    }
     return;
   }
 

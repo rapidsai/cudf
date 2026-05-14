@@ -151,6 +151,7 @@ struct delta_binary_decoder {
     current_value_idx = 0;
     error             = false;
 
+    // Validate header against the DELTA_BINARY_PACKED spec invariants
     if (mini_block_count == 0 or block_size == 0 or (block_size % mini_block_count) != 0) {
       error         = true;
       value_count   = 0;
