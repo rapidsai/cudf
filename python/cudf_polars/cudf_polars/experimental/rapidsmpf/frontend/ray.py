@@ -648,7 +648,7 @@ class RayEngine(StreamingEngine):
                     nranks=nranks,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
-                        "int",
+                        int,
                         executor_options.get("num_py_executors", 8),
                     ),
                     hardware_binding=hw_binding,
