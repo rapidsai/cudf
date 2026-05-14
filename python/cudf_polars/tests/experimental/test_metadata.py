@@ -582,22 +582,24 @@ def test_from_keys_order_scheme_single_rank(spmd_engine):
     assert result_rev_int.inter_rank_scheme is None
 
 
-def test_remap_partitioning_order_scheme_select(spmd_engine, engine):
+def test_remap_partitioning_order_scheme_select(spmd_engine):
     part = Partitioning(
         inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
         local="inherit",
     )
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
     assert result is not None
     assert isinstance(result.inter_rank, OrderScheme)
     assert result.inter_rank.keys[0].column_index == 1
 
 
-def test_remap_partitioning_order_scheme_drops_key(spmd_engine, engine):
+def test_remap_partitioning_order_scheme_drops_key(spmd_engine):
     part = Partitioning(
         inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
         local="inherit",
     )
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b",)), part)
     assert result is not None
     assert result.inter_rank is None
