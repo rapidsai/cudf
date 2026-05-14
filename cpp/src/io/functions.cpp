@@ -4,10 +4,10 @@
  */
 
 #include "io/orc/orc.hpp"
-#include "io/utilities/getenv_or.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
@@ -165,7 +165,7 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       sources.reserve(info.filepaths().size());
       // Creating sources in a single thread is faster for a small number of sources
       auto const pool_use_threshold =
-        getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8ul);
+        cudf::detail::getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8ul);
       if (info.filepaths().size() >= pool_use_threshold) {
         std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
         source_tasks.reserve(info.filepaths().size());

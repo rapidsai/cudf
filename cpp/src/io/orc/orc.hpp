@@ -159,7 +159,6 @@ int inline constexpr encode_field_number(int field_number, ProtofType field_type
   return (field_number * 8) + static_cast<int>(field_type);
 }
 
-namespace {
 template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
   requires(!std::is_arithmetic_v<base_t> and !std::is_enum_v<base_t>)
@@ -187,7 +186,6 @@ int static constexpr encode_field_number_base(int field_number) noexcept
 {
   return encode_field_number(field_number, ProtofType::FIXED64);
 }
-};  // namespace
 
 template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
