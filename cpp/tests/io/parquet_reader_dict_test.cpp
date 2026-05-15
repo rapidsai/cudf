@@ -9,6 +9,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -16,6 +17,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>
@@ -26,6 +28,8 @@ constexpr cudf::size_type num_rows       = 5000;
 constexpr cudf::size_type cardinality    = num_rows / 10;
 constexpr cudf::size_type row_group_size = 1000;
 constexpr unsigned int seed              = 0xcece;
+constexpr unsigned int list_strings_seed = seed ^ 0xA5701DUL;
+constexpr cudf::size_type max_elements_per_list = 8;
 constexpr double null_probability        = 0.1;
 
 cudf::test::strings_column_wrapper make_low_cardinality_strings()
@@ -42,6 +46,33 @@ cudf::test::strings_column_wrapper make_low_cardinality_strings()
   }
 
   return cudf::test::strings_column_wrapper(strings.begin(), strings.end(), valids.begin());
+}
+
+std::unique_ptr<cudf::column> make_low_cardinality_lists_of_strings()
+{
+  std::mt19937 engine(list_strings_seed);
+  std::uniform_int_distribution<int> value_dist(0, cardinality - 1);
+  std::uniform_int_distribution<int> len_dist(0, max_elements_per_list);
+
+  std::vector<cudf::size_type> offsets;
+  offsets.reserve(num_rows + 1);
+  offsets.push_back(0);
+  std::vector<std::string> child_strings;
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
+    auto const len = len_dist(engine);
+    for (int e = 0; e < len; ++e) {
+      child_strings.push_back("str_" + std::to_string(value_dist(engine)));
+    }
+    offsets.push_back(offsets.back() + static_cast<cudf::size_type>(len));
+  }
+
+  auto child = cudf::test::strings_column_wrapper(child_strings.begin(), child_strings.end());
+  auto offsets_col =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets.begin(), offsets.end())
+      .release();
+
+  return cudf::make_lists_column(
+    num_rows, std::move(offsets_col), child.release(), 0, rmm::device_buffer{});
 }
 
 void write_parquet(cudf::table_view const& input, std::string const& filepath)
@@ -123,4 +154,25 @@ TEST_F(ParquetReaderDictTest, FlatStringNoTranscodeByDefault)
   auto const read_col = read_table->view().column(0);
   ASSERT_EQ(read_col.type().id(), cudf::type_id::STRING);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, read_col);
+}
+
+// List<string> is not eligible for Parquet-dictionary → DICTIONARY32 transcode (flat string columns
+// only). With `try_output_dict_columns` enabled, the reader still round-trips as LIST<STRING>.
+TEST_F(ParquetReaderDictTest, ListOfStringsDictEncodedWithTryOutputDictOption)
+{
+  auto list_col = make_low_cardinality_lists_of_strings();
+
+  auto const input_tbl = cudf::table_view{{list_col->view()}};
+  auto const filepath =
+    temp_env->get_temp_filepath("ListOfStringsDictEncodedWithTryOutputDictOption.parquet");
+  write_parquet(input_tbl, filepath);
+
+  auto const read_table = read_parquet_as_dict(filepath).tbl;
+  ASSERT_EQ(read_table->num_rows(), input_tbl.num_rows());
+  ASSERT_EQ(read_table->num_columns(), 1);
+
+  auto const read_col = read_table->view().column(0);
+  ASSERT_EQ(read_col.type().id(), cudf::type_id::LIST)
+    << "List<string> must remain LIST when try_output_dict_columns is on (transcode is flat-only)";
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(list_col->view(), read_col);
 }
