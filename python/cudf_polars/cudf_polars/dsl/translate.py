@@ -978,6 +978,7 @@ def _translate_rolling(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    # pl.col("a").rolling(...) 
     with set_expr_context(translator, ExecutionContext.ROLLING):
         agg_expr = translator.translate_expr(n=node.function, schema=schema)
     orderby = translator.visitor.view_expression(node.index_column).name
