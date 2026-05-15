@@ -97,7 +97,8 @@ def _should_bcast_join(
     right: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
-    broadcast_join_limit: int,
+    broadcast_limit: int,
+    target_partition_size: int,
 ) -> bool:
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
@@ -115,16 +116,13 @@ def _should_bcast_join(
         and partition_info[large].count == output_count
     )
 
-    # Broadcast-Join Criteria:
-    # 1. Large dataframe isn't already shuffled
-    # 2. Small dataframe has 8 partitions (or fewer).
-    #    TODO: Make this value/heuristic configurable).
-    #    We may want to account for the number of workers.
-    # 3. The "kind" of join is compatible with a broadcast join
+    # Derive a partition-count threshold: how many target-sized partitions fit
+    # in the broadcast byte budget?
+    bcast_partition_threshold = broadcast_limit // target_partition_size
 
     return (
         not large_shuffled
-        and small_count <= broadcast_join_limit
+        and small_count <= bcast_partition_threshold
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
@@ -249,7 +247,8 @@ def _(
         right,
         partition_info,
         output_count,
-        config_options.executor.broadcast_join_limit,
+        config_options.executor.broadcast_limit,
+        config_options.executor.target_partition_size,
     ):
         # Create a broadcast join
         return _make_bcast_join(
