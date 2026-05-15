@@ -342,7 +342,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     if typ in ("csv", "ndjson"):
         for p in paths:
             if plc.io.SourceInfo._is_remote_uri(p):
-                continue
+                continue  # pragma: no cover
             data = _read_file_bytes(Path(p))
             compression = _check_compression(data)
             if compression is not None:
