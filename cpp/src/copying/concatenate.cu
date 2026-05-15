@@ -318,8 +318,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
       cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream));
   } else {
     col->set_null_count(0);  // prevent null count from being materialized
+    stream.synchronize();
   }
-  stream.synchronize();
 
   return col;
 }
