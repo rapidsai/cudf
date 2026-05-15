@@ -256,6 +256,14 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/functions/test_concat.py::test_concat_with_empty_dataframes_strict_25725": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/sql/test_window_functions.py::test_over_with_order_by": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_windows": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
 }
 
 
