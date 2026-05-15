@@ -351,13 +351,17 @@ class LocalRepartitioner:
         null_order = [k.null_order for k in scheme.keys]
         if key_column_indices is None:
             key_column_indices = [k.column_index for k in scheme.keys]
-        boundaries, boundary_stream = scheme.get_boundaries()
-        join_cuda_streams(downstreams=(stream,), upstreams=(boundary_stream,))
+        boundary_chunk = scheme.get_boundaries(self._br)
+        join_cuda_streams(downstreams=(stream,), upstreams=(boundary_chunk.stream,))
         async with self._local_shuffle.inserting() as inserter:
             for table in self._iter_chunks(stream):
                 key_table = plc.Table([table.columns()[i] for i in key_column_indices])
                 split_col = plc.search.lower_bound(
-                    key_table, boundaries, column_order, null_order, stream=stream
+                    key_table,
+                    boundary_chunk.table_view(),
+                    column_order,
+                    null_order,
+                    stream=stream,
                 )
                 splits = (
                     DataFrame.from_table(
