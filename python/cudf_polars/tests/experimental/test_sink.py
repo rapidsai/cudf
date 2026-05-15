@@ -91,15 +91,14 @@ def test_sink_parquet_directory(
         assert len(list(check_path.iterdir())) == expected_file_count
 
 
-def test_sink_parquet_raises(streaming_engines):
+def test_sink_parquet_raises(df: pl.LazyFrame, tmp_path, streaming_engine_factory):
     """No streaming-engine cluster supports ``sink_to_directory=False``."""
-    from cudf_polars.utils.config import Cluster, StreamingExecutor
-
-    for name in streaming_engines:
-        with pytest.raises(
-            ValueError, match=f"The {name} cluster requires sink_to_directory=True"
-        ):
-            StreamingExecutor(cluster=Cluster(name), sink_to_directory=False)
+    engine = streaming_engine_factory(StreamingOptions(sink_to_directory=False))
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match=r"ValueError: The [^ ]+ cluster requires sink_to_directory=True",
+    ):
+        df.sink_parquet(tmp_path / "test_sink_gpu.parquet", engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
