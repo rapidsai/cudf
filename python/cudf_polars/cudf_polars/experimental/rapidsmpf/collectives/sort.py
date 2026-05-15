@@ -127,7 +127,7 @@ def _extract_boundaries(
 
     # Check if any rows of partition_ends and partition_starts
     # are equal. If so, the boundaries are not strict
-    # (a distinct value my exist in multiple partitions).
+    # (a distinct value may exist in multiple partitions).
     bool_type = plc.DataType(plc.TypeId.BOOL8)
     row_eq = plc.binaryop.binary_operation(
         partition_ends.columns()[0],
