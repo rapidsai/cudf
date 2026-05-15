@@ -88,7 +88,6 @@ fetch_byte_ranges_to_device_async(
       return acc + range.size();
     });
 
-  // Coalesce adjacent byte ranges into a single IO call. Pure local computation, no shared state.
   std::vector<size_t> io_offsets;
   std::vector<size_t> io_sizes;
   std::vector<uint8_t*> destinations;
@@ -118,6 +117,7 @@ fetch_byte_ranges_to_device_async(
 
   using host_read_buffer = std::unique_ptr<cudf::io::datasource::buffer>;
 
+  // Vectors to hold futures from datasource
   std::vector<std::future<size_t>> device_read_tasks{};
   std::vector<std::future<host_read_buffer>> host_read_tasks{};
   device_read_tasks.reserve(io_offsets.size());
