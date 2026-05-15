@@ -262,6 +262,7 @@ embed_output generate_cxx_source_files_data(std::string_view id,
   auto hash_list = join_formatted(
     hash, ", ", [](uint8_t byte) { return std::format("0x{:02x}", static_cast<unsigned>(byte)); });
   auto arrays_list = generate_arrays(array_ids, array_values);
+  auto namespace_decl = "namespace " + std::string(id);
 
   auto cxx_header = std::format(
     R"***(
@@ -273,7 +274,7 @@ embed_output generate_cxx_source_files_data(std::string_view id,
 #include <span>
 #include <string_view>
 
-namespace {} {{
+{} {{
 
 
 constexpr char const * include_directories[{}] =
@@ -319,7 +320,7 @@ constexpr std::uint8_t hash[{}] =
 
 }}
 )***",
-    id,
+namespace_decl,
     id,
     include_dirs.size(),
     include_dirs_list,
