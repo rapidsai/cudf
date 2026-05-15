@@ -358,7 +358,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       auto const key = slot->first;
       if (key != KEY_SENTINEL) {
         auto const frag_loc = static_cast<size_type>(slot->second) - frag_start;
-        auto const loc      = atomicAdd(&fragment_offsets[frag_loc], 1);
+        cudf_assert(frag_loc >= 0 && frag_loc < num_frags &&
+                    "populate stamped a fragment hint outside this chunk's fragment range");
+        auto const loc = atomicAdd(&fragment_offsets[frag_loc], 1);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         slot->second         = loc;

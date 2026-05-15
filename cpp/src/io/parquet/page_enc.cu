@@ -152,7 +152,7 @@ void __device__ init_frag_state(frag_init_state_s* const s,
   // frag.num_rows = fragment_size except for the last fragment in partition which can be
   // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
   // nested.
-  s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
+  s->frag.num_rows = cuda::std::min<size_type>(fragment_size, part_end_row - s->frag.start_row);
   s->frag.fragment_data_size = 0;
   s->frag.dict_data_size     = 0;
 

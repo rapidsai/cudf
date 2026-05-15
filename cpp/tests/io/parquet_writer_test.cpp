@@ -1197,13 +1197,11 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
     EXPECT_LE(*max_bits_iter, chunk_wide_max_bits);
 
     // Check expected number of freq and rare pages
-
-     auto const total_page_count = static_cast<int>(page_dict_bits.size());
-     auto const freq_page_count  = static_cast<int>(
-       std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits;
-       }));
-     EXPECT_EQ(freq_page_count, freq_pages);
-     EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
+    auto const total_page_count = static_cast<int>(page_dict_bits.size());
+    auto const freq_page_count  = static_cast<int>(
+      std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits; }));
+    EXPECT_EQ(freq_page_count, freq_pages);
+    EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
   }
 }
 
