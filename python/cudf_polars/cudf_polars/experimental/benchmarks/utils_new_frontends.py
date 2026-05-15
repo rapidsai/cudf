@@ -109,7 +109,7 @@ else:
     _HAS_STRUCTLOG = True
 
 
-_STREAMING_FRONTENDS = frozenset({"spmd", "ray", "dask"})
+_STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
 
 
 @dataclasses.dataclass
@@ -387,7 +387,7 @@ class RunConfig:
     qualification: bool = False
 
     # Execution mode
-    frontend: Literal["cpu", "in-memory", "spmd", "ray", "dask", "duckdb"]
+    frontend: Literal["cpu", "dask", "duckdb", "in-memory", "ray", "spmd"]
     connect: str | None = None
     num_gpus: int | None = None
 
@@ -1742,15 +1742,15 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--frontend",
         required=True,
         type=str,
-        choices=["cpu", "in-memory", "spmd", "ray", "dask", "duckdb"],
+        choices=["cpu", "dask", "duckdb", "in-memory", "ray", "spmd"],
         help=textwrap.dedent("""\
             Execution frontend:
                 - cpu       : Polars CPU streaming engine (no GPU)
-                - in-memory : Single-process GPU, in-memory evaluation
-                - spmd      : SPMD execution via rrun launcher
-                - ray       : Ray actor-based multi-GPU execution
                 - dask      : Dask distributed multi-GPU execution
-                - duckdb    : DuckDB CPU execution"""),
+                - duckdb    : DuckDB CPU execution
+                - in-memory : Single-process GPU, in-memory evaluation
+                - ray       : Ray actor-based multi-GPU execution
+                - spmd      : SPMD execution via rrun launcher"""),
     )
     parser.add_argument(
         "--connect",
@@ -1994,7 +1994,7 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     if run_config.num_gpus is not None:
         if run_config.connect is not None:
             raise ValueError("--num-gpus cannot be used with --connect.")
-        if run_config.frontend not in ("ray", "dask"):
+        if run_config.frontend not in ("dask", "ray"):
             raise ValueError(
                 "--num-gpus is only supported with --frontend ray or dask."
             )
@@ -2021,8 +2021,8 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "in-memory":
-            run_polars_in_memory(
+        case "dask":
+            run_polars_dask(
                 benchmark,
                 args,
                 run_config,
@@ -2031,8 +2031,10 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "spmd":
-            run_polars_spmd(
+        case "duckdb":
+            run_duckdb(benchmark, args)
+        case "in-memory":
+            run_polars_in_memory(
                 benchmark,
                 args,
                 run_config,
@@ -2051,8 +2053,8 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "dask":
-            run_polars_dask(
+        case "spmd":
+            run_polars_spmd(
                 benchmark,
                 args,
                 run_config,
@@ -2061,7 +2063,5 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "duckdb":
-            run_duckdb(benchmark, args)
         case _:
             raise ValueError(f"Unknown --frontend: {args.frontend!r}")
