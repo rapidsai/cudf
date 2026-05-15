@@ -146,6 +146,7 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
     (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0])};
   CUDF_CUDA_TRY(
     cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), 2, stream));
+  stream.synchronize();
   return table_vector;
 }
 
@@ -176,6 +177,7 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
     (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0])};
   CUDF_CUDA_TRY(
     cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), 4, stream));
+  stream.synchronize();
   return table_vector;
 }
 

@@ -319,6 +319,7 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
   } else {
     col->set_null_count(0);  // prevent null count from being materialized
   }
+  stream.synchronize();
 
   return col;
 }
