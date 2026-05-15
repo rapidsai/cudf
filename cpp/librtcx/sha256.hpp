@@ -13,7 +13,7 @@
 
 namespace rtcx {
 
-namespace {
+inline namespace detail {
 
 std::uint32_t ror(std::uint32_t x, std::uint32_t n) { return (x >> n) | (x << (32 - n)); }
 
@@ -48,7 +48,7 @@ std::uint32_t get_be32(void const* ptr)
          (std::uint32_t)p[3] << 0;
 }
 
-}  // namespace
+}  // namespace detail
 
 struct [[nodiscard]] sha256_hex_string {
   char data_[65];  // NOLINT(modernize-avoid-c-arrays)

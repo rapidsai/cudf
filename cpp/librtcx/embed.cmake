@@ -38,12 +38,12 @@ endfunction()
 # This function registers a directory of include files to be embedded for JIT compilation.
 function(embed_includes TARGET)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS COPY_DIRECTORY # Source directory where files will be copied from
+  set(ONE_VALUE_ARGS SOURCE_DIRECTORY # Source directory where files will be copied from
                      DEST_DIRECTORY # Destination directory where files will be copied to
   )
   set(MULTI_VALUE_ARGS
-      FILES # Source files relative to COPY_DIRECTORY (optional, if not provided, all files under
-            # COPY_DIRECTORY will be used)
+      FILES # Source files relative to SOURCE_DIRECTORY (optional, if not provided, all files under
+            # SOURCE_DIRECTORY will be used)
       INCLUDE_DIRECTORIES # Include directories to be used when compiling with these files
   )
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
@@ -52,23 +52,23 @@ function(embed_includes TARGET)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
-  if(NOT ARG_COPY_DIRECTORY
+  if(NOT ARG_SOURCE_DIRECTORY
      OR NOT ARG_DEST_DIRECTORY
      OR NOT ARG_INCLUDE_DIRECTORIES
   )
     message(
-      FATAL_ERROR "COPY_DIRECTORY, DEST_DIRECTORY, and INCLUDE_DIRECTORIES arguments are required"
+      FATAL_ERROR "SOURCE_DIRECTORY, DEST_DIRECTORY, and INCLUDE_DIRECTORIES arguments are required"
     )
   endif()
 
   if(NOT ARG_FILES)
     # gather all include files under the specified directory
-    file(GLOB_RECURSE INCLUDE_FILES "${ARG_COPY_DIRECTORY}/*")
+    file(GLOB_RECURSE INCLUDE_FILES "${ARG_SOURCE_DIRECTORY}/*")
 
     # get their paths relative to the base include directory
     set(INCLUDE_FILES_RELATIVE_PATHS "")
     foreach(INCLUDE_FILE IN LISTS INCLUDE_FILES)
-      file(RELATIVE_PATH INCLUDE_FILE_REL_PATH "${ARG_COPY_DIRECTORY}" "${INCLUDE_FILE}")
+      file(RELATIVE_PATH INCLUDE_FILE_REL_PATH "${ARG_SOURCE_DIRECTORY}" "${INCLUDE_FILE}")
       list(APPEND INCLUDE_FILES_RELATIVE_PATHS "${INCLUDE_FILE_REL_PATH}")
     endforeach()
 
@@ -77,8 +77,8 @@ function(embed_includes TARGET)
 
   # check that each source file exists
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
-    if(NOT EXISTS "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
-      message(FATAL_ERROR "Source file '${ARG_COPY_DIRECTORY}/${SOURCE_FILE}' does not exist")
+    if(NOT EXISTS "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}")
+      message(FATAL_ERROR "Source file '${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}' does not exist")
     endif()
   endforeach(SOURCE_FILE)
 
@@ -92,7 +92,7 @@ function(embed_includes TARGET)
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
     list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
     list(APPEND SOURCE_FILE_IDS "include_${SOURCE_FILE_IDS_LENGTH}")
-    list(APPEND SOURCE_FILES "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
+    list(APPEND SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}")
     list(APPEND SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
   endforeach()
 

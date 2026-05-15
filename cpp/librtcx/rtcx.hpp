@@ -785,7 +785,6 @@ struct cache_t {  // NOLINT
  * operations. Failure to call this function before using other RTCX functions may result in
  * undefined behavior or runtime errors.
  * This function is thread-safe.
- *
  */
 void initialize();
 
