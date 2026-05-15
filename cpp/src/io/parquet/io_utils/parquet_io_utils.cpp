@@ -166,13 +166,9 @@ fetch_byte_ranges_to_device_async(
         host_read_buffers.emplace_back(task.get());
         copy_srcs.push_back(host_read_buffers.back().get()->data());
       }
-
       CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
         copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
     }
-
-    // Synchronize stream to ensure `memcpy_batch_async` completes before vectors are destroyed
-    stream.synchronize();
 
     auto sync_function = [](decltype(device_read_tasks) device_read_tasks) {
       for (auto& task : device_read_tasks) {
