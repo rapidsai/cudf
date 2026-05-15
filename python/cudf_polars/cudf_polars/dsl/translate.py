@@ -277,7 +277,7 @@ def _is_dynamic_pred(visitor: Any, expr_ir: Any) -> bool:
     except Exception as e:
         if str(e) == "dynamic_pred":
             return True
-        raise
+        raise  # pragma: no cover
     else:
         return False
 
@@ -626,7 +626,7 @@ def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.
 @_translate_ir.register
 def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> ir.IR:
     if POLARS_VERSION_LT_139:
-        strict = False
+        strict = False  # pragma: no cover
     else:
         _, strict, _ = node.options
     return ir.HConcat(

@@ -583,19 +583,16 @@ def test_scan_parquet_remote(
     )
 
 
+@pytest.mark.xfail(
+    condition=not POLARS_VERSION_LT_139,
+    reason="polars 1.39+ ndjson remote reader requires range request support",
+)
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
-    request: pytest.FixtureRequest,
     tmp_path: Path,
     df: pl.DataFrame,
     httpserver: HTTPServer,
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_139,
-            reason="polars 1.39+ ndjson remote reader requires range request support",
-        )
-    )
     path = tmp_path / "foo.jsonl"
     df.write_ndjson(path)
     bytes_ = path.read_bytes()
