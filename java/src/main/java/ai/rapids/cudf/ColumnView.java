@@ -5477,23 +5477,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static void syncAndCleanup(Cuda.Stream stream, Throwable primary,
       List<HostColumnVectorCore> children,
       HostMemoryBuffer hostData, HostMemoryBuffer hostOffsets, HostMemoryBuffer hostValid) {
-    boolean drained = false;
     try {
       stream.sync();
-      drained = true;
     } catch (Throwable syncFailure) {
+      // Stream is in an error state; pending DMA writes may not have landed.
+      // Intentionally leak the host buffers rather than risk closing them while
+      // the DMA engine could still write into freed memory.
       primary.addSuppressed(syncFailure);
+      return;
     }
-    if (drained) {
-      if (children != null) {
-        for (HostColumnVectorCore child : children) {
-          CleanupHelpers.closeAndSuppress(child, primary);
-        }
+    if (children != null) {
+      for (HostColumnVectorCore child : children) {
+        CleanupHelpers.closeAndSuppress(child, primary);
       }
-      CleanupHelpers.closeAndSuppress(hostData, primary);
-      CleanupHelpers.closeAndSuppress(hostOffsets, primary);
-      CleanupHelpers.closeAndSuppress(hostValid, primary);
     }
+    CleanupHelpers.closeAndSuppress(hostData, primary);
+    CleanupHelpers.closeAndSuppress(hostOffsets, primary);
+    CleanupHelpers.closeAndSuppress(hostValid, primary);
   }
 
   private static HostColumnVectorCore copyToHostAsyncNestedHelper(
