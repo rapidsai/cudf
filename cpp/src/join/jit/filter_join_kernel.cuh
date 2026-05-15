@@ -18,6 +18,7 @@ namespace cudf::join::jit {
  * @tparam has_user_data Whether the predicate function requires user data
  * @tparam is_null_aware Whether the expression needs input validity as part of its computation
  * @tparam Accessors type list of accessors for columns used in the predicate
+ * @param num_rows Number of rows to process
  * @param left_indices Device span of left table indices
  * @param right_indices Device span of right table indices
  * @param columns Device view of all columns involved in the predicate
