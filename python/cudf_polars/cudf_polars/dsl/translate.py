@@ -872,7 +872,6 @@ def _(
     if hasattr(plrs._expr_nodes, "RollingGroupOptions") and isinstance(
         node.options, plrs._expr_nodes.RollingGroupOptions
     ):  # pragma: no cover; polars >=1.36 uses AExpr::Rolling now
-        # pl.col("a").rolling(...) in polars <1.36
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = unique_names(schema)
