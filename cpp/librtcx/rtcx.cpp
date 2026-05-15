@@ -267,7 +267,7 @@ nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
   }
 }
 
-void* load_dll(std::string_view base_name, std::span<std::string const> names)
+void* load_dso(std::string_view base_name, std::span<std::string const> names)
 {
   for (auto& name : names) {
     void* handle = ::dlopen(name.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -311,7 +311,7 @@ struct LibCuda {
   static void* _load()
   {
     std::string lib_names[] = {"libcuda.so.1"};  // NOLINT(modernize-avoid-c-arrays)
-    return load_dll("libcuda.so", lib_names);
+    return load_dso("libcuda.so", lib_names);
   }
 
  private:
@@ -354,7 +354,7 @@ struct LibNVRTC {
     std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
       {std::format("libnvrtc.so.{}", major)};
 
-    return load_dll("libnvrtc.so", lib_names);
+    return load_dso("libnvrtc.so", lib_names);
   }
 
  private:
@@ -397,9 +397,9 @@ struct LibNVJitLink {
       std::runtime_error);
 
     std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
-      {std::format("libnvJitLink.so.{}", major), "libnvJitLink.so"};
+      {std::format("libnvJitLink.so.{}", major)};
 
-    return load_dll("libnvJitLink.so", lib_names);
+    return load_dso("libnvJitLink.so", lib_names);
   }
 
  private:
@@ -919,6 +919,11 @@ std::optional<blob_t> blob_t::from_file(char const* path)
   auto file_size = ::lseek(fd, 0, SEEK_END);
   if (file_size == -1) { throw_posix("Failed to determine size of RTCX cache file", "lseek"); }
 
+  if (file_size == 0) {
+    // mmap does not support mapping zero-length files, so we return an empty blob in this case
+    return blob_t::from_static_data({});
+  }
+
   void* map = ::mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
 
   if (map == MAP_FAILED) { throw_posix("Failed to memory-map RTCX cache file", "mmap"); }
@@ -1004,8 +1009,15 @@ void cache_blob_to_disk(std::string const& cache_dir,
       if (::close(fd) == -1) { throw_posix("Failed to close temporary RTCX cache file", "close"); }
     });
 
-    if (::write(fd, binary.data(), binary.size()) == -1) {
-      throw_posix("Failed to write RTCX cache to temporary file", "write");
+    {
+      auto ptr       = binary.data();
+      auto remaining = binary.size();
+      while (remaining > 0) {
+        auto written = ::write(fd, ptr, remaining);
+        if (written == -1) { throw_posix("Failed to write RTCX cache to temporary file", "write"); }
+        ptr += static_cast<std::size_t>(written);
+        remaining -= static_cast<std::size_t>(written);
+      }
     }
   }
 

@@ -612,9 +612,10 @@ struct cache_t {  // NOLINT
    * @brief Construct a new cache_t object with the specified cache directory, limits, and options
    * for preloading and enabling the cache.
    * @param cache_dir The directory path to be used for on-disk caching of compiled blobs and
-   * libraries
+   * libraries (this directory must exist and be writable by the process)
    * @param tmp_dir The directory path to be used for temporary files during atomic writes to the
-   * on-disk cache
+   * on-disk cache (this directory must exist, writable by the process, and be on the same
+   * filesystem as cache_dir to ensure atomic renames work correctly)
    * @param limits A cache_limits struct specifying the maximum number of blobs and libraries to
    * store in the cache before eviction occurs
    * @param preload A boolean flag indicating whether to preload the cache from disk during

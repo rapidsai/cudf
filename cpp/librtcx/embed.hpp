@@ -47,8 +47,6 @@ struct embed_output {
   std::vector<uint8_t> bin_file_data;
 };
 
-enum class value_type : int8_t { INT, STRING };
-
 std::pair<std::vector<uint8_t>, std::vector<size_range>> merge_bytes_with_null_terminators(
   std::span<std::vector<uint8_t> const> bytes_lists)
 {
@@ -125,6 +123,8 @@ std::string join_formatted(Container& items, std::string_view delimiter, Formatt
   return result.str();
 }
 
+enum class value_type : int8_t { INT, STRING };
+
 std::string generate_arrays(std::span<std::string_view const> array_ids,
                             std::span<std::string_view const> array_values)
 {
@@ -137,25 +137,19 @@ std::string generate_arrays(std::span<std::string_view const> array_ids,
   using ints_t    = std::vector<std::int64_t>;
   using values_t  = std::variant<strings_t, ints_t>;
 
-  struct array_entry {
-    value_type type = value_type::INT;
-    values_t values;
-  };
-
-  std::map<std::string_view, array_entry> arrays;
+  std::map<std::string_view, values_t> arrays;
 
   for (size_t i = 0; i < array_ids.size(); ++i) {
     auto id    = array_ids[i];
     auto value = array_values[i];
+    auto type  = get_type(value);
     if (auto array_it = arrays.find(id); array_it == arrays.end()) {
-      switch (get_type(value)) {
-        {
-          case value_type::INT:
-            arrays.emplace(id, array_entry(value_type::INT, std::vector<std::int64_t>{}));
-        }
-        break;
+      switch (type) {
+        case value_type::INT: {
+          arrays.emplace(id, ints_t{});
+        } break;
         case value_type::STRING: {
-          arrays.emplace(id, array_entry(value_type::STRING, std::vector<std::string_view>{}));
+          arrays.emplace(id, strings_t{});
         } break;
         default: throw std::logic_error("Unexpected constant type");
       }
@@ -163,17 +157,16 @@ std::string generate_arrays(std::span<std::string_view const> array_ids,
 
     auto& array = arrays[id];
 
-    switch (array.type) {
+    switch (type) {
       case value_type::INT: {
         std::int64_t int_value;
         RTCX_EMBED_EXPECTS(
           std::from_chars(value.data(), value.data() + value.size(), int_value).ec == std::errc(),
           std::format("Invalid integer constant value: {}", value));
-        std::get<std::vector<std::int64_t>>(array.values).push_back(int_value);
+        std::get<ints_t>(array).push_back(int_value);
       } break;
-
       case value_type::STRING: {
-        std::get<std::vector<std::string_view>>(array.values).push_back(value);
+        std::get<strings_t>(array).push_back(value);
       } break;
 
       default: break;
@@ -183,26 +176,19 @@ std::string generate_arrays(std::span<std::string_view const> array_ids,
   std::string result;
 
   for (auto& [id, array] : arrays) {
-    switch (array.type) {
-      case value_type::INT: {
-        auto& values = std::get<std::vector<std::int64_t>>(array.values);
-        result += std::format(
-          "constexpr std::int64_t {}[{}] = {{ {} }};\n\n",
-          id,
-          values.size(),
-          join_formatted(values, ", ", [](std::int64_t v) { return std::to_string(v); }));
-      } break;
-
-      case value_type::STRING: {
-        auto& values = std::get<std::vector<std::string_view>>(array.values);
-        result += std::format(
-          "constexpr char const* {}[{}] = {{ {} }};\n\n",
-          id,
-          values.size(),
-          join_formatted(values, ", ", [](auto s) { return std::format("\"{}\"", s); }));
-      } break;
-
-      default: break;
+    if (auto* ints = std::get_if<ints_t>(&array); ints != nullptr) {
+      result +=
+        std::format("constexpr std::int64_t {}[{}] = {{ {} }};\n\n",
+                    id,
+                    ints->size(),
+                    join_formatted(*ints, ", ", [](std::int64_t v) { return std::to_string(v); }));
+    } else {
+      auto& strings = std::get<strings_t>(array);
+      result +=
+        std::format("constexpr char const* {}[{}] = {{ {} }};\n\n",
+                    id,
+                    strings.size(),
+                    join_formatted(strings, ", ", [](auto s) { return std::format("\"{}\"", s); }));
     }
   }
 
@@ -356,14 +342,12 @@ constexpr std::uint8_t hash[{}] =
   auto asm_source = std::format(
     R"***(
 .section .rodata
-.global {}_files_begin
-{}_files_begin:
-.incbin "{}.bin"
+.global {0}_files_begin
+{0}_files_begin:
+.incbin "{0}.bin"
 
 .section .note.GNU-stack,"",@progbits
 )***",
-    id,
-    id,
     id);
 
   return embed_output{

@@ -15,8 +15,7 @@ endif()
 # embed_includes() or embed_blob() for the target. It sets up necessary variables and state to track
 # the registered files and dependencies for the target. The TARGET argument specifies the name of
 # the target being initialized.
-function(add_embed)
-  set(TARGET ${ARGV0})
+function(add_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS)
   set(MULTI_VALUE_ARGS)
@@ -37,8 +36,7 @@ function(add_embed)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
-function(embed_includes)
-  set(TARGET ${ARGV0})
+function(embed_includes TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS COPY_DIRECTORY # Source directory where files will be copied from
                      DEST_DIRECTORY # Destination directory where files will be copied to
@@ -126,8 +124,7 @@ function(embed_includes)
 endfunction()
 
 # This function registers a single file to be embedded for JIT compilation.
-function(embed_blob)
-  set(TARGET ${ARGV0})
+function(embed_blob TARGET)
   set(OPTIONS)
   set(ONE_VALUE_ARGS ID FILE DEST)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
@@ -214,8 +211,7 @@ endfunction()
 
 # This function generates the necessary files and build targets to embed the registered source files
 # for JIT compilation.
-function(embed)
-  set(TARGET ${ARGV0})
+function(embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS "COMPRESSION")
   set(MULTI_VALUE_ARGS "")
@@ -259,18 +255,19 @@ function(embed)
     INPUT "${CONFIGURED_EMBED_SCRIPT}"
   )
 
-  add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${ZSTD_INCLUDE_DIR})
-  target_link_libraries("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_DL_LIBS} zstd)
+  set(RUNNER "${TARGET}__jit_embed_run")
+  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
+  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
+  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
   set_target_properties(
-    "${TARGET}__jit_embed_run" PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+    ${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
   )
-  target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
+  target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
-    COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${TARGET}__jit_embed_run>
-    DEPENDS "${CONFIGURED_EMBED_SCRIPT}" "${EMBED_SCRIPT}" ${${TARGET}__embed__source_files}
+    COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${RUNNER}>
+    DEPENDS "${EMBED_SCRIPT}" ${${TARGET}__embed__source_files}
             ${${TARGET}__embed__target_deps}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
