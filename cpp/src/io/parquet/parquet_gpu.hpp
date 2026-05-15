@@ -530,7 +530,7 @@ struct PageFragment {
                              //!< non-leaf level
   uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
-  uint16_t num_rows;         //!< Number of rows in fragment
+  size_type num_rows;         //!< Number of rows in fragment
   EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 

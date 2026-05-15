@@ -97,7 +97,8 @@ def _should_bcast_join(
     right: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
-    broadcast_join_limit: int,
+    broadcast_limit: int,
+    target_partition_size: int,
 ) -> bool:
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
@@ -115,16 +116,13 @@ def _should_bcast_join(
         and partition_info[large].count == output_count
     )
 
-    # Broadcast-Join Criteria:
-    # 1. Large dataframe isn't already shuffled
-    # 2. Small dataframe has 8 partitions (or fewer).
-    #    TODO: Make this value/heuristic configurable).
-    #    We may want to account for the number of workers.
-    # 3. The "kind" of join is compatible with a broadcast join
+    # Derive a partition-count threshold: how many target-sized partitions fit
+    # in the broadcast byte budget?
+    bcast_partition_threshold = broadcast_limit // target_partition_size
 
     return (
         not large_shuffled
-        and small_count <= broadcast_join_limit
+        and small_count <= bcast_partition_threshold
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
@@ -164,20 +162,22 @@ def _(
     left, pi_left = rec(left)
     right, pi_right = rec(right)
 
-    # Fallback to single partition on the smaller table
+    # Fallback to single partition on the smaller table whenever either
+    # side has more than one partition.
     left_count = pi_left[left].count
     right_count = pi_right[right].count
     output_count = max(left_count, right_count)
-    fallback_msg = "ConditionalJoin not supported for multiple partitions."
-    if left_count < right_count:
-        if left_count > 1 or dynamic_planning:
+    if output_count > 1 or dynamic_planning:
+        if left_count < right_count:
             left = Repartition(left.schema, left)
             pi_left[left] = PartitionInfo(count=1)
-            _fallback_inform(fallback_msg, config_options)
-    elif right_count > 1 or dynamic_planning:
-        right = Repartition(right.schema, right)
-        pi_right[right] = PartitionInfo(count=1)
-        _fallback_inform(fallback_msg, config_options)
+        else:
+            right = Repartition(right.schema, right)
+            pi_right[right] = PartitionInfo(count=1)
+        _fallback_inform(
+            "ConditionalJoin not supported for multiple partitions.",
+            config_options,
+        )
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
@@ -247,7 +247,8 @@ def _(
         right,
         partition_info,
         output_count,
-        config_options.executor.broadcast_join_limit,
+        config_options.executor.broadcast_limit,
+        config_options.executor.target_partition_size,
     ):
         # Create a broadcast join
         return _make_bcast_join(

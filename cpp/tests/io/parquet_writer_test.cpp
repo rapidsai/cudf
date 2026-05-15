@@ -1118,7 +1118,6 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
   constexpr auto num_pages         = 10;
   constexpr auto page_size         = num_rows / num_pages;
   constexpr auto freq_pages        = num_pages - 2;
-  constexpr auto rare_pages        = num_pages - freq_pages;
   constexpr auto cardinality       = 64'000;
   constexpr auto frequent_set_size = 64;
 
@@ -1127,8 +1126,9 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
     std::mt19937 rng{0xACAD1A};
     using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-    // Hot pages contain values in [0, frequent_set_size - 1], rare pages contain values in
-    // [frequent_set_size, cardinality - 1]
+    // Hot pages contain values in [0, frequent_set_size - 1], (first `freq_pages` pages in the
+    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `num_pages -
+    // freq_pages` pages in the chunk)
     std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
     std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
     auto constexpr threshold = freq_pages * page_size;
@@ -1187,21 +1187,23 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
   // Checks
   {
     // Check min and max bit widths
-    auto const [min_bits, max_bits] = std::ranges::minmax_element(page_dict_bits);
-    auto const chunk_wide_max_bits  = std::bit_width<uint32_t>(cardinality - 1);
-    auto const frequent_max_bits    = std::bit_width<uint32_t>(frequent_set_size - 1);
-    ASSERT_NE(min_bits, page_dict_bits.end());
-    ASSERT_NE(max_bits, page_dict_bits.end());
-    EXPECT_GT(*min_bits, 1);
-    EXPECT_GT(*max_bits, frequent_max_bits);
-    EXPECT_LE(*max_bits, chunk_wide_max_bits);
+    auto const [min_bits_iter, max_bits_iter] = std::ranges::minmax_element(page_dict_bits);
+    auto const chunk_wide_max_bits            = std::bit_width<uint32_t>(cardinality - 1);
+    auto const frequent_max_bits              = std::bit_width<uint32_t>(frequent_set_size - 1);
+
+    ASSERT_FALSE(page_dict_bits.empty());
+    EXPECT_GT(*min_bits_iter, 1);
+    EXPECT_GT(*max_bits_iter, frequent_max_bits);
+    EXPECT_LE(*max_bits_iter, chunk_wide_max_bits);
 
     // Check expected number of freq and rare pages
-    auto const total_page_count = static_cast<int>(page_dict_bits.size());
-    auto const freq_page_count  = static_cast<int>(
-      std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits; }));
-    EXPECT_EQ(freq_page_count, freq_pages);
-    EXPECT_EQ(total_page_count - freq_page_count, rare_pages);
+
+     auto const total_page_count = static_cast<int>(page_dict_bits.size());
+     auto const freq_page_count  = static_cast<int>(
+       std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits;
+       }));
+     EXPECT_EQ(freq_page_count, freq_pages);
+     EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
   }
 }
 

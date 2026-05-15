@@ -27,6 +27,7 @@
 #include <cmath>
 #include <numeric>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -36,21 +37,22 @@ constexpr auto frequent_pages_ratio =
   0.8;  ///< 80% of the pages will only contain elements from the frequent set
 
 /**
- * @brief Build a numeric column such that certain pages only contain elements from the frequent set
+ * @brief Build a string column such that certain pages only contain elements from the frequent set
  and others only contain elements from the rare set
  *
- * @tparam T Element type of the generated column values
+ * Each generated value is of the form `"k_<v>"`, where `v` is a `cudf::size_type` index in `[0,
+ cardinality)`, so cardinality maps 1:1 to distinct strings.
+ *
  * @param num_rows Total number of rows
  * @param page_size_rows Number of rows per page
  * @param cardinality Total number of distinct values
  * @param frequent_set_ratio Fraction of `cardinality` assigned to the frequent set
  * @return Constructed column values
  */
-template <typename T>
-std::vector<T> build_numeric_column(cudf::size_type num_rows,
-                                    cudf::size_type page_size_rows,
-                                    cudf::size_type cardinality,
-                                    double frequent_set_ratio)
+std::vector<std::string> build_string_column(cudf::size_type num_rows,
+                                             cudf::size_type page_size_rows,
+                                             cudf::size_type cardinality,
+                                             double frequent_set_ratio)
 {
   static constexpr auto dict_rng_seed = 0xC0DEFACE;
 
@@ -72,17 +74,17 @@ std::vector<T> build_numeric_column(cudf::size_type num_rows,
   std::uniform_int_distribution<cudf::size_type> rare_dist(frequent_set_size, cardinality - 1);
 
   cudf::size_type row_idx = 0;
-  std::vector<T> values(num_rows);
+  std::vector<std::string> values(num_rows);
   std::generate_n(values.begin(), num_rows, [&]() {
-    return row_idx++ < frequent_set_threshold ? static_cast<T>(freq_dist(rng))
-                                              : static_cast<T>(rare_dist(rng));
+    auto const v = row_idx++ < frequent_set_threshold ? freq_dist(rng) : rare_dist(rng);
+    return "k_" + std::to_string(v);
   });
 
   return values;
 }
 
 /**
- * @brief Build a table with a single INT64 column
+ * @brief Build a table with a single STRING column
  *
  * @tparam reverse_order Whether to reverse the order of the values
  * @param num_rows Number of rows
@@ -99,13 +101,11 @@ template <bool reverse_order = false>
 {
   constexpr cudf::size_type num_cols = 1;
 
-  auto values =
-    build_numeric_column<int64_t>(num_rows, page_size_rows, cardinality, frequent_set_ratio);
+  auto values = build_string_column(num_rows, page_size_rows, cardinality, frequent_set_ratio);
   if constexpr (reverse_order) { std::reverse(values.begin(), values.end()); }
   std::vector<std::unique_ptr<cudf::column>> cols;
   cols.reserve(num_cols);
-  cols.emplace_back(
-    cudf::test::fixed_width_column_wrapper<int64_t>(values.begin(), values.end()).release());
+  cols.emplace_back(cudf::test::strings_column_wrapper(values.begin(), values.end()).release());
   return std::make_unique<cudf::table>(std::move(cols));
 }
 
