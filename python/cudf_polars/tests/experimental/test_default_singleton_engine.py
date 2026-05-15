@@ -4,11 +4,10 @@
 Tests for :class:`DefaultSingletonEngine`.
 
 Every test body runs inside a worker spawned by the module-scoped
-``proc_pool`` fixture. This isolates us from the session-scoped
-``streaming_engines`` fixture in :file:`conftest.py`, which creates an
-``SPMDEngine`` that lives for the entire pytest session and would
-otherwise trip the "no other engine alive when default is created"
-guardrail in :class:`DefaultSingletonEngine`.
+``proc_pool`` fixture. This isolates us from any session-scoped shared
+streaming engine that may be live in the parent pytest process and would
+otherwise trip the "no other engine alive when default is created" guardrail
+in :class:`DefaultSingletonEngine`.
 """
 
 from __future__ import annotations

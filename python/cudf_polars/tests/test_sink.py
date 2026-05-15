@@ -126,14 +126,14 @@ def test_sink_parquet_compression_type(df, tmp_path, compression, compression_le
                 "compression": compression,
                 "compression_level": compression_level,
             },
-            executor="in-memory",
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     elif compression in {"snappy", "lz4", "uncompressed"}:
         assert_sink_result_equal(
             df,
             tmp_path / "compression.parquet",
             write_kwargs={"compression": compression},
-            executor="in-memory",
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     else:
         assert_sink_ir_translation_raises(
