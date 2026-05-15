@@ -801,18 +801,34 @@ void initialize();
 void teardown();
 
 /**
+ * @brief Reflect a value of any type into its CUDA string representation
+ * @tparam T The type of the value to be reflected
+ * @param value The value to be reflected
+ * @return A string containing the CUDA representation of the value
+ * @details This is a template function that can be specialized for different types to provide
+ * appropriate CUDA string representations.
+ */
+template <typename T>
+std::string reflect(T value);
+
+/**
  * @brief Reflect a boolean value into its CUDA string representation ("true" or "false")
  * @param value The boolean value to be reflected
  * @return A string containing the CUDA representation of the boolean value ("true" or "false")
  */
-inline std::string reflect_bool(bool value) { return std::format("(bool){}", value); }
+template <>
+inline std::string reflect<bool>(bool value)
+{
+  return std::format("(bool){}", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::uint8_t value)
+template <>
+inline std::string reflect<std::uint8_t>(std::uint8_t value)
 {
   return std::format("(unsigned char){}U", value);
 }
@@ -822,7 +838,8 @@ inline std::string reflect_int(std::uint8_t value)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::uint16_t value)
+template <>
+inline std::string reflect<std::uint16_t>(std::uint16_t value)
 {
   return std::format("(unsigned short){}U", value);
 }
@@ -832,7 +849,8 @@ inline std::string reflect_int(std::uint16_t value)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::uint32_t value)
+template <>
+inline std::string reflect<std::uint32_t>(std::uint32_t value)
 {
   return std::format("(unsigned int){}U", value);
 }
@@ -842,7 +860,8 @@ inline std::string reflect_int(std::uint32_t value)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::uint64_t value)
+template <>
+inline std::string reflect<std::uint64_t>(std::uint64_t value)
 {
   return std::format("(unsigned long long int){}ULL", value);
 }
@@ -852,14 +871,19 @@ inline std::string reflect_int(std::uint64_t value)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::int8_t value) { return std::format("(signed char){}", value); }
+template <>
+inline std::string reflect<std::int8_t>(std::int8_t value)
+{
+  return std::format("(signed char){}", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::int16_t value)
+template <>
+inline std::string reflect<std::int16_t>(std::int16_t value)
 {
   return std::format("(signed short){}", value);
 }
@@ -869,14 +893,19 @@ inline std::string reflect_int(std::int16_t value)
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::int32_t value) { return std::format("(signed int){}", value); }
+template <>
+inline std::string reflect<std::int32_t>(std::int32_t value)
+{
+  return std::format("(signed int){}", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-inline std::string reflect_int(std::int64_t value)
+template <>
+inline std::string reflect<std::int64_t>(std::int64_t value)
 {
   return std::format("(signed long long int){}LL", value);
 }
@@ -886,14 +915,22 @@ inline std::string reflect_int(std::int64_t value)
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
-inline std::string reflect_float(float value) { return std::format("(float){}F", value); }
+template <>
+inline std::string reflect<float>(float value)
+{
+  return std::format("(float){}F", value);
+}
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
-inline std::string reflect_float(double value) { return std::format("(double){}", value); }
+template <>
+inline std::string reflect<double>(double value)
+{
+  return std::format("(double){}", value);
+}
 
 /**
  * @brief Reflect a value of any type into its CUDA string representation, given the type name as a
