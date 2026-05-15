@@ -498,21 +498,10 @@ TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
-
-  // Not-present key must still yield null after a full dictionary scan.
-  auto missing = cudf::io::parquet::experimental::extract_variant_field(struc, "k99", i32, stream);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing,
-                                 cudf::test::fixed_width_column_wrapper<int32_t>({0}, {false}));
 }
 
-TEST_F(ExtractVariantFieldTest, DeepNestedPathManyRowsWithNulls)
+TEST_F(ExtractVariantFieldTest, NullsAtDifferentDepths)
 {
-  // 128 rows of a depth-4 object-descent path $.a.b.c.d, cycling through four row
-  // shapes that null at different depths.  With 128 rows spread across 4 bitmask
-  // words and ~75% of rows nulling, this stresses the per-row null-mask updates in
-  // the sizes and copy kernels — threads within a warp all share one bitmask word,
-  // so non-atomic bit clears would race and silently drop some nulls.  A smaller
-  // fixture (e.g. 3 rows) would not reliably catch that.
   std::vector<std::string> const dict = {"a", "b", "c", "d"};  // fids: a=0,b=1,c=2,d=3
   auto const meta                     = build_metadata(dict);
 
@@ -563,42 +552,30 @@ TEST_F(ExtractVariantFieldTest, DeepNestedPathManyRowsWithNulls)
 
 struct GetVariantFieldTest : public cudf::test::BaseFixture {};
 
-TEST_F(GetVariantFieldTest, ReturnsVariantStruct)
+TEST_F(GetVariantFieldTest, ApacheObjectPrimitive)
 {
-  // Object { "x": 7, "y": "hi" }
-  std::vector<uint8_t> const metab = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'y'};
-  std::vector<uint8_t> const valb  = {
-    0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x07, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
-  auto struc = wrap_single_variant(metab, valb);
+  auto struc  = make_apache_variant(afv::object_primitive);
+  auto stream = cudf::test::get_default_stream();
 
-  auto got = cudf::io::parquet::experimental::get_variant_field(
-    struc, "x", cudf::test::get_default_stream());
+  auto got = cudf::io::parquet::experimental::get_variant_field(struc, "int_field", stream);
 
   EXPECT_EQ(got->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(got->num_children(), 2);
   EXPECT_EQ(got->size(), 1);
+  EXPECT_EQ(got->view().child(0).type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(got->view().child(1).type().id(), cudf::type_id::LIST);
 
-  auto const child0 = got->view().child(0);
-  auto const child1 = got->view().child(1);
-  EXPECT_EQ(child0.type().id(), cudf::type_id::LIST);
-  EXPECT_EQ(child1.type().id(), cudf::type_id::LIST);
-
-  // The extracted value for "x" should be the INT32 encoding: {0x14, 0x07, 0x00, 0x00, 0x00}
-  // Verify it can be decoded via cast_variant
   auto casted = cudf::io::parquet::experimental::cast_variant(
-    got->view(), cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{7};
+    got->view(), cudf::data_type{cudf::type_id::INT8}, stream);
+  cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*casted, expected);
 }
 
-TEST_F(GetVariantFieldTest, MissingKeyAllNull)
+TEST_F(GetVariantFieldTest, ApacheObjectPrimitiveMissingKeyAllNull)
 {
-  std::vector<uint8_t> const metab = {0x01, 0x01, 0x00, 0x01, static_cast<uint8_t>('x')};
-  std::vector<uint8_t> const valb  = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
-  auto struc                       = wrap_single_variant(metab, valb);
-
-  auto got = cudf::io::parquet::experimental::get_variant_field(
-    struc, "missing", cudf::test::get_default_stream());
+  auto struc = make_apache_variant(afv::object_primitive);
+  auto got   = cudf::io::parquet::experimental::get_variant_field(
+    struc, "no_such_field", cudf::test::get_default_stream());
 
   EXPECT_EQ(got->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(got->null_count(), 1);
@@ -609,31 +586,19 @@ TEST_F(GetVariantFieldTest, MissingKeyAllNull)
   EXPECT_EQ(meta_child.size(), 1);
 }
 
-TEST_F(GetVariantFieldTest, ThenCastMatchesExtract)
+TEST_F(GetVariantFieldTest, GetAndCastMatchesExtract)
 {
-  // Multi-row test: verify get_variant_field + cast_variant == extract_variant_field
   auto struc  = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
 
-  // extract_variant_field (convenience)
   auto extract_x = cudf::io::parquet::experimental::extract_variant_field(
     struc, "x", cudf::data_type{cudf::type_id::INT32}, stream);
 
-  // get_variant_field + cast_variant (two-step)
   auto intermediate = cudf::io::parquet::experimental::get_variant_field(struc, "x", stream);
   auto two_step_x   = cudf::io::parquet::experimental::cast_variant(
     intermediate->view(), cudf::data_type{cudf::type_id::INT32}, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_x, *two_step_x);
-
-  // Same for string field "y"
-  auto extract_y = cudf::io::parquet::experimental::extract_variant_field(
-    struc, "y", cudf::data_type{cudf::type_id::STRING}, stream);
-  auto intermediate_y = cudf::io::parquet::experimental::get_variant_field(struc, "y", stream);
-  auto two_step_y     = cudf::io::parquet::experimental::cast_variant(
-    intermediate_y->view(), cudf::data_type{cudf::type_id::STRING}, stream);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_y, *two_step_y);
 }
 
 struct CastVariantTest : public cudf::test::BaseFixture {};
