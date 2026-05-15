@@ -443,11 +443,28 @@ std::string cast_to_type::generate_code(instance_context& ctx,
         }
         return std::format("{}\n{}", operand_code, cast_code);
       } else {
-        auto cast_code = std::format("{} {} = static_cast<{}>({});",
-                                     target_type_name,
-                                     id_,
-                                     target_type_name,
-                                     operand_->get_id());
+        auto const raw_type_name = type_to_name(target_type_);
+        std::string cast_code;
+        if (ctx.has_nulls()) {
+          cast_code = std::format(
+            "{} {} = [&]() {{\n"
+            "  auto _val_ = {};\n"
+            "  if (!_val_.has_value()) return {}{{}};\n"
+            "  return {}{{static_cast<{}>(*_val_)}};\n"
+            "}}();",
+            target_type_name,
+            id_,
+            operand_->get_id(),
+            target_type_name,
+            target_type_name,
+            raw_type_name);
+        } else {
+          cast_code = std::format("{} {} = static_cast<{}>({});",
+                                  target_type_name,
+                                  id_,
+                                  target_type_name,
+                                  operand_->get_id());
+        }
         return std::format("{}\n{}", operand_code, cast_code);
       }
     }

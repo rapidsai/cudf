@@ -1447,4 +1447,88 @@ TYPED_TEST(TransformTest, CastIntToDecimal32)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TYPED_TEST(TransformTest, CastIntToDecimal64WithNulls)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<int32_t>{{10, 20, 30, 40}, {1, 0, 1, 0}};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>(
+    {1000, 0, 3000, 0}, {1, 0, 1, 0}, numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastFloatToDecimal64)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<double>{1.5, 2.25, 3.0, 4.75};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected =
+    cudf::test::fixed_point_column_wrapper<int64_t>({150, 225, 300, 475}, numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastEmptyColumnToDecimal64)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<int32_t>{};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>({}, numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastIntToDecimal64ScaleZero)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<int32_t>{10, 20, 30, 40};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, 0};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected =
+    cudf::test::fixed_point_column_wrapper<int64_t>({10, 20, 30, 40}, numeric::scale_type{0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastIntToDecimal64AllNulls)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<int32_t>{{10, 20, 30, 40}, {0, 0, 0, 0}};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>(
+    {0, 0, 0, 0}, {0, 0, 0, 0}, numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
