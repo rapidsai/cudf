@@ -120,8 +120,13 @@ class IRExecutionContext:
 
     Parameters
     ----------
+    py_executor
+       Thread pool for thread offload in async execution, only used by
+       streaming engine.
     get_cuda_stream
         A zero-argument callable that returns a CUDA stream.
+    query_id
+        Identifier for the query being executed.
     """
 
     py_executor: ThreadPoolExecutor | None = field(default=None)
@@ -145,8 +150,7 @@ class IRExecutionContext:
 
         Returns
         -------
-        Coroutine
-             To be awaited to obtain the result of calling ``func``.
+        Awaitable to obtain the result of calling ``func``.
 
         Notes
         -----
