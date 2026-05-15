@@ -42,17 +42,21 @@ struct overflow_sum_op {
   __device__ sum_overflow_result<DeviceType> operator()(
     sum_overflow_result<DeviceType> const& lhs, sum_overflow_result<DeviceType> const& rhs) const
   {
-    // Skip the add if either side already overflowed, or if it would overflow now.
+    // If either operand already has overflow, propagate without performing the add.
     if (lhs.overflow || rhs.overflow) {
       return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
+
+    // Check for positive overflow: would the addition exceed max()?
     if (rhs.sum > 0 && lhs.sum > cuda::std::numeric_limits<DeviceType>::max() - rhs.sum) {
       return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
+    // Check for negative overflow: would the addition go below min()?
     if (rhs.sum < 0 && lhs.sum < cuda::std::numeric_limits<DeviceType>::min() - rhs.sum) {
       return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
 
+    // Perform the addition (safe if no overflow detected)
     return sum_overflow_result<DeviceType>{static_cast<DeviceType>(lhs.sum + rhs.sum), false};
   }
 };
@@ -198,6 +202,9 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
+               "SUM_WITH_OVERFLOW output dtype must be STRUCT.",
+               std::invalid_argument);
   return cudf::type_dispatcher(col.type(), sum_with_overflow_dispatcher{}, col, init, stream, mr);
 }
 
