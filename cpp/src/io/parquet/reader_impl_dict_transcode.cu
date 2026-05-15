@@ -71,6 +71,52 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   }
 }
 
+// Per-input-column eligibility for Parquet-dict → DICTIONARY32. A column is eligible iff
+//  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
+//  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
+//  - every data page of every chunk of that column uses (PLAIN|RLE)_DICTIONARY encoding,
+//  - the chunk has a flat (non-list, non-nested) schema.
+//
+// We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
+// `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
+// in which `try_output_dict_columns` is supported), `subpass.pages == pass.pages`.
+[[nodiscard]] std::vector<column_eligibility> compute_dict_transcode_eligibility(
+  pass_intermediate_data const& pass,
+  std::vector<input_column_info> const& input_columns,
+  std::vector<cudf::io::detail::inline_column_buffer> const& output_buffers)
+{
+  auto const num_input_cols = input_columns.size();
+  std::vector<column_eligibility> elig(num_input_cols);
+
+  //Check if the output buffer is a flat string column
+  std::for_each(cuda::counting_iterator<size_t>{0},
+                cuda::counting_iterator{num_input_cols},
+                [&](size_t i) {
+                  auto const& input_col = input_columns[i];
+                  if (input_col.nesting_depth() != 1) { return; }
+                  if (output_buffers[input_col.nesting[0]].type.id() == type_id::STRING) {
+                    elig[i].has_string_buffer = true;
+                  }
+                });
+
+  // Fold per-chunk info into the per-column eligibility flags.
+  for (auto const& chunk : pass.chunks) {
+    auto const col_idx = chunk.src_col_index;
+    update_from_chunk(elig[col_idx], chunk);
+  }
+
+  // Any non-dictionary data-page encoding disqualifies the whole column. Dictionary pages
+  // themselves (PAGEINFO_FLAGS_DICTIONARY) are skipped since they are not data pages.
+  for (auto const& page : pass.pages) {
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { continue; }
+    auto const chunk_idx = page.chunk_idx;
+    auto const col_idx = pass.chunks[chunk_idx].src_col_index;
+    if (not is_dict_data_page_encoding(page.encoding)) { elig[col_idx].all_pages_dict = false; }
+  }
+
+  return elig;
+}
+
 // Build a STRING keys column covering the dictionary entries of a single chunk of a single input
 // column. `begin` points into the pass-wide `string_index_pair` buffer.
 [[nodiscard]] std::unique_ptr<column> make_keys_column_from_index_pairs(
@@ -99,46 +145,7 @@ void reader_impl::prepare_dict_transcode()
 
   if (pass.chunks.empty() or subpass.pages.size() == 0) { return; }
 
-  // Determine per-input-column eligibility. A column is eligible iff
-  //  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
-  //  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
-  //  - every data page of every chunk of that column uses (PLAIN|RLE)_DICTIONARY encoding,
-  //  - the chunk has a flat (non-list, non-nested) schema.
-  //
-  // We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
-  // `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
-  // in which `try_output_dict_columns` is supported), `subpass.pages == pass.pages`.
-  auto const num_input_cols = _input_columns.size();
-  std::vector<column_eligibility> elig(num_input_cols);
-
-  // Seed from the output buffer type: only flat STRING columns have a single leaf buffer whose
-  // type is STRING and can be flipped in place.
-  std::for_each(
-    cuda::counting_iterator<size_t>{0}, cuda::counting_iterator{num_input_cols}, [&](size_t i) {
-      auto const& input_col = _input_columns[i];
-      if (input_col.nesting_depth() != 1) { return; }
-      auto const& out_buf = _output_buffers[input_col.nesting[0]];
-      if (out_buf.type.id() == type_id::STRING) { elig[i].has_string_buffer = true; }
-    });
-
-  // Fold per-chunk info into the per-column eligibility flags.
-  for (auto const& chunk : pass.chunks) {
-    auto const col_idx = chunk.src_col_index;
-    if (col_idx < 0 or static_cast<size_t>(col_idx) >= num_input_cols) { continue; }
-    update_from_chunk(elig[col_idx], chunk);
-  }
-
-  // Any non-dictionary data-page encoding disqualifies the whole column. Dictionary pages
-  // themselves (PAGEINFO_FLAGS_DICTIONARY) are skipped since they are not data pages.
-  for (auto const& page : pass.pages) {
-    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { continue; }
-    auto const chunk_idx = page.chunk_idx;
-    if (chunk_idx < 0 or static_cast<size_t>(chunk_idx) >= pass.chunks.size()) { continue; }
-    auto const col_idx = pass.chunks[chunk_idx].src_col_index;
-    if (col_idx < 0 or static_cast<size_t>(col_idx) >= num_input_cols) { continue; }
-    if (not is_dict_data_page_encoding(page.encoding)) { elig[col_idx].all_pages_dict = false; }
-  }
-
+  auto const elig = compute_dict_transcode_eligibility(pass, _input_columns, _output_buffers);
   std::transform(
     elig.begin(), elig.end(), _dict_transcode_eligible.begin(), [](column_eligibility const& e) {
       return e.is_eligible();
@@ -148,7 +155,7 @@ void reader_impl::prepare_dict_transcode()
     std::count(_dict_transcode_eligible.begin(), _dict_transcode_eligible.end(), true);
   if (num_eligible == 0) { return; }
 
-  // Flip the output buffer type for eligible columns from STRING → INT32. The subsequent
+  // Change the output buffer type for eligible columns from STRING → INT32. The subsequent
   // `allocate_columns` call will then allocate an INT32 buffer that the DICT_INT32 kernel can
   // write directly into.
   std::for_each(
@@ -165,9 +172,7 @@ void reader_impl::prepare_dict_transcode()
   std::for_each(subpass.pages.host_begin(), subpass.pages.host_end(), [&](PageInfo& page) {
     if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return; }
     auto const chunk_idx = page.chunk_idx;
-    if (chunk_idx < 0 or static_cast<size_t>(chunk_idx) >= pass.chunks.size()) { return; }
     auto const col_idx = pass.chunks[chunk_idx].src_col_index;
-    if (col_idx < 0 or static_cast<size_t>(col_idx) >= num_input_cols) { return; }
     if (not _dict_transcode_eligible[col_idx]) { return; }
     if (page.kernel_mask == decode_kernel_mask::STRING_DICT) {
       page.kernel_mask = decode_kernel_mask::DICT_INT32;
