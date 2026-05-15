@@ -159,7 +159,7 @@ def _extract_boundaries(
     return partition_starts, strict
 
 
-async def extract_orderscheme(
+async def extract_orderscheme_partitioning(
     context: Context,
     comm: Communicator,
     schema_ir: IR,
@@ -167,9 +167,9 @@ async def extract_orderscheme(
     ch_in: Channel[TableChunk],
     order_keys: Sequence[OrderKey],
     collective_id: int,
-) -> OrderScheme | None:
+) -> Partitioning | None:
     """
-    Extract the OrderScheme metadata for a sorted channel.
+    Extract the partitioning metadata for a sorted channel.
 
     Parameters
     ----------
@@ -190,8 +190,10 @@ async def extract_orderscheme(
 
     Returns
     -------
-    An ``OrderScheme`` object, or ``None`` if the channel
-    contains insufficient data or the boundaries are not sorted.
+    A ``Partitioning`` whose ``inter_rank`` is an ``OrderScheme`` built
+    from the observed boundaries and ``local`` is ``"inherit"``, or
+    ``None`` if the channel contains insufficient data or the data is
+    not globally sorted.
 
     Notes
     -----
@@ -201,7 +203,7 @@ async def extract_orderscheme(
 
     Boundaries are NOT collected for empty chunks. Empty chunks
     should be dropped from the channel that the returned
-    OrderScheme metadata is ultimately attached to.
+    partitioning is ultimately attached to.
     """
     # Collect local min/max values table for each rank
     min_max_rows: list[plc.Table] = []
@@ -256,15 +258,18 @@ async def extract_orderscheme(
     ):
         return None
 
-    # Extract boundaries and construct the OrderScheme
+    # Extract boundaries and construct the Partitioning
     boundaries, strict = _extract_boundaries(min_max_table, num_partitions, stream)
     del min_max_table
-    return OrderScheme(
-        order_keys,
-        TableChunk.from_pylibcudf_table(
-            boundaries, stream, exclusive_view=True, br=context.br()
+    return Partitioning(
+        inter_rank=OrderScheme(
+            order_keys,
+            TableChunk.from_pylibcudf_table(
+                boundaries, stream, exclusive_view=True, br=context.br()
+            ),
+            strict_boundaries=strict,
         ),
-        strict_boundaries=strict,
+        local="inherit",
     )
 
 

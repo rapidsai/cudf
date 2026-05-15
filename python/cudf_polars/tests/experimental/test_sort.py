@@ -7,7 +7,7 @@ import asyncio
 
 import pytest
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import OrderKey
+from rapidsmpf.streaming.cudf.channel_metadata import OrderKey, OrderScheme
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
@@ -17,7 +17,9 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.ir import Empty, IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-from cudf_polars.experimental.rapidsmpf.collectives.sort import extract_orderscheme
+from cudf_polars.experimental.rapidsmpf.collectives.sort import (
+    extract_orderscheme_partitioning,
+)
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import gather_in_task_group
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -177,7 +179,7 @@ async def _send_sorted_chunks(
 
 @pytest.mark.spmd
 @pytest.mark.parametrize("n_chunks", [2, 4])
-def test_extract_orderscheme(spmd_engine, n_chunks) -> None:
+def test_extract_orderscheme_partitioning(spmd_engine, n_chunks) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
 
@@ -194,22 +196,25 @@ def test_extract_orderscheme(spmd_engine, n_chunks) -> None:
                 _send_sorted_chunks(
                     context, ch, key_start=key_start, n_chunks=n_chunks, n_rows=n_rows
                 ),
-                extract_orderscheme(
+                extract_orderscheme_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
         return scheme
 
-    scheme = asyncio.run(_run())
+    partitioning = asyncio.run(_run())
 
-    assert scheme is not None
-    assert scheme.keys == tuple(order_keys)
-    assert scheme.strict_boundaries  # all keys are distinct integers
-    assert scheme.num_boundaries == comm.nranks * n_chunks - 1
+    assert partitioning is not None
+    assert partitioning.local == "inherit"
+    inter_rank = partitioning.inter_rank
+    assert isinstance(inter_rank, OrderScheme)
+    assert inter_rank.keys == tuple(order_keys)
+    assert inter_rank.strict_boundaries  # all keys are distinct integers
+    assert inter_rank.num_boundaries == comm.nranks * n_chunks - 1
 
     # Verify actual boundary values: start of each partition except the first
     expected_keys = [i * n_rows for i in range(1, comm.nranks * n_chunks)]
-    tbl, bstream = scheme.get_boundaries()
+    tbl, bstream = inter_rank.get_boundaries()
     actual_keys = (
         DataFrame.from_table(tbl, ["key"], [DataType(pl.Int32())], stream=bstream)
         .to_polars()["key"]
@@ -219,7 +224,7 @@ def test_extract_orderscheme(spmd_engine, n_chunks) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_unsorted(spmd_engine) -> None:
+def test_extract_orderscheme_partitioning_unsorted(spmd_engine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
 
@@ -251,7 +256,7 @@ def test_extract_orderscheme_unsorted(spmd_engine) -> None:
         with reserve_op_id() as op_id:
             _, scheme = await gather_in_task_group(
                 _send(),
-                extract_orderscheme(
+                extract_orderscheme_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
@@ -261,7 +266,7 @@ def test_extract_orderscheme_unsorted(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_single_chunk(spmd_engine) -> None:
+def test_extract_orderscheme_partitioning_single_chunk(spmd_engine) -> None:
     """One chunk on a single rank → num_partitions == 1 < 2 → None."""
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -278,7 +283,7 @@ def test_extract_orderscheme_single_chunk(spmd_engine) -> None:
         with reserve_op_id() as op_id:
             _, scheme = await gather_in_task_group(
                 _send_sorted_chunks(context, ch, key_start=0, n_chunks=1, n_rows=4),
-                extract_orderscheme(
+                extract_orderscheme_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
@@ -288,7 +293,7 @@ def test_extract_orderscheme_single_chunk(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_descending(spmd_engine) -> None:
+def test_extract_orderscheme_partitioning_descending(spmd_engine) -> None:
     """Boundary values and strictness are correct for descending sort order."""
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -325,20 +330,23 @@ def test_extract_orderscheme_descending(spmd_engine) -> None:
         with reserve_op_id() as op_id:
             _, scheme = await gather_in_task_group(
                 _send(),
-                extract_orderscheme(
+                extract_orderscheme_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
         return scheme
 
-    scheme = asyncio.run(_run())
+    partitioning = asyncio.run(_run())
 
-    assert scheme is not None
-    assert scheme.keys == tuple(order_keys)
-    assert scheme.strict_boundaries
-    assert scheme.num_boundaries == 1
+    assert partitioning is not None
+    assert partitioning.local == "inherit"
+    inter_rank = partitioning.inter_rank
+    assert isinstance(inter_rank, OrderScheme)
+    assert inter_rank.keys == tuple(order_keys)
+    assert inter_rank.strict_boundaries
+    assert inter_rank.num_boundaries == 1
 
-    tbl, bstream = scheme.get_boundaries()
+    tbl, bstream = inter_rank.get_boundaries()
     actual_keys = (
         DataFrame.from_table(tbl, ["key"], [DataType(pl.Int32())], stream=bstream)
         .to_polars()["key"]
