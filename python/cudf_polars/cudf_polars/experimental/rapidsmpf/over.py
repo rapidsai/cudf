@@ -151,12 +151,10 @@ def _broadcast_gw_sync(
     out_names, out_dtypes = zip(
         *((ne.name, ne.value.dtype) for ne in gw.named_aggs), strict=True
     )
-    value_tbls = [
-        plc.Table([global_agg_df.column_map[ne.name].obj]) for ne in gw.named_aggs
-    ]
+    value_tbl = global_agg_df.select(out_names).table
 
     broadcasted_cols = gw._broadcast_agg_results(
-        by_tbl, group_keys_tbl, value_tbls, out_names, out_dtypes, stream
+        by_tbl, group_keys_tbl, value_tbl, out_names, out_dtypes, stream
     )
     temp_df = DataFrame(broadcasted_cols, stream=stream)
     return gw.post.value.evaluate(temp_df, context=ExecutionContext.FRAME)
@@ -178,9 +176,6 @@ def _evaluate_ir_broadcast_sync(
     # the input message). Join them so the broadcast kernels read global_agg_df
     # safely.
     with ir_context.stream_ordered_after(chunk_df, global_agg_df) as stream:
-        chunk_df = DataFrame(chunk_df.columns, stream=stream)
-        global_agg_df = DataFrame(global_agg_df.columns, stream=stream)
-
         gw_results = {
             gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, stream)
             for gw in gw_nodes

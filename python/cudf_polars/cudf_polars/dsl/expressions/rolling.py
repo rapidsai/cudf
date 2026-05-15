@@ -623,7 +623,7 @@ class GroupedWindow(Expr):
         self,
         by_tbl: plc.Table,
         group_keys_tbl: plc.Table,
-        value_tbls: list[plc.Table],
+        value_tbl: plc.Table,
         names: Sequence[str],
         dtypes: Sequence[DataType],
         stream: Stream,
@@ -651,7 +651,7 @@ class GroupedWindow(Expr):
 
         # Broadcast each scalar aggregated result back to row-shape using
         # the aligned mapping between row indices and group indices.
-        out_cols = (t.columns()[0] for t in value_tbls)
+        out_cols = value_tbl.columns()
         return [
             Column(
                 plc.copying.gather(
@@ -777,7 +777,7 @@ class GroupedWindow(Expr):
         broadcasted_cols = self._broadcast_agg_results(
             by_tbl,
             group_keys_tbl,
-            value_tables,
+            plc.Table([col for t in value_tables for col in t.columns()]),
             out_names,
             out_dtypes,
             df.stream,
@@ -811,7 +811,7 @@ class GroupedWindow(Expr):
                 self._broadcast_agg_results(
                     by_tbl,
                     group_keys_tbl_local,
-                    value_tables_local,
+                    plc.Table([col for t in value_tables_local for col in t.columns()]),
                     out_names,
                     out_dtypes,
                     df.stream,
