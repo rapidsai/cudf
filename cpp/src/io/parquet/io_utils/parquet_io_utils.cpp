@@ -129,10 +129,6 @@ fetch_byte_ranges_to_device_async(
   copy_dsts.reserve(io_offsets.size());
   copy_sizes.reserve(io_offsets.size());
 
-  // Defer space reservation until we know if there are host reads
-  std::vector<void const*> copy_srcs{};
-  std::vector<host_read_buffer> host_read_buffers{};
-
   // `device_read_async` is not guaranteed to follow stream-ordering (see datasource API docs)
   stream.synchronize();
 
@@ -160,8 +156,11 @@ fetch_byte_ranges_to_device_async(
 
     // If there are host reads, schedule a batched memcpy to device
     if (not host_read_tasks.empty()) {
+      std::vector<host_read_buffer> host_read_buffers{};
+      std::vector<void const*> copy_srcs{};
       host_read_buffers.reserve(host_read_tasks.size());
       copy_srcs.reserve(host_read_tasks.size());
+
       for (auto& task : host_read_tasks) {
         host_read_buffers.emplace_back(task.get());
         copy_srcs.push_back(host_read_buffers.back().get()->data());
