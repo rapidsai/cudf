@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata, Partitioning
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    OrderKey,
+    OrderScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
@@ -30,8 +35,10 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    NormalizedPartitioning,
     allgather_reduce,
     chunk_to_frame,
+    chunkwise_evaluate,
     concat_batch,
     empty_table_chunk,
     evaluate_batch,
@@ -471,6 +478,78 @@ async def _extract_partitions_and_send(
     await ch_out.drain(context)
 
 
+def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
+    """Convert Sort IR to list of OrderKeys."""
+    return [
+        OrderKey(index, order, null_order)
+        for index, order, null_order in zip(
+            names_to_indices(ir.by, ir.schema),
+            ir.order,
+            ir.null_order,
+            strict=False,
+        )
+    ]
+
+
+def _is_already_sorted(
+    metadata_in: ChannelMetadata,
+    order_keys: list[OrderKey],
+    nranks: int,
+) -> bool:
+    """Check if the input data is already sorted according to the order keys."""
+    np = NormalizedPartitioning.from_keys(
+        metadata_in.partitioning, nranks, keys=order_keys
+    )
+    if not np:
+        # np is falsy if `order_keys` does not match
+        # any prefix of keys in `metadata_in.partitioning`.
+        # If `order_keys` is Sequence[OrderKey], the order
+        # and null_order attributes must also match.
+        return False
+    scheme = np.inter_rank_scheme
+    if not isinstance(scheme, OrderScheme):
+        return False
+    elif len(scheme.keys) < len(order_keys):
+        # If we are only sorted on a subset of the keys,
+        # we need to check if the boundaries are strict.
+        return scheme.strict_boundaries
+    return True
+
+
+def _build_order_scheme(
+    context: Context,
+    order_keys: list[OrderKey],
+    sort_boundaries_df: DataFrame,
+) -> OrderScheme:
+    """Build output OrderScheme metadata."""
+    n_keys = len(order_keys)
+    stream = sort_boundaries_df.stream
+    # sort_boundaries_df will contain a tie-breaker column
+    by_table = plc.Table(sort_boundaries_df.table.columns()[:n_keys])
+    n_rows = by_table.num_rows()
+
+    strict_boundaries = (
+        n_rows == 0
+        # TODO: Use unique_count_table
+        # Requires https://github.com/rapidsai/cudf/pull/22487
+        or plc.stream_compaction.unique(
+            by_table,
+            list(range(n_keys)),
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.types.NullEquality.EQUAL,
+            stream=stream,
+        ).num_rows()
+        == n_rows
+    )
+
+    boundaries_chunk = TableChunk.from_pylibcudf_table(
+        by_table, stream, exclusive_view=False, br=context.br()
+    )
+    return OrderScheme(
+        order_keys, boundaries_chunk, strict_boundaries=strict_boundaries
+    )
+
+
 async def _global_sort(
     context: Context,
     comm: Communicator,
@@ -487,10 +566,12 @@ async def _global_sort(
     tracer: ActorTracer | None,
 ) -> None:
     """Global sort."""
-    # TODO: Attach OrderScheme metadata here.
     output_metadata = ChannelMetadata(
         local_count=max(1, num_partitions // comm.nranks),
-        partitioning=Partitioning(inter_rank=None, local="inherit"),
+        partitioning=Partitioning(
+            _build_order_scheme(context, _sort_to_order_keys(ir), sort_boundaries_df),
+            "inherit",
+        ),
     )
     await send_metadata(ch_out, context, output_metadata)
 
@@ -559,6 +640,20 @@ async def sort_actor(
                 metadata_in,
                 collective_ids,
                 tracer,
+            )
+            return
+
+        if _is_already_sorted(metadata_in, _sort_to_order_keys(ir), comm.nranks):
+            if tracer is not None:
+                tracer.decision = "already_sorted"
+            await chunkwise_evaluate(
+                context,
+                ir,
+                ir_context,
+                ch_out,
+                ch_in,
+                metadata_in,
+                tracer=tracer,
             )
             return
 
