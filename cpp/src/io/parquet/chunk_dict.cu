@@ -99,9 +99,6 @@ struct map_insert_fn {
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
       __shared__ size_type total_num_dict_entries;
-      __shared__ size_type num_dict_vals;
-      if (t == 0) { num_dict_vals = 0; };
-      __syncthreads();
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
@@ -175,21 +172,18 @@ struct map_insert_fn {
         auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
         __syncthreads();
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-        // One thread atomically updates the number and data size of total unique values.
+        // First thread atomically updates the total number and data size of unique values
         if (t == 0) {
           total_num_dict_entries =
             chunk_num_dict_entries.fetch_add(num_unique, cuda::std::memory_order_relaxed);
           total_num_dict_entries += num_unique;
-          num_dict_vals += num_unique;
           chunk_uniq_data_size.fetch_add(uniq_data_size, cuda::std::memory_order_relaxed);
         }
         __syncthreads();
 
         // Check if the num unique values in chunk has already exceeded max dict size and early exit
-        if (total_num_dict_entries > MAX_DICT_SIZE) { break; }
+        if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
       }  // for loop
-      // Flush the number of unique values inserted by this fragment
-      if (t == 0) { frag->num_dict_vals = num_dict_vals; };
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -345,11 +339,16 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     __shared__ typename block_scan::TempStorage scan_storage;
 
     {
-      auto const per_thread_count = (t < num_frags) ? fragment_offsets[t] : 0;
-      auto per_thread_offset      = 0;
-      block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
-      if (t < num_frags) { fragment_offsets[t] = per_thread_offset; }
-      __syncthreads();
+      auto base_idx = uint32_t{0};
+      while (base_idx < num_frags) {
+        auto const idx              = base_idx + t;
+        auto const per_thread_count = (idx < num_frags) ? fragment_offsets[t] : 0;
+        auto per_thread_offset      = 0;
+        block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
+        if (idx < num_frags) { fragment_offsets[idx] = per_thread_offset; }
+        base_idx += block_size;
+        __syncthreads();
+      }
     }
 
     // Iterate over slots and claim a dictionary index from the fragment offsets (spatial-locality
