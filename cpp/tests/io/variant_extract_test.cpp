@@ -345,6 +345,65 @@ inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
   return out;
 }
 
+// Build a VARIANT object blob with `n_fields` fields.  Field ids are 0..n_fields-1
+// (in ascending order, matching the dictionary positions) and each field holds a bare INT32 equal
+// to its field id.  Uses 1-byte field_id_size and 1-byte field_off_size; n_fields must be
+// <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
+inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
+{
+  std::vector<uint8_t> out{0x02, static_cast<uint8_t>(n_fields)};
+  for (int fid = 0; fid < n_fields; ++fid) {
+    out.push_back(static_cast<uint8_t>(fid));
+  }
+  for (int i = 0; i <= n_fields; ++i) {
+    out.push_back(static_cast<uint8_t>(i * 5));
+  }
+  for (int fid = 0; fid < n_fields; ++fid) {
+    auto const v = enc_int32(fid);
+    out.insert(out.end(), v.begin(), v.end());
+  }
+  return out;
+}
+
+// Lexicographically ordered dictionary of N zero-padded two-digit keys "k<NN>".
+inline std::vector<std::string> make_numeric_keys(int n)
+{
+  std::vector<std::string> out;
+  out.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    std::array<char, 8> buf{};
+    std::snprintf(buf.data(), buf.size(), "k%02d", i);
+    out.emplace_back(buf.data());
+  }
+  return out;
+}
+
+// Wrap per-row (metadata, value) byte vectors into a VARIANT struct column.  Built
+// with make_lists_column + structs_column_wrapper directly so the helper stays
+// self-contained within this test file for dynamic row counts.
+inline cudf::test::structs_column_wrapper wrap_multi_row_variant(
+  std::vector<std::vector<uint8_t>> const& meta_rows,
+  std::vector<std::vector<uint8_t>> const& val_rows)
+{
+  auto build_list = [](std::vector<std::vector<uint8_t>> const& rows) {
+    auto const n = static_cast<cudf::size_type>(rows.size());
+    std::vector<int32_t> offsets(n + 1, 0);
+    std::vector<uint8_t> flat;
+    for (cudf::size_type i = 0; i < n; ++i) {
+      flat.insert(flat.end(), rows[i].begin(), rows[i].end());
+      offsets[i + 1] = static_cast<int32_t>(flat.size());
+    }
+    auto offs =
+      cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end()).release();
+    auto data = cudf::test::fixed_width_column_wrapper<uint8_t>(flat.begin(), flat.end()).release();
+    return cudf::make_lists_column(n, std::move(offs), std::move(data), 0, {});
+  };
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.emplace_back(build_list(meta_rows));
+  children.emplace_back(build_list(val_rows));
+  return cudf::test::structs_column_wrapper{std::move(children)};
+}
+
 // Build a metadata blob (version 1, offset_size=1) for the given ordered string dictionary.
 inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 {
@@ -368,10 +427,11 @@ inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 
 TEST_F(ExtractVariantFieldTest, NestedPathMultiRowMixedNulls)
 {
-  // Row 0: { a: { b: INT32(1) } } -> path "$.a.b" = 1
-  auto const m0 = build_metadata({"a", "b"});
+  // Row 0: { a: { b: INT32(1) } } -> path "$.a.b" = 1.  Dictionary strings are stored in
+  // non-lexicographic order ({"b", "a"})
+  auto const m0 = build_metadata({"b", "a"});
   auto const v0 =
-    build_single_field_object(/*fid=a*/ 0, build_single_field_object(/*fid=b*/ 1, enc_int32(1)));
+    build_single_field_object(/*fid=a*/ 1, build_single_field_object(/*fid=b*/ 0, enc_int32(1)));
   // Row 1: { a: INT32(5) } -> non-object intermediate at "a" -> null
   auto const m1 = build_metadata({"a"});
   auto const v1 = build_single_field_object(/*fid=a*/ 0, enc_int32(5));
@@ -422,75 +482,8 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
   }
 }
 
-namespace {
-
-// Build a VARIANT object blob with `n_fields` fields.  Field ids are 0..n_fields-1
-// (sorted as required by the spec) and each field holds a bare INT32 equal to its
-// field id.  Uses 1-byte field_id_size and 1-byte field_off_size; n_fields must be
-// <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
-inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
-{
-  std::vector<uint8_t> out{0x02, static_cast<uint8_t>(n_fields)};
-  for (int fid = 0; fid < n_fields; ++fid) {
-    out.push_back(static_cast<uint8_t>(fid));
-  }
-  for (int i = 0; i <= n_fields; ++i) {
-    out.push_back(static_cast<uint8_t>(i * 5));
-  }
-  for (int fid = 0; fid < n_fields; ++fid) {
-    auto const v = enc_int32(fid);
-    out.insert(out.end(), v.begin(), v.end());
-  }
-  return out;
-}
-
-// Sorted dictionary of N zero-padded two-digit keys "k<NN>".
-inline std::vector<std::string> make_numeric_keys(int n)
-{
-  std::vector<std::string> out;
-  out.reserve(n);
-  for (int i = 0; i < n; ++i) {
-    std::array<char, 8> buf{};
-    std::snprintf(buf.data(), buf.size(), "k%02d", i);
-    out.emplace_back(buf.data());
-  }
-  return out;
-}
-
-// Wrap per-row (metadata, value) byte vectors into a VARIANT struct column.  Built
-// with make_lists_column + structs_column_wrapper directly so the helper stays
-// self-contained within this test file for dynamic row counts.
-inline cudf::test::structs_column_wrapper wrap_multi_row_variant(
-  std::vector<std::vector<uint8_t>> const& meta_rows,
-  std::vector<std::vector<uint8_t>> const& val_rows)
-{
-  auto build_list = [](std::vector<std::vector<uint8_t>> const& rows) {
-    auto const n = static_cast<cudf::size_type>(rows.size());
-    std::vector<int32_t> offsets(n + 1, 0);
-    std::vector<uint8_t> flat;
-    for (cudf::size_type i = 0; i < n; ++i) {
-      flat.insert(flat.end(), rows[i].begin(), rows[i].end());
-      offsets[i + 1] = static_cast<int32_t>(flat.size());
-    }
-    auto offs =
-      cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end()).release();
-    auto data = cudf::test::fixed_width_column_wrapper<uint8_t>(flat.begin(), flat.end()).release();
-    return cudf::make_lists_column(n, std::move(offs), std::move(data), 0, {});
-  };
-  std::vector<std::unique_ptr<cudf::column>> children;
-  children.emplace_back(build_list(meta_rows));
-  children.emplace_back(build_list(val_rows));
-  return cudf::test::structs_column_wrapper{std::move(children)};
-}
-
-}  // namespace
-
 TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
 {
-  // 50-entry dictionary + 50-field object — >10x the size of any other test in this
-  // file.  Exercises the scan loops in device_find_key_in_metadata and
-  // device_locate_object_field at a depth that would catch regressions in their
-  // scan-bound arithmetic without requiring a workload-scale fixture.
   auto const keys = make_numeric_keys(50);
   auto const meta = build_metadata(keys);
   auto const val  = build_sequential_int32_object(50);
