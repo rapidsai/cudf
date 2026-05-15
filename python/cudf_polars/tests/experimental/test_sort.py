@@ -285,3 +285,64 @@ def test_extract_orderscheme_single_chunk(spmd_engine) -> None:
         return scheme
 
     assert asyncio.run(_run()) is None
+
+
+@pytest.mark.spmd
+def test_extract_orderscheme_descending(spmd_engine) -> None:
+    """Boundary values and strictness are correct for descending sort order."""
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+
+    if comm.nranks != 1:
+        pytest.skip("descending boundary value check is clearest on single rank")
+
+    # Two chunks sorted descending: [7,6,5,4] then [3,2,1,0]
+    # Expected: 1 boundary at 3 (max of chunk 1), strict (no overlap)
+    order_keys = [OrderKey(0, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER)]
+    schema_ir = Empty({"key": DataType(pl.Int32())})
+    ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
+
+    async def _run():
+        ch = context.create_channel()
+        stream = context.get_stream_from_pool()
+
+        async def _send() -> None:
+            for i, keys in enumerate([[7, 6, 5, 4], [3, 2, 1, 0]]):
+                tbl = DataFrame.from_polars(
+                    pl.DataFrame({"key": pl.Series(keys, dtype=pl.Int32())}), stream
+                ).table
+                await ch.send(
+                    context,
+                    Message(
+                        i,
+                        TableChunk.from_pylibcudf_table(
+                            tbl, stream, exclusive_view=True, br=context.br()
+                        ),
+                    ),
+                )
+            await ch.drain(context)
+
+        with reserve_op_id() as op_id:
+            _, scheme = await gather_in_task_group(
+                _send(),
+                extract_orderscheme(
+                    context, comm, schema_ir, ir_context, ch, order_keys, op_id
+                ),
+            )
+        return scheme
+
+    scheme = asyncio.run(_run())
+
+    assert scheme is not None
+    assert scheme.keys == tuple(order_keys)
+    assert scheme.strict_boundaries
+    assert scheme.num_boundaries == 1
+
+    tbl, bstream = scheme.get_boundaries()
+    actual_keys = (
+        DataFrame.from_table(tbl, ["key"], [DataType(pl.Int32())], stream=bstream)
+        .to_polars()["key"]
+        .to_list()
+    )
+    # Boundary = first row of chunk 1 in descending order = max(chunk 1) = 3
+    assert actual_keys == [3]
