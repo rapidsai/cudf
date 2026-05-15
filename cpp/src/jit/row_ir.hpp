@@ -449,6 +449,34 @@ struct [[nodiscard]] filter_predicate final : node {
 };
 
 /**
+ * @brief An IR node that casts a value to a target data type (including fixed-point with scale).
+ */
+struct [[nodiscard]] cast_to_type final : node {
+ private:
+  std::string id_;
+  std::unique_ptr<node> operand_;
+  data_type target_type_;
+
+ public:
+  cast_to_type(std::unique_ptr<node> operand, data_type target_type);
+
+  cast_to_type(cast_to_type const&)            = delete;
+  cast_to_type& operator=(cast_to_type const&) = delete;
+  cast_to_type(cast_to_type&&)                 = default;
+  cast_to_type& operator=(cast_to_type&&)      = default;
+  ~cast_to_type() override                     = default;
+
+  [[nodiscard]] std::string_view get_id() override;
+  [[nodiscard]] data_type get_type() override;
+  [[nodiscard]] bool is_null_aware() override;
+  [[nodiscard]] bool is_always_valid() override;
+  void instantiate(instance_context& ctx, instance_info const& info) override;
+  [[nodiscard]] std::string generate_code(instance_context& ctx,
+                                          target_info const& info,
+                                          instance_info const& instance) override;
+};
+
+/**
  * @brief A specification of an input column to the AST
  */
 struct ast_column_input_spec {
@@ -555,6 +583,7 @@ struct [[nodiscard]] ast_converter {
   friend class ast::literal;
   friend class ast::column_reference;
   friend class ast::operation;
+  friend class ast::cast;
   friend class ast::column_name_reference;
   friend class ast::detail::filter_predicate;
 
@@ -566,6 +595,8 @@ struct [[nodiscard]] ast_converter {
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(
     ast::detail::filter_predicate const& expr);
+
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::cast const& expr);
 
   [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
 

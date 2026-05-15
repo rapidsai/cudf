@@ -669,6 +669,12 @@ template <>
 struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {};
 template <>
 struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {};
+template <>
+struct operator_functor<ast_operator::CAST_TO_DECIMAL32, false> : cast<int32_t> {};
+template <>
+struct operator_functor<ast_operator::CAST_TO_DECIMAL64, false> : cast<int64_t> {};
+template <>
+struct operator_functor<ast_operator::CAST_TO_DECIMAL128, false> : cast<__int128_t> {};
 
 /*
  * The default specialization of nullable operators is to fall back to the non-nullable

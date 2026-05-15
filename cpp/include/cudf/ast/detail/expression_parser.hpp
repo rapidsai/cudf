@@ -156,6 +156,14 @@ class expression_parser {
   cudf::size_type visit(operation const& expr);
 
   /**
+   * @brief Visit a cast expression.
+   *
+   * @param expr Cast expression.
+   * @return cudf::size_type Index of device data reference for the expression.
+   */
+  cudf::size_type visit(cast const& expr);
+
+  /**
    * @brief Visit a column name reference expression.
    *
    * @param expr Column name reference expression.

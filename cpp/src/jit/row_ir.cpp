@@ -193,7 +193,10 @@ inline bool is_operator_null_aware(opcode op)
     case ast::ast_operator::NOT:
     case ast::ast_operator::CAST_TO_INT64:
     case ast::ast_operator::CAST_TO_UINT64:
-    case ast::ast_operator::CAST_TO_FLOAT64: return false;
+    case ast::ast_operator::CAST_TO_FLOAT64:
+    case ast::ast_operator::CAST_TO_DECIMAL32:
+    case ast::ast_operator::CAST_TO_DECIMAL64:
+    case ast::ast_operator::CAST_TO_DECIMAL128: return false;
 
     default: CUDF_UNREACHABLE("Unrecognized operator type.");
   }
@@ -259,7 +262,10 @@ inline bool is_operator_always_valid(opcode op)
     case ast::ast_operator::NOT:
     case ast::ast_operator::CAST_TO_INT64:
     case ast::ast_operator::CAST_TO_UINT64:
-    case ast::ast_operator::CAST_TO_FLOAT64: return false;
+    case ast::ast_operator::CAST_TO_FLOAT64:
+    case ast::ast_operator::CAST_TO_DECIMAL32:
+    case ast::ast_operator::CAST_TO_DECIMAL64:
+    case ast::ast_operator::CAST_TO_DECIMAL128: return false;
 
     default: CUDF_UNREACHABLE("Unrecognized operator type.");
   }
@@ -378,6 +384,79 @@ void filter_predicate::instantiate(instance_context& ctx, instance_info const& i
   }
 }
 
+cast_to_type::cast_to_type(std::unique_ptr<node> operand, data_type target_type)
+  : id_(), operand_(std::move(operand)), target_type_(target_type)
+{
+}
+
+std::string_view cast_to_type::get_id() { return id_; }
+
+data_type cast_to_type::get_type() { return target_type_; }
+
+bool cast_to_type::is_null_aware() { return operand_->is_null_aware(); }
+
+bool cast_to_type::is_always_valid() { return false; }
+
+void cast_to_type::instantiate(instance_context& ctx, instance_info const& info)
+{
+  operand_->instantiate(ctx, info);
+  id_ = ctx.make_tmp_id();
+}
+
+std::string cast_to_type::generate_code(instance_context& ctx,
+                                        target_info const& info,
+                                        instance_info const& instance)
+{
+  switch (info.id) {
+    case target::CUDA: {
+      auto operand_code           = operand_->generate_code(ctx, info, instance);
+      auto const target_type_name = cuda_type(target_type_, ctx.has_nulls());
+
+      auto const is_decimal = target_type_.id() == type_id::DECIMAL32 ||
+                              target_type_.id() == type_id::DECIMAL64 ||
+                              target_type_.id() == type_id::DECIMAL128;
+
+      if (is_decimal) {
+        auto const scale = target_type_.scale();
+        auto cast_code   = std::format(
+          "{} {} = [&]() {{\n"
+            "  auto _val_ = {};\n"
+            "  using _Target_ = cudf::id_to_type<cudf::type_id({})>;\n"
+            "  auto _scale_ = numeric::scale_type{{{}}};\n",
+          target_type_name,
+          id_,
+          operand_->get_id(),
+          static_cast<int>(target_type_.id()),
+          scale);
+
+        if (ctx.has_nulls()) {
+          cast_code += std::format(
+            "  if (!_val_.has_value()) return {}{{}};\n"
+            "  return {}{{_Target_{{*_val_, _scale_}}.value()}};\n"
+            "}}();",
+            target_type_name,
+            target_type_name);
+        } else {
+          cast_code += std::format(
+            "  return _Target_{{_val_, _scale_}}.value();\n"
+            "}}();");
+        }
+        return std::format("{}\n{}", operand_code, cast_code);
+      } else {
+        auto cast_code = std::format("{} {} = static_cast<{}>({});",
+                                     target_type_name,
+                                     id_,
+                                     target_type_name,
+                                     operand_->get_id());
+        return std::format("{}\n{}", operand_code, cast_code);
+      }
+    }
+    default:
+      CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(info.id)),
+                std::invalid_argument);
+  }
+}
+
 std::span<ast_input_spec const> ast_converter::get_input_specs() const { return input_specs_; }
 
 int32_t ast_converter::add_ast_input(ast_input_spec in)
@@ -410,6 +489,12 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::operation const& e
     operands.push_back(operand.get().accept(*this));
   }
   return std::make_unique<row_ir::operation>(expr.get_operator(), std::move(operands));
+}
+
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::cast const& expr)
+{
+  auto operand = expr.get_operand().accept(*this);
+  return std::make_unique<row_ir::cast_to_type>(std::move(operand), expr.get_target_type());
 }
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::filter_predicate const& expr)

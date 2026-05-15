@@ -336,6 +336,9 @@ std::string_view ast_operator_string(ast_operator op)
     case ast_operator::CAST_TO_INT64: return "CAST_TO_INT64";
     case ast_operator::CAST_TO_UINT64: return "CAST_TO_UINT64";
     case ast_operator::CAST_TO_FLOAT64: return "CAST_TO_FLOAT64";
+    case ast_operator::CAST_TO_DECIMAL32: return "CAST_TO_DECIMAL32";
+    case ast_operator::CAST_TO_DECIMAL64: return "CAST_TO_DECIMAL64";
+    case ast_operator::CAST_TO_DECIMAL128: return "CAST_TO_DECIMAL128";
     default: CUDF_FAIL("Unrecognized operator type.");
   }
 }

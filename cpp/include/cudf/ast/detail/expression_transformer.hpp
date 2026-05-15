@@ -49,6 +49,14 @@ class expression_transformer {
    */
   virtual std::reference_wrapper<expression const> visit(column_name_reference const& expr) = 0;
 
+  /**
+   * @brief Visit a cast expression.
+   *
+   * @param expr Cast expression
+   * @return Reference wrapper of transformed expression
+   */
+  virtual std::reference_wrapper<expression const> visit(cast const& expr);
+
   virtual ~expression_transformer() {}
 };
 
