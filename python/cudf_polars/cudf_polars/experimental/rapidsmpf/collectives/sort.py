@@ -159,7 +159,7 @@ def _extract_boundaries(
     return partition_starts, strict
 
 
-async def collect_orderscheme_boundaries(
+async def extract_orderscheme(
     context: Context,
     comm: Communicator,
     schema_ir: IR,
@@ -167,9 +167,9 @@ async def collect_orderscheme_boundaries(
     ch_in: Channel[TableChunk],
     order_keys: Sequence[OrderKey],
     collective_id: int,
-) -> tuple[TableChunk | None, bool]:
+) -> OrderScheme | None:
     """
-    Collect OrderScheme boundaries from an ordered channel.
+    Extract the OrderScheme metadata for a sorted channel.
 
     Parameters
     ----------
@@ -190,7 +190,8 @@ async def collect_orderscheme_boundaries(
 
     Returns
     -------
-    The collected boundaries and whether they are strict.
+    An ``OrderScheme`` object, or ``None`` if the channel
+    contains insufficient data or the boundaries are not sorted.
 
     Notes
     -----
@@ -200,7 +201,7 @@ async def collect_orderscheme_boundaries(
 
     Boundaries are NOT collected for empty chunks. Empty chunks
     should be dropped from the channel that the returned
-    boundaries table is ultimately attached to.
+    OrderScheme metadata is ultimately attached to.
     """
     # Collect local min/max values table for each rank
     min_max_rows: list[plc.Table] = []
@@ -245,7 +246,7 @@ async def collect_orderscheme_boundaries(
 
     # Return None if there are insufficient min/max values to process
     if min_max_table is None or (num_partitions := min_max_table.num_rows() // 2) < 2:
-        return None, False
+        return None
 
     # Return None if the min/max values are not sorted
     column_order = [key.order for key in order_keys]
@@ -253,17 +254,17 @@ async def collect_orderscheme_boundaries(
     if not plc.sorting.is_sorted(
         min_max_table, column_order, null_order, stream=stream
     ):
-        return None, False
+        return None
 
-    # Extract boundaries from the global min/max table
-    # and return the result as a TableChunk
+    # Extract boundaries and construct the OrderScheme
     boundaries, strict = _extract_boundaries(min_max_table, num_partitions, stream)
     del min_max_table
-    return (
+    return OrderScheme(
+        order_keys,
         TableChunk.from_pylibcudf_table(
-            boundaries, stream, exclusive_view=False, br=context.br()
+            boundaries, stream, exclusive_view=True, br=context.br()
         ),
-        strict,
+        strict_boundaries=strict,
     )
 
 
