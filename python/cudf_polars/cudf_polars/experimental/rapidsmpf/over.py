@@ -106,7 +106,6 @@ if TYPE_CHECKING:
 class _ScalarOverPlan:
     """Pre-computed IR rewrites for the scalar Over path."""
 
-    gw_nodes: tuple[GroupedWindow, ...]
     key_names: tuple[str, ...]
     piecewise_ir: GroupBy
     reduction_ir: GroupBy
@@ -123,7 +122,6 @@ def _build_scalar_over_plan(ir: Over) -> _ScalarOverPlan:
         gw_nodes, ir.children[0]
     )
     return _ScalarOverPlan(
-        gw_nodes=gw_nodes,
         key_names=key_names,
         piecewise_ir=piecewise_ir,
         reduction_ir=reduction_ir,
@@ -165,7 +163,6 @@ def _evaluate_ir_broadcast_sync(
     ir: Over,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    gw_nodes: tuple[GroupedWindow, ...],
     ir_context: IRExecutionContext,
     br: BufferResource,
 ) -> TableChunk:
@@ -176,18 +173,14 @@ def _evaluate_ir_broadcast_sync(
     # the input message). Join them so the broadcast kernels read global_agg_df
     # safely.
     with ir_context.stream_ordered_after(chunk_df, global_agg_df) as stream:
-        gw_results = {
-            gw: _broadcast_gw_sync(gw, chunk_df, global_agg_df, key_names, stream)
-            for gw in gw_nodes
-        }
-
-        result_cols = []
-        for ne in ir.exprs:
-            if isinstance(ne.value, GroupedWindow):
-                col = gw_results[ne.value].rename(ne.name)
-            else:
-                col = ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
-            result_cols.append(col)
+        result_cols = [
+            _broadcast_gw_sync(
+                ne.value, chunk_df, global_agg_df, key_names, stream
+            ).rename(ne.name)
+            if isinstance(ne.value, GroupedWindow)
+            else ne.evaluate(chunk_df, context=ExecutionContext.FRAME)
+            for ne in ir.exprs
+        ]
 
         return TableChunk.from_pylibcudf_table(
             plc.Table([c.obj for c in result_cols]),
@@ -203,14 +196,14 @@ async def _evaluate_broadcast_chunk(
     ir: Over,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    gw_nodes: tuple[GroupedWindow, ...],
     ir_context: IRExecutionContext,
+    global_agg_per_row_size: int,
 ) -> TableChunk:
     """Unspill the chunk and map the per-group aggregate onto its rows."""
     chunk, extra = await make_table_chunks_available_or_wait(
         context,
         chunk,
-        reserve_extra=chunk.data_alloc_size(),
+        reserve_extra=global_agg_per_row_size * chunk.shape[0],
         net_memory_delta=0,
     )
     with opaque_memory_usage(extra):
@@ -220,7 +213,6 @@ async def _evaluate_broadcast_chunk(
             ir,
             global_agg_df,
             key_names,
-            gw_nodes,
             ir_context,
             context.br(),
         )
@@ -407,6 +399,9 @@ async def _allgather_and_broadcast(
         context, global_agg, agg_select_ir, ir_context=ir_context
     )
     global_agg_df = chunk_to_frame(global_agg, agg_select_ir)
+    global_agg_per_row_size = global_agg.data_alloc_size() // max(
+        1, global_agg_df.num_rows
+    )
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
@@ -422,8 +417,8 @@ async def _allgather_and_broadcast(
             ir,
             global_agg_df,
             plan.key_names,
-            plan.gw_nodes,
             ir_context,
+            global_agg_per_row_size,
         )
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())

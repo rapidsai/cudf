@@ -129,14 +129,12 @@ def test_over_colliding_internal_agg_names(engine):
     ],
     ids=["noncol_key", "mixed_col_and_expr_key"],
 )
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 2}}],
-    indirect=True,
-)
-def test_over_noncol_key_fallback(request, engine, expr) -> None:
+def test_over_noncol_key_fallback(request, streaming_engine_factory, expr) -> None:
     # Non-Col and mixed Col/expr partition-by keys are not yet supported for
     # multi-partition streaming and should fall back to single-partition.
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="warn"),
+    )
     if not isinstance(engine, SPMDEngine):
         # On Dask/Ray the fallback warning fires on worker processes and is
         # invisible to ``pytest.warns``.
@@ -156,14 +154,12 @@ def test_over_noncol_key_fallback(request, engine, expr) -> None:
         assert_gpu_result_equal(df.select(expr), engine=engine)
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 2}}],
-    indirect=True,
-)
-def test_over_mixed_keys(engine) -> None:
+def test_over_mixed_keys(streaming_engine_factory) -> None:
     # Multiple over expressions with different partition-by keys are decomposed
     # into separate Over nodes (one per key group) and combined with HConcat.
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="warn"),
+    )
     df = pl.LazyFrame(
         {
             "g": [1, 1, 2, 2, 2, 1],
@@ -188,19 +184,19 @@ def test_over_mixed_keys(engine) -> None:
     ],
     ids=["scalar_sum", "scalar_len", "nonscalar_rank", "nonscalar_cum_sum"],
 )
-@pytest.mark.parametrize(
-    "engine",
-    [
-        {"executor_options": {"max_rows_per_partition": 1}},
-        {"executor_options": {"max_rows_per_partition": 2}},
-    ],
-    indirect=True,
-)
-def test_over_many_partitions(engine, expr) -> None:
+@pytest.mark.parametrize("max_rows_per_partition", [1, 2])
+def test_over_many_partitions(
+    streaming_engine_factory, max_rows_per_partition, expr
+) -> None:
     # Small max_rows_per_partition forces many chunks, exercising the AllGather
     # (scalar broadcast) and sort-and-split (non-scalar) paths across many
     # partitions. Two values cover both single-row chunks and multi-row chunks
     # so the within-chunk position sort is also exercised.
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=max_rows_per_partition, fallback_mode="warn"
+        ),
+    )
     df = pl.LazyFrame(
         {
             "g": [1, 1, 2, 2, 2, 1],
@@ -219,12 +215,10 @@ def test_over_many_partitions(engine, expr) -> None:
     ],
     ids=["scalar_sum", "nonscalar_rank"],
 )
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 2}}],
-    indirect=True,
-)
-def test_over_empty_input(engine, expr) -> None:
+def test_over_empty_input(streaming_engine_factory, expr) -> None:
+    engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="warn"),
+    )
     df = pl.LazyFrame(
         {
             "g": pl.Series([], dtype=pl.Int64),
@@ -242,16 +236,15 @@ def test_over_empty_input(engine, expr) -> None:
     ],
     ids=["scalar_sum", "nonscalar_rank"],
 )
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": -1}}],
-    indirect=True,
-)
-def test_over_already_partitioned(engine, expr) -> None:
-    # broadcast_join_limit=-1 makes the broadcast threshold negative, disabling
-    # broadcast joins entirely. Therefore, we should already be shuffled on "g"
-    # after then join. The over("g") actor should detect this and evaluate chunkwise
-    # without a second shuffle.
+def test_over_already_partitioned(streaming_engine_factory, expr) -> None:
+    # broadcast_limit=0 disables broadcast joins entirely. Therefore, we should
+    # already be shuffled on "g" after the join. The over("g") actor should
+    # detect this and evaluate chunkwise without a second shuffle.
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=3, broadcast_limit=0, fallback_mode="warn"
+        ),
+    )
     left = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1, 2, 3, 4, 5, 6]})
     right = pl.LazyFrame({"g": [1, 2], "y": [10, 20]})
     assert_gpu_result_equal(
