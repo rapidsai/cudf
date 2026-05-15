@@ -213,11 +213,10 @@ def allgather_polars_dataframe(
     ).to_polars()
 
 
-def synchronize_quent_context_engine_id(
+def synchronize_quent_context(
     *,
     comm: Communicator,
     context: Context,
-    quent_context: cudf_polars.quent.QuentContext,
 ) -> cudf_polars.quent.QuentContext:
     """
     Ensure all ranks use the same Quent engine ID.
@@ -225,25 +224,20 @@ def synchronize_quent_context_engine_id(
     Rank 0 selects the engine ID (from its local ``quent_context``), then all
     ranks participate in an AllGather so every process converges on that value.
     """
-    if comm.nranks == 1:
-        return quent_context
-
     if comm.rank == 0:
-        data = str(quent_context.engine.id).encode()
+        quent_context = cudf_polars.quent.QuentContext()
+        data = quent_context.serialize()
     else:
         data = b""
+
+    if comm.nranks == 1:
+        # skip the collective
+        return cudf_polars.quent.QuentContext()
 
     with reserve_op_id() as op_id:
         all_data = all_gather_host_data(comm, context.br(), op_id, data)
 
-    engine_id = uuid.UUID(all_data[0].decode())
-    if quent_context.engine.id == engine_id:
-        return quent_context
-
-    return dataclasses.replace(
-        quent_context,
-        engine=dataclasses.replace(quent_context.engine, id=engine_id),
-    )
+    return cudf_polars.quent.QuentContext.deserialize(all_data[0])
 
 
 class SPMDEngine(StreamingEngine):
@@ -446,14 +440,18 @@ class SPMDEngine(StreamingEngine):
             self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
 
-            quent_context: cudf_polars.quent.QuentContext = executor_options.get(
-                "quent_context", cudf_polars.quent.QuentContext()
+            quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+                "quent_context"
             )
-            quent_context = synchronize_quent_context_engine_id(
-                comm=comm,
-                context=self._ctx,
-                quent_context=quent_context,
-            )
+
+            if quent_context is None:
+                # We only need the collective synchronize_quent_context
+                # in the case that the user's program doesn't provide a QuentContext.
+                quent_context = synchronize_quent_context(
+                    comm=comm,
+                    context=self._ctx,
+                )
+
             executor_options["quent_context"] = quent_context
             quent_context.emit_engine_init_events(self._quent_logger)
 
@@ -588,10 +586,9 @@ class SPMDEngine(StreamingEngine):
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
         self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
-        quent_context = synchronize_quent_context_engine_id(
+        quent_context = synchronize_quent_context(
             comm=self._comm,
             context=self._ctx,
-            quent_context=quent_context,
         )
         executor_options["quent_context"] = quent_context
 

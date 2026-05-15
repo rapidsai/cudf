@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import dataclasses
+import json
+import uuid
 from typing import TYPE_CHECKING
 
 from cudf_polars.quent._plan import (
@@ -14,12 +16,13 @@ from cudf_polars.quent._plan import (
 )
 from cudf_polars.quent._types import (
     Engine,
+    Implementation,
     Query,
     QueryGroup,
 )
 
 if TYPE_CHECKING:
-    import uuid
+    from typing import Self
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
@@ -53,6 +56,56 @@ class QuentContext:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
+
+    def serialize(self) -> bytes:
+        """
+        Serialize a QuentContext, for transmission between ranks.
+
+        See Also
+        --------
+        QuentContext.deserialize
+        """
+        # This might be serialized between ranks.
+        payload = {
+            "engine": {
+                "id": int(self.engine.id),
+                "implementation": self.engine.implementation.to_dict(),
+                "custom_attributes": self.engine.implementation.custom_attributes,
+            },
+            "query_group": {
+                "id": int(self.query_group.id),
+                "instance_name": self.query_group.instance_name,
+            },
+            "query": {
+                "id": int(self.query.id),
+                "instance_name": self.query.instance_name,
+            },
+        }
+        return json.dumps(payload).encode()
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> Self:
+        payload = json.loads(data)
+        return cls(
+            engine=Engine(
+                id=uuid.UUID(int=int(payload["engine"]["id"])),
+                implementation=Implementation(
+                    name=payload["engine"]["implementation"]["name"],
+                    version=payload["engine"]["implementation"]["version"],
+                    custom_attributes=payload["engine"]["implementation"][
+                        "custom_attributes"
+                    ],
+                ),
+            ),
+            query_group=QueryGroup(
+                id=uuid.UUID(int=int(payload["query_group"]["id"])),
+                instance_name=payload["query_group"]["instance_name"],
+            ),
+            query=Query(
+                id=uuid.UUID(int=int(payload["query"]["id"])),
+                instance_name=payload["query"]["instance_name"],
+            ),
+        )
 
     @property
     def _query_group_cache(self) -> set[uuid.UUID]:
