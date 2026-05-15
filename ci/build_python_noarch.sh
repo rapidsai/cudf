@@ -35,12 +35,13 @@ rapids-telemetry-record build-dask-cudf.log \
                     "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
 
-rapids-logger "Building cudf-polars"
+# Temporarily disable cudf-polars while we break a dependency cycle
+# rapids-logger "Building cudf-polars"
 
-rapids-telemetry-record build-cudf-polars.log \
-    rattler-build build --recipe conda/recipes/cudf-polars \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
+# rapids-telemetry-record build-cudf-polars.log \
+#     rattler-build build --recipe conda/recipes/cudf-polars \
+#                     "${RATTLER_ARGS[@]}" \
+#                     "${RATTLER_CHANNELS[@]}"
 
 rapids-logger "Building custreamz"
 
