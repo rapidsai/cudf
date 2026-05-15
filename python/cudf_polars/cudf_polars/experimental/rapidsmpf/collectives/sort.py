@@ -57,16 +57,18 @@ from cudf_polars.experimental.sort import (
     _select_local_split_candidates,
     find_sort_splits,
 )
-from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream, join_cuda_streams
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IRExecutionContext
+    from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import Schema
@@ -88,6 +90,181 @@ class ChunkStore:
         """Yield messages in insertion order, draining the store."""
         while self._mids:
             yield self._store.extract(mid=self._mids.popleft())
+
+
+def _extract_boundaries(
+    min_max_table: plc.Table,
+    num_partitions: int,
+    stream: Stream,
+) -> tuple[plc.Table, bool]:
+    """
+    Extract boundaries from the maxima of each partition.
+
+    Parameters
+    ----------
+    min_max_table
+        The table containing min and max values.
+    num_partitions
+        The number of partitions.
+    stream
+        The CUDA stream to use for the operation.
+
+    Returns
+    -------
+    The boundaries table and whether they are strict.
+    """
+
+    def _gather_rows(positions: list[int]) -> plc.Table:
+        bounds = [v for k in positions for v in (k, k + 1)]
+        return plc.concatenate.concatenate(
+            plc.copying.slice(min_max_table, bounds, stream=stream), stream=stream
+        )
+
+    # Gather the partition ends (to check for strictness)
+    partition_ends = _gather_rows(list(range(1, 2 * num_partitions - 1, 2)))
+    # Gather the partition starts (these are the "boundaries")
+    partition_starts = _gather_rows(list(range(2, 2 * num_partitions, 2)))
+
+    # Check if any rows of partition_ends and partition_starts
+    # are equal. If so, the boundaries are not strict
+    # (a distinct value my exist in multiple partitions).
+    bool_type = plc.DataType(plc.TypeId.BOOL8)
+    row_eq = plc.binaryop.binary_operation(
+        partition_ends.columns()[0],
+        partition_starts.columns()[0],
+        plc.binaryop.BinaryOperator.NULL_EQUALS,
+        bool_type,
+        stream=stream,
+    )
+    for j in range(1, partition_ends.num_columns()):
+        row_eq = plc.binaryop.binary_operation(
+            row_eq,
+            plc.binaryop.binary_operation(
+                partition_ends.columns()[j],
+                partition_starts.columns()[j],
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                bool_type,
+                stream=stream,
+            ),
+            plc.binaryop.BinaryOperator.LOGICAL_AND,
+            bool_type,
+            stream=stream,
+        )
+    strict = (
+        plc.stream_compaction.apply_boolean_mask(
+            plc.Table([row_eq]), row_eq, stream=stream
+        ).num_rows()
+        == 0
+    )
+    return partition_starts, strict
+
+
+async def collect_orderscheme_boundaries(
+    context: Context,
+    comm: Communicator,
+    schema_ir: IR,
+    ir_context: IRExecutionContext,
+    ch_in: Channel[TableChunk],
+    order_keys: Sequence[OrderKey],
+    collective_id: int,
+) -> tuple[TableChunk | None, bool]:
+    """
+    Collect OrderScheme boundaries from an ordered channel.
+
+    Parameters
+    ----------
+    context
+        The RapidsMPF context.
+    comm
+        The RapidsMPF communicator.
+    schema_ir
+        The IR reference to use for the boundary table schema.
+    ir_context
+        The IR execution context.
+    ch_in
+        The channel to collect boundaries from.
+    order_keys
+        The order keys associated with the boundaries.
+    collective_id
+        The collective ID for the allgather.
+
+    Returns
+    -------
+    The collected boundaries and whether they are strict.
+
+    Notes
+    -----
+    This utility does not collect channel metadata, nor does
+    it push any messages into an output channel. All data
+    messages from the input channel are consumed and discarded.
+
+    Boundaries are NOT collected for empty chunks. Empty chunks
+    should be dropped from the channel that the returned
+    boundaries table is ultimately attached to.
+    """
+    # Collect local min/max values table for each rank
+    min_max_rows: list[plc.Table] = []
+    stream = ir_context.get_cuda_stream()
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        join_cuda_streams(downstreams=(stream,), upstreams=(chunk.stream,))
+        tbl = chunk.table_view()
+        if (n := tbl.num_rows()) == 0:
+            # The corresponding empty chunk must be dropped
+            # from the data channel.
+            continue
+        min_max_rows.extend(
+            plc.copying.slice(
+                tbl,
+                [0, 1, 0, 1] if n == 1 else [0, 1, n - 1, n],
+                stream=stream,
+            )
+        )
+    min_max_table: plc.Table | None = (
+        plc.concatenate.concatenate(min_max_rows, stream=stream)
+        if min_max_rows
+        else None
+    )
+    del min_max_rows
+
+    # Allgather min/max values across all ranks
+    if comm.nranks > 1:
+        local_chunk = (
+            TableChunk.from_pylibcudf_table(
+                min_max_table, stream, exclusive_view=True, br=context.br()
+            )
+            if min_max_table is not None
+            else empty_table_chunk(schema_ir, context, stream)
+        )
+        allgather = AllGatherManager(context, comm, collective_id)
+        with allgather.inserting() as inserter:
+            inserter.insert(comm.rank, local_chunk)
+        min_max_table = await allgather.extract_concatenated(stream, ordered=True)
+
+    # Return None if there are insufficient min/max values to process
+    if min_max_table is None or (num_partitions := min_max_table.num_rows() // 2) < 2:
+        return None, False
+
+    # Return None if the min/max values are not sorted
+    column_order = [key.order for key in order_keys]
+    null_order = [key.null_order for key in order_keys]
+    if not plc.sorting.is_sorted(
+        min_max_table, column_order, null_order, stream=stream
+    ):
+        return None, False
+
+    # Extract boundaries from the global min/max table
+    # and return the result as a TableChunk
+    boundaries, strict = _extract_boundaries(min_max_table, num_partitions, stream)
+    del min_max_table
+    return (
+        TableChunk.from_pylibcudf_table(
+            boundaries, stream, exclusive_view=False, br=context.br()
+        ),
+        strict,
+    )
 
 
 async def _simple_top_or_bottom_k(
