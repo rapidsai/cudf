@@ -671,13 +671,12 @@ def test_dt_series_datetime_fields(data, field):
 
 
 @pytest.mark.parametrize("fmt", ["%Y-%m-%dT%H:%M%z", "%Y-%m-%dT%H:%M"])
-def test_strftime_tz_aware_as_utc(fmt):
+def test_strftime_tz_aware(fmt):
     data = [datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)]
     cudf_pacific = cudf.Series(data).dt.tz_convert("US/Pacific")
-    pd_utc = pd.Series(data)
-    assert cudf_pacific.dtype != pd_utc.dtype
+    pd_pacific = pd.Series(data).dt.tz_convert("US/Pacific")
     result = cudf_pacific.dt.strftime(fmt)
-    expected = pd_utc.dt.strftime(fmt)
+    expected = pd_pacific.dt.strftime(fmt)
     assert_eq(result, expected)
 
 

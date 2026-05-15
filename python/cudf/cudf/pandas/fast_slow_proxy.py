@@ -57,12 +57,15 @@ _WRAPPER_ASSIGNMENTS = tuple(
     for attr in functools.WRAPPER_ASSIGNMENTS
     # Skip __doc__ because we assign it on class creation using exec_body
     # callable that updates the namespace of the class.
-    # Skip __annotations__ because there are differences between Python
-    # versions on how it is initialized for a class that doesn't explicitly
-    # define it and we don't want to force eager evaluation of anything that
-    # would normally be lazy (mostly for consistency, shouldn't cause any
-    # significant issues).
-    if attr not in ("__annotations__", "__doc__")
+    # Skip __annotations__ / __annotate__ (PEP 749, added on 3.14) because
+    # there are differences between Python versions on how they're
+    # initialized for a class that doesn't explicitly define them and we
+    # don't want to force eager evaluation of anything that would normally
+    # be lazy. On 3.14 specifically, simply reading ``__annotate__`` causes
+    # ``__annotate_func__`` to materialize on the source class, which then
+    # shows up in ``dir()`` and diverges from the cached ``_fsproxy_slow_dir``
+    # captured a few lines earlier.
+    if attr not in ("__annotations__", "__annotate__", "__doc__")
 )
 
 
