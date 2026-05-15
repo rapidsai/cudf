@@ -13,12 +13,15 @@ namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
-constexpr bool is_name_start(char c)
+[[nodiscard]] constexpr bool is_name_start(char c)
 {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
 }
 
-constexpr bool is_name_cont(char c) { return is_name_start(c) || (c >= '0' && c <= '9'); }
+[[nodiscard]] constexpr bool is_name_cont(char c)
+{
+  return is_name_start(c) || (c >= '0' && c <= '9');
+}
 
 [[noreturn]] void throw_parse_error(std::string_view path, std::size_t pos, std::string_view msg)
 {
@@ -26,8 +29,6 @@ constexpr bool is_name_cont(char c) { return is_name_start(c) || (c >= '0' && c 
                               std::to_string(pos) + ": " + std::string{msg});
 }
 
-// Read an unquoted identifier starting at `pos`. Returns the new position after the name.
-// Throws if no valid name is present at `pos`.
 std::size_t read_unquoted_name(std::string_view path, std::size_t pos, std::string& out)
 {
   auto const start = pos;
@@ -45,9 +46,9 @@ std::size_t read_unquoted_name(std::string_view path, std::size_t pos, std::stri
 
 }  // namespace
 
-std::vector<variant_path_step> parse_variant_path(std::string_view path)
+std::vector<std::string> parse_variant_path(std::string_view path)
 {
-  std::vector<variant_path_step> steps;
+  std::vector<std::string> steps;
   auto const len  = path.size();
   std::size_t pos = 0;
 

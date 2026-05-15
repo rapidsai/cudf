@@ -42,10 +42,6 @@ namespace {
 
 constexpr int variant_version_v1 = 1;
 
-// ---------------------------------------------------------------------------
-// Device-side parsing helpers
-// ---------------------------------------------------------------------------
-
 struct uint_result {
   uint64_t value;
   bool ok;
@@ -510,7 +506,7 @@ struct marshalled_path {
   std::vector<size_type> name_offsets;
 };
 
-marshalled_path marshal_path(std::vector<detail::variant_path_step> const& steps)
+marshalled_path marshal_path(std::vector<std::string> const& steps)
 {
   auto const depth = static_cast<size_type>(steps.size());
   marshalled_path out;

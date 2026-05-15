@@ -12,11 +12,6 @@
 namespace cudf::io::parquet::experimental::detail {
 
 /**
- * @brief One step in a parsed VARIANT path: an object field name to descend into.
- */
-using variant_path_step = std::string;
-
-/**
  * @brief Parse a JSONPath-like VARIANT path string into an ordered sequence of object-key steps.
  *
  * Grammar — object descent only:
@@ -27,6 +22,6 @@ using variant_path_step = std::string;
  * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
  *         which require array-indexing support that is not yet implemented)
  */
-std::vector<variant_path_step> parse_variant_path(std::string_view path);
+[[nodiscard]] std::vector<std::string> parse_variant_path(std::string_view path);
 
 }  // namespace cudf::io::parquet::experimental::detail
