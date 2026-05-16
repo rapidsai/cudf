@@ -103,6 +103,7 @@ def test_sink_parquet(
             "row_group_size": row_group_size,
         },
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={"chunked": is_chunked, "n_output_chunks": n_output_chunks},
         ),
@@ -125,12 +126,14 @@ def test_sink_parquet_compression_type(df, tmp_path, compression, compression_le
                 "compression": compression,
                 "compression_level": compression_level,
             },
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     elif compression in {"snappy", "lz4", "uncompressed"}:
         assert_sink_result_equal(
             df,
             tmp_path / "compression.parquet",
             write_kwargs={"compression": compression},
+            engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True),
         )
     else:
         assert_sink_ir_translation_raises(
@@ -157,6 +160,7 @@ def test_chunked_sink_empty_table_to_parquet(tmp_path):
         pl.LazyFrame(),
         tmp_path / "out.parquet",
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={"chunked": True, "n_output_chunks": 2},
         ),

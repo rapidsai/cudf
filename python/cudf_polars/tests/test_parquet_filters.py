@@ -56,7 +56,12 @@ def pq_file(tmp_path_factory, df):
 def test_scan_by_hand(expr, selection, pq_file, chunked):
     q = pq_file.filter(expr).select(*selection)
     assert_gpu_result_equal(
-        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+        q,
+        engine=pl.GPUEngine(
+            executor="in-memory",
+            raise_on_fail=True,
+            parquet_options={"chunked": chunked},
+        ),
     )
 
 
