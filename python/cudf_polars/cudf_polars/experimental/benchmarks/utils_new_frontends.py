@@ -110,6 +110,7 @@ else:
 
 
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
+_CPU_ENGINES = frozenset({"polars-cpu", "duckdb-cpu"})
 
 
 @dataclasses.dataclass
@@ -1072,7 +1073,7 @@ def _finalize_benchmark_run(
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
         run_config.summarize()
-    if args.validate and "cpu" not in run_config.frontend:
+    if args.validate and run_config.frontend not in _CPU_ENGINES:
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
@@ -2015,16 +2016,21 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
 
-    if run_config.connect is not None and run_config.frontend == "spmd":
-        raise ValueError("--connect is not supported with --frontend spmd.")
+    if run_config.connect is not None and run_config.frontend not in ("dask", "ray"):
+        raise ValueError("--connect is only supported with --frontend ray or dask.")
 
-    if run_config.collect_traces and run_config.frontend in (
-        "polars-cpu",
-        "duckdb-cpu",
-    ):
+    if run_config.collect_traces and run_config.frontend in _CPU_ENGINES:
         raise ValueError(
             f"--collect-traces is not supported with --frontend {run_config.frontend}; "
             "cudf-polars tracing only applies to GPU frontends "
+            "(in-memory, dask, ray, spmd)."
+        )
+
+    if run_config.validation_method is not None and run_config.frontend in _CPU_ENGINES:
+        raise ValueError(
+            f"--validate/--validate-directory is not supported with --frontend "
+            f"{run_config.frontend}; validation compares a candidate engine against "
+            "a CPU baseline, so it only applies to GPU frontends "
             "(in-memory, dask, ray, spmd)."
         )
 
