@@ -199,8 +199,11 @@ class reader_impl {
    *
    * Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
    * column will be assembled as a DICTIONARY32 output later in `assemble_dict_transcoded_columns`.
+   *
+   * @return True if dict transcode is active for this read (eligible columns had output types and
+   * decode masks updated and pushed to the device). False otherwise.
    */
-  void prepare_dict_transcode();
+  [[nodiscard]] bool prepare_dict_transcode();
 
   /**
    * @brief Zero-initialize the INT32 output buffers of dict-transcoded columns so that null rows
@@ -212,9 +215,9 @@ class reader_impl {
 
   /**
    * @brief Assemble DICTIONARY32 output columns for input columns that were marked eligible by
-   * `prepare_dict_transcode`. Each chunk's INT32 indices produced by the `DICT_INT32` kernel are
-   * shifted by the cumulative number of keys from prior chunks, and the per-chunk keys (built
-   * from `pass.str_dict_index`) are concatenated into a single keys child.
+   * `prepare_dict_transcode`. Per-chunk keys (from `pass.str_dict_index`) and INT32 indices are
+   * concatenated; `cudf::dictionary::detail::concatenate` remaps indices to deduplicated keys
+   * (indices are not pre-shifted by the reader).
    *
    * Non-eligible flat STRING columns are left untouched here and are expected to go through the
    * post-hoc `cudf::dictionary::encode` fallback in `finalize_output`.
