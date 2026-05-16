@@ -1138,6 +1138,7 @@ def run_polars_in_memory(
         validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1381,9 +1382,32 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 
 def _consolidate_logs(
-    run_config: RunConfig, engine: StreamingEngine, *, gather_client_logs: bool = True
+    run_config: RunConfig,
+    engine: StreamingEngine | None,
+    *,
+    gather_client_logs: bool = True,
 ) -> RunConfig:
-    """Merge structlog traces from the local process and Dask workers into run_config."""
+    """
+    Gather structlog traces and attach them to ``run_config.records``.
+
+    Parameters
+    ----------
+    run_config
+        The benchmark run config to augment.
+    engine
+        The streaming engine to fan out the gather across (dask / ray / spmd).
+        Pass ``None`` for single-process frontends (e.g. in-memory), only the
+        local-process buffer is collected.
+    gather_client_logs
+        When ``engine`` is not ``None``, also include the client-side
+        local-process buffer. Set to ``False`` for SPMD, where rank-0 is
+        itself a worker (so the worker fan-out already covered it). Ignored
+        when ``engine`` is ``None``.
+
+    Returns
+    -------
+    The augmented ``run_config``.
+    """
     if not (_HAS_STRUCTLOG and run_config.collect_traces):
         return run_config
 
@@ -1391,9 +1415,12 @@ def _consolidate_logs(
         logger = logging.getLogger()
         return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
-    all_logs = "\n".join(engine._run(gather_logs))
-    if gather_client_logs:
-        all_logs += "\n" + gather_logs()
+    parts: list[str] = []
+    if engine is not None:
+        parts.append("\n".join(engine._run(gather_logs)))
+    if engine is None or gather_client_logs:
+        parts.append(gather_logs())
+    all_logs = "\n".join(parts)
 
     parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
     # Some other log records can end up in here. Filter those out.
@@ -1990,6 +2017,16 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
 
     if run_config.connect is not None and run_config.frontend == "spmd":
         raise ValueError("--connect is not supported with --frontend spmd.")
+
+    if run_config.collect_traces and run_config.frontend in (
+        "polars-cpu",
+        "duckdb-cpu",
+    ):
+        raise ValueError(
+            f"--collect-traces is not supported with --frontend {run_config.frontend}; "
+            "cudf-polars tracing only applies to GPU frontends "
+            "(in-memory, dask, ray, spmd)."
+        )
 
     if run_config.num_gpus is not None:
         if run_config.connect is not None:
