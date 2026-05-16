@@ -258,7 +258,7 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 # ##################################################################################################
 # * fixed_point tests -----------------------------------------------------------------------------
 ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cpp fixed_point/fixed_point_tests.cu)
-ConfigureTest(FIXED_POINT_OVERFLOW_TEST fixed_point/fixed_point_overflow_tests.cpp)
+ConfigureTest(SAFE_ARITHMETIC_TEST fixed_point/safe_arithmetic_tests.cpp)
 
 # ##################################################################################################
 # * unary tests -----------------------------------------------------------------------------------

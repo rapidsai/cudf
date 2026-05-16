@@ -4,10 +4,10 @@
  */
 
 #include "binary_ops.hpp"
-#include "operation.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/fixed_point/detail/safe_arithmetic.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -25,15 +25,71 @@ namespace binops {
 namespace compiled {
 namespace {
 
-// Functor that performs the decimal-safe binary op for one row.
+// One thin overflow-aware functor per supported binary operator. Each functor
+// wraps the matching free function in `cudf/fixed_point/detail/safe_arithmetic.hpp`
+// and returns the `safe_result` directly, so the kernel only needs to OR the
+// op-level overflow with the rescale-to-output overflow before recording the
+// global flag.
+struct SafeAdd {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_add(lhs, rhs);
+  }
+};
+struct SafeSub {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_sub(lhs, rhs);
+  }
+};
+struct SafeMul {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_mul(lhs, rhs);
+  }
+};
+struct SafeDiv {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_div(lhs, rhs);
+  }
+};
+struct SafeMod {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_mod(lhs, rhs);
+  }
+};
+struct SafePMod {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_pmod(lhs, rhs);
+  }
+};
+struct SafePyMod {
+  template <typename Decimal>
+  __device__ __forceinline__ auto operator()(Decimal lhs, Decimal rhs) const
+  {
+    return numeric::detail::safe_pymod(lhs, rhs);
+  }
+};
+
+// Per-row functor that performs an overflow-checked decimal binary op.
 //
-// Both operands and the output are assumed to use the same base-10 decimal storage type
-// (caller-validated). We load the raw integer rep, wrap it into a `Track::on` value type so
-// arithmetic propagates a sticky overflow bit, run the op, rescale to the output scale, and
-// atomicMax the global flag if any active row overflows.
-template <typename SafeDecimal, typename Op>
+// Both operands and the output share the same base-10 decimal storage type
+// (caller-validated). Each thread loads the raw integer rep, wraps it in a
+// regular `fixed_point` value (no sticky-flag layer), calls the matching
+// `safe_*` free function, rescales to the output scale via `safe_rescaled`,
+// and atomicMax's the global flag if any active row reports overflow.
+template <typename Decimal, typename SafeOp>
 struct decimal_safe_op_kernel {
-  using Rep = typename SafeDecimal::rep;
+  using Rep = typename Decimal::rep;
 
   mutable_column_device_view out;
   column_device_view lhs;
@@ -52,21 +108,19 @@ struct decimal_safe_op_kernel {
     auto const lscale = numeric::scale_type{lhs.type().scale()};
     auto const rscale = numeric::scale_type{rhs.type().scale()};
 
-    SafeDecimal const x{numeric::scaled_integer<Rep>{lhs.element<Rep>(li), lscale}};
-    SafeDecimal const y{numeric::scaled_integer<Rep>{rhs.element<Rep>(ri), rscale}};
+    Decimal const x{numeric::scaled_integer<Rep>{lhs.element<Rep>(li), lscale}};
+    Decimal const y{numeric::scaled_integer<Rep>{rhs.element<Rep>(ri), rscale}};
 
-    SafeDecimal r = Op{}(x, y);
-    bool bad      = r.overflow_occurred();
-
-    r   = r.rescaled(out_scale);
-    bad = bad || r.overflow_occurred();
+    auto const op_res       = SafeOp{}(x, y);
+    auto const rescaled_res = numeric::detail::safe_rescaled(op_res.value, out_scale);
+    bool const bad          = op_res.overflow || rescaled_res.overflow;
 
     if (row_active && bad) { atomicMax(d_overflow, 1u); }
-    out.data<Rep>()[i] = r.value();
+    out.data<Rep>()[i] = rescaled_res.value.value();
   }
 };
 
-template <typename SafeDecimal, typename Op>
+template <typename Decimal, typename SafeOp>
 void launch_decimal_safe_kernel(mutable_column_device_view& outd,
                                 column_device_view const& lhsd,
                                 column_device_view const& rhsd,
@@ -77,13 +131,13 @@ void launch_decimal_safe_kernel(mutable_column_device_view& outd,
                                 rmm::cuda_stream_view stream)
 {
   auto const out_scale = numeric::scale_type{outd.type().scale()};
-  decimal_safe_op_kernel<SafeDecimal, Op> kern{
+  decimal_safe_op_kernel<Decimal, SafeOp> kern{
     outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, out_scale, d_overflow};
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream), cuda::counting_iterator<size_type>{0}, n, kern);
 }
 
-template <typename SafeDecimal>
+template <typename Decimal>
 void dispatch_op_and_run(mutable_column_device_view& outd,
                          column_device_view const& lhsd,
                          column_device_view const& rhsd,
@@ -96,31 +150,31 @@ void dispatch_op_and_run(mutable_column_device_view& outd,
 {
   switch (op) {
     case binary_operator::ADD:
-      launch_decimal_safe_kernel<SafeDecimal, ops::Add>(
+      launch_decimal_safe_kernel<Decimal, SafeAdd>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::SUB:
-      launch_decimal_safe_kernel<SafeDecimal, ops::Sub>(
+      launch_decimal_safe_kernel<Decimal, SafeSub>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::MUL:
-      launch_decimal_safe_kernel<SafeDecimal, ops::Mul>(
+      launch_decimal_safe_kernel<Decimal, SafeMul>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::DIV:
-      launch_decimal_safe_kernel<SafeDecimal, ops::Div>(
+      launch_decimal_safe_kernel<Decimal, SafeDiv>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::MOD:
-      launch_decimal_safe_kernel<SafeDecimal, ops::Mod>(
+      launch_decimal_safe_kernel<Decimal, SafeMod>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::PMOD:
-      launch_decimal_safe_kernel<SafeDecimal, ops::PMod>(
+      launch_decimal_safe_kernel<Decimal, SafePMod>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     case binary_operator::PYMOD:
-      launch_decimal_safe_kernel<SafeDecimal, ops::PyMod>(
+      launch_decimal_safe_kernel<Decimal, SafePyMod>(
         outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
       break;
     default:
@@ -152,40 +206,37 @@ void apply_binary_op_safe(mutable_column_view& out,
 
   switch (out.type().id()) {
     case type_id::DECIMAL32:
-    case type_id::DECIMAL32_SAFE:
-      dispatch_op_and_run<numeric::decimal32_safe>(*outd,
-                                                   *lhsd,
-                                                   *rhsd,
-                                                   is_lhs_scalar,
-                                                   is_rhs_scalar,
-                                                   out.size(),
-                                                   d_overflow_flag,
-                                                   op,
-                                                   stream);
+      dispatch_op_and_run<numeric::decimal32>(*outd,
+                                              *lhsd,
+                                              *rhsd,
+                                              is_lhs_scalar,
+                                              is_rhs_scalar,
+                                              out.size(),
+                                              d_overflow_flag,
+                                              op,
+                                              stream);
       break;
     case type_id::DECIMAL64:
-    case type_id::DECIMAL64_SAFE:
-      dispatch_op_and_run<numeric::decimal64_safe>(*outd,
-                                                   *lhsd,
-                                                   *rhsd,
-                                                   is_lhs_scalar,
-                                                   is_rhs_scalar,
-                                                   out.size(),
-                                                   d_overflow_flag,
-                                                   op,
-                                                   stream);
+      dispatch_op_and_run<numeric::decimal64>(*outd,
+                                              *lhsd,
+                                              *rhsd,
+                                              is_lhs_scalar,
+                                              is_rhs_scalar,
+                                              out.size(),
+                                              d_overflow_flag,
+                                              op,
+                                              stream);
       break;
     case type_id::DECIMAL128:
-    case type_id::DECIMAL128_SAFE:
-      dispatch_op_and_run<numeric::decimal128_safe>(*outd,
-                                                    *lhsd,
-                                                    *rhsd,
-                                                    is_lhs_scalar,
-                                                    is_rhs_scalar,
-                                                    out.size(),
-                                                    d_overflow_flag,
-                                                    op,
-                                                    stream);
+      dispatch_op_and_run<numeric::decimal128>(*outd,
+                                               *lhsd,
+                                               *rhsd,
+                                               is_lhs_scalar,
+                                               is_rhs_scalar,
+                                               out.size(),
+                                               d_overflow_flag,
+                                               op,
+                                               stream);
       break;
     default: CUDF_FAIL("binary_operation_safe requires a base-10 decimal output type.");
   }

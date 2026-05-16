@@ -38,24 +38,13 @@ template <typename Fixed,
           CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating>&& is_fixed_point<Fixed>())>
 CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::scale_type scale)
 {
-  using Rep        = typename Fixed::rep;
-  auto const value = [&]() {
-    if constexpr (Fixed::rad == numeric::Radix::BASE_10) {
-      if constexpr (Fixed::track == numeric::overflow_tracking::on) {
-        auto const [v, overflow] =
-          numeric::detail::convert_floating_to_integral_checked<Rep>(floating, scale);
-        return cuda::std::pair{v, overflow};
-      } else {
-        return numeric::detail::convert_floating_to_integral<Rep>(floating, scale);
-      }
-    } else {
-      return static_cast<Rep>(numeric::detail::shift<Rep, Fixed::rad>(floating, scale));
-    }
-  }();
-
-  if constexpr (Fixed::rad == numeric::Radix::BASE_10 && Fixed::track == numeric::overflow_tracking::on) {
-    return Fixed(numeric::scaled_integer<Rep>{value.first, scale}, value.second);
+  using Rep = typename Fixed::rep;
+  if constexpr (Fixed::rad == numeric::Radix::BASE_10) {
+    auto const value = numeric::detail::convert_floating_to_integral<Rep>(floating, scale);
+    return Fixed(numeric::scaled_integer<Rep>{value, scale});
   } else {
+    auto const value =
+      static_cast<Rep>(numeric::detail::shift<Rep, Fixed::rad>(floating, scale));
     return Fixed(numeric::scaled_integer<Rep>{value, scale});
   }
 }

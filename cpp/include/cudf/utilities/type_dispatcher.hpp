@@ -97,12 +97,9 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 // clang-format off
 template <typename T>
 using device_storage_type_t =
-  std::conditional_t<std::is_same_v<numeric::decimal32,       T>, int32_t,
-  std::conditional_t<std::is_same_v<numeric::decimal64,       T>, int64_t,
-  std::conditional_t<std::is_same_v<numeric::decimal128,      T>, __int128_t,
-  std::conditional_t<std::is_same_v<numeric::decimal32_safe,  T>, int32_t,
-  std::conditional_t<std::is_same_v<numeric::decimal64_safe,  T>, int64_t,
-  std::conditional_t<std::is_same_v<numeric::decimal128_safe, T>, __int128_t, T>>>>>>;
+  std::conditional_t<std::is_same_v<numeric::decimal32,  T>, int32_t,
+  std::conditional_t<std::is_same_v<numeric::decimal64,  T>, int64_t,
+  std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
 // clang-format on
 
 /**
@@ -179,9 +176,6 @@ CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST)
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32)
 CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64)
 CUDF_TYPE_MAPPING(numeric::decimal128, type_id::DECIMAL128)
-CUDF_TYPE_MAPPING(numeric::decimal32_safe, type_id::DECIMAL32_SAFE)
-CUDF_TYPE_MAPPING(numeric::decimal64_safe, type_id::DECIMAL64_SAFE)
-CUDF_TYPE_MAPPING(numeric::decimal128_safe, type_id::DECIMAL128_SAFE)
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT)
 
 /**
@@ -213,9 +207,6 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
   return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
          (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) ||
-         (id == type_id::DECIMAL32_SAFE && std::is_same_v<T, int32_t>) ||
-         (id == type_id::DECIMAL64_SAFE && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DECIMAL128_SAFE && std::is_same_v<T, __int128_t>) ||
          id == type_to_id<T>();
 }
 
@@ -293,27 +284,6 @@ template <>
 struct type_to_scalar_type_impl<numeric::decimal128> {
   using ScalarType       = cudf::fixed_point_scalar<numeric::decimal128>;
   using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal128>;
-};
-
-// Scalar specializations for the overflow-tracking decimal aliases. The scalar
-// storage shares the underlying integer representation; the wrapper only adds
-// the sticky overflow bit at the value-type layer.
-template <>
-struct type_to_scalar_type_impl<numeric::decimal32_safe> {
-  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal32_safe>;
-  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal32_safe>;
-};
-
-template <>
-struct type_to_scalar_type_impl<numeric::decimal64_safe> {
-  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal64_safe>;
-  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal64_safe>;
-};
-
-template <>
-struct type_to_scalar_type_impl<numeric::decimal128_safe> {
-  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal128_safe>;
-  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal128_safe>;
 };
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
@@ -578,15 +548,6 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
         std::forward<Ts>(args)...);
     case type_id::DECIMAL128:
       return f.template operator()<typename IdTypeMap<type_id::DECIMAL128>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL32_SAFE:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL32_SAFE>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL64_SAFE:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL64_SAFE>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL128_SAFE:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL128_SAFE>::type>(
         std::forward<Ts>(args)...);
     case type_id::STRUCT:
       return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
