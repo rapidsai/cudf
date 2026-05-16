@@ -169,7 +169,7 @@ class ValidationMethod:
         A name indicating the source of the expected results.
 
         - 'polars-cpu': Run polars against the same data
-        - 'duckdb': Compare against pre-computed DuckDB results
+        - 'duckdb-cpu': Compare against pre-computed DuckDB results
 
     comparison_method
         How the comparison was performed. Currently, only
