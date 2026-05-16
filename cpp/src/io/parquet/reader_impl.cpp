@@ -721,7 +721,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // eligibility and mutate `_output_buffers` / `subpass.pages` before we allocate column buffers
   // or dispatch decode kernels. This has to happen before `preprocess_chunk_strings` /
   // `allocate_columns` because those branch on `subpass.kernel_mask` and on `out_buf.type`.
-  prepare_dict_transcode();
+  bool const dict_transcode_active = prepare_dict_transcode();
 
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
@@ -748,7 +748,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // Zero-init the INT32 index buffers of dict-transcoded columns before launching decode, so
   // that null positions (which the DICT_INT32 kernel does not write to) carry well-defined
   // indices in the produced DICTIONARY32 output.
-  zero_init_dict_transcoded_index_buffers();
+  if (dict_transcode_active) { zero_init_dict_transcoded_index_buffers(); }
 
   // Parse data into the output buffers.
   decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
@@ -779,9 +779,9 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 
   // For any columns that were selected for direct parquet-dict → DICTIONARY32 transcode in
   // `prepare_dict_transcode`, the entries in `out_columns` are currently INT32 indices columns.
-  // Assemble them into DICTIONARY32 columns here by attaching per-chunk keys and shifting
-  // per-chunk indices so the concatenation refers to the unified keys child.
-  assemble_dict_transcoded_columns(out_columns);
+  // Assemble them into DICTIONARY32 columns here by attaching per-chunk keys; concatenate
+  // remaps indices to the unified keys child.
+  if (dict_transcode_active) { assemble_dict_transcoded_columns(out_columns); }
 
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);

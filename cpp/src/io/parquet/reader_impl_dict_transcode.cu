@@ -131,19 +131,19 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 
 }  // namespace
 
-void reader_impl::prepare_dict_transcode()
+bool reader_impl::prepare_dict_transcode()
 {
   CUDF_FUNC_RANGE();
 
   _dict_transcode_eligible.assign(_input_columns.size(), false);
 
-  if (not _options.try_output_dict_columns) { return; }
-  if (_pass_itm_data == nullptr or _pass_itm_data->subpass == nullptr) { return; }
+  if (not _options.try_output_dict_columns) { return false; }
+  if (_pass_itm_data == nullptr or _pass_itm_data->subpass == nullptr) { return false; }
 
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  if (pass.chunks.empty() or subpass.pages.size() == 0) { return; }
+  if (pass.chunks.empty() or subpass.pages.size() == 0) { return false; }
 
   auto const elig = compute_dict_transcode_eligibility(pass, _input_columns, _output_buffers);
   std::transform(
@@ -153,7 +153,9 @@ void reader_impl::prepare_dict_transcode()
 
   auto const num_eligible =
     std::count(_dict_transcode_eligible.begin(), _dict_transcode_eligible.end(), true);
-  if (num_eligible == 0) { return; }
+  if (num_eligible == 0) { return false; }
+
+  auto const num_input_cols = _input_columns.size();
 
   // Change the output buffer type for eligible columns from STRING → INT32. The subsequent
   // `allocate_columns` call will then allocate an INT32 buffer that the DICT_INT32 kernel can
@@ -180,7 +182,7 @@ void reader_impl::prepare_dict_transcode()
     }
   });
 
-  if (not any_rewritten) { return; }
+  if (not any_rewritten) { return false; }
 
   // Push the rewritten `kernel_mask`s back to device so subsequent decode kernels dispatch
   // correctly. Then refresh the aggregated `subpass.kernel_mask` on the host by re-OR'ing all
@@ -193,14 +195,12 @@ void reader_impl::prepare_dict_transcode()
     std::bit_or<>{},
     [](PageInfo const& page) { return static_cast<uint32_t>(page.kernel_mask); });
   _stream.synchronize();
+  return true;
 }
 
 void reader_impl::zero_init_dict_transcoded_index_buffers()
 {
   CUDF_FUNC_RANGE();
-
-  if (not _options.try_output_dict_columns) { return; }
-  if (_dict_transcode_eligible.empty()) { return; }
 
   // The `DICT_INT32` kernel only writes to positions with valid definition levels, leaving null
   // slots untouched. Since `allocate_columns` does not zero-initialize fixed-width buffers by
@@ -226,8 +226,6 @@ void reader_impl::assemble_dict_transcoded_columns(
 {
   CUDF_FUNC_RANGE();
 
-  if (not _options.try_output_dict_columns) { return; }
-  if (_dict_transcode_eligible.empty()) { return; }
   if (_pass_itm_data == nullptr) { return; }
 
   auto const& pass = *_pass_itm_data;
