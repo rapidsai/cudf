@@ -1441,18 +1441,18 @@ def _consolidate_logs(
     )
 
     for query_id, run_logs_group in grouped:
-        run_logs = list(run_logs_group)
-        by_iteration = [
-            list(x)
-            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
-        ]
+        traces_by_iteration: dict[int, list[dict[str, Any]]] = {
+            iteration: list(group)
+            for iteration, group in itertools.groupby(
+                run_logs_group, key=lambda x: x["iteration"]
+            )
+        }
         run_records = run_config.records[query_id]
-        assert len(by_iteration) == len(run_records)  # same number of iterations
-        all_traces = [list(iteration) for iteration in by_iteration]
 
         new_records: list[SuccessRecord | FailedRecord] = []
-        for rec, traces in zip(run_records, all_traces, strict=True):
-            if rec.status == "success":
+        for rec in run_records:
+            traces = traces_by_iteration.get(rec.iteration)
+            if rec.status == "success" and traces is not None:
                 new_records.append(dataclasses.replace(rec, traces=traces))
             else:
                 new_records.append(rec)
@@ -2032,6 +2032,12 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             f"{run_config.frontend}; validation compares a candidate engine against "
             "a CPU baseline, so it only applies to GPU frontends "
             "(in-memory, dask, ray, spmd)."
+        )
+
+    if args.debug and run_config.frontend in _CPU_ENGINES:
+        raise ValueError(
+            f"--debug is not supported with --frontend {run_config.frontend}; "
+            "debug mode only applies to GPU frontends (in-memory, dask, ray, spmd)."
         )
 
     if run_config.num_gpus is not None:
