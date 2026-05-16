@@ -180,7 +180,7 @@ class ValidationMethod:
         things like the tolerance for floating point comparisons.
     """
 
-    expected_source: Literal["polars-cpu", "duckdb"]
+    expected_source: Literal["polars-cpu", "duckdb-cpu"]
     comparison_method: Literal["polars"]
     comparison_options: dict[str, Any]
 
@@ -377,7 +377,7 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Benchmark run configuration for SPMD / Ray / DuckDB frontends."""
 
-    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb-cpu"]
     # Query selection & dataset
     queries: list[int]
     query_set: str
@@ -387,7 +387,7 @@ class RunConfig:
     qualification: bool = False
 
     # Execution mode
-    frontend: Literal["cpu", "dask", "duckdb", "in-memory", "ray", "spmd"]
+    frontend: Literal["dask", "duckdb-cpu", "in-memory", "polars-cpu", "ray", "spmd"]
     connect: str | None = None
     num_gpus: int | None = None
 
@@ -494,29 +494,28 @@ class RunConfig:
 
         if args.validate_directory:
             validation_method = ValidationMethod(
-                expected_source="duckdb",
+                expected_source="duckdb-cpu",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
         elif args.validate:
             validation_method = ValidationMethod(
-                expected_source="polars-cpu" if args.baseline == "cpu" else "duckdb",
+                expected_source="polars-cpu"
+                if args.baseline == "polars-cpu"
+                else "duckdb-cpu",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
         else:
             validation_method = None
 
-        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
-        if args.engine == "duckdb":
-            engine_name = "duckdb"
-        elif args.engine == "polars":
-            if args.frontend == "cpu":
-                engine_name = "polars-cpu"
-            else:
-                engine_name = "cudf-polars"
+        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb-cpu"]
+        if args.frontend == "duckdb-cpu":
+            engine_name = "duckdb-cpu"
+        elif args.frontend == "polars-cpu":
+            engine_name = "polars-cpu"
         else:
-            raise ValueError(f"Invalid engine: {args.engine}")
+            engine_name = "cudf-polars"
 
         return cls(
             engine_name=engine_name,
@@ -648,7 +647,7 @@ def print_query_plan(
 ) -> tuple[str | None, str | None]:
     """Print the query plan."""
     logical_plan = plan = None
-    if run_config.frontend == "cpu":
+    if run_config.frontend == "polars-cpu":
         if args.explain_logical:
             logical_plan = q.explain()
         if args.explain:
@@ -710,7 +709,7 @@ def execute_query(
         domain="cudf_polars",
         color="green",
     ):
-        if run_config.frontend == "cpu":
+        if run_config.frontend == "polars-cpu":
             t0 = time.monotonic()
             result = q.collect(engine="streaming")
             t1 = time.monotonic()
@@ -911,21 +910,22 @@ def run_polars_query(
 
     expected: pl.DataFrame | None = None
     if args.validate:
-        if args.baseline == "cpu":
-            expected = q.collect()
-        elif args.baseline == "duckdb":
-            duckdb_queries_cls = benchmark().duckdb_queries
-            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
-            base_sql = get_ddb(run_config)
-            expected = execute_duckdb_query(
-                base_sql,
-                run_config.dataset_path,
-                query_set=duckdb_queries_cls.name,
-                suffix=run_config.suffix,
-                run_config=run_config,
-            ).with_columns(*casts)
-        else:
-            raise ValueError(f"Invalid baseline: {args.baseline}")
+        match args.baseline:
+            case "polars-cpu":
+                expected = q.collect()
+            case "duckdb-cpu":
+                duckdb_queries_cls = benchmark().duckdb_queries
+                get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+                base_sql = get_ddb(run_config)
+                expected = execute_duckdb_query(
+                    base_sql,
+                    run_config.dataset_path,
+                    query_set=duckdb_queries_cls.name,
+                    suffix=run_config.suffix,
+                    run_config=run_config,
+                ).with_columns(*casts)
+            case _:
+                raise ValueError(f"Invalid baseline: {args.baseline}")
     elif validation_files is not None:
         expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
     else:
@@ -1072,7 +1072,7 @@ def _finalize_benchmark_run(
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
         run_config.summarize()
-    if args.validate and run_config.frontend != "cpu":
+    if args.validate and "cpu" not in run_config.frontend:
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
@@ -1742,15 +1742,15 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--frontend",
         required=True,
         type=str,
-        choices=["cpu", "dask", "duckdb", "in-memory", "ray", "spmd"],
+        choices=["dask", "duckdb-cpu", "in-memory", "polars-cpu", "ray", "spmd"],
         help=textwrap.dedent("""\
             Execution frontend:
-                - cpu       : Polars CPU streaming engine (no GPU)
-                - dask      : Dask distributed multi-GPU execution
-                - duckdb    : DuckDB CPU execution
-                - in-memory : Single-process GPU, in-memory evaluation
-                - ray       : Ray actor-based multi-GPU execution
-                - spmd      : SPMD execution via rrun launcher"""),
+                - dask       : Dask distributed multi-GPU execution
+                - duckdb-cpu : DuckDB CPU execution
+                - in-memory  : Single-process GPU, in-memory evaluation
+                - polars-cpu : Polars CPU streaming engine (no GPU)
+                - ray        : Ray actor-based multi-GPU execution
+                - spmd       : SPMD execution via rrun launcher"""),
     )
     parser.add_argument(
         "--connect",
@@ -1864,8 +1864,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--baseline",
-        choices=["duckdb", "cpu"],
-        default="duckdb",
+        choices=["duckdb-cpu", "polars-cpu"],
+        default="duckdb-cpu",
         help="Which engine to use as the baseline for validation.",
     )
     parser.add_argument(
@@ -2012,15 +2012,6 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     )
     numeric_type, date_type = check_input_data_type(run_config)
     match args.frontend:
-        case "cpu":
-            run_polars_cpu(
-                benchmark,
-                args,
-                run_config,
-                numeric_type,
-                date_type,
-                validation_files,
-            )
         case "dask":
             run_polars_dask(
                 benchmark,
@@ -2031,14 +2022,23 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "duckdb":
-            run_duckdb(benchmark, args)
+        case "duckdb-cpu":
+            run_duckdb(benchmark().duckdb_queries, args)
         case "in-memory":
             run_polars_in_memory(
                 benchmark,
                 args,
                 run_config,
                 parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
+        case "polars-cpu":
+            run_polars_cpu(
+                benchmark,
+                args,
+                run_config,
                 numeric_type,
                 date_type,
                 validation_files,
