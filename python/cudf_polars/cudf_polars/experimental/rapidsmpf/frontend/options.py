@@ -193,6 +193,11 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PINNED_INITIAL_POOL_SIZE``.
         Default: ``0``.
         Category: rapidsmpf.
+    pinned_max_pool_size
+        Maximum pinned host memory pool size (e.g. ``"4GiB"``, ``"50%"``).
+        Env: ``RAPIDSMPF_PINNED_MAX_POOL_SIZE``.
+        Default: 80% of per-GPU host memory.
+        Category: rapidsmpf.
     spill_device_limit
         Device memory soft limit before spilling (e.g. ``"80%"`` or bytes).
         Env: ``RAPIDSMPF_SPILL_DEVICE_LIMIT``.
@@ -202,6 +207,14 @@ class StreamingOptions:
         Interval between spill checks (e.g. ``"1ms"``).
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
+        Category: rapidsmpf.
+    unbounded_file_read_cache
+        Cache file-read results in the Context's message storage.
+        Accepts a memory type (``"host"``, ``"pinned"``, ``"device"``) or
+        ``"disabled"``. Primarily for benchmarking. Each file slice must be
+        read with identical parameters (see rapidsmpf docs).
+        Env: ``RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE``.
+        Default: ``"disabled"``.
         Category: rapidsmpf.
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
@@ -302,11 +315,17 @@ class StreamingOptions:
     pinned_initial_pool_size: int | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PINNED_INITIAL_POOL_SIZE", int
     )
+    pinned_max_pool_size: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_PINNED_MAX_POOL_SIZE"
+    )
     spill_device_limit: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_SPILL_DEVICE_LIMIT"
     )
     periodic_spill_check: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
+    )
+    unbounded_file_read_cache: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE"
     )
     # ---- Executor ----
     num_py_executors: int | Unspecified = _opt(
@@ -498,8 +517,10 @@ class StreamingOptions:
             allow_overbooking_by_default=_get("allow_overbooking_by_default"),
             pinned_memory=_get("pinned_memory"),
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
+            pinned_max_pool_size=_get("pinned_max_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
+            unbounded_file_read_cache=_get("unbounded_file_read_cache"),
             hardware_binding=_get("hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
@@ -606,6 +627,17 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PINNED_INITIAL_POOL_SIZE. Built-in default: 0."""),
         )
         g.add_argument(
+            "--pinned-max-pool-size",
+            dest="pinned_max_pool_size",
+            default=None,
+            type=str,
+            help=textwrap.dedent("""\
+                Maximum size of the pinned memory pool. Accepts byte counts
+                (e.g. "4GiB") or a percentage (e.g. "80%%").
+                Env: RAPIDSMPF_PINNED_MAX_POOL_SIZE.
+                Built-in default: 80%% of per-GPU host memory."""),
+        )
+        g.add_argument(
             "--spill-device-limit",
             dest="spill_device_limit",
             default=None,
@@ -623,6 +655,16 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Interval between periodic spill checks (e.g. "1ms").
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
+        )
+        g.add_argument(
+            "--unbounded-file-read-cache",
+            dest="unbounded_file_read_cache",
+            default=None,
+            type=str,
+            help=textwrap.dedent("""\
+                Cache file-read results in the Context's message storage.
+                One of "host", "pinned", "device", or "disabled".
+                Env: RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE. Built-in default: disabled."""),
         )
         g.add_argument(
             "--hardware-binding",
