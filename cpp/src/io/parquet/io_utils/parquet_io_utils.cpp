@@ -171,8 +171,9 @@ fetch_byte_ranges_to_device_async(
         copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
     }
 
-    // Synchronize the stream so that the host buffers can be safely discarded
-    stream.synchronize();
+    // Synchronize the stream if `memcpy_batch_async` was scheduled to safely discard the host
+    // buffers
+    if (not host_buffers.empty()) { stream.synchronize(); }
 
     auto sync_function = [](decltype(device_read_tasks) device_read_tasks) {
       for (auto& task : device_read_tasks) {
