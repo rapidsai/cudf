@@ -97,8 +97,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
+CUSTOMER_COMPOSITE = ["c_customer_id", "c_first_name", "c_last_name"]
+
+
 def _year_total_sk(
     sales: pl.LazyFrame,
+    customer: pl.LazyFrame,
     date_dim: pl.LazyFrame,
     date_fk: str,
     customer_fk: str,
@@ -108,9 +112,9 @@ def _year_total_sk(
     dates = date_dim.filter(pl.col("d_year") == year).select(["d_date_sk"])
     return (
         sales.join(dates, left_on=date_fk, right_on="d_date_sk")
-        .group_by(customer_fk)
+        .join(customer, left_on=customer_fk, right_on="c_customer_sk")
+        .group_by(CUSTOMER_COMPOSITE)
         .agg(pl.col(amount_col).std().alias("year_total"))
-        .rename({customer_fk: "customer_sk"})
     )
 
 
@@ -132,6 +136,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     t_s_first = (
         _year_total_sk(
             store_sales,
+            customer,
             date_dim,
             "ss_sold_date_sk",
             "ss_customer_sk",
@@ -143,6 +148,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     t_s_sec = _year_total_sk(
         store_sales,
+        customer,
         date_dim,
         "ss_sold_date_sk",
         "ss_customer_sk",
@@ -152,6 +158,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     t_w_first = (
         _year_total_sk(
             web_sales,
+            customer,
             date_dim,
             "ws_sold_date_sk",
             "ws_bill_customer_sk",
@@ -163,6 +170,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     t_w_sec = _year_total_sk(
         web_sales,
+        customer,
         date_dim,
         "ws_sold_date_sk",
         "ws_bill_customer_sk",
@@ -171,9 +179,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).rename({"year_total": "w_sec_total"})
 
     joined = (
-        t_s_first.join(t_s_sec, on="customer_sk")
-        .join(t_w_first, on="customer_sk")
-        .join(t_w_sec, on="customer_sk")
+        t_s_first.join(t_s_sec, on=CUSTOMER_COMPOSITE, nulls_equal=True)
+        .join(t_w_first, on=CUSTOMER_COMPOSITE, nulls_equal=True)
+        .join(t_w_sec, on=CUSTOMER_COMPOSITE, nulls_equal=True)
     )
 
     sort_by = {
@@ -187,13 +195,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             joined.filter(
                 pl.col("w_sec_total") / pl.col("w_first_total")
                 > pl.col("s_sec_total") / pl.col("s_first_total")
-            )
-            .join(
-                customer.select(
-                    ["c_customer_sk", "c_customer_id", "c_first_name", "c_last_name"]
-                ),
-                left_on="customer_sk",
-                right_on="c_customer_sk",
             )
             .select(
                 pl.col("c_customer_id").alias("customer_id"),
