@@ -76,17 +76,37 @@ function(embed_includes TARGET)
   endforeach(SOURCE_FILE)
 
   # Determine the starting index for new IDs from the current list length
-  get_property(SOURCE_FILE_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_IDS)
+  get_property(
+    SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
   list(LENGTH SOURCE_FILE_IDS IDX)
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_IDS "include_${IDX}")
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}")
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_SOURCE_FILE_IDS "include_${IDX}"
+    )
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}"
+    )
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}"
+    )
     math(EXPR IDX "${IDX} + 1")
   endforeach()
 
-  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
+  set_property(
+    TARGET ${TARGET}__embed__props
+    APPEND
+    PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES}
+  )
 
 endfunction()
 
@@ -120,22 +140,46 @@ function(embed_blob TARGET)
       message(FATAL_ERROR "ARRAY_IDS and ARRAY_VALUES must have the same length")
     endif()
 
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_ARRAY_IDS ${ARG_ARRAY_IDS})
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_ARRAY_VALUES ${ARG_ARRAY_VALUES})
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_ARRAY_IDS ${ARG_ARRAY_IDS}
+    )
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_ARRAY_VALUES ${ARG_ARRAY_VALUES}
+    )
   endif()
 
   if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
     # If the file is a generator expression for target objects add as dependency
-    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>)
+    set_property(
+      TARGET ${TARGET}__embed__props
+      APPEND
+      PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>
+    )
   else()
     if(NOT EXISTS "${ARG_FILE}")
       message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
     endif()
   endif()
 
-  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_IDS ${ARG_ID})
-  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILES ${ARG_FILE})
-  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST})
+  set_property(
+    TARGET ${TARGET}__embed__props
+    APPEND
+    PROPERTY EMBED_SOURCE_FILE_IDS ${ARG_ID}
+  )
+  set_property(
+    TARGET ${TARGET}__embed__props
+    APPEND
+    PROPERTY EMBED_SOURCE_FILES ${ARG_FILE}
+  )
+  set_property(
+    TARGET ${TARGET}__embed__props
+    APPEND
+    PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST}
+  )
 
 endfunction()
 
@@ -159,17 +203,45 @@ function(embed TARGET)
     message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
   endif()
 
-  get_property(EMBED_SOURCE_FILES TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILES)
+  get_property(
+    EMBED_SOURCE_FILES
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_SOURCE_FILES
+  )
   if(NOT EMBED_SOURCE_FILES)
     message(FATAL_ERROR "No source files registered for target '${TARGET}'")
   endif()
 
-  get_property(EMBED_SOURCE_FILE_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_IDS)
-  get_property(EMBED_SOURCE_FILE_DESTS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_DESTS)
-  get_property(EMBED_TARGET_DEPS TARGET ${TARGET}__embed__props PROPERTY EMBED_TARGET_DEPS)
-  get_property(EMBED_ARRAY_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_ARRAY_IDS)
-  get_property(EMBED_ARRAY_VALUES TARGET ${TARGET}__embed__props PROPERTY EMBED_ARRAY_VALUES)
-  get_property(EMBED_INCLUDE_DIRS TARGET ${TARGET}__embed__props PROPERTY EMBED_INCLUDE_DIRECTORIES)
+  get_property(
+    EMBED_SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
+  get_property(
+    EMBED_SOURCE_FILE_DESTS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_SOURCE_FILE_DESTS
+  )
+  get_property(
+    EMBED_TARGET_DEPS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_TARGET_DEPS
+  )
+  get_property(
+    EMBED_ARRAY_IDS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_ARRAY_IDS
+  )
+  get_property(
+    EMBED_ARRAY_VALUES
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_ARRAY_VALUES
+  )
+  get_property(
+    EMBED_INCLUDE_DIRS
+    TARGET ${TARGET}__embed__props
+    PROPERTY EMBED_INCLUDE_DIRECTORIES
+  )
 
   set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
   set(EMBED_SCRIPT_TEMPLATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
@@ -197,16 +269,13 @@ function(embed TARGET)
   add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
   target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
-  set_target_properties(
-    ${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
-  )
+  set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
   target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${RUNNER}>
-    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES}
-            ${EMBED_TARGET_DEPS}
+    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES} ${EMBED_TARGET_DEPS}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM
