@@ -60,7 +60,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if variant == "in-memory":
         engine = polars.GPUEngine(executor="in-memory", raise_on_fail=raise_on_fail)
     else:
-        from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+        from cudf_polars.engine.spmd import SPMDEngine
 
         executor_options: dict[str, object] = {}
         if blocksize == "small":

@@ -101,7 +101,7 @@ exclude_also = [
 # so we omit them from coverage checks.
 omit = [
   "cudf_polars/testing/inject_gpu_engine.py",
-  "cudf_polars/experimental/**",
+  "cudf_polars/streaming/**",
 ]
 
 [tool.ruff]
