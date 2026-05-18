@@ -4,11 +4,14 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 from functools import partial, reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
+
+import pylibcudf as plc
 
 import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
@@ -17,11 +20,12 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
-from cudf_polars.containers import DataType
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
+    DataFrameScan,
     Filter,
     HConcat,
     HStack,
@@ -29,26 +33,189 @@ from cudf_polars.dsl.ir import (
     Projection,
     Select,
     Slice,
+    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import ColumnStat, PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_over,
     _dynamic_planning_on,
+    _fallback_inform,
     _lower_ir_fallback,
 )
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
+    from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+
+class RowIndex(IR):
+    """Add a temporary row index with partition-specific offsets."""
+
+    __slots__ = ("name", "offsets", "partition_order")
+    _non_child = ("schema", "name", "offsets", "partition_order")
+    _n_non_child_args = 2
+    name: str
+    offsets: tuple[int, ...]
+    partition_order: int | tuple[Any, ...]
+
+    def __init__(
+        self,
+        schema: Schema,
+        name: str,
+        offsets: tuple[int, ...],
+        partition_order: int | tuple[Any, ...],
+        df: IR,
+    ):
+        self.schema = schema
+        self.name = name
+        self.offsets = offsets
+        self.partition_order = partition_order
+        self._non_child_args = (name, offsets, partition_order)
+        self.children = (df,)
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        name: str,
+        offset: int,
+        df: DataFrame,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe with a leading row-index column."""
+        stream = df.stream
+        dtype = DataType(pl.UInt64())
+        step = plc.Scalar.from_py(1, dtype.plc_type, stream=stream)
+        init = plc.Scalar.from_py(offset, dtype.plc_type, stream=stream)
+        index_col = Column(
+            plc.filling.sequence(df.num_rows, init, step, stream=stream),
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.AFTER,
+            name=name,
+            dtype=dtype,
+        )
+        return DataFrame([index_col, *df.columns], stream=stream)
+
+
+def _partition_row_counts(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    stats: StatsCollector,
+) -> tuple[list[int], int | tuple[Any, ...]] | None:
+    """Return exact row counts for the partitions of *ir*, if known."""
+    if isinstance(ir, DataFrameScan):
+        count = partition_info[ir].count
+        nrows = ir.df.shape()[0]
+        length = max(1, (nrows + count - 1) // count)
+        counts = [max(0, min(length, nrows - i * length)) for i in range(count)]
+        return counts, count
+
+    if isinstance(ir, Union):
+        counts: list[int] = []
+        partition_order = []
+        for child in ir.children:
+            child_info = _partition_row_counts(child, partition_info, stats)
+            if child_info is None:
+                return None
+            child_counts, child_partition_order = child_info
+            counts.extend(child_counts)
+            partition_order.append(child_partition_order)
+        return counts, tuple(partition_order)
+
+    if isinstance(ir, Repartition):
+        child_info = _partition_row_counts(ir.children[0], partition_info, stats)
+        if child_info is None:
+            return None
+        child_counts, _ = child_info
+        count_out = partition_info[ir].count
+        n, remainder = divmod(len(child_counts), count_out)
+        offsets = [
+            0,
+            *itertools.accumulate(n + (i < remainder) for i in range(count_out)),
+        ]
+        counts = [
+            sum(child_counts[offsets[i] : offsets[i + 1]]) for i in range(count_out)
+        ]
+        return counts, count_out
+
+    if partition_info[ir].count == 1:
+        value = stats.row_count.get(ir, ColumnStat[int]()).value
+        return ([value], 1) if value is not None else None
+
+    if len(ir.children) == 1 and isinstance(ir, (Cache, HStack, Projection)):
+        return _partition_row_counts(ir.children[0], partition_info, stats)
+
+    if isinstance(ir, MapFunction) and ir.name == "rename":
+        return _partition_row_counts(ir.children[0], partition_info, stats)
+
+    return None
+
+
+def _lower_over_filter_fallback(
+    ir: Filter,
+    child: IR,
+    rec: LowerIRTransformer,
+    partition_info: MutableMapping[IR, PartitionInfo],
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    row_count_info = _partition_row_counts(child, partition_info, rec.state["stats"])
+    if row_count_info is None:
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "over(...) inside filter is not supported for multiple partitions; "
+                "falling back to in-memory evaluation."
+            ),
+        )
+    counts, partition_order = row_count_info
+
+    temp_name = next(
+        unique_names((f"__cudf_polars_filter_order_{abs(hash(ir))}", *child.schema))
+    )
+
+    order_dtype = DataType(pl.UInt64())
+    indexed_schema = {temp_name: order_dtype, **child.schema}
+    offsets = tuple(itertools.accumulate((0, *counts)))[:-1]
+    indexed_child = RowIndex(indexed_schema, temp_name, offsets, partition_order, child)
+    partition_info[indexed_child] = PartitionInfo(count=partition_info[child].count)
+
+    if partition_info[indexed_child].count > 1:
+        _fallback_inform(
+            "over(...) inside filter is not supported for multiple partitions; "
+            "falling back to in-memory evaluation.",
+            rec.state["config_options"],
+        )
+        indexed_child = Repartition(indexed_schema, indexed_child)
+        partition_info[indexed_child] = PartitionInfo(count=1)
+
+    filtered = Filter(indexed_schema, ir.mask, indexed_child)
+    partition_info[filtered] = PartitionInfo(count=1)
+    order_key = NamedExpr(temp_name, Col(order_dtype, temp_name))
+    sorted_filter = Sort(
+        indexed_schema,
+        (order_key,),
+        (plc.types.Order.ASCENDING,),
+        (plc.types.NullOrder.AFTER,),
+        stable=True,
+        zlice=None,
+        df=filtered,
+    )
+    partition_info[sorted_filter] = PartitionInfo(count=1)
+    projected = Projection(ir.schema, sorted_filter)
+    partition_info[projected] = PartitionInfo(count=1)
+    return projected, partition_info
 
 
 @lower_ir_node.register(IR)
@@ -212,14 +379,7 @@ def _(
 
     if partition_info[child].count > 1 and _contains_over([ir.mask.value]):
         # mask contains .over(...), collapse to single partition
-        return _lower_ir_fallback(
-            ir.reconstruct([child]),
-            rec,
-            msg=(
-                "over(...) inside filter is not supported for multiple partitions; "
-                "falling back to in-memory evaluation."
-            ),
-        )
+        return _lower_over_filter_fallback(ir, child, rec, partition_info)
 
     if partition_info[child].count > 1 and not all(
         expr.is_pointwise for expr in traversal([ir.mask.value])

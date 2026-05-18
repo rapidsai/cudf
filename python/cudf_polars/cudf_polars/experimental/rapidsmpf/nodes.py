@@ -20,6 +20,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.experimental.parallel import RowIndex
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -43,6 +44,35 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+
+
+def _partition_order_count(partition_order: int | tuple[Any, ...]) -> int:
+    if isinstance(partition_order, int):
+        return partition_order
+    return sum(_partition_order_count(child) for child in partition_order)
+
+
+def _local_partition_indices(
+    partition_order: int | tuple[Any, ...],
+    rank: int,
+    nranks: int,
+    *,
+    base: int = 0,
+) -> tuple[int, ...]:
+    if isinstance(partition_order, int):
+        local_count = (partition_order + nranks - 1) // nranks
+        start = local_count * rank
+        stop = min(start + local_count, partition_order)
+        return tuple(range(base + start, base + stop))
+
+    indices: list[int] = []
+    child_base = base
+    for child in partition_order:
+        indices.extend(
+            _local_partition_indices(child, rank, nranks, base=child_base)
+        )
+        child_base += _partition_order_count(child)
+    return tuple(indices)
 
 
 @define_actor()
@@ -550,6 +580,106 @@ def _(
             )
         ]
 
+    return nodes, channels
+
+
+@define_actor()
+async def row_index_node(
+    context: Context,
+    ir: RowIndex,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+) -> None:
+    """
+    Row-index node for rapidsmpf.
+
+    Notes
+    -----
+    The generic single-input node cannot evaluate RowIndex because the
+    partition-specific offset is keyed by each message's sequence number.
+    """
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
+        metadata_in = await recv_metadata(ch_in, context)
+        metadata_out = ChannelMetadata(
+            local_count=metadata_in.local_count,
+            partitioning=metadata_in.partitioning,
+            duplicated=metadata_in.duplicated,
+        )
+        await send_metadata(ch_out, context, metadata_out)
+        if tracer is not None and metadata_out.duplicated:
+            tracer.set_duplicated()
+
+        partition_indices = _local_partition_indices(
+            ir.partition_order,
+            context.comm().rank,
+            context.comm().nranks,
+        )
+
+        while (msg := await ch_in.recv(context)) is not None:
+            seq_num = msg.sequence_number
+            if seq_num >= len(partition_indices):
+                raise RuntimeError(
+                    "RowIndex received more chunks than expected from its input."
+                )
+            chunk = TableChunk.from_message(msg, br=context.br())
+            del msg
+            chunk, extra = await make_table_chunks_available_or_wait(
+                context,
+                chunk,
+                reserve_extra=chunk.data_alloc_size(),
+                net_memory_delta=0,
+            )
+            partition_index = partition_indices[seq_num]
+            with opaque_memory_usage(extra):
+                df = await ir_context.to_thread(
+                    ir.do_evaluate,
+                    ir.name,
+                    ir.offsets[partition_index],
+                    DataFrame.from_table(
+                        chunk.table_view(),
+                        list(ir.children[0].schema.keys()),
+                        list(ir.children[0].schema.values()),
+                        chunk.stream,
+                    ),
+                    context=ir_context,
+                )
+            if tracer is not None:
+                tracer.add_chunk(table=df.table)
+            await ch_out.send(
+                context,
+                Message(
+                    seq_num,
+                    TableChunk.from_pylibcudf_table(
+                        df.table,
+                        df.stream,
+                        exclusive_view=True,
+                        br=context.br(),
+                    ),
+                ),
+            )
+            del chunk, df
+
+        await ch_out.drain(context)
+
+
+@generate_ir_sub_network.register(RowIndex)
+def _(
+    ir: RowIndex, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    nodes, channels = process_children(ir, rec)
+    channels[ir] = ChannelManager(rec.state["context"])
+    nodes[ir] = [
+        row_index_node(
+            rec.state["context"],
+            ir,
+            rec.state["ir_context"],
+            channels[ir].reserve_input_slot(),
+            channels[ir.children[0]].reserve_output_slot(),
+        )
+    ]
     return nodes, channels
 
 

@@ -43,3 +43,29 @@ def test_filter_non_pointwise(df, engine):
         match="This filter is not supported for multiple partitions.",
     ):
         assert_gpu_result_equal(query, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        pl.len().over("k") == 2,
+        pl.col("v").max().over("k") > 4,
+    ],
+)
+def test_filter_over_fallback_preserves_row_order(engine, mask):
+    query = pl.concat(
+        [
+            pl.LazyFrame({"k": ["x", "y"], "v": [3, 2]}),
+            pl.LazyFrame({"k": ["x", "y"], "v": [5, 7]}),
+        ]
+    ).filter(mask)
+
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match=(
+            "over\\(\\.\\.\\.\\) inside filter is not supported "
+            "for multiple partitions"
+        ),
+    ):
+        assert_gpu_result_equal(query, engine=engine)
