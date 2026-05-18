@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -53,7 +54,8 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
-  auto const run_bench = [&](auto const& input) {
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  auto const run_bench        = [&](auto const& input) {
     state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::unique(input, {0}, Keep, cudf::null_equality::EQUAL);
@@ -67,6 +69,9 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   } else {
     run_bench(input_table);
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 using data_type   = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
@@ -110,7 +115,8 @@ void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench
   auto const input_table = create_random_table(
     {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 0);
 
-  auto const run_bench = [&](auto const& input) {
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  auto const run_bench        = [&](auto const& input) {
     state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::unique(input, {0}, Keep, cudf::null_equality::EQUAL);
@@ -124,6 +130,9 @@ void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench
   } else {
     run_bench(*input_table);
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(nvbench_unique_list,

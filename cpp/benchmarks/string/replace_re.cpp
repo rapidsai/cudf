@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/replace_re.hpp>
@@ -30,6 +31,7 @@ static void bench_replace(nvbench::state& state)
   state.add_global_memory_reads<nvbench::int8_t>(data_size);
   state.add_global_memory_writes<nvbench::int8_t>(data_size);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   if (rtype == "backref") {
     auto replacement = std::string("#\\1X");
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -41,6 +43,8 @@ static void bench_replace(nvbench::state& state)
       cudf::strings::replace_re(input, *program, replacement);
     });
   }
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_replace)

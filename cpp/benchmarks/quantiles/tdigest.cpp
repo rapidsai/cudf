@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <benchmarks/common/memory_stats.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -84,6 +86,7 @@ void bm_tdigest_merge(nvbench::state& state)
   state.add_element_count(total_centroids);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                timer.start();
@@ -96,6 +99,8 @@ void bm_tdigest_merge(nvbench::state& state)
                                                                         mr);
                timer.stop();
              });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 void bm_tdigest_reduce(nvbench::state& state)
@@ -129,6 +134,7 @@ void bm_tdigest_reduce(nvbench::state& state)
   stream.synchronize();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                timer.start();
@@ -142,6 +148,8 @@ void bm_tdigest_reduce(nvbench::state& state)
                                                                   mr);
                timer.stop();
              });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bm_tdigest_merge)

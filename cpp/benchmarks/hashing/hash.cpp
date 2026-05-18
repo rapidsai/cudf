@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/hashing.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -43,6 +44,8 @@ static void bench_hash(nvbench::state& state)
                                                    cudf::bitmask_allocation_size_bytes(num_rows));
   }
   // memory written depends on used hash
+
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   if (hash_name == "murmurhash3_x86_32") {
     state.add_global_memory_writes<nvbench::uint32_t>(num_rows);
@@ -89,6 +92,9 @@ static void bench_hash(nvbench::state& state)
   } else {
     state.skip(hash_name + ": unknown hash name");
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_hash)

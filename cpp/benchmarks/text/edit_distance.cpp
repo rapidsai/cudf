@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/copying.hpp>
@@ -109,12 +110,15 @@ static void bench_edit_distance_ascii(nvbench::state& state)
 
 static void bench_edit_distance(nvbench::state& state)
 {
-  auto const encode = state.get_string("encode");
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  auto const encode           = state.get_string("encode");
   if (encode == "ascii") {
     bench_edit_distance_ascii(state);
   } else {
     bench_edit_distance_utf8(state);
   }
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_edit_distance)

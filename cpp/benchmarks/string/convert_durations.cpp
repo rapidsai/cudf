@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
@@ -38,6 +39,8 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   if (from_dur) {
     state.add_global_memory_reads<DataType>(num_rows);
     state.add_global_memory_writes<int8_t>(format.size() * num_rows);
@@ -52,6 +55,9 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
       cudf::strings::to_durations(view, data_type, format);
     });
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(bench_convert_duration, NVBENCH_TYPE_AXES(Types))
