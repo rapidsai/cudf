@@ -103,6 +103,10 @@ def test_make_spill_function(
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
 
+    assert context.br().spill_manager.spill(1 * 1024 * 1024) == 0, (
+        "No messages should be spilled initially"
+    )
+
     # Register spill function
     spill_func = make_spill_function(buffers, context)
     func_id = context.br().spill_manager.add_spill_function(spill_func, priority=0)
