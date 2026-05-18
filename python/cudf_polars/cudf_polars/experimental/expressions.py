@@ -44,6 +44,7 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.rolling import GroupedWindow
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
@@ -51,6 +52,7 @@ from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.over import _decompose_grouped_window_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _dynamic_planning_on
 
@@ -462,6 +464,10 @@ def _decompose_expr_node(
         )
         (expr,) = columns
         return expr, input_ir, partition_info
+    elif isinstance(expr, GroupedWindow) and _dynamic_planning_on(config_options):
+        return _decompose_grouped_window_node(
+            expr, input_ir, partition_info, config_options, names=names
+        )
     else:
         # This is an un-supported expression - raise.
         raise NotImplementedError(
