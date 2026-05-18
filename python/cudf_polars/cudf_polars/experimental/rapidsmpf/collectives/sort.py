@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from collections import deque
 from typing import TYPE_CHECKING
 
 from rapidsmpf.shuffler import PartitionAssignment
@@ -25,7 +24,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Empty, Sort
-from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
@@ -35,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    ChunkStore,
     NormalizedPartitioning,
     allgather_reduce,
     chunk_to_frame,
@@ -44,7 +44,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     evaluate_batch,
     evaluate_chunk,
     gather_in_task_group,
-    names_to_indices,
     process_children,
     recv_metadata,
     replay_buffered_channel,
@@ -60,7 +59,7 @@ from cudf_polars.experimental.sort import (
 from cudf_polars.utils.cuda_stream import get_joined_cuda_stream, join_cuda_streams
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -73,23 +72,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import StreamingExecutor
-
-
-class ChunkStore:
-    """Ordered spillable buffer for TableChunk messages."""
-
-    def __init__(self, ctx: Context) -> None:
-        self._mids: deque[int] = deque()
-        self._store = ctx.spillable_messages()
-
-    def insert(self, msg: Message) -> None:
-        """Insert a message into the store."""
-        self._mids.append(self._store.insert(msg))
-
-    def __iter__(self) -> Generator[Message, None, None]:
-        """Yield messages in insertion order, draining the store."""
-        while self._mids:
-            yield self._store.extract(mid=self._mids.popleft())
 
 
 def _extract_boundaries(
@@ -244,7 +226,9 @@ async def extract_orderscheme_partitioning(
         allgather = AllGatherManager(context, comm, collective_id)
         with allgather.inserting() as inserter:
             inserter.insert(comm.rank, local_chunk)
-        min_max_table = await allgather.extract_concatenated(stream, ordered=True)
+        min_max_table = await allgather.extract_concatenated(
+            stream, ordered=True, ir_context=ir_context
+        )
 
     # Return None if there are insufficient min/max values to process
     if min_max_table is None or (num_partitions := min_max_table.num_rows() // 2) < 2:
@@ -321,7 +305,9 @@ async def _simple_top_or_bottom_k(
         chunk = await evaluate_chunk(
             context,
             TableChunk.from_pylibcudf_table(
-                await allgather.extract_concatenated(stream, ordered=True),
+                await allgather.extract_concatenated(
+                    stream, ordered=True, ir_context=ir_context
+                ),
                 stream,
                 exclusive_view=True,
                 br=context.br(),
@@ -397,7 +383,9 @@ async def _compute_sort_boundaries(
         allgather = AllGatherManager(context, comm, allgather_id)
         with allgather.inserting() as inserter:
             inserter.insert(comm.rank, chunk)
-        concat_table = await allgather.extract_concatenated(stream, ordered=True)
+        concat_table = await allgather.extract_concatenated(
+            stream, ordered=True, ir_context=ir_context
+        )
         return _get_final_sort_boundaries(
             DataFrame.from_table(
                 concat_table,

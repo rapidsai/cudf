@@ -214,9 +214,11 @@ def test_extract_orderscheme_partitioning(spmd_engine, n_chunks) -> None:
 
     # Verify actual boundary values: start of each partition except the first
     expected_keys = [i * n_rows for i in range(1, comm.nranks * n_chunks)]
-    tbl, bstream = inter_rank.get_boundaries()
+    chunk = inter_rank.get_boundaries(context.br())
     actual_keys = (
-        DataFrame.from_table(tbl, ["key"], [DataType(pl.Int32())], stream=bstream)
+        DataFrame.from_table(
+            chunk.table_view(), ["key"], [DataType(pl.Int32())], stream=chunk.stream
+        )
         .to_polars()["key"]
         .to_list()
     )
@@ -346,9 +348,11 @@ def test_extract_orderscheme_partitioning_descending(spmd_engine) -> None:
     assert inter_rank.strict_boundaries
     assert inter_rank.num_boundaries == 1
 
-    tbl, bstream = inter_rank.get_boundaries()
+    chunk = inter_rank.get_boundaries(context.br())
     actual_keys = (
-        DataFrame.from_table(tbl, ["key"], [DataType(pl.Int32())], stream=bstream)
+        DataFrame.from_table(
+            chunk.table_view(), ["key"], [DataType(pl.Int32())], stream=chunk.stream
+        )
         .to_polars()["key"]
         .to_list()
     )
