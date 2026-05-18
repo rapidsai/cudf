@@ -37,7 +37,6 @@ Forward + return shuffle (non-decomposable aggregations)
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -207,7 +206,7 @@ async def _evaluate_broadcast_chunk(
         net_memory_delta=0,
     )
     with opaque_memory_usage(extra):
-        return await asyncio.to_thread(
+        return await ir_context.to_thread(
             _evaluate_ir_broadcast_sync,
             chunk,
             ir,
@@ -366,7 +365,7 @@ async def _allgather_and_broadcast(
             net_memory_delta=0,
         )
         with opaque_memory_usage(extra):
-            partial = await asyncio.to_thread(
+            partial = await ir_context.to_thread(
                 _evaluate_chunk_sync,
                 chunk,
                 piecewise_ir,
@@ -491,7 +490,7 @@ async def _distribute_by_group(
                 # 1..nranks-1 sit idle on emit. Slice the duplicated input
                 # across ranks (e.g. stripe by row index) and stamp each
                 # slice with its target origin rank to distribute emit work.
-                stamped = await asyncio.to_thread(
+                stamped = await ir_context.to_thread(
                     _append_origin_stamps,
                     chunk,
                     chunk_index,
@@ -523,10 +522,10 @@ async def _evaluate_and_route_to_origin(
             partition = TableChunk.from_pylibcudf_table(
                 extracted, stream, exclusive_view=True, br=context.br()
             )
-            evaluated = await asyncio.to_thread(
+            evaluated = await ir_context.to_thread(
                 _evaluate_window_with_stamps, partition, ir, ir_context, stamps
             )
-            routed, splits = await asyncio.to_thread(
+            routed, splits = await ir_context.to_thread(
                 _partition_by_origin_rank, evaluated, num_ranks, context.br()
             )
             if routed is not None:

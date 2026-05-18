@@ -441,7 +441,7 @@ def execute_ir_on_rank(
         Collected channel metadata.
     """
     ir_context = IRExecutionContext(
-        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
     )
     metadata_collector: list[ChannelMetadata] = []
 
@@ -457,7 +457,7 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(actors=nodes, py_executor=py_executor)
+    run_actor_network(ctx, actors=nodes)
 
     messages = output.release()
     chunks = [

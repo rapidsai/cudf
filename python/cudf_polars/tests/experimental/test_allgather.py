@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -13,6 +14,7 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.utils import allgather_reduce
 
@@ -46,8 +48,12 @@ async def _test_allgather(engine) -> None:
                 ),
             )
 
-    # Extract concatenated result
-    result = await allgather.extract_concatenated(stream, ordered=True)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        ir_context = IRExecutionContext(executor)
+        # Extract concatenated result
+        result = await allgather.extract_concatenated(
+            stream, ordered=True, ir_context=ir_context
+        )
 
     # Verify the concatenated table has the expected shape
     assert result.num_rows() == 600  # 100 + 200 + 300
