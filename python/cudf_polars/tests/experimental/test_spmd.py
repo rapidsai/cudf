@@ -393,3 +393,146 @@ def test_reset_rejects_construction_time_engine_options(
             )
         with pytest.raises(ValueError, match="memory_resource_config"):
             engine._reset(engine_options={"memory_resource_config": None})
+
+
+# Group keys probed with num_partitions=2, nranks=2, ROUND_ROBIN:
+#   _SAME_RANK_KEYS[r] hashes to partition r: data stays on its origin rank.
+#   _CROSS_RANK_KEYS[r] hashes to partition 1-r: data is fully shuffled away.
+# num_partitions=2 = max(nranks=2, local_count=1).  local_count=1 requires
+# max_rows_per_partition >= the number of rows per rank (3 here), so we use 4.
+_SAME_RANK_KEYS = [
+    0,
+    3,
+]  # g=0 hashes to partition 0 (rank 0); g=3 hashes to partition 1 (rank 1)
+_CROSS_RANK_KEYS = [
+    3,
+    0,
+]  # g=3 hashes to partition 1 (rank 1); g=0 hashes to partition 0 (rank 0)
+
+
+@pytest.mark.parametrize(
+    "expr,is_scalar",
+    [
+        (pl.col("x").sum().over("g").alias("result"), True),
+        (pl.col("x").rank(method="dense").over("g").alias("result"), False),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "cross_rank",
+    [False, True],
+    ids=["same_rank", "cross_rank"],
+)
+def test_over_multirank(
+    request: pytest.FixtureRequest,
+    comm: Communicator,
+    expr: pl.Expr,
+    is_scalar: bool,  # noqa: FBT001
+    cross_rank: bool,  # noqa: FBT001
+) -> None:
+    """over() correctness in multi-rank SPMD mode, same-rank and cross-rank cases.
+
+    same_rank: group keys hash to the origin rank's own partition (happy path).
+    cross_rank: group keys hash to the other rank's partition, exercising the
+    bug where row_idx spaces are rank-local so Phase 2 fills the wrong
+    accumulated slots and each rank receives the other rank's data.
+
+    max_rows_per_partition=4 keeps all 3 rows in one chunk (local_count=1),
+    so num_partitions=max(nranks=2, 1)=2, matching the probed key assignments.
+    """
+    with SPMDEngine(
+        comm=comm,
+        executor_options={"max_rows_per_partition": 4, "dynamic_planning": {}},
+    ) as engine:
+        rank = engine.rank
+        nranks = engine.nranks
+        if nranks != 2:
+            request.applymarker(
+                pytest.mark.skip(
+                    reason="key assignments are probed for exactly 2 ranks"
+                )
+            )
+        keys = _CROSS_RANK_KEYS if cross_rank else _SAME_RANK_KEYS
+        g = keys[rank]
+        xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        lf = pl.LazyFrame({"g": [g, g, g], "x": xs})
+        local_result = lf.select(pl.col("g"), pl.col("x"), expr).collect(engine=engine)
+
+        # Each rank must get back its OWN rows (not another rank's).
+        assert local_result["g"].unique().to_list() == [g], (
+            f"rank {rank}: expected only group {g} in output, "
+            f"got {local_result['g'].unique().to_list()}"
+        )
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            )
+
+        assert global_result.shape == (3 * nranks, 3)
+        for r in range(nranks):
+            grp_g = keys[r]
+            grp = global_result.filter(pl.col("g") == grp_g).sort("x")
+            assert grp.shape == (3, 3), f"rank {r} group has wrong row count"
+            expected_xs = [r * 3 + 1, r * 3 + 2, r * 3 + 3]
+            assert grp["x"].to_list() == expected_xs
+            if is_scalar:
+                assert grp["result"].to_list() == [sum(expected_xs)] * 3
+            else:
+                assert grp["result"].to_list() == [1, 2, 3]
+
+
+def test_over_nonscalar_duplicated_input(
+    request: pytest.FixtureRequest,
+    comm: Communicator,
+) -> None:
+    """Non-scalar over() on duplicated=True input produces correct row count and values.
+
+    group_by() AllGathers its result onto all ranks (duplicated=True).  The
+    non-scalar over() path must output duplicated=False and only insert rows on
+    rank 0, otherwise all ranks insert the same rows (N-fold overcounting) and
+    the downstream Repartition skips AllGather.
+
+    max_rows_per_partition=10 keeps all 3 rows in one chunk (local_count=1),
+    so modulus=max(nranks=2, 1)=2, matching the _SAME_RANK_KEYS assignments.
+    """
+    with SPMDEngine(
+        comm=comm,
+        executor_options={"max_rows_per_partition": 10, "dynamic_planning": {}},
+    ) as engine:
+        rank = engine.rank
+        nranks = engine.nranks
+        if nranks != 2:
+            request.applymarker(
+                pytest.mark.skip(
+                    reason="key assignments are probed for exactly 2 ranks"
+                )
+            )
+
+        coarse_g = _SAME_RANK_KEYS[rank]
+        fine_gs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        xs = [rank * 30 + 10, rank * 30 + 20, rank * 30 + 30]
+        lf = pl.LazyFrame({"fine_g": fine_gs, "coarse_g": [coarse_g] * 3, "x": xs})
+        local_result = (
+            lf.group_by("fine_g", "coarse_g")
+            .agg(pl.col("x").first())
+            .with_columns(
+                pl.col("x").rank(method="dense").over("coarse_g").alias("rank_x")
+            )
+            .collect(engine=engine)
+        )
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            )
+
+        assert global_result.shape == (3 * nranks, 4)
+        for r in range(nranks):
+            cg = _SAME_RANK_KEYS[r]
+            grp = global_result.filter(pl.col("coarse_g") == cg).sort("x")
+            assert grp.shape == (3, 4), f"coarse_g={cg}: wrong row count"
+            assert grp["rank_x"].to_list() == [1, 2, 3], (
+                f"coarse_g={cg}: expected dense ranks [1, 2, 3] "
+                f"but got {grp['rank_x'].to_list()}"
+            )
