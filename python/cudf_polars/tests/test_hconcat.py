@@ -41,7 +41,7 @@ def test_hconcat_strict_different_heights():
     with pytest.raises(pl.exceptions.ShapeError):
         q.collect()
     with pytest.raises(pl.exceptions.ShapeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 def test_hconcat_should_broadcast():
