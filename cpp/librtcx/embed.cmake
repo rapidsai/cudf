@@ -12,9 +12,9 @@ if(NOT TARGET zstd)
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
-# embed_includes() or embed_blob() for the target. It sets up necessary variables and state to track
-# the registered files and dependencies for the target. The TARGET argument specifies the name of
-# the target being initialized.
+# embed_includes() or embed_blob() for the target. It creates a dedicated INTERFACE library target
+# that is used to track registered files and dependencies via target properties. The TARGET argument
+# specifies the name of the target being initialized.
 function(add_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS)
@@ -25,14 +25,7 @@ function(add_embed TARGET)
     message(FATAL_ERROR "TARGET argument is required")
   endif()
 
-  set(${TARGET}_FILE_INDEX
-      0
-      PARENT_SCOPE
-  )
-  set(${TARGET}_INITIALIZED
-      TRUE
-      PARENT_SCOPE
-  )
+  add_library(${TARGET}__embed__props INTERFACE)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
@@ -48,7 +41,7 @@ function(embed_includes TARGET)
   )
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+  if(NOT TARGET ${TARGET}__embed__props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -82,44 +75,18 @@ function(embed_includes TARGET)
     endif()
   endforeach(SOURCE_FILE)
 
-  # Set scope variables to accumulate results
-
-  set(SOURCE_FILE_IDS ${${TARGET}__embed__source_file_ids})
-  set(SOURCE_FILES ${${TARGET}__embed__source_files})
-  set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
-  set(INCLUDE_DIRECTORIES ${${TARGET}__embed__include_directories})
+  # Determine the starting index for new IDs from the current list length
+  get_property(SOURCE_FILE_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_IDS)
+  list(LENGTH SOURCE_FILE_IDS IDX)
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
-    list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
-    list(APPEND SOURCE_FILE_IDS "include_${SOURCE_FILE_IDS_LENGTH}")
-    list(APPEND SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}")
-    list(APPEND SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_IDS "include_${IDX}")
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}")
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}")
+    math(EXPR IDX "${IDX} + 1")
   endforeach()
 
-  list(APPEND INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
-
-  list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
-
-  set(${TARGET}_FILE_INDEX
-      ${SOURCE_FILE_IDS_LENGTH}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_file_ids
-      ${SOURCE_FILE_IDS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_files
-      ${SOURCE_FILES}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_file_dests
-      ${SOURCE_FILE_DESTS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__include_directories
-      ${INCLUDE_DIRECTORIES}
-      PARENT_SCOPE
-  )
+  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
 
 endfunction()
 
@@ -130,7 +97,7 @@ function(embed_blob TARGET)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+  if(NOT TARGET ${TARGET}__embed__props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -140,13 +107,6 @@ function(embed_blob TARGET)
   )
     message(FATAL_ERROR "ID, FILE, and DEST arguments are required")
   endif()
-
-  set(SOURCE_FILE_IDS ${${TARGET}__embed__source_file_ids})
-  set(SOURCE_FILES ${${TARGET}__embed__source_files})
-  set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
-  set(TARGET_DEPS ${${TARGET}__embed__target_deps})
-  set(ARRAY_IDS ${${TARGET}__embed__array_ids})
-  set(ARRAY_VALUES ${${TARGET}__embed__array_values})
 
   if(ARG_ARRAY_IDS)
     if(NOT ARG_ARRAY_VALUES)
@@ -160,52 +120,22 @@ function(embed_blob TARGET)
       message(FATAL_ERROR "ARRAY_IDS and ARRAY_VALUES must have the same length")
     endif()
 
-    list(APPEND ARRAY_IDS ${ARG_ARRAY_IDS})
-    list(APPEND ARRAY_VALUES ${ARG_ARRAY_VALUES})
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_ARRAY_IDS ${ARG_ARRAY_IDS})
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_ARRAY_VALUES ${ARG_ARRAY_VALUES})
   endif()
 
   if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
     # If the file is a generator expression for target objects add as dependency
-    list(APPEND TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>)
+    set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>)
   else()
     if(NOT EXISTS "${ARG_FILE}")
       message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
     endif()
   endif()
-  list(APPEND SOURCE_FILE_IDS ${ARG_ID})
-  list(APPEND SOURCE_FILES ${ARG_FILE})
-  list(APPEND SOURCE_FILE_DESTS ${ARG_DEST})
 
-  list(LENGTH SOURCE_FILE_IDS SOURCE_FILE_IDS_LENGTH)
-
-  set(${TARGET}_FILE_INDEX
-      ${SOURCE_FILE_IDS_LENGTH}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_file_ids
-      ${SOURCE_FILE_IDS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_files
-      ${SOURCE_FILES}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__source_file_dests
-      ${SOURCE_FILE_DESTS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__target_deps
-      ${TARGET_DEPS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__array_ids
-      ${ARRAY_IDS}
-      PARENT_SCOPE
-  )
-  set(${TARGET}__embed__array_values
-      ${ARRAY_VALUES}
-      PARENT_SCOPE
-  )
+  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_IDS ${ARG_ID})
+  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILES ${ARG_FILE})
+  set_property(TARGET ${TARGET}__embed__props APPEND PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST})
 
 endfunction()
 
@@ -217,7 +147,7 @@ function(embed TARGET)
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT DEFINED TARGET OR NOT ${TARGET}_INITIALIZED)
+  if(NOT TARGET ${TARGET}__embed__props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -229,9 +159,17 @@ function(embed TARGET)
     message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
   endif()
 
-  if(NOT DEFINED ${TARGET}__embed__source_files)
+  get_property(EMBED_SOURCE_FILES TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILES)
+  if(NOT EMBED_SOURCE_FILES)
     message(FATAL_ERROR "No source files registered for target '${TARGET}'")
   endif()
+
+  get_property(EMBED_SOURCE_FILE_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_IDS)
+  get_property(EMBED_SOURCE_FILE_DESTS TARGET ${TARGET}__embed__props PROPERTY EMBED_SOURCE_FILE_DESTS)
+  get_property(EMBED_TARGET_DEPS TARGET ${TARGET}__embed__props PROPERTY EMBED_TARGET_DEPS)
+  get_property(EMBED_ARRAY_IDS TARGET ${TARGET}__embed__props PROPERTY EMBED_ARRAY_IDS)
+  get_property(EMBED_ARRAY_VALUES TARGET ${TARGET}__embed__props PROPERTY EMBED_ARRAY_VALUES)
+  get_property(EMBED_INCLUDE_DIRS TARGET ${TARGET}__embed__props PROPERTY EMBED_INCLUDE_DIRECTORIES)
 
   set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
   set(EMBED_SCRIPT_TEMPLATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
@@ -239,12 +177,12 @@ function(embed TARGET)
   set(EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
 
   set(EMBED_SCRIPT__ID "${TARGET}")
-  set(EMBED_SCRIPT__ARRAY_IDS "${${TARGET}__embed__array_ids}")
-  set(EMBED_SCRIPT__ARRAY_VALUES "${${TARGET}__embed__array_values}")
-  set(EMBED_SCRIPT__FILE_IDS "${${TARGET}__embed__source_file_ids}")
-  set(EMBED_SCRIPT__FILE_PATHS "${${TARGET}__embed__source_files}")
-  set(EMBED_SCRIPT__FILE_DESTS "${${TARGET}__embed__source_file_dests}")
-  set(EMBED_SCRIPT__INCLUDE_DIRS "${${TARGET}__embed__include_directories}")
+  set(EMBED_SCRIPT__ARRAY_IDS "${EMBED_ARRAY_IDS}")
+  set(EMBED_SCRIPT__ARRAY_VALUES "${EMBED_ARRAY_VALUES}")
+  set(EMBED_SCRIPT__FILE_IDS "${EMBED_SOURCE_FILE_IDS}")
+  set(EMBED_SCRIPT__FILE_PATHS "${EMBED_SOURCE_FILES}")
+  set(EMBED_SCRIPT__FILE_DESTS "${EMBED_SOURCE_FILE_DESTS}")
+  set(EMBED_SCRIPT__INCLUDE_DIRS "${EMBED_INCLUDE_DIRS}")
   set(EMBED_SCRIPT__COMPRESSION "${ARG_COMPRESSION}")
   set(EMBED_SCRIPT__OUTPUT_DIR "${OUTPUT_DIR}")
 
@@ -267,8 +205,8 @@ function(embed TARGET)
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${RUNNER}>
-    DEPENDS "${EMBED_SCRIPT}" ${${TARGET}__embed__source_files}
-            ${${TARGET}__embed__target_deps}
+    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES}
+            ${EMBED_TARGET_DEPS}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM
