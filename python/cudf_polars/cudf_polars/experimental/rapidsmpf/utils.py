@@ -503,7 +503,7 @@ async def evaluate_chunk(
     )
     with opaque_memory_usage(extra):
         for single_ir in irs:
-            chunk = await asyncio.to_thread(
+            chunk = await ir_context.to_thread(
                 _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
@@ -544,7 +544,7 @@ async def allgather_and_reduce(
         inserter.insert(0, local_chunk)
     stream = ir_context.get_cuda_stream()
     concat_chunk = TableChunk.from_pylibcudf_table(
-        await allgather.extract_concatenated(stream),
+        await allgather.extract_concatenated(stream, ir_context=ir_context),
         stream,
         exclusive_view=True,
         br=context.br(),
@@ -583,7 +583,7 @@ async def concat_batch(
         net_memory_delta=0,
     )
     with opaque_memory_usage(extra):
-        df = await asyncio.to_thread(
+        df = await ir_context.to_thread(
             _concat,
             *[
                 DataFrame.from_table(
