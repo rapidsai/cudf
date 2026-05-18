@@ -92,19 +92,22 @@ std::unique_ptr<cudf::scalar> make_sum_overflow_struct_scalar(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+
   std::unique_ptr<cudf::scalar> sum_scalar;
   if constexpr (cudf::is_fixed_point<Source>()) {
     sum_scalar = cudf::make_fixed_point_scalar<Source>(
-      sum_value, numeric::scale_type{source_type.scale()}, stream, mr);
+      sum_value, numeric::scale_type{source_type.scale()}, stream, temp_mr);
   } else {
-    sum_scalar = cudf::make_fixed_width_scalar<Source>(static_cast<Source>(sum_value), stream, mr);
+    sum_scalar =
+      cudf::make_fixed_width_scalar<Source>(static_cast<Source>(sum_value), stream, temp_mr);
   }
   sum_scalar->set_valid_async(sum_is_valid, stream);
-  auto overflow_scalar = cudf::make_fixed_width_scalar<bool>(overflow_value, stream, mr);
+  auto overflow_scalar = cudf::make_fixed_width_scalar<bool>(overflow_value, stream, temp_mr);
 
   std::vector<std::unique_ptr<cudf::column>> children;
-  children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, mr));
-  children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, mr));
+  children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, temp_mr));
+  children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, temp_mr));
 
   std::vector<cudf::column_view> child_views{children[0]->view(), children[1]->view()};
   return cudf::make_struct_scalar(
