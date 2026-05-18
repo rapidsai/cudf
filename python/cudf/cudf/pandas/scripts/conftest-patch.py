@@ -6225,7 +6225,7 @@ NODEIDS_THAT_FAIL = {
 NODEIDS_PATHS_TO_SKIP: dict[str, str] = {
     "tests/copy_view/test_interp_fillna.py::test_fillna_series_empty_arg": "flaky test",
     "tests/copy_view/test_interp_fillna.py::test_fillna_series_empty_arg_inplace": "flaky test",
-    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_frame_duplicate_columns_multiple_blocks" : "flaky test",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_frame_duplicate_columns_multiple_blocks": "flaky test",
     "tests/groupby/test_groupby_dropna.py::test_null_is_null_for_dtype[True-NoneType-NoneType-object-False]": "flaky test",
     "tests/groupby/test_groupby_dropna.py::test_null_is_null_for_dtype[True-NoneType-NoneType-None-False]": "flaky test",
     "tests/groupby/test_groupby_dropna.py::test_null_is_null_for_dtype[True-NoneType-float0-None-False]": "flaky test",
