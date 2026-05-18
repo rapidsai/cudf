@@ -6,6 +6,7 @@
 #include "io/comp/common.hpp"
 #include "io/parquet/parquet_common.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -21,6 +22,8 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 
+#include <functional>
+#include <mutex>
 #include <numeric>
 #include <tuple>
 
@@ -56,64 +59,104 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
 }
 
+namespace detail {
+
+using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const>>;
+
 std::tuple<std::vector<rmm::device_buffer>,
-           std::vector<cudf::device_span<uint8_t const>>,
+           std::vector<device_spans_per_source_type>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(
-  cudf::io::datasource& datasource,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
+    byte_ranges_per_source,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   static std::mutex mutex;
 
-  // Allocate device spans for each column chunk
-  std::vector<cudf::device_span<uint8_t const>> column_chunk_data{};
-  column_chunk_data.reserve(byte_ranges.size());
+  auto const num_sources = datasources.size();
 
-  auto total_size = std::accumulate(
-    byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
-      return acc + range.size();
-    });
+  CUDF_EXPECTS(num_sources == byte_ranges_per_source.size(),
+               "Encountered mismatch in number of datasources and the number of byte range spans");
 
-  // Allocate single device buffer for all column chunks
-  std::vector<rmm::device_buffer> column_chunk_buffers{};
-  // Buffer needs to be padded. Required by `gpuDecodePageData`.
-  column_chunk_buffers.emplace_back(
-    cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream, mr);
-  auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
-  std::ignore      = std::accumulate(
-    byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
-      column_chunk_data.emplace_back(buffer_data + acc, static_cast<size_t>(range.size()));
-      return acc + range.size();
-    });
+  // Total number of byte ranges across all sources
+  auto const total_byte_ranges =
+    std::accumulate(byte_ranges_per_source.begin(),
+                    byte_ranges_per_source.end(),
+                    std::size_t{0},
+                    [](auto acc, auto const& ranges) { return acc + ranges.size(); });
 
+  // IO descriptors
+  std::vector<size_t> io_source_indices;
   std::vector<size_t> io_offsets;
   std::vector<size_t> io_sizes;
   std::vector<uint8_t*> destinations;
-  io_offsets.reserve(byte_ranges.size());
-  io_sizes.reserve(byte_ranges.size());
-  destinations.reserve(byte_ranges.size());
+  io_source_indices.reserve(total_byte_ranges);
+  io_offsets.reserve(total_byte_ranges);
+  io_sizes.reserve(total_byte_ranges);
+  destinations.reserve(total_byte_ranges);
 
-  for (size_t chunk = 0; chunk < byte_ranges.size();) {
-    auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
-    auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
-    size_t next_chunk    = chunk + 1;
-    while (next_chunk < byte_ranges.size()) {
-      size_t const next_offset = byte_ranges[next_chunk].offset();
-      if (next_offset != io_offset + io_size) { break; }
-      io_size += byte_ranges[next_chunk].size();
-      next_chunk++;
-    }
-    if (io_size != 0) {
-      io_offsets.push_back(io_offset);
-      io_sizes.push_back(io_size);
-      destinations.push_back(const_cast<uint8_t*>(column_chunk_data[chunk].data()));
-    }
-    chunk = next_chunk;
-  }
-  CUDF_EXPECTS(io_offsets.size() == io_sizes.size() and io_sizes.size() == destinations.size(),
-               "Unexpected number of IO offsets, sizes, or destinations");
+  // Allocate one device buffer per byte ranges of a datasource
+  std::vector<rmm::device_buffer> column_chunk_buffers{};
+  column_chunk_buffers.reserve(num_sources);
+
+  // Column chunk device spans, one per byte range per datasource
+  std::vector<device_spans_per_source_type> column_chunk_data_per_source(num_sources);
+
+  std::for_each(
+    cuda::counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>(num_sources),
+    [&](auto const source_idx) {
+      auto const& byte_ranges = byte_ranges_per_source[source_idx];
+
+      // Total buffer size required for column chunks of this source
+      auto const buffer_size = std::accumulate(
+        byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [](auto acc, auto const& range) {
+          return acc + range.size();
+        });
+
+      // Buffer needs to be padded. Required by `gpuDecodePageData`.
+      column_chunk_buffers.emplace_back(
+        cudf::util::round_up_safe(buffer_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+        stream,
+        mr);
+
+      auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
+
+      // Build device spans for each byte range in this source
+      auto& column_chunk_data = column_chunk_data_per_source[source_idx];
+      column_chunk_data.reserve(byte_ranges.size());
+      std::ignore = std::accumulate(
+        byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
+          column_chunk_data.emplace_back(buffer_data + acc, static_cast<size_t>(range.size()));
+          return acc + range.size();
+        });
+
+      // Coalesce contiguous byte ranges within this source into single IO request
+      for (size_t chunk = 0; chunk < byte_ranges.size();) {
+        auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
+        auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
+        size_t next_chunk    = chunk + 1;
+        while (next_chunk < byte_ranges.size()) {
+          size_t const next_offset = byte_ranges[next_chunk].offset();
+          if (next_offset != io_offset + io_size) { break; }
+          io_size += byte_ranges[next_chunk].size();
+          next_chunk++;
+        }
+        if (io_size != 0) {
+          io_source_indices.push_back(source_idx);
+          io_offsets.push_back(io_offset);
+          io_sizes.push_back(io_size);
+          destinations.push_back(const_cast<uint8_t*>(column_chunk_data[chunk].data()));
+        }
+        chunk = next_chunk;
+      }
+    });
+
+  CUDF_EXPECTS(io_offsets.size() == io_sizes.size() and io_sizes.size() == destinations.size() and
+                 io_source_indices.size() == io_offsets.size(),
+               "Unexpected number of IO source indices, offsets, sizes, or destinations");
 
   using host_read_buffer = std::unique_ptr<cudf::io::datasource::buffer>;
 
@@ -131,14 +174,17 @@ fetch_byte_ranges_to_device_async(
   copy_dsts.reserve(io_offsets.size());
   copy_sizes.reserve(io_offsets.size());
 
-  auto iter = cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
+  auto iter = cuda::make_zip_iterator(
+    io_source_indices.begin(), io_offsets.begin(), io_sizes.begin(), destinations.begin());
 
   // Schedule host reads in parallel
   std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
-    auto const io_offset = cuda::std::get<0>(tuple);
-    auto const io_size   = cuda::std::get<1>(tuple);
-    auto const dest      = cuda::std::get<2>(tuple);
+    auto const src_idx   = cuda::std::get<0>(tuple);
+    auto const io_offset = cuda::std::get<1>(tuple);
+    auto const io_size   = cuda::std::get<2>(tuple);
+    auto const dest      = cuda::std::get<3>(tuple);
 
+    auto& datasource = datasources[src_idx].get();
     if (not datasource.supports_device_read() or not datasource.is_device_read_preferred(io_size)) {
       // Asynchronously read column chunk data to a host buffer
       host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
@@ -166,10 +212,12 @@ fetch_byte_ranges_to_device_async(
     std::scoped_lock<std::mutex> lock(mutex);
 
     std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
-      auto const io_offset = cuda::std::get<0>(tuple);
-      auto const io_size   = cuda::std::get<1>(tuple);
-      auto const dest      = cuda::std::get<2>(tuple);
+      auto const src_idx   = cuda::std::get<0>(tuple);
+      auto const io_offset = cuda::std::get<1>(tuple);
+      auto const io_size   = cuda::std::get<2>(tuple);
+      auto const dest      = cuda::std::get<3>(tuple);
 
+      auto& datasource = datasources[src_idx].get();
       // Directly read the column chunk data to the device buffer if supported
       if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
         device_read_tasks.emplace_back(
@@ -193,8 +241,56 @@ fetch_byte_ranges_to_device_async(
     }
   };
   return {std::move(column_chunk_buffers),
-          std::move(column_chunk_data),
+          std::move(column_chunk_data_per_source),
           std::async(std::launch::deferred, sync_function, std::move(device_read_tasks))};
+}
+
+}  // namespace detail
+
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<cudf::device_span<uint8_t const>>,
+           std::future<void>>
+fetch_byte_ranges_to_device_async(
+  cudf::io::datasource& datasource,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Wrap the inputs into arrays and delegate to the detail multi-source API
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  std::array<cudf::host_span<cudf::io::text::byte_range_info const>, 1> byte_ranges_per_source{
+    byte_ranges};
+
+  auto [buffers, fetched_byte_ranges, fut] = detail::fetch_byte_ranges_to_device_async(
+    {datasources.data(), datasources.size()},
+    {byte_ranges_per_source.data(), byte_ranges_per_source.size()},
+    stream,
+    mr);
+
+  return {std::move(buffers), std::move(fetched_byte_ranges.front()), std::move(fut)};
+}
+
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<std::vector<cudf::device_span<uint8_t const>>>,
+           std::future<void>>
+fetch_byte_ranges_to_device_async(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<cudf::io::text::byte_range_info> const> byte_ranges_per_source,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Convert input vectors into host spans for detail API
+  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>> source_byte_range_spans;
+  source_byte_range_spans.reserve(byte_ranges_per_source.size());
+  for (auto const& ranges : byte_ranges_per_source) {
+    source_byte_range_spans.emplace_back(ranges);
+  }
+  return detail::fetch_byte_ranges_to_device_async(
+    datasources, {source_byte_range_spans.data(), source_byte_range_spans.size()}, stream, mr);
 }
 
 }  // namespace cudf::io::parquet
