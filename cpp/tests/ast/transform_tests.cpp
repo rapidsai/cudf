@@ -1403,6 +1403,61 @@ TYPED_TEST(DecimalTests, LessConsumesMulOfDecimals)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(ast_result->view(), ref_result->view());
 }
 
+TEST_F(ComputeColumnTest, NullPropagatesViaSmallTypeIntermediate)
+{
+  auto a     = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4}, {1, 0, 1, 1}};
+  auto b     = cudf::test::fixed_width_column_wrapper<int32_t>{{10, 10, 10, 10}, {1, 1, 1, 1}};
+  auto c     = cudf::test::fixed_width_column_wrapper<int32_t>{{5, 5, 5, 5}, {1, 1, 0, 1}};
+  auto table = cudf::table_view{{a, b, c}};
+
+  auto ra  = cudf::ast::column_reference(0);
+  auto rb  = cudf::ast::column_reference(1);
+  auto rc  = cudf::ast::column_reference(2);
+  auto mul = cudf::ast::operation(cudf::ast::ast_operator::MUL, ra, rb);
+  auto add = cudf::ast::operation(cudf::ast::ast_operator::ADD, mul, rc);
+
+  // row 0: 1*10+5  = 15 (valid)
+  // row 1: null*10 = null → null+5 = null
+  // row 2: 3*10    = 30  → 30+null = null
+  // row 3: 4*10+5  = 45 (valid)
+  auto expected = column_wrapper<int32_t>{{15, 0, 0, 45}, {1, 0, 0, 1}};
+  auto result   = cudf::compute_column(table, add);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(DecimalTests, LessConsumesMulOfDecimalsWithNulls)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+  // col_a  at scale=-2: {1.00, null, 5.00, 10.00}
+  // thresh at scale=-2: {0.20, 0.20, null, 0.20}
+  // avg    at scale=-2: {25.00, 25.00, 25.00, 25.00} (no nulls)
+  auto col_a =
+    cudf::test::fixed_point_column_wrapper<RepType>({100, 200, 500, 1000}, {1, 0, 1, 1}, scale);
+  auto col_thresh =
+    cudf::test::fixed_point_column_wrapper<RepType>({20, 20, 20, 20}, {1, 1, 0, 1}, scale);
+  auto col_avg = cudf::test::fixed_point_column_wrapper<RepType>({2500, 2500, 2500, 2500}, scale);
+  auto table   = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  auto ra  = cudf::ast::column_reference(0);
+  auto rt  = cudf::ast::column_reference(1);
+  auto rv  = cudf::ast::column_reference(2);
+  auto mul = cudf::ast::operation(cudf::ast::ast_operator::MUL, rt, rv);
+  auto lt  = cudf::ast::operation(cudf::ast::ast_operator::LESS, ra, mul);
+
+  // row 0: 1.00 < (0.20*25.00 = 5.00) → true
+  // row 1: col_a=null                  → null
+  // row 2: col_thresh=null → MUL=null  → null
+  // row 3: 10.00 < 5.00                → false
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0}, {1, 0, 0, 1});
+  auto result   = cudf::compute_column(table, lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  result = cudf::compute_column_jit(table, lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TYPED_TEST(TransformTest, NonDefaultStream)
 {
   // This test ensures that the algorithm is stream safe when a nondefault

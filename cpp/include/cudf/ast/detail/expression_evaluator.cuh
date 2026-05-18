@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cooperative_groups/memcpy_async.h>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
@@ -662,18 +663,21 @@ struct expression_evaluator {
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
       using RepType = typename Element::rep;
-      auto const v  = result.value();
-      auto const rv = [&v, &result] {
-        if constexpr (cuda::std::is_same_v<cuda::std::remove_cvref_t<decltype(v)>, RepType>) {
-          return v;  // no nulls path
-        } else {
-          // rewrap rep component value appropriately
-          using ResultType = possibly_null_value_t<RepType, has_nulls>;
-          return result.has_value() ? ResultType{v.value()} : ResultType{};
-        }
-      }();
-      resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
-        output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+      if constexpr (has_nulls) {
+        // result is optional<Element>; must guard before calling .value() to avoid
+        // bad_optional_access when result is null.
+        using ResultType = possibly_null_value_t<RepType, true>;
+        auto const rv    = result.has_value() ? ResultType{result->value()} : ResultType{};
+        resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
+          output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+      } else {
+        // result is Element; .value() is Element::value() which returns RepType.
+        resolve_output<RepType, ResultSubclass, T, result_has_nulls>(output_object,
+                                                                     device_data_reference,
+                                                                     row_index,
+                                                                     thread_intermediate_storage,
+                                                                     result.value());
+      }
     }
 
     template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
