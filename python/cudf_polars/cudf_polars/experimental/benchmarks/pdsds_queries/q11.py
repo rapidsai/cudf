@@ -117,24 +117,31 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
+CUSTOMER_COMPOSITE = [
+    "c_customer_id",
+    "c_first_name",
+    "c_last_name",
+    "c_preferred_cust_flag",
+    "c_birth_country",
+    "c_login",
+    "c_email_address",
+]
+
+
 def build_year_total(
     sales_table: pl.LazyFrame,
+    customer_table: pl.LazyFrame,
     customer_sk_col: str,
     date_sk_col: str,
     list_price_col: str,
     discount_col: str,
     year_dates: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """
-    Aggregate sales per customer_sk for a single year.
-
-    Groups by c_customer_sk only (not the wide customer display columns)
-    to reduce intermediate cardinality. Customer display columns are
-    joined once at the end where needed.
-    """
+    """Aggregate sales joined with customer for a single year, keyed on customer composite."""
     return (
         sales_table.join(year_dates, left_on=date_sk_col, right_on="d_date_sk")
-        .group_by(customer_sk_col)
+        .join(customer_table, left_on=customer_sk_col, right_on="c_customer_sk")
+        .group_by(CUSTOMER_COMPOSITE)
         .agg(
             [(pl.col(list_price_col) - pl.col(discount_col)).sum().alias("year_total")]
         )
@@ -160,64 +167,63 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_first = date_dim.filter(pl.col("d_year") == year_first).select("d_date_sk")
     date_second = date_dim.filter(pl.col("d_year") == year_second).select("d_date_sk")
 
-    # Aggregate by customer_sk only — no customer table join needed yet.
     t_s_first = (
         build_year_total(
             store_sales,
+            customer,
             "ss_customer_sk",
             "ss_sold_date_sk",
             "ss_ext_list_price",
             "ss_ext_discount_amt",
             date_first,
         )
-        .rename({"ss_customer_sk": "customer_sk", "year_total": "s_first_year_total"})
+        .rename({"year_total": "s_first_year_total"})
         .filter(pl.col("s_first_year_total") > 0)
     )
 
     t_s_sec = build_year_total(
         store_sales,
+        customer,
         "ss_customer_sk",
         "ss_sold_date_sk",
         "ss_ext_list_price",
         "ss_ext_discount_amt",
         date_second,
-    ).rename({"ss_customer_sk": "customer_sk", "year_total": "s_sec_year_total"})
+    ).rename({"year_total": "s_sec_year_total"})
 
     t_w_first = (
         build_year_total(
             web_sales,
+            customer,
             "ws_bill_customer_sk",
             "ws_sold_date_sk",
             "ws_ext_list_price",
             "ws_ext_discount_amt",
             date_first,
         )
-        .rename(
-            {"ws_bill_customer_sk": "customer_sk", "year_total": "w_first_year_total"}
-        )
+        .rename({"year_total": "w_first_year_total"})
         .filter(pl.col("w_first_year_total") > 0)
     )
 
     t_w_sec = build_year_total(
         web_sales,
+        customer,
         "ws_bill_customer_sk",
         "ws_sold_date_sk",
         "ws_ext_list_price",
         "ws_ext_discount_amt",
         date_second,
-    ).rename({"ws_bill_customer_sk": "customer_sk", "year_total": "w_sec_year_total"})
+    ).rename({"year_total": "w_sec_year_total"})
 
-    # Join all four aggregates on customer_sk, then join customer once for display cols.
     return QueryResult(
         frame=(
-            t_s_sec.join(t_s_first, on="customer_sk")
-            .join(t_w_first, on="customer_sk")
-            .join(t_w_sec, on="customer_sk")
+            t_s_sec.join(t_s_first, on=CUSTOMER_COMPOSITE, nulls_equal=True)
+            .join(t_w_first, on=CUSTOMER_COMPOSITE, nulls_equal=True)
+            .join(t_w_sec, on=CUSTOMER_COMPOSITE, nulls_equal=True)
             .filter(
                 pl.col("w_sec_year_total") / pl.col("w_first_year_total")
                 > pl.col("s_sec_year_total") / pl.col("s_first_year_total")
             )
-            .join(customer, left_on="customer_sk", right_on="c_customer_sk")
             .select(
                 [
                     pl.col("c_customer_id").alias("customer_id"),
