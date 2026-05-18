@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import NamedExpr
+from cudf_polars.dsl.expr import Col, NamedExpr
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -59,5 +59,10 @@ def names_to_indices(
     The column indices for each name in schema order.
     """
     keys = list(schema.keys())
-    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
+    str_names = [
+        (n.value.name if isinstance(n.value, Col) else n.name)
+        if isinstance(n, NamedExpr)
+        else n
+        for n in names
+    ]
     return tuple(keys.index(n) for n in str_names)
