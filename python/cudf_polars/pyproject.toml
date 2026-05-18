@@ -206,6 +206,7 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "asyncio.gather".msg = "Use gather_with_task_group instead."
+"asyncio.to_thread".msg = "Use ir_context.to_thread instead."
 
 [tool.ruff.lint.flake8-type-checking]
 strict = true
