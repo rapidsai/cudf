@@ -1787,10 +1787,9 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=str,
         help=textwrap.dedent("""\
             Connect to an existing cluster instead of creating a local one.
-            For --frontend dask: a TCP address (e.g. tcp://host:8786) or a
-            scheduler file path. For --frontend ray: a Ray address
-            (e.g. ray://host:10001 or "auto").
-            Not supported with --frontend spmd."""),
+            Only supported with --frontend dask or ray:
+                - dask : a TCP address (e.g. tcp://host:8786) or a scheduler file path
+                - ray  : a Ray address (e.g. ray://host:10001 or "auto")"""),
     )
     parser.add_argument(
         "--num-gpus",
