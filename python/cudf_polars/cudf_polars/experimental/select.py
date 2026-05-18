@@ -20,6 +20,7 @@ from cudf_polars.experimental.expressions import (
     decompose_expr_graph,
     make_expr_decomposer,
 )
+from cudf_polars.experimental.over import _fuse_over_nodes
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
@@ -166,6 +167,7 @@ def decompose_select(
 
     # Concatenate partial selections
     new_ir: Select | HConcat
+    selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
