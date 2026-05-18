@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
+    import rapidsmpf.config
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
@@ -158,6 +159,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
     # alive when the singleton is constructed.
@@ -439,7 +441,7 @@ def execute_ir_on_rank(
         Collected channel metadata.
     """
     ir_context = IRExecutionContext(
-        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
     )
     metadata_collector: list[ChannelMetadata] = []
 
@@ -455,7 +457,7 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(actors=nodes, py_executor=py_executor)
+    run_actor_network(ctx, actors=nodes)
 
     messages = output.release()
     chunks = [
