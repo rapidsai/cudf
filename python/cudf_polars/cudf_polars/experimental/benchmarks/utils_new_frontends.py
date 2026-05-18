@@ -68,6 +68,7 @@ try:
     )
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
@@ -78,7 +79,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf_polars.experimental.explain import SerializablePlan
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
@@ -816,8 +816,6 @@ def _collect_statistics(engine: pl.GPUEngine | None) -> dict[str, Any] | None:
     """Gather + clear per-rank rapidsmpf statistics into a merged dict."""
     if engine is None:
         return None
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-
     if not isinstance(engine, StreamingEngine):
         return None
     return engine.global_statistics(clear=True).to_dict()
@@ -948,10 +946,6 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
-            from cudf_polars.experimental.rapidsmpf.frontend.core import (
-                StreamingEngine,
-            )
-
             if isinstance(engine, StreamingEngine):
                 engine._run(setup_logging, q_id, i)
 
@@ -1073,7 +1067,10 @@ def _finalize_benchmark_run(
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
         run_config.summarize()
-    if args.validate and run_config.frontend not in _CPU_ENGINES:
+    if (
+        run_config.validation_method is not None
+        and run_config.frontend not in _CPU_ENGINES
+    ):
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
