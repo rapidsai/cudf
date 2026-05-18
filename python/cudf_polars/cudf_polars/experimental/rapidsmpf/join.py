@@ -763,6 +763,8 @@ async def _shuffle_join(
         trace_ir=ir,
         ir_context=ir_context,
     ):
+        left, right = ir.children
+        n_keys = len(strategy.left_indices)
         actor_tasks = [
             *filter_tasks,
             _global_shuffle(
@@ -771,9 +773,10 @@ async def _shuffle_join(
                 ir_context,
                 ch_left_shuffle,
                 ch_left,
-                strategy.left_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                ir.left_on[:n_keys],
+                left,
             ),
             _global_shuffle(
                 context,
@@ -781,9 +784,10 @@ async def _shuffle_join(
                 ir_context,
                 ch_right_shuffle,
                 ch_right,
-                strategy.right_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                ir.right_on[:n_keys],
+                right,
             ),
             _join_chunks(
                 context,
