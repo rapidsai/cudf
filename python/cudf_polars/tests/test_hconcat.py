@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_collect_raises, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 
 def test_hconcat(engine: pl.GPUEngine):
@@ -30,6 +33,7 @@ def test_hconcat_different_heights(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skipif(POLARS_VERSION_LT_139, reason="strict keyword added in polars 1.39")
 def test_hconcat_strict_different_heights():
     left = pl.LazyFrame({"a": [1, 2, 3]})
     right = pl.LazyFrame({"b": [4, 5]})
