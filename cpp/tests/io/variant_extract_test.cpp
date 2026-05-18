@@ -473,8 +473,7 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
   auto stream = cudf::test::get_default_stream();
   // Only object-key descent is supported — array indexing, bracket steps, and quoted keys should
   // throw, alongside malformed paths.
-  for (auto const* bad :
-       {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.a.1bad", "$.", "$.'q'", "$['x']", "$.a[*]"}) {
+  for (auto const* bad : {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.", "$['x']", "$.a[*]"}) {
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::get_variant_field(struc, bad, stream)),
       std::invalid_argument)

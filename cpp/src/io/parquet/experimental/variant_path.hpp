@@ -17,7 +17,10 @@ namespace cudf::io::parquet::experimental::detail {
  * Grammar — object descent only:
  *   path  := "$"? first_step ("." name)*
  *   first := name | "." name
- *   name  := [A-Za-z_][A-Za-z0-9_]*
+ *   name  := [^.\[]+
+ *
+ * Names accept any byte except '.' (step separator) and '[' (start of a bracket step,
+ * reserved for future array indexing and quoted-name syntax).
  *
  * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
  *         which require array-indexing support that is not yet implemented)
