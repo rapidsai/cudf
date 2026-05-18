@@ -2062,11 +2062,6 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
 
 TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
 {
-  /**
-   * @brief Test that recovery mode handles multiple malformed lines with just open braces.
-   * This is a regression test for a bug where the token count estimate didn't account for
-   * the delimiter_offset in recovery mode, causing an assertion failure.
-   */
   std::string data =
     // Two lines with just an open brace (malformed JSON)
     "{\n"
