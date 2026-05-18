@@ -7,7 +7,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/join/filtered_join.hpp>
+#include <cudf/table/equality.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -87,19 +87,10 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         cudf::table_view const& rhs_table,
                         rmm::cuda_stream_view stream)
 {
-  try {
-    // Left anti-join the original and transcoded tables identical tables should not throw an
-    // exception and return an empty indices vector
-    cudf::filtered_join join_obj(lhs_table, cudf::null_equality::EQUAL, stream);
-    auto const indices = join_obj.anti_join(rhs_table, stream);
-
-    // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << valid << "\n\n";
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
-  }
+  auto const tables_equal =
+    cudf::tables_equal(lhs_table, rhs_table, cudf::null_equality::EQUAL, stream);
+  std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+  if (not tables_equal) { throw std::logic_error("Table equality check failed"); }
 }
 
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
