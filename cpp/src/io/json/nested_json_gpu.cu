@@ -1631,6 +1631,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
       tokenizer_pda::get_translation_table(recover_from_error)),
     stream);
 
+  // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
+  // see a JSON-line delimiter as the very first item
+  SymbolOffsetT const delimiter_offset =
+    (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
+
   // Perform a PDA-transducer pass
   // Compute the maximum amount of tokens that can possibly be emitted for a given input size
   // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
@@ -1639,13 +1644,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr min_chars_per_struct  = 5;
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
-    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
+    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct +
+    delimiter_offset;
   cudf::detail::device_scalar<std::size_t> num_written_tokens{
     stream, cudf::get_current_device_resource_ref()};
-  // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
-  // see a JSON-line delimiter as the very first item
-  SymbolOffsetT const delimiter_offset =
-    (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
 
   // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
