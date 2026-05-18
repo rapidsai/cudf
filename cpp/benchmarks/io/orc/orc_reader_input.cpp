@@ -170,7 +170,7 @@ NVBENCH_BENCH_TYPES(BM_orc_read_data, NVBENCH_TYPE_AXES(d_type_list))
 NVBENCH_BENCH(BM_orc_read_io_compression)
   .set_name("orc_read_io_compression")
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
-  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "NONE"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "LZ4", "NONE"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -179,7 +179,7 @@ NVBENCH_BENCH(BM_orc_read_io_compression)
 NVBENCH_BENCH(BM_orc_chunked_read_io_compression)
   .set_name("orc_chunked_read_io_compression")
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "NONE"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "LZ4", "NONE"})
   .set_min_samples(4)
   // The input has approximately 520MB and 127K rows.
   // The limits below are given in MBs.
