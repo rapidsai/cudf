@@ -443,8 +443,8 @@ class RunConfig:
         # Update `extra_info.environment` with the captured environment variables.
         self.extra_info.setdefault("environment", {})
         for var in self.capture_env_vars.split(","):
-            var = var.strip()
-            self.extra_info["environment"][var] = os.environ.get(var)            
+            var_ = var.strip()
+            self.extra_info["environment"][var_] = os.environ.get(var_)
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
