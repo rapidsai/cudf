@@ -470,8 +470,9 @@ def execute_ir_on_rank(
         run_actor_network(ctx, actors=nodes)
     except (MemoryError, BaseExceptionGroup) as e:
         if (mem_error := _find_memory_error(e)) is not None:
+            target_partition_size = config_options.executor.target_partition_size
             hint = (
-                f"Try lowering CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE (default 1.5GB) "
+                f"Try lowering `target_partition_size` (current {target_partition_size}) "
                 f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
                 f"\nSee https://docs.rapids.ai/api/rapidsmpf/stable/configuration/#general "
                 f"for all RapidsMPF spilling options."
