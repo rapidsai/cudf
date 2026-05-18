@@ -41,7 +41,7 @@ repos:
           "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
           types-cachetools,
-          "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'",
+          "rmm-cu12==26.8.*,>=0.0.0a0; sys_platform=='linux'",
           "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
         ]
         args: ["--config-file=pyproject.toml",

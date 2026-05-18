@@ -179,14 +179,26 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
+CUSTOMER_COMPOSITE = [
+    "c_customer_id",
+    "c_first_name",
+    "c_last_name",
+    "c_preferred_cust_flag",
+    "c_birth_country",
+    "c_login",
+    "c_email_address",
+]
+
+
 def build_sales_agg(
     sales_df: pl.LazyFrame,
     date_df: pl.LazyFrame,
+    customer_df: pl.LazyFrame,
     sold_date_key: str,
     customer_key: str,
     col_prefix: str,
 ) -> pl.LazyFrame:
-    """Aggregate sales to (customer_sk, year_total) without joining customer table."""
+    """Aggregate sales joined with customer to (customer composite, year_total)."""
     profit_expr = (
         (
             pl.col(f"{col_prefix}ext_list_price")
@@ -198,9 +210,9 @@ def build_sales_agg(
 
     return (
         sales_df.join(date_df, left_on=sold_date_key, right_on="d_date_sk")
-        .group_by(customer_key)
+        .join(customer_df, left_on=customer_key, right_on="c_customer_sk")
+        .group_by(CUSTOMER_COMPOSITE)
         .agg(profit_expr.sum().alias("year_total"))
-        .rename({customer_key: "customer_sk"})
     )
 
 
@@ -223,53 +235,84 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_firstyear = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
     date_secyear = date_dim.filter(pl.col("d_year") == year + 1).select("d_date_sk")
 
-    # Aggregate each channel x year to (customer_sk, year_total)
+    # Aggregate each channel x year to (customer composite, year_total)
     t_s_fy = build_sales_agg(
-        store_sales, date_firstyear, "ss_sold_date_sk", "ss_customer_sk", "ss_"
+        store_sales,
+        date_firstyear,
+        customer,
+        "ss_sold_date_sk",
+        "ss_customer_sk",
+        "ss_",
     ).filter(pl.col("year_total") > 0)
     t_s_sy = build_sales_agg(
-        store_sales, date_secyear, "ss_sold_date_sk", "ss_customer_sk", "ss_"
+        store_sales, date_secyear, customer, "ss_sold_date_sk", "ss_customer_sk", "ss_"
     )
     t_c_fy = build_sales_agg(
-        catalog_sales, date_firstyear, "cs_sold_date_sk", "cs_bill_customer_sk", "cs_"
+        catalog_sales,
+        date_firstyear,
+        customer,
+        "cs_sold_date_sk",
+        "cs_bill_customer_sk",
+        "cs_",
     ).filter(pl.col("year_total") > 0)
     t_c_sy = build_sales_agg(
-        catalog_sales, date_secyear, "cs_sold_date_sk", "cs_bill_customer_sk", "cs_"
+        catalog_sales,
+        date_secyear,
+        customer,
+        "cs_sold_date_sk",
+        "cs_bill_customer_sk",
+        "cs_",
     )
     t_w_fy = build_sales_agg(
-        web_sales, date_firstyear, "ws_sold_date_sk", "ws_bill_customer_sk", "ws_"
+        web_sales,
+        date_firstyear,
+        customer,
+        "ws_sold_date_sk",
+        "ws_bill_customer_sk",
+        "ws_",
     ).filter(pl.col("year_total") > 0)
     t_w_sy = build_sales_agg(
-        web_sales, date_secyear, "ws_sold_date_sk", "ws_bill_customer_sk", "ws_"
+        web_sales,
+        date_secyear,
+        customer,
+        "ws_sold_date_sk",
+        "ws_bill_customer_sk",
+        "ws_",
     )
 
-    # Join all 6 subqueries on customer_sk
+    # Join all 6 subqueries on customer composite. nulls_equal=True preserves
+    # the null=null semantics of GROUP BY, since composite columns may be null.
     joined = (
         t_s_sy.rename({"year_total": "s_sy"})
         .join(
             t_s_fy.rename({"year_total": "s_fy"}),
-            on="customer_sk",
+            on=CUSTOMER_COMPOSITE,
             how="inner",
+            nulls_equal=True,
         )
         .join(
             t_c_fy.rename({"year_total": "c_fy"}),
-            on="customer_sk",
+            on=CUSTOMER_COMPOSITE,
             how="inner",
+            nulls_equal=True,
         )
         .join(
             t_c_sy.rename({"year_total": "c_sy"}),
-            on="customer_sk",
+            on=CUSTOMER_COMPOSITE,
             how="inner",
+            nulls_equal=True,
         )
         .join(
             t_w_fy.rename({"year_total": "w_fy"}),
-            on="customer_sk",
+            on=CUSTOMER_COMPOSITE,
             how="inner",
+            nulls_equal=True,
         )
         .join(
             t_w_sy.rename({"year_total": "w_sy"}),
-            on="customer_sk",
+            on=CUSTOMER_COMPOSITE,
             how="inner",
+            nulls_equal=True,
         )
         .filter(
             # Catalog growth rate > Store growth rate
@@ -294,7 +337,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
     )
 
-    # Join customer once to get output columns
     sort_cols = [
         "customer_id",
         "customer_first_name",
@@ -303,20 +345,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ]
     return QueryResult(
         frame=(
-            joined.join(
-                customer.select(
-                    [
-                        "c_customer_sk",
-                        "c_customer_id",
-                        "c_first_name",
-                        "c_last_name",
-                        "c_preferred_cust_flag",
-                    ]
-                ),
-                left_on="customer_sk",
-                right_on="c_customer_sk",
-            )
-            .select(
+            joined.select(
                 [
                     pl.col("c_customer_id").alias("customer_id"),
                     pl.col("c_first_name").alias("customer_first_name"),
