@@ -118,7 +118,9 @@ async def _simple_top_or_bottom_k(
         chunk = await evaluate_chunk(
             context,
             TableChunk.from_pylibcudf_table(
-                await allgather.extract_concatenated(stream, ordered=True),
+                await allgather.extract_concatenated(
+                    stream, ordered=True, ir_context=ir_context
+                ),
                 stream,
                 exclusive_view=True,
                 br=context.br(),
@@ -194,7 +196,9 @@ async def _compute_sort_boundaries(
         allgather = AllGatherManager(context, comm, allgather_id)
         with allgather.inserting() as inserter:
             inserter.insert(comm.rank, chunk)
-        concat_table = await allgather.extract_concatenated(stream, ordered=True)
+        concat_table = await allgather.extract_concatenated(
+            stream, ordered=True, ir_context=ir_context
+        )
         return _get_final_sort_boundaries(
             DataFrame.from_table(
                 concat_table,

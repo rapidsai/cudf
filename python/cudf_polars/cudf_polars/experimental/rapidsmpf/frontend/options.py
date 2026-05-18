@@ -10,7 +10,6 @@ import dataclasses
 import json
 import os
 import textwrap
-import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.config import Options
@@ -233,10 +232,10 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION``.
         Default: ``1_000_000``.
         Category: executor.
-    broadcast_join_limit
-        Max partitions for broadcast joins.
-        Env: ``CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT``.
-        Default: auto.
+    broadcast_limit
+        Maximum byte size for broadcast joins.
+        Env: ``CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT``.
+        Default: ``"auto"``.
         Category: executor.
     target_partition_size
         Target IO partition size (bytes). ``0`` = auto.
@@ -344,9 +343,6 @@ class StreamingOptions:
     max_rows_per_partition: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", int
     )
-    broadcast_join_limit: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", int
-    )
     broadcast_limit: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", int
     )
@@ -401,29 +397,8 @@ class StreamingOptions:
         Only fields that are not :data:`UNSPECIFIED` are included.
         ``StreamingExecutor`` reads ``CUDF_POLARS__EXECUTOR__*`` environment
         variables for any omitted fields.
-
-        ``broadcast_join_limit`` (legacy) is converted to ``broadcast_limit``
-        here: ``broadcast_limit = broadcast_join_limit * target_partition_size``.
-        ``broadcast_join_limit`` is then dropped so it never reaches
-        ``StreamingExecutor``.
         """
-        opts = _category_opts(self, "executor")
-        bjl = opts.pop("broadcast_join_limit", None)
-        if bjl is not None:
-            # TODO: Remove after nightlies adopt `default_broadcast_limit`
-            warnings.warn(
-                "broadcast_join_limit is deprecated; use broadcast_limit instead. "
-                "broadcast_limit accepts an absolute byte value, whereas "
-                "broadcast_join_limit was a multiplier on target_partition_size."
-                "broadcast_join_limit is now IGNORED when broadcast_limit is set.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            if "broadcast_limit" not in opts:
-                target = opts.get("target_partition_size")
-                if target:
-                    opts["broadcast_limit"] = bjl * target
-        return opts
+        return _category_opts(self, "executor")
 
     def to_engine_options(self) -> dict[str, Any]:
         """
@@ -560,7 +535,6 @@ class StreamingOptions:
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
-            broadcast_join_limit=_get("broadcast_join_limit"),
             broadcast_limit=_get("broadcast_limit"),
             target_partition_size=target_partition_size,
             dynamic_planning=dynamic_planning,
@@ -752,15 +726,6 @@ class StreamingOptions:
                 Maximum number of rows per partition.
                 Env: CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION.
                 Built-in default: 1000000."""),
-        )
-        g.add_argument(
-            "--broadcast-join-limit",
-            dest="broadcast_join_limit",
-            default=None,
-            type=int,
-            help=textwrap.dedent("""\
-                Deprecated. Use --broadcast-limit instead.
-                Env: CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT."""),
         )
         g.add_argument(
             "--broadcast-limit",

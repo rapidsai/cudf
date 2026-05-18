@@ -704,9 +704,8 @@ class DaskEngine(StreamingEngine):
             "memory_resource_config", None
         )
 
-        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
-            rapidsmpf_options
-        ).serialize()
+        self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
