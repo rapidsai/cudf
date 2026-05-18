@@ -267,6 +267,11 @@ aggregate_orc_metadata::select_stripes(
         {buffer->data(), buffer->size()});
       protobuf_reader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+      auto const& stripe_footer = per_file_metadata[mapping.source_idx].stripefooters[i];
+      auto const num_types      = per_file_metadata[mapping.source_idx].ff.types.size();
+      CUDF_EXPECTS(stripe_footer.columns.size() >= num_types,
+                   "Invalid ColumnEncoding field in a stripe footer.",
+                   std::out_of_range);
       mapping.stripe_info[i].stripe_footer =
         &per_file_metadata[mapping.source_idx].stripefooters[i];
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }

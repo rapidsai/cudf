@@ -609,10 +609,13 @@ struct PdaSymbolToSymbolGroupId {
     // escape, comma, colon or whitespace characters.
     auto constexpr newline    = '\n';
     auto constexpr whitespace = ' ';
+    // Cast to unsigned char first so high-bit bytes (>= 0x80) are not sign-extended to negative
+    // int32_t values, which would underflow the min() clamp used as the lookup index.
     auto const symbol_position =
       symbol == delimiter
         ? static_cast<int32_t>(newline)
-        : (symbol == newline ? static_cast<int32_t>(whitespace) : static_cast<int32_t>(symbol));
+        : (symbol == newline ? static_cast<int32_t>(whitespace)
+                             : static_cast<int32_t>(static_cast<unsigned char>(symbol)));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +

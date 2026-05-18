@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,38 +51,6 @@ TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
-TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
-{
-  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
-                                     "the fat cat lays next to the other accénted cat",
-                                     "a slow moving turtlé cannot catch the bird",
-                                     "which can be composéd together to form a more complete",
-                                     "thé result does not include the value in the sum in",
-                                     "",
-                                     nullptr};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
-  auto strings_view = cudf::strings_column_view(strings);
-
-  std::vector<char const*> h_expected{" quick brown fox jumps over  lazy dog",
-                                      " fat cat lays next to  other accénted cat",
-                                      "** slow moving turtlé cannot catch  bird",
-                                      "which can be composéd together to form ** more complete",
-                                      "thé result does not include  value N  sum N",
-                                      "",
-                                      nullptr};
-
-  std::vector<std::string> patterns{"\\bthe\\b", "\\bin\\b", "\\ba\\b"};
-  std::vector<std::string> h_repls{"", "N", "**"};
-  cudf::test::strings_column_wrapper repls(h_repls.begin(), h_repls.end());
-  auto repls_view = cudf::strings_column_view(repls);
-  auto results    = cudf::strings::replace_re(strings_view, patterns, repls_view);
-  cudf::test::strings_column_wrapper expected(
-    h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-}
-
 TEST_F(StringsReplaceRegexTest, InvalidRegex)
 {
   // these are quantifiers that do not have a preceding character/class
@@ -103,13 +71,8 @@ TEST_F(StringsReplaceRegexTest, WithEmptyPattern)
 
   auto empty_pattern = std::string("");
   auto repl          = cudf::string_scalar("bbb");
-  std::vector<std::string> patterns({empty_pattern});
-  cudf::test::strings_column_wrapper repls({"bbb"});
-  auto repls_view = cudf::strings_column_view(repls);
-  auto results    = cudf::strings::replace_re(strings_view, patterns, repls_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, strings);
-  auto prog = cudf::strings::regex_program::create(empty_pattern);
-  results   = cudf::strings::replace_re(strings_view, *prog, repl);
+  auto prog          = cudf::strings::regex_program::create(empty_pattern);
+  auto results       = cudf::strings::replace_re(strings_view, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, strings);
 }
 
@@ -236,17 +199,6 @@ TEST_F(StringsReplaceRegexTest, Multiline)
   prog    = cudf::strings::regex_program::create(pattern);
   results = cudf::strings::replace_re(sv, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-
-  // multi-replace
-  std::vector<std::string> patterns({"aba$", "^aba"});
-  cudf::test::strings_column_wrapper repls({">", "<"});
-  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls), multiline);
-  cudf::test::strings_column_wrapper multi_expected_ml({"bcd\n>\nefg", ">\n< abab\n>", ">"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected_ml);
-
-  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls));
-  cudf::test::strings_column_wrapper multi_expected({"bcd\naba\nefg", "<\naba abab\n>", ">"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected);
 
   // backref-replace
   auto repl_template = std::string("[\\1]");
