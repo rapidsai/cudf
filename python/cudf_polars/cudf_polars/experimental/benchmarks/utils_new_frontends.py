@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pprint
+import shlex
 import sys
 import textwrap
 import time
@@ -430,6 +431,8 @@ class RunConfig:
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
+    command_line: str
+    capture_env_vars: str
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.io_mode == "hot" and self.iterations < 2:
@@ -437,6 +440,12 @@ class RunConfig:
                 "--io-mode hot requires at least 2 iterations: "
                 "iteration 0 warms the cache, iterations 1+ are the hot measurements."
             )
+
+        # Update `extra_info.environment` with the captured environment variables.
+        self.extra_info.setdefault("environment", {})
+        for var in self.capture_env_vars.split(","):
+            var_ = var.strip()
+            self.extra_info["environment"][var_] = os.environ.get(var_)
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -541,6 +550,8 @@ class RunConfig:
             duckdb_threads=args.duckdb_threads,
             duckdb_memory_limit=args.duckdb_memory_limit,
             duckdb_temp_dir=args.duckdb_temp_dir,
+            command_line=shlex.join(sys.argv),
+            capture_env_vars=args.capture_env_vars,
         )
 
     def serialize(self, engine: StreamingEngine | None) -> dict:
@@ -564,6 +575,7 @@ class RunConfig:
             "extra_info": self.extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
+            "command_line": self.command_line,
             "streaming_options": {
                 "rapidsmpf": opts.to_rapidsmpf_options().get_strings(),
                 "executor": opts.to_executor_options(),
@@ -1966,6 +1978,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Directory for DuckDB to spill temporary data to disk.",
+    )
+    parser.add_argument(
+        "--capture-env-vars",
+        type=str,
+        default="CUDF_POLARS_LOG_TRACES_MEMORY,CUDF_POLARS_LOG_TRACES,DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT,DASK_DISTRIBUTED__COMM__UCX__CONNECT_TIMEOUT,KVIKIO_NTHREADS,LIBCUDF_NUM_HOST_WORKERS,OMP_NUM_THREADS,POLARS_MAX_THREADS,RAPIDSMPF_num_streaming_threads,UCX_MAX_RNDV_RAILS,UCX_PROTO_ENABLE,UCX_RNDV_FRAG_MEM_TYPES,UCX_RNDV_MTYPE_WORKER_FC_ENABLE,UCX_RNDV_MTYPE_WORKER_MAX_MEM,UCX_RNDV_PIPELINE_ERROR_HANDLING",
+        help="Comma-separated list of environment variables to capture. Written to ``extra_info.environment``.",
     )
 
     StreamingOptions._add_cli_args(parser)
