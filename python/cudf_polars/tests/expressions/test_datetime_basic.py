@@ -381,7 +381,7 @@ def test_datetime_from_integer(engine: pl.GPUEngine, datetime_dtype, integer_dty
         with pytest.raises(pl.exceptions.InvalidOperationError):
             q.collect()
         with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+            q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
 

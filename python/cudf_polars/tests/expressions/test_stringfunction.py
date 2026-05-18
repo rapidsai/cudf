@@ -304,8 +304,12 @@ def test_to_datetime(
     elif outcome == "collect_error":
         with pytest.raises(pl.exceptions.InvalidOperationError):
             q.collect()
-        with pytest.raises(pl.exceptions.InvalidOperationError):
-            q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+        if is_streaming_engine(engine):
+            with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+                q.collect(engine=engine)
+        else:
+            with pytest.raises(pl.exceptions.InvalidOperationError):
+                q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
 
@@ -501,13 +505,17 @@ def test_string_from_float(engine: pl.GPUEngine, request, str_from_float_data):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_string_to_numeric_invalid(numeric_type):
+def test_string_to_numeric_invalid(engine, numeric_type):
     df = pl.LazyFrame({"a": ["a", "b", "c"]})
     q = df.select(pl.col("a").cast(numeric_type))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect()
-    with pytest.raises(pl.exceptions.InvalidOperationError):
-        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
 
 
 @pytest.mark.parametrize("ignore_nulls", [False, True])
@@ -546,7 +554,7 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
         with pytest.raises(pl.exceptions.InvalidOperationError):
             q.collect()
         with pytest.raises(pl.exceptions.InvalidOperationError):
-            q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+            q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
 
@@ -584,17 +592,21 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
     if fill is not None and fill < 0:
         with pytest.raises(pl.exceptions.InvalidOperationError):
             q.collect()
-        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+        q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
 
 
-def test_string_zfill_forbidden_chars():
+def test_string_zfill_forbidden_chars(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
     q = ldf.select(pl.col("a").str.zfill(3))
-    q.collect()
-    with pytest.raises(pl.exceptions.InvalidOperationError):
-        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+    # disallowed by libcudf
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -624,10 +636,6 @@ def test_string_zfill_forbidden_chars():
     ],
 )
 def test_string_pad_start(engine: pl.GPUEngine, width, char):
-    if is_streaming_engine(engine):
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
     df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
     q = df.select(pl.col("a").str.pad_start(width, char))
     assert_gpu_result_equal(q, engine=engine)

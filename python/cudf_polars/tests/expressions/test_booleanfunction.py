@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,10 +81,6 @@ def test_boolean_function_unary(
     has_nans: bool,
     has_nulls: bool,
 ) -> None:
-    if is_streaming_engine(engine):
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -170,10 +165,6 @@ def test_boolean_isbetween(engine: pl.GPUEngine, closed, bounds):
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
 def test_boolean_horizontal(engine: pl.GPUEngine, expr, has_nulls, wide):
-    if is_streaming_engine(engine):
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],
