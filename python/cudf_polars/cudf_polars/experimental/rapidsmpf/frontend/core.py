@@ -562,8 +562,14 @@ def all_gather_host_data(
         br=br,
         statistics=Statistics(enable=False),
     )
-    allgather.insert(0, PackedData.from_host_bytes(data, br))
-    allgather.insert_finished()
+    # TODO: Make AllGather (bulk) a context manager so this becomes
+    # with AllGather(...) as ag:
+    #     ag.insert(0, PackedData.from_host_bytes(data, br))
+    # results = ag.wait_and_extract(ordered=True)
+    try:
+        allgather.insert(0, PackedData.from_host_bytes(data, br))
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
     return [r.to_host_bytes() for r in results]
 
