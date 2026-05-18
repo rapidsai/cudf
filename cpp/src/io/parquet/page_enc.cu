@@ -152,7 +152,7 @@ void __device__ init_frag_state(frag_init_state_s* const s,
   // frag.num_rows = fragment_size except for the last fragment in partition which can be
   // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
   // nested.
-  s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
+  s->frag.num_rows = cuda::std::min<size_type>(fragment_size, part_end_row - s->frag.start_row);
   s->frag.num_dict_vals      = 0;
   s->frag.fragment_data_size = 0;
   s->frag.dict_data_size     = 0;
@@ -642,7 +642,6 @@ CUDF_KERNEL void __launch_bounds__(128)
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
     uint32_t page_offset         = ck_g.ck_stat_size;
-    uint32_t num_dict_entries    = 0;
     uint32_t comp_page_offset    = ck_g.ck_stat_size;
     uint32_t page_headers_size   = 0;
     uint32_t max_page_data_size  = 0;
@@ -677,6 +676,7 @@ CUDF_KERNEL void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
+        page_g.dict_rle_bits   = ck_g.dict_rle_bits;     // TODO: shouldn't matter for dict page
         page_offset +=
           util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
@@ -778,7 +778,9 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.data_size      = 0;
           page_g.comp_data_size = 0;
           page_g.is_compressed  = false;
-          page_g.max_hdr_size   = max_data_page_hdr_size;  // Max size excluding statistics
+          page_g.dict_rle_bits =
+            ck_g.dict_rle_bits;  // Conservatively set to the chunk-wide bit width
+          page_g.max_hdr_size = max_data_page_hdr_size;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {
@@ -890,7 +892,6 @@ CUDF_KERNEL void __launch_bounds__(128)
         max_stats_len       = 0;
       }
       max_stats_len = max(max_stats_len, minmax_len);
-      num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
       // fragment_data_size includes the length indicator...remove it
       var_bytes_size += frag_g.fragment_data_size - frag_g.num_valid * sizeof(size_type);
@@ -1911,7 +1912,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // TODO assert dict_bits >= 0
   auto const dict_bits = (physical_type == Type::BOOLEAN) ? 1
                          : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
-                           ? s->ck.dict_rle_bits
+                           ? s->page.dict_rle_bits  // Use `page.dict_rle_bits` for data pages
                            : -1;
   if (t == 0) {
     uint8_t* dst     = s->cur;
