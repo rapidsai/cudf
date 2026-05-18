@@ -728,6 +728,15 @@ def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...
     return tuple(keys[i] for i in indices)
 
 
+def has_computed_key(names: tuple[str | NamedExpr, ...]) -> bool:
+    """Return True if any join key is a computed expression rather than a plain column."""
+    return any(
+        isinstance(n, NamedExpr)
+        and not (isinstance(n.value, Col) and n.value.name == n.name)
+        for n in names
+    )
+
+
 @dataclass(frozen=True)
 class TableSizeStats:
     """Sampled chunks and aggregate size/row stats for a table channel."""
