@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy, Sort
+from cudf_polars.dsl.ir import Distinct, GroupBy, Sort, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
@@ -92,6 +92,7 @@ class ReserveOpIDs:
             Repartition,
             StreamingSink,
             Sort,
+            Union,
         )
         if self.dynamic_planning_enabled:
             collective_types = (
@@ -103,6 +104,7 @@ class ReserveOpIDs:
                 GroupBy,
                 Distinct,
                 Over,
+                Union,
             )
 
         self.collective_nodes: list[IR] = [
