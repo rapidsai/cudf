@@ -105,7 +105,7 @@ def test_rolling_integral_orderby(engine: pl.GPUEngine, dtype):
 
 
 @skip_rolling_expr_136_to_138
-def test_rolling_agg_first(engine: pl.GPUEngine):
+def test_rolling_agg_before_rolling(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     q = df.with_columns(pl.col("a").sum().rolling("b", period="2i"))
     assert_gpu_result_equal(q, engine=engine)
