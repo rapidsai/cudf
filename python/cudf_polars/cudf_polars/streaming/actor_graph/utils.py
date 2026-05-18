@@ -40,7 +40,7 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
-from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.dsl.utils.naming import indices_to_names, names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer
 from cudf_polars.streaming.utils import _concat
@@ -703,25 +703,6 @@ async def chunkwise_evaluate(
         await ch_out.send(context, Message(0, result))
 
     await ch_out.drain(context)
-
-
-def indices_to_names(indices: Iterable[int], schema: Schema) -> tuple[str, ...]:
-    """
-    Return column names for the given column indices in schema order.
-
-    Parameters
-    ----------
-    indices
-        The indices to get names for.
-    schema
-        The schema to get names from.
-
-    Returns
-    -------
-    The column names for each index in schema order.
-    """
-    keys = list(schema.keys())
-    return tuple(keys[i] for i in indices)
 
 
 @dataclass(frozen=True)

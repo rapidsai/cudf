@@ -86,3 +86,22 @@ def names_to_indices(
     return tuple(
         keys[n] for n in (n.name if isinstance(n, NamedExpr) else n for n in names)
     )
+
+
+def indices_to_names(indices: Iterable[int], schema: Schema) -> tuple[str, ...]:
+    """
+    Return column names for the given column indices in schema order.
+
+    Parameters
+    ----------
+    indices
+        The indices to get names for.
+    schema
+        The schema to get names from.
+
+    Returns
+    -------
+    The column names for each index in schema order.
+    """
+    keys = list(schema.keys())
+    return tuple(keys[i] for i in indices)
