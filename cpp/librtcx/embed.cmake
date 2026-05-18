@@ -25,7 +25,7 @@ function(add_embed TARGET)
     message(FATAL_ERROR "TARGET argument is required")
   endif()
 
-  add_library(${TARGET}__embed__props INTERFACE)
+  add_library(${TARGET}__embed_props INTERFACE)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
@@ -41,7 +41,7 @@ function(embed_includes TARGET)
   )
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT TARGET ${TARGET}__embed__props)
+  if(NOT TARGET ${TARGET}__embed_props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -78,24 +78,24 @@ function(embed_includes TARGET)
   # Determine the starting index for new IDs from the current list length
   get_property(
     SOURCE_FILE_IDS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_SOURCE_FILE_IDS
   )
   list(LENGTH SOURCE_FILE_IDS IDX)
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_SOURCE_FILE_IDS "include_${IDX}"
     )
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_SOURCE_FILES "${ARG_SOURCE_DIRECTORY}/${SOURCE_FILE}"
     )
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_SOURCE_FILE_DESTS "${ARG_DEST_DIRECTORY}/${SOURCE_FILE}"
     )
@@ -103,7 +103,7 @@ function(embed_includes TARGET)
   endforeach()
 
   set_property(
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     APPEND
     PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES}
   )
@@ -117,7 +117,7 @@ function(embed_blob TARGET)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT TARGET ${TARGET}__embed__props)
+  if(NOT TARGET ${TARGET}__embed_props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -141,12 +141,12 @@ function(embed_blob TARGET)
     endif()
 
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_ARRAY_IDS ${ARG_ARRAY_IDS}
     )
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_ARRAY_VALUES ${ARG_ARRAY_VALUES}
     )
@@ -155,7 +155,7 @@ function(embed_blob TARGET)
   if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
     # If the file is a generator expression for target objects add as dependency
     set_property(
-      TARGET ${TARGET}__embed__props
+      TARGET ${TARGET}__embed_props
       APPEND
       PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>
     )
@@ -166,17 +166,17 @@ function(embed_blob TARGET)
   endif()
 
   set_property(
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     APPEND
     PROPERTY EMBED_SOURCE_FILE_IDS ${ARG_ID}
   )
   set_property(
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     APPEND
     PROPERTY EMBED_SOURCE_FILES ${ARG_FILE}
   )
   set_property(
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     APPEND
     PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST}
   )
@@ -191,7 +191,7 @@ function(embed TARGET)
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
-  if(NOT TARGET ${TARGET}__embed__props)
+  if(NOT TARGET ${TARGET}__embed_props)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
@@ -205,7 +205,7 @@ function(embed TARGET)
 
   get_property(
     EMBED_SOURCE_FILES
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_SOURCE_FILES
   )
   if(NOT EMBED_SOURCE_FILES)
@@ -214,32 +214,32 @@ function(embed TARGET)
 
   get_property(
     EMBED_SOURCE_FILE_IDS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_SOURCE_FILE_IDS
   )
   get_property(
     EMBED_SOURCE_FILE_DESTS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_SOURCE_FILE_DESTS
   )
   get_property(
     EMBED_TARGET_DEPS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_TARGET_DEPS
   )
   get_property(
     EMBED_ARRAY_IDS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_ARRAY_IDS
   )
   get_property(
     EMBED_ARRAY_VALUES
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_ARRAY_VALUES
   )
   get_property(
     EMBED_INCLUDE_DIRS
-    TARGET ${TARGET}__embed__props
+    TARGET ${TARGET}__embed_props
     PROPERTY EMBED_INCLUDE_DIRECTORIES
   )
 
