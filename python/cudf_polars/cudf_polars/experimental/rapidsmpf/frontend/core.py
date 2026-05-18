@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
+    import rapidsmpf.config
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
@@ -158,6 +159,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
     # alive when the singleton is constructed.
@@ -391,6 +393,17 @@ class StreamingEngine(pl.GPUEngine):
         raise NotImplementedError
 
 
+def _find_memory_error(exc: BaseException) -> MemoryError | None:
+    """Recursively search for MemoryErrors."""
+    if isinstance(exc, MemoryError):
+        return exc
+    elif isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            if (mem_error := _find_memory_error(sub)) is not None:
+                return mem_error
+    return None
+
+
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
@@ -455,35 +468,50 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(ctx, actors=nodes)
+    try:
+        run_actor_network(ctx, actors=nodes)
 
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg, br=ctx.br()).make_available_and_spill(
-            ctx.br(), allow_overbooking=True
-        )
-        for msg in messages
-    ]
-    if chunks:
-        dfs = [
-            DataFrame.from_table(
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg, br=ctx.br()).make_available_and_spill(
+                ctx.br(), allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        if chunks:
+            dfs = [
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    chunk.stream,
+                )
+                for chunk in chunks
+            ]
+            df = _concat(*dfs, context=ir_context)
+        else:
+            stream = ir_context.get_cuda_stream()
+            chunk = empty_table_chunk(ir, ctx, stream)
+            df = DataFrame.from_table(
                 chunk.table_view(),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
-                chunk.stream,
+                stream,
             )
-            for chunk in chunks
-        ]
-        df = _concat(*dfs, context=ir_context)
-    else:
-        stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(ir, ctx, stream)
-        df = DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            stream,
-        )
+    except (MemoryError, BaseExceptionGroup) as e:
+        if (mem_error := _find_memory_error(e)) is not None:
+            hint = (
+                f"Try lowering CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE (default 1.5GB) "
+                f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
+                f"\nSee https://docs.rapids.ai/api/rapidsmpf/stable/configuration/#general "
+                f"for all RapidsMPF spilling options."
+                f"\nNOTE: RAPIDSMPF_PINNED_MEMORY is recommended for spill-heavy workloads."
+                f"\nOriginal error:\n{mem_error}"
+            )
+            raise MemoryError(hint) from e
+        else:
+            raise
+
     return df.to_polars(), metadata_collector
 
 
