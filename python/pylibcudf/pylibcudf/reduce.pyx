@@ -239,9 +239,10 @@ cpdef size_type unique_count(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_unique_count.unique_count(
-        source.view(), null_handling, nan_handling, _stream.view().value()
-    )
+    with nogil:
+        return cpp_unique_count.unique_count(
+            source.view(), null_handling, nan_handling, _stream.view().value()
+        )
 
 
 cpdef size_type distinct_count(
@@ -272,9 +273,10 @@ cpdef size_type distinct_count(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_distinct_count.distinct_count(
-        source.view(), null_handling, nan_handling, _stream.view().value()
-    )
+    with nogil:
+        return cpp_distinct_count.distinct_count(
+            source.view(), null_handling, nan_handling, _stream.view().value()
+        )
 
 
 cpdef size_type unique_count_table(
@@ -304,9 +306,10 @@ cpdef size_type unique_count_table(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_unique_count.unique_count(
-        source.view(), nulls_equal, _stream.view().value()
-    )
+    with nogil:
+        return cpp_unique_count.unique_count(
+            source.view(), nulls_equal, _stream.view().value()
+        )
 
 
 cpdef size_type distinct_count_table(
@@ -336,9 +339,10 @@ cpdef size_type distinct_count_table(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_distinct_count.distinct_count(
-        source.view(), nulls_equal, _stream.view().value()
-    )
+    with nogil:
+        return cpp_distinct_count.distinct_count(
+            source.view(), nulls_equal, _stream.view().value()
+        )
 
 
 ScanType.__str__ = ScanType.__repr__
