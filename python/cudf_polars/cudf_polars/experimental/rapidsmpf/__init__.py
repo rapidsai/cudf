@@ -13,6 +13,7 @@ import cudf_polars.experimental.rapidsmpf.collectives.sort
 import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
+import cudf_polars.experimental.rapidsmpf.over
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 

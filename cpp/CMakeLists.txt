@@ -5,7 +5,7 @@
 # cmake-format: on
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 
 include(../cmake/rapids_config.cmake)
 include(rapids-cmake)
@@ -931,6 +931,7 @@ add_library(
   src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/getenv_or.cpp
   src/utilities/grid_1d.cu
   src/utilities/host_memory.cpp
   src/utilities/host_worker_pool.cpp

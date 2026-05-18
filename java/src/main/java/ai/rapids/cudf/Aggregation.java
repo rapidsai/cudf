@@ -61,7 +61,8 @@ abstract class Aggregation {
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
         MERGE_HISTOGRAM(35),
-        BITWISE_AGG(36);
+        BITWISE_AGG(36),
+        SUM_WITH_OVERFLOW(37);
 
         final int nativeId;
 
@@ -531,6 +532,23 @@ abstract class Aggregation {
      */
     static SumAggregation sum() {
         return new SumAggregation();
+    }
+
+    static final class SumWithOverflowAggregation extends NoParamAggregation {
+        private SumWithOverflowAggregation() {
+            super(Kind.SUM_WITH_OVERFLOW);
+        }
+    }
+
+    /**
+     * Sum aggregation that also reports overflow. The result is a struct with
+     * children {sum, overflow: BOOL8}. For column reductions the input must be
+     * INT64. For hash-based groupby the input may be any signed integer type
+     * (INT8/16/32/64) or fixed-point decimal. Sort-based groupby, scan,
+     * segmented reduce, and rolling are not supported by cudf.
+     */
+    static SumWithOverflowAggregation sumWithOverflow() {
+        return new SumWithOverflowAggregation();
     }
 
     static final class ProductAggregation extends NoParamAggregation {
