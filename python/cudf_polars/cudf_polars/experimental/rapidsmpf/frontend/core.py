@@ -468,35 +468,6 @@ def execute_ir_on_rank(
 
     try:
         run_actor_network(ctx, actors=nodes)
-
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg, br=ctx.br()).make_available_and_spill(
-                ctx.br(), allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, ctx, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
-
     except (MemoryError, BaseExceptionGroup) as e:
         if (mem_error := _find_memory_error(e)) is not None:
             hint = (
@@ -511,6 +482,33 @@ def execute_ir_on_rank(
         else:
             raise
 
+    messages = output.release()
+    chunks = [
+        TableChunk.from_message(msg, br=ctx.br()).make_available_and_spill(
+            ctx.br(), allow_overbooking=True
+        )
+        for msg in messages
+    ]
+    if chunks:
+        dfs = [
+            DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                chunk.stream,
+            )
+            for chunk in chunks
+        ]
+        df = _concat(*dfs, context=ir_context)
+    else:
+        stream = ir_context.get_cuda_stream()
+        chunk = empty_table_chunk(ir, ctx, stream)
+        df = DataFrame.from_table(
+            chunk.table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            stream,
+        )
     return df.to_polars(), metadata_collector
 
 
