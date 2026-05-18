@@ -609,6 +609,11 @@ class RunConfig:
                 "config_options": dataclasses.asdict(config_options),
                 "rapidsmpf_options": rapidsmpf_options,
             }
+            # discard unserializable / unnecessary UUIDs
+            result["config_options"]["config_options"]["executor"].pop(
+                "quent_context", None
+            )
+
         return result
 
     def summarize(self) -> None:
