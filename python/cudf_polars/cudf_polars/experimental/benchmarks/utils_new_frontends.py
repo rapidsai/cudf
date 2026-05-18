@@ -1120,7 +1120,9 @@ def run_polars_cpu(
         validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_in_memory(
@@ -1153,7 +1155,9 @@ def run_polars_in_memory(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_spmd(
