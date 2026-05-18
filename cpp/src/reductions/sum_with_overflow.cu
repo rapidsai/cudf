@@ -71,16 +71,14 @@ struct to_sum_overflow {
 
 template <typename DeviceType>
 struct null_aware_to_sum_overflow {
-  cudf::column_device_view const* dcol_ptr;
+  cudf::column_device_view dcol;
 
-  CUDF_HOST_DEVICE null_aware_to_sum_overflow(cudf::column_device_view const* dcol) : dcol_ptr(dcol)
-  {
-  }
+  CUDF_HOST_DEVICE null_aware_to_sum_overflow(cudf::column_device_view const& d) : dcol{d} {}
 
   __device__ sum_overflow_result<DeviceType> operator()(cudf::size_type idx) const
   {
-    return dcol_ptr->is_valid(idx)
-             ? sum_overflow_result<DeviceType>{dcol_ptr->element<DeviceType>(idx), false}
+    return dcol.is_valid(idx)
+             ? sum_overflow_result<DeviceType>{dcol.element<DeviceType>(idx), false}
              : sum_overflow_result<DeviceType>{DeviceType{0}, false};
   }
 };
@@ -141,7 +139,6 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
   }
 
   auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
-  auto dcol_ptr      = dcol.get();
   sum_overflow_result<DeviceType> result;
 
   if (col.has_nulls()) {
@@ -149,7 +146,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       counting_iter,
       counting_iter + col.size(),
-      null_aware_to_sum_overflow<DeviceType>{dcol_ptr},
+      null_aware_to_sum_overflow<DeviceType>{*dcol},
       initial_value,
       overflow_sum_op<DeviceType>{});
   } else {
