@@ -59,7 +59,15 @@ def test_make_spill_function(
     spilled_host_mem_type: MemoryType,
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
-    engine = spmd_engine_factory(StreamingOptions(pinned_memory=pinned_memory))
+    try:
+        engine = spmd_engine_factory(
+            StreamingOptions(
+                pinned_memory=pinned_memory,
+                pinned_initial_pool_size=3 * 1024 * 1024,
+            )
+        )
+    except RuntimeError as e:
+        pytest.skip(f"Error creating engine: {e}")
     context = engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
@@ -103,15 +111,11 @@ def test_make_spill_function(
         # Manually trigger spilling of 3MB
         # Expected: Buffer 1 (longest) should spill newest messages first
         amount_to_spill = 3 * 1024 * 1024
-        try:
-            actual_spilled = context.br().spill_manager.spill(amount_to_spill)
-        except RuntimeError as e:
-            if "Failed to allocate memory from a memory pool" in str(e):
-                pytest.skip("transient pinned-memory contention on CI node")
-            raise
+        actual_spilled = context.br().spill_manager.spill(amount_to_spill)
 
         # Allow some tolerance
         assert actual_spilled >= amount_to_spill * 0.95
+        assert actual_spilled <= amount_to_spill * 1.05
 
         # Verify Buffer 1 (longest queue): newest 3 messages should be spilled
         buffer_1_descs = buffers[1].get_content_descriptions()
