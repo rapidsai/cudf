@@ -2073,8 +2073,9 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
     "{";
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
-      reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
 
