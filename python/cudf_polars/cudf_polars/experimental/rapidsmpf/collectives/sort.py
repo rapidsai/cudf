@@ -95,46 +95,43 @@ def _extract_boundaries(
     -------
     The boundaries table and whether they are strict.
     """
-
-    def _gather_rows(positions: list[int]) -> plc.Table:
-        bounds = [v for k in positions for v in (k, k + 1)]
-        return plc.concatenate.concatenate(
-            plc.copying.slice(min_max_table, bounds, stream=stream), stream=stream
-        )
-
-    # Gather the partition ends (to check for strictness)
-    partition_ends = _gather_rows(list(range(1, 2 * num_partitions - 1, 2)))
-    # Gather the partition starts (these are the "boundaries")
-    partition_starts = _gather_rows(list(range(2, 2 * num_partitions, 2)))
-
-    # Check if any rows of partition_ends and partition_starts
-    # are equal. If so, the boundaries are not strict
-    # (a distinct value may exist in multiple partitions).
-    bool_type = plc.DataType(plc.TypeId.BOOL8)
-    row_eq = plc.binaryop.binary_operation(
-        partition_ends.columns()[0],
-        partition_starts.columns()[0],
-        plc.binaryop.BinaryOperator.NULL_EQUALS,
-        bool_type,
+    partition_ends = plc.concatenate.concatenate(
+        plc.copying.slice(
+            min_max_table, list(range(1, 2 * num_partitions - 1)), stream=stream
+        ),
         stream=stream,
     )
-    for j in range(1, partition_ends.num_columns()):
-        row_eq = plc.binaryop.binary_operation(
-            row_eq,
-            plc.binaryop.binary_operation(
-                partition_ends.columns()[j],
-                partition_starts.columns()[j],
-                plc.binaryop.BinaryOperator.NULL_EQUALS,
-                bool_type,
-                stream=stream,
-            ),
-            plc.binaryop.BinaryOperator.LOGICAL_AND,
-            bool_type,
-            stream=stream,
+    partition_starts = plc.concatenate.concatenate(
+        plc.copying.slice(
+            min_max_table, list(range(2, 2 * num_partitions)), stream=stream
+        ),
+        stream=stream,
+    )
+
+    # Single-kernel row-equality check across all key columns using AST
+    num_cols = partition_ends.num_columns()
+    combined = plc.Table(
+        list(partition_ends.columns()) + list(partition_starts.columns())
+    )
+    eq_exprs = [
+        plc.expressions.Operation(
+            plc.expressions.ASTOperator.NULL_EQUAL,
+            plc.expressions.ColumnReference(j),
+            plc.expressions.ColumnReference(num_cols + j),
         )
+        for j in range(num_cols)
+    ]
+    row_eq_expr = eq_exprs[0]
+    for expr in eq_exprs[1:]:
+        row_eq_expr = plc.expressions.Operation(
+            plc.expressions.ASTOperator.NULL_LOGICAL_AND,
+            row_eq_expr,
+            expr,
+        )
+    row_eq_col = plc.transform.compute_column(combined, row_eq_expr, stream=stream)
     strict = (
         plc.stream_compaction.apply_boolean_mask(
-            plc.Table([row_eq]), row_eq, stream=stream
+            plc.Table([row_eq_col]), row_eq_col, stream=stream
         ).num_rows()
         == 0
     )
