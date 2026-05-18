@@ -439,7 +439,7 @@ def execute_ir_on_rank(
         Collected channel metadata.
     """
     ir_context = IRExecutionContext(
-        get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
     )
     metadata_collector: list[ChannelMetadata] = []
 
@@ -455,7 +455,7 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(actors=nodes, py_executor=py_executor)
+    run_actor_network(ctx, actors=nodes)
 
     messages = output.release()
     chunks = [
@@ -560,8 +560,14 @@ def all_gather_host_data(
         br=br,
         statistics=Statistics(enable=False),
     )
-    allgather.insert(0, PackedData.from_host_bytes(data, br))
-    allgather.insert_finished()
+    # TODO: Make AllGather (bulk) a context manager so this becomes
+    # with AllGather(...) as ag:
+    #     ag.insert(0, PackedData.from_host_bytes(data, br))
+    # results = ag.wait_and_extract(ordered=True)
+    try:
+        allgather.insert(0, PackedData.from_host_bytes(data, br))
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
     return [r.to_host_bytes() for r in results]
 
