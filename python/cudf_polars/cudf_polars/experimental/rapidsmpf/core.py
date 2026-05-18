@@ -20,6 +20,7 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
@@ -173,12 +174,11 @@ def determine_fanout_nodes(
     for node in traversal([ir]):
         if node in unbounded:
             _mark_children_unbounded(node)
-        elif isinstance(node, Union):
-            # Union processes children sequentially, so all children
-            # with multiple consumers need unbounded fanout
-            _mark_children_unbounded(node)
-        elif isinstance(node, Join):
-            # This may be a broadcast join
+        elif isinstance(node, (Union, Join, Over)):
+            # Union processes children sequentially; Join may broadcast one
+            # side; Over buffers (or samples-then-replays) its input before
+            # producing output. In every case the input source needs
+            # unbounded fanout so other consumers don't block it.
             _mark_children_unbounded(node)
         elif len(node.children) > 1:
             # Check if this node is doing any broadcasting.
