@@ -67,7 +67,6 @@ python -m pytest \
        -p cudf_polars.testing.inject_gpu_engine \
        -n 8 \
        --dist=worksteal \
-       -vv \
        --tb=native \
        $DESELECTED_TESTS_STR \
        "$@" \
@@ -86,7 +85,6 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        -W ignore::ResourceWarning \
        -n 8 \
        --dist=worksteal \
-       -vv \
        --tb=native \
        $DESELECTED_TESTS_STR \
        "$@" \
