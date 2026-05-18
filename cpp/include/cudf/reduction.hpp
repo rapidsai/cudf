@@ -78,7 +78,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @throw std::invalid_argument if `mean`, `var`, or `std` reduction is called and
  * the `output_type` is not floating point.
  * @throw std::invalid_argument if `sum_with_overflow` reduction is called and the
- * input column type is not a signed integer or decimal, or the `output_dtype` is not `STRUCT`.
+ * input column type is not a signed integer or decimal, or the `output_type` is not `STRUCT`.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
