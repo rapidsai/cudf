@@ -110,7 +110,7 @@ else:
 
 
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
-_CPU_ENGINES = frozenset({"polars-cpu", "duckdb-cpu"})
+_CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
 
 
 @dataclasses.dataclass
@@ -169,7 +169,7 @@ class ValidationMethod:
         A name indicating the source of the expected results.
 
         - 'polars-cpu': Run polars against the same data
-        - 'duckdb-cpu': Compare against pre-computed DuckDB results
+        - 'duckdb': Compare against pre-computed DuckDB results
 
     comparison_method
         How the comparison was performed. Currently, only
@@ -181,7 +181,7 @@ class ValidationMethod:
         things like the tolerance for floating point comparisons.
     """
 
-    expected_source: Literal["polars-cpu", "duckdb-cpu"]
+    expected_source: Literal["polars-cpu", "duckdb"]
     comparison_method: Literal["polars"]
     comparison_options: dict[str, Any]
 
@@ -378,7 +378,7 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Benchmark run configuration for SPMD / Ray / DuckDB frontends."""
 
-    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb-cpu"]
+    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
     # Query selection & dataset
     queries: list[int]
     query_set: str
@@ -388,7 +388,7 @@ class RunConfig:
     qualification: bool = False
 
     # Execution mode
-    frontend: Literal["dask", "duckdb-cpu", "in-memory", "polars-cpu", "ray", "spmd"]
+    frontend: Literal["dask", "duckdb", "in-memory", "polars-cpu", "ray", "spmd"]
     connect: str | None = None
     num_gpus: int | None = None
 
@@ -495,7 +495,7 @@ class RunConfig:
 
         if args.validate_directory:
             validation_method = ValidationMethod(
-                expected_source="duckdb-cpu",
+                expected_source="duckdb",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
@@ -503,16 +503,16 @@ class RunConfig:
             validation_method = ValidationMethod(
                 expected_source="polars-cpu"
                 if args.baseline == "polars-cpu"
-                else "duckdb-cpu",
+                else "duckdb",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
         else:
             validation_method = None
 
-        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb-cpu"]
-        if args.frontend == "duckdb-cpu":
-            engine_name = "duckdb-cpu"
+        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+        if args.frontend == "duckdb":
+            engine_name = "duckdb"
         elif args.frontend == "polars-cpu":
             engine_name = "polars-cpu"
         else:
@@ -914,7 +914,7 @@ def run_polars_query(
         match args.baseline:
             case "polars-cpu":
                 expected = q.collect()
-            case "duckdb-cpu":
+            case "duckdb":
                 duckdb_queries_cls = benchmark().duckdb_queries
                 get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
                 base_sql = get_ddb(run_config)
@@ -1770,11 +1770,11 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--frontend",
         required=True,
         type=str,
-        choices=["dask", "duckdb-cpu", "in-memory", "polars-cpu", "ray", "spmd"],
+        choices=["dask", "duckdb", "in-memory", "polars-cpu", "ray", "spmd"],
         help=textwrap.dedent("""\
             Execution frontend:
                 - dask       : Dask distributed multi-GPU execution
-                - duckdb-cpu : DuckDB CPU execution
+                - duckdb     : DuckDB CPU execution
                 - in-memory  : Single-process GPU, in-memory evaluation
                 - polars-cpu : Polars CPU streaming engine (no GPU)
                 - ray        : Ray actor-based multi-GPU execution
@@ -1892,8 +1892,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--baseline",
-        choices=["duckdb-cpu", "polars-cpu"],
-        default="duckdb-cpu",
+        choices=["duckdb", "polars-cpu"],
+        default="duckdb",
         help="Which engine to use as the baseline for validation.",
     )
     parser.add_argument(
@@ -2071,7 +2071,7 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 date_type,
                 validation_files,
             )
-        case "duckdb-cpu":
+        case "duckdb":
             run_duckdb(benchmark().duckdb_queries, args)
         case "in-memory":
             run_polars_in_memory(
