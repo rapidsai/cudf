@@ -279,10 +279,13 @@ void metadata::sanitize_schema()
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
       if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
-          schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
+          schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
-        // This is a list of structs, so we need to mark this as a list, but also
-        // add a struct child and move this element's children to the struct
+        // This is an unannotated 1-level legacy list (no LIST/MAP parent). Per the Parquet
+        // spec, when the repeated field is a group, the element type is the group itself.
+        // This applies regardless of the number of children: a 1-field repeated group means
+        // list<struct<one_field>>, not list<one_field>. Rewrite into the canonical
+        // list<struct<...>> form so the rest of the reader treats it as a normal list.
         schema_elem.converted_type  = ConvertedType::LIST;
         schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
