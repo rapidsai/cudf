@@ -1,15 +1,31 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from libc.stdint cimport uint8_t
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.vector cimport vector
+
 from pylibcudf.io.types cimport SourceInfo
+from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
+from pylibcudf.libcudf.io.hybrid_scan cimport (
+    const_uint8_t,
+    hybrid_scan_reader as cpp_hybrid_scan_reader,
+)
+from pylibcudf.libcudf.io.parquet cimport parquet_reader_options
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
+from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
+from pylibcudf.libcudf.utilities.span cimport host_span
 from pylibcudf.types cimport DataType
+
+ctypedef const unique_ptr[datasource] const_unique_ptr_datasource
 
 
 __all__ = [
+    "FileMetaData",
     "ParquetColumnSchema",
     "ParquetMetadata",
     "ParquetSchema",
+    "read_parquet_footers",
     "read_parquet_metadata",
 ]
 
@@ -244,6 +260,78 @@ cdef class ParquetMetadata:
         }
 
 
+cdef class FileMetaData:
+    """Parquet file footer metadata.
+
+    For details, see :cpp:class:`cudf::io::parquet::FileMetaData`
+
+    See Also
+    --------
+    read_parquet_footers
+        Read one ``FileMetaData`` per source directly from :class:`SourceInfo`.
+    """
+
+    def __init__(self):
+        raise ValueError("FileMetaData cannot be constructed directly")
+
+    @staticmethod
+    cdef FileMetaData from_cpp(cpp_FileMetaData metadata):
+        cdef FileMetaData result = FileMetaData.__new__(FileMetaData)
+        result.c_obj = metadata
+        return result
+
+    @property
+    def version(self):
+        """Get the file format version."""
+        return self.c_obj.version
+
+    @property
+    def num_rows(self):
+        """Get the total number of rows."""
+        return self.c_obj.num_rows
+
+    @property
+    def created_by(self):
+        """Get the application that created the file."""
+        return self.c_obj.created_by.decode("utf-8")
+
+    @classmethod
+    def from_bytes(cls, const uint8_t[::1] footer_bytes):
+        """Build ``FileMetaData`` from parquet footer bytes.
+
+        Parameters
+        ----------
+        footer_bytes : Buffer
+            A contiguous bytes-like object containing parquet footer bytes.
+            The bytes are forwarded as-is to
+            :cpp:class:`cudf::io::parquet::experimental::hybrid_scan_reader`
+            without Python-side preprocessing. This method does not strip the
+            parquet footer suffix (4-byte footer length + ``PAR1`` magic), so
+            callers should generally pass only the footer region bytes.
+
+        Returns
+        -------
+        FileMetaData
+            Parsed parquet file footer metadata.
+        """
+        cdef parquet_reader_options options = parquet_reader_options()
+        cdef unique_ptr[cpp_hybrid_scan_reader] reader
+        cdef cpp_FileMetaData metadata
+        cdef const uint8_t* footer_ptr = <const uint8_t*>0
+
+        if len(footer_bytes) > 0:
+            footer_ptr = &footer_bytes[0]
+
+        with nogil:
+            reader = make_unique[cpp_hybrid_scan_reader](
+                host_span[const_uint8_t](footer_ptr, len(footer_bytes)),
+                options,
+            )
+            metadata = reader.get()[0].parquet_metadata()
+
+        return FileMetaData.from_cpp(metadata)
+
+
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
     """
     Reads metadata of parquet dataset.
@@ -258,6 +346,12 @@ cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
     ParquetMetadata
         Parquet_metadata with parquet schema, number of rows,
         number of row groups and key-value metadata.
+
+    See Also
+    --------
+    read_parquet_footers
+        To read the pre-materialized flie footer metadata used
+        in :func:`pylibcudf.io.parquet.read_parquet`.
     """
     cdef cpp_parquet_metadata.parquet_metadata c_result
 
@@ -265,3 +359,31 @@ cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
         c_result = cpp_parquet_metadata.read_parquet_metadata(src_info.c_obj)
 
     return ParquetMetadata.from_metadata(c_result)
+
+
+cpdef list read_parquet_footers(SourceInfo src_info):
+    """
+    Read parquet file footers as ``FileMetaData`` objects.
+
+    Parameters
+    ----------
+    src_info : SourceInfo
+        Dataset source.
+
+    Returns
+    -------
+    list[FileMetaData]
+        One footer metadata object per input source.
+    """
+    cdef vector[unique_ptr[datasource]] sources = make_datasources(src_info.c_obj)
+    cdef vector[cpp_FileMetaData] c_result
+    cdef cpp_FileMetaData metadata
+    with nogil:
+        c_result = cpp_parquet_metadata.read_parquet_footers(
+            host_span[const_unique_ptr_datasource](
+                <const_unique_ptr_datasource*>sources.data(),
+                sources.size(),
+            )
+        )
+
+    return [FileMetaData.from_cpp(metadata) for metadata in c_result]

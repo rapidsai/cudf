@@ -4,10 +4,17 @@
 from pylibcudf.io.types import SourceInfo
 from pylibcudf.types import DataType
 
+try:
+    from collections.abc import Buffer
+except ImportError:
+    from typing_extensions import Buffer
+
 __all__ = [
+    "FileMetaData",
     "ParquetColumnSchema",
     "ParquetMetadata",
     "ParquetSchema",
+    "read_parquet_footers",
     "read_parquet_metadata",
 ]
 
@@ -30,4 +37,15 @@ class ParquetMetadata:
     def rowgroup_metadata(self) -> list[dict[str, int]]: ...
     def columnchunk_metadata(self) -> dict[str, list[int]]: ...
 
+class FileMetaData:
+    @classmethod
+    def from_bytes(cls, footer_bytes: Buffer) -> FileMetaData: ...
+    @property
+    def version(self) -> int: ...
+    @property
+    def num_rows(self) -> int: ...
+    @property
+    def created_by(self) -> str: ...
+
 def read_parquet_metadata(src_info: SourceInfo) -> ParquetMetadata: ...
+def read_parquet_footers(src_info: SourceInfo) -> list[FileMetaData]: ...
