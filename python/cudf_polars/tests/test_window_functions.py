@@ -95,10 +95,10 @@ def test_over(engine: pl.GPUEngine, df: pl.LazyFrame, partition_by, agg_expr):
     ) if "var" in str(agg_expr) else assert_gpu_result_equal(q, engine=engine)
 
 
-def test_over_with_sort(df: pl.LazyFrame):
+def test_over_with_sort(engine: pl.GPUEngine, df: pl.LazyFrame):
     """Test window functions with sorting."""
     query = df.with_columns([pl.col("c").rank().sort().over(pl.col("a"))])
-    assert_ir_translation_raises(query, NotImplementedError)
+    assert_ir_translation_raises(query, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("mapping_strategy", ["group_to_rows", "explode", "join"])
@@ -123,7 +123,7 @@ def test_over_mapping_strategy(
     if mapping_strategy == "group_to_rows":
         assert_gpu_result_equal(q, engine=engine)
     else:
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("period", ["2d", "3d"])
@@ -144,7 +144,9 @@ def test_rolling(
     assert_gpu_result_equal(query, engine=engine)
 
 
-def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
+def test_rolling_unsupported(
+    engine: pl.GPUEngine, df: pl.LazyFrame, unsupported_agg_expr
+):
     """Test rolling window functions over time series."""
     window_expr = unsupported_agg_expr.rolling(period="2d", index_column="date")
     result_name = f"{agg_expr!s}_rolling"
@@ -152,7 +154,7 @@ def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
 
     query = df.with_columns(window_expr)
 
-    assert_ir_translation_raises(query, NotImplementedError)
+    assert_ir_translation_raises(query, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])

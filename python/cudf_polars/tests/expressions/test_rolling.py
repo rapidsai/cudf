@@ -110,13 +110,13 @@ def test_rolling_integral_orderby(engine: pl.GPUEngine, request, dtype):
     POLARS_VERSION_LT_136,
     reason="Rolling expression node only exists in polars >= 1.36",
 )
-def test_rolling_translation_raises():
+def test_rolling_translation_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     q = df.with_columns(pl.col("a").sum().rolling("b", period="2i"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_rolling_collect_list_raises():
+def test_rolling_collect_list_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "orderby": [1, 4, 8, 10, 12, 13, 14, 22],
@@ -125,6 +125,7 @@ def test_rolling_collect_list_raises():
     )
     assert_ir_translation_raises(
         df.with_columns(pl.col("values").rolling("orderby", period="4i")),
+        engine,
         NotImplementedError,
     )
 
@@ -160,17 +161,17 @@ def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine, r
         q.collect(engine=engine_raise_on_fail)
 
 
-def test_invalid_duration_spec_raises_in_translation(request):
+def test_invalid_duration_spec_raises_in_translation(engine: pl.GPUEngine, request):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
         )
     df = pl.LazyFrame({"orderby": [1, 2, 4, 5], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="3d"))
-    assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
+    assert_ir_translation_raises(q, engine, pl.exceptions.InvalidOperationError)
 
 
-def test_rolling_inside_groupby_raises(request):
+def test_rolling_inside_groupby_raises(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_136,
@@ -185,7 +186,7 @@ def test_rolling_inside_groupby_raises(request):
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine, request):
@@ -276,14 +277,14 @@ def test_over_with_order_by(
 
 
 @pytest.mark.parametrize("strategy", ["explode", "join"], ids=["explode", "join"])
-def test_over_with_mapping_strategy_unsupported(df, strategy):
+def test_over_with_mapping_strategy_unsupported(engine: pl.GPUEngine, df, strategy):
     q = df.select(pl.col("x").sum().over("g", mapping_strategy=strategy))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_over_boolean_function_unsupported(df):
+def test_over_boolean_function_unsupported(engine: pl.GPUEngine, df):
     q = df.select(pl.col("x").not_().over("g"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_over_ternary(engine: pl.GPUEngine, df):
@@ -428,9 +429,11 @@ def test_fill_over(
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
+def test_fill_null_with_mean_over_unsupported(
+    engine: pl.GPUEngine, df: pl.LazyFrame
+) -> None:
     q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -488,6 +491,6 @@ def test_order_sensitive_over_scalar_aggs(
         )
     )
     if isinstance(order_by, list):
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
         assert_gpu_result_equal(q, engine=engine)

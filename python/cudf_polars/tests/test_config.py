@@ -45,7 +45,7 @@ def test_polars_verbose_warns(engine, monkeypatch):
     monkeypatch.setattr(DataFrameScan, "__init__", raise_unimplemented)
     q = pl.LazyFrame({})
     # Ensure that things raise
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
     with (
         pl.Config(verbose=True),
         pytest.raises(pl.exceptions.ComputeError),

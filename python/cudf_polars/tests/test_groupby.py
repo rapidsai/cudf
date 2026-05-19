@@ -188,10 +188,12 @@ def test_groupby_len(engine: pl.GPUEngine, df, keys):
         (pl.when(pl.col("int").min() >= 3).then(pl.col("float"))),
     ],
 )
-def test_groupby_unsupported(df: pl.LazyFrame, expr: pl.Expr) -> None:
+def test_groupby_unsupported(
+    engine: pl.GPUEngine, df: pl.LazyFrame, expr: pl.Expr
+) -> None:
     q = df.group_by("key1").agg(expr)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_groupby_null_keys(engine: pl.GPUEngine, maintain_order):
@@ -223,14 +225,14 @@ def test_groupby_minmax_with_nan(engine: pl.GPUEngine):
 
 
 @pytest.mark.parametrize("op", [pl.Expr.nan_max, pl.Expr.nan_min])
-def test_groupby_nan_minmax_raises(op):
+def test_groupby_nan_minmax_raises(engine: pl.GPUEngine, op):
     df = pl.LazyFrame(
         {"key": [1, 2, 2, 2], "value": [float("nan"), 1, -1, float("nan")]}
     )
 
     q = df.group_by("key").agg(op(pl.col("value")))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -263,14 +265,14 @@ def test_groupby_literal_in_agg(engine: pl.GPUEngine, df, key, expr):
     "expr",
     [pl.col("int").unique(), pl.col("int").drop_nulls(), pl.col("int").cum_max()],
 )
-def test_groupby_unary_non_pointwise_raises(df, expr):
+def test_groupby_unary_non_pointwise_raises(engine: pl.GPUEngine, df, expr):
     q = df.group_by("key1").agg(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_groupby_agg_broadcast_raises(df):
+def test_groupby_agg_broadcast_raises(engine: pl.GPUEngine, df):
     q = df.group_by("key1").agg(pl.col("int") + pl.col("float").max())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -281,7 +283,7 @@ def test_groupby_agg_broadcast_raises(df):
         pl.List(pl.List(pl.List(pl.Struct({"foo": pl.Int64, "bar": pl.String})))),
     ],
 )
-def test_groupby_nested_list_struct_raises(dtype):
+def test_groupby_nested_list_struct_raises(engine: pl.GPUEngine, dtype):
     ldf = pl.LazyFrame(
         {
             "key": [1, 2, 3],
@@ -289,7 +291,7 @@ def test_groupby_nested_list_struct_raises(dtype):
         }
     )
     q = ldf.group_by("key").agg(pl.col("value"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
@@ -368,9 +370,11 @@ def test_groupby_null_count(engine: pl.GPUEngine, df: pl.LazyFrame):
         "is_unique",
     ],
 )
-def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+def test_groupby_unsupported_non_pointwise_boolean_function(
+    engine: pl.GPUEngine, df: pl.LazyFrame, expr
+):
     q = df.group_by("key1").agg(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_groupby_mean_type_promotion(engine: pl.GPUEngine, df: pl.LazyFrame) -> None:
@@ -455,7 +459,7 @@ def test_groupby_ternary_supported(
 @pytest.mark.parametrize(
     "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
 )
-def test_groupby_fill_null_with_strategy(strategy):
+def test_groupby_fill_null_with_strategy(engine: pl.GPUEngine, strategy):
     lf = pl.LazyFrame(
         {
             "key": [1, 1, 2, 2, 2],
@@ -465,13 +469,13 @@ def test_groupby_fill_null_with_strategy(strategy):
 
     q = lf.group_by("key").agg(pl.col("val").fill_null(strategy=strategy))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
+def test_groupby_rank_raises(engine: pl.GPUEngine, df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_groupby_sum_decimal_null_group(engine: pl.GPUEngine) -> None:
@@ -493,7 +497,7 @@ def test_groupby_literal_agg(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_empty_keys_raises():
+def test_groupby_empty_keys_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"x": [1, 2, 3]})
     q = df.group_by([]).agg(pl.len())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
