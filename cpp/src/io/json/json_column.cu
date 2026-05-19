@@ -607,7 +607,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     CUDF_EXPECTS(prune_schema->child_types.size() == col_order.size(),
                  "Input schema column order size mismatch with input schema child types");
   }
-  auto root_col_size       = root_struct_col.num_rows;
+  auto root_col_size              = root_struct_col.num_rows;
   auto column_had_schema_mismatch = [&root_column](std::string const& col_name) {
     return root_column.schema_mismatch_column_names.contains(col_name);
   };
