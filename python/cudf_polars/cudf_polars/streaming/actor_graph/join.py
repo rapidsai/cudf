@@ -30,6 +30,8 @@ from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
+from cudf_polars.streaming.actor_graph.collectives.shuffle import _global_shuffle
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -51,8 +53,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.streaming.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.collectives.shuffle import _global_shuffle
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import _concat
 

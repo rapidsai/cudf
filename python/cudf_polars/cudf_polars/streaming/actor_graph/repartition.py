@@ -17,6 +17,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.nodes import shutdown_on_error
 from cudf_polars.streaming.actor_graph.utils import (
@@ -25,7 +26,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     recv_metadata,
     send_metadata,
 )
-from cudf_polars.streaming.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import _concat
 

@@ -18,13 +18,13 @@ import polars as pl
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import allgather_polars_dataframe
-from cudf_polars.streaming.actor_graph.utils import (
-    _is_already_partitioned,
-)
-from cudf_polars.streaming.collectives.common import reserve_op_id
-from cudf_polars.streaming.collectives.shuffle import (
+from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
+from cudf_polars.streaming.actor_graph.collectives.shuffle import (
     LocalRepartitioner,
     ShuffleManager,
+)
+from cudf_polars.streaming.actor_graph.utils import (
+    _is_already_partitioned,
 )
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 

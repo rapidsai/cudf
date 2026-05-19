@@ -39,8 +39,8 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.utils import set_memory_resource
-from cudf_polars.streaming.collectives.common import reserve_op_id
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     SPMDContext,
