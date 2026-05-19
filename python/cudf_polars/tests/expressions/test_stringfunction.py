@@ -10,7 +10,6 @@ import polars as pl
 
 from cudf_polars import execute_with_cudf
 from cudf_polars.testing.asserts import (
-    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -303,12 +302,10 @@ def test_to_datetime(
     if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
     elif outcome == "collect_error":
-        cudf_exc = pl.exceptions.InvalidOperationError
-        assert_collect_raises(
-            q,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=cudf_exc,
-        )
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect()
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
     else:
         assert_gpu_result_equal(q, engine=engine)
 
@@ -453,11 +450,10 @@ def test_invalid_regex_raises():
 
     q = df.select(pl.col("a").str.contains(r"ab)", strict=True))
 
-    assert_collect_raises(
-        q,
-        polars_except=pl.exceptions.ComputeError,
-        cudf_except=pl.exceptions.ComputeError,
-    )
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect()
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 @pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
@@ -508,11 +504,10 @@ def test_string_from_float(engine: pl.GPUEngine, request, str_from_float_data):
 def test_string_to_numeric_invalid(numeric_type):
     df = pl.LazyFrame({"a": ["a", "b", "c"]})
     q = df.select(pl.col("a").cast(numeric_type))
-    assert_collect_raises(
-        q,
-        polars_except=pl.exceptions.InvalidOperationError,
-        cudf_except=pl.exceptions.InvalidOperationError,
-    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        q.collect()
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 @pytest.mark.parametrize("ignore_nulls", [False, True])
@@ -548,11 +543,10 @@ def test_string_zfill(engine: pl.GPUEngine, fill, input_strings):
     q = ldf.select(pl.col("a").str.zfill(fill))
 
     if fill is not None and fill < 0:
-        assert_collect_raises(
-            q,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError,
-        )
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect()
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
     else:
         assert_gpu_result_equal(q, engine=engine)
 
@@ -588,11 +582,9 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
     ).lazy()
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
-        assert_collect_raises(
-            q,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=(),
-        )
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect()
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
     else:
         assert_gpu_result_equal(q, engine=engine)
 
@@ -600,11 +592,9 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
 def test_string_zfill_forbidden_chars():
     ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
     q = ldf.select(pl.col("a").str.zfill(3))
-    assert_collect_raises(
-        q,
-        polars_except=(),
-        cudf_except=pl.exceptions.InvalidOperationError,
-    )
+    q.collect()
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 @pytest.mark.parametrize(

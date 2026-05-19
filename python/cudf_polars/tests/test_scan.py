@@ -21,6 +21,7 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
@@ -582,6 +583,10 @@ def test_scan_parquet_remote(
     )
 
 
+@pytest.mark.xfail(
+    condition=not POLARS_VERSION_LT_139,
+    reason="polars 1.39+ ndjson remote reader requires range request support",
+)
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
     tmp_path: Path,
@@ -651,7 +656,7 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_138,
-            reason="polars fails ahead of time",
+            reason="polars >= 1.38 raises duplicate row_index name ahead of time",
         )
     )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
@@ -700,8 +705,7 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="height parameter added in Polars 1.38",
+    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
