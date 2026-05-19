@@ -527,12 +527,19 @@ cdef class ChunkedParquetReader:
     ----------
     options : ParquetReaderOptions
         Settings for controlling reading behavior
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     chunk_read_limit : size_t, default 0
         Limit on total number of bytes to be returned per read,
         or 0 if there is no limit.
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    parquet_metadatas : list[FileMetaData], optional
+        Pre-materialized parquet footer metadata, one for each source. If not
+        provided, footers are read from the sources internally.
     """
     def __init__(
         self,
