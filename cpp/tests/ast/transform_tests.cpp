@@ -1367,6 +1367,92 @@ TYPED_TEST(DecimalTests, DecimalDifferentScales)
   }
 }
 
+TYPED_TEST(DecimalTests, LessConsumesMulOfDecimalsAstIntermediate)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+
+  // col_a    in {1, 2, 5, 10, 25, 50}.00      (reps 100, 200, 500, 1000, 2500, 5000)
+  // col_thresh = 0.20                         (rep 20)
+  // col_avg    = 25.00                        (rep 2500)
+  // expected: col_a < (col_thresh * col_avg) = col_a < 5.00 => [1,1,0,0,0,0]
+  auto col_a = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{100}, RepType{200}, RepType{500}, RepType{1000}, RepType{2500}, RepType{5000}}, scale);
+  auto col_thresh = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{20}, RepType{20}, RepType{20}, RepType{20}, RepType{20}, RepType{20}}, scale);
+  auto col_avg = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}},
+    scale);
+  auto table = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  // Fused AST: col_a < (col_thresh * col_avg)
+  // The MUL produces a fixed_point intermediate at scale -4 (rep 50000, value 5.0000).
+  // LESS then rescales both operands to the common scale before comparing.
+  auto ref_a      = cudf::ast::column_reference(0);
+  auto ref_thresh = cudf::ast::column_reference(1);
+  auto ref_avg    = cudf::ast::column_reference(2);
+  cudf::ast::tree tree{};
+  auto const& mul_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::MUL, ref_thresh, ref_avg));
+  auto const& lt_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::LESS, ref_a, mul_expr));
+
+  auto const expected = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 0, 0, 0, 0};
+
+  auto result = cudf::compute_column(table, lt_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  result = cudf::compute_column_jit(table, lt_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(DecimalTests, LessConsumesMulOfDecimalsWithNullsAstIntermediate)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+
+  // Same shape as LessConsumesMulOfDecimalsAstIntermediate but exercises the
+  // has_nulls=true intermediate-slot path (cuda::std::optional<int64_t>).
+  // Null bits chosen so each side has at least one null row mid-table.
+  auto col_a = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{100}, RepType{200}, RepType{500}, RepType{1000}, RepType{2500}, RepType{5000}},
+    {1, 1, 1, 0, 1, 1},
+    scale);
+  auto col_thresh = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{20}, RepType{20}, RepType{20}, RepType{20}, RepType{20}, RepType{20}},
+    {1, 1, 1, 1, 1, 0},
+    scale);
+  auto col_avg = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}, RepType{2500}},
+    {1, 1, 1, 1, 1, 1},
+    scale);
+  auto table = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  auto ref_a      = cudf::ast::column_reference(0);
+  auto ref_thresh = cudf::ast::column_reference(1);
+  auto ref_avg    = cudf::ast::column_reference(2);
+  cudf::ast::tree tree{};
+  auto const& mul_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::MUL, ref_thresh, ref_avg));
+  auto const& lt_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::LESS, ref_a, mul_expr));
+
+  // Rows 3 (col_a null) and 5 (col_thresh null) propagate null through the
+  // comparison; remaining rows are col_a < 5.00.
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 0, 0, 0, 0}, {1, 1, 1, 0, 1, 0}};
+
+  auto result = cudf::compute_column(table, lt_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  result = cudf::compute_column_jit(table, lt_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TYPED_TEST(TransformTest, NonDefaultStream)
 {
   // This test ensures that the algorithm is stream safe when a nondefault

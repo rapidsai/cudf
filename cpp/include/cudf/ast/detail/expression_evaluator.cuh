@@ -309,9 +309,23 @@ struct expression_evaluator {
       // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
         thread_intermediate_storage[input_reference.data_index];
-      ReturnType tmp;
-      memcpy(&tmp, &intermediate, sizeof(ReturnType));
-      return tmp;
+      if constexpr (cuda::std::is_same_v<Element, numeric::decimal32> or
+                    cuda::std::is_same_v<Element, numeric::decimal64>) {
+        using RepType    = typename Element::rep;
+        auto const scale = numeric::scale_type{input_reference.data_type.scale()};
+        if constexpr (has_nulls) {
+          if (not intermediate.has_value()) { return ReturnType{}; }
+          auto const rep = static_cast<RepType>(*intermediate);
+          return ReturnType{Element{numeric::scaled_integer<RepType>{rep, scale}}};
+        } else {
+          auto const rep = static_cast<RepType>(intermediate);
+          return ReturnType{Element{numeric::scaled_integer<RepType>{rep, scale}}};
+        }
+      } else {
+        ReturnType tmp;
+        memcpy(&tmp, &intermediate, sizeof(ReturnType));
+        return tmp;
+      }
     }
     // Unreachable return used to silence compiler warnings.
     return {};
