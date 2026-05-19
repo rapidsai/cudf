@@ -51,11 +51,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
 
   auto count_matches = [&](auto equality, auto d_hasher) {
     // Precompute probe keys: {hash(row_idx), row_idx} for each probe row.
-    auto const n = static_cast<thread_index_type>(probe_table_num_rows);
+    auto const n = static_cast<thread_index_type>(left_table_num_rows);
     rmm::device_uvector<probe_key_type> probe_keys(n, stream);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(probe_table_num_rows),
+                      cuda::counting_iterator<size_type>(left_table_num_rows),
                       probe_keys.begin(),
                       pair_fn{d_hasher});
 
