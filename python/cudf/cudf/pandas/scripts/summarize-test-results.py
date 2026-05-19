@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -19,7 +19,7 @@ import os
 from rich.console import Console
 from rich.table import Table
 
-PANDAS_TEST_PREFIX = "pandas-tests/"
+PANDAS_TEST_PREFIX = "pandas/"
 
 
 def get_per_module_results(log_file_name):

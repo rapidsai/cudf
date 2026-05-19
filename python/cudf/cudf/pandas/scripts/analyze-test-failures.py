@@ -20,7 +20,7 @@ from fnmatch import fnmatch
 from rich.console import Console
 from rich.table import Table
 
-PANDAS_TEST_PREFIX = "pandas-tests/"
+PANDAS_TEST_PREFIX = "pandas/"
 
 
 def count_failures(log_file_name, pattern):
