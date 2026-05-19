@@ -548,9 +548,8 @@ class RayEngine(StreamingEngine):
             "memory_resource_config", None
         )
 
-        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
-            rapidsmpf_options
-        ).serialize()
+        self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
         exit_stack = contextlib.ExitStack()
         if not ray.is_initialized():
