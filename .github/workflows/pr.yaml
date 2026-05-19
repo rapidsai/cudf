@@ -669,7 +669,6 @@ jobs:
       node_type: "cpu8"
       timeout-minutes: 90
       env: |
-        CONDA_ENV_CREATE_QUIET=true
         SCCACHE_DIST_MAX_RETRIES=inf
         SCCACHE_SERVER_LOG=sccache=debug
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
