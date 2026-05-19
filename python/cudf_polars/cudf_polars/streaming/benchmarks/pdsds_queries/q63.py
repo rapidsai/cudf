@@ -89,42 +89,54 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
-    inner_query = (
-        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(
-            pl.col("d_month_seq").is_in([dms + i for i in range(12)])
-            & (
-                (
-                    pl.col("i_category").is_in(["Books", "Children", "Electronics"])
-                    & pl.col("i_class").is_in(
-                        ["personal", "portable", "reference", "self-help"]
-                    )
-                    & pl.col("i_brand").is_in(
-                        [
-                            "scholaramalgamalg #14",
-                            "scholaramalgamalg #7",
-                            "exportiunivamalg #9",
-                            "scholaramalgamalg #9",
-                        ]
-                    )
-                )
-                | (
-                    pl.col("i_category").is_in(["Women", "Music", "Men"])
-                    & pl.col("i_class").is_in(
-                        ["accessories", "classical", "fragrances", "pants"]
-                    )
-                    & pl.col("i_brand").is_in(
-                        [
-                            "amalgimporto #1",
-                            "edu packscholar #1",
-                            "exportiimporto #1",
-                            "importoamalg #1",
-                        ]
-                    )
-                )
+    # Pre-filter both lookup tables before joining against store_sales [58 partitions].
+    # item: apply both OR'd rule groups up front; only i_manager_id needed after.
+    # date_dim: keep d_moy because it appears in the GROUP BY.
+    filtered_item = item.filter(
+        (
+            pl.col("i_category").is_in(["Books", "Children", "Electronics"])
+            & pl.col("i_class").is_in(
+                ["personal", "portable", "reference", "self-help"]
             )
+            & pl.col("i_brand").is_in(
+                [
+                    "scholaramalgamalg #14",
+                    "scholaramalgamalg #7",
+                    "exportiunivamalg #9",
+                    "scholaramalgamalg #9",
+                ]
+            )
+        )
+        | (
+            pl.col("i_category").is_in(["Women", "Music", "Men"])
+            & pl.col("i_class").is_in(
+                ["accessories", "classical", "fragrances", "pants"]
+            )
+            & pl.col("i_brand").is_in(
+                [
+                    "amalgimporto #1",
+                    "edu packscholar #1",
+                    "exportiimporto #1",
+                    "importoamalg #1",
+                ]
+            )
+        )
+    ).select(["i_item_sk", "i_manager_id"])
+    filtered_dates = date_dim.filter(
+        pl.col("d_month_seq").is_in([dms + i for i in range(12)])
+    ).select(["d_date_sk", "d_moy"])
+
+    inner_query = (
+        store_sales.select(
+            ["ss_sold_date_sk", "ss_item_sk", "ss_store_sk", "ss_sales_price"]
+        )
+        .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(
+            store.select("s_store_sk"),
+            left_on="ss_store_sk",
+            right_on="s_store_sk",
+            how="semi",
         )
         .group_by(["i_manager_id", "d_moy"])
         .agg([pl.col("ss_sales_price").sum().alias("sum_sales")])

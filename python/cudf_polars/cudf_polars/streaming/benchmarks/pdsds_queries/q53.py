@@ -101,25 +101,37 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     month_seq_list = list(range(dms, dms + 12))
+
+    # Pre-filter lookup tables before joining against store_sales [87 partitions].
+    # date_dim: keep d_qoy because it appears in the GROUP BY.
+    filtered_dates = date_dim.filter(
+        pl.col("d_month_seq").is_in(month_seq_list)
+    ).select(["d_date_sk", "d_qoy"])
+    # item: apply both OR'd rule groups up front; only i_manufact_id needed after.
+    filtered_item = item.filter(
+        (
+            pl.col("i_category").is_in(categories1)
+            & pl.col("i_class").is_in(classes1)
+            & pl.col("i_brand").is_in(brands1)
+        )
+        | (
+            pl.col("i_category").is_in(categories2)
+            & pl.col("i_class").is_in(classes2)
+            & pl.col("i_brand").is_in(brands2)
+        )
+    ).select(["i_item_sk", "i_manufact_id"])
+
     grouped_data = (
-        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(pl.col("d_month_seq").is_in(month_seq_list))
-        .filter(
-            # First rule group
-            (
-                (pl.col("i_category").is_in(categories1))
-                & (pl.col("i_class").is_in(classes1))
-                & (pl.col("i_brand").is_in(brands1))
-            )
-            |
-            # Second rule group
-            (
-                (pl.col("i_category").is_in(categories2))
-                & (pl.col("i_class").is_in(classes2))
-                & (pl.col("i_brand").is_in(brands2))
-            )
+        store_sales.select(
+            ["ss_sold_date_sk", "ss_item_sk", "ss_store_sk", "ss_sales_price"]
+        )
+        .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(
+            store.select("s_store_sk"),
+            left_on="ss_store_sk",
+            right_on="s_store_sk",
+            how="semi",
         )
         .group_by(["i_manufact_id", "d_qoy"])
         .agg([pl.col("ss_sales_price").sum().alias("sum_sales_raw")])

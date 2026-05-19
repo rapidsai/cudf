@@ -136,10 +136,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ),
         ]
     )
-    # Step 2: Create wswscs CTE equivalent (aggregate by week and day of week)
-    # First join with date_dim to get day names
-    wscs_with_dates = wscs.join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
-    # Create separate aggregations for each day to better control null handling
     days = (
         "Sunday",
         "Monday",
@@ -158,35 +154,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "fri_sales",
         "sat_sales",
     )
-    # Start with all week sequences
-    all_weeks = wscs_with_dates.select("d_week_seq").unique()
-    wswscs = all_weeks
-
+    # Pre-filter date_dim to 4 years ([year-1, year, year+1, year+2]) to capture
+    # boundary weeks that span year transitions (e.g. from Dec 28 to Jan 3). Filtering to
+    # only [year, year+1] incorrectly excludes Dec days whose d_week_seq also
+    # appears in year's date_dim, producing null sales for those boundary weeks.
+    date_dim_prefilter = date_dim.filter(
+        pl.col("d_year").is_in([year - 1, year, year + 1, year + 2])
+    ).select(["d_date_sk", "d_week_seq", "d_day_name"])
     wswscs = (
-        wscs_with_dates.with_columns(
+        wscs.join(date_dim_prefilter, left_on="sold_date_sk", right_on="d_date_sk")
+        .group_by("d_week_seq")
+        .agg(
             [
                 pl.when(pl.col("d_day_name") == day)
                 .then(pl.col("sales_price"))
                 .otherwise(None)
+                .sum()
                 .alias(name)
                 for day, name in zip(days, day_cols, strict=True)
             ]
         )
-        .group_by("d_week_seq")
-        .agg(
-            *(pl.col(name).sum().alias(name) for name in day_cols),
-            *(pl.col(name).count().alias(f"{name}_count") for name in day_cols),
-        )
-        .with_columns(
-            [
-                pl.when(pl.col(f"{name}_count") > 0)
-                .then(pl.col(name))
-                .otherwise(None)
-                .alias(name)
-                for name in day_cols
-            ]
-        )
-        .select(["d_week_seq", *day_cols])
     )
 
     # Step 3: Create year data (y subquery equivalent)
