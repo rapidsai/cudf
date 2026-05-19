@@ -536,3 +536,22 @@ def test_over_nonscalar_duplicated_input(
                 f"coarse_g={cg}: expected dense ranks [1, 2, 3] "
                 f"but got {grp['rank_x'].to_list()}"
             )
+
+
+@pytest.mark.spmd
+def test_memory_error_hint(spmd_engine: SPMDEngine) -> None:
+    """MemoryError from the actor network is re-raised with a configuration hint."""
+    q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") + 1)
+
+    for exc in [
+        MemoryError("CUDA out of memory"),
+        BaseExceptionGroup("unhandled errors", [MemoryError("CUDA out of memory")]),
+    ]:
+        with (
+            patch(
+                "cudf_polars.experimental.rapidsmpf.frontend.core.run_actor_network",
+                side_effect=exc,
+            ),
+            pytest.raises(MemoryError, match="target_partition_size"),
+        ):
+            q.collect(engine=spmd_engine)

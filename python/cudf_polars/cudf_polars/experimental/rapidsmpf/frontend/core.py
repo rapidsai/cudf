@@ -474,9 +474,8 @@ def execute_ir_on_rank(
             hint = (
                 f"Try lowering `target_partition_size` (current {target_partition_size}) "
                 f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
-                f"\nSee https://docs.rapids.ai/api/rapidsmpf/stable/configuration/#general "
-                f"for all RapidsMPF spilling options."
-                f"\nNOTE: RAPIDSMPF_PINNED_MEMORY is recommended for spill-heavy workloads."
+                f"\nSee https://docs.rapids.ai/api/cudf/stable/cudf_polars/memory_errors/ "
+                f"for troubleshooting guidance."
                 f"\nOriginal error:\n{mem_error}"
             )
             raise MemoryError(hint) from e
