@@ -277,6 +277,18 @@ class Index(SingleColumnFrame):
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # Defer to Series (and DataFrame) which have higher priority than
+        # Index when participating in a numpy ufunc — pandas dispatches
+        # ``np.ufunc(Index, Series)`` to ``Series`` so the result is a
+        # ``Series``. Without this, cudf would handle it here and return an
+        # ``Index``.
+        if any(
+            isinstance(inp, (cudf.Series, cudf.DataFrame))
+            for inp in inputs
+            if inp is not self
+        ):
+            return NotImplemented
+
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
         if ret is not None:
@@ -1477,6 +1489,16 @@ class Index(SingleColumnFrame):
             other_name = getattr(other, "name", self.name)
 
         ret.name = self.name if _is_same_name(self.name, other_name) else None
+        # pandas preserves the freq on a DatetimeIndex when shifting it by a
+        # constant timedelta / Tick offset (vector shifts drop the freq).
+        if (
+            isinstance(self, DatetimeIndex)
+            and self.freq is not None
+            and op in {"__add__", "__sub__"}
+            and isinstance(ret, DatetimeIndex)
+            and is_scalar(other)
+        ):
+            ret._freq = self._freq
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
@@ -2940,9 +2962,12 @@ class RangeIndex(Index):
         return max(min(len(ri), offset), 0)
 
     @_performance_tracking
-    def factorize(
-        self, sort: bool = False, use_na_sentinel: bool = True
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
     ) -> tuple[cupy.ndarray, Self]:
+        # Specialized: the uniques of a RangeIndex are the RangeIndex
+        # itself (or its reverse when ``sort`` flips a decreasing range),
+        # not a generic Index built from a materialized column.
         if sort and self.step < 0:
             codes = cupy.arange(len(self) - 1, -1, -1)
             uniques = self[::-1]
@@ -3206,7 +3231,15 @@ class DatetimeIndex(Index):
                 data = data.astype(dtype)
         elif data.dtype.kind != "M":
             if is_dtype_obj_string(data.dtype):
-                data = data.astype(np.dtype("datetime64[us]"))
+                # Pandas's array_to_datetime falls back to [s] when no
+                # concrete (non-NaT) datetime is observed — empty input or
+                # an all-NaT/None array (pandas-dev/pandas#55901). Otherwise
+                # parsed strings land on [us].
+                if len(data) == 0 or data.null_count == len(data):
+                    target_unit = "s"
+                else:
+                    target_unit = "us"
+                data = data.astype(np.dtype(f"datetime64[{target_unit}]"))
             else:
                 data = data.astype(np.dtype("datetime64[ns]"))
 
@@ -3218,23 +3251,8 @@ class DatetimeIndex(Index):
         )
         self._freq = _validate_freq(freq)
         # existing pandas index needs no additional validation
-        if self._freq is not None and not was_pd_index:
-            unique_vals = self.to_series().diff().unique()
-            if self._freq == cudf.DateOffset(months=1):
-                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            elif self._freq == cudf.DateOffset(years=1):
-                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            else:
-                if len(unique_vals) > 2 or (
-                    len(unique_vals) == 2
-                    and unique_vals[1].value
-                    != self._freq._maybe_as_fast_pandas_offset().nanos
-                ):
-                    raise ValueError("No unique frequency found")
+        if not was_pd_index:
+            self._validate_freq_against_data(self._freq)
 
     @_performance_tracking
     def serialize(self):
@@ -3265,9 +3283,11 @@ class DatetimeIndex(Index):
         columns: list[ColumnBase],
         column_names: Iterable[str] | None = None,
     ):
-        result = super()._from_columns_like_self(columns, column_names)
-        result._freq = _validate_freq(self._freq)
-        return result
+        # Callers (e.g. _gather, sort_values) reorder or filter values, so we
+        # cannot assume self._freq still applies to the result. Leave _freq
+        # unset (None) and let callers that know the freq is preserved set it
+        # explicitly. Matches pandas, which drops freq on these operations.
+        return super()._from_columns_like_self(columns, column_names)
 
     @classmethod
     def _from_data(
@@ -3472,13 +3492,49 @@ class DatetimeIndex(Index):
             else:
                 return self.inferred_freq
 
+    def _validate_freq_against_data(self, freq) -> None:
+        if freq is None:
+            return
+        unique_vals = cudf.Series._from_column(
+            self.to_series().diff()._column.unique()
+        )
+        if freq == cudf.DateOffset(months=1):
+            possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        elif freq == cudf.DateOffset(years=1):
+            possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+        else:
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1].value
+                != freq._maybe_as_fast_pandas_offset().nanos
+            ):
+                raise ValueError(
+                    f"Inferred frequency from passed values does not "
+                    f"conform to passed frequency "
+                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                )
+
     @property
     def freq(self) -> DateOffset | None:
         return self._freq
 
     @freq.setter
-    def freq(self) -> None:
-        raise NotImplementedError("Setting freq is currently not supported.")
+    def freq(self, value) -> None:
+        new_freq = _validate_freq(value)
+        self._validate_freq_against_data(new_freq)
+        self._freq = new_freq
 
     @property
     def freqstr(self) -> str:
@@ -3530,7 +3586,7 @@ class DatetimeIndex(Index):
             self._column.to_julian_date(), name=self.name
         )
 
-    def to_period(self, freq) -> pd.PeriodIndex:
+    def to_period(self, freq=None) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
 
     def normalize(self) -> Self:
@@ -4028,7 +4084,20 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            # Prefer pandas's inferred_freq because the cached self._freq may
+            # not conform (e.g. after deserialization or external assignment)
+            # and pandas validates the assignment against the index values.
+            # Fall back to the cached freq when inference is impossible
+            # (empty / single-element indexes), so resample round-trips
+            # preserve `freq` to match pandas.
+            inferred = result.inferred_freq
+            if inferred is None:
+                try:
+                    result.freq = self._freq._maybe_as_fast_pandas_offset()
+                except ValueError:
+                    pass
+            else:
+                result.freq = inferred
         return result
 
     @_performance_tracking
@@ -4221,11 +4290,6 @@ class DatetimeIndex(Index):
         """
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_column(result_col, name=self.name)
-
-    def repeat(self, repeats, axis=None) -> Self:
-        res = super().repeat(repeats, axis=axis)
-        res._freq = None
-        return res
 
 
 class TimedeltaIndex(Index):
@@ -4904,7 +4968,7 @@ def interval_range(
         ):
             common_dtype = np.dtype("float64")
     else:
-        common_dtype = find_common_type(  # type: ignore[assignment]
+        common_dtype = find_common_type(
             [x for x in (start, end) if x is not None]
         )
         if all(is_integer(x) for x in (start, end) if x is not None):

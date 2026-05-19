@@ -796,6 +796,26 @@ def test_series_empty_index_rangeindex(data):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("index", [None, []])
+def test_series_no_data_empty_index_defaults_to_object(index):
+    # When no data is supplied and the index is empty (None or []), the
+    # resulting dtype should be object to match pandas. Only a non-empty
+    # index without explicit dtype should default to float64.
+    expected = pd.Series(index=index)
+    result = cudf.Series(index=index)
+    assert result.dtype == np.dtype("object")
+    assert_eq(result, expected)
+
+
+def test_series_no_data_nonempty_index_defaults_to_float64():
+    # Sanity check: a non-empty index without explicit dtype keeps the
+    # float64 default that pandas uses.
+    expected = pd.Series(index=[1, 2, 3])
+    result = cudf.Series(index=[1, 2, 3])
+    assert result.dtype == np.dtype("float64")
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "pandas_type",
     [
@@ -1403,6 +1423,23 @@ def test_categorical_creation(codes, categories):
     expected = pd.Series(data, dtype="category")
     got = cudf.Series(data, dtype="category")
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("tz", ["US/Eastern", "Asia/Tokyo", "UTC"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2024-01-01", "2024-02-01", "2024-01-01"],
+        ["2024-01-01", None, "2024-02-01"],
+    ],
+)
+def test_categorical_creation_tz_aware(data, tz):
+    cats = pd.to_datetime(data).tz_localize(tz)
+    pd_cat = pd.Categorical(cats)
+    expected = pd.Series(pd_cat)
+    got = cudf.Series(pd_cat)
+    assert_eq(expected, got)
+    assert got.cat.categories.dtype == expected.cat.categories.dtype
 
 
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])

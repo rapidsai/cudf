@@ -1037,6 +1037,38 @@ def test_string_array():
     tm.assert_extension_array_equal(xobj, pobj)
 
 
+def test_string_array_is_numpy_extension_subclass():
+    assert issubclass(xpd.arrays.StringArray, xpd.arrays.NumpyExtensionArray)
+
+
+@pytest.mark.parametrize(
+    "comparison_op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ],
+)
+def test_string_array_object_array_comparison(comparison_op):
+    xa = xpd.array(["a", None, "c"], dtype=object)
+    xb = xpd.array([None, None, "c"], dtype="string[python]")
+    pa_ = pd.array(["a", None, "c"], dtype=object)
+    pb_ = pd.array([None, None, "c"], dtype="string[python]")
+
+    tm.assert_extension_array_equal(
+        comparison_op(xa, xb), comparison_op(pa_, pb_)
+    )
+    tm.assert_extension_array_equal(
+        comparison_op(xb, xa), comparison_op(pb_, pa_)
+    )
+    tm.assert_extension_array_equal(
+        comparison_op(xa, xb), comparison_op(xb, xa)
+    )
+
+
 def test_subclass_series():
     class foo(pd.Series):
         def __init__(self, myinput):

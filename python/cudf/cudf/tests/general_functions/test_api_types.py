@@ -212,6 +212,17 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
+        (cudf.Index([], dtype="bool"), True),
+        (cudf.Index([], dtype="int64"), True),
+        (cudf.Index([], dtype="uint8"), True),
+        (cudf.Index([], dtype="float64"), True),
+        (cudf.Index([], dtype="boolean"), True),
+        (cudf.Index([], dtype="Int64"), True),
+        (cudf.Index([], dtype="UInt16"), True),
+        (cudf.Index([], dtype="Float32"), True),
+        (cudf.Index([], dtype="str"), False),
+        (cudf.Index([], dtype="datetime64[s]"), False),
+        (cudf.Index([], dtype="timedelta64[s]"), False),
     ),
 )
 def test_is_numeric_dtype(obj, expect):

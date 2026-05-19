@@ -874,6 +874,43 @@ def test_groupby_group_keys(group_keys, by):
     assert_eq(actual, expected)
 
 
+def test_groupby_apply_default_include_groups_excludes_keys():
+    # The cudf default for `include_groups` matches pandas 3.x (False):
+    # the grouping column should not be present in the per-group frame.
+    gdf = cudf.DataFrame(
+        {"A": [1, 1, 2, 2], "B": [1, 2, 3, 4], "C": [10, 20, 30, 40]}
+    )
+    seen_columns: list[list[str]] = []
+
+    def record(x):
+        seen_columns.append(list(x.columns))
+        return x["B"].sum()
+
+    gdf.groupby("A").apply(record)
+    assert all("A" not in cols for cols in seen_columns), seen_columns
+
+
+def test_seriesgroupby_apply_default_include_groups():
+    # Regression: SeriesGroupBy.apply used to crash with `include_groups=False`
+    # because `_grouped` tried to ``del`` from a Series.
+    gdf = cudf.DataFrame({"A": [1, 1, 2, 2], "B": [1, 2, 3, 4]})
+    pdf = gdf.to_pandas()
+    got = gdf.groupby("A")["B"].apply(lambda x: x.sum())
+    expect = pdf.groupby("A")["B"].apply(lambda x: x.sum())
+    assert_eq(got, expect)
+
+
+def test_groupby_default_group_keys_under_pandas_compat():
+    # In pandas-compatible mode, `group_keys` defaults to True so that
+    # ``apply`` prepends group labels to the result index, matching pandas.
+    gdf = cudf.DataFrame({"A": [1, 1, 2, 2], "B": [1, 2, 3, 4]})
+    pdf = gdf.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby("A").apply(lambda x: x["B"] * 2)
+    expect = pdf.groupby("A").apply(lambda x: x["B"] * 2)
+    assert_eq(got, expect)
+
+
 @pytest.mark.parametrize(
     "dtype",
     ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],

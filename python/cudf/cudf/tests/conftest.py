@@ -690,3 +690,33 @@ def pandas_compatible(request):
     """Param for `pandas_compatible` option"""
     with cudf.option_context("mode.pandas_compatible", request.param):
         yield request.param
+
+
+@pytest.fixture(params=[True, False])
+def infer_objects(request):
+    """Param for `infer_objects` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def convert_string(request):
+    """Param for `convert_string` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def convert_integer(request):
+    """Param for `convert_integer` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def convert_boolean(request):
+    """Param for `convert_boolean` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def convert_floating(request):
+    """Param for `convert_floating` argument"""
+    return request.param

@@ -8,6 +8,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -37,13 +38,11 @@ def test_dynamic_distinct_basic(df, streaming_engine, subset, keep):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 100_000_000}}],
-    indirect=True,
-)
-def test_dynamic_distinct_tree_strategy(df, streaming_engine):
+def test_dynamic_distinct_tree_strategy(df, streaming_engine_factory):
     """Test that small output uses tree reduction (high target_partition_size)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=100_000_000),
+    )
     subset = ("y",)
     q = df.unique(subset=subset, keep="any", maintain_order=False)
     # With keep="any", non-subset columns are non-deterministic, so only check subset
@@ -51,13 +50,11 @@ def test_dynamic_distinct_tree_strategy(df, streaming_engine):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"executor_options": {"target_partition_size": 1000}}],
-    indirect=True,
-)
-def test_dynamic_distinct_shuffle_strategy(streaming_engine):
+def test_dynamic_distinct_shuffle_strategy(streaming_engine_factory):
     """Test that large output uses shuffle (low target_partition_size)."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(target_partition_size=1000),
+    )
     df = pl.LazyFrame({"x": range(1000), "y": range(1000)})
     q = df.unique(subset=None, keep="any", maintain_order=False)
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)

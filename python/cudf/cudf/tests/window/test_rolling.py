@@ -503,6 +503,23 @@ def test_rolling_series():
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("key", ["a", ["a"], ["a", "b"]])
+def test_rolling_groupby_getitem_preserves_grouping(key):
+    # Subsetting a RollingGroupby with [] used to drop the grouping context
+    # and return a plain Rolling, losing the per-group MultiIndex.
+    pdf = pd.DataFrame(
+        {
+            "g": [1, 1, 1, 2, 2, 2],
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby("g").rolling(2)[key].sum()
+    got = gdf.groupby("g").rolling(2)[key].sum()
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("klass", ["DataFrame", "Series"])
 def test_pandas_compat_int_nan_min_periods(klass):
     data = [None, 1, 2, None, 4, 6, 11]

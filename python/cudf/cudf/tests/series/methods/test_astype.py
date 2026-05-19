@@ -72,6 +72,46 @@ def test_series_typecast_to_object():
 @pytest.mark.parametrize(
     "dtype",
     [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.ArrowDtype(pa.string()),
+    ],
+)
+def test_string_astype_object_pd_na_pandas_compat(dtype):
+    sr = cudf.Series(["a", None, "b"], dtype=dtype)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(
+            NotImplementedError,
+            match="Casting nullable string columns with pd.NA to object",
+        ):
+            sr.astype(object)
+
+    with cudf.option_context("mode.pandas_compatible", False):
+        result = sr.astype(object)
+    assert result.dtype == np.dtype("object")
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.ArrowDtype(pa.string()),
+    ],
+)
+def test_string_astype_object_pd_na_pandas_compat_no_nulls(dtype):
+    sr = cudf.Series(["a", "b", "c"], dtype=dtype)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = sr.astype(object)
+    assert result.dtype == np.dtype("object")
+    assert result.to_arrow().to_pylist() == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
         pd.ArrowDtype(pa.int8()),
         pd.ArrowDtype(pa.int16()),
         pd.ArrowDtype(pa.int32()),
@@ -293,6 +333,28 @@ def test_timedelta_astype_object_raises_pandas_compat():
             sr.astype(object)
         with pytest.raises(TypeError):
             sr.astype(np.dtype("object"))
+
+
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "datetime64[us]", "timedelta64[ns]"]
+)
+@pytest.mark.parametrize(
+    "target_dtype", ["float32", "float64", np.float64, np.float32]
+)
+def test_temporal_astype_float_raises_pandas_compat(dtype, target_dtype):
+    # pandas raises TypeError when casting datetime/timedelta to float;
+    # cuDF must match this under pandas-compatible mode.
+    from cudf.testing._utils import assert_exceptions_equal
+
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            lfunc=psr.astype,
+            rfunc=gsr.astype,
+            lfunc_args_and_kwargs=([target_dtype], {}),
+            rfunc_args_and_kwargs=([target_dtype], {}),
+        )
 
 
 def test_timedelta_astype_unicode_dtype_pandas_compat():

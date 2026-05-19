@@ -584,6 +584,16 @@ def test_orc_read_incorrect_ps_length():
         cudf.read_orc(buf)
 
 
+def test_orc_read_stripe_footer_no_encodings(datadir):
+    # Crafted ORC whose stripe footer's ColumnEncoding list is empty even though
+    # the file footer declares one data column. The reader used to index the
+    # encoding list out of bounds and segfault; it now raises IndexError from
+    # the early stripe-footer validation in aggregate_orc_metadata.
+    path = datadir / "stripe_footer_no_encodings.orc"
+    with pytest.raises(IndexError):
+        cudf.read_orc(path)
+
+
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
@@ -1845,6 +1855,25 @@ def test_orc_reader_apache_negative_timestamp(datadir):
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
+
+
+def test_orc_reader_epoch_boundary_with_timezone(datadir):
+    # A Spark-written ORC file with writer timezone Asia/Shanghai and a
+    # timestamp near the Unix epoch.
+    path = datadir / "TestOrcFile.Spark.EpochTimestamp.Shanghai.orc"
+
+    # Expected value matches the Apache Java reference reader.
+    # Note: pyarrow/pandas use the Apache C++ reader which
+    # applies the compensation after the timezone conversion and
+    # therefore returns a value that is 1 second too high for this file
+    # (see Apache ORC-763 and ORC-1287). Comparing against pyarrow here
+    # would incorrectly propagate that upstream bug.
+    expected = cudf.DataFrame(
+        {"ts": [pd.Timestamp("1970-01-01 05:51:26.883873")]}
+    )
+    gdf = cudf.read_orc(path)
+
+    assert_eq(expected, gdf, check_dtype=False)
 
 
 def test_statistics_string_sum():

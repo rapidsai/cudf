@@ -673,6 +673,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
 
+            if (
+                to_dtype is not None
+                and cudf.dtype(to_dtype).kind != "O"
+                and col.dtype != cudf.dtype(to_dtype)
+            ):
+                # Skip the in-cudf cast when the target is numpy object:
+                # in cudf cudf.dtype(object) is the string dtype, so
+                # casting would stringify values. module.asarray(..., dtype=object)
+                # below correctly boxes the host values as Python objects.
+                col = col.astype(cudf.dtype(to_dtype))
+
             array = get_array(col)
 
             if (
@@ -842,6 +853,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._num_columns > 1
             and na_value is None
             and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
+            and (dtype is None or dtype == self._columns[0].dtype)
             and all(
                 not col.nullable and col.dtype == self._columns[0].dtype
                 for col in self._columns
@@ -1722,25 +1734,32 @@ class Frame(BinaryOperand, Scannable, Serializable):
             right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
                 if left_is_column and right_is_column:
-                    # If both columns are nullable, pandas semantics dictate
-                    # that nulls that are present in both left_column and
-                    # right_column are not filled.
-                    if left_column.nullable and right_column.nullable:
+                    # ``has_nulls(include_nan=True)`` covers both validity-mask
+                    # nulls and NaN-as-null floats (the latter is how columns
+                    # are represented in ``mode.pandas_compatible``).
+                    left_has_nulls = left_column.has_nulls(include_nan=True)
+                    right_has_nulls = right_column.has_nulls(include_nan=True)
+                    if left_has_nulls and right_has_nulls:
+                        # Pandas semantics: nulls that are present in both
+                        # left and right at the same position remain null in
+                        # the output even when ``fill_value`` is given.
+                        output_validity = (
+                            left_column.notnull() | right_column.notnull()
+                        )
                         output_mask, output_null_count = (
-                            left_column._get_mask_as_column()
-                            | right_column._get_mask_as_column()
-                        ).as_mask()
+                            output_validity.as_mask()
+                        )
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
-                    elif left_column.nullable:
+                    elif left_has_nulls:
                         left_column = left_column.fillna(fill_value)
-                    elif right_column.nullable:
+                    elif right_has_nulls:
                         right_column = right_column.fillna(fill_value)
                 elif left_is_column:
-                    if left_column.nullable:
+                    if left_column.has_nulls(include_nan=True):
                         left_column = left_column.fillna(fill_value)
                 elif right_is_column:
-                    if right_column.nullable:
+                    if right_column.has_nulls(include_nan=True):
                         right_column = right_column.fillna(fill_value)
                 else:
                     assert False, "At least one operand must be a column."
@@ -1789,6 +1808,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # dispatch those (or any other) functions that we could implement
         # without cupy.
 
+        from cudf.utils.dtypes import get_dtype_of_same_kind
+
         with access_columns(
             *(
                 col
@@ -1803,7 +1824,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
             for name, (left, right, _, _) in operands.items():
                 cupy_inputs = []
+                source_dtype = None
                 for inp in (left, right) if ufunc.nin == 2 else (left,):
+                    if (
+                        isinstance(inp, ColumnBase)
+                        and source_dtype is None
+                        and is_pandas_nullable_extension_dtype(inp.dtype)
+                    ):
+                        source_dtype = inp.dtype
                     if isinstance(inp, ColumnBase) and inp.has_nulls():
                         new_mask = inp._get_mask_as_column()
                         mask = new_mask if mask is None else mask & new_mask
@@ -1823,9 +1851,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 else:
                     mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
-                    data[i][name] = as_column(out).set_mask(
-                        mask_buff, null_count
+                    target_dtype = (
+                        get_dtype_of_same_kind(source_dtype, out.dtype)
+                        if source_dtype is not None
+                        else None
                     )
+                    data[i][name] = as_column(
+                        out, dtype=target_dtype
+                    ).set_mask(mask_buff, null_count)
             return data
 
     # Unary logical operators

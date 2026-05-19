@@ -525,7 +525,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
-            if dtype is None and index is not None:
+            if dtype is None and index is not None and len(index) > 0:
                 dtype = np.dtype("float64")
         if dtype is not None:
             dtype = cudf.dtype(dtype)
@@ -1378,8 +1378,16 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, CategoricalDtype):
-            category_memory = lines[-1]
-            lines = lines[:-1]
+            # The trailing "Categories (...): [...]" block can wrap across
+            # multiple lines (e.g. for datetime categories), so capture every
+            # line from "Categories" onwards instead of just the last line.
+            for cat_start in range(len(lines) - 1, -1, -1):
+                if lines[cat_start].startswith("Categories"):
+                    break
+            else:
+                cat_start = len(lines) - 1
+            category_memory = "\n".join(lines[cat_start:])
+            lines = lines[:cat_start]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
                 lines = lines[:-1]
@@ -3198,9 +3206,13 @@ class Series(SingleColumnFrame, IndexedFrame):
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
         if dropna and self._is_all_null:
+            count_dtype = get_dtype_of_same_kind(
+                self.dtype,
+                np.dtype(np.float64) if normalize else np.dtype(np.int64),
+            )
             return Series(
                 [],
-                dtype=np.int64,
+                dtype=count_dtype,
                 name=result_name,
                 index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
@@ -3222,8 +3234,25 @@ class Series(SingleColumnFrame, IndexedFrame):
                 # their occurrences as 0.
                 # TODO: Remove this workaround once `observed`
                 # parameter support is added to `groupby`
+                #
+                # When ``dropna=False`` and the column contains nulls,
+                # ``res`` includes a ``NaN`` group that we must preserve;
+                # only the existing categories should be reindexed/filled
+                # with 0.
+                nan_count = (
+                    res[res.index.isna()]
+                    if not dropna and res.index.isna().any()
+                    else None
+                )
+                res = res[res.index.notna()]
                 res = res.reindex(self.dtype.categories).fillna(0)
                 res.index = res.index.astype(self.dtype)
+                if nan_count is not None:
+                    res = cudf.concat([res, nan_count])
+                    # ``cudf.concat`` does not always preserve the
+                    # ``ordered`` flag of the categorical index dtype, so
+                    # restore it here.
+                    res.index = res.index.astype(self.dtype)
 
         res.index.name = self.name
 
@@ -3511,7 +3540,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):
@@ -3877,6 +3906,36 @@ class BaseDatelikeProperties:
         """Return the method result like self.series"""
         data = ColumnAccessor({self.series.name: column}, verify=False)
         return self.series._from_data_like_self(data)
+
+
+def _expand_pyarrow_subsecond(date_format: str, subsecond_format: str) -> str:
+    # pyarrow's strftime appends sub-second fractions after %S based on the
+    # timestamp resolution. Insert that fraction directly into the format
+    # string for libcudf, but only when %S is not already followed by a
+    # subsecond directive.
+    out: list[str] = []
+    i = 0
+    n = len(date_format)
+    while i < n:
+        ch = date_format[i]
+        if ch == "%" and i + 1 < n:
+            out.append(date_format[i : i + 2])
+            directive = date_format[i + 1]
+            i += 2
+            if directive == "S":
+                # Only append if not already followed by a subsecond directive.
+                if (
+                    i + 1 < n
+                    and date_format[i] == "."
+                    and date_format[i + 1] in "0123456789"
+                ):
+                    pass
+                else:
+                    out.append(subsecond_format)
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
 
 
 class DatetimeProperties(BaseDatelikeProperties):
@@ -4345,9 +4404,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        return self._return_result_like_self(
-            self.series._column.is_leap_year.fillna(False)
-        )
+        col = self.series._column.is_leap_year
+        if not isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.fillna(False)
+        return self._return_result_like_self(col)
 
     @property
     @_performance_tracking
@@ -4410,9 +4470,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         7     Saturday
         dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_day_names(locale)
-        )
+        col = self.series._column.get_day_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def month_name(self, locale: str | None = None) -> Series:
@@ -4440,9 +4501,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         5    February
         dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_month_names(locale)
-        )
+        col = self.series._column.get_month_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def isocalendar(self) -> DataFrame:
@@ -4934,12 +4996,31 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            # pyarrow's strftime returns pa.string(), not pa.large_string().
+            target_dtype = pd.ArrowDtype(pa.string())
+            # pyarrow's "%S" includes the subsecond fraction at the
+            # timestamp's resolution. Translate to the equivalent libcudf
+            # format directive so the output matches.
+            unit = self.series.dtype.pyarrow_dtype.unit
+            subsecond_format = {
+                "s": "",
+                "ms": ".%3f",
+                "us": ".%6f",
+                "ns": ".%9f",
+            }.get(unit, "")
+            if subsecond_format:
+                date_format = _expand_pyarrow_subsecond(
+                    date_format, subsecond_format
+                )
+        else:
+            target_dtype = get_dtype_of_same_kind(
+                self.series.dtype, DEFAULT_STRING_DTYPE
+            )
         return self._return_result_like_self(
             self.series._column.strftime(
                 format=date_format,
-                dtype=get_dtype_of_same_kind(
-                    self.series.dtype, DEFAULT_STRING_DTYPE
-                ),
+                dtype=target_dtype,
             )
         )
 
@@ -4968,6 +5049,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         return self._return_result_like_self(
             self.series._column.tz_convert(tz)
         )
+
+    @_performance_tracking
+    def to_pydatetime(self) -> pd.Series:
+        """
+        Return the data as a Series of :class:`datetime.datetime` objects.
+        """
+        return self.series.to_pandas().dt.to_pydatetime()
 
 
 class TimedeltaProperties(BaseDatelikeProperties):
@@ -5037,6 +5125,13 @@ class TimedeltaProperties(BaseDatelikeProperties):
     4    0
     dtype: int64
     """
+
+    @_performance_tracking
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an array of native :class:`datetime.timedelta` objects.
+        """
+        return self.series.to_pandas().dt.to_pytimedelta()
 
     @property
     @_performance_tracking

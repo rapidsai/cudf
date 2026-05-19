@@ -17,10 +17,9 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_135,
     POLARS_VERSION_LT_138,
 )
 
@@ -31,7 +30,9 @@ if TYPE_CHECKING:
     from werkzeug import Request
 
 
-NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
+NO_CHUNK_ENGINE = pl.GPUEngine(
+    executor="in-memory", raise_on_fail=True, parquet_options={"chunked": False}
+)
 
 
 @pytest.fixture(
@@ -137,7 +138,11 @@ def test_scan(
         row_index_offset=offset,
         n_rows=n_rows,
     )
-    engine = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": is_chunked})
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={"chunked": is_chunked},
+    )
 
     if zlice is not None:
         q = q.slice(*zlice)
@@ -373,10 +378,8 @@ def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif format == "parquet":
-        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
     else:
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
 @pytest.fixture(
@@ -387,14 +390,13 @@ def chunked_slice(request):
 
 
 @pytest.fixture(scope="module")
-def large_df(df, tmpdir_factory, chunked_slice):
-    # Something big enough that we get more than a single chunk,
-    # empirically determined
-    df = pl.concat([df] * 1000)
-    df = pl.concat([df] * 10)
-    df = pl.concat([df] * 10)
-    path = str(tmpdir_factory.mktemp("data") / "large.pq")
-    make_partitioned_source(df, path, "parquet")
+def chunked_df(df, tmpdir_factory, chunked_slice):
+    # Many small row groups so that ``pass_read_limit`` (one pass per row
+    # group) and ``chunk_read_limit`` (one output chunk per page within a
+    # pass) can force the libcudf chunked reader to return multiple chunks.
+    df = pl.concat([df] * 100)
+    path = str(tmpdir_factory.mktemp("data") / "chunked.pq")
+    make_partitioned_source(df, path, "parquet", row_group_size=10)
     n_rows = len(df)
     q = pl.scan_parquet(path)
     if chunked_slice == "no_slice":
@@ -408,27 +410,34 @@ def large_df(df, tmpdir_factory, chunked_slice):
 
 
 @pytest.mark.parametrize(
-    "chunk_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"chunk_{x}"
-)
-@pytest.mark.parametrize(
-    "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
+    "chunk_read_limit, pass_read_limit",
+    [
+        (0, 0),
+        (0, 1),
+        (1, 0),
+        (1, 1),
+        (2, 1),
+        (1, 2),
+    ],
+    ids=lambda x: f"limit_{x}",
 )
 @pytest.mark.parametrize(
     "filter", [None, pl.col("a") > 3], ids=["no_filters", "with_filters"]
 )
 def test_scan_parquet_chunked(
-    large_df,
+    chunked_df,
     chunk_read_limit,
     pass_read_limit,
     filter,
 ):
     if filter is None:
-        q = large_df
+        q = chunked_df
     else:
-        q = large_df.filter(filter)
+        q = chunked_df.filter(filter)
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
+            executor="in-memory",
             raise_on_fail=True,
             parquet_options={
                 "chunked": True,
@@ -515,14 +524,8 @@ def test_scan_from_file_uri(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("chunked", [False, True])
 def test_scan_parquet_remote(
-    request, tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
+    tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
-        )
-    )
     path = tmp_path / "foo.parquet"
     df.write_parquet(path)
     bytes_ = path.read_bytes()
@@ -575,23 +578,21 @@ def test_scan_parquet_remote(
     q = pl.scan_parquet(httpserver.url_for(server_path))
 
     assert_gpu_result_equal(
-        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+        q,
+        engine=pl.GPUEngine(
+            executor="in-memory",
+            raise_on_fail=True,
+            parquet_options={"chunked": chunked},
+        ),
     )
 
 
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
-    request: pytest.FixtureRequest,
     tmp_path: Path,
     df: pl.DataFrame,
     httpserver: HTTPServer,
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
-        )
-    )
     path = tmp_path / "foo.jsonl"
     df.write_ndjson(path)
     bytes_ = path.read_bytes()
@@ -664,11 +665,7 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
         "index"
     )
 
-    if POLARS_VERSION_LT_135:
-        # Did not raise before
-        assert_gpu_result_equal(q, engine=engine)
-    else:
-        assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
@@ -713,17 +710,16 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
-    engine: pl.GPUEngine, tmp_path, custom_engine, request, using_streaming_engine
+    engine: pl.GPUEngine, tmp_path, custom_engine, request
 ):
+    active_engine = custom_engine if custom_engine is not None else engine
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine and custom_engine is None,
+            is_streaming_engine(active_engine),
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )
     path = tmp_path / "zero_width.parquet"
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
-    assert_gpu_result_equal(
-        q, engine=custom_engine if custom_engine is not None else engine
-    )
+    assert_gpu_result_equal(q, engine=active_engine)

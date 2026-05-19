@@ -57,12 +57,15 @@ _WRAPPER_ASSIGNMENTS = tuple(
     for attr in functools.WRAPPER_ASSIGNMENTS
     # Skip __doc__ because we assign it on class creation using exec_body
     # callable that updates the namespace of the class.
-    # Skip __annotations__ because there are differences between Python
-    # versions on how it is initialized for a class that doesn't explicitly
-    # define it and we don't want to force eager evaluation of anything that
-    # would normally be lazy (mostly for consistency, shouldn't cause any
-    # significant issues).
-    if attr not in ("__annotations__", "__doc__")
+    # Skip __annotations__ / __annotate__ (PEP 749, added on 3.14) because
+    # there are differences between Python versions on how they're
+    # initialized for a class that doesn't explicitly define them and we
+    # don't want to force eager evaluation of anything that would normally
+    # be lazy. On 3.14 specifically, simply reading ``__annotate__`` causes
+    # ``__annotate_func__`` to materialize on the source class, which then
+    # shows up in ``dir()`` and diverges from the cached ``_fsproxy_slow_dir``
+    # captured a few lines earlier.
+    if attr not in ("__annotations__", "__annotate__", "__doc__")
 )
 
 
@@ -693,6 +696,23 @@ class _FastSlowProxy:
 
     def __setattr__(self, name, value):
         if name.startswith("_"):
+            # If the class declares this private name as a
+            # ``_FastSlowAttribute``, forward the write to the wrapped
+            # object so that behaviors driven by that attribute
+            # (e.g. ``_readonly`` propagation in
+            # ``ArrowExtensionArray.__getitem__``) are preserved.
+            descriptor = inspect.getattr_static(type(self), name, None)
+            if isinstance(descriptor, _FastSlowAttribute):
+                try:
+                    wrapped = object.__getattribute__(self, "_fsproxy_wrapped")
+                except AttributeError:
+                    wrapped = None
+                if wrapped is not None:
+                    try:
+                        setattr(wrapped, name, value)
+                        return
+                    except (AttributeError, TypeError):
+                        pass
             object.__setattr__(self, name, value)
             return
         return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
@@ -1124,6 +1144,10 @@ class _MethodProxy(_FunctionProxy):
     @property
     def __doc__(self):
         return self._fsproxy_slow.__doc__
+
+    @property
+    def __func__(self):
+        return self._fsproxy_slow.__func__
 
     @property
     def __name__(self):

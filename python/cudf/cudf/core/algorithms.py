@@ -78,14 +78,31 @@ def factorize(
     >>> codes
     array([ 0,  1,  0, -1])
     >>> uniques
-    Index([1.0, 2.0], dtype='float64')
+    array([1., 2.])
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
     array([0, 1, 0, 2])
     >>> uniques
-    Index([1.0, 2.0, NaN], dtype='float64')
+    array([ 1.,  2., nan])
     """
-    return_cupy_array = isinstance(values, cp.ndarray)
+    if size_hint:
+        warnings.warn("size_hint is not applicable for cudf.factorize")
+
+    # cupy/numpy arrays: run column logic directly and return an array
+    # for ``cats`` so the call is closed under array inputs (mirrors
+    # ``pd.factorize(np.ndarray)``).
+    if isinstance(values, cp.ndarray):
+        labels, cats = as_column(values).factorize(sort, use_na_sentinel)
+        return labels, cats.values
+    if isinstance(values, np.ndarray):
+        labels, cats = as_column(values).factorize(sort, use_na_sentinel)
+        return labels.get(), cats.to_pandas().to_numpy()
+
+    # cudf objects: delegate to the type's ``_factorize`` so subclasses
+    # (e.g. ``RangeIndex``) can specialize while sharing the common
+    # column-level ``Column.factorize`` path by default.
+    if isinstance(values, (cudf.Series, cudf.Index, cudf.MultiIndex)):
+        return values._factorize(sort=sort, use_na_sentinel=use_na_sentinel)
 
     if not can_convert_to_column(values):
         raise TypeError(
@@ -93,31 +110,9 @@ def factorize(
             f"got {type(values)}"
         )
 
-    values = as_column(values)
-
-    if size_hint:
-        warnings.warn("size_hint is not applicable for cudf.factorize")
-
-    if use_na_sentinel:
-        cats = values.dropna()
-    else:
-        cats = values
-
-    cats = cats.unique().astype(values.dtype)
-
-    if sort:
-        cats = cats.sort_values()
-
-    labels = values._label_encoding(
-        cats=cats,
-        dtype=np.dtype("int64"),
-    ).values
-
+    labels, cats = as_column(values).factorize(sort, use_na_sentinel)
     # TODO: Avoid accessing Index from the top level namespace
-    return (
-        labels,
-        cats.values if return_cupy_array else cudf.Index._from_column(cats),
-    )
+    return labels, cudf.Index._from_column(cats)
 
 
 def unique(values):

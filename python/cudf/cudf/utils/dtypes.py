@@ -291,7 +291,7 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
         return np.float64("nan")
 
 
-def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
+def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj:
     """
     Wrapper over np.result_type to handle cudf specific types.
 
@@ -302,12 +302,18 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
 
     Returns
     -------
-    dtype : np.dtype or None
-        None if input is empty
-        DtypeObj otherwise
+    dtype : DtypeObj
+
+    Raises
+    ------
+    ValueError
+        If ``dtypes`` is empty (matches ``pandas.core.dtypes.cast.find_common_type``).
     """
     if len(dtypes) == 0:  # type: ignore[arg-type]
-        return None
+        # Match pandas.core.dtypes.cast.find_common_type, which raises.
+        raise ValueError("no types given")
+
+    pandas_compatible = cudf.get_option("mode.pandas_compatible")
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
@@ -378,6 +384,25 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "Finding a common type for `ListDtype` or `StructDtype` is currently "
             "not supported"
         )
+
+    if pandas_compatible:
+        # cudf follows NumPy promotion: bool+int->int, bool+float->float,
+        # datetime64+timedelta64->datetime64. Pandas returns `object` for
+        # these mixes. Raise so that, when used as the cudf.pandas fast path
+        # for `pandas.core.dtypes.cast.find_common_type`, we fall back to
+        # pandas' implementation rather than silently producing a different
+        # answer.
+        kinds = {dtype.kind for dtype in dtypes if isinstance(dtype, np.dtype)}
+        if "b" in kinds and kinds & set("iuf"):
+            raise NotImplementedError(
+                "Common type of bool with numeric dtypes is not supported "
+                "in pandas-compatible mode."
+            )
+        if "M" in kinds and "m" in kinds:
+            raise NotImplementedError(
+                "Common type of datetime64 with timedelta64 is not supported "
+                "in pandas-compatible mode."
+            )
 
     try:
         common_dtype = np.result_type(*dtypes)  # noqa: TID251
@@ -527,8 +552,26 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
+        # Preserve the source Arrow string variant (string vs large_string)
+        # when the target is a string-like dtype.
+        if pa.types.is_string(
+            source_dtype.pyarrow_dtype
+        ) or pa.types.is_large_string(source_dtype.pyarrow_dtype):
+            if isinstance(target_dtype, pd.StringDtype) or (
+                isinstance(target_dtype, pd.ArrowDtype)
+                and (
+                    pa.types.is_string(target_dtype.pyarrow_dtype)
+                    or pa.types.is_large_string(target_dtype.pyarrow_dtype)
+                )
+            ):
+                return source_dtype
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        # Preserve StringDtype storage/na_value when target is also a StringDtype.
+        if isinstance(source_dtype, pd.StringDtype) and isinstance(
+            target_dtype, pd.StringDtype
+        ):
+            return source_dtype
         if (
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.na_value is np.nan
@@ -538,11 +581,6 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.storage == "pyarrow"
         ):
-            if (
-                isinstance(target_dtype, pd.StringDtype)
-                and source_dtype == target_dtype
-            ):
-                return source_dtype
             return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
@@ -599,29 +637,6 @@ def is_arrow_null_dtype(dtype: DtypeObj) -> bool:
     return isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
         dtype.pyarrow_dtype
     )
-
-
-def maybe_normalize_arrow_null(
-    col: plc.Column, dtype: DtypeObj
-) -> tuple[plc.Column, DtypeObj, DtypeObj | None]:
-    """Normalize ArrowDtype(pa.null()) columns for internal construction.
-
-    For pandas nullable null types (ArrowDtype wrapping pa.null()),
-    the column data is normalized and the dtype is replaced with
-    ``np.dtype("object")`` for internal dispatch. The original dtype
-    is returned as ``old_dtype`` so it can be stored on the column.
-
-    Returns
-    -------
-    tuple of (col, dtype, old_dtype)
-        ``old_dtype`` is the original dtype if normalization occurred,
-        otherwise ``None``.
-    """
-    from cudf.core.column.column import _normalize_types_column
-
-    if is_arrow_null_dtype(dtype):
-        return _normalize_types_column(col), np.dtype("object"), dtype
-    return col, dtype, None
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {

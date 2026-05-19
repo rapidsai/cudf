@@ -12,7 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -81,9 +81,8 @@ def test_boolean_function_unary(
     *,
     has_nans: bool,
     has_nulls: bool,
-    using_streaming_engine: bool,
 ) -> None:
-    if using_streaming_engine:
+    if is_streaming_engine(engine):
         pytest.skip(
             "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
         )
@@ -170,10 +169,8 @@ def test_boolean_isbetween(engine: pl.GPUEngine, closed, bounds):
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
-def test_boolean_horizontal(
-    engine: pl.GPUEngine, expr, has_nulls, wide, using_streaming_engine
-):
-    if using_streaming_engine:
+def test_boolean_horizontal(engine: pl.GPUEngine, expr, has_nulls, wide):
+    if is_streaming_engine(engine):
         pytest.skip(
             "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
         )
@@ -271,12 +268,7 @@ def test_is_in_shape_mismatch_raises(needles, haystack):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_boolean_is_close(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_132, reason="Not supported until polars 1.32"
-        )
-    )
+def test_boolean_is_close():
     ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 

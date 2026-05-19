@@ -3960,6 +3960,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringContainsPerRow() {
+    // Aligns with libcudf StringsFindTest.Contains column-target case (find_tests.cpp).
+    try (ColumnVector haystack = ColumnVector.fromStrings(
+             "Héllo", "thesé", null, "lease", "tést strings", "", "eé", "éte");
+         ColumnVector targets = ColumnVector.fromStrings("Hello", "é", "e", "x", "", null, "n", "t");
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             false, true, null, false, true, false, false, true);
+         ColumnVector result = haystack.stringContainsPerRow(targets)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringContainsPerRowRowCountMismatch() {
+    try (ColumnVector haystack = ColumnVector.fromStrings("a", "b");
+         ColumnVector targets = ColumnVector.fromStrings("a")) {
+      assertThrows(AssertionError.class, () -> haystack.stringContainsPerRow(targets).close());
+    }
+  }
+
+  @Test
   void testStringFindOperations() {
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "1a\"\u0100B1", "a\"\u0100B1", "1a\"\u0100B",
                                       "1a\"\u0100B1\n\t\'", "1a\"\u0100B1\u0453\u1322\u5112", "1a\"\u0100B1Fg26",
@@ -5171,6 +5192,39 @@ void testExtractReWithMultiLineDelimiters() {
            ColumnVector repls = null;
            ColumnVector result = testStrings.stringReplace(targets,repls)){}
     });
+  }
+
+  @Test
+  void testStringReplacePerRow() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello world", "foo bar", "aaa", "");
+         ColumnVector targets = ColumnVector.fromStrings("o", "bar", "a", "x");
+         ColumnVector repls = ColumnVector.fromStrings("0", "BAR", "X", "y");
+         ColumnVector expected = ColumnVector.fromStrings("hell0 w0rld", "foo BAR", "XXX", "");
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringReplacePerRowNulls() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello", null, "foo", "bar");
+         ColumnVector targets = ColumnVector.fromStrings("l", "o", null, "a");
+         ColumnVector repls = ColumnVector.fromStrings("L", "0", "0", null);
+         ColumnVector expected = ColumnVector.fromStrings("heLLo", null, null, null);
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringReplacePerRowEmptyTarget() {
+    try (ColumnVector input = ColumnVector.fromStrings("hello", "world", "foo");
+         ColumnVector targets = ColumnVector.fromStrings("l", "", "o");
+         ColumnVector repls = ColumnVector.fromStrings("L", "X", "0");
+         ColumnVector expected = ColumnVector.fromStrings("heLLo", "world", "f00");
+         ColumnVector result = input.stringReplacePerRow(targets, repls)) {
+      assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test

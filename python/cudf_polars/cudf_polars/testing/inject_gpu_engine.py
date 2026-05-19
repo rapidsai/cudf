@@ -30,6 +30,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("in-memory", "spmd"),
         help="Which GPU engine variant to inject globally.",
     )
+    # TODO: We never run with --inject-gpu-engine-blocksize in ci/run_cudf_polars_polars_tests.sh. Remove?
     group.addoption(
         "--inject-gpu-engine-blocksize",
         action="store",
@@ -134,6 +135,7 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
+# TODO: This is just Mapping[str, str]?
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -305,7 +307,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 
 # Generally skip for:
 # 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
-# 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -334,9 +335,20 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs0-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs1-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs4-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs5-True-unordered_columns5]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs6-False-unordered_columns6]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs7-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs8-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs10-True-unordered_columns10]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs11-False-unordered_columns11]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -413,35 +425,7 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/operations/test_join.py::test_join_rewrite_panic_23307": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
-    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
-    "tests/unit/sql/test_joins.py::test_join_anti_semi[SELECT * FROM tbl_a LEFT SEMI JOIN tbl_b USING (a)-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df11-df21-df1.id = df2.id AND LOWER(df1.name) = df2.match-df1.id, df1.name, df2.match-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LOWER(df1.text) = df2.text-2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[SUBSTR(df1.code, 1, 2) = SUBSTR(df2.code, 1, 2)-3]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LENGTH(df1.text) = LENGTH(df2.text)-5]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df10-df20-df1.id = df2.id AND df1.multiplier * 5 = df2.base AND df1.category = 'A'-df1.id, df1.multiplier, df2.base-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df11-df21-df1.id = df2.id AND (df1.value * 2) = df2.target AND df1.id = 2-df1.id, df1.value, df2.target-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df12-df22-df1.x * 2 = df2.a AND df1.y = df2.b-df1.x, df1.y, df2.a-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df12-df22-LENGTH(df1.name) = df2.len-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_reversed_constraint_order[df12-df22-(df1.a + df1.a) = df2.b-df2.b = (df1.a + df1.a)-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df11-df21-x + y = sum-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df12-df22-LENGTH(name) = len-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[above_avg]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[equals_max]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[compound_expr]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_distinct": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[sum_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[count_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
 }
 
 
