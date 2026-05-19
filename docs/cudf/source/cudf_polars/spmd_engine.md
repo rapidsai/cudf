@@ -92,9 +92,9 @@ See {doc}`options` for the available fields.
 {class}`~cudf_polars.engine.spmd.SPMDEngine` exposes a few properties
 that are useful in SPMD code:
 
-* `engine.nranks` / `engine.rank` — cluster size and local rank index.
-* `engine.comm` — the active `rapidsmpf.communicator.Communicator`.
-* `engine.context` — the active `rapidsmpf.streaming.core.context.Context`.
+* `engine.nranks` / `engine.rank`: cluster size and local rank index.
+* `engine.comm`: the active `rapidsmpf.communicator.Communicator`.
+* `engine.context`: the active `rapidsmpf.streaming.core.context.Context`.
 
 ## Query symmetry requirement
 
@@ -106,10 +106,10 @@ In practice:
 
 * Avoid rank-conditional `collect()` or `sink*()` calls.
 * Avoid branches that change the query graph.
-* Keep the driver script deterministic.
+* Keep the client script deterministic.
 
 ```python
-# OK — every rank runs the same query in the same order.
+# OK: every rank runs the same query in the same order.
 with SPMDEngine() as engine:
     result = (
         pl.scan_parquet("/data/*.parquet")
@@ -120,7 +120,7 @@ with SPMDEngine() as engine:
 ```
 
 ```python
-# DEADLOCKS — rank 0 issues a group_by collective the other ranks never see.
+# DEADLOCKS: rank 0 issues a group_by collective the other ranks never see.
 with SPMDEngine() as engine:
     df = pl.scan_parquet("/data/*.parquet")
     if engine.rank == 0:        # don't do this
@@ -130,7 +130,7 @@ with SPMDEngine() as engine:
 
 ## Collecting distributed results
 
-Unlike `RayEngine` / `DaskEngine`, where `.collect()` gathers every partition to the driver,
+Unlike `RayEngine` / `DaskEngine`, where `.collect()` gathers every partition to the client,
 here each rank's `.collect()` returns *its own* fragment. If you want to keep processing the
 data rank-by-rank, just use that fragment directly; if you need a single concatenated view,
 use the helper below.
@@ -157,7 +157,7 @@ with SPMDEngine() as engine:
         )
 ```
 
-`op_id` identifies the collective across ranks — all ranks must pass the same value.
+`op_id` identifies the collective across ranks. All ranks must pass the same value.
 {func}`~cudf_polars.streaming.collectives.common.reserve_op_id` draws from the same
 pool that cudf-polars uses internally for shuffle and join collectives, so there is no risk of
 collision. Do not pass hardcoded integers: they may silently collide with an ID reserved by an
@@ -174,7 +174,7 @@ in a test suite or interactive session), repeated bootstrapping is unnecessary a
 the file-based coordination layer shared by all ranks.
 
 Pass a pre-created communicator via `comm=` to skip the bootstrap entirely. The engine does
-**not** close the communicator on shutdown — the caller retains ownership and can reuse it
+**not** close the communicator on shutdown. The caller retains ownership and can reuse it
 across multiple {class}`~cudf_polars.engine.spmd.SPMDEngine` lifetimes:
 
 ```python
@@ -185,7 +185,7 @@ from cudf_polars.engine.spmd import SPMDEngine
 # Bootstrap once.
 comm = bootstrap.create_ucxx_comm(progress_thread=ProgressThread())
 
-# Reuse across multiple engine lifetimes — no re-bootstrap between them.
+# Reuse across multiple engine lifetimes, no re-bootstrap between them.
 with SPMDEngine(comm=comm) as engine:
     result1 = df1.lazy().collect(engine=engine)
 

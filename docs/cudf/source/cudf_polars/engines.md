@@ -43,12 +43,12 @@ details.
 
 ## Cluster backends
 
-| Engine                                                                | Cluster model                                                       | Extra runtime dependency | Typical use                                                                       |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| {class}`~cudf_polars.engine.ray.RayEngine`   | Single-client driver; one Ray actor per GPU                         | [Ray][ray-docs]          | Works from a laptop to a cloud cluster. No separate cluster setup needed.         |
-| {class}`~cudf_polars.engine.dask.DaskEngine` | Single-client driver; one Dask worker per GPU                       | [Dask distributed][dask] | Teams with an existing Dask deployment or a preferred Dask launcher.              |
-| {class}`~cudf_polars.engine.spmd.SPMDEngine` | Same script runs once per GPU, joined by a communicator             | UCXX (under `rrun`)      | HPC / SPMD launchers such as `rrun`. Single-rank mode needs no cluster at all.    |
-| [`engine="gpu"`](default_singleton_engine.md)                         | Implicit process-wide singleton on one GPU; no cluster              | None                     | Default when no engine is constructed. Short scripts and notebooks. No options.   |
+| Engine                                        | Cluster model                                           | Extra runtime dependency | Typical use                                                                     |
+| --------------------------------------------- | --------------------------------------------------------| ------------------------ | ------------------------------------------------------------------------------- |
+| {class}`~cudf_polars.engine.ray.RayEngine`    | Single client; one Ray actor per GPU                    | [Ray][ray-docs]          | Works from a laptop to a cloud cluster. No separate cluster setup needed.       |
+| {class}`~cudf_polars.engine.dask.DaskEngine`  | Single client; one Dask worker per GPU                  | [Dask distributed][dask] | Teams with an existing Dask deployment or a preferred Dask launcher.            |
+| {class}`~cudf_polars.engine.spmd.SPMDEngine`  | Same script runs once per GPU, joined by a communicator | UCXX (under `rrun`)      | HPC / SPMD launchers such as `rrun`. Single-rank mode needs no cluster at all.  |
+| [`engine="gpu"`](default_singleton_engine.md) | Implicit process-wide singleton on one GPU; no cluster  | None                     | Default when no engine is constructed. Short scripts and notebooks. No options. |
 
 All four approaches use the same execution model under the hood, so which to select depends
 on your preferred deployment method, not performance tradeoffs. For any non-trivial workflow,
@@ -61,14 +61,14 @@ convenience and accepts no options, so it cannot be tuned. See
 `.collect()` returns a single `pl.DataFrame` on the **caller's process**. On the streaming
 engines that has two flavors:
 
-- **`RayEngine` / `DaskEngine`** (single-client driver): every partition is pulled from the
-  cluster workers back to the driver and concatenated there. Convenient for results that fit
-  in driver memory but **a foot-gun for full distributed datasets**. E.g., calling `.collect()`
-  on a 1 TB query result sends 1 TB through your driver. Sink the result
+- **`RayEngine` / `DaskEngine`** (single client): every partition is pulled from the
+  cluster workers back to the client and concatenated there. This is convenient for small
+  results but does not scale to large queries. E.g., calling `.collect()` on a 1 TB query
+  result sends 1 TB through your client. Sink the result
   (`.sink_parquet("path/")`, `.sink_csv(...)`, …) so each rank writes its own partition
   directly, or reduce/sample the data inside the query before `.collect()`.
 - **`SPMDEngine`** (one process per GPU): each rank's `.collect()` returns *that rank's*
-  local fragment. There is no driver to gather to. If you need a single concatenated
+  local fragment. There is no client to gather to. If you need a single concatenated
   `pl.DataFrame` across ranks, call
   {func}`~cudf_polars.engine.spmd.allgather_polars_dataframe` explicitly (see
   [Collecting distributed results](spmd_engine.md#collecting-distributed-results)). If you
@@ -80,15 +80,15 @@ Rules of thumb for multi-machine `RayEngine` / `DaskEngine` runs:
 
 - For exports: prefer `.sink_*()` over `.collect()`.
 - For analysis: aggregate, sample, or `limit()` the result inside the lazy query before
-  `.collect()` so the driver only sees a small DataFrame.
+  `.collect()` so the client only sees a small DataFrame.
 - For further distributed processing in Python: switch to `SPMDEngine` so each rank keeps
   its fragment.
 
 ## Where to go next
 
-- {doc}`usage` — tutorial that walks through running your first GPU query end-to-end.
-- {doc}`other_engines` — per-engine reference pages for DaskEngine and SPMDEngine.
-- {doc}`options` — the `StreamingOptions` configuration object and every field it surfaces.
+- {doc}`usage`: tutorial that walks through running your first GPU query end-to-end.
+- {doc}`other_engines`: per-engine reference pages for DaskEngine and SPMDEngine.
+- {doc}`options`: the `StreamingOptions` configuration object and every field it surfaces.
 
 [ray-docs]: https://docs.ray.io/
 [dask]: https://distributed.dask.org/

@@ -39,15 +39,12 @@ multiple engines for GPU execution. See {doc}`other_engines` for alternatives, o
 ```
 
 ```{note}
-`.collect()` pulls the full result back to the driver process. For large distributed outputs,
+`.collect()` pulls the full result back to the client process. For large distributed outputs,
 prefer `.sink_*()` or aggregate/sample inside the query before `.collect()`. See
 [Result collection](engines.md#result-collection).
 ```
 
 ## Configuring `RayEngine`
-
-The same `from_options()` / `StreamingOptions` pattern shown here works for every streaming
-engine — see {doc}`other_engines` for the DaskEngine and SPMDEngine variants.
 
 {class}`~cudf_polars.engine.ray.RayEngine` with no arguments starts a
 local [Ray][ray-docs] cluster and creates one GPU worker per visible GPU.
@@ -74,10 +71,13 @@ See {doc}`options` for the available fields.
 context-manager form so the Ray cluster and GPU workers are torn down automatically.
 ```
 
+The same `from_options()` / `StreamingOptions` pattern shown here works for every streaming
+engine. See {doc}`other_engines` for the DaskEngine and SPMDEngine variants.
+
 ## Attaching to an existing Ray cluster
 
 For multi-node runs, start a Ray cluster separately (for example with `ray start` on each
-node) and attach to it from your driver script. When Ray is already initialized,
+node) and attach to it from your client script. When Ray is already initialized,
 {class}`~cudf_polars.engine.ray.RayEngine` connects to the running
 cluster and leaves it untouched on exit:
 
@@ -96,9 +96,8 @@ with RayEngine() as engine:
     )
 ```
 
-{class}`~cudf_polars.engine.ray.RayEngine` creates one rank per GPU in
-the Ray cluster and bootstraps a UCXX communicator across them. It raises `RuntimeError` if
-created inside an `rrun` cluster or if no GPUs are available.
+{class}`~cudf_polars.engine.ray.RayEngine` creates one rank per GPU in the Ray cluster.
+It raises `RuntimeError` if no GPUs are available.
 
 ## Manual Engine Lifetime Control
 
@@ -152,8 +151,8 @@ the specified path.
 ## Cluster diagnostics
 
 {meth}`~cudf_polars.engine.ray.RayEngine.gather_cluster_info` returns
-a list of {class}`~cudf_polars.engine.core.ClusterInfo` — one per rank
-actor — with fields `hostname`, `pid`, `cuda_visible_devices`, and `gpu_uuid`:
+a list of {class}`~cudf_polars.engine.core.ClusterInfo`, one per rank
+actor, with fields `hostname`, `pid`, `cuda_visible_devices`, and `gpu_uuid`:
 
 ```python
 with RayEngine() as engine:

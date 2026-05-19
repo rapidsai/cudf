@@ -40,18 +40,19 @@ categories of fields:
 
 | Category    | Scope                                                                                  | Env var prefix            |
 | ----------- | -------------------------------------------------------------------------------------- | ------------------------- |
-| `rapidsmpf` | Streaming runtime, e.g. threads, CUDA streams, spilling, pinned memory, log level      | `RAPIDSMPF_`              |
 | `executor`  | Query execution and partitioning, e.g. `max_rows_per_partition`, `fallback_mode`, ...  | `CUDF_POLARS__EXECUTOR__` |
 | `engine`    | `pl.GPUEngine` kwargs, e.g. Parquet, memory resource, CUDA streams, hardware binding   | `CUDF_POLARS__`           |
+| `rapidsmpf` | Streaming runtime, e.g. threads, CUDA streams, spilling, pinned memory, log level      | `RAPIDSMPF_`              |
 
 The `engine` category surfaces the same tuning knobs as plain `pl.GPUEngine(...)`. For example,
 `parquet_options` and `memory_resource_config`. Configure these settings through
 {class}`~cudf_polars.engine.options.StreamingOptions` rather than
 passing them to `pl.GPUEngine(...)` directly.
 
-The `rapidsmpf` category adds configuration for the streaming runtime that has no equivalent on the plain
-`pl.GPUEngine`. See the [streaming runtime configuration reference][rapidsmpf-config] for the underlying
-meaning of each `RAPIDSMPF_*` field.
+The `rapidsmpf` category adds lower-level configuration for the streaming runtime that has no equivalent on
+the plain `pl.GPUEngine`. Most users will not need to touch these directly. See the
+[streaming runtime configuration reference][rapidsmpf-config] for the underlying meaning of each
+`RAPIDSMPF_*` field.
 
 Every option has a corresponding environment variable. When an option is not set explicitly, its
 value is read from the environment variable if present; otherwise the underlying library applies
@@ -94,13 +95,9 @@ See {doc}`in_memory_engine` for how to configure it.
 
 Environment variables follow these patterns:
 
-* `rapidsmpf`: `RAPIDSMPF_<OPTION_NAME>` (e.g. `RAPIDSMPF_NUM_STREAMING_THREADS`)
 * `executor`: `CUDF_POLARS__EXECUTOR__<OPTION_NAME>` (e.g. `CUDF_POLARS__EXECUTOR__FALLBACK_MODE`)
 * `engine`: `CUDF_POLARS__<OPTION_NAME>` (e.g. `CUDF_POLARS__RAISE_ON_FAIL`; nested prefixes for structured options)
-
-### Category: `rapidsmpf`
-
-See the [streaming runtime configuration reference][rapidsmpf-config] for the full list of fields and defaults.
+* `rapidsmpf`: `RAPIDSMPF_<OPTION_NAME>` (e.g. `RAPIDSMPF_NUM_STREAMING_THREADS`)
 
 ### Category: `executor`
 
@@ -124,6 +121,11 @@ See the [streaming runtime configuration reference][rapidsmpf-config] for the fu
 | `cuda_stream_policy`     | CUDA stream policy (`"default"`, `"pool"`, or a configuration dict).                                                          | —                         |
 | `hardware_binding`       | Hardware binding policy. Pass a {class}`~cudf_polars.engine.hardware_binding.HardwareBindingPolicy` for fine-grained control. | `HardwareBindingPolicy()` |
 | `allow_gpu_sharing`      | When `False` (default), the engine raises if multiple ranks share the same physical GPU.                                      | `False`                   |
+
+### Category: `rapidsmpf`
+
+Lower-level streaming runtime knobs. Most users will not need to touch these directly. See the
+[streaming runtime configuration reference][rapidsmpf-config] for the full list of fields and defaults.
 
 <!-- Reference links -->
 [rapidsmpf-config]: https://docs.rapids.ai/api/rapidsmpf/nightly/configuration/

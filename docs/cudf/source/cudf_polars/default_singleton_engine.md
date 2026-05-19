@@ -1,7 +1,7 @@
 (cudf-polars-default-singleton-engine)=
 # Default `engine="gpu"`
 
-`.collect(engine="gpu")` (and `engine=pl.GPUEngine()`) is the API users invoke when they don't
+`.collect(engine="gpu")` (and `engine=pl.GPUEngine()`) is the API you invoke when you don't
 construct a streaming engine explicitly. It runs the same streaming executor as the explicit
 engines (Ray, Dask, SPMD), conceptually similar to
 [Polars' own streaming engine](https://docs.pola.rs/user-guide/concepts/streaming/) but on the
@@ -26,7 +26,7 @@ explicit engine. See {doc}`usage` and {doc}`options`.
 
 ## What you get without an explicit engine
 
-When the user just writes:
+When you just write:
 
 ```python
 import polars as pl

@@ -28,7 +28,7 @@ With no arguments, {class}`~cudf_polars.engine.dask.DaskEngine` creates a
 bootstraps a UCXX communicator across all workers. On exit, everything it created is torn down.
 
 ```{note}
-`.collect()` pulls the full result back to the driver process. For large distributed outputs,
+`.collect()` pulls the full result back to the client process. For large distributed outputs,
 prefer `.sink_*()` or aggregate/sample inside the query before `.collect()`. See
 [Result collection](engines.md#result-collection).
 ```
@@ -103,7 +103,7 @@ preload to assign one GPU per worker. The preload sets `CUDA_VISIBLE_DEVICES` on
 before the process spawns:
 
 ```bash
-# On each node — launch one worker per GPU with a single thread each:
+# On each node, launch one worker per GPU with a single thread each:
 dask worker SCHEDULER_ADDRESS:8786 --nworkers N --nthreads 1 \
     --preload-nanny cudf_polars.engine.dask
 ```
@@ -137,10 +137,9 @@ configures UCX.
 `DaskEngine` sets up the same things for its own streaming runtime, so the two need to be
 coordinated or they will fight:
 
-* **CPU affinity is unconditional in `dask-cuda-worker`** — the `CPUAffinity` plugin is always
-  installed and there is no CLI flag to turn it off. Pass
-  `hardware_binding=HardwareBindingPolicy(enabled=False)` to `DaskEngine` so it does not try to
-  re-pin affinity on top of dask-cuda's binding.
+* **CPU affinity is unconditional in `dask-cuda-worker`**, the `CPUAffinity` plugin is always
+  installed and there is no CLI flag to turn it off. Pass `hardware_binding=HardwareBindingPolicy(enabled=False)`
+  to `DaskEngine` so it does not try to re-pin affinity on top of dask-cuda's binding.
 * **Do not pass `--rmm-pool-size`, `--rmm-managed-memory`, or similar RMM flags** to
   `dask-cuda-worker`. Let `DaskEngine` own the memory resource via its `memory_resource_config`
   (see {doc}`options`); otherwise two different memory resources will be installed on the same
@@ -151,7 +150,7 @@ coordinated or they will fight:
   configuration across the cluster.
 
 ```bash
-# On each node — GPU assignment + CPU affinity only (no RMM, no UCX flags):
+# On each node, GPU assignment + CPU affinity only (no RMM, no UCX flags):
 dask-cuda-worker SCHEDULER_ADDRESS:8786
 ```
 
