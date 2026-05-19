@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.column cimport Column
-from pylibcudf.gpumemoryresource cimport DeviceMemoryResource
-from pylibcudf.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 
 cpdef Column decode_protobuf(
@@ -16,6 +15,6 @@ cpdef Column decode_protobuf(
     list enum_valid_values,
     list enum_names,
     bint fail_on_errors,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )

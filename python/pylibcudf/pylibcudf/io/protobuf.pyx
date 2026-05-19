@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 from pylibcudf.column cimport Column
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
@@ -79,7 +80,7 @@ cpdef Column decode_protobuf(
     list enum_valid_values,
     list enum_names,
     bint fail_on_errors,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr = None,
 ):
     """
@@ -123,16 +124,16 @@ cpdef Column decode_protobuf(
     cdef vector[nested_field_descriptor] c_schema
     c_schema.reserve(n)
     cdef nested_field_descriptor desc
-    for s in schema:
-        desc.field_number = <int>s[0]
-        desc.parent_idx = <int>s[1]
-        desc.depth = <int>s[2]
-        desc.wire_type = <proto_wire_type>(<int>s[3])
-        desc.output_type = <type_id>(<int>s[4])
-        desc.encoding = <proto_encoding>(<int>s[5])
-        desc.is_repeated = <bool>s[6]
-        desc.is_required = <bool>s[7]
-        desc.has_default_value = <bool>s[8]
+    for field in schema:
+        desc.field_number = <int>field[0]
+        desc.parent_idx = <int>field[1]
+        desc.depth = <int>field[2]
+        desc.wire_type = <proto_wire_type>(<int>field[3])
+        desc.output_type = <type_id>(<int>field[4])
+        desc.encoding = <proto_encoding>(<int>field[5])
+        desc.is_repeated = <bool>field[6]
+        desc.is_required = <bool>field[7]
+        desc.has_default_value = <bool>field[8]
         c_schema.push_back(desc)
 
     options.schema = move(c_schema)
@@ -185,7 +186,8 @@ cpdef Column decode_protobuf(
 
     options.fail_on_errors = fail_on_errors
 
-    cdef Stream s = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[column] c_result
@@ -194,9 +196,9 @@ cpdef Column decode_protobuf(
             cpp_decode_protobuf(
                 binary_input.view(),
                 options,
-                s.view(),
+                _cs,
                 mr.get_mr(),
             )
         )
 
-    return Column.from_libcudf(move(c_result), s, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

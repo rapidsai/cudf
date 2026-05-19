@@ -9,9 +9,9 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport type_id
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/io/protobuf.hpp" namespace "cudf::io::protobuf" nogil:
@@ -54,6 +54,6 @@ cdef extern from "cudf/io/protobuf.hpp" namespace "cudf::io::protobuf" nogil:
     cdef unique_ptr[column] decode_protobuf(
         column_view binary_input,
         decode_protobuf_options options,
-        cuda_stream_view stream,
-        device_memory_resource* mr,
+        cudaStream_t stream,
+        device_async_resource_ref mr,
     ) except +libcudf_exception_handler
