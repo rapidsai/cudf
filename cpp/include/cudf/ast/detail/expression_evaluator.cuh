@@ -18,7 +18,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cooperative_groups/memcpy_async.h>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
@@ -635,7 +634,7 @@ struct expression_evaluator {
         if constexpr (has_nulls) {
           if (result.has_value()) {
             std::int64_t rep{};
-            memcpy(&rep, &*result, sizeof(Element));
+            memcpy(&rep, &(result.value()), sizeof(Element));
             thread_intermediate_storage[device_data_reference.data_index] =
               IntermediateDataType<has_nulls>{rep};
           } else {
