@@ -27,7 +27,6 @@ namespace {
 [[nodiscard]] std::string nvcomp_status_to_string(nvcompStatus_t status)
 {
 #if NVCOMP_VER_MAJOR > 5 || (NVCOMP_VER_MAJOR == 5 && NVCOMP_VER_MINOR >= 2)
-  // nvcompGetStatusString added in nvcomp 5.2
   if (auto const* str = nvcompGetStatusString(status); str != nullptr) { return str; }
   return "nvcompStatus_t(" + std::to_string(static_cast<int>(status)) + ")";
 #else
