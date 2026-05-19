@@ -84,7 +84,8 @@ cpdef Column decode_protobuf(
     DeviceMemoryResource mr = None,
 ):
     """
-    Decode serialized protobuf messages from a LIST<INT8/UINT8> column into a STRUCT column.
+    Decode serialized protobuf messages from a LIST<INT8/UINT8> column
+    into a STRUCT column.
 
     Parameters
     ----------

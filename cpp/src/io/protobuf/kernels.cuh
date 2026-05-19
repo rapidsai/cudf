@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2026, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -564,7 +553,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
   rmm::device_async_resource_ref mr)
 {
   int32_t def_len = has_default ? static_cast<int32_t>(default_bytes.size()) : 0;
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr    = cudf::get_current_device_resource_ref();
   rmm::device_uvector<uint8_t> d_default(0, stream, temp_mr);
   if (has_default && def_len > 0) {
     d_default = cudf::detail::make_device_uvector_async(default_bytes, stream, temp_mr);
@@ -645,12 +634,8 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
                     validity_fn);
   auto [mask, null_count] = make_null_mask_from_valid(valid, stream, mr);
   if (as_bytes) {
-    auto bytes_child =
-      std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT8},
-                                     total_size,
-                                     chars.release(),
-                                     rmm::device_buffer{},
-                                     0);
+    auto bytes_child = std::make_unique<cudf::column>(
+      cudf::data_type{cudf::type_id::UINT8}, total_size, chars.release(), rmm::device_buffer{}, 0);
     return cudf::make_lists_column(
       num_rows, std::move(offsets_col), std::move(bytes_child), null_count, std::move(mask));
   }

@@ -235,15 +235,14 @@ TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
 
   auto [bytes, ints] = make_empty_vectors(n);
 
-  pb::decode_protobuf_options options{
-    std::move(schema),
-    std::vector<int64_t>(n, 0),
-    std::vector<double>(n, 0.0),
-    std::vector<uint8_t>(n, 0),
-    std::move(bytes),
-    std::move(ints),
-    std::vector<std::vector<std::vector<uint8_t>>>(n),
-    true};
+  pb::decode_protobuf_options options{std::move(schema),
+                                      std::vector<int64_t>(n, 0),
+                                      std::vector<double>(n, 0.0),
+                                      std::vector<uint8_t>(n, 0),
+                                      std::move(bytes),
+                                      std::move(ints),
+                                      std::vector<std::vector<std::vector<uint8_t>>>(n),
+                                      true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 
@@ -272,15 +271,14 @@ TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
 
   auto [bytes, ints] = make_empty_vectors(n);
 
-  pb::decode_protobuf_options options{
-    std::move(schema),
-    std::vector<int64_t>(n, 0),
-    std::vector<double>(n, 0.0),
-    std::vector<uint8_t>(n, 0),
-    std::move(bytes),
-    std::move(ints),
-    std::vector<std::vector<std::vector<uint8_t>>>(n),
-    true};
+  pb::decode_protobuf_options options{std::move(schema),
+                                      std::vector<int64_t>(n, 0),
+                                      std::vector<double>(n, 0.0),
+                                      std::vector<uint8_t>(n, 0),
+                                      std::move(bytes),
+                                      std::move(ints),
+                                      std::vector<std::vector<std::vector<uint8_t>>>(n),
+                                      true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 

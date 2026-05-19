@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2026, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -103,12 +92,24 @@ struct nested_field_descriptor {
  * and enum metadata needed for decoding.
  */
 struct decode_protobuf_options {
-  using byte_vector       = std::vector<uint8_t>;
-  using enum_value_vector = std::vector<int32_t>;
-  using enum_name_vector  = std::vector<byte_vector>;
+  using byte_vector       = std::vector<uint8_t>;  ///< Raw byte vector for string or enum name data
+  using enum_value_vector = std::vector<int32_t>;  ///< Valid enum numbers for one field
+  using enum_name_vector  = std::vector<byte_vector>;  ///< UTF-8 enum names for one field
 
   decode_protobuf_options() = default;
 
+  /**
+   * @brief Construct options from complete schema metadata.
+   *
+   * @param schema Flat array of field descriptors
+   * @param default_ints Default integer values per field
+   * @param default_floats Default float values per field
+   * @param default_bools Default boolean values per field
+   * @param default_strings Default string values per field
+   * @param enum_valid_values Valid enum numbers per field
+   * @param enum_names UTF-8 enum names per field
+   * @param fail_on_errors Whether malformed messages should raise an error
+   */
   decode_protobuf_options(std::vector<nested_field_descriptor> schema,
                           std::vector<int64_t> default_ints,
                           std::vector<double> default_floats,
@@ -132,16 +133,19 @@ struct decode_protobuf_options {
    * @brief Creates a builder for decode_protobuf_options.
    *
    * The builder initializes per-field metadata containers to match the schema size.
+   *
+   * @param schema Flat array of field descriptors
+   * @return A builder initialized with the provided schema
    */
   static decode_protobuf_options_builder builder(std::vector<nested_field_descriptor> schema);
 
-  std::vector<nested_field_descriptor> schema;  ///< Flat array of field descriptors
-  std::vector<int64_t> default_ints;            ///< Default integer values per field
-  std::vector<double> default_floats;           ///< Default float values per field
-  std::vector<uint8_t> default_bools;           ///< Default boolean values per field (0 or 1)
-  std::vector<byte_vector> default_strings;     ///< Default string values per field
+  std::vector<nested_field_descriptor> schema;       ///< Flat array of field descriptors
+  std::vector<int64_t> default_ints;                 ///< Default integer values per field
+  std::vector<double> default_floats;                ///< Default float values per field
+  std::vector<uint8_t> default_bools;                ///< Default boolean values per field (0 or 1)
+  std::vector<byte_vector> default_strings;          ///< Default string values per field
   std::vector<enum_value_vector> enum_valid_values;  ///< Valid enum numbers per field
-  std::vector<enum_name_vector> enum_names;           ///< UTF-8 enum names per field
+  std::vector<enum_name_vector> enum_names;          ///< UTF-8 enum names per field
   bool fail_on_errors = true;  ///< If true, throw on malformed messages; otherwise return nulls
 };
 
@@ -150,38 +154,67 @@ struct decode_protobuf_options {
  */
 class decode_protobuf_options_builder {
  public:
+  /**
+   * @brief Construct a builder for decode_protobuf_options.
+   *
+   * @param schema Flat array of field descriptors
+   */
   explicit decode_protobuf_options_builder(std::vector<nested_field_descriptor> schema)
   {
-    auto const num_fields     = schema.size();
-    _options.schema           = std::move(schema);
-    _options.default_ints     = std::vector<int64_t>(num_fields);
-    _options.default_floats   = std::vector<double>(num_fields);
-    _options.default_bools    = std::vector<uint8_t>(num_fields);
-    _options.default_strings  = std::vector<decode_protobuf_options::byte_vector>(num_fields);
+    auto const num_fields    = schema.size();
+    _options.schema          = std::move(schema);
+    _options.default_ints    = std::vector<int64_t>(num_fields);
+    _options.default_floats  = std::vector<double>(num_fields);
+    _options.default_bools   = std::vector<uint8_t>(num_fields);
+    _options.default_strings = std::vector<decode_protobuf_options::byte_vector>(num_fields);
     _options.enum_valid_values =
       std::vector<decode_protobuf_options::enum_value_vector>(num_fields);
     _options.enum_names     = std::vector<decode_protobuf_options::enum_name_vector>(num_fields);
     _options.fail_on_errors = true;
   }
 
+  /**
+   * @brief Set default integer values.
+   *
+   * @param values Default integer values per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& default_ints(std::vector<int64_t> values)
   {
     _options.default_ints = std::move(values);
     return *this;
   }
 
+  /**
+   * @brief Set default float values.
+   *
+   * @param values Default float values per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& default_floats(std::vector<double> values)
   {
     _options.default_floats = std::move(values);
     return *this;
   }
 
+  /**
+   * @brief Set default boolean values.
+   *
+   * @param values Default boolean values per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& default_bools(std::vector<uint8_t> values)
   {
     _options.default_bools = std::move(values);
     return *this;
   }
 
+  /**
+   * @brief Set default string values.
+   *
+   * @param values Default string values per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& default_strings(
     std::vector<decode_protobuf_options::byte_vector> values)
   {
@@ -189,6 +222,12 @@ class decode_protobuf_options_builder {
     return *this;
   }
 
+  /**
+   * @brief Set valid enum numeric values.
+   *
+   * @param values Valid enum numbers per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& enum_valid_values(
     std::vector<decode_protobuf_options::enum_value_vector> values)
   {
@@ -196,6 +235,12 @@ class decode_protobuf_options_builder {
     return *this;
   }
 
+  /**
+   * @brief Set enum names.
+   *
+   * @param values UTF-8 enum names per field
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& enum_names(
     std::vector<decode_protobuf_options::enum_name_vector> values)
   {
@@ -203,12 +248,23 @@ class decode_protobuf_options_builder {
     return *this;
   }
 
+  /**
+   * @brief Set error handling behavior.
+   *
+   * @param value Whether malformed messages should raise an error
+   * @return Reference to this builder
+   */
   decode_protobuf_options_builder& fail_on_errors(bool value)
   {
     _options.fail_on_errors = value;
     return *this;
   }
 
+  /**
+   * @brief Build decode_protobuf_options.
+   *
+   * @return Completed decode_protobuf_options
+   */
   decode_protobuf_options&& build() { return std::move(_options); }
 
  private:
