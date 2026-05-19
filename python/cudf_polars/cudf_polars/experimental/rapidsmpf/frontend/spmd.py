@@ -350,7 +350,7 @@ class SPMDEngine(StreamingEngine):
         )
         bind_to_gpu(hw_binding)
 
-        rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         mr_config: MemoryResourceConfig = engine_options.get(
             "memory_resource_config", MemoryResourceConfig.default()
         )
@@ -361,12 +361,12 @@ class SPMDEngine(StreamingEngine):
                 comm = bootstrap.create_ucxx_comm(
                     progress_thread=ProgressThread(),
                     type=bootstrap.BackendType.AUTO,
-                    options=rapidsmpf_options,
+                    options=self.rapidsmpf_options,
                 )
             else:
                 comm = single_communicator(
                     progress_thread=ProgressThread(),
-                    options=rapidsmpf_options,
+                    options=self.rapidsmpf_options,
                 )
         # else: caller-provided comm; the caller retains ownership
 
@@ -380,7 +380,7 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            self._ctx = Context.from_options(comm.logger, mr, rapidsmpf_options)
+            self._ctx = Context.from_options(comm.logger, mr, self.rapidsmpf_options)
             exit_stack.callback(self._cleanup_ctx)
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the

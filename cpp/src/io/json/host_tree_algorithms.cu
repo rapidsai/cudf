@@ -939,12 +939,19 @@ void scatter_offsets(tree_meta_t const& tree,
       if (d_ignore_vals[col_ids[i]]) return;
       auto const node_category = column_categories[col_ids[i]];
       switch (node_category) {
-        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
+        case NC_STRUCT:
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          break;
+        case NC_LIST:
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          break;
         case NC_STR: [[fallthrough]];
         case NC_VAL:
           if (d_ignore_vals[col_ids[i]]) break;
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
           d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;

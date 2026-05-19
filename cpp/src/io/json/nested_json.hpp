@@ -288,6 +288,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
  * @param options Parsing options specifying the parsing behaviour
  * @param stream The cuda stream to dispatch GPU kernels to
  */
+CUDF_EXPORT
 void validate_token_stream(device_span<char const> d_input,
                            device_span<PdaTokenT> tokens,
                            device_span<SymbolOffsetT> token_indices,

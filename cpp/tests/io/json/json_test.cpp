@@ -22,16 +22,11 @@
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/mr/pool_memory_resource.hpp>
-
 #include <cuda/iterator>
-#include <cuda/memory_resource>
 
 #include <fstream>
 #include <limits>
@@ -1607,15 +1602,15 @@ TEST_F(JsonReaderTest, TestColumnOrder)
   // Read in data using nested JSON reader
   cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
 
-  // Verify root column order (assert to avoid OOB access)
+  // Verify root column order before accessing schema entries.
   ASSERT_EQ(new_reader_table.metadata.schema_info.size(), root_col_names.size());
 
-  for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
+  for (std::size_t i = 0; i < root_col_names.size(); i++) {
     auto const& root_col_name = root_col_names[i];
     EXPECT_EQ(new_reader_table.metadata.schema_info[i].name, root_col_name);
   }
 
-  // Verify nested child column order (assert to avoid OOB access)
+  // Verify nested child column order before accessing schema entries.
   ASSERT_EQ(new_reader_table.metadata.schema_info[2].children.size(), a_child_col_names.size());
   for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
     auto const& a_child_col_name = a_child_col_names[i];
@@ -2063,6 +2058,26 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
     result.tbl->get_column(1),
     float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
                     c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
+{
+  std::string data =
+    // Two lines with just an open brace (malformed JSON)
+    "{\n"
+    "{";
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  // All rows are invalid with no schema to infer, so we expect 0 rows
+  EXPECT_EQ(result.tbl->num_rows(), 0);
 }
 
 TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
@@ -3752,6 +3767,58 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagDescendantOnlyNotOnChildren)
   for (auto const& child : result.metadata.schema_info[0].children) {
     EXPECT_FALSE(child.had_schema_mismatch.has_value());
   }
+}
+
+TEST_F(JsonReaderTest, MalformedFieldNameWithBrace)
+{
+  // Garbled field name containing '{' creates structural ambiguity in the
+  // token tree.  Combined with an invalid byte in a sibling row, the parser
+  // may produce column-tree nodes that are never materialised as columns.
+  // Recovery mode must handle this without accessing uninitialised memory.
+  std::string json_string =
+    R"({"name":"Alice","address":{"city":"NYC","zip":"1"},"score{":[95,2]})"
+    "\n"
+    R"({"name":"Bob","address":{"city":"LA","zip":"1"},"scores":[)"
+    "\xbf"
+    R"(8,82]})"
+    "\n"
+    R"({"name":"C","address":{"city":"Chi","zip":"60601"},"scores":[1,97]})";
+
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(options));
+}
+
+TEST_F(JsonReaderTest, MalformedStructuralCharsInValues)
+{
+  // A malformed middle line must not affect surrounding well-formed records.
+  std::string json_string = R"({"a":1,"b":[10,20]})"
+                            "\n"
+                            R"({"phantom":{"nested":[30,{"c":40)"
+                            "\n"
+                            R"({"a":3,"b":[50,60]})";
+
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  cudf::io::table_with_metadata tbl;
+  ASSERT_NO_THROW(tbl = cudf::io::read_json(options));
+  ASSERT_EQ(tbl.tbl->num_rows(), 3);
+  ASSERT_EQ(tbl.tbl->num_columns(), 2);
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_a{{1, 0, 3}, {true, false, true}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(tbl.tbl->view().column(0), expected_a);
+  EXPECT_EQ(tbl.tbl->get_column(0).null_count(), 1);
+  // Column "b": list<int64> [[10,20], null, [50,60]].
+  using LCWI = cudf::test::lists_column_wrapper<int64_t>;
+  LCWI expected_b{{LCWI{10, 20}, LCWI{}, LCWI{50, 60}}, std::vector<bool>{1, 0, 1}.begin()};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(tbl.tbl->view().column(1), expected_b);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
