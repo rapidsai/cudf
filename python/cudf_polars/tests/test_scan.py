@@ -416,6 +416,8 @@ def chunked_df(df, tmpdir_factory, chunked_slice):
         (0, 1),
         (1, 0),
         (1, 1),
+        (2, 1),
+        (1, 2),
     ],
     ids=lambda x: f"limit_{x}",
 )
