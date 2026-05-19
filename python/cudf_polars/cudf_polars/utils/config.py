@@ -87,6 +87,7 @@ def get_device() -> Any:
             return None
     else:
         device = system.Device(index=int(index_or_uuid))
+    return device
 
 
 @functools.cache
