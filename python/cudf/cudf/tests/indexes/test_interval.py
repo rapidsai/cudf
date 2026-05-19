@@ -1,12 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import IntervalIndex, interval_range
 from cudf.testing import assert_eq
 
@@ -40,20 +40,6 @@ PERIODS_TYPES = [
     np.int32,
     np.int64,
 ]
-
-
-def assert_with_pandas_2_bug(pindex, gindex):
-    # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
-    # using Series to use check_dtype
-    if gindex.dtype.subtype.kind == "f":
-        gindex = gindex.astype(
-            cudf.IntervalDtype(subtype="float64", closed=gindex.dtype.closed)
-        )
-    elif gindex.dtype.subtype.kind == "i":
-        gindex = gindex.astype(
-            cudf.IntervalDtype(subtype="int64", closed=gindex.dtype.closed)
-        )
-    assert_eq(pd.Series(pindex), cudf.Series(gindex), check_dtype=False)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -106,7 +92,7 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
     gindex = cudf.interval_range(
         start=start, end=end, freq=freq, closed="left"
     )
-    assert_with_pandas_2_bug(pindex, gindex)
+    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -135,27 +121,29 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     gindex = cudf.interval_range(
         start=start, end=end, periods=periods, closed="left"
     )
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(gindex.dtype.subtype, pindex.dtype.closed)
+        )
 
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Does not warn on older versions of pandas",
-)
-def test_interval_range_periods_warnings():
+def test_interval_range_periods_non_integer_raises():
     start_val, end_val, periods_val = 0, 4, 1.0
 
-    with pytest.warns(FutureWarning):
-        pindex = pd.interval_range(
+    with pytest.raises(TypeError):
+        pd.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )
-    with pytest.warns(FutureWarning):
-        gindex = cudf.interval_range(
+    with pytest.raises(TypeError):
+        cudf.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )
-
-    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -184,7 +172,17 @@ def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
     gindex = cudf.interval_range(
         end=end, freq=freq, periods=periods, closed="left"
     )
-    assert_with_pandas_2_bug(pindex, gindex)
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(
+                subtype=gindex.dtype.subtype, closed=pindex.dtype.closed
+            )
+        )
+    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -213,7 +211,17 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
     gindex = cudf.interval_range(
         start=start, freq=freq, periods=periods, closed="left"
     )
-    assert_with_pandas_2_bug(pindex, gindex)
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(
+                subtype=gindex.dtype.subtype, closed=pindex.dtype.closed
+            )
+        )
+    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
@@ -290,26 +298,18 @@ def test_interval_index_from_breaks(closed):
     [
         (0.0, None, 0.2, 5),
         (0.0, 1.0, None, 5),
-        pytest.param(
+        (
             0.0,
             1.0,
             0.2,
             None,
-            marks=pytest.mark.skipif(
-                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="https://github.com/pandas-dev/pandas/pull/54477",
-            ),
         ),
         (None, 1.0, 0.2, 5),
-        pytest.param(
+        (
             0.0,
             1.0,
             0.1,
             None,
-            marks=pytest.mark.xfail(
-                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="https://github.com/pandas-dev/pandas/pull/54477",
-            ),
         ),
         (0.0, 1.0, None, 10),
         (0.0, None, 0.25, 4),
