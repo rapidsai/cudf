@@ -8,10 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.testing import assert_eq, assert_groupby_results_equal
 
@@ -185,13 +181,15 @@ def test_groupby_as_index_multiindex(as_index):
     ],
 )
 def test_groupby_2keys_agg(func):
-    # gdf (Note: lack of multiIndex)
     nelem = 20
     pdf = pd.DataFrame(np.ones((nelem, 2)), columns=["x", "y"])
     gdf = cudf.DataFrame(pdf)
     expect_df = pdf.groupby(["x", "y"]).agg(func)
     got_df = gdf.groupby(["x", "y"]).agg(func)
-
+    # As of pandas 3.0, empty default type of object isn't
+    # necessarily equivalent to cuDF's empty default type of
+    # pandas.StringDtype
+    expect_df.columns = expect_df.columns.astype(got_df.columns.dtype)
     assert_groupby_results_equal(got_df, expect_df)
 
 
@@ -209,13 +207,6 @@ def test_groupby_agg_decimal(groupby_reduction_methods, request):
             groupby_reduction_methods in ["prod", "mean"],
             raises=pd.errors.DataError,
             reason=f"{groupby_reduction_methods} not supported with Decimals in pandas",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmax", "idxmin"]
-            and PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-            reason=f"{groupby_reduction_methods} not supported with Decimals in an older version of pandas",
         )
     )
     rng = np.random.default_rng(seed=0)
@@ -397,11 +388,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="previous verion of pandas throws a warning",
-)
-def test_groupby_nulls_basic(groupby_reduction_methods, request):
+def test_groupby_nulls_basic(groupby_reduction_methods):
     pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
@@ -422,6 +409,8 @@ def test_groupby_nulls_basic(groupby_reduction_methods, request):
         getattr(gdf.groupby("a"), groupby_reduction_methods)(),
     )
 
+
+def test_groupby_nulls_all_na_group(groupby_reduction_methods, request):
     pdf = pd.DataFrame(
         {
             "a": [0, 0, 1, 1, 2, 2],
@@ -431,16 +420,22 @@ def test_groupby_nulls_basic(groupby_reduction_methods, request):
     )
     gdf = cudf.from_pandas(pdf)
 
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["prod", "sum"],
-            reason="cuDF returns NaN instead of an actual value",
+    if groupby_reduction_methods in ["idxmin", "idxmax"]:
+        with pytest.raises(ValueError):
+            getattr(gdf.groupby("a"), groupby_reduction_methods)()
+        with pytest.raises(ValueError):
+            getattr(pdf.groupby("a"), groupby_reduction_methods)()
+    else:
+        request.applymarker(
+            pytest.mark.xfail(
+                groupby_reduction_methods in ["prod", "sum"],
+                reason="cuDF returns NaN instead of an actual value",
+            )
         )
-    )
-    assert_groupby_results_equal(
-        getattr(pdf.groupby("a"), groupby_reduction_methods)(),
-        getattr(gdf.groupby("a"), groupby_reduction_methods)(),
-    )
+        assert_groupby_results_equal(
+            getattr(pdf.groupby("a"), groupby_reduction_methods)(),
+            getattr(gdf.groupby("a"), groupby_reduction_methods)(),
+        )
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
@@ -513,7 +508,12 @@ def test_groupby_agg_combinations(agg):
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
 def test_groupby_list_simple(list_agg):
-    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": pd.array([1, 2, None, 4, 5, 6], dtype="double[pyarrow]"),
+        }
+    )
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
@@ -567,7 +567,9 @@ def test_groupby_list_of_structs(list_agg):
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
 def test_groupby_list_single_element(list_agg):
-    pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
+    pdf = pd.DataFrame(
+        {"a": [1, 2], "b": pd.array([3, None], dtype="double[pyarrow]")}
+    )
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
@@ -584,7 +586,7 @@ def test_groupby_list_strings(agg):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2],
-            "b": ["b", "a", None, "e", "d"],
+            "b": pd.array(["b", "a", None, "e", "d"], dtype="string[pyarrow]"),
             "c": [1, 2, 3, 4, 5],
         }
     )

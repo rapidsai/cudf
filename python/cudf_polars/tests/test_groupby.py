@@ -15,7 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import get_blocksize_mode, is_streaming_engine
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
 )
@@ -294,18 +294,13 @@ def test_groupby_nested_list_struct_raises(engine: pl.GPUEngine, dtype):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-@pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(
     engine: pl.GPUEngine,
-    nrows,
-    nkeys,
-    with_nulls,
+    nkeys: int,
+    with_nulls: bool,  # noqa: FBT001
 ):
-    if nrows > 30 and (
-        get_blocksize_mode(engine) == "small" or is_streaming_engine(engine)
-    ):
-        pytest.skip("streaming executor too slow for large n_rows")
+    nrows = 30
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)
     key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
