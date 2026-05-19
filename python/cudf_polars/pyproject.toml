@@ -96,9 +96,9 @@ exclude_also = [
   "class .*\\bProtocol(?:\\[[^]]+\\])?\\):",
   "assert_never\\("
 ]
-# The cudf_polars test suite does not exercise the plugin or all experimental
-# tests (some require optional dependencies and others are not yet fully covered),
-# so we omit them from coverage checks.
+# The cudf_polars test suite does not exercise the plugin and not all
+# streaming tests are not yet fully covered, so we omit them from coverage checks.
+# See https://github.com/rapidsai/cudf/issues/22568.
 omit = [
   "cudf_polars/testing/inject_gpu_engine.py",
   "cudf_polars/streaming/**",
