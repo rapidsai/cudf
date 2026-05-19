@@ -20,7 +20,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <cuda/std/limits>
+#include <cuda/numeric>
 #include <thrust/transform_reduce.h>
 
 namespace cudf::reduction::detail {
@@ -42,22 +42,11 @@ struct overflow_sum_op {
   __device__ sum_overflow_result<DeviceType> operator()(
     sum_overflow_result<DeviceType> const& lhs, sum_overflow_result<DeviceType> const& rhs) const
   {
-    // If either operand already has overflow, propagate without performing the add.
     if (lhs.overflow || rhs.overflow) {
       return sum_overflow_result<DeviceType>{DeviceType{0}, true};
     }
-
-    // Check for positive overflow: would the addition exceed max()?
-    if (rhs.sum > 0 && lhs.sum > cuda::std::numeric_limits<DeviceType>::max() - rhs.sum) {
-      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
-    }
-    // Check for negative overflow: would the addition go below min()?
-    if (rhs.sum < 0 && lhs.sum < cuda::std::numeric_limits<DeviceType>::min() - rhs.sum) {
-      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
-    }
-
-    // Perform the addition (safe if no overflow detected)
-    return sum_overflow_result<DeviceType>{static_cast<DeviceType>(lhs.sum + rhs.sum), false};
+    auto const r = cuda::add_overflow<DeviceType>(lhs.sum, rhs.sum);
+    return sum_overflow_result<DeviceType>{r.overflow ? DeviceType{0} : r.value, r.overflow};
   }
 };
 
