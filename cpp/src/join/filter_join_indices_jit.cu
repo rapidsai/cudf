@@ -76,7 +76,7 @@ jitify2::StringVec build_join_filter_template_params(
                                  "cudf::column_device_view_core",
                                  element,
                                  true,
-                                 0  // scalars dont belong to a table, so just use 0 as placeholder
+                                 0  // scalars don't belong to a table, so just use 0 as placeholder
                                  ));
     }
   }
