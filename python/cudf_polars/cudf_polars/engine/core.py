@@ -25,12 +25,12 @@ import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
+from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
 from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.collectives import ReserveOpIDs
-from cudf_polars.streaming.collectives.common import reserve_op_id
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat

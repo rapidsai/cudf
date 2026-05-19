@@ -59,6 +59,10 @@ from cudf_polars.dsl.expr import GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.streaming.actor_graph.collectives.shuffle import (
+    LocalRepartitioner,
+    ShuffleManager,
+)
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -80,10 +84,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     replay_buffered_channel,
     send_metadata,
     shutdown_on_error,
-)
-from cudf_polars.streaming.collectives.shuffle import (
-    LocalRepartitioner,
-    ShuffleManager,
 )
 from cudf_polars.streaming.over import Over, _build_over_groupby_irs
 

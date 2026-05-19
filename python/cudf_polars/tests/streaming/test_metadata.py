@@ -24,14 +24,14 @@ from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select, Sort
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.collectives.sort import (
+    _is_already_sorted,
+    _sort_to_order_keys,
+)
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.streaming.actor_graph.utils import (
     NormalizedPartitioning,
     maybe_remap_partitioning,
-)
-from cudf_polars.streaming.collectives.sort import (
-    _is_already_sorted,
-    _sort_to_order_keys,
 )
 from cudf_polars.utils.config import ConfigOptions
 
