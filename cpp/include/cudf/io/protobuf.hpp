@@ -18,7 +18,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -27,10 +26,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace io::protobuf {
+
+class decode_protobuf_options_builder;
 
 /**
  * @brief Protobuf field encoding types.
@@ -101,40 +103,131 @@ struct nested_field_descriptor {
  * and enum metadata needed for decoding.
  */
 struct decode_protobuf_options {
+  using byte_vector       = std::vector<uint8_t>;
+  using enum_value_vector = std::vector<int32_t>;
+  using enum_name_vector  = std::vector<byte_vector>;
+
+  decode_protobuf_options() = default;
+
+  decode_protobuf_options(std::vector<nested_field_descriptor> schema,
+                          std::vector<int64_t> default_ints,
+                          std::vector<double> default_floats,
+                          std::vector<uint8_t> default_bools,
+                          std::vector<byte_vector> default_strings,
+                          std::vector<enum_value_vector> enum_valid_values,
+                          std::vector<enum_name_vector> enum_names,
+                          bool fail_on_errors = true)
+    : schema(std::move(schema)),
+      default_ints(std::move(default_ints)),
+      default_floats(std::move(default_floats)),
+      default_bools(std::move(default_bools)),
+      default_strings(std::move(default_strings)),
+      enum_valid_values(std::move(enum_valid_values)),
+      enum_names(std::move(enum_names)),
+      fail_on_errors(fail_on_errors)
+  {
+  }
+
+  /**
+   * @brief Creates a builder for decode_protobuf_options.
+   *
+   * The builder initializes per-field metadata containers to match the schema size.
+   */
+  static decode_protobuf_options_builder builder(std::vector<nested_field_descriptor> schema);
+
   std::vector<nested_field_descriptor> schema;  ///< Flat array of field descriptors
   std::vector<int64_t> default_ints;            ///< Default integer values per field
   std::vector<double> default_floats;           ///< Default float values per field
-  std::vector<bool> default_bools;              ///< Default boolean values per field
-  std::vector<cudf::detail::host_vector<uint8_t>>
-    default_strings;  ///< Default string values per field
-  std::vector<cudf::detail::host_vector<int32_t>>
-    enum_valid_values;  ///< Valid enum numbers per field
-  std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>
-    enum_names;         ///< UTF-8 enum names per field
-  bool fail_on_errors;  ///< If true, throw on malformed messages; otherwise return nulls
+  std::vector<uint8_t> default_bools;           ///< Default boolean values per field (0 or 1)
+  std::vector<byte_vector> default_strings;     ///< Default string values per field
+  std::vector<enum_value_vector> enum_valid_values;  ///< Valid enum numbers per field
+  std::vector<enum_name_vector> enum_names;           ///< UTF-8 enum names per field
+  bool fail_on_errors = true;  ///< If true, throw on malformed messages; otherwise return nulls
 };
 
 /**
- * @brief View into a single field's metadata from a decode_protobuf_options.
+ * @brief Builder for decode_protobuf_options.
  */
-struct protobuf_field_meta_view {
-  nested_field_descriptor const& schema;
-  cudf::data_type const output_type;
-  int64_t default_int;
-  double default_float;
-  bool default_bool;
-  cudf::detail::host_vector<uint8_t> const& default_string;
-  cudf::detail::host_vector<int32_t> const& enum_valid_values;
-  std::vector<cudf::detail::host_vector<uint8_t>> const& enum_names;
+class decode_protobuf_options_builder {
+ public:
+  explicit decode_protobuf_options_builder(std::vector<nested_field_descriptor> schema)
+  {
+    auto const num_fields     = schema.size();
+    _options.schema           = std::move(schema);
+    _options.default_ints     = std::vector<int64_t>(num_fields);
+    _options.default_floats   = std::vector<double>(num_fields);
+    _options.default_bools    = std::vector<uint8_t>(num_fields);
+    _options.default_strings  = std::vector<decode_protobuf_options::byte_vector>(num_fields);
+    _options.enum_valid_values =
+      std::vector<decode_protobuf_options::enum_value_vector>(num_fields);
+    _options.enum_names     = std::vector<decode_protobuf_options::enum_name_vector>(num_fields);
+    _options.fail_on_errors = true;
+  }
+
+  decode_protobuf_options_builder& default_ints(std::vector<int64_t> values)
+  {
+    _options.default_ints = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& default_floats(std::vector<double> values)
+  {
+    _options.default_floats = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& default_bools(std::vector<uint8_t> values)
+  {
+    _options.default_bools = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& default_strings(
+    std::vector<decode_protobuf_options::byte_vector> values)
+  {
+    _options.default_strings = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& enum_valid_values(
+    std::vector<decode_protobuf_options::enum_value_vector> values)
+  {
+    _options.enum_valid_values = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& enum_names(
+    std::vector<decode_protobuf_options::enum_name_vector> values)
+  {
+    _options.enum_names = std::move(values);
+    return *this;
+  }
+
+  decode_protobuf_options_builder& fail_on_errors(bool value)
+  {
+    _options.fail_on_errors = value;
+    return *this;
+  }
+
+  decode_protobuf_options&& build() { return std::move(_options); }
+
+ private:
+  decode_protobuf_options _options;
 };
+
+inline decode_protobuf_options_builder decode_protobuf_options::builder(
+  std::vector<nested_field_descriptor> schema)
+{
+  return decode_protobuf_options_builder{std::move(schema)};
+}
 
 /**
  * @brief Decode serialized protobuf messages into a struct column.
  *
- * Takes a LIST<UINT8> column where each row contains a serialized protobuf message,
- * and decodes it into a STRUCT column according to the provided schema.
+ * Takes a LIST<INT8> or LIST<UINT8> column where each row contains a serialized
+ * protobuf message, and decodes it into a STRUCT column according to the provided schema.
  *
- * Supports nested messages (up to 10 levels), repeated fields (as LIST columns),
+ * Supports nested messages (up to MAX_NESTING_DEPTH levels), repeated fields (as LIST columns),
  * enum-as-string conversion, default values, and required field checking.
  *
  * @param binary_input LIST<INT8> or LIST<UINT8> column of serialized protobuf messages
@@ -146,7 +239,7 @@ struct protobuf_field_meta_view {
  * @throws cudf::logic_error if the schema is invalid
  * @throws cudf::logic_error if fail_on_errors is true and a message cannot be decoded
  */
-std::unique_ptr<cudf::column> decode_protobuf(
+[[nodiscard]] std::unique_ptr<cudf::column> decode_protobuf(
   cudf::column_view const& binary_input,
   decode_protobuf_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),

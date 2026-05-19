@@ -193,7 +193,7 @@ CUDF_KERNEL void extract_varint_kernel(uint8_t const* message_data,
   uint64_t v;
   int n;
   if (!read_varint(cur, cur_end, v, n)) {
-    set_error_once(error_flag, ERR_VARINT);
+    set_error_once(error_flag, proto_decode_error::VARINT);
     if (valid) valid[idx] = false;
     return;
   }
@@ -234,7 +234,7 @@ CUDF_KERNEL void extract_fixed_kernel(uint8_t const* message_data,
 
   if constexpr (WT == wire_type_value(proto_wire_type::I32BIT)) {
     if (loc.length < 4) {
-      set_error_once(error_flag, ERR_FIXED_LEN);
+      set_error_once(error_flag, proto_decode_error::FIXED_LEN);
       if (valid) valid[idx] = false;
       return;
     }
@@ -242,7 +242,7 @@ CUDF_KERNEL void extract_fixed_kernel(uint8_t const* message_data,
     memcpy(&value, &raw, sizeof(value));
   } else {
     if (loc.length < 8) {
-      set_error_once(error_flag, ERR_FIXED_LEN);
+      set_error_once(error_flag, proto_decode_error::FIXED_LEN);
       if (valid) valid[idx] = false;
       return;
     }
@@ -311,7 +311,7 @@ CUDF_KERNEL void extract_varint_batched_kernel(uint8_t const* message_data,
   uint64_t v;
   int n;
   if (!read_varint(cur, end, v, n)) {
-    set_error_once(error_flag, ERR_VARINT);
+    set_error_once(error_flag, proto_decode_error::VARINT);
     desc.valid[row] = false;
     return;
   }
@@ -359,7 +359,7 @@ CUDF_KERNEL void extract_fixed_batched_kernel(uint8_t const* message_data,
 
   if constexpr (WT == wire_type_value(proto_wire_type::I32BIT)) {
     if (loc.length < 4) {
-      set_error_once(error_flag, ERR_FIXED_LEN);
+      set_error_once(error_flag, proto_decode_error::FIXED_LEN);
       desc.valid[row] = false;
       return;
     }
@@ -367,7 +367,7 @@ CUDF_KERNEL void extract_fixed_batched_kernel(uint8_t const* message_data,
     memcpy(&value, &raw, sizeof(value));
   } else {
     if (loc.length < 8) {
-      set_error_once(error_flag, ERR_FIXED_LEN);
+      set_error_once(error_flag, proto_decode_error::FIXED_LEN);
       desc.valid[row] = false;
       return;
     }
@@ -558,7 +558,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
   CopyProvider const& copy_provider,
   ValidityFn validity_fn,
   bool has_default,
-  cudf::detail::host_vector<uint8_t> const& default_bytes,
+  decode_protobuf_options::byte_vector const& default_bytes,
   rmm::device_uvector<int>& d_error,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -672,10 +672,10 @@ inline std::unique_ptr<cudf::column> extract_typed_column(
   int64_t default_int,
   double default_float,
   bool default_bool,
-  cudf::detail::host_vector<uint8_t> const& default_string,
+  decode_protobuf_options::byte_vector const& default_string,
   int schema_idx,
-  std::vector<cudf::detail::host_vector<int32_t>> const& enum_valid_values,
-  std::vector<std::vector<cudf::detail::host_vector<uint8_t>>> const& enum_names,
+  std::vector<decode_protobuf_options::enum_value_vector> const& enum_valid_values,
+  std::vector<decode_protobuf_options::enum_name_vector> const& enum_names,
   rmm::device_uvector<bool>& d_row_force_null,
   rmm::device_uvector<int>& d_error,
   rmm::cuda_stream_view stream,

@@ -3374,7 +3374,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector decodeProtobuf(ProtobufSchemaDescriptor schema,
                                            boolean failOnErrors) {
-    assert type.equals(DType.LIST) : "column type must be a LIST";
+    if (!type.equals(DType.LIST)) {
+      throw new IllegalArgumentException("column type must be a LIST");
+    }
     return new ColumnVector(decodeProtobuf(getNativeView(),
         schema.fieldNumbers, schema.parentIndices, schema.depthLevels,
         schema.wireTypes, schema.outputTypeIds, schema.encodings,

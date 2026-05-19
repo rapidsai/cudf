@@ -16,6 +16,7 @@
 
 #include "io/protobuf/kernels.cuh"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 
@@ -68,18 +69,8 @@ std::unique_ptr<cudf::column> make_empty_column_safe(cudf::data_type dtype,
 {
   switch (dtype.id()) {
     case cudf::type_id::LIST: {
-      auto offsets_col =
-        std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                       1,
-                                       rmm::device_buffer(sizeof(int32_t), stream, mr),
-                                       rmm::device_buffer{},
-                                       0);
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        offsets_col->mutable_view().data<int32_t>(), 0, sizeof(int32_t), stream.value()));
-      auto child_col = std::make_unique<cudf::column>(
-        cudf::data_type{cudf::type_id::UINT8}, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
-      return cudf::make_lists_column(
-        0, std::move(offsets_col), std::move(child_col), 0, rmm::device_buffer{});
+      return cudf::lists::detail::make_empty_lists_column(
+        cudf::data_type{cudf::type_id::UINT8});
     }
     case cudf::type_id::STRUCT: {
       std::vector<std::unique_ptr<cudf::column>> empty_children;
@@ -96,8 +87,8 @@ std::unique_ptr<cudf::column> make_null_list_column_with_child(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<int32_t> offsets(num_rows + 1, stream, mr);
-  thrust::fill(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), 0);
+  auto offsets = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
+    num_rows + 1, stream, mr);
   auto offsets_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                     num_rows + 1,
                                                     offsets.release(),
@@ -109,16 +100,10 @@ std::unique_ptr<cudf::column> make_null_list_column_with_child(
 }
 
 std::unique_ptr<cudf::column> make_empty_list_column(std::unique_ptr<cudf::column> element_col,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
+                                                     rmm::cuda_stream_view,
+                                                     rmm::device_async_resource_ref)
 {
-  auto offsets_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                    1,
-                                                    rmm::device_buffer(sizeof(int32_t), stream, mr),
-                                                    rmm::device_buffer{},
-                                                    0);
-  CUDF_CUDA_TRY(cudaMemsetAsync(
-    offsets_col->mutable_view().data<int32_t>(), 0, sizeof(int32_t), stream.value()));
+  auto offsets_col = cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
   return cudf::make_lists_column(
     0, std::move(offsets_col), std::move(element_col), 0, rmm::device_buffer{});
 }

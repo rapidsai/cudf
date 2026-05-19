@@ -6,43 +6,38 @@
 #include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
 
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/protobuf.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 namespace {
 
-cudf::detail::host_vector<uint8_t> jni_byte_array_to_host_vector(JNIEnv* env, jobject obj)
+std::vector<uint8_t> jni_byte_array_to_vector(JNIEnv* env, jobject obj)
 {
-  if (obj == nullptr) {
-    return cudf::detail::make_host_vector<uint8_t>(0, cudf::get_default_stream());
-  }
+  if (obj == nullptr) { return {}; }
   auto byte_arr = static_cast<jbyteArray>(obj);
   jsize len     = env->GetArrayLength(byte_arr);
   jbyte* bytes  = env->GetByteArrayElements(byte_arr, nullptr);
-  if (bytes == nullptr) {
-    return cudf::detail::make_host_vector<uint8_t>(0, cudf::get_default_stream());
-  }
-  auto vec = cudf::detail::make_host_vector<uint8_t>(len, cudf::get_default_stream());
+  if (bytes == nullptr) { return {}; }
+  auto vec = std::vector<uint8_t>(len);
   std::copy(
     reinterpret_cast<uint8_t*>(bytes), reinterpret_cast<uint8_t*>(bytes) + len, vec.begin());
   env->ReleaseByteArrayElements(byte_arr, bytes, JNI_ABORT);
   return vec;
 }
 
-cudf::detail::host_vector<int32_t> jni_int_array_to_host_vector(JNIEnv* env, jobject obj)
+std::vector<int32_t> jni_int_array_to_vector(JNIEnv* env, jobject obj)
 {
-  if (obj == nullptr) {
-    return cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream());
-  }
+  if (obj == nullptr) { return {}; }
   auto int_arr = static_cast<jintArray>(obj);
   jsize len    = env->GetArrayLength(int_arr);
   jint* ints   = env->GetIntArrayElements(int_arr, nullptr);
-  if (ints == nullptr) {
-    return cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream());
-  }
-  auto vec = cudf::detail::make_host_vector<int32_t>(len, cudf::get_default_stream());
+  if (ints == nullptr) { return {}; }
+  auto vec = std::vector<int32_t>(len);
   std::copy(ints, ints + len, vec.begin());
   env->ReleaseIntArrayElements(int_arr, ints, JNI_ABORT);
   return vec;
@@ -133,35 +128,31 @@ Java_ai_rapids_cudf_ColumnView_decodeProtobuf(JNIEnv* env,
     std::vector<int64_t> default_int_values(n_default_ints.begin(), n_default_ints.end());
     std::vector<double> default_float_values(n_default_floats.begin(), n_default_floats.end());
 
-    std::vector<bool> default_bool_values;
+    std::vector<uint8_t> default_bool_values;
     default_bool_values.reserve(num_fields);
     for (int i = 0; i < num_fields; ++i) {
-      default_bool_values.push_back(n_default_bools[i] != 0);
+      default_bool_values.push_back(n_default_bools[i] != 0 ? 1 : 0);
     }
 
     // Convert default strings (byte[][])
-    auto default_string_values = jni_object_array_to_vectors<cudf::detail::host_vector<uint8_t>>(
-      env, default_strings, num_fields, jni_byte_array_to_host_vector);
+    auto default_string_values = jni_object_array_to_vectors<std::vector<uint8_t>>(
+      env, default_strings, num_fields, jni_byte_array_to_vector);
     if (env->ExceptionCheck()) { return 0; }
 
     // Convert enum valid values (int[][])
-    auto enum_values = jni_object_array_to_vectors<cudf::detail::host_vector<int32_t>>(
-      env, enum_valid_values, num_fields, jni_int_array_to_host_vector);
+    auto enum_values = jni_object_array_to_vectors<std::vector<int32_t>>(
+      env, enum_valid_values, num_fields, jni_int_array_to_vector);
     if (env->ExceptionCheck()) { return 0; }
 
     // Convert enum names (byte[][][])
-    auto enum_name_values =
-      jni_object_array_to_vectors<std::vector<cudf::detail::host_vector<uint8_t>>>(
-        env,
-        enum_names,
-        num_fields,
-        [](JNIEnv* e, jobject obj) -> std::vector<cudf::detail::host_vector<uint8_t>> {
-          if (obj == nullptr) { return {}; }
-          auto inner_arr = static_cast<jobjectArray>(obj);
-          jsize num      = e->GetArrayLength(inner_arr);
-          return jni_object_array_to_vectors<cudf::detail::host_vector<uint8_t>>(
-            e, inner_arr, num, jni_byte_array_to_host_vector);
-        });
+    auto enum_name_values = jni_object_array_to_vectors<std::vector<std::vector<uint8_t>>>(
+      env, enum_names, num_fields, [](JNIEnv* e, jobject obj) -> std::vector<std::vector<uint8_t>> {
+        if (obj == nullptr) { return {}; }
+        auto inner_arr = static_cast<jobjectArray>(obj);
+        jsize num      = e->GetArrayLength(inner_arr);
+        return jni_object_array_to_vectors<std::vector<uint8_t>>(
+          e, inner_arr, num, jni_byte_array_to_vector);
+      });
     if (env->ExceptionCheck()) { return 0; }
 
     cudf::io::protobuf::decode_protobuf_options options{std::move(schema),

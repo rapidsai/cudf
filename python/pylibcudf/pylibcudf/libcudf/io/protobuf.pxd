@@ -45,9 +45,10 @@ cdef extern from "cudf/io/protobuf.hpp" namespace "cudf::io::protobuf" nogil:
         vector[nested_field_descriptor] schema
         vector[int64_t] default_ints
         vector[double] default_floats
-        vector[bool] default_bools
-        # Note: host_vector types are not easily bindable through Cython.
-        # The Python layer will need to handle conversion.
+        vector[uint8_t] default_bools
+        vector[vector[uint8_t]] default_strings
+        vector[vector[int32_t]] enum_valid_values
+        vector[vector[vector[uint8_t]]] enum_names
         bool fail_on_errors
 
     cdef unique_ptr[column] decode_protobuf(

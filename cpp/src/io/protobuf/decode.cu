@@ -26,6 +26,20 @@ namespace cudf::io::protobuf {
 
 namespace detail {
 
+/**
+ * @brief View into a single field's metadata from a decode_protobuf_options.
+ */
+struct protobuf_field_meta_view {
+  nested_field_descriptor const& schema;
+  cudf::data_type const output_type;
+  int64_t default_int;
+  double default_float;
+  bool default_bool;
+  decode_protobuf_options::byte_vector const& default_string;
+  decode_protobuf_options::enum_value_vector const& enum_valid_values;
+  decode_protobuf_options::enum_name_vector const& enum_names;
+};
+
 namespace {
 
 std::unique_ptr<cudf::column> make_null_column_with_schema(
@@ -201,6 +215,11 @@ void validate_decode_options(decode_protobuf_options const& context)
                   std::to_string(i),
                 std::invalid_argument);
     }
+    if (context.default_bools[i] > 1) {
+      CUDF_FAIL("protobuf decode context: default_bools must contain only 0 or 1 at field " +
+                  std::to_string(i),
+                std::invalid_argument);
+    }
     if (field.is_repeated && field.has_default_value) {
       CUDF_FAIL("protobuf decode context: repeated field cannot carry default value at field " +
                   std::to_string(i),
@@ -250,7 +269,7 @@ protobuf_field_meta_view make_field_meta_view(decode_protobuf_options const& con
                                   cudf::data_type{context.schema.at(idx).output_type},
                                   context.default_ints.at(idx),
                                   context.default_floats.at(idx),
-                                  context.default_bools.at(idx),
+                                  context.default_bools.at(idx) != 0,
                                   context.default_strings.at(idx),
                                   context.enum_valid_values.at(idx),
                                   context.enum_names.at(idx)};
@@ -307,17 +326,11 @@ std::unique_ptr<cudf::column> decode_protobuf(cudf::column_view const& binary_in
       0, std::move(empty_children), 0, rmm::device_buffer{}, stream, mr);
   }
 
-  std::vector<std::unique_ptr<cudf::column>> column_map(num_fields);
-
   std::vector<std::unique_ptr<cudf::column>> top_level_children;
   for (int i = 0; i < num_fields; i++) {
     if (schema[i].parent_idx == -1) {
-      if (column_map[i]) {
-        top_level_children.push_back(std::move(column_map[i]));
-      } else {
-        top_level_children.push_back(
-          make_null_column_with_schema(schema, i, num_fields, num_rows, stream, mr));
-      }
+      top_level_children.push_back(
+        make_null_column_with_schema(schema, i, num_fields, num_rows, stream, mr));
     }
   }
 

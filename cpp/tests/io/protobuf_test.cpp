@@ -145,42 +145,18 @@ pb::decode_protobuf_options make_scalar_options(std::vector<int> const& field_nu
                       false});
   }
 
-  std::vector<cudf::detail::host_vector<uint8_t>> default_strings;
-  std::vector<cudf::detail::host_vector<int32_t>> enum_valid;
-  default_strings.reserve(n);
-  enum_valid.reserve(n);
-  for (int i = 0; i < n; ++i) {
-    default_strings.push_back(
-      cudf::detail::make_host_vector<uint8_t>(0, cudf::get_default_stream()));
-    enum_valid.push_back(cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream()));
-  }
-
-  return pb::decode_protobuf_options{
-    std::move(schema),
-    std::vector<int64_t>(n, 0),
-    std::vector<double>(n, 0.0),
-    std::vector<bool>(n, false),
-    std::move(default_strings),
-    std::move(enum_valid),
-    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n),
-    fail_on_errors,
-  };
+  return pb::decode_protobuf_options::builder(std::move(schema))
+    .fail_on_errors(fail_on_errors)
+    .build();
 }
 
-auto make_empty_host_vectors(int count)
+auto make_empty_vectors(int count)
 {
   struct result {
-    std::vector<cudf::detail::host_vector<uint8_t>> hv;
-    std::vector<cudf::detail::host_vector<int32_t>> iv;
+    std::vector<std::vector<uint8_t>> bytes;
+    std::vector<std::vector<int32_t>> ints;
   };
-  result r;
-  r.hv.reserve(count);
-  r.iv.reserve(count);
-  for (int i = 0; i < count; ++i) {
-    r.hv.push_back(cudf::detail::make_host_vector<uint8_t>(0, cudf::get_default_stream()));
-    r.iv.push_back(cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream()));
-  }
-  return r;
+  return result{std::vector<std::vector<uint8_t>>(count), std::vector<std::vector<int32_t>>(count)};
 }
 
 }  // anonymous namespace
@@ -257,16 +233,16 @@ TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
      false},
   };
 
-  auto [hv, iv] = make_empty_host_vectors(n);
+  auto [bytes, ints] = make_empty_vectors(n);
 
   pb::decode_protobuf_options options{
     std::move(schema),
     std::vector<int64_t>(n, 0),
     std::vector<double>(n, 0.0),
-    std::vector<bool>(n, false),
-    std::move(hv),
-    std::move(iv),
-    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n),
+    std::vector<uint8_t>(n, 0),
+    std::move(bytes),
+    std::move(ints),
+    std::vector<std::vector<std::vector<uint8_t>>>(n),
     true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
@@ -294,16 +270,16 @@ TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
      false},
   };
 
-  auto [hv, iv] = make_empty_host_vectors(n);
+  auto [bytes, ints] = make_empty_vectors(n);
 
   pb::decode_protobuf_options options{
     std::move(schema),
     std::vector<int64_t>(n, 0),
     std::vector<double>(n, 0.0),
-    std::vector<bool>(n, false),
-    std::move(hv),
-    std::move(iv),
-    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n),
+    std::vector<uint8_t>(n, 0),
+    std::move(bytes),
+    std::move(ints),
+    std::vector<std::vector<std::vector<uint8_t>>>(n),
     true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);

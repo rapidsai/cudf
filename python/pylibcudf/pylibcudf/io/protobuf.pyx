@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -28,6 +28,47 @@ __all__ = [
 ]
 
 
+cdef vector[uint8_t] _bytes_to_vector(object value):
+    cdef vector[uint8_t] out
+    cdef object item
+
+    if value is None:
+        return out
+
+    out.reserve(len(value))
+    for item in value:
+        out.push_back(<uint8_t>item)
+    return out
+
+
+cdef vector[int32_t] _ints_to_vector(object values):
+    cdef vector[int32_t] out
+    cdef object value
+
+    if values is None:
+        return out
+
+    out.reserve(len(values))
+    for value in values:
+        out.push_back(<int32_t>value)
+    return out
+
+
+cdef vector[vector[uint8_t]] _bytes_list_to_vectors(object values):
+    cdef vector[vector[uint8_t]] out
+    cdef vector[uint8_t] value
+    cdef object item
+
+    if values is None:
+        return out
+
+    out.reserve(len(values))
+    for item in values:
+        value = _bytes_to_vector(item)
+        out.push_back(move(value))
+    return out
+
+
 cpdef Column decode_protobuf(
     Column binary_input,
     list schema,
@@ -42,7 +83,7 @@ cpdef Column decode_protobuf(
     DeviceMemoryResource mr = None,
 ):
     """
-    Decode serialized protobuf messages from a LIST<UINT8> column into a STRUCT column.
+    Decode serialized protobuf messages from a LIST<INT8/UINT8> column into a STRUCT column.
 
     Parameters
     ----------
@@ -109,11 +150,38 @@ cpdef Column decode_protobuf(
         c_default_floats.push_back(<double>v)
     options.default_floats = move(c_default_floats)
 
-    cdef vector[bool] c_default_bools
+    cdef vector[uint8_t] c_default_bools
     c_default_bools.reserve(n)
     for v in default_bools:
-        c_default_bools.push_back(<bool>v)
+        if v:
+            c_default_bools.push_back(<uint8_t>1)
+        else:
+            c_default_bools.push_back(<uint8_t>0)
     options.default_bools = move(c_default_bools)
+
+    cdef vector[vector[uint8_t]] c_default_strings
+    cdef vector[uint8_t] c_bytes
+    c_default_strings.reserve(n)
+    for v in default_strings:
+        c_bytes = _bytes_to_vector(v)
+        c_default_strings.push_back(move(c_bytes))
+    options.default_strings = move(c_default_strings)
+
+    cdef vector[vector[int32_t]] c_enum_valid_values
+    cdef vector[int32_t] c_ints
+    c_enum_valid_values.reserve(n)
+    for v in enum_valid_values:
+        c_ints = _ints_to_vector(v)
+        c_enum_valid_values.push_back(move(c_ints))
+    options.enum_valid_values = move(c_enum_valid_values)
+
+    cdef vector[vector[vector[uint8_t]]] c_enum_names
+    cdef vector[vector[uint8_t]] c_names
+    c_enum_names.reserve(n)
+    for v in enum_names:
+        c_names = _bytes_list_to_vectors(v)
+        c_enum_names.push_back(move(c_names))
+    options.enum_names = move(c_enum_names)
 
     options.fail_on_errors = fail_on_errors
 

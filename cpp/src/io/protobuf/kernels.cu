@@ -27,13 +27,15 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
+
 namespace cudf::io::protobuf::detail {
 
 namespace {
 
-CUDF_KERNEL void set_error_if_unset_kernel(int* error_flag, int error_code)
+CUDF_KERNEL void set_error_if_unset_kernel(int* error_flag, proto_decode_error error)
 {
-  if (blockIdx.x == 0 && threadIdx.x == 0) { set_error_once(error_flag, error_code); }
+  if (blockIdx.x == 0 && threadIdx.x == 0) { set_error_once(error_flag, error); }
 }
 
 // Stub kernels — replaced with real implementations in follow-up PRs.
@@ -56,9 +58,9 @@ CUDF_KERNEL void validate_enum_values_kernel(int32_t const*, bool*, bool*, int32
 
 }  // namespace
 
-void set_error_once_async(int* error_flag, int error_code, rmm::cuda_stream_view stream)
+void set_error_once_async(int* error_flag, proto_decode_error error, rmm::cuda_stream_view stream)
 {
-  set_error_if_unset_kernel<<<1, 1, 0, stream.value()>>>(error_flag, error_code);
+  set_error_if_unset_kernel<<<1, 1, 0, stream.value()>>>(error_flag, error);
   CUDF_CUDA_TRY(cudaPeekAtLastError());
 }
 
@@ -137,7 +139,7 @@ void propagate_invalid_enum_flags_to_rows(rmm::device_uvector<bool> const& item_
 
 void validate_enum_and_propagate_rows(rmm::device_uvector<int32_t> const& values,
                                       rmm::device_uvector<bool>& valid,
-                                      cudf::detail::host_vector<int32_t> const& valid_enums,
+                                      decode_protobuf_options::enum_value_vector const& valid_enums,
                                       rmm::device_uvector<bool>& row_invalid,
                                       int num_items,
                                       int32_t const* top_row_indices,
@@ -147,8 +149,10 @@ void validate_enum_and_propagate_rows(rmm::device_uvector<int32_t> const& values
   if (num_items == 0 || valid_enums.empty()) { return; }
 
   auto const blocks  = static_cast<int>((num_items + THREADS_PER_BLOCK - 1u) / THREADS_PER_BLOCK);
+  auto h_valid_enums = cudf::detail::make_pinned_vector_async<int32_t>(valid_enums.size(), stream);
+  std::copy(valid_enums.begin(), valid_enums.end(), h_valid_enums.begin());
   auto d_valid_enums = cudf::detail::make_device_uvector_async(
-    valid_enums, stream, rmm::mr::get_current_device_resource_ref());
+    h_valid_enums, stream, rmm::mr::get_current_device_resource_ref());
 
   rmm::device_uvector<bool> item_invalid(
     num_items, stream, rmm::mr::get_current_device_resource_ref());

@@ -55,14 +55,14 @@ __device__ inline bool read_varint(uint8_t const* cur,
   return false;
 }
 
-__device__ inline void set_error_once(int* error_flag, int error_code)
+__device__ inline void set_error_once(int* error_flag, proto_decode_error error)
 {
   int expected = 0;
   cuda::atomic_ref<int, cuda::thread_scope_device> ref(*error_flag);
-  ref.compare_exchange_strong(expected, error_code, cuda::memory_order_relaxed);
+  ref.compare_exchange_strong(expected, error_code(error), cuda::memory_order_relaxed);
 }
 
-void set_error_once_async(int* error_flag, int error_code, rmm::cuda_stream_view stream);
+void set_error_once_async(int* error_flag, proto_decode_error error, rmm::cuda_stream_view stream);
 
 __device__ inline int get_wire_type_size(int wt, uint8_t const* cur, uint8_t const* end)
 {
@@ -213,7 +213,7 @@ __device__ inline bool check_message_bounds(int32_t start,
                                             int* error_flag)
 {
   if (start < 0 || end_pos < start || end_pos > total_size) {
-    set_error_once(error_flag, ERR_BOUNDS);
+    set_error_once(error_flag, proto_decode_error::BOUNDS);
     return false;
   }
   return true;
@@ -232,14 +232,14 @@ __device__ inline bool decode_tag(uint8_t const*& cur,
   uint64_t key;
   int key_bytes;
   if (!read_varint(cur, end, key, key_bytes)) {
-    set_error_once(error_flag, ERR_VARINT);
+    set_error_once(error_flag, proto_decode_error::VARINT);
     return false;
   }
 
   cur += key_bytes;
   uint64_t fn = key >> 3;
   if (fn == 0 || fn > static_cast<uint64_t>(MAX_FIELD_NUMBER)) {
-    set_error_once(error_flag, ERR_FIELD_NUMBER);
+    set_error_once(error_flag, proto_decode_error::FIELD_NUMBER);
     return false;
   }
   tag.field_number = static_cast<int>(fn);
