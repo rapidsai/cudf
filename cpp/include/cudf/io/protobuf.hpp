@@ -265,7 +265,7 @@ class decode_protobuf_options_builder {
    *
    * @return Completed decode_protobuf_options
    */
-  decode_protobuf_options&& build() { return std::move(_options); }
+  [[nodiscard]] decode_protobuf_options build() { return std::move(_options); }
 
  private:
   decode_protobuf_options _options;

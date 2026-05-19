@@ -91,6 +91,7 @@ void maybe_check_required_fields(field_location const* locations,
     row_force_null,
     top_row_indices,
     error_flag);
+  CUDF_CUDA_TRY(cudaPeekAtLastError());
 }
 
 void propagate_invalid_enum_flags_to_rows(rmm::device_uvector<bool> const& item_invalid,
@@ -153,6 +154,7 @@ void validate_enum_and_propagate_rows(rmm::device_uvector<int32_t> const& values
     d_valid_enums.data(),
     static_cast<int>(valid_enums.size()),
     num_items);
+  CUDF_CUDA_TRY(cudaPeekAtLastError());
 
   propagate_invalid_enum_flags_to_rows(
     item_invalid, row_invalid, num_items, top_row_indices, propagate_to_rows, stream);
