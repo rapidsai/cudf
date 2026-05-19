@@ -31,9 +31,9 @@ requirements:
   run:
     - python
     - cudf =${{ version }}
-    # 'nvidia-ml-py' provides the 'pynvml' module
-    - nvidia-ml-py>=12
     - rapids-dask-dependency =${{ minor_version }}
+    - cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*
+    - cuda-core>=1.0.0
 
 tests:
   - python:
