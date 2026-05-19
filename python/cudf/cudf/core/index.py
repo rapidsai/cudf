@@ -2943,10 +2943,10 @@ class RangeIndex(Index):
         copy = copy or cudf.get_option("copy_on_write")
         result = self._numpy_values
         if dtype is not None:
-            result = result.astype(dtype, copy=copy)
+            return self._numpy_values.astype(dtype, copy=copy)
         if copy:
-            return result.copy()
-        return result
+            return self._numpy_values.copy()
+        return self._numpy_values
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
