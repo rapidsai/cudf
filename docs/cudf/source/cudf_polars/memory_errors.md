@@ -1,73 +1,98 @@
 (cudf-polars-memory-errors)=
-# Troubleshooting Memory Issues
+# Understanding Memory Use in the GPU Streaming Engine
 
-This page covers the most common causes of out-of-memory (OOM) errors and slow spilling
-when using the GPU streaming engine, and how to address them.
+The GPU streaming engine is designed to execute queries on datasets that are larger
+than GPU memory. This page explains how the engine manages memory, why out-of-memory
+errors occur, and how spilling to host memory works, so that you can reason about
+and tune memory-related behaviour in your workloads.
 
-## Out-of-memory errors
+## How the engine uses GPU memory
 
-### Lower the target partition size
+Rather than loading an entire dataset into GPU memory at once, the streaming engine
+decomposes input data into a sequence of *chunks* and processes them one at a time.
+`target_partition_size` controls the target size of each chunk in bytes. Chunks flow
+through the query graph, being filtered, transformed, aggregated, and joined, and
+intermediate results are also chunked.
 
-The GPU streaming engine decomposes input data into a stream of chunks that can be
-operated on in GPU memory independently. `target_partition_size` sets the ideal size
-of each chunk in bytes. Reducing this size makes it easier for the engine to stay within
-its memory budget, since each chunk is a smaller unit of work to spill and unspill. The
-trade-off is that smaller chunks may reduce compute efficiency.
+The default chunk size is the lesser of 1.5 GB and 2.5% of the smallest GPU in the
+cluster. For most workloads this leaves enough headroom for intermediate results
+without sacrificing compute efficiency, but it is not optimal for every query.
+The optimal chunk size is much smaller than total memory of a single GPU. This is
+because RapidsMPF overlaps the execution of multiple operations across the network,
+and each operation requires temporary allocations for its input, output, and
+intermediate data buffers.
 
-```python
-engine = pl.GPUEngine(
-    executor="streaming",
-    executor_options={"target_partition_size": 64_000_000},  # 64 MB
-)
-```
+## Why out-of-memory errors occur
 
-Or via environment variable:
+The `target_partition_size` setting establishes a *target*, not a hard ceiling.
+Some situations lead to oversized chunks, or require the engine to hold many
+chunks in memory simultaneously.
 
-```
-CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=64000000
-```
+### Shuffle-heavy operations
 
-The default is the lesser of 1.5 GB and 2.5% of the smallest GPU in the system.
-For pathological workloads with heavy shuffling or skewed data distributions, a
-much smaller value may be necessary.
+A *shuffle* is a network-wide redistribution of data so that rows with matching keys
+land on the same GPU. During a shuffle, each GPU must hold both the data it is sending
+and the data it is receiving, which can temporarily double memory pressure.
 
-### Lower the spill threshold
+Shuffles arise in several common operations. A `sort` over the full dataset must
+redistribute rows into a globally ordered sequence. A `group_by` on over a column
+with many unique values must route every distinct key to the same GPU before aggregating.
+A join must align rows from both tables by their join keys before comparing them.
+Queries with skewed value distributions are especially prone to memory spikes because
+a single GPU (or chunk) may receive a disproportionately large share of the shuffled data.
 
-`RAPIDSMPF_SPILL_DEVICE_LIMIT` controls when spilling to host memory begins.
-Setting it lower causes spilling to start earlier, leaving more room for peak
-allocations:
+### Buffering for multiple consumers
 
-```
-RAPIDSMPF_SPILL_DEVICE_LIMIT=50%
-```
+When the output of an operation is consumed by more than one downstream operation,
+the engine must keep that output in memory until all consumers have consumed it.
+A query plan with a shared subexpression or a self-join can therefore hold multiple
+chunks in memory simultaneously even if each individual operation is within budget.
 
-The default is `80%`. You can also set this via executor options:
+### File format constraints
 
-```python
-engine = pl.GPUEngine(
-    executor="streaming",
-    executor_options={"spill_device_limit": "50%"},
-)
-```
+The minimum amount of data the engine can read at one time depends on the file format.
+For Parquet, the engine can read as little as one row group at a time, so files written
+with reasonable row-group sizes give the engine fine-grained control over how much data
+enters the pipeline at once. For formats that do not support partial reads, such as CSV,
+the engine must load an entire file before it can begin processing, which may produce
+chunks much larger than `target_partition_size`.
 
-## Slow spilling
+## Spilling to host memory
 
-If spilling is occurring but performance is poor, enabling pinned (page-locked) host
-memory can significantly speed up GPU ↔ host data transfers:
+When GPU memory pressure rises above a configurable threshold
+(`RAPIDSMPF_SPILL_DEVICE_LIMIT`, default `80%`), the engine begins *spilling*: moving
+chunks that are not currently being processed from GPU memory to host (CPU) RAM. Once
+the operation that needs them resumes, those chunks are brought back to the GPU.
 
-```
-RAPIDSMPF_PINNED_MEMORY=true
-RAPIDSMPF_PINNED_INITIAL_POOL_SIZE=32GB  # pre-allocate the full pool up front
-```
+Spilling lets the engine handle datasets larger than GPU memory, but every spill and
+unspill requires a GPU-to-host data transfer, and the operation depending on that
+chunk must wait until the transfer completes.
 
-```{note}
-Registering page-locked memory with the driver has a significant up-front cost.
-Once registration is complete, GPU ↔ host transfers will be much faster, but the
-cost is only worthwhile if spilling is a clear bottleneck in your workflow, or
-if you are executing many queries in the same session (so the cost can be amortized).
-```
+If spilling is occurring but the GPU still runs out of memory, it usually means the
+peak allocation within a single operation is too large. Reducing `target_partition_size`
+makes each operation smaller, and lowering `RAPIDSMPF_SPILL_DEVICE_LIMIT` causes
+spilling to start earlier, leaving more headroom for those peaks.
 
-## All RapidsMPF memory options
+## Pinned memory and transfer speed
 
-For the full list of spill and memory configuration options see the
+By default, host memory used for spilling is *pageable*. The operating system may
+swap it to disk, and GPU-to-host transfers must go through an extra copy. *Pinned*
+(page-locked) memory bypasses this: the GPU DMA engine can transfer directly to and
+from it, significantly increasing bandwidth.
+
+The trade-off is that registering pinned memory with the driver has a substantial
+up-front cost. This cost is only worthwhile if spilling is a clear bottleneck in your
+workflow, or if you are executing many queries in the same session so the cost can be
+amortized across them.
+
+## Configuration reference
+
+| Option | Default | Effect |
+|---|---|---|
+| `target_partition_size` (executor option or `CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`) | 1.5 GB or 2.5% of smallest GPU | Target chunk size in bytes. Smaller values reduce peak memory at some cost to compute efficiency. |
+| `RAPIDSMPF_SPILL_DEVICE_LIMIT` | `80%` | GPU memory fraction at which spilling begins. Lower values give more headroom for peaks. |
+| `RAPIDSMPF_PINNED_MEMORY` | disabled | Set to `true` to enable pinned host memory for spill buffers. |
+| `RAPIDSMPF_PINNED_INITIAL_POOL_SIZE` | (none) | Size of the pinned memory pool to pre-allocate (e.g. `32GB`). |
+
+For the full list of memory and spill configuration options see the
 [RapidsMPF configuration reference](https://docs.rapids.ai/api/rapidsmpf/stable/configuration/#general).
