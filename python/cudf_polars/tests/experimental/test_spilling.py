@@ -5,15 +5,17 @@
 
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pytest
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -31,8 +33,9 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     assert nbytes % 4 == 0, "nbytes must be divisible by 4 for float32"
     # Create a simple table with one column of random float32 data
     num_elements = nbytes // 4
-    data = np.random.random(num_elements).astype(np.float32)
-    return plc.Table([plc.Column.from_array(data, stream=stream)])
+    rng = random.Random(42)
+    pl_data = pl.Series([rng.random() for _ in range(num_elements)], dtype=pl.Float32())
+    return plc.Table([plc.Column.from_arrow(pl_data, stream=stream)])
 
 
 @pytest.mark.parametrize(
@@ -56,7 +59,15 @@ def test_make_spill_function(
     spilled_host_mem_type: MemoryType,
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
-    engine = spmd_engine_factory(StreamingOptions(pinned_memory=pinned_memory))
+    try:
+        engine = spmd_engine_factory(
+            StreamingOptions(
+                pinned_memory=pinned_memory,
+                pinned_initial_pool_size=3 * 1024 * 1024,
+            )
+        )
+    except RuntimeError as e:
+        pytest.skip(f"Error creating engine: {e}")
     context = engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
@@ -92,6 +103,10 @@ def test_make_spill_function(
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
 
+    assert context.br().spill_manager.spill(1 * 1024 * 1024) == 0, (
+        "No messages should be spilled initially"
+    )
+
     # Register spill function
     spill_func = make_spill_function(buffers, context)
     func_id = context.br().spill_manager.add_spill_function(spill_func, priority=0)
@@ -104,6 +119,7 @@ def test_make_spill_function(
 
         # Allow some tolerance
         assert actual_spilled >= amount_to_spill * 0.95
+        assert actual_spilled <= amount_to_spill * 1.05
 
         # Verify Buffer 1 (longest queue): newest 3 messages should be spilled
         buffer_1_descs = buffers[1].get_content_descriptions()

@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
@@ -20,6 +19,8 @@ if TYPE_CHECKING:
 
     import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.dsl.ir import IRExecutionContext
 
 
 class AllGatherManager:
@@ -100,7 +101,7 @@ class AllGatherManager:
         return AllGatherManager.Inserter(self)
 
     async def extract_concatenated(
-        self, stream: Stream, *, ordered: bool = True
+        self, stream: Stream, *, ordered: bool = True, ir_context: IRExecutionContext
     ) -> plc.Table:
         """
         Extract the concatenated result.
@@ -111,12 +112,14 @@ class AllGatherManager:
             The stream to use for chunk extraction.
         ordered: bool
             Whether to extract the data in ordered or unordered fashion.
+        ir_context
+            Execution context to offload concatenation.
 
         Returns
         -------
         The concatenated AllGather result.
         """
-        return await asyncio.to_thread(
+        return await ir_context.to_thread(
             unpack_and_concat,
             partitions=await self.allgather.extract_all(self.context, ordered=ordered),
             stream=stream,

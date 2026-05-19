@@ -6,6 +6,7 @@ from __future__ import annotations
 from cudf_polars.testing.engine_utils import (
     EngineFixtureParam,
     create_streaming_options,
+    merge_streaming_options,
 )
 
 
@@ -45,7 +46,7 @@ def test_create_streaming_options_overrides_merge():
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
     overrides = StreamingOptions(max_rows_per_partition=999)
-    merged = create_streaming_options("medium", overrides)
+    merged = merge_streaming_options(create_streaming_options("medium"), overrides)
     # Override wins.
     assert merged.max_rows_per_partition == 999
     # Untouched baseline field is preserved.

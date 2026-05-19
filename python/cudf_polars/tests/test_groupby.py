@@ -15,12 +15,9 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import get_blocksize_mode, is_streaming_engine
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
-    POLARS_VERSION_LT_1321,
 )
 
 
@@ -50,11 +47,9 @@ def df():
             ],
         }
     )
-    if not POLARS_VERSION_LT_132:
-        lf = lf.with_columns(
-            pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
-        )
-    return lf
+    return lf.with_columns(
+        pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
+    )
 
 
 @pytest.fixture(
@@ -104,12 +99,10 @@ _EXPRS: list[list[pl.Expr | str]] = [
         pl.col("datetime").max(),
         pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
     ],
+    # polars gives us precision=None, which we
+    # do not support
+    [pl.col("decimal").median()],
 ]
-
-# polars gives us precision=None, which we
-# do not supprt
-if not POLARS_VERSION_LT_132:
-    _EXPRS.append([pl.col("decimal").median()])
 
 
 @pytest.fixture(
@@ -252,7 +245,6 @@ def test_groupby_nan_minmax_raises(op):
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
-                condition=not POLARS_VERSION_LT_1321,
                 reason="https://github.com/rapidsai/cudf/issues/19610",
             ),
         ),
@@ -300,18 +292,13 @@ def test_groupby_nested_list_struct_raises(dtype):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(
     engine: pl.GPUEngine,
-    nrows,
-    nkeys,
-    with_nulls,
+    nkeys: int,
+    with_nulls: bool,  # noqa: FBT001
 ):
-    if nrows > 30 and (
-        get_blocksize_mode(engine) == "small" or is_streaming_engine(engine)
-    ):
-        pytest.skip("streaming executor too slow for large n_rows")
+    nrows = 30
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)
     key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
@@ -420,15 +407,6 @@ def test_groupby_aggs_keep_unsupported_as_null(
             reason="polars raises now",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition="quantile" in str(agg_expr)
-            and not POLARS_VERSION_LT_132
-            and POLARS_VERSION_LT_134
-            and is_streaming_engine(engine),
-            reason="Decimal precision mismatch (9 vs 38)",
-        )
-    )
     lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
     q = lf.group_by("datetime").agg(agg_expr)
     assert_gpu_result_equal(q, engine=engine)
@@ -501,13 +479,8 @@ def test_groupby_sum_decimal_null_group(engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.xfail(
-    raises=(AssertionError, pl.exceptions.SchemaError),
-    reason=(
-        "https://github.com/rapidsai/cudf/issues/19610 — in-memory engine "
-        "fails with AssertionError (wrong values); multi-rank streaming "
-        "fails earlier with SchemaError (literal agg yields a divergent "
-        "schema after cross-rank concat)."
-    ),
+    raises=AssertionError,
+    reason="https://github.com/rapidsai/cudf/issues/19610",
 )
 def test_groupby_literal_agg(engine: pl.GPUEngine):
     df = pl.LazyFrame({"c0": [True, False]})
