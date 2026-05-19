@@ -50,23 +50,23 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   auto const left_table_num_rows = left.num_rows();
 
   auto count_matches = [&](auto equality, auto d_hasher) {
-    // Precompute probe keys: {hash(row_idx), row_idx} for each probe row.
+    // Precompute left keys: {hash(row_idx), row_idx} for each left row.
     auto const n = static_cast<thread_index_type>(left_table_num_rows);
-    rmm::device_uvector<probe_key_type> probe_keys(n, stream);
+    rmm::device_uvector<probe_key_type> left_keys(n, stream);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(left_table_num_rows),
-                      probe_keys.begin(),
+                      left_keys.begin(),
                       pair_fn{d_hasher});
 
     auto const ref = hash_table.ref(cuco::op::count)
                        .rebind_key_eq(equality)
                        .rebind_hash_function(hash_table.hash_function());
     if (join == join_kind::INNER_JOIN) {
-      launch_partitioned_count<false>(probe_keys.data(), n, match_counts->begin(), ref, stream);
+      launch_partitioned_count<false>(left_keys.data(), n, match_counts->begin(), ref, stream);
     } else {
       // IsOuter=true handles the clamp (zero → 1) for LEFT/FULL joins internally.
-      launch_partitioned_count<true>(probe_keys.data(), n, match_counts->begin(), ref, stream);
+      launch_partitioned_count<true>(left_keys.data(), n, match_counts->begin(), ref, stream);
     }
   };
 

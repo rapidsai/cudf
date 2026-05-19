@@ -43,44 +43,44 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
                                          rmm::device_async_resource_ref mr);
 
 /**
- * @brief Finalize a full-join result from a single probe-side `(left, right)` index pair.
+ * @brief Finalize a full-join result from a single `(left, right)` index pair.
  *
- * Takes ownership of `probe_indices`, resizes both vectors to `probe_indices.first->size() +
- * build_table_num_rows`, and appends the complement (unmatched build rows paired with
+ * Takes ownership of `indices`, resizes both vectors to `indices.first->size() +
+ * right_table_num_rows`, and appends the complement (unmatched right rows paired with
  * `JoinNoMatch`) into the tail. The vectors are then resized down to the true output length.
  *
  * Used by the non-partitioned full-join paths (hash/mixed/conditional); consuming the caller's
- * buffers in-place avoids a redundant concat memcpy over the probe data.
+ * buffers in-place avoids a redundant concat memcpy over the left-side data.
  *
- * @param probe_indices Probe-side `(left, right)` index vectors (consumed).
- * @param probe_table_num_rows Number of rows in the probe table (0 → every build row is
- *                             unmatched, fast path).
- * @param build_table_num_rows Number of rows in the build table.
+ * @param indices `(left, right)` index vectors (consumed).
+ * @param left_table_num_rows Number of rows in the left table (0 → every right row is
+ *                            unmatched, fast path).
+ * @param right_table_num_rows Number of rows in the right table.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate working storage.
  *
  * @return `[left_indices, right_indices]` of the complete full-join output.
  */
-VectorPair finalize_full_join(VectorPair&& probe_indices,
-                              size_type probe_table_num_rows,
-                              size_type build_table_num_rows,
+VectorPair finalize_full_join(VectorPair&& indices,
+                              size_type left_table_num_rows,
+                              size_type right_table_num_rows,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
 /**
- * @brief Finalize a full-join result from per-partition probe index spans.
+ * @brief Finalize a full-join result from per-partition index spans.
  *
  * Concatenates every `(left_partials[i], right_partials[i])` pair into the head of the output
- * and appends the complement (unmatched build rows paired with `JoinNoMatch`) into the tail.
+ * and appends the complement (unmatched right rows paired with `JoinNoMatch`) into the tail.
  * Internally delegates to the `VectorPair&&` overload, so the mark/compact path is shared.
  *
  * Used by `cudf::hash_join::finalize_partitioned_full_join` for partitioned full joins where the
  * partials live in separate buffers and must be gathered.
  *
- * @param left_partials Per-partition probe-side (left) index spans.
- * @param right_partials Per-partition probe-side (right) index spans.
- * @param probe_table_num_rows Number of rows in the probe table.
- * @param build_table_num_rows Number of rows in the build table.
+ * @param left_partials Per-partition left index spans.
+ * @param right_partials Per-partition right index spans.
+ * @param left_table_num_rows Number of rows in the left table.
+ * @param right_table_num_rows Number of rows in the right table.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned vectors.
  *
@@ -89,8 +89,8 @@ VectorPair finalize_full_join(VectorPair&& probe_indices,
 VectorPair finalize_full_join(
   cudf::host_span<cudf::device_span<size_type const> const> left_partials,
   cudf::host_span<cudf::device_span<size_type const> const> right_partials,
-  size_type probe_table_num_rows,
-  size_type build_table_num_rows,
+  size_type left_table_num_rows,
+  size_type right_table_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

@@ -56,16 +56,16 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
 
 namespace {
 
-// Predicate: build row `idx` is unmatched iff its flag slot is zero.
-// We use an int32 flag (one per build row) rather than a packed bit or a byte: byte stores
+// Predicate: right row `idx` is unmatched iff its flag slot is zero.
+// We use an int32 flag (one per right row) rather than a packed bit or a byte: byte stores
 // from a dense 32-wide scatter don't coalesce into full-word transactions, which costs 2–3×
-// in the mark kernel for skewed probe/build ratios.
+// in the mark kernel for skewed left/right ratios.
 struct unmatched_flag {
   size_type const* flags;
   __device__ bool operator()(size_type idx) const noexcept { return flags[idx] == 0; }
 };
 
-// Transform a selected (unmatched) build index into a (JoinNoMatch, idx) pair that is stored
+// Transform a selected (unmatched) right index into a (JoinNoMatch, idx) pair that is stored
 // through a zip iterator over (left_out_tail, right_out_tail).
 struct to_no_match_pair {
   __device__ cuda::std::tuple<size_type, size_type> operator()(size_type idx) const noexcept
@@ -76,75 +76,75 @@ struct to_no_match_pair {
 
 }  // namespace
 
-VectorPair finalize_full_join(VectorPair&& probe_indices,
-                              size_type probe_table_num_rows,
-                              size_type build_table_num_rows,
+VectorPair finalize_full_join(VectorPair&& indices,
+                              size_type left_table_num_rows,
+                              size_type right_table_num_rows,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  auto [left_out, right_out] = std::move(probe_indices);
+  auto [left_out, right_out] = std::move(indices);
   CUDF_EXPECTS(left_out->size() == right_out->size(),
-               "probe left/right index vectors must have equal size",
+               "left/right index vectors must have equal size",
                std::invalid_argument);
-  auto const probe_total = left_out->size();
+  auto const match_total = left_out->size();
 
-  // Empty-probe fast path: every build row is unmatched.
-  if (probe_table_num_rows == 0) {
-    auto const tail = static_cast<std::size_t>(build_table_num_rows);
-    left_out->resize(probe_total + tail, stream);
-    right_out->resize(probe_total + tail, stream);
+  // Empty-left fast path: every right row is unmatched.
+  if (left_table_num_rows == 0) {
+    auto const tail = static_cast<std::size_t>(right_table_num_rows);
+    left_out->resize(match_total + tail, stream);
+    right_out->resize(match_total + tail, stream);
     thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     right_out->begin() + probe_total,
+                     right_out->begin() + match_total,
                      right_out->end(),
                      0);
     thrust::uninitialized_fill(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      left_out->begin() + probe_total,
+      left_out->begin() + match_total,
       left_out->end(),
       cudf::JoinNoMatch);
     return std::pair(std::move(left_out), std::move(right_out));
   }
 
-  if (build_table_num_rows == 0) { return std::pair(std::move(left_out), std::move(right_out)); }
+  if (right_table_num_rows == 0) { return std::pair(std::move(left_out), std::move(right_out)); }
 
-  // Grow to the upper bound (probe_total + build_table_num_rows); the complement is appended
+  // Grow to the upper bound (match_total + right_table_num_rows); the complement is appended
   // into the tail. If the caller pre-reserved this capacity (see the span overload below),
   // these resizes don't reallocate.
-  auto const upper = probe_total + static_cast<std::size_t>(build_table_num_rows);
+  auto const upper = match_total + static_cast<std::size_t>(right_table_num_rows);
   left_out->resize(upper, stream);
   right_out->resize(upper, stream);
 
-  // Mark matched build rows in an int32 flag array (one word per build row). Redundant stores
+  // Mark matched right rows in an int32 flag array (one word per right row). Redundant stores
   // of the same value are idempotent, so no atomics are needed. Word-sized stores coalesce into
   // full 128-byte transactions per warp; byte-sized flags cost ~2–3× here because partial-word
   // stores from dense scatters serialize within each 32-bit sector.
   auto flags = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    build_table_num_rows, stream, cudf::get_current_device_resource_ref());
+    right_table_num_rows, stream, cudf::get_current_device_resource_ref());
 
   thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::make_constant_iterator(size_type{1}),
-                     cuda::make_constant_iterator(size_type{1}) + probe_total,
+                     cuda::make_constant_iterator(size_type{1}) + match_total,
                      right_out->begin(),
                      right_out->begin(),
                      flags.begin(),
-                     valid_range<size_type>{0, build_table_num_rows});
+                     valid_range<size_type>{0, right_table_num_rows});
 
-  // Fused compaction: for each unmatched build row, emit (JoinNoMatch, build_idx) into
+  // Fused compaction: for each unmatched right row, emit (JoinNoMatch, right_idx) into
   // (left_out_tail, right_out_tail) in a single CUB DeviceSelect pass.
   auto zip_tail =
-    thrust::make_zip_iterator(left_out->data() + probe_total, right_out->data() + probe_total);
+    thrust::make_zip_iterator(left_out->data() + match_total, right_out->data() + match_total);
   auto out_iter = thrust::make_transform_output_iterator(zip_tail, to_no_match_pair{});
 
   auto const new_end =
     cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
-                          cuda::counting_iterator<size_type>{build_table_num_rows},
+                          cuda::counting_iterator<size_type>{right_table_num_rows},
                           out_iter,
                           unmatched_flag{flags.data()},
                           stream);
 
   auto const comp_size = static_cast<std::size_t>(new_end - out_iter);
-  left_out->resize(probe_total + comp_size, stream);
-  right_out->resize(probe_total + comp_size, stream);
+  left_out->resize(match_total + comp_size, stream);
+  right_out->resize(match_total + comp_size, stream);
 
   return std::pair(std::move(left_out), std::move(right_out));
 }
@@ -152,8 +152,8 @@ VectorPair finalize_full_join(VectorPair&& probe_indices,
 VectorPair finalize_full_join(
   cudf::host_span<cudf::device_span<size_type const> const> left_partials,
   cudf::host_span<cudf::device_span<size_type const> const> right_partials,
-  size_type probe_table_num_rows,
-  size_type build_table_num_rows,
+  size_type left_table_num_rows,
+  size_type right_table_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -161,22 +161,22 @@ VectorPair finalize_full_join(
                "left_partials and right_partials must have the same length",
                std::invalid_argument);
 
-  std::size_t probe_total = 0;
+  std::size_t match_total = 0;
   for (std::size_t i = 0; i < left_partials.size(); ++i) {
     CUDF_EXPECTS(left_partials[i].size() == right_partials[i].size(),
                  "matching partials must have equal left/right sizes",
                  std::invalid_argument);
-    probe_total += left_partials[i].size();
+    match_total += left_partials[i].size();
   }
 
   // Pre-allocate at the upper bound so the VectorPair overload's resize-up becomes a no-op
   // (capacity is already there).
-  auto const upper = probe_total + static_cast<std::size_t>(build_table_num_rows);
+  auto const upper = match_total + static_cast<std::size_t>(right_table_num_rows);
   auto left_out    = std::make_unique<rmm::device_uvector<size_type>>(upper, stream, mr);
   auto right_out   = std::make_unique<rmm::device_uvector<size_type>>(upper, stream, mr);
 
-  // Concatenate every probe partial into the head of the output via one batched memcpy.
-  if (probe_total > 0) {
+  // Concatenate every partial into the head of the output via one batched memcpy.
+  if (match_total > 0) {
     auto const n = left_partials.size();
     std::vector<void*> dsts;
     std::vector<void const*> srcs;
@@ -199,14 +199,14 @@ VectorPair finalize_full_join(
       dsts.data(), srcs.data(), sizes.data(), dsts.size(), stream));
   }
 
-  // Shrink the uvectors' logical size to probe_total (capacity stays at upper bound), then
+  // Shrink the uvectors' logical size to match_total (capacity stays at upper bound), then
   // delegate to the VectorPair overload which resizes back up and appends the complement.
-  left_out->resize(probe_total, stream);
-  right_out->resize(probe_total, stream);
+  left_out->resize(match_total, stream);
+  right_out->resize(match_total, stream);
 
   return finalize_full_join(std::pair(std::move(left_out), std::move(right_out)),
-                            probe_table_num_rows,
-                            build_table_num_rows,
+                            left_table_num_rows,
+                            right_table_num_rows,
                             stream,
                             mr);
 }
