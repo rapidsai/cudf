@@ -546,7 +546,7 @@ def test_memory_error_hint(spmd_engine: SPMDEngine) -> None:
     ]:
         with (
             patch(
-                "cudf_polars.experimental.rapidsmpf.frontend.core.run_actor_network",
+                "cudf_polars.engine.core.run_actor_network",
                 side_effect=exc,
             ),
             pytest.raises(MemoryError, match="target_partition_size"),
