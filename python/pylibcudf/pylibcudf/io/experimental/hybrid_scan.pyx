@@ -13,6 +13,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.column cimport Column
 from pylibcudf.io.parquet cimport ParquetReaderOptions
+from pylibcudf.io.parquet_metadata cimport FileMetaData as c_FileMetaData
 from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
@@ -24,7 +25,6 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
-from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
@@ -32,16 +32,13 @@ from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
 from pylibcudf.span import is_span
+from pylibcudf.io.parquet_metadata import FileMetaData
 
 import pylibcudf.libcudf.io.hybrid_scan
 
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
-__all__ = [
-    "FileMetaData",
-    "HybridScanReader",
-    "UseDataPageMask",
-]
+__all__ = ["FileMetaData", "HybridScanReader", "UseDataPageMask"]
 
 
 cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
@@ -53,37 +50,6 @@ cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
     return device_span[const_uint8_t](<const_uint8_t*>
                                       <uintptr_t>obj.ptr,
                                       <size_t>obj.size)
-
-
-cdef class FileMetaData:
-    """Parquet file footer metadata.
-
-    For details, see :cpp:class:`cudf::io::parquet::FileMetaData`
-    """
-
-    def __init__(self):
-        raise ValueError("FileMetaData cannot be constructed directly")
-
-    @staticmethod
-    cdef FileMetaData from_cpp(cpp_FileMetaData metadata):
-        cdef FileMetaData result = FileMetaData.__new__(FileMetaData)
-        result.c_obj = metadata
-        return result
-
-    @property
-    def version(self):
-        """Get the file format version."""
-        return self.c_obj.version
-
-    @property
-    def num_rows(self):
-        """Get the total number of rows."""
-        return self.c_obj.num_rows
-
-    @property
-    def created_by(self):
-        """Get the application that created the file."""
-        return self.c_obj.created_by.decode('utf-8')
 
 
 cdef class HybridScanReader:
@@ -121,7 +87,7 @@ cdef class HybridScanReader:
         )
 
     @staticmethod
-    def from_parquet_metadata(FileMetaData metadata, ParquetReaderOptions options):
+    def from_parquet_metadata(c_FileMetaData metadata, ParquetReaderOptions options):
         """Create a HybridScanReader from pre-populated metadata.
 
         Parameters
@@ -150,7 +116,7 @@ cdef class HybridScanReader:
         FileMetaData
             Parquet file footer metadata
         """
-        return FileMetaData.from_cpp(self.c_obj.get()[0].parquet_metadata())
+        return c_FileMetaData.from_cpp(self.c_obj.get()[0].parquet_metadata())
 
     def page_index_byte_range(self):
         """Get the byte range of the page index.

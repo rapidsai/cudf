@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
+import os
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
-from pyarrow.parquet import read_table
+from pyarrow.parquet import read_table, write_table
 from utils import (
     assert_table_and_meta_eq,
     get_bytes_from_source,
@@ -93,7 +94,7 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     max_element = max(col_list)
     tbl1 = pa.Table.from_pydict({"a": col_list})
     path1 = tmp_path / "tbl1.parquet"
-    pa.parquet.write_table(tbl1, path1)
+    write_table(tbl1, path1)
     source = plc.io.SourceInfo([path1])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
@@ -249,6 +250,87 @@ def test_read_parquet_from_device_buffers(
     expected = expected.slice(skiprows, nrows if nrows > -1 else None)
 
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)
+
+
+def test_read_parquet_with_pre_materialized_metadata(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+
+    parquet_metadatas = plc.io.parquet_metadata.read_parquet_footers(
+        source_info
+    )
+    result = plc.io.parquet.read_parquet(
+        options, parquet_metadatas=parquet_metadatas
+    )
+
+    assert_table_and_meta_eq(pa_table, result, check_field_nullability=False)
+
+
+def test_read_parquet_with_pre_materialized_metadata_len_mismatch(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+
+    with pytest.raises(
+        ValueError, match="len\\(parquet_metadatas\\) must match"
+    ):
+        plc.io.parquet.read_parquet(options, parquet_metadatas=[])
+
+
+def test_chunked_parquet_reader_with_pre_materialized_metadata(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+    parquet_metadatas = plc.io.parquet_metadata.read_parquet_footers(
+        source_info
+    )
+
+    default_reader = plc.io.parquet.ChunkedParquetReader(
+        options,
+        chunk_read_limit=512,
+    )
+    default_chunks: list[pa.Table] = []
+    while default_reader.has_next():
+        default_chunks.append(default_reader.read_chunk().tbl.to_arrow())
+
+    metadata_reader = plc.io.parquet.ChunkedParquetReader(
+        options,
+        chunk_read_limit=512,
+        parquet_metadatas=parquet_metadatas,
+    )
+    metadata_chunks: list[pa.Table] = []
+    while metadata_reader.has_next():
+        metadata_chunks.append(metadata_reader.read_chunk().tbl.to_arrow())
+
+    if default_chunks:
+        expected = pa.concat_tables(default_chunks)
+    else:
+        expected = pa_table.slice(0, 0)
+    if metadata_chunks:
+        result = pa.concat_tables(metadata_chunks)
+    else:
+        result = pa_table.slice(0, 0)
+
+    assert result.equals(expected)
 
 
 # TODO: Test these options
