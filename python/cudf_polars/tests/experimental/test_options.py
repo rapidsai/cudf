@@ -66,14 +66,19 @@ def test_executor_options_includes_set_fields() -> None:
     assert "log" not in result
 
 
-def test_executor_options_unique_fraction() -> None:
-    result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
-    assert result["unique_fraction"] == {"col_a": 0.5}
-
-
 def test_executor_options_num_py_executors() -> None:
     result = StreamingOptions(num_py_executors=4).to_executor_options()
     assert result["num_py_executors"] == 4
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_executor_options_sink_to_directory(*, value: bool) -> None:
+    result = StreamingOptions(sink_to_directory=value).to_executor_options()
+    assert result["sink_to_directory"] is value
+
+
+def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
+    assert "sink_to_directory" not in StreamingOptions().to_executor_options()
 
 
 # ---------------------------------------------------------------------------
@@ -101,13 +106,20 @@ def test_engine_options_includes_set_fields() -> None:
 
 def test_rapidsmpf_options_serialized() -> None:
     opts = StreamingOptions(
-        statistics=True, pinned_memory=False, num_streaming_threads=8, log="DEBUG"
+        statistics=True,
+        pinned_memory=False,
+        num_streaming_threads=8,
+        log="DEBUG",
+        pinned_max_pool_size="4GiB",
+        unbounded_file_read_cache="host",
     )
     strings = opts.to_rapidsmpf_options().get_strings()
     assert strings["statistics"] == "True"
     assert strings["pinned_memory"] == "False"
     assert strings["num_streaming_threads"] == "8"
     assert strings["log"] == "DEBUG"
+    assert strings["pinned_max_pool_size"] == "4GiB"
+    assert strings["unbounded_file_read_cache"] == "host"
 
 
 def test_rapidsmpf_options_unspecified_fields_absent() -> None:
@@ -136,6 +148,18 @@ def test_rapidsmpf_options_explicit_overrides_env_var(
 def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RAPIDSMPF_LOG", raising=False)
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
+
+
+def test_pinned_max_pool_size_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAPIDSMPF_PINNED_MAX_POOL_SIZE", "4GiB")
+    strings = StreamingOptions().to_rapidsmpf_options().get_strings()
+    assert strings["pinned_max_pool_size"] == "4GiB"
+
+
+def test_unbounded_file_read_cache_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE", "host")
+    strings = StreamingOptions().to_rapidsmpf_options().get_strings()
+    assert strings["unbounded_file_read_cache"] == "host"
 
 
 # ---------------------------------------------------------------------------
@@ -286,12 +310,24 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     parser = argparse.ArgumentParser()
     StreamingOptions._add_cli_args(parser)
     args = parser.parse_args(
-        ["--num-streaming-threads", "8", "--rapidsmpf-log", "DEBUG", "--raise-on-fail"]
+        [
+            "--num-streaming-threads",
+            "8",
+            "--rapidsmpf-log",
+            "DEBUG",
+            "--raise-on-fail",
+            "--pinned-max-pool-size",
+            "4GiB",
+            "--unbounded-file-read-cache",
+            "host",
+        ]
     )
     opts = StreamingOptions._from_argparse(args)
     assert opts.num_streaming_threads == 8
     assert opts.log == "DEBUG"
     assert opts.raise_on_fail is True
+    assert opts.pinned_max_pool_size == "4GiB"
+    assert opts.unbounded_file_read_cache == "host"
     # Unprovided args default to None → UNSPECIFIED
     assert isinstance(opts.fallback_mode, Unspecified)
 

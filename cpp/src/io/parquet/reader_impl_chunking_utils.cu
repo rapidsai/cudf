@@ -5,7 +5,7 @@
 
 #include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/utilities/time_utils.cuh"
+#include "io/utilities/time_utils.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
@@ -231,7 +231,7 @@ int64_t find_next_split(int64_t cur_pos,
   cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
-    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+    is_chrono(data_type{column_type_id}) ? cudf::io::detail::to_clockrate(timestamp_type_id) : 0;
 
   // TODO(ets): this is leftover from the original code, but will we ever output decimal as
   // anything but fixed point?
@@ -715,8 +715,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
-  rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<size_t> d_temp_cost =
+    cudf::detail::make_device_uvector(temp_cost, stream, cudf::get_current_device_resource_ref());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,

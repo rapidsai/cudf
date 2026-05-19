@@ -193,6 +193,11 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PINNED_INITIAL_POOL_SIZE``.
         Default: ``0``.
         Category: rapidsmpf.
+    pinned_max_pool_size
+        Maximum pinned host memory pool size (e.g. ``"4GiB"``, ``"50%"``).
+        Env: ``RAPIDSMPF_PINNED_MAX_POOL_SIZE``.
+        Default: 80% of per-GPU host memory.
+        Category: rapidsmpf.
     spill_device_limit
         Device memory soft limit before spilling (e.g. ``"80%"`` or bytes).
         Env: ``RAPIDSMPF_SPILL_DEVICE_LIMIT``.
@@ -202,6 +207,14 @@ class StreamingOptions:
         Interval between spill checks (e.g. ``"1ms"``).
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
+        Category: rapidsmpf.
+    unbounded_file_read_cache
+        Cache file-read results in the Context's message storage.
+        Accepts a memory type (``"host"``, ``"pinned"``, ``"device"``) or
+        ``"disabled"``. Primarily for benchmarking. Each file slice must be
+        read with identical parameters (see rapidsmpf docs).
+        Env: ``RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE``.
+        Default: ``"disabled"``.
         Category: rapidsmpf.
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
@@ -218,10 +231,10 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION``.
         Default: ``1_000_000``.
         Category: executor.
-    broadcast_join_limit
-        Max partitions for broadcast joins.
-        Env: ``CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT``.
-        Default: auto.
+    broadcast_limit
+        Maximum byte size for broadcast joins.
+        Env: ``CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT``.
+        Default: ``"auto"``.
         Category: executor.
     target_partition_size
         Target IO partition size (bytes). ``0`` = auto.
@@ -234,10 +247,12 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
-    unique_fraction
-        Per-column uniqueness estimate (0-1). Defaults to ``1.0``.
-        Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
-        Default: ``{}``.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. The ``spmd``/``ray``/``dask`` engines
+        always use ``True``; passing ``False`` raises ``ValueError``.
+        Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
+        Default: ``True`` (forced by the streaming engines).
         Category: executor.
     raise_on_fail
         Raise instead of falling back to CPU.
@@ -300,11 +315,17 @@ class StreamingOptions:
     pinned_initial_pool_size: int | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PINNED_INITIAL_POOL_SIZE", int
     )
+    pinned_max_pool_size: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_PINNED_MAX_POOL_SIZE"
+    )
     spill_device_limit: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_SPILL_DEVICE_LIMIT"
     )
     periodic_spill_check: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
+    )
+    unbounded_file_read_cache: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE"
     )
     # ---- Executor ----
     num_py_executors: int | Unspecified = _opt(
@@ -316,8 +337,8 @@ class StreamingOptions:
     max_rows_per_partition: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", int
     )
-    broadcast_join_limit: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", int
+    broadcast_limit: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", int
     )
     target_partition_size: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", int
@@ -325,8 +346,8 @@ class StreamingOptions:
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
-    unique_fraction: dict[str, float] | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
+    sink_to_directory: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
@@ -496,16 +517,17 @@ class StreamingOptions:
             allow_overbooking_by_default=_get("allow_overbooking_by_default"),
             pinned_memory=_get("pinned_memory"),
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
+            pinned_max_pool_size=_get("pinned_max_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
+            unbounded_file_read_cache=_get("unbounded_file_read_cache"),
             hardware_binding=_get("hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
-            broadcast_join_limit=_get("broadcast_join_limit"),
+            broadcast_limit=_get("broadcast_limit"),
             target_partition_size=target_partition_size,
             dynamic_planning=dynamic_planning,
-            unique_fraction=_get("unique_fraction"),
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
@@ -605,6 +627,17 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PINNED_INITIAL_POOL_SIZE. Built-in default: 0."""),
         )
         g.add_argument(
+            "--pinned-max-pool-size",
+            dest="pinned_max_pool_size",
+            default=None,
+            type=str,
+            help=textwrap.dedent("""\
+                Maximum size of the pinned memory pool. Accepts byte counts
+                (e.g. "4GiB") or a percentage (e.g. "80%%").
+                Env: RAPIDSMPF_PINNED_MAX_POOL_SIZE.
+                Built-in default: 80%% of per-GPU host memory."""),
+        )
+        g.add_argument(
             "--spill-device-limit",
             dest="spill_device_limit",
             default=None,
@@ -624,6 +657,16 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
         )
         g.add_argument(
+            "--unbounded-file-read-cache",
+            dest="unbounded_file_read_cache",
+            default=None,
+            type=str,
+            help=textwrap.dedent("""\
+                Cache file-read results in the Context's message storage.
+                One of "host", "pinned", "device", or "disabled".
+                Env: RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE. Built-in default: disabled."""),
+        )
+        g.add_argument(
             "--hardware-binding",
             dest="hardware_binding",
             default=None,
@@ -641,8 +684,8 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__NUM_PY_EXECUTORS.
-                Built-in default: 1."""),
+                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
+                Built-in default: 8."""),
         )
         g.add_argument(
             "--raise-on-fail",
@@ -675,13 +718,13 @@ class StreamingOptions:
                 Built-in default: 1000000."""),
         )
         g.add_argument(
-            "--broadcast-join-limit",
-            dest="broadcast_join_limit",
+            "--broadcast-limit",
+            dest="broadcast_limit",
             default=None,
             type=int,
             help=textwrap.dedent("""\
-                Maximum number of partitions eligible for broadcast joins.
-                Env: CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT. Built-in default: auto."""),
+                Maximum byte size for broadcast joins. 0 = auto.
+                Env: CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT."""),
         )
         g.add_argument(
             "--target-partition-size",
@@ -700,15 +743,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--unique-fraction",
-            dest="unique_fraction",
-            default=None,
-            type=json.loads,
-            help=textwrap.dedent("""\
-                Per-column uniqueness estimate as a JSON object (e.g. '{"col": 0.5}').
-                Env: CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION. Built-in default: {}."""),
         )
         g.add_argument(
             "--stream-policy",

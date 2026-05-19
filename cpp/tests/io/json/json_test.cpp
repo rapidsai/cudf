@@ -22,12 +22,9 @@
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
-
-#include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include <cuda/iterator>
 
@@ -1605,15 +1602,15 @@ TEST_F(JsonReaderTest, TestColumnOrder)
   // Read in data using nested JSON reader
   cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
 
-  // Verify root column order (assert to avoid OOB access)
+  // Verify root column order before accessing schema entries.
   ASSERT_EQ(new_reader_table.metadata.schema_info.size(), root_col_names.size());
 
-  for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
+  for (std::size_t i = 0; i < root_col_names.size(); i++) {
     auto const& root_col_name = root_col_names[i];
     EXPECT_EQ(new_reader_table.metadata.schema_info[i].name, root_col_name);
   }
 
-  // Verify nested child column order (assert to avoid OOB access)
+  // Verify nested child column order before accessing schema entries.
   ASSERT_EQ(new_reader_table.metadata.schema_info[2].children.size(), a_child_col_names.size());
   for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
     auto const& a_child_col_name = a_child_col_names[i];
@@ -2135,9 +2132,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
 {
   // Set up host pinned memory pool to avoid implicit synchronizations to test for any potential
   // races due to missing host-device synchronizations
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
-  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
+  cudf::test::pinned_pool mr{size_t{128} * 1024 * 1024};
 
   // Set new resource
   auto last_mr = cudf::set_pinned_memory_resource(mr);
@@ -3633,6 +3628,58 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }
+}
+
+TEST_F(JsonReaderTest, MalformedFieldNameWithBrace)
+{
+  // Garbled field name containing '{' creates structural ambiguity in the
+  // token tree.  Combined with an invalid byte in a sibling row, the parser
+  // may produce column-tree nodes that are never materialised as columns.
+  // Recovery mode must handle this without accessing uninitialised memory.
+  std::string json_string =
+    R"({"name":"Alice","address":{"city":"NYC","zip":"1"},"score{":[95,2]})"
+    "\n"
+    R"({"name":"Bob","address":{"city":"LA","zip":"1"},"scores":[)"
+    "\xbf"
+    R"(8,82]})"
+    "\n"
+    R"({"name":"C","address":{"city":"Chi","zip":"60601"},"scores":[1,97]})";
+
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(options));
+}
+
+TEST_F(JsonReaderTest, MalformedStructuralCharsInValues)
+{
+  // A malformed middle line must not affect surrounding well-formed records.
+  std::string json_string = R"({"a":1,"b":[10,20]})"
+                            "\n"
+                            R"({"phantom":{"nested":[30,{"c":40)"
+                            "\n"
+                            R"({"a":3,"b":[50,60]})";
+
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  cudf::io::table_with_metadata tbl;
+  ASSERT_NO_THROW(tbl = cudf::io::read_json(options));
+  ASSERT_EQ(tbl.tbl->num_rows(), 3);
+  ASSERT_EQ(tbl.tbl->num_columns(), 2);
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_a{{1, 0, 3}, {true, false, true}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(tbl.tbl->view().column(0), expected_a);
+  EXPECT_EQ(tbl.tbl->get_column(0).null_count(), 1);
+  // Column "b": list<int64> [[10,20], null, [50,60]].
+  using LCWI = cudf::test::lists_column_wrapper<int64_t>;
+  LCWI expected_b{{LCWI{10, 20}, LCWI{}, LCWI{50, 60}}, std::vector<bool>{1, 0, 1}.begin()};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(tbl.tbl->view().column(1), expected_b);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

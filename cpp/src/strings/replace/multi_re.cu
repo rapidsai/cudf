@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -158,6 +158,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
     });
 
   auto d_max_prog        = **max_prog;
+  auto const max_insts   = d_max_prog.insts_counts();
   auto const buffer_size = d_max_prog.working_memory_size(input.size());
   auto d_buffer          = rmm::device_buffer(buffer_size, stream);
 
@@ -166,12 +167,12 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   std::transform(h_progs.begin(),
                  h_progs.end(),
                  std::back_inserter(progs),
-                 [d_buffer = d_buffer.data(), size = input.size()](auto& prog) {
-                   prog->set_working_memory(d_buffer, size);
+                 [d_buffer = d_buffer.data(), size = input.size(), max_insts](auto& prog) {
+                   prog->set_working_memory(d_buffer, size, max_insts);
                    return *prog;
                  });
   auto d_progs =
-    cudf::detail::make_device_uvector_async(progs, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector(progs, stream, cudf::get_current_device_resource_ref());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);
@@ -183,6 +184,8 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
     input.size(),
     stream,
     mr);
+
+  stream.synchronize();
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

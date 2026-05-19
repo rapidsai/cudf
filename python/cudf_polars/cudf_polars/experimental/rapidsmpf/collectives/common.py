@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy
+from cudf_polars.dsl.ir import Distinct, GroupBy, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
+from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.sort import ShuffleSorted
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -39,7 +39,10 @@ def _get_new_collective_id() -> int:
                 "times in a single query."
             )
 
-        return _collective_id_vacancy.pop()
+        # All ranks must choose the same collective IDs during lowering.
+        collective_id = min(_collective_id_vacancy)
+        _collective_id_vacancy.discard(collective_id)
+        return collective_id
 
 
 def _release_collective_id(collective_id: int) -> None:
@@ -88,7 +91,7 @@ class ReserveOpIDs:
             Join,
             Repartition,
             StreamingSink,
-            ShuffleSorted,
+            Sort,
         )
         if self.dynamic_planning_enabled:
             collective_types = (
@@ -96,9 +99,10 @@ class ReserveOpIDs:
                 Join,
                 Repartition,
                 StreamingSink,
-                ShuffleSorted,
+                Sort,
                 GroupBy,
                 Distinct,
+                Over,
             )
 
         self.collective_nodes: list[IR] = [
@@ -134,7 +138,7 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]
-            elif isinstance(node, ShuffleSorted):
+            elif isinstance(node, Sort):
                 if self.dynamic_planning_enabled:
                     # 3 IDs: size-estimate allgather, boundary allgather, shuffle
                     self.collective_id_map[node] = [
@@ -148,6 +152,16 @@ class ReserveOpIDs:
                         _get_new_collective_id(),
                         _get_new_collective_id(),
                     ]
+            elif isinstance(node, Over) and not node.is_scalar:
+                # Non-scalar Over needs 2 IDs: one for the size AllGather +
+                # forward shuffle (the AllGather completes before the forward
+                # shuffle starts, so they can share), and a separate ID for
+                # the return shuffle (which overlaps with the forward shuffle
+                # during extract+insert).
+                self.collective_id_map[node] = [
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                ]
             else:
                 self.collective_id_map[node] = [_get_new_collective_id()]
 

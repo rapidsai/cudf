@@ -6,12 +6,16 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import json
 import os
 import socket
-from typing import TYPE_CHECKING, Any, Self
+import threading
+import weakref
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
@@ -21,23 +25,68 @@ import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.experimental.base import StatsCollector
+from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.core import generate_network
+from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    import uuid
+    from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
+    import rapidsmpf.config
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
+
+
+T = TypeVar("T")
+
+
+def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
+    """
+    Resolve ``rapidsmpf_options`` and apply cross-frontend defaults.
+
+    If ``None`` is passed, constructs an ``Options`` instance from
+    environment variables. Then applies defaults that should be consistent
+    across SPMD, Ray, and Dask. Defaults are set via
+    ``Options.insert_if_absent``, so explicit values or environment
+    variables always take precedence.
+
+    Defaults applied:
+
+    - ``num_streaming_threads=4``: moderate worker count for the rapidsmpf
+      streaming runtime, shared across frontends.
+
+    Parameters
+    ----------
+    rapidsmpf_options
+        Existing options to resolve, or ``None`` to construct from environment
+        variables.
+
+    Returns
+    -------
+    Options
+        Resolved options with cross-frontend defaults applied.
+    """
+    if rapidsmpf_options is None:
+        rapidsmpf_options = Options(get_environment_variables())
+
+    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+    return rapidsmpf_options
 
 
 @dataclasses.dataclass(frozen=True)
@@ -55,12 +104,15 @@ class ClusterInfo:
         Value of ``CUDA_VISIBLE_DEVICES``, or ``None`` if unset.
     gpu_uuid
         UUID of the current CUDA device.
+    device_memory
+        Total device memory in bytes, or ``None`` if unknown.
     """
 
     pid: int
     hostname: str
     cuda_visible_devices: str | None
     gpu_uuid: str
+    device_memory: int | None = None
 
     @classmethod
     def local(cls) -> ClusterInfo:
@@ -76,6 +128,7 @@ class ClusterInfo:
             hostname=socket.gethostname(),
             cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
             gpu_uuid=cuda.core.Device().uuid,
+            device_memory=get_total_device_memory(),
         )
 
 
@@ -106,6 +159,13 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    rapidsmpf_options: rapidsmpf.config.Options
+    # Process-wide registry of every live :class:`StreamingEngine`. Used by
+    # :class:`DefaultSingletonEngine` to enforce that no other engine is
+    # alive when the singleton is constructed.
+    _active_engines: ClassVar[weakref.WeakSet[StreamingEngine]] = weakref.WeakSet()
+    _active_engines_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(
         self,
         *,
@@ -114,22 +174,61 @@ class StreamingEngine(pl.GPUEngine):
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ):
+        # Refuse to construct if a ``DefaultSingletonEngine`` is alive
+        # (no-op for the singleton itself).
+        from cudf_polars.experimental.rapidsmpf.frontend.default_singleton_engine import (
+            check_no_live_default_singleton,
+        )
+
+        check_no_live_default_singleton(self)
         self._nranks = nranks
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
+
+        # Gather `min_device_size` from the cluster
+        cluster_infos: list[ClusterInfo] = self.gather_cluster_info()
+        device_memories = [info.device_memory for info in cluster_infos]
+        executor_options["min_device_size"] = (
+            None
+            if any(dm is None for dm in device_memories)
+            else min(device_memories, default=None)
+        )
+
+        # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
+        # accept it.
+        engine_options = dict(engine_options)
+        allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
             **engine_options,
         )
-        if nranks > 1 and engine_options.get("allow_gpu_sharing", False) is False:
-            uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
+        if nranks > 1 and not allow_gpu_sharing:
+            uuids = [info.gpu_uuid for info in cluster_infos]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
                     "Multiple ranks share the same GPU (UUID collision detected). "
                     f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
                 )
+        with StreamingEngine._active_engines_lock:
+            StreamingEngine._active_engines.add(self)
+
+    @classmethod
+    def _active_engine_count(cls) -> int:
+        """
+        Return the number of currently-live :class:`StreamingEngine` instances.
+
+        "Live" means constructed and not yet shut down (or garbage collected).
+        The count is process-wide and shared across all subclasses.
+
+        Returns
+        -------
+        Number of live engines, including ``self`` if called on a live
+        instance.
+        """
+        with StreamingEngine._active_engines_lock:
+            return len(StreamingEngine._active_engines)
 
     @property
     def nranks(self) -> int:
@@ -154,6 +253,99 @@ class StreamingEngine(pl.GPUEngine):
         """
         raise NotImplementedError
 
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        raise NotImplementedError
+
+    def global_statistics(self, *, clear: bool = False) -> Statistics:
+        """
+        Collect statistics from every rank and merge them into a single global statistics.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        A merged :class:`~rapidsmpf.statistics.Statistics`: per-stat counts
+        and values are summed, maxima are reduced with ``max``. Formatters
+        are taken from rank 0.
+        """
+        return Statistics.merge(self.gather_statistics(clear=clear))
+
+    def _reset(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Reset the engine with new options, keeping cluster resources alive.
+
+        The following inputs are fixed at construction time and cannot change:
+          - ``num_ranks``
+          - ``num_py_executors`` (in ``executor_options``)
+          - ``hardware_binding`` (in ``engine_options``)
+          - ``memory_resource_config`` (in ``engine_options``)
+
+        Subclasses must override this method. The override should:
+          1. Raise :class:`RuntimeError` if the engine is already shut down.
+          2. Call ``super()._reset(...)`` to apply the universal option validation below.
+          3. Perform the backend-specific rebuild.
+
+        Parameters
+        ----------
+        rapidsmpf_options
+            New :class:`Options` for each rank's :class:`Context`.
+            ``None`` is treated as an empty dict.
+        executor_options
+            New executor options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+        engine_options
+            New engine options for the polars ``GPUEngine`` layer.
+            ``None`` is treated as an empty dict.
+
+        Raises
+        ------
+        ValueError
+            If ``executor_options`` or ``engine_options`` contains a
+            construction-time-only key (see list above), or if a
+            reserved key is set (via :func:`check_reserved_keys`).
+        """
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        check_reserved_keys(executor_options, engine_options)
+
+        _disallowed_exec = {"num_py_executors"} & executor_options.keys()
+        if _disallowed_exec:
+            raise ValueError(
+                f"executor_options keys {sorted(_disallowed_exec)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
+        _disallowed_engine = {
+            "hardware_binding",
+            "memory_resource_config",
+        } & engine_options.keys()
+        if _disallowed_engine:
+            raise ValueError(
+                f"engine_options keys {sorted(_disallowed_engine)} cannot be "
+                "changed via _reset(). Construct a fresh engine instead."
+            )
+
     def shutdown(self) -> None:
         """
         Shut down engine and release all owned resources.
@@ -170,6 +362,8 @@ class StreamingEngine(pl.GPUEngine):
             self.device = None
             self.memory_resource = None
             self.config = {}
+            with StreamingEngine._active_engines_lock:
+                StreamingEngine._active_engines.discard(self)
 
     def __enter__(self) -> Self:
         """Enter the context manager, returning ``self``."""
@@ -178,6 +372,25 @@ class StreamingEngine(pl.GPUEngine):
     def __exit__(self, *_: object) -> None:
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        """
+        Execute a function on all ranks.
+
+        Parameters
+        ----------
+        func
+            Function to execute.
+        args
+            Arguments to pass to the function.
+        kwargs
+            Keyword arguments to pass to the function.
+
+        Returns
+        -------
+        List of results from calling ``func``, one per rank.
+        """
+        raise NotImplementedError
 
 
 def execute_ir_on_rank(
@@ -190,8 +403,8 @@ def execute_ir_on_rank(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     *,
-    collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+    query_id: uuid.UUID,
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
 
@@ -217,19 +430,20 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
-    collect_metadata
-        Whether to collect channel metadata during execution.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
     result
         This rank's output fragment as a Polars DataFrame.
     metadata
-        Collected channel metadata if ``collect_metadata`` is ``True``,
-        otherwise ``None``.
+        Collected channel metadata.
     """
-    ir_context = IRExecutionContext(get_cuda_stream=ctx.get_stream_from_pool)
-    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
+    ir_context = IRExecutionContext(
+        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+    )
+    metadata_collector: list[ChannelMetadata] = []
 
     nodes, output = generate_network(
         ctx,
@@ -243,7 +457,7 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(actors=nodes, py_executor=py_executor)
+    run_actor_network(ctx, actors=nodes)
 
     messages = output.release()
     chunks = [
@@ -276,7 +490,7 @@ def execute_ir_on_rank(
 
 
 _RESERVED_EXECUTOR_KEYS: frozenset[str] = frozenset(
-    {"runtime", "cluster", "spmd_context", "ray_context", "dask_context"}
+    {"cluster", "spmd_context", "ray_context", "dask_context"}
 )
 _RESERVED_ENGINE_KEYS: frozenset[str] = frozenset({"memory_resource", "executor"})
 
@@ -348,7 +562,121 @@ def all_gather_host_data(
         br=br,
         statistics=Statistics(enable=False),
     )
-    allgather.insert(0, PackedData.from_host_bytes(data, br))
-    allgather.insert_finished()
+    # TODO: Make AllGather (bulk) a context manager so this becomes
+    # with AllGather(...) as ag:
+    #     ag.insert(0, PackedData.from_host_bytes(data, br))
+    # results = ag.wait_and_extract(ordered=True)
+    try:
+        allgather.insert(0, PackedData.from_host_bytes(data, br))
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
     return [r.to_host_bytes() for r in results]
+
+
+def allgather_stats(
+    comm: Communicator,
+    br: BufferResource,
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> StatsCollector:
+    """
+    Collect scan statistics on rank 0 and distribute to all ranks.
+
+    When ``comm.nranks == 1`` the allgather is skipped and statistics are
+    collected locally.
+
+    Parameters
+    ----------
+    comm
+        Communicator shared by all participating ranks.
+    br
+        Buffer resource for the allgather allocation.
+    ir
+        Root of the pre-lowered IR graph (same object on every rank).
+    config_options
+        Executor configuration.
+
+    Returns
+    -------
+    A :class:`StatsCollector` valid for the local rank's IR node objects.
+    """
+    if comm.nranks == 1:
+        return collect_statistics(ir, config_options)
+
+    if comm.rank == 0:
+        stats = collect_statistics(ir, config_options)
+        data = json.dumps(stats.serialize(ir)).encode()
+    else:
+        data = b""
+
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, br, op_id, data)
+
+    if comm.rank == 0:
+        return stats
+    return StatsCollector.deserialize(json.loads(all_data[0]), ir)
+
+
+def evaluate_on_rank(
+    ctx: Context,
+    comm: Communicator,
+    py_executor: ThreadPoolExecutor,
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    *,
+    query_id: uuid.UUID,
+) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
+    """
+    Evaluate a polars IR plan on a single rank.
+
+    This is the main worker-side entry point for multi-rank execution.
+    It performs the following steps collectively across all ranks:
+
+    1. Collect statistics (on rank 0 and allgather)
+    2. Lower the IR graph
+    3. Reserve collective operation IDs
+    4. Execute the lowered pipeline
+
+    Parameters
+    ----------
+    ctx
+        The active RapidsMPF streaming context for this rank.
+    comm
+        The active RapidsMPF communicator for this rank.
+    py_executor
+        Thread-pool executor used to drive the actor network.
+    ir
+        Root of the **pre-lowered** IR graph.
+    config_options
+        Executor configuration forwarded from the client.
+    query_id
+        Unique identifier for the query, propagated into actor traces.
+
+    Returns
+    -------
+    result
+        This rank's output fragment as a Polars DataFrame.
+    metadata
+        Collected channel metadata.
+    """
+    stats = allgather_stats(comm, ctx.br(), ir, config_options)
+    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+
+    if comm.rank == 0:
+        # At least for now, the query plan is identical on all ranks,
+        # so we only log it once.
+        log_query_plan(ir, config_options)
+
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
+        return execute_ir_on_rank(
+            ctx,
+            comm,
+            py_executor,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            query_id=query_id,
+        )

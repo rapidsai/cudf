@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -90,77 +90,6 @@ struct device_span {
   {
     return device_span<T const>{_data, _size};
   }
-};
-
-/**
- * @brief A span type with optional/nullable elements.
- *
- * Optional implies the span contains nullable elements.
- * The nullability of the elements is internally represented by an optional bitmask which can be
- * nullptr when all the elements are non-null.
- */
-template <typename T>
-struct device_optional_span : device_span<T> {
- private:
-  using base               = device_span<T>;
-  bitmask_type* _null_mask = nullptr;
-
- public:
-  CUDF_HOST_DEVICE constexpr device_optional_span() {}
-
-  /**
-   * @brief Constructs an optional span from a span and a null-mask.
-   *
-   * @param span Span containing the elements
-   * @param null_mask The null-mask determining the validity of the elements or nullptr if all
-   * valid.
-   */
-  CUDF_HOST_DEVICE device_optional_span(device_span<T> span, bitmask_type* null_mask)
-    : base{span}, _null_mask{null_mask}
-  {
-  }
-
-  /// @copydoc column_device_view::nullable
-  [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
-
-#ifdef __CUDACC__
-
-  /// @copydoc column_device_view::is_valid_nocheck
-  [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
-  {
-    return bit_is_set(_null_mask, element_index);
-  }
-
-  /// @copydoc column_device_view::is_valid
-  [[nodiscard]] __device__ bool is_valid(size_t element_index) const
-  {
-    return not nullable() or is_valid_nocheck(element_index);
-  }
-
-  /// @copydoc column_device_view::is_null
-  [[nodiscard]] __device__ bool is_null(size_t element_index) const
-  {
-    return !is_valid(element_index);
-  }
-
-  CUDF_HOST_DEVICE constexpr T& element(size_t idx) const { return base::operator[](idx); }
-
-  /// @copydoc column_device_view::element
-  __device__ void set_valid(size_type element_index) const noexcept
-  {
-    return set_bit(_null_mask, element_index);
-  }
-
-  /// @copydoc column_device_view::set_null
-  __device__ void set_null(size_type element_index) const noexcept
-  {
-    return clear_bit(_null_mask, element_index);
-  }
-
-  /// @brief converts the optional span to a regular non-nullable span.
-  [[nodiscard]] __device__ base to_span() const noexcept { return static_cast<base const&>(*this); }
-
-#endif
 };
 
 }  // namespace jit

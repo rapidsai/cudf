@@ -27,7 +27,6 @@ try:
         build_parser,
         get_data,
         parse_args,
-        run_duckdb,
         run_polars,
     )
 except ImportError as e:
@@ -58,8 +57,6 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 if COUNT_DTYPE is not None:
     EXPECTED_CASTS = {
         1: [pl.col("count_order").cast(COUNT_DTYPE)],
-        3: [pl.col("o_orderdate").cast(pl.Date())],
-        18: [pl.col("o_orderdate").cast(pl.Date())],
         4: [pl.col("order_count").cast(COUNT_DTYPE)],
         7: [pl.col("l_year").cast(pl.Int32())],
         8: [pl.col("o_year").cast(pl.Int32())],
@@ -1797,17 +1794,5 @@ class PDSHDuckDBQueries:
 
 if __name__ == "__main__":
     parser = build_parser(num_queries=22)
-    parser.add_argument(
-        "--engine",
-        choices=["polars", "duckdb"],
-        default="polars",
-        help="Which engine to use for executing the benchmarks or to validate results.",
-    )
     args = parse_args(parser=parser)
-
-    if args.engine == "polars":
-        run_polars(PDSHQueries, args)
-    elif args.engine == "duckdb":
-        run_duckdb(PDSHDuckDBQueries, args)
-    else:
-        raise ValueError(f"Invalid engine: {args.engine}")
+    run_polars(PDSHQueries, args)
