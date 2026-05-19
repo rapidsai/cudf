@@ -13,7 +13,10 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import contextvars
+import functools
 import itertools
 import json
 import random
@@ -22,7 +25,15 @@ import uuid
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    ParamSpec,
+    TypeVar,
+    assert_never,
+    overload,
+)
 
 import polars as pl
 
@@ -45,12 +56,9 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
-    get_joined_cuda_stream,
-    join_cuda_streams,
+    stream_ordered_after,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
     POLARS_VERSION_LT_138,
@@ -58,6 +66,7 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+    from concurrent.futures import ThreadPoolExecutor
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -68,6 +77,9 @@ if TYPE_CHECKING:
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
+
+    P = ParamSpec("P")
+    T = TypeVar("T")
 
 __all__ = [
     "IR",
@@ -108,12 +120,50 @@ class IRExecutionContext:
 
     Parameters
     ----------
+    py_executor
+       Thread pool for thread offload in async execution, only used by
+       streaming engine.
     get_cuda_stream
         A zero-argument callable that returns a CUDA stream.
+    query_id
+        Identifier for the query being executed.
     """
 
+    py_executor: ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    async def to_thread(
+        self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
+    ) -> T:
+        """
+        Run a function asynchronously in a thread.
+
+        Parameters
+        ----------
+        func
+            The function to run.
+        args
+            Arguments.
+        kwargs
+            Keyword arguments.
+
+        Returns
+        -------
+        Awaitable to obtain the result of calling ``func``.
+
+        Notes
+        -----
+        This offloads the function to run in the thread pool attached to
+        this execution context.
+        """
+        assert self.py_executor is not None, (
+            "Execution context must have a thread pool for offload"
+        )
+        loop = asyncio.get_running_loop()
+        ctx = contextvars.copy_context()
+        func_call = functools.partial(ctx.run, func, *args, **kwargs)
+        return await loop.run_in_executor(self.py_executor, func_call)
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -128,36 +178,11 @@ class IRExecutionContext:
         Yields
         ------
         A CUDA stream that is downstream of the given dataframes.
-
-        Notes
-        -----
-        This context manager provides two useful guarantees when working with
-        objects holding references to stream-ordered objects:
-
-        1. The stream yield upon entering the context manager is *downstream* of
-           all the input dataframes.  This ensures that you can safely perform
-           stream-ordered operations on any input using the yielded stream.
-        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
-           context manager exits. This ensures that all stream-ordered operations
-           submitted inside the context manager can complete before the memory
-           referenced by the inputs is deallocated.
-
-        Note that this does (deliberately) disconnect the dropping of the Python
-        object (by its refcount dropping to 0) from the actual stream-ordered
-        deallocation of the CUDA memory. This is precisely what we need to ensure
-        that the inputs are valid long enough for the stream-ordered operations to
-        complete.
         """
-        result_stream = get_joined_cuda_stream(
+        with stream_ordered_after(
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        yield result_stream
-
-        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
-        )
+        ) as result_stream:
+            yield result_stream
 
 
 _BINOPS = {
@@ -325,6 +350,7 @@ _COMPARISON_BINOPS = {
 }
 
 
+@nvtx_annotate_cudf_polars(message="_parquet_physical_types")
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
@@ -505,16 +531,7 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if (
-            any(str(p).startswith("https:/") for p in self.paths)
-            and POLARS_VERSION_LT_131
-        ):  # pragma: no cover; polars passed us the wrong URI
-            # https://github.com/pola-rs/polars/issues/22766
-            raise NotImplementedError("Read from https")
-        if any(
-            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
-            for p in self.paths
-        ):
+        if any(str(p).startswith("file://") for p in self.paths):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
@@ -632,6 +649,7 @@ class Scan(IR):
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
 
+    @nvtx_annotate_cudf_polars(message="Scan.fast_count")
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
         meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -643,6 +661,7 @@ class Scan(IR):
         return max(total_rows, 0)
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
     def _get_parquet_row_count_from_metadata(
         paths: list[str], skip_rows: int, n_rows: int
     ) -> int:
@@ -1980,19 +1999,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child
@@ -2479,9 +2494,11 @@ class Join(IR):
                         right.columns,
                         left=False,
                         empty=True,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         stream=stream,
                     )
                     result = DataFrame([*left_cols, *right_cols], stream=stream)
@@ -2495,9 +2512,11 @@ class Join(IR):
                     right_cols = Join._build_columns(
                         columns[left.num_columns :],
                         right.columns,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         left=False,
                         stream=stream,
                     )
@@ -3040,16 +3059,6 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR
-            old, new, strict = self.options
-            if len(new) != len(set(new)) or (
-                set(new) & (set(df.schema.keys()) - set(old))
-            ):
-                raise NotImplementedError(
-                    "Duplicate new names in rename."
-                )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -3123,11 +3132,6 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
-            # final tag is "swapping" which is useful for the
-            # optimiser (it blocks some pushdown operations)
-            old, new, _ = options
-            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif name == "explode":
             ((to_explode,),) = options
             index = df.column_names.index(to_explode)

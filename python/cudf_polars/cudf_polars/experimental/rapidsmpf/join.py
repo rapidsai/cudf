@@ -4,8 +4,7 @@
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
@@ -30,6 +29,7 @@ from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -39,13 +39,14 @@ from cudf_polars.experimental.rapidsmpf.nodes import default_node_multi
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    TableSizeStats,
     _is_already_partitioned,
+    _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
     maybe_remap_partitioning,
-    names_to_indices,
     process_children,
     recv_metadata,
     replay_buffered_channel,
@@ -74,20 +75,6 @@ if TYPE_CHECKING:
 # cuDF column/concatenate row limit (int32)
 CUDF_ROW_LIMIT = 2**31 - 1
 MAX_BROADCAST_ROWS = CUDF_ROW_LIMIT // 2
-
-
-@dataclass(frozen=True)
-class JoinSideStats:
-    """Sampled chunks and aggregate size/row stats for one side of a join."""
-
-    chunks: dict[int, TableChunk] = field(default_factory=dict)
-    """The sampled chunks, keyed by sequence number."""
-    total_size: int = 0
-    """The total estimated size of the child table."""
-    total_rows: int = 0
-    """The total estimated number of rows in the child table."""
-    total_chunks: int = 0
-    """The total estimated number of chunks in the child table."""
 
 
 @dataclass(frozen=True)
@@ -205,9 +192,9 @@ async def _collect_small_side_for_broadcast(
             for s_id in range(len(chunks)):
                 inserter.insert(s_id, chunks.pop(0))
         stream = ir_context.get_cuda_stream()
-        gathered = await allgather.extract_concatenated(stream)
+        gathered = await allgather.extract_concatenated(stream, ir_context=ir_context)
         # When every rank inserted zero chunks, the AllGather has no schema
-        # to infer and returns a 0-column table. Substitute a properly typed
+        # to infer and returns a 0 column table. Substitute a properly typed
         # empty table for the small side so downstream joins still match the
         # expected schema.
         table = (
@@ -278,7 +265,7 @@ async def _broadcast_join_large_chunk(
         await reserve_memory(context, size=input_bytes, net_memory_delta=0)
     ):
         for sdf in dfs_to_join:
-            result = await asyncio.to_thread(
+            result = await ir_context.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
                 *([large_df, sdf] if broadcast_side == "right" else [sdf, large_df]),
@@ -481,7 +468,7 @@ async def _join_chunks(
         with opaque_memory_usage(
             await reserve_memory(context, size=input_bytes, net_memory_delta=0)
         ):
-            df = await asyncio.to_thread(
+            df = await ir_context.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
                 chunk_to_frame(left_chunk, left),
@@ -855,10 +842,10 @@ def _make_shuffle_strategy(
 async def _aggregate_estimates(
     context: Context,
     comm: Communicator,
-    left_sample: JoinSideStats,
-    right_sample: JoinSideStats,
+    left_sample: TableSizeStats,
+    right_sample: TableSizeStats,
     collective_ids: list[int],
-) -> tuple[JoinSideStats, JoinSideStats]:
+) -> tuple[TableSizeStats, TableSizeStats]:
     """Aggregate table-size and row estimates across ranks."""
     # AllGather size, row, and chunk count estimates across ranks
     (
@@ -880,13 +867,13 @@ async def _aggregate_estimates(
         right_sample.total_chunks,
     )
 
-    new_left_sample = JoinSideStats(
+    new_left_sample = TableSizeStats(
         chunks=left_sample.chunks,
         total_size=left_total,
         total_rows=left_total_rows,
         total_chunks=left_total_chunks,
     )
-    new_right_sample = JoinSideStats(
+    new_right_sample = TableSizeStats(
         chunks=right_sample.chunks,
         total_size=right_total,
         total_rows=right_total_rows,
@@ -904,8 +891,8 @@ async def _choose_strategy_from_samples(
     right_partitioning: NormalizedPartitioning,
     executor: StreamingExecutor,
     *,
-    left_sample: JoinSideStats,
-    right_sample: JoinSideStats,
+    left_sample: TableSizeStats,
+    right_sample: TableSizeStats,
     chunkwise: bool,
     tracer: ActorTracer | None,
 ) -> JoinStrategy:
@@ -941,7 +928,7 @@ async def _choose_strategy_from_samples(
     # - Full: cannot broadcast (must shuffle both to preserve both sides)
 
     # Determine which sides may be broadcasted
-    broadcast_threshold = executor.target_partition_size * executor.broadcast_join_limit
+    broadcast_threshold = executor.broadcast_limit
     left_size_ok = left_total < broadcast_threshold and (
         left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
     )
@@ -1043,59 +1030,6 @@ def _choose_shuffle_modulus(
         return max(large, min_shuffle_modulus)
 
 
-async def _sample_chunks(
-    context: Context,
-    ch: Channel[TableChunk],
-    max_sample_chunks: int,
-    max_sample_bytes: int,
-    local_count: int,
-) -> JoinSideStats:
-    """
-    Sample chunks from a channel.
-
-    Parameters
-    ----------
-    context
-        The context.
-    ch
-        The channel to sample from.
-    max_sample_chunks
-        The maximum number of chunks to sample.
-    max_sample_bytes
-        The maximum number of bytes to sample.
-    local_count
-        The number of local chunks.
-
-    Returns
-    -------
-    The sampled chunks.
-    """
-    sampled_chunks: dict[int, TableChunk] = {}
-    total_size = 0
-    total_rows = 0
-    for _ in range(max_sample_chunks):
-        msg = await ch.recv(context)
-        if msg is None:
-            break
-        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        sampled_chunks[msg.sequence_number] = chunk
-        total_size += chunk.data_alloc_size()
-        total_rows += chunk.shape[0]
-        if total_size >= max_sample_bytes:
-            break
-    if sampled_chunks:
-        total_size = int((total_size / len(sampled_chunks)) * local_count)
-        total_rows = int((total_rows / len(sampled_chunks)) * local_count)
-    return JoinSideStats(
-        chunks=sampled_chunks,
-        total_size=total_size,
-        total_rows=total_rows,
-        total_chunks=local_count,
-    )
-
-
 async def _choose_strategy(
     context: Context,
     comm: Communicator,
@@ -1108,25 +1042,25 @@ async def _choose_strategy(
     collective_ids: list[int],
     *,
     tracer: ActorTracer | None,
-) -> tuple[JoinSideStats, JoinSideStats, JoinStrategy]:
+) -> tuple[TableSizeStats, TableSizeStats, JoinStrategy]:
     """Sample both sides, aggregate estimates, and choose broadcast vs shuffle."""
     nranks = comm.nranks
     left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.left_on, ir.children[0].schema),
+        keys=names_to_indices(ir.left_on, ir.children[0].schema),
     )
     right_partitioning = NormalizedPartitioning.from_keys(
         right_metadata.partitioning,
         nranks,
-        indices=names_to_indices(ir.right_on, ir.children[1].schema),
+        keys=names_to_indices(ir.right_on, ir.children[1].schema),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning):
+    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
         # We can use a chunkwise join
         chunkwise = True
-        left_sample = JoinSideStats(total_chunks=left_metadata.local_count)
-        right_sample = JoinSideStats(total_chunks=right_metadata.local_count)
+        left_sample = TableSizeStats(total_chunks=left_metadata.local_count)
+        right_sample = TableSizeStats(total_chunks=right_metadata.local_count)
     else:
         # Need to shuffle or broadcast - Use sampled data to choose a strategy
         chunkwise = False

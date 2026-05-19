@@ -29,6 +29,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -7827,6 +7828,233 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByHashSumWithOverflow() {
+    // int64 keys 1, 2, 3 with values that fit comfortably in int64.
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
+             .column(10L, 20L, 30L, 11L, 21L, 22L, 12L, 31L, 32L, 23L)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertEquals(2, sorted.getNumberOfColumns());
+      assertEquals(3, sorted.getRowCount());
+
+      ColumnVector keyCol = sorted.getColumn(0);
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedKeys = ColumnVector.fromInts(1, 2, 3);
+           ColumnVector expectedSum = ColumnVector.fromLongs(33L, 86L, 93L);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false, false)) {
+        assertColumnsAreEqual(expectedKeys, keyCol);
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDetectsOverflow() {
+    // Group 1 overflows (max + max), group 2 stays in range.
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      try (ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowInt32() {
+    // Int32 input: hash groupby supports it (reduction does not).
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .column(1, 10, 2, 20)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.fromInts(3, 30);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.INT32, sumCol.getType());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupBySortSumWithOverflowThrows() {
+    // Sort-based groupby (keysSorted=true forces the sort impl in cudf).
+    // SUM_WITH_OVERFLOW is hash-only, so cudf should throw.
+    GroupByOptions sortOpts = GroupByOptions.builder().withKeysSorted(true).build();
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(1L, 2L, 3L, 4L)
+             .build()) {
+      assertThrows(CudfException.class, () ->
+          input.groupBy(sortOpts, 0).aggregate(
+              GroupByAggregation.sumWithOverflow().onColumn(1)).close());
+    }
+  }
+
+  // For SUM_WITH_OVERFLOW on fixed-point inputs, cudf's hash groupby produces a
+  // STRUCT whose sum-child has the same decimal type AND scale as the input
+  // (target_type_impl<fixed_point, SUM_WITH_OVERFLOW> uses Source as the sum
+  // type at cpp/include/cudf/detail/aggregation/aggregation.hpp). The three
+  // tests below assert both the values and that scale is preserved end-to-end
+  // through the JNI struct-column extraction path.
+  @Test
+  void testGroupByHashSumWithOverflowDecimal32() {
+    final int scale = -2;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2, 1)
+             .decimal32Column(scale, 100, 200, 150, 250, 50)  // 1.00, 2.00, 1.50, 2.50, 0.50
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector keyCol = sorted.getColumn(0);
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedKeys = ColumnVector.fromInts(1, 2);
+           ColumnVector expectedSum = ColumnVector.decimalFromInts(scale, 300, 450);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL32, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedKeys, keyCol);
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal64() {
+    final int scale = -4;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal64Column(scale, 10000L, 20000L, 30000L, 40000L)  // 1.0000, 2.0000, ...
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromLongs(scale, 40000L, 60000L);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL64, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal128() {
+    final int scale = -10;
+    BigInteger v1 = BigInteger.valueOf(123456789L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v2 = BigInteger.valueOf(987654321L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v3 = BigInteger.valueOf(111111111L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v4 = BigInteger.valueOf(222222222L).multiply(BigInteger.TEN.pow(10));
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY, v1, v2, v3, v4)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromBigInt(scale,
+               v1.add(v3), v2.add(v4));
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL128, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumWithOverflowDecimal128DetectsOverflow() {
+    // Pick a value with at most 38 significant digits (the MathContext cap in
+    // Table.TestBuilder.decimal128Column) that still overflows int128_max when
+    // summed with itself. 10^38 - 1 is 38 nines; 2 * (10^38 - 1) ~= 2e38 which
+    // exceeds int128_max ~= 1.7e38, so cudf's kernel flags overflow.
+    final int scale = 0;
+    BigInteger nearMax = BigInteger.TEN.pow(38).subtract(BigInteger.ONE);
+    // Expected wrapped sum for group 1: two's-complement wrap of 2*nearMax in
+    // int128. 2*nearMax > int128_max, so the signed result is 2*nearMax - 2^128.
+    BigInteger two = BigInteger.valueOf(2);
+    BigInteger group1Wrapped = nearMax.multiply(two).subtract(two.pow(128));
+    BigInteger group2Sum = BigInteger.valueOf(7);  // 3 + 4
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY,
+                 nearMax, nearMax, BigInteger.valueOf(3), BigInteger.valueOf(4))
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           // expectedSum uses decimalFromBigInt because the wrapped group-1
+           // value has 39 significant digits and would not survive the
+           // MathContext(38) inside Table.TestBuilder.decimal128Column.
+           ColumnVector expectedSum = ColumnVector.decimalFromBigInt(scale,
+               group1Wrapped, group2Sum);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL128, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
   void testGroupByMergeM2() {
     StructType nestedType = new StructType(false,
         new BasicType(true, DType.INT64),
@@ -9508,6 +9736,157 @@ public class TableTest extends CudfTestBase {
         assert (((GroupType) schema.getFields().get(3)).getFields().get(0).getId().intValue() == 31);
         assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
         assert (schema.getFields().get(4).getId().intValue() == 0);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnOuterListBinaryAndMap() throws IOException {
+    // Regression test for cudf #22347: parquet field IDs supplied via
+    // withBinaryColumn(name, nullable, id), listBuilder(name, nullable, id) and
+    // mapColumn(name, key, value, isNullable, id) must end up on the outer
+    // (list/map) column on disk, not on the inner element/key_value child.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withBinaryColumn("_c0", true, 1)
+        .withListColumn(listBuilder("_c1", true, 2)
+            .withColumn(false, "element", 22)
+            .build())
+        .withMapColumn(mapColumn("_c2",
+            new ColumnWriterOptions("key", false),
+            new ColumnWriterOptions("value"),
+            true, 3))
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-outer", ".parquet");
+    try {
+      List<Byte> bin1 = asList("ABC");
+      List<Byte> bin2 = asList("DEF");
+      HostColumnVector.ListType binType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType listOfInt = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.INT32));
+      HostColumnVector.StructType kvType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                        new HostColumnVector.BasicType(true, DType.STRING)));
+      HostColumnVector.ListType mapType = new HostColumnVector.ListType(true, kvType);
+
+      try (ColumnVector binCol = ColumnVector.fromLists(binType, bin1, bin2);
+           ColumnVector listCol = ColumnVector.fromLists(listOfInt,
+               Arrays.asList(1, 2, 3), Arrays.asList(4, 5));
+           ColumnVector mapCol = ColumnVector.fromLists(mapType,
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b"))),
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c", "d"))));
+           Table t0 = new Table(binCol, listCol, mapCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // The id supplied to the API must land on the outer (BINARY/LIST/MAP) column.
+        assertEquals(1, schema.getFields().get(0).getId().intValue());
+        assertEquals(2, schema.getFields().get(1).getId().intValue());
+        assertEquals(3, schema.getFields().get(2).getId().intValue());
+
+        // No nested descendant must inherit the outer id (catches "id placed on
+        // both outer and inner" regressions, including the original bug where
+        // withBinary(...id) attached the id to the inner BINARY_DATA child).
+        assertNoNestedIdEquals(schema.getFields().get(0), 1);
+        assertNoNestedIdEquals(schema.getFields().get(1), 2);
+        assertNoNestedIdEquals(schema.getFields().get(2), 3);
+
+        // The explicit child id on the LIST<INT> "element" must be preserved.
+        Type listElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(listElement);
+        assertEquals(22, listElement.getId().intValue());
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  private static void assertNoNestedIdEquals(Type type, int outerId) {
+    if (type.isPrimitive()) return;
+    for (Type child : type.asGroupType().getFields()) {
+      if (child.getId() != null) {
+        assertNotEquals(outerId, child.getId().intValue(),
+            "Field " + child.getName() + " unexpectedly inherited outer id " + outerId);
+      }
+      assertNoNestedIdEquals(child, outerId);
+    }
+  }
+
+  private static Type findDescendantByName(Type type, String name) {
+    if (type.isPrimitive()) {
+      return name.equals(type.getName()) ? type : null;
+    }
+    for (Type child : type.asGroupType().getFields()) {
+      if (name.equals(child.getName())) return child;
+      Type found = findDescendantByName(child, name);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnNestedArrayOfBinaryAndString() throws IOException {
+    // Regression test for cudf #22347: the original Spark-Rapids/Iceberg
+    // failure ("Missing required field ... optional binary element is not in
+    // the store") came from array<binary> / array<string> columns where
+    // iceberg looks the leaf up by its parquet field id. Lock that nested path
+    // down here in addition to the top-level cases.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withListColumn(listBuilder("arr_bin", true, 10)
+            .withBinaryColumn("element", true, 11)
+            .build())
+        .withListColumn(listBuilder("arr_str", true, 20)
+            .withColumn(true, "element", 21)
+            .build())
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id-nested", ".parquet");
+    try {
+      HostColumnVector.ListType binEl = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType arrBinType = new HostColumnVector.ListType(true, binEl);
+      HostColumnVector.ListType arrStrType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (ColumnVector arrBinCol = ColumnVector.fromLists(arrBinType,
+               Arrays.asList(asList("ABC"), asList("DEF")),
+               Arrays.asList(asList("GHI")));
+           ColumnVector arrStrCol = ColumnVector.fromLists(arrStrType,
+               Arrays.asList("a", "b"),
+               Arrays.asList("c"));
+           Table t0 = new Table(arrBinCol, arrStrCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // Outer LIST ids must land on the outer list groups.
+        assertEquals(10, schema.getFields().get(0).getId().intValue());
+        assertEquals(20, schema.getFields().get(1).getId().intValue());
+
+        // Outer ids must not leak into nested descendants.
+        assertNoNestedIdEquals(schema.getFields().get(0), 10);
+        assertNoNestedIdEquals(schema.getFields().get(1), 20);
+
+        // Inner element ids must reach the leaf — this is the iceberg lookup
+        // path that broke before the fix on array<binary>.
+        Type binElement = findDescendantByName(schema.getFields().get(0), "element");
+        assertNotNull(binElement);
+        assertEquals(11, binElement.getId().intValue());
+        Type strElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(strElement);
+        assertEquals(21, strElement.getId().intValue());
       }
     } finally {
       tempFile.delete();

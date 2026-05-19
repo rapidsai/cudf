@@ -20,6 +20,7 @@ from cudf_polars.experimental.expressions import (
     decompose_expr_graph,
     make_expr_decomposer,
 )
+from cudf_polars.experimental.over import _fuse_over_nodes
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
@@ -166,6 +167,7 @@ def decompose_select(
 
     # Concatenate partial selections
     new_ir: Select | HConcat
+    selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
@@ -432,8 +434,9 @@ def _(
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
         # Use Empty as the input so the streaming network's metadata flows
-        # `duplicated=True` end-to-end. Without that, every rank emits the
-        # literal once and the client concatenates N copies.
+        # duplicated=True end to end. Without that, the literal expression
+        # would be evaluated chunkwise over child and emit one row per input
+        # chunk instead of a single row globally.
         input_ir: IR = Empty({})
         new_node = Select(
             {named_expr.name: named_expr.value.dtype},
