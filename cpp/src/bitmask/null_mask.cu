@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <span>
 
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
@@ -905,19 +906,19 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
 }
 
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
-                                             host_span<size_type const> indices,
+                                             std::span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_valid_count(bitmask, indices, stream);
+  return detail::segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
-                                            host_span<size_type const> indices,
+                                            std::span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_null_count(bitmask, indices, stream);
+  return detail::segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 size_type index_of_first_set_bit(bitmask_type const* bitmask,
