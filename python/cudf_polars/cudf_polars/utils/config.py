@@ -73,23 +73,20 @@ def get_device() -> Any:
     # Gets called for each IR.do_evaluate node, so we'll cache it.
     from cuda.core import system
 
-    try:
-        index_or_uuid = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index_or_uuid and not index_or_uuid.isnumeric():  # pragma: no cover
-            # This means device_index is UUID.
-            # This works for both MIG and non-MIG device UUIDs.
-            device = system.Device(uuid=index_or_uuid)
+    index_or_uuid = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+    if index_or_uuid and not index_or_uuid.isnumeric():  # pragma: no cover
+        # This means device_index is UUID.
+        # This works for both MIG and non-MIG device UUIDs.
+        device = system.Device(uuid=index_or_uuid)
+        try:
             if device.mig.is_mig_device:
                 # Additionally get parent device handle
                 # if the device itself is a MIG instance
                 device = device.mig.parent
-        else:
-            device = system.Device(index=int(index_or_uuid))
-    except system.NotSupportedError:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        return None
+        except system.NotSupportedError:
+            return None
     else:
-        return device
+        device = system.Device(index=int(index_or_uuid))
 
 
 @functools.cache

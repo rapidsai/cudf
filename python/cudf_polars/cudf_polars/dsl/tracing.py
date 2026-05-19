@@ -13,6 +13,7 @@ import time
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
+from cuda.core import system
 
 import rmm
 import rmm.statistics
@@ -132,11 +133,16 @@ def make_snapshot(
             )
 
         if device is not None:
-            processes = device.compute_running_processes
-            for proc in processes:
-                if proc.pid == pid:
-                    d[f"nvml_current_bytes_{phase}"] = proc.used_gpu_memory
-                    break
+            try:
+                processes = device.compute_running_processes
+            except system.NvmlError:
+                # This can fail if not supported by the device
+                pass
+            else:
+                for proc in processes:
+                    if proc.pid == pid:
+                        d[f"nvml_current_bytes_{phase}"] = proc.used_gpu_memory
+                        break
     if extra:
         d.update(extra)
 
