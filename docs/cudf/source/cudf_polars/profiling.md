@@ -45,6 +45,12 @@ and merges the per-rank statistics into a single `Statistics` (counts and values
 reduced with `max`). Capture it inside the engine context, then print after exit:
 
 ```python
+import polars as pl
+from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.engine.ray import RayEngine
+
+opts = StreamingOptions(statistics=True)
+
 with RayEngine.from_options(opts) as engine:
     result = pl.scan_parquet("/data/*.parquet").collect(engine=engine)
     total = engine.global_statistics(clear=True)
@@ -142,7 +148,7 @@ The different scopes have different schemas. Fields in **bold** are required / a
 
 Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
 from collecting the memory or dataframe metrics can be measurable. You can disable some metrics
-through additional environment variables. For example, to disable the memory related metrics, set:
+through additional environment variables. For example, to disable the memory-related metrics, set:
 
 ```bash
 CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0

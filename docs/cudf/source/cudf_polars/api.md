@@ -25,7 +25,7 @@ multi-GPU engines.
    :show-inheritance:
 ```
 
-The three engines share a common base class:
+The engine classes share a common base class:
 
 ```{eval-rst}
 .. autoclass:: cudf_polars.engine.core.StreamingEngine

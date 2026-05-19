@@ -5,7 +5,7 @@
 an `engine=` argument to `.collect()` or `.sink_*()`. See {doc}`engines` for the conceptual
 picture; this page walks through running your first query.
 
-We always recommend constructing an engine object and using them in a context manager to ensure proper resource cleanup. The engine constructor is
+We always recommend constructing an engine object and using it in a context manager to ensure proper resource cleanup. The engine constructor is
 where you specify {class}`~cudf_polars.engine.options.StreamingOptions`
 such as `spill_to_pinned_memory` or `fallback_mode`. Ray is the showcased example below; see also
 {doc}`other_engines`.
@@ -31,7 +31,7 @@ print(result)
 {class}`~cudf_polars.engine.ray.RayEngine` with no arguments uses every
 GPU visible to the process, so the example above runs on one GPU if that's all that's available
 and scales automatically to every GPU on the node otherwise. It also attaches to an existing
-Ray cluster if one is already running (see [Attaching to an existing Raycluster](#attaching-to-an-existing-ray-cluster)).
+Ray cluster if one is already running (see [Attaching to an existing Ray cluster](#attaching-to-an-existing-ray-cluster)).
 
 ```{note}
 The examples on this page use {class}`~cudf_polars.engine.ray.RayEngine`. `cudf-polars` supports
@@ -101,8 +101,8 @@ It raises `RuntimeError` if no GPUs are available.
 
 ## Manual Engine Lifetime Control
 
-When you need to control the engine lifetime explicitly. For example, in a Jupyter notebook
-where a `with` block cannot span multiple cells, construct `RayEngine` once and reuse it,
+When you need to control the engine lifetime explicitly, for example in a Jupyter notebook
+where a `with` block cannot span multiple cells, construct a `RayEngine` once and reuse it,
 then call `engine.shutdown()` when you are done:
 
 ```python
