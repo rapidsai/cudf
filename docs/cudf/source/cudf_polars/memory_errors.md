@@ -35,7 +35,7 @@ land on the same GPU. During a shuffle, each GPU must hold both the data it is s
 and the data it is receiving, which can temporarily double memory pressure.
 
 Shuffles arise in several common operations. A `sort` over the full dataset must
-redistribute rows into a globally ordered sequence. A `group_by` on over a column
+redistribute rows into a globally ordered sequence. A `group_by` over a column
 with many unique values must route every distinct key to the same GPU before aggregating.
 A join must align rows from both tables by their join keys before comparing them.
 Queries with skewed value distributions are especially prone to memory spikes because
