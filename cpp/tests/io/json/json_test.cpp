@@ -2060,6 +2060,26 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
                     c_validity.cbegin()});
 }
 
+TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
+{
+  std::string data =
+    // Two lines with just an open brace (malformed JSON)
+    "{\n"
+    "{";
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  // All rows are invalid with no schema to infer, so we expect 0 rows
+  EXPECT_EQ(result.tbl->num_rows(), 0);
+}
+
 TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
 {
   /**
