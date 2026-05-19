@@ -27,14 +27,15 @@ namespace cudf::reduction::detail {
 
 namespace {
 
-// Pair to hold sum and overflow flag for the running reduction
+// `wraps` is the net number of times the running sum has stepped outside [MIN, MAX].
+// A final `wraps == 0` means the true sum fits in DeviceType, i.e. no overflow.
 template <typename DeviceType>
 struct sum_overflow_result {
   DeviceType sum;
-  bool overflow;
+  cudf::size_type wraps;
 
-  CUDF_HOST_DEVICE sum_overflow_result() : sum{0}, overflow{false} {}
-  CUDF_HOST_DEVICE sum_overflow_result(DeviceType s, bool o) : sum{s}, overflow{o} {}
+  CUDF_HOST_DEVICE sum_overflow_result() : sum{0}, wraps{0} {}
+  CUDF_HOST_DEVICE sum_overflow_result(DeviceType s, cudf::size_type w) : sum{s}, wraps{w} {}
 };
 
 template <typename DeviceType>
@@ -42,11 +43,9 @@ struct overflow_sum_op {
   __device__ sum_overflow_result<DeviceType> operator()(
     sum_overflow_result<DeviceType> const& lhs, sum_overflow_result<DeviceType> const& rhs) const
   {
-    if (lhs.overflow || rhs.overflow) {
-      return sum_overflow_result<DeviceType>{DeviceType{0}, true};
-    }
-    auto const r = cuda::add_overflow<DeviceType>(lhs.sum, rhs.sum);
-    return sum_overflow_result<DeviceType>{r.overflow ? DeviceType{0} : r.value, r.overflow};
+    auto const r     = cuda::add_overflow<DeviceType>(lhs.sum, rhs.sum);
+    auto const carry = r.overflow ? (rhs.sum > DeviceType{0} ? 1 : -1) : 0;
+    return sum_overflow_result<DeviceType>{r.value, lhs.wraps + rhs.wraps + carry};
   }
 };
 
@@ -54,7 +53,7 @@ template <typename DeviceType>
 struct to_sum_overflow {
   __device__ sum_overflow_result<DeviceType> operator()(DeviceType value) const
   {
-    return sum_overflow_result<DeviceType>{value, false};
+    return sum_overflow_result<DeviceType>{value, 0};
   }
 };
 
@@ -66,9 +65,8 @@ struct null_aware_to_sum_overflow {
 
   __device__ sum_overflow_result<DeviceType> operator()(cudf::size_type idx) const
   {
-    return dcol.is_valid(idx)
-             ? sum_overflow_result<DeviceType>{dcol.element<DeviceType>(idx), false}
-             : sum_overflow_result<DeviceType>{DeviceType{0}, false};
+    return dcol.is_valid(idx) ? sum_overflow_result<DeviceType>{dcol.element<DeviceType>(idx), 0}
+                              : sum_overflow_result<DeviceType>{DeviceType{0}, 0};
   }
 };
 
@@ -114,17 +112,17 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
 
   if (init.has_value() && !init.value().get().is_valid(stream)) {
     return make_sum_overflow_struct_scalar<Source>(
-      DeviceType{0}, false, /*sum_is_valid=*/false, col.type(), stream, mr);
+      DeviceType{0}, false, false, col.type(), stream, mr);
   }
 
   if (col.size() == 0 || col.size() == col.null_count()) {
     return make_sum_overflow_struct_scalar<Source>(
-      DeviceType{0}, false, /*sum_is_valid=*/false, col.type(), stream, mr);
+      DeviceType{0}, false, false, col.type(), stream, mr);
   }
 
   auto dcol = cudf::column_device_view::create(col, stream);
 
-  sum_overflow_result<DeviceType> initial_value{DeviceType{0}, false};
+  sum_overflow_result<DeviceType> initial_value{DeviceType{0}, 0};
   if (init.has_value()) {
     auto const& init_scalar = static_cast<cudf::scalar_type_t<Source> const&>(init.value().get());
     initial_value.sum       = static_cast<DeviceType>(init_scalar.value(stream));
@@ -153,7 +151,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
   }
 
   return make_sum_overflow_struct_scalar<Source>(
-    result.sum, result.overflow, /*sum_is_valid=*/true, col.type(), stream, mr);
+    result.sum, result.wraps != 0, true, col.type(), stream, mr);
 }
 
 struct sum_with_overflow_dispatcher {
