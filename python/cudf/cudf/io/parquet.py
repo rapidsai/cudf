@@ -1341,10 +1341,7 @@ def _parquet_to_frame(
     if len(dfs) > 1:
         # Concatenate dfs and return.
         # Assume we can ignore the index if it has no name.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
-        return res
+        return concat(dfs, ignore_index=dfs[-1].index.name is None)
     else:
         return dfs[0]
 
@@ -2493,6 +2490,13 @@ def _process_metadata(
                 df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
+            elif (
+                isinstance(df._data[col].dtype, pd.StringDtype)
+                and col in meta_data_per_column
+                and meta_data_per_column[col]["pandas_type"] == "empty"
+                and meta_data_per_column[col]["numpy_type"] == "object"
+            ):
+                df._data[col] = df._data[col].astype(np.dtype("object"))
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:
