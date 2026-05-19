@@ -304,7 +304,7 @@ def test_read_parquet_with_pre_materialized_metadata_len_mismatch(
 
     with pytest.raises(
         ValueError,
-        match="len\\(parquet_metadatas\\).*must match the number of input sources",
+        match=r"Length of 'parquet_metadatas' \(0\) must match the number of input sources \(1\)",
     ):
         plc.io.parquet.read_parquet(options, parquet_metadatas=[])
 

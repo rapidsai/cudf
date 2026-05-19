@@ -350,7 +350,7 @@ cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
     See Also
     --------
     read_parquet_footers
-        To read the pre-materialized flie footer metadata used
+        To read the pre-materialized file footer metadata used
         in :func:`pylibcudf.io.parquet.read_parquet`.
     """
     cdef cpp_parquet_metadata.parquet_metadata c_result
