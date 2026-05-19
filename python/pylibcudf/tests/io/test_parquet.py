@@ -387,7 +387,7 @@ def test_file_metadata_from_bytes(
 
 
 def test_file_metadata_from_bytes_empty() -> None:
-    with pytest.raises(ValueError, match="footer_bytes must be non-empty"):
+    with pytest.raises(RuntimeError, match="Cannot initialize schema"):
         plc.io.parquet_metadata.FileMetaData.from_bytes(memoryview(b""))
 
 
