@@ -176,7 +176,7 @@ async def default_node_multi(
                     finished_channels.add(ch_idx)
                 else:
                     # Store the new chunk (replacing previous if any)
-                    ready_chunks[ch_idx] = TableChunk.from_message(msg)
+                    ready_chunks[ch_idx] = TableChunk.from_message(msg, br=context.br())
                     chunk_count[ch_idx] += 1
                 del msg
 
@@ -212,7 +212,7 @@ async def default_node_multi(
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
             with opaque_memory_usage(extra):
-                df = await asyncio.to_thread(
+                df = await ir_context.to_thread(
                     ir.do_evaluate,
                     *ir._non_child_args,
                     *dfs,
@@ -229,6 +229,7 @@ async def default_node_multi(
                         df.table,
                         df.stream,
                         exclusive_view=True,
+                        br=context.br(),
                     ),
                 ),
             )
@@ -280,9 +281,9 @@ async def fanout_node_bounded(
         )
 
         while (msg := await ch_in.recv(context)) is not None:
-            table_chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
+            table_chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
             seq_num = msg.sequence_number
             del msg
             for ch_out in chs_out:
@@ -294,6 +295,7 @@ async def fanout_node_bounded(
                             table_chunk.table_view(),
                             table_chunk.stream,
                             exclusive_view=False,
+                            br=context.br(),
                         ),
                     ),
                 )
@@ -350,7 +352,9 @@ async def fanout_node_unbounded(
         )
 
         # Spillable FIFO buffer for each output channel
-        output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
+        output_buffers: list[SpillableMessages] = [
+            SpillableMessages(context.br()) for _ in chs_out
+        ]
         num_outputs = len(chs_out)
 
         # Track message IDs in FIFO order for each output buffer
@@ -584,7 +588,7 @@ async def empty_node(
 
         # Return the output chunk (empty but with correct schema)
         chunk = TableChunk.from_pylibcudf_table(
-            df.table, df.stream, exclusive_view=True
+            df.table, df.stream, exclusive_view=True, br=context.br()
         )
         await ch_out.send(context, Message(0, chunk))
 
@@ -728,20 +732,10 @@ async def metadata_drain_node(
     ):
         # Drain metadata channel (we don't need it after this point)
         metadata = await recv_metadata(ch_in, context)
-        send_empty = metadata.duplicated and comm.rank != 0
         if metadata_collector is not None:
             metadata_collector.append(metadata)
 
-        # Forward non-duplicated data messages
         while (msg := await ch_in.recv(context)) is not None:
-            if not send_empty:
-                await ch_out.send(context, msg)
-
-        # Send empty data if needed
-        if send_empty:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.send(
-                context, Message(0, empty_table_chunk(ir, context, stream))
-            )
+            await ch_out.send(context, msg)
 
         await ch_out.drain(context)

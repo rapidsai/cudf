@@ -130,7 +130,7 @@ TEST_F(groupby_argmax_string_test, zero_valid_values)
   using R = cudf::size_type;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::strings_column_wrapper vals({"año", "bit", "₹1"}, cudf::test::iterators::all_nulls());
+  cudf::test::strings_column_wrapper vals({"", "", ""}, cudf::test::iterators::all_nulls());
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, cudf::test::iterators::all_nulls());

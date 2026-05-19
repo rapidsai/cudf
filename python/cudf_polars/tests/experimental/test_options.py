@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import pytest
@@ -14,6 +15,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.options import (
     StreamingOptions,
     Unspecified,
 )
+from cudf_polars.utils.config import MemoryResourceConfig
 
 # ---------------------------------------------------------------------------
 # Sentinel
@@ -64,14 +66,19 @@ def test_executor_options_includes_set_fields() -> None:
     assert "log" not in result
 
 
-def test_executor_options_unique_fraction() -> None:
-    result = StreamingOptions(unique_fraction={"col_a": 0.5}).to_executor_options()
-    assert result["unique_fraction"] == {"col_a": 0.5}
-
-
 def test_executor_options_num_py_executors() -> None:
     result = StreamingOptions(num_py_executors=4).to_executor_options()
     assert result["num_py_executors"] == 4
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_executor_options_sink_to_directory(*, value: bool) -> None:
+    result = StreamingOptions(sink_to_directory=value).to_executor_options()
+    assert result["sink_to_directory"] is value
+
+
+def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
+    assert "sink_to_directory" not in StreamingOptions().to_executor_options()
 
 
 # ---------------------------------------------------------------------------
@@ -99,13 +106,20 @@ def test_engine_options_includes_set_fields() -> None:
 
 def test_rapidsmpf_options_serialized() -> None:
     opts = StreamingOptions(
-        statistics=True, pinned_memory=False, num_streaming_threads=8, log="DEBUG"
+        statistics=True,
+        pinned_memory=False,
+        num_streaming_threads=8,
+        log="DEBUG",
+        pinned_max_pool_size="4GiB",
+        unbounded_file_read_cache="host",
     )
     strings = opts.to_rapidsmpf_options().get_strings()
     assert strings["statistics"] == "True"
     assert strings["pinned_memory"] == "False"
     assert strings["num_streaming_threads"] == "8"
     assert strings["log"] == "DEBUG"
+    assert strings["pinned_max_pool_size"] == "4GiB"
+    assert strings["unbounded_file_read_cache"] == "host"
 
 
 def test_rapidsmpf_options_unspecified_fields_absent() -> None:
@@ -136,30 +150,59 @@ def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
 
 
-@pytest.mark.spmd
-def test_spmd_engine_from_options_creates_engine() -> None:
-    """from_options with default StreamingOptions creates a valid SPMDEngine."""
-    pytest.importorskip("rapidsmpf")
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    opts = StreamingOptions(fallback_mode="silent", raise_on_fail=True)
-    with SPMDEngine.from_options(opts) as engine:
-        assert engine.nranks >= 1
+def test_pinned_max_pool_size_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAPIDSMPF_PINNED_MAX_POOL_SIZE", "4GiB")
+    strings = StreamingOptions().to_rapidsmpf_options().get_strings()
+    assert strings["pinned_max_pool_size"] == "4GiB"
 
 
-# distributed's shutdown leaves unclosed sockets; suppress the noise.
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_dask_engine_from_options_creates_engine() -> None:
-    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
-    pytest.importorskip("distributed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+def test_unbounded_file_read_cache_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAPIDSMPF_UNBOUNDED_FILE_READ_CACHE", "host")
+    strings = StreamingOptions().to_rapidsmpf_options().get_strings()
+    assert strings["unbounded_file_read_cache"] == "host"
 
-    opts = StreamingOptions(fallback_mode="silent")
-    try:
-        with DaskEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Dask GPU cluster unavailable: {e}")
+
+# ---------------------------------------------------------------------------
+# memory_resource_config forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_parse_memory_resource_config() -> None:
+    """_parse_memory_resource_config converts a JSON string to MemoryResourceConfig."""
+    from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        _parse_memory_resource_config,
+    )
+
+    config = _parse_memory_resource_config('{"qualname": "rmm.mr.CudaMemoryResource"}')
+    assert isinstance(config, MemoryResourceConfig)
+    assert config.qualname == "rmm.mr.CudaMemoryResource"
+
+
+def test_from_argparse_memory_resource_config_passthrough() -> None:
+    """MemoryResourceConfig instances pass through _from_argparse unchanged."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    ns = argparse.Namespace(memory_resource_config=config)
+    opts = StreamingOptions._from_argparse(ns)
+    assert opts.memory_resource_config is config
+
+
+def test_cli_memory_resource_config_roundtrip() -> None:
+    """--memory-resource-config JSON roundtrips through CLI parsing."""
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(
+        ["--memory-resource-config", '{"qualname": "rmm.mr.CudaAsyncMemoryResource"}']
+    )
+    opts = StreamingOptions._from_argparse(args)
+    assert isinstance(opts.memory_resource_config, MemoryResourceConfig)
+    assert opts.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
+
+
+def test_memory_resource_config_in_engine_options() -> None:
+    """memory_resource_config is included in to_engine_options() when set."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    opts = StreamingOptions(memory_resource_config=config)
+    assert opts.to_engine_options()["memory_resource_config"] is config
 
 
 # ---------------------------------------------------------------------------
@@ -267,12 +310,24 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     parser = argparse.ArgumentParser()
     StreamingOptions._add_cli_args(parser)
     args = parser.parse_args(
-        ["--num-streaming-threads", "8", "--rapidsmpf-log", "DEBUG", "--raise-on-fail"]
+        [
+            "--num-streaming-threads",
+            "8",
+            "--rapidsmpf-log",
+            "DEBUG",
+            "--raise-on-fail",
+            "--pinned-max-pool-size",
+            "4GiB",
+            "--unbounded-file-read-cache",
+            "host",
+        ]
     )
     opts = StreamingOptions._from_argparse(args)
     assert opts.num_streaming_threads == 8
     assert opts.log == "DEBUG"
     assert opts.raise_on_fail is True
+    assert opts.pinned_max_pool_size == "4GiB"
+    assert opts.unbounded_file_read_cache == "host"
     # Unprovided args default to None → UNSPECIFIED
     assert isinstance(opts.fallback_mode, Unspecified)
 
@@ -305,3 +360,59 @@ def test_to_dict_roundtrip() -> None:
 def test_to_dict_roundtrip_empty() -> None:
     opts = StreamingOptions()
     assert StreamingOptions.from_dict(opts.to_dict()) == opts
+
+
+# ---------------------------------------------------------------------------
+# hardware_binding
+# ---------------------------------------------------------------------------
+
+
+def test_hardware_binding_in_engine_options() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    result = StreamingOptions(
+        hardware_binding=HardwareBindingPolicy(enabled=False)
+    ).to_engine_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
+
+
+def test_hardware_binding_env_var_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", '{"enabled": false}')
+    result = StreamingOptions().to_engine_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
+
+
+def test_hardware_binding_cli_json() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--hardware-binding", '{"raise_on_fail": true}'])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.hardware_binding == HardwareBindingPolicy(raise_on_fail=True)
+
+
+def test_hardware_binding_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", "not json")
+    with pytest.raises(json.JSONDecodeError):
+        StreamingOptions()
+
+
+def test_hardware_binding_cli_disabled() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--hardware-binding", '{"enabled": false}'])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.hardware_binding == HardwareBindingPolicy(enabled=False)

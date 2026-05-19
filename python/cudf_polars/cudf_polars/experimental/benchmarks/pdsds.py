@@ -13,21 +13,22 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import os
 from typing import TYPE_CHECKING, ClassVar
 
 import polars as pl
 
-with contextlib.suppress(ImportError):
+try:
     from cudf_polars.experimental.benchmarks.utils import (
         COUNT_DTYPE,
         build_parser,
         parse_args,
-        run_duckdb,
         run_polars,
     )
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -326,17 +327,5 @@ class PDSDSDuckDBQueries(PDSDSQueries):
 
 if __name__ == "__main__":
     parser = build_parser(num_queries=99)
-    parser.add_argument(
-        "--engine",
-        choices=["polars", "duckdb"],
-        default="polars",
-        help="Which engine to use for executing the benchmarks or to validate results.",
-    )
     args = parse_args(parser=parser)
-
-    if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, args)
-    elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, args)
-    else:
-        raise ValueError(f"Invalid engine: {args.engine}")
+    run_polars(PDSDSPolarsQueries, args)

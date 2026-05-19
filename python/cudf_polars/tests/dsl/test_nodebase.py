@@ -36,7 +36,7 @@ if TYPE_CHECKING:
             expr.Col(DataType(pl.Int64()), "foo"),
             expr.Literal(DataType(pl.Int64()), 1),
         ),
-        expr.GroupedRollingWindow(
+        expr.GroupedWindow(
             DataType(pl.Float64),
             ("groups_to_rows", True, False, False),
             [
@@ -93,3 +93,29 @@ def test_get_stable_id(node: Node):
     assert isinstance(node_id, int)
     # Second call should return the cached value
     assert node.get_stable_id() == node_id
+
+
+def test_get_stable_plan_id():
+    node = expr.BinOp(
+        DataType(pl.Int64()),
+        plc.binaryop.BinaryOperator.ADD,
+        expr.Col(DataType(pl.Int64()), "foo"),
+        expr.Literal(DataType(pl.Int64()), 1),
+    )
+
+    plan_id = node.get_stable_plan_id()
+    # Second call should return the cached value
+    assert node.get_stable_plan_id() == plan_id
+
+    # stability
+    node2 = expr.BinOp(
+        DataType(pl.Int64()),
+        plc.binaryop.BinaryOperator.ADD,
+        expr.Col(DataType(pl.Int64()), "foo"),
+        expr.Literal(DataType(pl.Int64()), 1),
+    )
+    assert node2.get_stable_plan_id() == plan_id
+
+    # And uniqueness
+    node3 = node.children[0]
+    assert node3.get_stable_plan_id() != plan_id

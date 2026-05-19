@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
-"""Rolling DSL nodes."""
+"""Rolling and Window DSL nodes."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import ClosedInterval, Duration
 
-__all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
+__all__ = ["GroupedWindow", "RollingWindow", "to_request"]
 
 
 @dataclass(frozen=True)
@@ -206,7 +206,7 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
         return Column(result, dtype=self.dtype)
 
 
-class GroupedRollingWindow(Expr):
+class GroupedWindow(Expr):
     """
     Compute a window ``.over(...)`` aggregation and broadcast to rows.
 
@@ -615,13 +615,17 @@ class GroupedRollingWindow(Expr):
         local = self._sorted_grouper(by_cols_for_scan)
         return order_index, by_cols_for_scan, local
 
+    # TODO: this is an ordered left-join that drops the join keys.
+    # Rename it and replace the manual scatter+gather with the Join IR's
+    # _reorder_maps helper (lifted to a shared utility) so the streaming
+    # and in-memory over paths share the same primitive.
     def _broadcast_agg_results(
         self,
         by_tbl: plc.Table,
         group_keys_tbl: plc.Table,
-        value_tbls: list[plc.Table],
-        names: list[str],
-        dtypes: list[DataType],
+        value_tbl: plc.Table,
+        names: Sequence[str],
+        dtypes: Sequence[DataType],
         stream: Stream,
     ) -> list[Column]:
         # We do a left-join between the input keys to group-keys
@@ -647,7 +651,7 @@ class GroupedRollingWindow(Expr):
 
         # Broadcast each scalar aggregated result back to row-shape using
         # the aligned mapping between row indices and group indices.
-        out_cols = (t.columns()[0] for t in value_tbls)
+        out_cols = value_tbl.columns()
         return [
             Column(
                 plc.copying.gather(
@@ -773,7 +777,7 @@ class GroupedRollingWindow(Expr):
         broadcasted_cols = self._broadcast_agg_results(
             by_tbl,
             group_keys_tbl,
-            value_tables,
+            plc.Table([col for t in value_tables for col in t.columns()]),
             out_names,
             out_dtypes,
             df.stream,
@@ -807,7 +811,7 @@ class GroupedRollingWindow(Expr):
                 self._broadcast_agg_results(
                     by_tbl,
                     group_keys_tbl_local,
-                    value_tables_local,
+                    plc.Table([col for t in value_tables_local for col in t.columns()]),
                     out_names,
                     out_dtypes,
                     df.stream,
@@ -845,7 +849,7 @@ class GroupedRollingWindow(Expr):
                     rank_by_cols_for_scan = self._gather_columns(
                         by_cols, order_index, stream=df.stream
                     )
-                    local = GroupedRollingWindow._sorted_grouper(rank_by_cols_for_scan)
+                    local = GroupedWindow._sorted_grouper(rank_by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],

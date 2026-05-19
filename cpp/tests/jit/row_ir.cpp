@@ -11,8 +11,9 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
+
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <cctype>
@@ -247,8 +248,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 
   auto column = cudf::test::fixed_width_column_wrapper<int32_t>({69, 69, 69, 69, 69, 69}).release();
 
-  auto expected_iter =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 69 + 42; });
+  auto expected_iter = cuda::constant_iterator{69 + 42};
   auto expected =
     cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + column->size());
 

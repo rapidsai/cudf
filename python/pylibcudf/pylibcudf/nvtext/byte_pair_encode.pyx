@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -19,6 +19,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["BPEMergePairs", "byte_pair_encoding"]
 
@@ -30,14 +31,17 @@ cdef class BPEMergePairs:
     def __cinit__(
         self,
         Column merge_pairs,
-        Stream stream=None,
+        object stream=None,
         DeviceMemoryResource mr=None
     ):
         cdef column_view c_pairs = merge_pairs.view()
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr()))
+            self.c_obj = move(
+                cpp_load_merge_pairs(c_pairs, _cs, mr.get_mr())
+            )
 
     __hash__ = None
 
@@ -45,7 +49,7 @@ cpdef Column byte_pair_encoding(
     Column input,
     BPEMergePairs merge_pairs,
     Scalar separator=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -70,12 +74,13 @@ cpdef Column byte_pair_encoding(
         An encoded column of strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
@@ -84,9 +89,9 @@ cpdef Column byte_pair_encoding(
                 input.view(),
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

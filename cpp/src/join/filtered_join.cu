@@ -203,11 +203,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                        cuda::counting_iterator<size_type>{0},
-                                        cuda::counting_iterator<size_type>{probe.num_rows()},
-                                        gather_map.begin(),
-                                        gather_mask{kind, contains_map});
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{probe.num_rows()},
+                    gather_map.begin(),
+                    gather_mask{kind, contains_map});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }
@@ -360,7 +361,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
   if (_build.num_rows() == 0) {
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, mr);
-    thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     result->begin(),
+                     result->end());
     return result;
   }
 
@@ -387,6 +390,8 @@ filtered_join::filtered_join(cudf::table_view const& build,
 {
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
                              set_as_build_table reuse_tbl,
@@ -405,6 +410,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, reuse_tbl, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
+#pragma GCC diagnostic pop
 
 std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::semi_join(
   cudf::table_view const& probe,
