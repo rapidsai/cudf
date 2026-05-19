@@ -41,6 +41,7 @@ from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.streaming.actor_graph.tracing import ActorTracer
 from cudf_polars.streaming.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
@@ -65,7 +66,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.typing import Schema
 
 
@@ -166,7 +166,6 @@ async def shutdown_on_error(
     # Create tracer only if LOG_TRACES is enabled and IR is provided
     tracer: ActorTracer | None = None
     contextvars: dict[str, Any] = {}
-    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
 
     ir_id = trace_ir.get_stable_id()
     ir_type = type(trace_ir).__name__

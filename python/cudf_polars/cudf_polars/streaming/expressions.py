@@ -52,8 +52,10 @@ from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.streaming.base import PartitionInfo
+from cudf_polars.streaming.distinct import lower_distinct
 from cudf_polars.streaming.over import _decompose_grouped_window_node
 from cudf_polars.streaming.repartition import Repartition
+from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
@@ -180,8 +182,6 @@ def _decompose_unique(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    from cudf_polars.streaming.distinct import lower_distinct
-
     (child,) = unique.children
     (maintain_order,) = unique.options
     columns, input_ir, partition_info = select(
@@ -314,8 +314,6 @@ def _decompose_agg_node(
         (child,) = agg.children
         pi = partition_info[input_ir]
         if pi.count > 1 and [ne.value for ne in pi.partitioned_on] != [input_ir]:
-            from cudf_polars.streaming.shuffle import Shuffle
-
             children, input_ir, partition_info = select(
                 [UnaryFunction(agg.dtype, "unique", (False,), child)],
                 input_ir,

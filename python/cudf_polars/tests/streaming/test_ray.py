@@ -13,6 +13,7 @@ from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
 
+from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
@@ -304,10 +305,6 @@ def test_reset_rejects_construction_time_engine_options(
     reset_engine: RayEngine,
 ) -> None:
     """``_reset`` rejects ``engine_options`` keys read at actor construction."""
-    from cudf_polars.engine.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
     with pytest.raises(ValueError, match="hardware_binding"):
         reset_engine._reset(
             engine_options={

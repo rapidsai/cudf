@@ -16,6 +16,7 @@ import polars as pl
 
 import rmm.mr
 
+from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import (
     SPMDEngine,
@@ -380,10 +381,6 @@ def test_reset_rejects_construction_time_engine_options(
     comm: Communicator,
 ) -> None:
     """``_reset`` rejects ``engine_options`` keys read at engine construction."""
-    from cudf_polars.engine.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
     with SPMDEngine(comm=comm) as engine:
         with pytest.raises(ValueError, match="hardware_binding"):
             engine._reset(
