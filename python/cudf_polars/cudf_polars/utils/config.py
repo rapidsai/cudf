@@ -99,7 +99,7 @@ def get_total_device_memory() -> int | None:
 
     if maybe_device is not None:
         try:
-            return maybe_device.memory.total
+            return maybe_device.memory_info.total
         except system.NotSupportedError:  # pragma: no cover
             # System doesn't have proper "GPU memory".
             return None
