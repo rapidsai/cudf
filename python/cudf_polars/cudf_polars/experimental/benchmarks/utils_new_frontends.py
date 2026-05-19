@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pprint
+import shlex
 import sys
 import textwrap
 import time
@@ -80,6 +81,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.experimental.explain import SerializablePlan
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
     "check_column_order": True,
@@ -350,10 +352,7 @@ def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFram
     local filesystem, falls back to scanning ``{path}/{table_name}`` as a
     directory of parquet files.
     """
-    file_path = Path(path) / f"{table_name}{suffix}"
-    if suffix and not file_path.exists():
-        # Directory-based layout: e.g. tpch-rs partitioned output
-        return pl.scan_parquet(Path(path) / table_name)
+    file_path = str(path).removesuffix("/") + f"/{table_name}{suffix}"
     return pl.scan_parquet(file_path)
 
 
@@ -429,6 +428,8 @@ class RunConfig:
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
+    command_line: str
+    capture_env_vars: str
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.io_mode == "hot" and self.iterations < 2:
@@ -436,6 +437,12 @@ class RunConfig:
                 "--io-mode hot requires at least 2 iterations: "
                 "iteration 0 warms the cache, iterations 1+ are the hot measurements."
             )
+
+        # Update `extra_info.environment` with the captured environment variables.
+        self.extra_info.setdefault("environment", {})
+        for var in self.capture_env_vars.split(","):
+            var_ = var.strip()
+            self.extra_info["environment"][var_] = os.environ.get(var_)
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -540,9 +547,11 @@ class RunConfig:
             duckdb_threads=args.duckdb_threads,
             duckdb_memory_limit=args.duckdb_memory_limit,
             duckdb_temp_dir=args.duckdb_temp_dir,
+            command_line=shlex.join(sys.argv),
+            capture_env_vars=args.capture_env_vars,
         )
 
-    def serialize(self, engine: pl.GPUEngine | None) -> dict:
+    def serialize(self, engine: StreamingEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         opts = self.streaming_options
         result: dict[str, Any] = {
@@ -563,6 +572,7 @@ class RunConfig:
             "extra_info": self.extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
+            "command_line": self.command_line,
             "streaming_options": {
                 "rapidsmpf": opts.to_rapidsmpf_options().get_strings(),
                 "executor": opts.to_executor_options(),
@@ -580,7 +590,21 @@ class RunConfig:
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
-            result["config_options"] = dataclasses.asdict(config_options)
+            # Drop non-serializable contexts.
+            config_options = dataclasses.replace(
+                config_options,
+                executor=dataclasses.replace(
+                    config_options.executor,
+                    spmd_context=None,
+                    ray_context=None,
+                    dask_context=None,
+                ),
+            )
+            rapidsmpf_options = engine.rapidsmpf_options.get_strings()
+            result["config_options"] = {
+                "config_options": dataclasses.asdict(config_options),
+                "rapidsmpf_options": rapidsmpf_options,
+            }
         return result
 
     def summarize(self) -> None:
@@ -1063,6 +1087,7 @@ def _finalize_benchmark_run(
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
+    engine: StreamingEngine | None,
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1080,7 +1105,7 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1104,7 +1129,9 @@ def run_polars_cpu(
         validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_in_memory(
@@ -1137,7 +1164,9 @@ def run_polars_in_memory(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_spmd(
@@ -1194,7 +1223,9 @@ def run_polars_spmd(
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
-        _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+        _finalize_benchmark_run(
+            args, run_config, validation_failures, query_failures, engine=engine
+        )
 
 
 def run_polars_ray(
@@ -1241,7 +1272,9 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
 
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def run_polars_dask(
@@ -1301,7 +1334,9 @@ def run_polars_dask(
     finally:
         if dask_client is not None:
             dask_client.close()
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def setup_logging(query_id: int, iteration: int) -> None:
@@ -1944,6 +1979,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Directory for DuckDB to spill temporary data to disk.",
+    )
+    parser.add_argument(
+        "--capture-env-vars",
+        type=str,
+        default="CUDF_POLARS_LOG_TRACES_MEMORY,CUDF_POLARS_LOG_TRACES,DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT,DASK_DISTRIBUTED__COMM__UCX__CONNECT_TIMEOUT,KVIKIO_NTHREADS,LIBCUDF_NUM_HOST_WORKERS,OMP_NUM_THREADS,POLARS_MAX_THREADS,RAPIDSMPF_num_streaming_threads,UCX_MAX_RNDV_RAILS,UCX_PROTO_ENABLE,UCX_RNDV_FRAG_MEM_TYPES,UCX_RNDV_MTYPE_WORKER_FC_ENABLE,UCX_RNDV_MTYPE_WORKER_MAX_MEM,UCX_RNDV_PIPELINE_ERROR_HANDLING",
+        help="Comma-separated list of environment variables to capture. Written to ``extra_info.environment``.",
     )
 
     StreamingOptions._add_cli_args(parser)

@@ -16,7 +16,10 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 
+
+@nvtx_annotate_cudf_polars(message="collect_statistics")
 def collect_statistics(
     root: IR,
     config_options: ConfigOptions[StreamingExecutor],

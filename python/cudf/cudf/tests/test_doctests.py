@@ -4,14 +4,12 @@ import contextlib
 import doctest
 import inspect
 import io
-import os
 
 import numpy as np
 import pytest
 from packaging import version
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
 _SKIP_DOCTESTS = frozenset(
@@ -123,18 +121,7 @@ class TestDoctests:
         _all_doctests,
         ids=lambda docstring: docstring.name,
     )
-    @pytest.mark.skipif(
-        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-        reason="Doctests not expected to pass on older versions of pandas",
-    )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
-        if (
-            docstring.name == "copy"
-            and os.environ.get("CUDF_TEST_COPY_ON_WRITE") == "1"
-        ):
-            pytest.skip(
-                "copy doctest not compatible with CUDF_TEST_COPY_ON_WRITE=1"
-            )
         if docstring.name in _SKIP_DOCTESTS:
             pytest.skip(f"{docstring.name} doctest is not runnable")
         # We ignore differences in whitespace in the doctest output, and enable
