@@ -272,59 +272,65 @@ void metadata::sanitize_schema()
   // This code attempts to make this less messy for the code that follows.
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
-    auto& schema_elem = schema[schema_idx];
-    if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
-      auto const& parent_schema    = schema[schema_elem.parent_idx];
+    if (schema_idx != 0 && schema[schema_idx].type == Type::UNDEFINED) {
+      auto const& parent_schema    = schema[schema[schema_idx].parent_idx];
       auto const is_parent_variant = parent_schema.logical_type.has_value() &&
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
-      if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
-          schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
+      if (not is_parent_variant &&
+          schema[schema_idx].repetition_type == FieldRepetitionType::REPEATED &&
+          schema[schema_idx].num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
         // This is an unannotated 1-level legacy list (no LIST/MAP parent). Per the Parquet
         // spec, when the repeated field is a group, the element type is the group itself.
         // This applies regardless of the number of children: a 1-field repeated group means
         // list<struct<one_field>>, not list<one_field>. Rewrite into the canonical
         // list<struct<...>> form so the rest of the reader treats it as a normal list.
-        schema_elem.converted_type  = ConvertedType::LIST;
-        schema_elem.logical_type    = LogicalType::LIST;
-        schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
-        auto const struct_node_idx  = static_cast<size_type>(schema.size());
+        auto const struct_node_idx = static_cast<size_type>(schema.size());
 
         SchemaElement struct_elem;
         struct_elem.name            = "struct_node";
         struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
-        struct_elem.num_children    = schema_elem.num_children;
+        struct_elem.num_children    = schema[schema_idx].num_children;
         struct_elem.type            = Type::UNDEFINED;
         struct_elem.converted_type  = std::nullopt;
 
-        // swap children
-        struct_elem.children_idx = std::move(schema_elem.children_idx);
-        schema_elem.children_idx = {struct_node_idx};
-        schema_elem.num_children = 1;
+        // swap children and rewrite this node as the LIST level
+        struct_elem.children_idx           = std::move(schema[schema_idx].children_idx);
+        schema[schema_idx].children_idx    = {struct_node_idx};
+        schema[schema_idx].num_children    = 1;
+        schema[schema_idx].converted_type  = ConvertedType::LIST;
+        schema[schema_idx].logical_type    = LogicalType::LIST;
+        schema[schema_idx].repetition_type = FieldRepetitionType::OPTIONAL;
 
-        struct_elem.max_definition_level = schema_elem.max_definition_level;
-        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
-        schema_elem.max_definition_level--;
-        schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
+        struct_elem.max_definition_level = schema[schema_idx].max_definition_level;
+        struct_elem.max_repetition_level = schema[schema_idx].max_repetition_level;
+        schema[schema_idx].max_definition_level--;
+        schema[schema_idx].max_repetition_level =
+          schema[schema[schema_idx].parent_idx].max_repetition_level;
 
         // change parent index on new node and on children
         struct_elem.parent_idx = schema_idx;
         for (auto& child_idx : struct_elem.children_idx) {
           schema[child_idx].parent_idx = struct_node_idx;
         }
-        // add our struct
+        // add our struct — this may reallocate `schema`, so no live references
+        // into `schema` may be held across this push_back.
         schema.push_back(struct_elem);
       }
     }
 
     // convert ConvertedType to LogicalType for older files
-    if (schema_elem.converted_type.has_value() and not schema_elem.logical_type.has_value()) {
-      schema_elem.logical_type = converted_to_logical_type(schema_elem);
+    if (schema[schema_idx].converted_type.has_value() and
+        not schema[schema_idx].logical_type.has_value()) {
+      schema[schema_idx].logical_type = converted_to_logical_type(schema[schema_idx]);
     }
 
-    for (auto& child_idx : schema_elem.children_idx) {
-      process(child_idx);
+    // Iterate by index (not by reference) because the recursive `process` call
+    // can append to `schema` and invalidate any reference / iterator held here.
+    auto const num_children = schema[schema_idx].num_children;
+    for (size_type i = 0; i < num_children; ++i) {
+      process(schema[schema_idx].children_idx[i]);
     }
   };
 
