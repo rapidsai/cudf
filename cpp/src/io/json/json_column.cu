@@ -608,10 +608,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                  "Input schema column order size mismatch with input schema child types");
   }
   auto root_col_size       = root_struct_col.num_rows;
-  auto has_schema_mismatch = [&root_column](std::string const& col_name) {
-    return std::find(root_column.schema_mismatch_column_names.cbegin(),
-                     root_column.schema_mismatch_column_names.cend(),
-                     col_name) != root_column.schema_mismatch_column_names.cend();
+  auto column_had_schema_mismatch = [&root_column](std::string const& col_name) {
+    return root_column.schema_mismatch_column_names.contains(col_name);
   };
 
   // Iterate over the struct's child columns/column_order and convert to cudf column
@@ -675,7 +673,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                    "prune_columns is enabled");
       // inserts all null column
       out_column_names.emplace_back(make_column_name_info(child_schema_element.value(), col_name));
-      if (has_schema_mismatch(col_name)) { out_column_names.back().had_schema_mismatch = true; }
+      if (column_had_schema_mismatch(col_name)) {
+        out_column_names.back().had_schema_mismatch = true;
+      }
       auto all_null_column =
         make_all_nulls_column(child_schema_element.value(), root_col_size, stream, mr);
       out_columns.emplace_back(std::move(all_null_column));
@@ -685,10 +685,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     auto& json_col = found_it->second;
 
     if (!options.is_enabled_prune_columns() or child_schema_element.has_value()) {
-      // Capture the diagnostic flag before `device_json_column_to_cudf_column` consumes (moves)
-      // members of `json_col`.
-      bool const had_schema_mismatch = json_col.had_schema_mismatch;
-
       // Get this JSON column's cudf column and schema info, (modifies json_col)
       auto [cudf_col, col_name_info] =
         device_json_column_to_cudf_column(json_col,
@@ -709,7 +705,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
       // Surface the per-top-level-column schema-mismatch diagnostic so callers can implement
       // their own policy (e.g. spark-rapids-jni nulls the depth-1 ancestor for Spark-compat).
       // Only set when the flag is true; left as `std::nullopt` otherwise.
-      if (had_schema_mismatch or has_schema_mismatch(col_name)) {
+      if (column_had_schema_mismatch(col_name)) {
         out_column_names.back().had_schema_mismatch = true;
       }
       out_columns.emplace_back(std::move(cudf_col));

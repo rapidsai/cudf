@@ -11,6 +11,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 // Forward declaration of parse_options from parsing_utils.cuh
@@ -160,17 +161,13 @@ struct device_json_column {
   // Force as string column
   bool forced_as_string_column{false};
 
-  // JSON reader diagnostic. Set to true if any descendant of this column was pruned because the
-  // JSON's actual node category (`NC_STRUCT` / `NC_LIST` / `NC_VAL`) does not match the requested
-  // schema's type. Propagated UP the tree from the mismatch node toward the root in `build_tree`,
-  // and surfaced to callers via `column_name_info::had_schema_mismatch` on the resulting
-  // `table_metadata`. Consumers (e.g. spark-rapids-jni) can use this signal to implement their
-  // own per-column policy on schema mismatch.
-  bool had_schema_mismatch{false};
-  // Top-level output column names that encountered a schema mismatch. This is stored on the root
-  // column so metadata can still be flagged when the mismatched top-level column is fully pruned
-  // and materialized from the user schema as an all-null column.
-  std::vector<std::string> schema_mismatch_column_names;
+  // Top-level output column names that encountered a schema mismatch in any descendant. Stored
+  // only on the root column (empty on every non-root `device_json_column`) and surfaced to callers
+  // via `column_name_info::had_schema_mismatch` on the resulting `table_metadata`. Consumers
+  // (e.g. spark-rapids-jni) use this signal to implement their own per-column policy on schema
+  // mismatch. Using a set (rather than a vector) keeps `add_top_level_schema_mismatch` and the
+  // metadata-emit lookup at O(1) and naturally deduplicates names.
+  std::unordered_set<std::string> schema_mismatch_column_names;
 
   /**
    * @brief Construct a new d json column object

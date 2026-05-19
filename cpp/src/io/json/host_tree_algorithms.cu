@@ -508,8 +508,10 @@ std::
     return -1;
   };
   // Collected during mark_is_pruned: each col_id whose JSON-tree category did not match the
-  // requested schema type (and was therefore pruned). Used downstream to surface a per-top-level
-  // column diagnostic flag (`had_schema_mismatch`) so callers can apply their own policy.
+  // requested schema type (and was therefore pruned). After `construct_tree` returns we walk each
+  // entry up to its top-level ancestor and add that ancestor's name to
+  // `root.schema_mismatch_column_names`, which feeds the per-top-level diagnostic on
+  // `column_name_info`.
   auto mismatched_col_ids = std::vector<NodeIndexT>{};
 
   // recursive lambda on schema to mark columns as pruned.
@@ -531,9 +533,8 @@ std::
     if (!pass) {
       // The JSON tree's actual category for this node disagrees with the requested schema type
       // (e.g. JSON has a scalar where schema expects a struct). Record the col_id so that after
-      // `construct_tree` builds the device tree, we can mark every non-pruned ancestor's
-      // `device_json_column` as `had_schema_mismatch = true`. Downstream consumers see this flag
-      // on `column_name_info` in the returned `table_metadata`.
+      // `construct_tree` builds the device tree we can walk up to the top-level ancestor and set
+      // the `had_schema_mismatch` diagnostic on that top-level `column_name_info`.
       mismatched_col_ids.push_back(root);
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
@@ -669,12 +670,7 @@ std::
   auto add_top_level_schema_mismatch = [&](NodeIndexT col_id) {
     while (col_id != parent_node_sentinel and col_id != -1) {
       if (column_parent_ids[col_id] == named_level) {
-        auto const& col_name = column_names[col_id];
-        if (std::find(root.schema_mismatch_column_names.cbegin(),
-                      root.schema_mismatch_column_names.cend(),
-                      col_name) == root.schema_mismatch_column_names.cend()) {
-          root.schema_mismatch_column_names.push_back(col_name);
-        }
+        root.schema_mismatch_column_names.insert(column_names[col_id]);
         return;
       }
       col_id = column_parent_ids[col_id];
@@ -869,19 +865,12 @@ std::
     }
   }
 
-  // Diagnostic propagation: walk UP from each schema-mismatched col_id (collected in
-  // `mark_is_pruned` above) and set `had_schema_mismatch = true` on every non-pruned ancestor's
-  // `device_json_column`. The mismatched node itself was pruned and has no `device_json_column`;
-  // we start from its parent. `device_json_column_to_cudf_column` later copies this flag onto
-  // the resulting top-level `column_name_info` so callers can implement their own policy.
+  // For each schema-mismatched col_id (collected in `mark_is_pruned` above), record the name of
+  // its top-level output column on `root.schema_mismatch_column_names`. The diagnostic is only
+  // surfaced on top-level `column_name_info` entries, so we do not need to mark intermediate
+  // ancestors' `device_json_column`s.
   for (auto const mismatched_id : mismatched_col_ids) {
     add_top_level_schema_mismatch(mismatched_id);
-    auto ancestor_id = column_parent_ids[mismatched_id];
-    while (ancestor_id != parent_node_sentinel and ancestor_id != -1) {
-      auto const it = columns.find(ancestor_id);
-      if (it != columns.end()) { it->second.get().had_schema_mismatch = true; }
-      ancestor_id = column_parent_ids[ancestor_id];
-    }
   }
   std::transform(expected_types.cbegin(),
                  expected_types.cend(),
