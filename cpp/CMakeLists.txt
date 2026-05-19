@@ -510,9 +510,6 @@ add_library(
   src/io/json/process_tokens.cu
   src/io/json/write_json.cpp
   src/io/json/write_json.cu
-  src/io/protobuf/builders.cu
-  src/io/protobuf/decode.cu
-  src/io/protobuf/kernels.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -560,6 +557,9 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
+  src/io/protobuf/builders.cu
+  src/io/protobuf/decode.cu
+  src/io/protobuf/kernels.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp

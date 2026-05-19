@@ -327,11 +327,6 @@ ConfigureTest(
   PERCENT 100
 )
 ConfigureTest(
-  PROTOBUF_TEST io/protobuf_test.cpp
-  GPUS 1
-  PERCENT 100
-)
-ConfigureTest(
   PARQUET_TEST
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
@@ -365,6 +360,11 @@ ConfigureTest(
   ROARING_DISABLE_X64=1
   ROARING_DISABLE_AVX=1
   CROARING_COMPILER_SUPPORTS_AVX512=0
+)
+ConfigureTest(
+  PROTOBUF_TEST io/protobuf_test.cpp
+  GPUS 1
+  PERCENT 100
 )
 ConfigureTest(
   JSON_TEST io/json/json_chunked_reader.cpp io/json/json_test.cpp io/json/json_type_cast_test.cpp

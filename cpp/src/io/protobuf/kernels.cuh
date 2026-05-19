@@ -428,10 +428,10 @@ std::unique_ptr<cudf::column> extract_and_build_scalar_column(cudf::data_type dt
                                                               rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> out(num_rows, stream, mr);
-  rmm::device_uvector<bool> valid((num_rows > 0 ? num_rows : 1), stream, mr);
   if (num_rows == 0) {
     return std::make_unique<cudf::column>(dt, 0, out.release(), rmm::device_buffer{}, 0);
   }
+  rmm::device_uvector<bool> valid(num_rows, stream, cudf::get_current_device_resource_ref());
   launch_extract(out.data(), valid.data());
   auto [mask, null_count] = make_null_mask_from_valid(valid, stream, mr);
   return std::make_unique<cudf::column>(dt, num_rows, out.release(), std::move(mask), null_count);
@@ -564,13 +564,13 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
   rmm::device_async_resource_ref mr)
 {
   int32_t def_len = has_default ? static_cast<int32_t>(default_bytes.size()) : 0;
-  rmm::device_uvector<uint8_t> d_default(0, stream, mr);
+  auto temp_mr = cudf::get_current_device_resource_ref();
+  rmm::device_uvector<uint8_t> d_default(0, stream, temp_mr);
   if (has_default && def_len > 0) {
-    d_default = cudf::detail::make_device_uvector_async(
-      default_bytes, stream, rmm::mr::get_current_device_resource_ref());
+    d_default = cudf::detail::make_device_uvector_async(default_bytes, stream, temp_mr);
   }
 
-  rmm::device_uvector<int32_t> lengths(num_rows, stream, mr);
+  rmm::device_uvector<int32_t> lengths(num_rows, stream, temp_mr);
   auto const threads = THREADS_PER_BLOCK;
   auto const blocks  = static_cast<int>((num_rows + threads - 1u) / threads);
   extract_lengths_kernel<LengthProvider><<<blocks, threads, 0, stream.value()>>>(
@@ -616,7 +616,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
     size_t temp_storage_bytes = 0;
     cub::DeviceMemcpy::Batched(
       nullptr, temp_storage_bytes, src_iter, dst_iter, size_iter, num_rows, stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream, mr);
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream, temp_mr);
     cub::DeviceMemcpy::Batched(temp_storage.data(),
                                temp_storage_bytes,
                                src_iter,
@@ -637,7 +637,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
       0, std::move(offsets_col), chars.release(), 0, rmm::device_buffer{});
   }
 
-  rmm::device_uvector<bool> valid(num_rows, stream, mr);
+  rmm::device_uvector<bool> valid(num_rows, stream, temp_mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(num_rows),
@@ -648,7 +648,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
     auto bytes_child =
       std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT8},
                                      total_size,
-                                     rmm::device_buffer(chars.data(), total_size, stream, mr),
+                                     chars.release(),
                                      rmm::device_buffer{},
                                      0);
     return cudf::make_lists_column(

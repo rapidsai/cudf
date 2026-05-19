@@ -113,7 +113,7 @@ struct device_nested_field_descriptor {
 
   device_nested_field_descriptor() = default;
 
-  // Wire type and encoding are stored as int (not typed enums) because CUDA device code
+  // wire_type, output_type_id, and encoding are stored as int because CUDA device code
   // historically had limited constexpr enum support, and the kernel comparison sites use
   // int-typed wire_type_value()/encoding_value() helpers throughout.
   explicit device_nested_field_descriptor(nested_field_descriptor const& src)
