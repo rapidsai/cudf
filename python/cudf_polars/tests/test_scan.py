@@ -24,6 +24,7 @@ from cudf_polars.utils.versions import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from pytest_httpserver import HTTPServer
@@ -676,10 +677,12 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
 
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
-def test_scan_compressed_file_raises(engine, tmp_path, compression, file_type):
+def test_scan_compressed_file_raises(
+    engine: pl.GPUEngine, tmp_path: Path, compression: str, file_type: str
+):
     if file_type == "csv":
         data = b"a,b\n1,2\n3,4\n"
-        scan_fn = pl.scan_csv
+        scan_fn: Callable = pl.scan_csv
     else:
         data = b'{"a":1,"b":2}\n{"a":3,"b":4}\n'
         scan_fn = pl.scan_ndjson

@@ -38,7 +38,7 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
-def test_polars_verbose_warns(engine, monkeypatch):
+def test_polars_verbose_warns(engine: pl.GPUEngine, monkeypatch: pytest.MonkeyPatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
