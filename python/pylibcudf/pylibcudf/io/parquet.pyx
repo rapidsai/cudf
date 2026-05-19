@@ -94,7 +94,9 @@ cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
 
     if c_metadatas.size() != num_sources:
         raise ValueError(
-            "len(parquet_metadatas) must match the number of input sources"
+            "len(parquet_metadatas) "
+            f"({c_metadatas.size()}) must match the number of input sources "
+            f"({num_sources})"
         )
 
     return c_metadatas

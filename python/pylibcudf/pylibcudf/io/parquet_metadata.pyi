@@ -4,6 +4,11 @@
 from pylibcudf.io.types import SourceInfo
 from pylibcudf.types import DataType
 
+try:
+    from collections.abc import Buffer
+except ImportError:
+    from typing_extensions import Buffer
+
 __all__ = [
     "FileMetaData",
     "ParquetColumnSchema",
@@ -33,6 +38,8 @@ class ParquetMetadata:
     def columnchunk_metadata(self) -> dict[str, list[int]]: ...
 
 class FileMetaData:
+    @classmethod
+    def from_bytes(cls, footer_bytes: Buffer) -> FileMetaData: ...
     @property
     def version(self) -> int: ...
     @property

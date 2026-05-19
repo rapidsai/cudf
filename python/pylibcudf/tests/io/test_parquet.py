@@ -30,6 +30,24 @@ from pylibcudf.expressions import (
 _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
+def _extract_footer_bytes_with_suffix(
+    file_bytes: bytes,
+) -> tuple[memoryview, memoryview]:
+    """Return footer bytes with and without the parquet footer suffix."""
+    parquet_suffix_size = 8  # 4-byte footer length + 4-byte magic bytes (PAR1)
+    file_memoryview = memoryview(file_bytes)
+    footer_size = int.from_bytes(
+        file_memoryview[-parquet_suffix_size:-4], byteorder="little"
+    )
+    footer_start = len(file_memoryview) - parquet_suffix_size - footer_size
+    footer_stop = len(file_memoryview)
+    footer_with_suffix = file_memoryview[footer_start:footer_stop]
+    footer_without_suffix = file_memoryview[
+        footer_start : footer_stop - parquet_suffix_size
+    ]
+    return footer_without_suffix, footer_with_suffix
+
+
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
 @pytest.mark.parametrize("column_indices", [None, [2, 0]])
@@ -285,7 +303,8 @@ def test_read_parquet_with_pre_materialized_metadata_len_mismatch(
     options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
 
     with pytest.raises(
-        ValueError, match="len\\(parquet_metadatas\\) must match"
+        ValueError,
+        match="len\\(parquet_metadatas\\).*must match the number of input sources",
     ):
         plc.io.parquet.read_parquet(options, parquet_metadatas=[])
 
@@ -331,6 +350,45 @@ def test_chunked_parquet_reader_with_pre_materialized_metadata(
         result = pa_table.slice(0, 0)
 
     assert result.equals(expected)
+
+
+def test_file_metadata_from_bytes(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_bytes = get_bytes_from_source(source)
+    footer_without_suffix, footer_with_suffix = (
+        _extract_footer_bytes_with_suffix(source_bytes)
+    )
+
+    metadata_from_footer_only = (
+        plc.io.parquet_metadata.FileMetaData.from_bytes(footer_without_suffix)
+    )
+    metadata_from_footer_with_suffix = (
+        plc.io.parquet_metadata.FileMetaData.from_bytes(footer_with_suffix)
+    )
+    assert (
+        metadata_from_footer_only.version
+        == metadata_from_footer_with_suffix.version
+    )
+    assert (
+        metadata_from_footer_only.num_rows
+        == metadata_from_footer_with_suffix.num_rows
+    )
+    assert (
+        metadata_from_footer_only.created_by
+        == metadata_from_footer_with_suffix.created_by
+    )
+    assert metadata_from_footer_only.num_rows == pa_table.num_rows
+
+
+def test_file_metadata_from_bytes_empty() -> None:
+    with pytest.raises(ValueError, match="footer_bytes must be non-empty"):
+        plc.io.parquet_metadata.FileMetaData.from_bytes(memoryview(b""))
 
 
 # TODO: Test these options
