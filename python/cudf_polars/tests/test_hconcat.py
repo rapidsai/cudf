@@ -8,7 +8,7 @@ import polars as pl
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
-from cudf_polars.testing.asserts import assert_collect_raises, assert_gpu_result_equal
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 
@@ -38,11 +38,10 @@ def test_hconcat_strict_different_heights():
     left = pl.LazyFrame({"a": [1, 2, 3]})
     right = pl.LazyFrame({"b": [4, 5]})
     q = pl.concat([left, right], how="horizontal", strict=True)
-    assert_collect_raises(
-        q,
-        polars_except=pl.exceptions.ShapeError,
-        cudf_except=pl.exceptions.ShapeError,
-    )
+    with pytest.raises(pl.exceptions.ShapeError):
+        q.collect()
+    with pytest.raises(pl.exceptions.ShapeError):
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 def test_hconcat_should_broadcast():
