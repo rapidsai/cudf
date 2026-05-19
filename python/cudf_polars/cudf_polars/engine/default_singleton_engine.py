@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Single-GPU, single-instance specialization of :class:`SPMDEngine`."""
+"""Single-GPU, single-instance specialization of :class:`~cudf_polars.engine.spmd.SPMDEngine`."""
 
 from __future__ import annotations
 
@@ -221,7 +221,7 @@ def check_no_live_default_singleton(self_engine: Any) -> None:
 
 class DefaultSingletonEngine(SPMDEngine):
     """
-    Process-wide single-GPU singleton specialization of :class:`SPMDEngine`.
+    Process-wide single-GPU singleton specialization of :class:`~cudf_polars.engine.spmd.SPMDEngine`.
 
     At most one live instance exists per process. Use :meth:`get_or_create`
     to obtain it and :meth:`shutdown` to tear it down.
@@ -230,7 +230,8 @@ class DefaultSingletonEngine(SPMDEngine):
     executor, and engine settings from the environment.
 
     Users needing custom configuration should construct an engine explicitly.
-    See :class:`RayEngine`, :class:`DaskEngine`, and :class:`SPMDEngine`.
+    See :class:`~cudf_polars.engine.ray.RayEngine`, :class:`~cudf_polars.engine.dask.DaskEngine`,
+    and :class:`~cudf_polars.engine.spmd.SPMDEngine`.
 
     Examples
     --------
@@ -275,7 +276,7 @@ class DefaultSingletonEngine(SPMDEngine):
         Raises
         ------
         RuntimeError
-            If any other :class:`StreamingEngine` is currently alive.
+            If any other :class:`~cudf_polars.engine.core.StreamingEngine` is currently alive.
         """
         with _state.lock:
             if _state.instance is not None:
@@ -292,7 +293,7 @@ class DefaultSingletonEngine(SPMDEngine):
 
         Submits teardown to the dedicated worker thread, the same thread
         that constructed the rapidsmpf ``Context``, and waits up to
-        :data:`SHUTDOWN_TIMEOUT_SECONDS`.
+        ``SHUTDOWN_TIMEOUT_SECONDS`` seconds.
         """
         with _state.lock:
             instance = _state.instance
