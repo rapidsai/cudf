@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     import rmm.mr
 
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
+    from cudf_polars.engine.ray import RankActor
 
 
 __all__ = [
@@ -462,9 +462,8 @@ class SPMDContext:
         This dataclass is **not picklable** because :class:`Communicator`,
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
-        ``SPMDContext`` locally inside
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`, so
-        pickling is never required. Do not use this class with Dask or any other
+        ``SPMDContext`` locally inside :class:`~cudf_polars.engine.spmd.SPMDEngine`,
+        so pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
     Parameters
@@ -490,16 +489,15 @@ class RayContext:
     .. note::
         This dataclass holds Ray actor handles, which are only valid within the
         Ray session that created them. It is stripped from ``config_options``
-        before pickling for remote actor calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`
-        by :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`.
-        Do not persist or transfer this object across Ray sessions.
+        before pickling for remote actor calls in :func:`~cudf_polars.engine.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.engine.ray.RayEngine`. Do not persist or transfer
+        this object across Ray sessions.
 
     Parameters
     ----------
     rank_actors
-        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
-        handles, one per GPU in the cluster.
+        List of :class:`~cudf_polars.engine.ray.RankActor` handles, one per GPU
+        in the cluster.
     """
 
     rank_actors: list[ActorHandle[RankActor]]
@@ -514,7 +512,7 @@ class DaskContext:
         This dataclass holds a :class:`~distributed.Client` handle, which is
         only valid within the Dask session that created it. It is stripped from
         ``config_options`` before pickling for remote worker calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        :func:`~cudf_polars.engine.dask.evaluate_pipeline_dask_mode`.
         Do not persist or transfer this object across Dask sessions.
 
     Parameters
@@ -525,7 +523,7 @@ class DaskContext:
         Unique identifier for this RapidsMPF bootstrap session.
     owned_client
         Client to close on shutdown, if created internally by
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+        :class:`~cudf_polars.engine.dask.DaskEngine`.
     owned_cluster
         Cluster to close on shutdown, if created internally.
     """

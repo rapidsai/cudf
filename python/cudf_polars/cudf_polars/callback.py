@@ -307,7 +307,7 @@ def _callback(
             else:
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
-            from cudf_polars.experimental.parallel import evaluate_streaming
+            from cudf_polars.streaming.parallel import evaluate_streaming
 
             if timer is not None:
                 msg = textwrap.dedent("""\

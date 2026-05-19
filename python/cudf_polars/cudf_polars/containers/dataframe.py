@@ -299,7 +299,7 @@ class DataFrame:
 
         To enable dask support, dask serializers must be registered
 
-            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> from cudf_polars.streaming.dask_serialize import register
             >>> register()
 
         Parameters
