@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from cudf_polars.streaming.collectives.common import (
+from cudf_polars.streaming.actor_graph.collectives.common import (
     ReserveOpIDs,
     reserve_op_id,
 )

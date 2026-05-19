@@ -25,6 +25,8 @@ from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Empty, Sort
 from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
+from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
+from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.nodes import (
     default_node_single,
@@ -47,8 +49,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     replay_buffered_channel,
     send_metadata,
 )
-from cudf_polars.streaming.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.sort import (
     _get_final_sort_boundaries,
