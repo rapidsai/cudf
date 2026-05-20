@@ -466,7 +466,7 @@ struct [[nodiscard]] link_params {
   std::span<char const* const> link_options = {};  //< NVJITLink options
 };
 
-namespace detail {
+inline namespace detail {
 
 template <typename T>
 struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
