@@ -959,7 +959,7 @@ template <typename T>
   requires(std::is_enum_v<T>)
 std::string reflect_enum(std::string_view type, T value)
 {
-  return reflect_cast(type, reflect_int(static_cast<std::underlying_type_t<T>>(value)));
+  return reflect_cast(type, reflect(static_cast<std::underlying_type_t<T>>(value)));
 }
 
 /**
