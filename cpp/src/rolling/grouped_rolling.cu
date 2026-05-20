@@ -210,7 +210,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    host_span<rolling_request const> requests,
+                                                    std::span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
@@ -490,7 +490,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    host_span<rolling_request const> requests,
+                                                    std::span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
