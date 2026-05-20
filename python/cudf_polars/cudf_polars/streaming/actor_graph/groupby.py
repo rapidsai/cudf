@@ -24,6 +24,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -43,7 +44,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.streaming.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.groupby import combine, decompose
 from cudf_polars.streaming.repartition import Repartition
 

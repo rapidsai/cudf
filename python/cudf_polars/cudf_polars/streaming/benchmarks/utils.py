@@ -1187,7 +1187,7 @@ def run_polars_spmd(
         from cudf_polars.engine.spmd import (
             allgather_polars_dataframe,
         )
-        from cudf_polars.streaming.collectives.common import reserve_op_id
+        from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:

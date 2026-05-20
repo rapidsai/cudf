@@ -105,10 +105,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
 
+    # Pre-filter date_dim to the 4-year window so the inner join with store_sales
+    # naturally excludes out-of-window records before the expensive item join.
+    year_set = [year, year + 1, year + 2, year + 3]
+    date_dim_years = date_dim.filter(pl.col("d_year").is_in(year_set))
+
     frequent_ss_items = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim_years, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .with_columns(pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc"))
         .group_by(["itemdesc", "ss_item_sk", "d_date"])
         .agg(pl.len().alias("cnt"))
@@ -121,8 +127,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         # only valid because we know that the TPC-DS includes a foreign key here, so all
         # customers in store_sales _must_ be entries that exist somewhere in customer.
         store_sales.filter(pl.col("ss_customer_sk").is_not_null())
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
+        .join(
+            date_dim_years.select("d_date_sk"),
+            left_on="ss_sold_date_sk",
+            right_on="d_date_sk",
+        )
         .group_by("ss_customer_sk")
         .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales"))
     )
@@ -146,13 +155,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (pl.col("d_year") == year) & (pl.col("d_moy") == month)
     ).select("d_date_sk")
 
+    # Join order: most selective filters first (date_target ~1.2%, frequent_ss_items,
+    # best_customers semi ~5%), then customer last — it's a non-filtering name lookup
+    # that only adds c_last_name/c_first_name, so running it on the already-reduced
+    # row set avoids the full catalog_sales/web_sales scan width.
     catalog_part = (
-        catalog_sales.join(
-            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
-            left_on="cs_bill_customer_sk",
-            right_on="c_customer_sk",
-        )
-        .join(date_target, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(date_target, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(frequent_ss_items, left_on="cs_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
@@ -160,23 +168,28 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="ss_customer_sk",
             how="semi",
         )
+        .join(
+            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
+            left_on="cs_bill_customer_sk",
+            right_on="c_customer_sk",
+        )
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
     )
 
     web_part = (
-        web_sales.join(
-            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
-            left_on="ws_bill_customer_sk",
-            right_on="c_customer_sk",
-        )
-        .join(date_target, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(date_target, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(frequent_ss_items, left_on="ws_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
             left_on="ws_bill_customer_sk",
             right_on="ss_customer_sk",
             how="semi",
+        )
+        .join(
+            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
+            left_on="ws_bill_customer_sk",
+            right_on="c_customer_sk",
         )
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
