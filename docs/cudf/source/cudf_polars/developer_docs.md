@@ -11,9 +11,9 @@ You will need:
    environment](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
-:::{note}
+```{note}
 These instructions will get simpler as we merge code in.
-:::
+```
 
 ## Installing polars
 
@@ -39,9 +39,9 @@ pip install --upgrade uv
 uv pip install --upgrade -r py-polars/requirements-dev.txt
 ```
 
-:::{note}
+```{note}
 plain `pip install` works fine, but `uv` is _much_ faster!
-:::
+```
 
 Now we have the necessary machinery to build polars
 ```sh
@@ -162,11 +162,11 @@ in `dsl/nodebase.py` defines the interface for implementing new nodes,
 and provides many useful default methods. See also the docstrings of
 the `Node` class.
 
-:::{note}
+```{note}
 This generic implementation relies on nodes being treated as
 *immutable*. Do not implement in-place modification of nodes, bad
 things will happen.
-:::
+```
 
 ## Defining nodes
 
@@ -366,11 +366,11 @@ and then for the remaining expressions
 _rename.register(Expr)(reuse_if_unchanged)
 ```
 
-:::{note}
+```{note}
 In this case, we could have put the generic handler in the `_rename`
 function, however, then we would not get a nice error message if we
 accidentally sent in an object of the incorrect type.
-:::
+```
 
 Finally we tie everything together with a public function:
 
@@ -391,10 +391,10 @@ def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
 
 # IO partition statistics
 
-:::{note}
+```{note}
 IO partition statistics are experimental and the details are
 likely to change in the future.
-:::
+```
 
 The streaming executor samples Parquet footer metadata to estimate
 per-column storage sizes, then uses those estimates together with
@@ -557,9 +557,9 @@ an exception (usually `NotImplementedError`), use the utility function
 from cudf_polars.testing.asserts import assert_ir_translation_raises
 
 
-def test_whatever(engine):
+def test_whatever():
     unsupported_query = ...
-    assert_ir_translation_raises(unsupported_query, engine, NotImplementedError)
+    assert_ir_translation_raises(unsupported_query, NotImplementedError)
 ```
 
 This test will fail if translation does not raise.
@@ -631,19 +631,19 @@ annotated with nvtx ranges.
 
 # Query Plans
 
-The module `cudf_polars.streaming.explain` contains functions for dumping
+The module `cudf_polars.experimental.explain` contains functions for dumping
 the query for a given `LazyFrame`.
 
 
 ## Structured Output
 
-`cudf_polars.streaming.explain.serialize_query` can be used to output
+`cudf_polars.experimental.explain.serialize_query` can be used to output
 the query plan in a structured format.
 
 ```python
 >>> import dataclasses
 >>> import polars as pl
->>> from cudf_polars.streaming.explain import serialize_query
+>>> from cudf_polars.experimental.explain import serialize_query
 >>> q = pl.LazyFrame({"a": ['a', 'b', 'a'], "b": [1, 2, 3]}).group_by("a").agg(pl.len())
 >>> dataclasses.asdict(serialize_query(q, engine=pl.GPUEngine()))
 {'roots': ['526964741'],

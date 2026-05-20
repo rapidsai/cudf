@@ -21,10 +21,3 @@ libcudf documentation
    labeling_apis
    expressions
    tdigest
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`
