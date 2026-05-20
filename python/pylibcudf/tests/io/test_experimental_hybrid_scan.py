@@ -120,6 +120,7 @@ def test_hybrid_scan_reader_from_metadata(
     """Test creating HybridScanReader from pre-populated metadata."""
     # Get metadata from the fixture reader
     metadata = simple_hybrid_scan_reader.parquet_metadata()
+    assert isinstance(metadata, plc.io.parquet_metadata.FileMetaData)
 
     # Create a second reader from the metadata
     reader2 = HybridScanReader.from_parquet_metadata(

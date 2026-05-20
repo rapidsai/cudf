@@ -78,6 +78,20 @@ def test_setsorted(engine: pl.GPUEngine, request, descending, nulls_last, with_n
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("nulls_last", [False, True])
+def test_setsorted_expr_with_nulls(engine: pl.GPUEngine, descending, nulls_last):
+    sorted_values = sorted([1, 2, 3, 4, 5], reverse=descending)
+    values: list[int | None] = [*sorted_values]
+    if nulls_last:
+        values.append(None)
+    else:
+        values.insert(0, None)
+    ldf = pl.LazyFrame({"a": values})
+    q = ldf.select(pl.col("a").set_sorted(descending=descending))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_sort_concat_filtered_to_empty(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     q = pl.concat([df.filter(pl.col("a") == 0), df.filter(pl.col("a") == 4)]).sort("a")
