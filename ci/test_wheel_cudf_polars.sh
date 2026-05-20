@@ -76,6 +76,7 @@ for version in "${VERSIONS[@]}"; do
         --numprocesses=8 \
         --dist=worksteal \
         --durations 10 --durations-min 10 \
+        -ra \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     if [ $? -ne 0 ]; then

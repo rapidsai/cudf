@@ -50,7 +50,8 @@ timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
   --cov-report=term \
-  --durations=10 --durations-min=10
+  --durations=10 --durations-min=10 \
+  -ra
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

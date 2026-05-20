@@ -69,6 +69,7 @@ python -m pytest \
        --dist=worksteal \
        --tb=native \
        --durations 10 --durations-min 10 \
+       -ra \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
@@ -88,6 +89,7 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        --dist=worksteal \
        --tb=native \
        --durations 10 --durations-min 10 \
+       -ra \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
