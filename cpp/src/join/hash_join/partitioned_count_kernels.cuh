@@ -60,22 +60,16 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
     } else {
       auto const tile =
         cooperative_groups::tiled_partition<cg_size>(cooperative_groups::this_thread_block());
-      if constexpr (IsOuter) {
-        auto const temp_count = static_cast<size_type>(ref.count(tile, key));
-        if (tile.all(temp_count == 0)) {
-          cooperative_groups::invoke_one(tile, [&]() { output[idx] = size_type{1}; });
+      auto const temp_count = static_cast<size_type>(ref.count(tile, key));
+      auto const match_count =
+        cooperative_groups::reduce(tile, temp_count, cooperative_groups::plus<size_type>());
+      cooperative_groups::invoke_one(tile, [&]() {
+        if constexpr (IsOuter) {
+          output[idx] = (match_count == 0) ? size_type{1} : match_count;
         } else {
-          auto const match_count =
-            cooperative_groups::reduce(tile, temp_count, cooperative_groups::plus<size_type>());
-          cooperative_groups::invoke_one(tile, [&]() { output[idx] = match_count; });
+          output[idx] = match_count;
         }
-      } else {
-        auto const match_count =
-          cooperative_groups::reduce(tile,
-                                     static_cast<size_type>(ref.count(tile, key)),
-                                     cooperative_groups::plus<size_type>());
-        cooperative_groups::invoke_one(tile, [&]() { output[idx] = match_count; });
-      }
+      });
     }
     idx += stride;
   }
