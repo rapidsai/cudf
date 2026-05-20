@@ -27,9 +27,9 @@ def _assert_stable_ids_match(orig, loaded) -> None:
 def df():
     return pl.LazyFrame(
         {
-            "x": range(30_000),
-            "y": [1, 2, 3] * 10_000,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 6_000,
+            "x": range(3_000),
+            "y": [1, 2, 3] * 1_000,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 600,
         }
     )
 

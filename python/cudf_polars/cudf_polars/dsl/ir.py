@@ -838,13 +838,11 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():  # pragma: no cover
+                while reader.has_next():
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(  # pragma: no cover
-                        len(concatenated_columns) - 1, -1, -1
-                    ):
+                    for i in reversed(range(len(concatenated_columns))):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
