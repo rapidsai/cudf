@@ -21,6 +21,7 @@
 
 #include <cuda/iterator>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -142,7 +143,7 @@ VectorPair finalize_full_join(VectorPair&& indices,
                           unmatched_flag{flags.data()},
                           stream);
 
-  auto const comp_size = static_cast<std::size_t>(new_end - out_iter);
+  auto const comp_size = cuda::std::distance(out_iter, new_end);
   left_out->resize(match_total + comp_size, stream);
   right_out->resize(match_total + comp_size, stream);
 

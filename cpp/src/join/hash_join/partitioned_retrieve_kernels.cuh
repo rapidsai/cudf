@@ -70,6 +70,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto constexpr bucket_size        = Ref::bucket_size;
   auto constexpr flushing_tile_size = 32;  // full warp for coalesced flushes
   static_assert(flushing_tile_size >= cg_size);
+  static_assert(flushing_tile_size % cg_size == 0,
+                "Every probing tile must sit inside a single flushing tile");
   static_assert(DEFAULT_JOIN_BLOCK_SIZE % flushing_tile_size == 0);
 
   auto constexpr num_flushing_tiles   = DEFAULT_JOIN_BLOCK_SIZE / flushing_tile_size;
