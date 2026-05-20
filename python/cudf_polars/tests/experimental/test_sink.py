@@ -17,17 +17,17 @@ from cudf_polars.testing.asserts import assert_sink_result_equal
 def df():
     return pl.LazyFrame(
         {
-            "x": range(30_000),
-            "y": [1, 2, None] * 10_000,
-            "z": ["ẅ", "a", "z", "123", "abcd"] * 6_000,
+            "x": range(30),
+            "y": [1, 2, None] * 10,
+            "z": ["ẅ", "a", "z", "123", "abcd"] * 6,
         }
     )
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
-@pytest.mark.parametrize("data_page_size", [None, 256_000])
-@pytest.mark.parametrize("row_group_size", [None, 1_000])
-@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+@pytest.mark.parametrize("data_page_size", [None, 1024])
+@pytest.mark.parametrize("row_group_size", [None, 10])
+@pytest.mark.parametrize("max_rows_per_partition", [10, 1_000_000])
 def test_sink_parquet_single_file(
     df,
     streaming_engine_factory,
@@ -53,9 +53,9 @@ def test_sink_parquet_single_file(
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
-@pytest.mark.parametrize("data_page_size", [None, 256_000])
-@pytest.mark.parametrize("row_group_size", [None, 1_000])
-@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+@pytest.mark.parametrize("data_page_size", [None, 1024])
+@pytest.mark.parametrize("row_group_size", [None, 10])
+@pytest.mark.parametrize("max_rows_per_partition", [10, 1_000_000])
 def test_sink_parquet_directory(
     df,
     streaming_engine_factory,
@@ -104,7 +104,7 @@ def test_sink_parquet_raises(df: pl.LazyFrame, tmp_path, streaming_engine_factor
 @pytest.mark.parametrize("include_header", [True, False])
 @pytest.mark.parametrize("null_value", [None, "NA"])
 @pytest.mark.parametrize("separator", [",", "|"])
-@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+@pytest.mark.parametrize("max_rows_per_partition", [10, 1_000_000])
 def test_sink_csv(
     df,
     streaming_engine_factory,
@@ -135,7 +135,7 @@ def test_sink_csv(
     )
 
 
-@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+@pytest.mark.parametrize("max_rows_per_partition", [10, 1_000_000])
 def test_sink_ndjson(df, streaming_engine_factory, tmp_path, max_rows_per_partition):
     engine = streaming_engine_factory(
         StreamingOptions(

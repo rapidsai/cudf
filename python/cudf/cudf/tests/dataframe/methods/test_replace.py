@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,21 +6,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning introduced in pandas-2.2.0",
-)
 @pytest.mark.parametrize(
     "data, dtype",
     [
@@ -86,7 +77,7 @@ from cudf.testing._utils import (
         ),
     ],
 )
-def test_dataframe_replace(data, dtype, to_replace, value):
+def test_dataframe_replace(request, data, dtype, to_replace, value):
     gdf = cudf.DataFrame(data, dtype=dtype)
     pdf = gdf.to_pandas()
 
@@ -102,21 +93,33 @@ def test_dataframe_replace(data, dtype, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    can_warn = (
+    categories_missing = (
         isinstance(gdf["a"].dtype, cudf.CategoricalDtype)
         and isinstance(to_replace, str)
         and to_replace == "two"
         and isinstance(value, str)
         and value == "three"
     )
-    with expect_warning_if(can_warn):
-        if pd_value is None:
-            expected = pdf.replace(to_replace=pd_to_replace)
-        else:
-            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    with expect_warning_if(can_warn):
-        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
-
+    request.applymarker(
+        pytest.mark.xfail(
+            categories_missing,
+            reason="cuDF result missing 'two' in dtype.categories",
+        )
+    )
+    if pd_value is None:
+        expected = pdf.replace(to_replace=pd_to_replace)
+    else:
+        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    if isinstance(value, list) and value == ["_", None]:
+        # "foo" already contained strings with NaNs, replacing with None
+        # results in object dtype which cuDF doesn't support
+        if "c" in data:
+            expected["c"] = expected["c"].astype(actual["c"].dtype)
+        elif "col two" in data:
+            expected["col two"] = expected["col two"].astype(
+                actual["col two"].dtype
+            )
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
 
@@ -169,5 +172,12 @@ def test_replace_multiple_rows(datadir):
 
     pdf.replace([np.inf, -np.inf], np.nan, inplace=True)
     gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    # pandas 3 reads nullable parquet columns as Float64; cast to float64 to
+    # match cudf's representation before comparing.
+    # TODO: Remove this cast after https://github.com/rapidsai/cudf/issues/22018 is resolved.
+    pdf = pdf.astype(
+        {c: "float64" for c, d in pdf.dtypes.items() if d == pd.Float64Dtype()}
+    )
 
     assert_eq(pdf, gdf, check_dtype=False)

@@ -222,6 +222,23 @@ def ndarray__array_function__(self, func, types, args, kwargs):
     )
 
 
+def _ndarray_fsproxy_fast_to_slow(self):
+    from ..fast_slow_proxy import _State
+
+    # Preserve view semantics when the proxy was originally wrapped
+    # around a numpy view (``.base is not None``).  Without this, a
+    # round-trip through cupy would convert the stored numpy view into
+    # a cupy array and then back into a freshly-allocated numpy array
+    # whose ``.base`` is None, breaking callers that rely on the view
+    # relationship.
+    if self._fsproxy_state is _State.FAST:
+        original = getattr(self, "_fsproxy_original_slow", None)
+        if original is not None:
+            return original
+        return cupy.ndarray.get(self._fsproxy_wrapped)
+    return self._fsproxy_wrapped
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -287,6 +304,7 @@ ndarray = make_final_proxy_type(
         "__iter__": custom_iter,
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
+        "_fsproxy_fast_to_slow": _ndarray_fsproxy_fast_to_slow,
         "base": _FastSlowAttribute("base", private=True),
         "data": _FastSlowAttribute("data", private=True),
     },

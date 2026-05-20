@@ -155,7 +155,9 @@ async def concatenate_node(
                     del msg
 
             # Extract concatenated result
-            result_table = await allgather.extract_concatenated(stream)
+            result_table = await allgather.extract_concatenated(
+                stream, ir_context=ir_context
+            )
             if tracer is not None:
                 tracer.add_chunk(table=result_table)
 
