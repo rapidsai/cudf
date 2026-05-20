@@ -28,7 +28,7 @@ from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaDat
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span, std_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
 from pylibcudf.span import is_span
@@ -208,7 +208,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
         return self.c_obj.get()[0].total_rows_in_row_groups(
-            host_span[const_size_type](indices_vec.data(), indices_vec.size())
+            std_span[const_size_type](indices_vec.data(), indices_vec.size())
         )
 
     def reset_column_selection(self):
@@ -245,7 +245,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef vector[size_type] filtered = (
             self.c_obj.get()[0].filter_row_groups_with_stats(
-                host_span[const_size_type](
+                std_span[const_size_type](
                     indices_vec.data(), indices_vec.size()
                 ),
                 options.c_obj,
@@ -276,7 +276,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef pair[vector[byte_range_info], vector[byte_range_info]] ranges = \
             self.c_obj.get()[0].secondary_filters_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             )
 
@@ -322,10 +322,10 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] filtered = \
             self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
             )
@@ -365,10 +365,10 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] filtered = \
             self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
             )
@@ -404,7 +404,7 @@ cdef class HybridScanReader:
         mr = _get_memory_resource(mr)
         cdef unique_ptr[column] c_result = \
             self.c_obj.get()[0].build_row_mask_with_page_index_stats(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
@@ -433,7 +433,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef vector[byte_range_info] ranges = \
             self.c_obj.get()[0].filter_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             )
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -483,8 +483,8 @@ cdef class HybridScanReader:
         cdef mutable_column_view mask_view = row_mask.mutable_view()
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_filter_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
@@ -517,7 +517,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef vector[byte_range_info] ranges = \
             self.c_obj.get()[0].payload_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             )
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -567,8 +567,8 @@ cdef class HybridScanReader:
         cdef column_view mask_view = row_mask.view()
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_payload_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
@@ -601,7 +601,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef vector[byte_range_info] ranges = \
             self.c_obj.get()[0].all_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             )
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -643,8 +643,8 @@ cdef class HybridScanReader:
             spans_vec.push_back(_get_device_span(span))
         cdef table_with_metadata c_result = \
             self.c_obj.get()[0].materialize_all_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 options.c_obj,
@@ -701,10 +701,10 @@ cdef class HybridScanReader:
         self.c_obj.get()[0].setup_chunking_for_filter_columns(
             chunk_read_limit,
             pass_read_limit,
-            host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+            std_span[const_size_type](indices_vec.data(), indices_vec.size()),
             mask_view,
             mask_data_pages,
-            host_span[const_device_span_const_uint8_t](
+            std_span[const_device_span_const_uint8_t](
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
@@ -784,10 +784,10 @@ cdef class HybridScanReader:
         self.c_obj.get()[0].setup_chunking_for_payload_columns(
             chunk_read_limit,
             pass_read_limit,
-            host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+            std_span[const_size_type](indices_vec.data(), indices_vec.size()),
             mask_view,
             mask_data_pages,
-            host_span[const_device_span_const_uint8_t](
+            std_span[const_device_span_const_uint8_t](
                 <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
             ),
             options.c_obj,
@@ -851,7 +851,7 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
         return self.c_obj.get()[0].construct_row_group_passes(
-            host_span[const_size_type](
+            std_span[const_size_type](
                 indices_vec.data(), indices_vec.size()
             ),
             pass_read_limit

@@ -14,7 +14,7 @@ from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span, std_span
 from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
@@ -53,13 +53,13 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         ) except +libcudf_exception_handler
 
         size_type total_rows_in_row_groups(
-            host_span[const_size_type] row_group_indices
+            std_span[const_size_type] row_group_indices
         ) except +libcudf_exception_handler
 
         void reset_column_selection() except +libcudf_exception_handler
 
         vector[size_type] filter_row_groups_with_stats(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options,
             cudaStream_t stream
         ) except +libcudf_exception_handler
@@ -67,39 +67,39 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         pair[
             vector[byte_range_info], vector[byte_range_info]
         ] secondary_filters_byte_ranges(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options
         ) except +libcudf_exception_handler
 
         vector[size_type] filter_row_groups_with_dictionary_pages(
-            host_span[const_device_span_const_uint8_t] dictionary_page_data,
-            host_span[const_size_type] row_group_indices,
+            std_span[const_device_span_const_uint8_t] dictionary_page_data,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options,
             cudaStream_t stream
         ) except +libcudf_exception_handler
 
         vector[size_type] filter_row_groups_with_bloom_filters(
-            host_span[const_device_span_const_uint8_t] bloom_filter_data,
-            host_span[const_size_type] row_group_indices,
+            std_span[const_device_span_const_uint8_t] bloom_filter_data,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options,
             cudaStream_t stream
         ) except +libcudf_exception_handler
 
         unique_ptr[column] build_row_mask_with_page_index_stats(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options,
             cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
         vector[byte_range_info] filter_column_chunks_byte_ranges(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options
         ) except +libcudf_exception_handler
 
         table_with_metadata materialize_filter_columns(
-            host_span[const_size_type] row_group_indices,
-            host_span[const_device_span_const_uint8_t] column_chunk_data,
+            std_span[const_size_type] row_group_indices,
+            std_span[const_device_span_const_uint8_t] column_chunk_data,
             mutable_column_view& row_mask,
             use_data_page_mask mask_data_pages,
             const parquet_reader_options& options,
@@ -108,13 +108,13 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         ) except +libcudf_exception_handler
 
         vector[byte_range_info] payload_column_chunks_byte_ranges(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options
         ) except +libcudf_exception_handler
 
         table_with_metadata materialize_payload_columns(
-            host_span[const_size_type] row_group_indices,
-            host_span[const_device_span_const_uint8_t] column_chunk_data,
+            std_span[const_size_type] row_group_indices,
+            std_span[const_device_span_const_uint8_t] column_chunk_data,
             const column_view& row_mask,
             use_data_page_mask mask_data_pages,
             const parquet_reader_options& options,
@@ -123,13 +123,13 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         ) except +libcudf_exception_handler
 
         vector[byte_range_info] all_column_chunks_byte_ranges(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const parquet_reader_options& options
         ) except +libcudf_exception_handler
 
         table_with_metadata materialize_all_columns(
-            host_span[const_size_type] row_group_indices,
-            host_span[const_device_span_const_uint8_t] column_chunk_data,
+            std_span[const_size_type] row_group_indices,
+            std_span[const_device_span_const_uint8_t] column_chunk_data,
             const parquet_reader_options& options,
             cudaStream_t stream,
             device_async_resource_ref mr
@@ -138,10 +138,10 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         void setup_chunking_for_filter_columns(
             size_t chunk_read_limit,
             size_t pass_read_limit,
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const column_view& row_mask,
             use_data_page_mask mask_data_pages,
-            host_span[const_device_span_const_uint8_t] column_chunk_data,
+            std_span[const_device_span_const_uint8_t] column_chunk_data,
             const parquet_reader_options& options,
             cudaStream_t stream,
             device_async_resource_ref mr
@@ -154,10 +154,10 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         void setup_chunking_for_payload_columns(
             size_t chunk_read_limit,
             size_t pass_read_limit,
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             const column_view& row_mask,
             use_data_page_mask mask_data_pages,
-            host_span[const_device_span_const_uint8_t] column_chunk_data,
+            std_span[const_device_span_const_uint8_t] column_chunk_data,
             const parquet_reader_options& options,
             cudaStream_t stream,
             device_async_resource_ref mr
@@ -168,7 +168,7 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         ) except +libcudf_exception_handler
 
         vector[vector[size_type]] construct_row_group_passes(
-            host_span[const_size_type] row_group_indices,
+            std_span[const_size_type] row_group_indices,
             size_t pass_read_limit,
         ) except +libcudf_exception_handler
 
