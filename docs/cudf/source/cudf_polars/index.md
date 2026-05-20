@@ -91,6 +91,7 @@ options
 profiling
 other_engines
 api
+developer_docs
 ```
 
 ## Launch on Google Colab
