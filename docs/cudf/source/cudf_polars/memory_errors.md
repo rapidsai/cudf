@@ -32,15 +32,16 @@ chunks in memory simultaneously.
 ### Shuffle-heavy operations
 
 A *shuffle* is a cluster-wide redistribution of data so that rows with matching keys
-land on the same GPU. During a shuffle, each GPU must hold both the data it is sending
+land on the same GPU. During a shuffle each GPU must hold both the data it is sending
 and the data it is receiving, which can temporarily increase memory pressure.
 
 Shuffles arise in several common operations. A `sort` over the full dataset must
 redistribute rows into a globally ordered sequence. A `group_by` over a column
-with many unique values must route every distinct key to the same GPU before aggregating.
-A `join` must align rows from both tables by their join keys before comparing them.
-Queries with skewed value distributions are especially prone to memory spikes because
-a single GPU (or chunk) may receive a disproportionately large share of the shuffled data.
+with many unique values must arrange for every distinct key to be on the same GPU
+before aggregating. A `join` must align rows from both tables by their join keys before
+comparing them. Queries with skewed value distributions are especially prone to memory
+spikes because a single GPU (or chunk) may receive a disproportionately large share of
+the shuffled data.
 
 ### Buffering for multiple consumers
 
@@ -62,8 +63,8 @@ chunks much larger than `target_partition_size`.
 
 When GPU memory pressure rises above a configurable threshold
 (`RAPIDSMPF_SPILL_DEVICE_LIMIT`, default `80%`), the engine begins *spilling*: moving
-chunks that are not currently being processed from GPU memory to host (CPU) RAM. Once
-the operation that needs them resumes, those chunks are brought back to the GPU.
+chunks that are not currently being processed from GPU to host (CPU) memory. Once
+the operation that needs them resumes, the chunks are then unspilled back to the GPU.
 
 Spilling lets the engine handle datasets larger than GPU memory, but every spill and
 unspill requires a GPU-to-host data transfer, and the operation depending on that
@@ -82,9 +83,12 @@ swap it to disk, and GPU-to-host transfers must go through an extra copy. *Pinne
 from it, significantly increasing bandwidth.
 
 The trade-off is that registering pinned memory with the driver has a substantial
-up-front cost. This cost is only worthwhile if spilling is a clear bottleneck in your
-workflow, or if you are executing many queries in the same session so the cost can be
-amortized across them.
+up-front cost. Pinned memory also reduces the amount of host memory available for
+other work on the system: pinned pages cannot be swapped out or migrated by the
+operating system. These costs are therefore only worthwhile if spilling is a clear
+bottleneck in your workflow, or if you are executing many queries in the same session.
+Consequently, if we want to spill to pinned memory we must explicitly opt in when
+constructing the GPU engine for queries.
 
 ## Configuration reference
 
