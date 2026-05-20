@@ -18,7 +18,7 @@ The default chunk size is the lesser of 1.5 GB and 2.5% of the smallest GPU in t
 cluster. For most workloads this leaves enough headroom for intermediate results
 without sacrificing compute efficiency, but it is not optimal for every query.
 The optimal chunk size is much smaller than total memory of a single GPU. This is
-because RapidsMPF overlaps the execution of multiple operations across the network,
+because RapidsMPF overlaps the execution of multiple operations across the actor graph,
 and each operation requires temporary allocations for its input, output, and
 intermediate data buffers.
 
@@ -30,14 +30,14 @@ chunks in memory simultaneously.
 
 ### Shuffle-heavy operations
 
-A *shuffle* is a network-wide redistribution of data so that rows with matching keys
+A *shuffle* is a cluster-wide redistribution of data so that rows with matching keys
 land on the same GPU. During a shuffle, each GPU must hold both the data it is sending
-and the data it is receiving, which can temporarily double memory pressure.
+and the data it is receiving, which can temporarily increase memory pressure.
 
 Shuffles arise in several common operations. A `sort` over the full dataset must
 redistribute rows into a globally ordered sequence. A `group_by` over a column
 with many unique values must route every distinct key to the same GPU before aggregating.
-A join must align rows from both tables by their join keys before comparing them.
+A `join` must align rows from both tables by their join keys before comparing them.
 Queries with skewed value distributions are especially prone to memory spikes because
 a single GPU (or chunk) may receive a disproportionately large share of the shuffled data.
 
@@ -45,7 +45,7 @@ a single GPU (or chunk) may receive a disproportionately large share of the shuf
 
 When the output of an operation is consumed by more than one downstream operation,
 the engine must keep that output in memory until all consumers have consumed it.
-A query plan with a shared subexpression or a self-join can therefore hold multiple
+A query plan with a shared sub-plan or a self-join can therefore hold multiple
 chunks in memory simultaneously even if each individual operation is within budget.
 
 ### File format constraints
