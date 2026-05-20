@@ -116,7 +116,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy_nosync(stream),
+    thrust::gather_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -124,8 +124,11 @@ void gather_helper(InputItr source_itr,
                       target_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
-    thrust::gather(
-      rmm::exec_policy_nosync(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   gather_map_begin,
+                   gather_map_end,
+                   source_itr,
+                   target_itr);
   }
 }
 
