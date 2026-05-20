@@ -46,6 +46,17 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
   cudf::io::datasource& datasource);
 
 /**
+ * @brief Fetches host buffers of Parquet footer bytes from multiple input data sources
+ *
+ * @ingroup io_utils
+ *
+ * @param datasources Input data sources
+ * @return Vector of host buffers containing footer bytes, one per datasource
+ */
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footer_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
+
+/**
  * @brief Fetches a host buffer of Parquet page index from the input data source
  *
  * @ingroup io_utils
@@ -56,6 +67,19 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
  */
 std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, byte_range_info const page_index_bytes);
+
+/**
+ * @brief Fetches host buffers of Parquet page index bytes from multiple input data sources
+ *
+ * @ingroup io_utils
+ *
+ * @param datasources Input datasources
+ * @param page_index_bytes_per_source Byte ranges of page index, one per datasource
+ * @return Vector of host buffers containing page index bytes, one per datasource
+ */
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_index_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<byte_range_info const> page_index_bytes_per_source);
 
 /**
  * @brief Fetches a list of byte ranges from a datasource into device buffers
