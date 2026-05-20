@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
@@ -70,8 +71,12 @@ def test_cast_strict_false_string_to_numeric(engine: pl.GPUEngine, dtype, strict
     if strict:
         with pytest.raises(pl.exceptions.InvalidOperationError):
             query.collect()
-        with pytest.raises(pl.exceptions.InvalidOperationError):
-            query.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
+        if is_streaming_engine(engine):
+            with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+                query.collect(engine=engine)
+        else:
+            with pytest.raises(pl.exceptions.InvalidOperationError):
+                query.collect(engine=engine)
     else:
         assert_gpu_result_equal(query, engine=engine)
 
