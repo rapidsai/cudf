@@ -27,7 +27,7 @@ M2_REPO="${MAVEN_REPO:-$HOME/.m2/repository}"
 CUDF_GROUP_DIR="$M2_REPO/ai/rapids/cudf"
 
 MAIN_CLASS="ai.rapids.cudf.examples.deployment.SimpleWorkload"
-EXAMPLE_VERSION="26.08.0-SNAPSHOT"
+EXAMPLE_VERSION="$(awk -F. '{printf "%s.%s.%d", $1, $2, $3}' "$SCRIPT_DIR/../../../VERSION")-SNAPSHOT"
 EXAMPLE_JAR="$SCRIPT_DIR/target/cudf-deployment-modes-example-${EXAMPLE_VERSION}.jar"
 
 KEEP=0
@@ -57,16 +57,23 @@ USAGE
 }
 
 # Locate the latest non-classifier-test cudf-*.jar in the Maven repo.
-# Accept any cuda* classifier (e.g. cudf-26.08.0-SNAPSHOT-cuda12.jar) but
+# Accept any cuda* classifier (e.g. cudf-<version>-SNAPSHOT-cuda12.jar) but
 # skip *-tests.jar / *-sources.jar / *-javadoc.jar.
 locate_cudf_jar() {
   if [[ ! -d "$CUDF_GROUP_DIR" ]]; then
     err "cudf Maven artifacts not found at $CUDF_GROUP_DIR. Build cudf first (mvn install)."
   fi
-  local jar
-  jar=$(ls -1t "$CUDF_GROUP_DIR"/*/cudf-*.jar 2>/dev/null \
-        | grep -Ev -- '-(tests|sources|javadoc)\.jar$' \
-        | head -n1 || true)
+  local jar=""
+  for candidate in "$CUDF_GROUP_DIR"/*/cudf-*.jar; do
+    if [[ ! -f "$candidate" ]]; then
+      continue
+    fi
+    if [[ "$candidate" =~ -(tests|sources|javadoc)\.jar$ ]]; then
+      continue
+    fi
+    jar=$candidate
+    break
+  done
   if [[ -z "$jar" ]]; then
     err "no cudf-*.jar found under $CUDF_GROUP_DIR. Build cudf first (mvn install)."
   fi
@@ -78,7 +85,7 @@ build_example() {
     return
   fi
   printf 'Building deployment-modes example (mvn package)...\n' >&2
-  (cd "$SCRIPT_DIR" && mvn -q package)
+  (cd "$SCRIPT_DIR" && mvn -q package -Dsnapshot_version="$EXAMPLE_VERSION")
 }
 
 build_classpath() {
@@ -86,6 +93,9 @@ build_classpath() {
 }
 
 prepare_unpacked_libs() {
+  # In a real deployment, the .so files would already exist on the filesystem
+  # or in the container image. This step simulates that by unpacking them from
+  # the local Maven JAR.
   local cudf_jar="$1"
   if [[ -d "$UNPACKED_DIR" && -n "$(ls -A "$UNPACKED_DIR" 2>/dev/null)" ]]; then
     printf 'Reusing existing unpacked-libs at %s\n' "$UNPACKED_DIR"

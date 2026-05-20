@@ -103,7 +103,7 @@ cpp/doxygen/xml
 target
 
 # Local Maven repo created by java/ci/build-in-docker.sh
-.m2
+.m2/
 
 # Recreated on every Maven `validate` phase by gmaven-plugin:1.5
 java/bin/

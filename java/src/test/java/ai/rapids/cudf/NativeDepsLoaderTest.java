@@ -66,17 +66,25 @@ class NativeDepsLoaderTest {
 
   @AfterEach
   void cleanContents() throws IOException {
-    try (Stream<Path> s = Files.list(libDir)) {
-      s.forEach(p -> {
-        try {
-          Files.walk(p).sorted(Comparator.reverseOrder())
-              .forEach(q -> q.toFile().delete());
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        }
-      });
+    try {
+      try (Stream<Path> s = Files.list(libDir)) {
+        s.forEach(p -> {
+          try (Stream<Path> walk = Files.walk(p)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(q -> {
+              try {
+                Files.delete(q);
+              } catch (IOException e) {
+                throw new UncheckedIOException(e);
+              }
+            });
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        });
+      }
+    } finally {
+      NativeDepsLoader.resetLoaded();
     }
-    NativeDepsLoader.resetLoaded();
   }
 
   @Test
