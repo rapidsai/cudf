@@ -21,6 +21,7 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
@@ -390,14 +391,13 @@ def chunked_slice(request):
 
 
 @pytest.fixture(scope="module")
-def large_df(df, tmpdir_factory, chunked_slice):
-    # Something big enough that we get more than a single chunk,
-    # empirically determined
-    df = pl.concat([df] * 1000)
-    df = pl.concat([df] * 10)
-    df = pl.concat([df] * 10)
-    path = str(tmpdir_factory.mktemp("data") / "large.pq")
-    make_partitioned_source(df, path, "parquet")
+def chunked_df(df, tmpdir_factory, chunked_slice):
+    # Many small row groups so that ``pass_read_limit`` (one pass per row
+    # group) and ``chunk_read_limit`` (one output chunk per page within a
+    # pass) can force the libcudf chunked reader to return multiple chunks.
+    df = pl.concat([df] * 100)
+    path = str(tmpdir_factory.mktemp("data") / "chunked.pq")
+    make_partitioned_source(df, path, "parquet", row_group_size=10)
     n_rows = len(df)
     q = pl.scan_parquet(path)
     if chunked_slice == "no_slice":
@@ -411,24 +411,30 @@ def large_df(df, tmpdir_factory, chunked_slice):
 
 
 @pytest.mark.parametrize(
-    "chunk_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"chunk_{x}"
-)
-@pytest.mark.parametrize(
-    "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
+    "chunk_read_limit, pass_read_limit",
+    [
+        (0, 0),
+        (0, 1),
+        (1, 0),
+        (1, 1),
+        (2, 1),
+        (1, 2),
+    ],
+    ids=lambda x: f"limit_{x}",
 )
 @pytest.mark.parametrize(
     "filter", [None, pl.col("a") > 3], ids=["no_filters", "with_filters"]
 )
 def test_scan_parquet_chunked(
-    large_df,
+    chunked_df,
     chunk_read_limit,
     pass_read_limit,
     filter,
 ):
     if filter is None:
-        q = large_df
+        q = chunked_df
     else:
-        q = large_df.filter(filter)
+        q = chunked_df.filter(filter)
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
@@ -582,6 +588,10 @@ def test_scan_parquet_remote(
     )
 
 
+@pytest.mark.xfail(
+    condition=not POLARS_VERSION_LT_139,
+    reason="polars 1.39+ ndjson remote reader requires range request support",
+)
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
     tmp_path: Path,
@@ -651,7 +661,7 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_138,
-            reason="polars fails ahead of time",
+            reason="polars >= 1.38 raises duplicate row_index name ahead of time",
         )
     )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
@@ -700,8 +710,7 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="height parameter added in Polars 1.38",
+    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
