@@ -60,6 +60,9 @@ struct findall_fn {
   }
 };
 
+/**
+ * @brief Extracts the first capture group instead of the whole match
+ */
 struct one_capture_fn {
   column_device_view const d_strings;
   size_type const* d_offsets;
