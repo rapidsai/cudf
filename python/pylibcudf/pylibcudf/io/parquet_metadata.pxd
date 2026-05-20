@@ -4,6 +4,7 @@
 from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io.parquet_schema cimport (
     ColumnChunk as cpp_ColumnChunk,
+    ColumnChunkMetaData as cpp_ColumnChunkMetaData,
     FileMetaData as cpp_FileMetaData,
     RowGroup as cpp_RowGroup,
     SortingColumn as cpp_SortingColumn,
@@ -80,6 +81,12 @@ cdef class ColumnChunk:
 
     @staticmethod
     cdef ColumnChunk from_cpp(cpp_ColumnChunk column_chunk)
+
+cdef class ColumnChunkMetaData:
+    cdef cpp_ColumnChunkMetaData c_obj
+
+    @staticmethod
+    cdef ColumnChunkMetaData from_cpp(cpp_ColumnChunkMetaData meta_data)
 
 cdef class RowGroup:
     cdef cpp_RowGroup c_obj

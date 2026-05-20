@@ -427,20 +427,19 @@ def test_file_metadata_row_groups_and_column_chunks() -> None:
         assert len(row_group.columns) == pa_row_group.num_columns
         for col_idx, column_chunk in enumerate(row_group.columns):
             pa_col_chunk = pa_row_group.column(col_idx)
+            meta_data = column_chunk.meta_data
             assert column_chunk.file_path == ""
             assert column_chunk.file_offset == 0
-            assert column_chunk.num_values == pa_col_chunk.num_values
+            assert meta_data.num_values == pa_col_chunk.num_values
             assert (
-                column_chunk.total_uncompressed_size
+                meta_data.total_uncompressed_size
                 == pa_col_chunk.total_uncompressed_size
             )
             assert (
-                column_chunk.total_compressed_size
+                meta_data.total_compressed_size
                 == pa_col_chunk.total_compressed_size
             )
-            assert (
-                column_chunk.path_in_schema[-1] == pa_col_chunk.path_in_schema
-            )
+            assert meta_data.path_in_schema[-1] == pa_col_chunk.path_in_schema
 
 
 def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:

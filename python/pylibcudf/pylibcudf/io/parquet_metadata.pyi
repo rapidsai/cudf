@@ -11,6 +11,7 @@ except ImportError:
 
 __all__ = [
     "ColumnChunk",
+    "ColumnChunkMetaData",
     "FileMetaData",
     "ParquetColumnSchema",
     "ParquetMetadata",
@@ -75,6 +76,10 @@ class ColumnChunk:
     def column_index_length(self) -> int: ...
     @property
     def schema_idx(self) -> int: ...
+    @property
+    def meta_data(self) -> ColumnChunkMetaData: ...
+
+class ColumnChunkMetaData:
     @property
     def path_in_schema(self) -> list[str]: ...
     @property

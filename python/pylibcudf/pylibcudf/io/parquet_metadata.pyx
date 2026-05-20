@@ -16,6 +16,7 @@ from pylibcudf.libcudf.io.parquet cimport parquet_reader_options
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
 from pylibcudf.libcudf.io.parquet_schema cimport (
     ColumnChunk as cpp_ColumnChunk,
+    ColumnChunkMetaData as cpp_ColumnChunkMetaData,
     FileMetaData as cpp_FileMetaData,
     RowGroup as cpp_RowGroup,
     SortingColumn as cpp_SortingColumn,
@@ -28,6 +29,7 @@ ctypedef const unique_ptr[datasource] const_unique_ptr_datasource
 
 __all__ = [
     "ColumnChunk",
+    "ColumnChunkMetaData",
     "FileMetaData",
     "ParquetColumnSchema",
     "ParquetMetadata",
@@ -345,25 +347,45 @@ cdef class ColumnChunk:
         return self.c_obj.schema_idx
 
     @property
+    def meta_data(self):
+        """Column metadata for this chunk."""
+        return ColumnChunkMetaData.from_cpp(self.c_obj.meta_data)
+
+
+cdef class ColumnChunkMetaData:
+    """Metadata payload for a column chunk."""
+
+    def __init__(self):
+        raise ValueError("ColumnChunkMetaData cannot be constructed directly")
+
+    @staticmethod
+    cdef ColumnChunkMetaData from_cpp(cpp_ColumnChunkMetaData meta_data):
+        cdef ColumnChunkMetaData result = ColumnChunkMetaData.__new__(
+            ColumnChunkMetaData
+        )
+        result.c_obj = meta_data
+        return result
+
+    @property
     def path_in_schema(self):
         """Column path components in the flattened schema."""
         cdef string path
-        return [path.decode("utf-8") for path in self.c_obj.meta_data.path_in_schema]
+        return [path.decode("utf-8") for path in self.c_obj.path_in_schema]
 
     @property
     def num_values(self):
         """Number of values in this chunk."""
-        return self.c_obj.meta_data.num_values
+        return self.c_obj.num_values
 
     @property
     def total_uncompressed_size(self):
         """Total uncompressed page bytes for this chunk."""
-        return self.c_obj.meta_data.total_uncompressed_size
+        return self.c_obj.total_uncompressed_size
 
     @property
     def total_compressed_size(self):
         """Total compressed page bytes for this chunk."""
-        return self.c_obj.meta_data.total_compressed_size
+        return self.c_obj.total_compressed_size
 
 
 cdef class RowGroup:
