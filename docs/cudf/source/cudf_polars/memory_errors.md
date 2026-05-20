@@ -11,8 +11,9 @@ and tune memory-related behaviour in your workloads.
 Rather than loading an entire dataset into GPU memory at once, the streaming engine
 decomposes input data into a sequence of *chunks* and processes them independently.
 `target_partition_size` controls the target size of each chunk in bytes. Chunks flow
-through the query graph, being filtered, transformed, aggregated, and joined, and
-intermediate results are also chunked.
+through the query graph, being filtered, transformed, aggregated, and joined.
+When operations change the size of a chunk, chunks are split or combined to
+be approximately `target_partition_size` bytes.
 
 The default chunk size is the lesser of 1.5 GB and 2.5% of the smallest GPU in the
 cluster. For most workloads this leaves enough headroom for intermediate results
@@ -51,7 +52,7 @@ chunks in memory simultaneously even if each individual operation is within budg
 ### File format constraints
 
 The minimum amount of data the engine can read at one time depends on the file format.
-For Parquet, the engine can read as little as one row group at a time, so files written
+For Parquet, the engine can read as little as one *column chunk* at a time, so files written
 with reasonable row-group sizes give the engine fine-grained control over how much data
 enters the pipeline at once. For formats that do not support partial reads, such as CSV,
 the engine must load an entire file before it can begin processing, which may produce
