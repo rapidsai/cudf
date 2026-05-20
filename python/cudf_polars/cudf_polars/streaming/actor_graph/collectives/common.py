@@ -27,28 +27,32 @@ if TYPE_CHECKING:
 
 
 # Set of available collective IDs
-_collective_id_vacancy: set[int] = set(range(Shuffler.max_concurrent_shuffles))
+_collective_id_vacancy: dict[int, None] = dict.fromkeys(
+    range(Shuffler.max_concurrent_shuffles)
+)
 _collective_id_vacancy_lock: threading.Lock = threading.Lock()
 
 
-def _get_new_collective_id() -> int:
-    with _collective_id_vacancy_lock:
-        if not _collective_id_vacancy:
-            raise ValueError(
-                f"Cannot shuffle more than {Shuffler.max_concurrent_shuffles} "
-                "times in a single query."
-            )
-
+def _get_new_collective_id_unsafe() -> int:
+    # Not thread safe, must be called with _collective_id_vacancy_lock held
+    try:
         # All ranks must choose the same collective IDs during lowering.
-        collective_id = min(_collective_id_vacancy)
-        _collective_id_vacancy.discard(collective_id)
-        return collective_id
+        # Since 3.7, dict.popitem() is guaranteed LIFO.
+        collective_id, _ = _collective_id_vacancy.popitem()
+    except KeyError:
+        raise ValueError(
+            f"Cannot shuffle more than {Shuffler.max_concurrent_shuffles} "
+            "times in a single query."
+        ) from None
+    return collective_id
 
 
-def _release_collective_id(collective_id: int) -> None:
+def _release_collective_id_unsafe(collective_id: int) -> None:
     """Release a collective ID back to the vacancy set."""
-    with _collective_id_vacancy_lock:
-        _collective_id_vacancy.add(collective_id)
+    # Not thread safe, must be called with _collective_id_vacancy_lock held
+    if collective_id in _collective_id_vacancy:
+        raise ValueError("Restoring ID that exists")
+    _collective_id_vacancy[collective_id] = None
 
 
 class ReserveOpIDs:
@@ -122,48 +126,52 @@ class ReserveOpIDs:
             collective operations per node.
         """
         # Reserve IDs and map nodes to a list of IDs
-        for node in self.collective_nodes:
-            if isinstance(node, (GroupBy, Distinct)) and self.dynamic_planning_enabled:
-                # GroupBy/Distinct need 2 IDs: one for size allgather, one for shuffle
-                self.collective_id_map[node] = [
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                ]
-            elif isinstance(node, Join) and self.dynamic_planning_enabled:
-                # Join needs 4 IDs: size allgather, left shuffle/bcast,
-                # right shuffle/bcast, bloom filter
-                self.collective_id_map[node] = [
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                ]
-            elif isinstance(node, Sort):
-                if self.dynamic_planning_enabled:
-                    # 3 IDs: size-estimate allgather, boundary allgather, shuffle
+        with _collective_id_vacancy_lock:
+            for node in self.collective_nodes:
+                if (
+                    isinstance(node, (GroupBy, Distinct))
+                    and self.dynamic_planning_enabled
+                ):
+                    # GroupBy/Distinct need 2 IDs: one for size allgather, one for shuffle
                     self.collective_id_map[node] = [
-                        _get_new_collective_id(),
-                        _get_new_collective_id(),
-                        _get_new_collective_id(),
+                        _get_new_collective_id_unsafe(),
+                        _get_new_collective_id_unsafe(),
+                    ]
+                elif isinstance(node, Join) and self.dynamic_planning_enabled:
+                    # Join needs 4 IDs: size allgather, left shuffle/bcast,
+                    # right shuffle/bcast, bloom filter
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id_unsafe(),
+                        _get_new_collective_id_unsafe(),
+                        _get_new_collective_id_unsafe(),
+                        _get_new_collective_id_unsafe(),
+                    ]
+                elif isinstance(node, Sort):
+                    if self.dynamic_planning_enabled:
+                        # 3 IDs: size-estimate allgather, boundary allgather, shuffle
+                        self.collective_id_map[node] = [
+                            _get_new_collective_id_unsafe(),
+                            _get_new_collective_id_unsafe(),
+                            _get_new_collective_id_unsafe(),
+                        ]
+                    else:
+                        # 2 IDs: boundary allgather, shuffle
+                        self.collective_id_map[node] = [
+                            _get_new_collective_id_unsafe(),
+                            _get_new_collective_id_unsafe(),
+                        ]
+                elif isinstance(node, Over) and not node.is_scalar:
+                    # Non-scalar Over needs 2 IDs: one for the size AllGather +
+                    # forward shuffle (the AllGather completes before the forward
+                    # shuffle starts, so they can share), and a separate ID for
+                    # the return shuffle (which overlaps with the forward shuffle
+                    # during extract+insert).
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id_unsafe(),
+                        _get_new_collective_id_unsafe(),
                     ]
                 else:
-                    # 2 IDs: boundary allgather, shuffle
-                    self.collective_id_map[node] = [
-                        _get_new_collective_id(),
-                        _get_new_collective_id(),
-                    ]
-            elif isinstance(node, Over) and not node.is_scalar:
-                # Non-scalar Over needs 2 IDs: one for the size AllGather +
-                # forward shuffle (the AllGather completes before the forward
-                # shuffle starts, so they can share), and a separate ID for
-                # the return shuffle (which overlaps with the forward shuffle
-                # during extract+insert).
-                self.collective_id_map[node] = [
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                ]
-            else:
-                self.collective_id_map[node] = [_get_new_collective_id()]
+                    self.collective_id_map[node] = [_get_new_collective_id_unsafe()]
 
         return self.collective_id_map
 
@@ -174,9 +182,10 @@ class ReserveOpIDs:
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
         """Release all reserved collective IDs back to the vacancy pool."""
-        for collective_ids in self.collective_id_map.values():
-            for collective_id in collective_ids:
-                _release_collective_id(collective_id)
+        with _collective_id_vacancy_lock:
+            for collective_ids in self.collective_id_map.values():
+                for collective_id in collective_ids:
+                    _release_collective_id_unsafe(collective_id)
         return False
 
 
@@ -195,8 +204,10 @@ def reserve_op_id() -> Iterator[int]:
     collective_id : int
         A vacant collective ID reserved from the global vacancy pool.
     """
-    collective_id = _get_new_collective_id()
+    with _collective_id_vacancy_lock:
+        collective_id = _get_new_collective_id_unsafe()
     try:
         yield collective_id
     finally:
-        _release_collective_id(collective_id)
+        with _collective_id_vacancy_lock:
+            _release_collective_id_unsafe(collective_id)
