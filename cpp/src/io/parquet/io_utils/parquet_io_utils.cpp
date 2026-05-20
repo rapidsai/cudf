@@ -284,13 +284,16 @@ fetch_byte_ranges_to_device_async(
   CUDF_FUNC_RANGE();
 
   // Convert input vectors into host spans for detail API
-  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>> source_byte_range_spans;
-  source_byte_range_spans.reserve(byte_ranges_per_source.size());
+  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>> byte_range_spans_per_source;
+  byte_range_spans_per_source.reserve(byte_ranges_per_source.size());
   for (auto const& ranges : byte_ranges_per_source) {
-    source_byte_range_spans.emplace_back(ranges);
+    byte_range_spans_per_source.emplace_back(ranges);
   }
   return detail::fetch_byte_ranges_to_device_async(
-    datasources, {source_byte_range_spans.data(), source_byte_range_spans.size()}, stream, mr);
+    datasources,
+    {byte_range_spans_per_source.data(), byte_range_spans_per_source.size()},
+    stream,
+    mr);
 }
 
 }  // namespace cudf::io::parquet
