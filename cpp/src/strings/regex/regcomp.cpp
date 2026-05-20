@@ -364,9 +364,19 @@ class regex_parser {
           literals.push_back(chr);  // add '-' as literal
           break;
         }
-        // normal case: '[a-z]'
-        // update end-range character
-        literals.back() = n_chr;
+        auto back1 = literals.back();
+        literals.pop_back();
+        if (back1 == literals.back()) {
+          // normal case: '[a-z]' update end-range character
+          literals.push_back(n_chr);
+        } else {
+          // restore range character and add literals
+          literals.push_back(back1);
+          literals.push_back(chr);
+          literals.push_back(chr);
+          literals.push_back(n_chr);
+          literals.push_back(n_chr);
+        }
       } else {
         // add single literal
         literals.push_back(chr);
