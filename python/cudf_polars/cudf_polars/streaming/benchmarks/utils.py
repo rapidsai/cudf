@@ -190,13 +190,13 @@ class ValidationMethod:
     expected_source: Literal["polars-cpu", "duckdb", "duckdb-disk"]
     comparison_method: Literal["polars"]
     comparison_options: dict[str, Any]
-    expected_location: Path | None
+    expected_location: str | None
 
     def expected_file(self, q_id: int) -> Path:
         """Return path to disk-based result for the given query."""
         if self.expected_location is None:
             raise RuntimeError("No expected location given")
-        p = self.expected_location / f"q{q_id:02d}.parquet"
+        p = Path(self.expected_location) / f"q_{q_id:02d}.parquet"
         if not p.exists():
             raise FileNotFoundError(f"Expected result file {p} does not exist")
         return p
@@ -514,7 +514,7 @@ class RunConfig:
                 expected_source="duckdb-disk",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
-                expected_location=args.validate_directory,
+                expected_location=str(args.validate_directory),
             )
         elif args.validate_against is not None:
             validation_method = ValidationMethod(
@@ -1906,7 +1906,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=None,
         help=(
             "Validate the results against a directory with a pre-computed set of 'golden' results. "
-            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "The directory should contain one parquet file per query, named 'q_DD.parquet', where DD is the "
             "zero-padded query number."
         ),
     )
