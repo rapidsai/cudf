@@ -240,12 +240,12 @@ def test_boolean_kleene_logic(engine: pl.GPUEngine, expr):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_boolean_is_in_raises_unsupported():
+def test_boolean_is_in_raises_unsupported(engine: pl.GPUEngine):
     # Needs implode agg
     ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
     q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_boolean_is_in_with_nested_list_raises(engine: pl.GPUEngine):
@@ -269,16 +269,16 @@ def test_expr_is_in_empty_list(engine: pl.GPUEngine):
         (pl.Series(["a", "b", "c", "d"]), pl.Series([["a"], ["b"]])),
     ],
 )
-def test_is_in_shape_mismatch_raises(needles, haystack):
+def test_is_in_shape_mismatch_raises(engine: pl.GPUEngine, needles, haystack):
     q = pl.LazyFrame().select(pl.lit(needles).is_in(haystack))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_boolean_is_close():
+def test_boolean_is_close(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(

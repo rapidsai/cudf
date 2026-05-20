@@ -83,7 +83,7 @@ def test_datetime_extract(engine: pl.GPUEngine, field):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_datetime_extra_unsupported(monkeypatch):
+def test_datetime_extra_unsupported(engine: pl.GPUEngine, monkeypatch):
     ldf = pl.LazyFrame(
         {
             "datetimes": pl.datetime_range(
@@ -109,7 +109,7 @@ def test_datetime_extra_unsupported(monkeypatch):
 
     q = ldf.select(pl.col("datetimes").dt.nanosecond())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -157,7 +157,7 @@ def test_strftime_timestamp(engine: pl.GPUEngine, format):
 
 
 @pytest.mark.parametrize("format", ["iso", "polars"])
-def test_strftime_duration(format):
+def test_strftime_duration(engine: pl.GPUEngine, format):
     ldf = pl.LazyFrame(
         {
             "durations": [
@@ -168,7 +168,7 @@ def test_strftime_duration(format):
     )
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(

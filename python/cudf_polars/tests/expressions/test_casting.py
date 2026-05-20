@@ -50,10 +50,10 @@ def test_cast_supported(engine: pl.GPUEngine, tests):
 
 
 @pytest.mark.parametrize("dtypes", _unsupported_dtypes, indirect=True)
-def test_cast_unsupported(tests):
+def test_cast_unsupported(engine: pl.GPUEngine, tests):
     df, totype = tests
     assert_ir_translation_raises(
-        df.select(pl.col("a").cast(totype)), NotImplementedError
+        df.select(pl.col("a").cast(totype)), engine, NotImplementedError
     )
 
 
@@ -81,16 +81,16 @@ def test_cast_strict_false_string_to_numeric(engine: pl.GPUEngine, dtype, strict
         assert_gpu_result_equal(query, engine=engine)
 
 
-def test_cast_from_string_unsupported():
+def test_cast_from_string_unsupported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": ["True"]})
     query = df.select(pl.col("a").cast(pl.Boolean()))
-    assert_ir_translation_raises(query, NotImplementedError)
+    assert_ir_translation_raises(query, engine, NotImplementedError)
 
 
-def test_cast_to_string_unsupported():
+def test_cast_to_string_unsupported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [True]})
     query = df.select(pl.col("a").cast(pl.String()))
-    assert_ir_translation_raises(query, NotImplementedError)
+    assert_ir_translation_raises(query, engine, NotImplementedError)
 
 
 def test_float_to_decimal_rounding(engine: pl.GPUEngine):
