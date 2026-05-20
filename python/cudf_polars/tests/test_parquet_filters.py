@@ -65,6 +65,17 @@ def test_scan_by_hand(expr, selection, pq_file, chunked):
     )
 
 
+def test_parquet_filter_ne_missing(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, None, 3, None]})
+    df.write_parquet(tmp_path / "df.parquet", row_group_size=3)
+    q = pl.scan_parquet(tmp_path / "df.parquet").filter(
+        pl.col("a").ne_missing(pl.lit(2, dtype=pl.Int64))
+    )
+    assert_gpu_result_equal(
+        q, engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    )
+
+
 def test_parquet_filter_boolean_column(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"x": [1, 2, 3], "y": [True, False, True]})
     df.write_parquet(tmp_path / "df.parquet")
