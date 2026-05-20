@@ -269,7 +269,7 @@ def assert_sink_ir_translation_raises(
     try:
         lazy_sink = getattr(lazydf, f"sink_{fmt}")(
             path,
-            engine="gpu",
+            engine=engine,
             lazy=True,
             **write_kwargs,
         )
