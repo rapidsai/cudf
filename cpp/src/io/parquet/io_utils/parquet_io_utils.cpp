@@ -6,6 +6,7 @@
 #include "io/comp/common.hpp"
 #include "io/parquet/parquet_common.hpp"
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
@@ -21,6 +22,7 @@
 #include <cuda/std/tuple>
 
 #include <numeric>
+#include <tuple>
 
 /**
  * @file parquet_io_utils.cpp
@@ -88,6 +90,9 @@ fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
   std::vector<size_t> io_offsets;
   std::vector<size_t> io_sizes;
   std::vector<uint8_t*> destinations;
+  io_offsets.reserve(byte_ranges.size());
+  io_sizes.reserve(byte_ranges.size());
+  destinations.reserve(byte_ranges.size());
 
   for (size_t chunk = 0; chunk < byte_ranges.size();) {
     auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
@@ -109,12 +114,24 @@ fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
   CUDF_EXPECTS(io_offsets.size() == io_sizes.size() and io_sizes.size() == destinations.size(),
                "Unexpected number of IO offsets, sizes, or destinations");
 
-  std::vector<std::future<size_t>> device_read_tasks{};
-  std::vector<std::future<size_t>> host_read_tasks{};
-  device_read_tasks.reserve(byte_ranges.size());
-  host_read_tasks.reserve(byte_ranges.size());
+  using host_read_buffer = std::unique_ptr<cudf::io::datasource::buffer>;
 
-  // device_read_async is not guaranteed to follow stream-ordering (see datasource API docs).
+  // Vectors to hold futures from datasource
+  std::vector<std::future<size_t>> device_read_tasks{};
+  std::vector<std::future<host_read_buffer>> host_read_tasks{};
+  device_read_tasks.reserve(io_offsets.size());
+  host_read_tasks.reserve(io_offsets.size());
+
+  // Vectors to store intermediate host read buffers and relevant pointers
+  std::vector<void*> copy_dsts{};
+  std::vector<size_t> copy_sizes{};
+  copy_dsts.reserve(io_offsets.size());
+  copy_sizes.reserve(io_offsets.size());
+
+  // Vector to store intermediate host buffers
+  std::vector<host_read_buffer> host_buffers{};
+
+  // `device_read_async` is not guaranteed to follow stream-ordering (see datasource API docs)
   stream.synchronize();
 
   {
@@ -132,35 +149,40 @@ fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
         device_read_tasks.emplace_back(
           datasource.device_read_async(io_offset, io_size, dest, stream));
       } else {
-        // Read the column chunk data to the host buffer copy it to the device buffer
-        host_read_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-          [&datasource, io_offset, io_size, dest, stream]() {
-            auto host_buffer = datasource.host_read(io_offset, io_size);
-            cudf::detail::cuda_memcpy_async(
-              cudf::device_span<uint8_t>{dest, io_size},
-              cudf::host_span<uint8_t const>{host_buffer->data(), io_size},
-              stream);
-            return io_size;
-          }));
+        // Asynchronously read column chunk data to a host buffer
+        host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
+        copy_dsts.push_back(static_cast<void*>(dest));
+        copy_sizes.push_back(io_size);
       }
     });
-  }
 
-  auto sync_function = [](decltype(host_read_tasks) host_read_tasks,
-                          decltype(device_read_tasks) device_read_tasks) {
-    for (auto& task : host_read_tasks) {
-      task.get();
+    // If there are host reads, schedule a batched memcpy to device
+    if (not host_read_tasks.empty()) {
+      std::vector<void const*> copy_srcs{};
+      copy_srcs.reserve(host_read_tasks.size());
+      host_buffers.reserve(host_read_tasks.size());
+
+      for (auto& task : host_read_tasks) {
+        host_buffers.emplace_back(task.get());
+        copy_srcs.push_back(host_buffers.back().get()->data());
+      }
+      CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+        copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
     }
-    for (auto& task : device_read_tasks) {
-      task.get();
-    }
-  };
-  return {std::move(column_chunk_buffers),
-          std::move(column_chunk_data),
-          std::async(std::launch::deferred,
-                     sync_function,
-                     std::move(host_read_tasks),
-                     std::move(device_read_tasks))};
+
+    // Synchronize the stream if `memcpy_batch_async` was scheduled to safely discard the host
+    // buffers
+    if (not host_buffers.empty()) { stream.synchronize(); }
+
+    auto sync_function = [](decltype(device_read_tasks) device_read_tasks) {
+      for (auto& task : device_read_tasks) {
+        task.get();
+      }
+    };
+    return {std::move(column_chunk_buffers),
+            std::move(column_chunk_data),
+            std::async(std::launch::deferred, sync_function, std::move(device_read_tasks))};
+  }
 }
 
 }  // namespace cudf::io::parquet

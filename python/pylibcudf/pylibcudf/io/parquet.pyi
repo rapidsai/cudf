@@ -7,6 +7,7 @@ from typing import Self
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.expressions import Expression
+from pylibcudf.io.parquet_metadata import FileMetaData
 from pylibcudf.io.types import (
     CompressionType,
     DictionaryPolicy,
@@ -54,8 +55,10 @@ class ChunkedParquetReader:
         self,
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
+        mr: DeviceMemoryResource | None = None,
         chunk_read_limit: int = 0,
         pass_read_limit: int = 1024000000,
+        parquet_metadatas: Sequence[FileMetaData] | None = None,
     ) -> None: ...
     def has_next(self) -> bool: ...
     def read_chunk(self) -> TableWithMetadata: ...
@@ -64,6 +67,7 @@ def read_parquet(
     options: ParquetReaderOptions,
     stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
+    parquet_metadatas: Sequence[FileMetaData] | None = None,
 ) -> TableWithMetadata: ...
 
 class ParquetWriterOptions:

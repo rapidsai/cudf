@@ -165,6 +165,21 @@ def test_boolean_isbetween(engine: pl.GPUEngine, closed, bounds):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("closed", ["both", "left", "right", "none"])
+def test_boolean_isbetween_decimal_float(engine: pl.GPUEngine, closed):
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3, 4], dtype=pl.Decimal(scale=2)),
+            "lo": pl.Series([0.5, 1.5, 2.5, 3.5], dtype=pl.Float64),
+            "hi": pl.Series([1.5, 2.5, 3.5, 4.5], dtype=pl.Float64),
+        }
+    )
+
+    q = df.select(pl.col("a").is_between(pl.col("lo"), pl.col("hi"), closed=closed))
+
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )

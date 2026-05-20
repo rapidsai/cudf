@@ -20,9 +20,9 @@ from cudf_polars.testing.engine_utils import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.spmd import SPMDEngine
 
 
 # Number of ranks for multi-rank streaming engines that share one GPU
@@ -95,15 +95,15 @@ def _unconfigured_engine(
         engine: StreamingEngine
         match _engine_param.engine_name:
             case "spmd":
-                from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+                from cudf_polars.engine.spmd import SPMDEngine
 
                 engine = SPMDEngine()
             case "dask":  # pragma: no cover
-                from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+                from cudf_polars.engine.dask import DaskEngine
 
                 engine = DaskEngine(engine_options={"allow_gpu_sharing": True})
             case "ray":  # pragma: no cover
-                from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+                from cudf_polars.engine.ray import RayEngine
 
                 # Always specify num_ranks so the engine has a fixed size
                 # regardless of how many GPUs the host happens to have;
@@ -240,7 +240,7 @@ def engine(
     engine, options = _unconfigured_engine
     if options is None:
         return engine
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+    from cudf_polars.engine.core import StreamingEngine
 
     assert isinstance(engine, StreamingEngine)
     return configure_streaming_engine(engine, options)
