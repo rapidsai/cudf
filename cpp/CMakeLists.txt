@@ -496,6 +496,7 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
+  src/groupby/common/utils.cpp
   src/groupby/groupby.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
@@ -539,6 +540,16 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/streaming_groupby.cpp
+  src/groupby/streaming_groupby/aggregate.cu
+  src/groupby/streaming_groupby/impl.cu
+  src/groupby/streaming_groupby/insert.cu
+  src/groupby/streaming_groupby/insert_first.cu
+  src/groupby/streaming_groupby/insert_first_nested.cu
+  src/groupby/streaming_groupby/insert_nested.cu
+  src/groupby/streaming_groupby/insert_subsequent.cu
+  src/groupby/streaming_groupby/insert_subsequent_nested.cu
+  src/groupby/streaming_groupby/merge.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
