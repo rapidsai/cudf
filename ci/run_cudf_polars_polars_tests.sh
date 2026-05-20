@@ -68,6 +68,7 @@ python -m pytest \
        -n 8 \
        --dist=worksteal \
        --tb=native \
+       --timeout=60 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
