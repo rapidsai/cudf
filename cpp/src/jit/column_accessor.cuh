@@ -16,13 +16,12 @@
 namespace cudf {
 namespace jit {
 
-template <int32_t Index, typename Column, typename Element, bool AsScalar, int32_t TableIndex>
+template <int32_t Index, typename Column, typename Element, bool AsScalar>
 struct column_accessor {
-  static constexpr int32_t index       = Index;
-  static constexpr int32_t table_index = TableIndex;
-  using column_type                    = Column;
-  using element_type                   = Element;
-  using optional_element_type          = cuda::std::optional<element_type>;
+  static constexpr int32_t index = Index;
+  using column_type              = Column;
+  using element_type             = Element;
+  using optional_element_type    = cuda::std::optional<element_type>;
 
   static constexpr bool as_scalar = AsScalar;
 
