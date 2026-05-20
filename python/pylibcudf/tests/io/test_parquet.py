@@ -447,7 +447,7 @@ def test_file_metadata_row_groups_and_column_chunks() -> None:
             assert meta_data.path_in_schema[-1] == pa_col_chunk.path_in_schema
 
 
-def test_new_file_metadata_wrappers_not_directly_constructible() -> None:
+def test_file_metadata_wrappers_not_directly_constructible() -> None:
     with pytest.raises(
         ValueError, match="SortingColumn cannot be constructed directly"
     ):
@@ -509,11 +509,7 @@ def test_file_metadata_row_group_ordinal(tmp_path) -> None:
     )[0]
     ordinals = [row_group.ordinal for row_group in file_metadata.row_groups]
 
-    # Parquet writers may omit row-group ordinal metadata.
-    if all(ordinal is None for ordinal in ordinals):
-        assert ordinals == [None] * len(ordinals)
-    else:
-        assert ordinals == list(range(len(ordinals)))
+    assert ordinals == [None] * len(ordinals)
 
 
 # TODO: Test these options
