@@ -761,7 +761,7 @@ class DaskEngine(StreamingEngine):
         dask_client: distributed.Client | None = None,
     ) -> DaskEngine:
         """
-        Create a :class:`DaskEngine` from a :class:`StreamingOptions` object.
+        Create a :class:`DaskEngine` from a :class:`~cudf_polars.engine.options.StreamingOptions` object.
 
         This is the recommended way to construct a ``DaskEngine`` for typical
         use. All RapidsMPF, executor, and engine options are read from
@@ -806,7 +806,7 @@ class DaskEngine(StreamingEngine):
 
         Returns
         -------
-        List of :class:`ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
         """
         return list(self._dask_ctx.client.run(ClusterInfo.local).values())
 

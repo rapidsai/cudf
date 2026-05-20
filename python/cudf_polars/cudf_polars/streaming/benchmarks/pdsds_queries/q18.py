@@ -121,10 +121,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    customer_demographics_1 = get_data(
-        run_config.dataset_path, "customer_demographics", run_config.suffix
-    )
-    customer_demographics_2 = get_data(
+    customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
@@ -134,30 +131,52 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # Pre-filter each dimension table before joining against catalog_sales [45 partitions].
+    # d_year not in GROUP BY — semi-join keeps only the date key in the pipeline.
+    filtered_dates = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
+    filtered_cd1 = customer_demographics.filter(
+        (pl.col("cd_gender") == gen) & (pl.col("cd_education_status") == es)
+    ).select(["cd_demo_sk", "cd_dep_count"])
+    filtered_customer = customer.filter(pl.col("c_birth_month").is_in(month)).select(
+        ["c_customer_sk", "c_current_cdemo_sk", "c_current_addr_sk", "c_birth_year"]
+    )
+    filtered_addr = customer_address.filter(pl.col("ca_state").is_in(state)).select(
+        ["ca_address_sk", "ca_county", "ca_state", "ca_country"]
+    )
+
     base_query = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(
-            customer_demographics_1,
-            left_on="cs_bill_cdemo_sk",
-            right_on="cd_demo_sk",
-            suffix="_cd1",
+        catalog_sales.select(
+            [
+                "cs_sold_date_sk",
+                "cs_item_sk",
+                "cs_bill_cdemo_sk",
+                "cs_bill_customer_sk",
+                "cs_quantity",
+                "cs_list_price",
+                "cs_coupon_amt",
+                "cs_sales_price",
+                "cs_net_profit",
+            ]
         )
-        .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
         .join(
-            customer_demographics_2,
+            filtered_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+        )
+        .join(
+            item.select(["i_item_sk", "i_item_id"]),
+            left_on="cs_item_sk",
+            right_on="i_item_sk",
+        )
+        .join(filtered_cd1, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk")
+        .join(
+            filtered_customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+        )
+        .join(
+            customer_demographics.select("cd_demo_sk"),
             left_on="c_current_cdemo_sk",
             right_on="cd_demo_sk",
-            suffix="_cd2",
+            how="semi",
         )
-        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
-        .filter(
-            (pl.col("cd_gender") == gen)
-            & (pl.col("cd_education_status") == es)
-            & pl.col("c_birth_month").is_in(month)
-            & (pl.col("d_year") == year)
-            & pl.col("ca_state").is_in(state)
-        )
+        .join(filtered_addr, left_on="c_current_addr_sk", right_on="ca_address_sk")
     )
 
     agg_exprs = [
