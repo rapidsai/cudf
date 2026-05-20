@@ -107,7 +107,6 @@ Function application, GroupBy & window
 
    DataFrame.agg
    DataFrame.apply
-   DataFrame.applymap
    DataFrame.groupby
    DataFrame.map
    DataFrame.pipe
@@ -167,9 +166,7 @@ Reindexing / selection / label manipulation
    DataFrame.drop_duplicates
    DataFrame.duplicated
    DataFrame.equals
-   DataFrame.first
    DataFrame.head
-   DataFrame.last
    DataFrame.reindex
    DataFrame.rename
    DataFrame.reset_index
@@ -189,7 +186,6 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
-   DataFrame.backfill
    DataFrame.bfill
    DataFrame.dropna
    DataFrame.ffill
@@ -200,7 +196,6 @@ Missing data handling
    DataFrame.nans_to_nulls
    DataFrame.notna
    DataFrame.notnull
-   DataFrame.pad
    DataFrame.replace
 
 Reshaping, sorting, transposing
@@ -252,6 +247,8 @@ Metadata
    :toctree: api/
 
    DataFrame.attrs
+   DataFrame.flags
+   DataFrame.set_flags
 
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

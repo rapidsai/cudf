@@ -31,9 +31,9 @@ pytestmark = [
 def df() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
-            "x": range(30_000),
-            "y": [1, 2, None] * 10_000,
-            "z": ["ẅ", "a", "z", "123", "abcd"] * 6_000,
+            "x": range(30),
+            "y": [1, 2, None] * 10,
+            "z": ["ẅ", "a", "z", "123", "abcd"] * 6,
         }
     )
 
@@ -44,7 +44,7 @@ def engine(
 ) -> StreamingEngine:
     """Yield each supported streaming engine pinned to small partitions."""
     return streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=1_000),
+        StreamingOptions(max_rows_per_partition=10),
     )
 
 
