@@ -269,14 +269,15 @@ __device__ inline errc ansi_mul(optional<T>* out, optional<T> const* a, optional
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
+ * @return errc::DIVISION_BY_ZERO on zero divisor, errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
   requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_div(T* out, T const* a, T const* b)
 {
+  if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   T r;
-  if (cuda::div_overflow(r, *a, *b)) { return errc::DIVISION_BY_ZERO; }
+  if (cuda::div_overflow(r, *a, *b)) { return errc::OVERFLOW; }
   *out = r;
   return errc::OK;
 }
@@ -310,9 +311,9 @@ __device__ inline errc ansi_div(T* out, T const* a, T const* b)
 template <typename R>
 __device__ inline errc ansi_div(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
-  if (numeric::division_overflow<R>(a->value(), b->value()) || b->value() == 0) {
-    return errc::OVERFLOW;
-  }
+  if (b->value() == 0) { return errc::DIVISION_BY_ZERO; }
+
+  if (numeric::division_overflow<R>(a->value(), b->value())) { return errc::OVERFLOW; }
 
   *out = decimal<R>{numeric::scaled_integer<R>{a->value() / b->value(),
                                                numeric::scale_type{a->scale() - b->scale()}}};
