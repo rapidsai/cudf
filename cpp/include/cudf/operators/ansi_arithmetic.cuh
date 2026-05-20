@@ -8,49 +8,27 @@
 #include <cudf/operators/math.cuh>
 #include <cudf/operators/types.cuh>
 
+#include <cuda/numeric>
+
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
 /**
- * @brief Adds unsigned integral operands with overflow detection.
+ * @brief Adds integral operands with overflow detection.
  *
- * @tparam T Unsigned integral type.
+ * @tparam T Integral type.
  * @param out Destination value.
  * @param a Left operand.
  * @param b Right operand.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
+  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_add(T* out, T const* a, T const* b)
 {
-  using P = detail::promote<T>;
-  auto r  = static_cast<P>(*a) + static_cast<P>(*b);
-  if (r > static_cast<P>(cuda::std::numeric_limits<T>::max())) { return errc::OVERFLOW; }
-  *out = static_cast<T>(r);
-  return errc::OK;
-}
-
-/**
- * @brief Adds signed integral operands with overflow detection.
- *
- * @tparam T Signed integral type.
- * @param out Destination value.
- * @param a Left operand.
- * @param b Right operand.
- * @return errc::OVERFLOW on overflow, else errc::OK.
- */
-template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
-__device__ inline errc ansi_add(T* out, T const* a, T const* b)
-{
-  using P = detail::promote<T>;
-  auto r  = static_cast<P>(*a) + static_cast<P>(*b);
-  if (r > static_cast<P>(cuda::std::numeric_limits<T>::max()) ||
-      r < static_cast<P>(cuda::std::numeric_limits<T>::min())) {
-    return errc::OVERFLOW;
-  }
-  *out = static_cast<T>(r);
+  T r;
+  if (cuda::add_overflow(r, *a, *b)) { return errc::OVERFLOW; }
+  *out = r;
   return errc::OK;
 }
 
@@ -121,44 +99,21 @@ __device__ inline errc ansi_add(optional<T>* out, optional<T> const* a, optional
 }
 
 /**
- * @brief Subtracts unsigned integral operands with overflow detection.
+ * @brief Subtracts integral operands with overflow detection.
  *
- * @tparam T Unsigned integral type.
+ * @tparam T Integral type.
  * @param out Destination value.
  * @param a Minuend.
  * @param b Subtrahend.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
+  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_sub(T* out, T const* a, T const* b)
 {
-  if (*a < *b) { return errc::OVERFLOW; }
-  auto r = *a - *b;
-  *out   = static_cast<T>(r);
-  return errc::OK;
-}
-
-/**
- * @brief Subtracts signed integral operands with overflow detection.
- *
- * @tparam T Signed integral type.
- * @param out Destination value.
- * @param a Minuend.
- * @param b Subtrahend.
- * @return errc::OVERFLOW on overflow, else errc::OK.
- */
-template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
-__device__ inline errc ansi_sub(T* out, T const* a, T const* b)
-{
-  using P = detail::promote<T>;
-  auto r  = static_cast<P>(*a) - static_cast<P>(*b);
-  if (r > static_cast<P>(cuda::std::numeric_limits<T>::max()) ||
-      r < static_cast<P>(cuda::std::numeric_limits<T>::min())) {
-    return errc::OVERFLOW;
-  }
-  *out = static_cast<T>(r);
+  T r;
+  if (cuda::sub_overflow(r, *a, *b)) { return errc::OVERFLOW; }
+  *out = r;
   return errc::OK;
 }
 
@@ -228,45 +183,21 @@ __device__ inline errc ansi_sub(optional<T>* out, optional<T> const* a, optional
 }
 
 /**
- * @brief Multiplies unsigned integral operands with overflow detection.
+ * @brief Multiplies integral operands with overflow detection.
  *
- * @tparam T Unsigned integral type.
+ * @tparam T Integral type.
  * @param out Destination value.
  * @param a Left operand.
  * @param b Right operand.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
+  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
 {
-  using P = detail::promote<T>;
-  auto r  = static_cast<P>(*a) * static_cast<P>(*b);
-  if (r > static_cast<P>(cuda::std::numeric_limits<T>::max())) { return errc::OVERFLOW; }
-  *out = static_cast<T>(r);
-  return errc::OK;
-}
-
-/**
- * @brief Multiplies signed integral operands with overflow detection.
- *
- * @tparam T Signed integral type.
- * @param out Destination value.
- * @param a Left operand.
- * @param b Right operand.
- * @return errc::OVERFLOW on overflow, else errc::OK.
- */
-template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
-__device__ inline errc ansi_mul(T* out, T const* a, T const* b)
-{
-  using P = detail::promote<T>;
-  auto r  = static_cast<P>(*a) * static_cast<P>(*b);
-  if (r > static_cast<P>(cuda::std::numeric_limits<T>::max()) ||
-      r < static_cast<P>(cuda::std::numeric_limits<T>::min())) {
-    return errc::OVERFLOW;
-  }
-  *out = static_cast<T>(r);
+  T r;
+  if (cuda::mul_overflow(r, *a, *b)) { return errc::OVERFLOW; }
+  *out = r;
   return errc::OK;
 }
 
@@ -332,39 +263,21 @@ __device__ inline errc ansi_mul(optional<T>* out, optional<T> const* a, optional
 }
 
 /**
- * @brief Divides unsigned integral operands with divide-by-zero checks.
+ * @brief Divides integral operands with divide-by-zero checks.
  *
- * @tparam T Unsigned integral type.
+ * @tparam T Integral type.
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
  * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
+  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_div(T* out, T const* a, T const* b)
 {
-  if (*b == 0) { return errc::DIVISION_BY_ZERO; }
-  *out = static_cast<T>(static_cast<T>(*a) / static_cast<T>(*b));
-  return errc::OK;
-}
-
-/**
- * @brief Divides signed integral operands with ANSI overflow and divide-by-zero checks.
- *
- * @tparam T Signed integral type.
- * @param out Destination value.
- * @param a Dividend.
- * @param b Divisor.
- * @return errc::DIVISION_BY_ZERO or errc::OVERFLOW on error, else errc::OK.
- */
-template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
-__device__ inline errc ansi_div(T* out, T const* a, T const* b)
-{
-  if (*b == 0) { return errc::DIVISION_BY_ZERO; }
-  if (*a == cuda::std::numeric_limits<T>::min() && *b == -1) { return errc::OVERFLOW; }
-  *out = static_cast<T>(static_cast<T>(*a) / static_cast<T>(*b));
+  T r;
+  if (cuda::div_overflow(r, *a, *b)) { return errc::DIVISION_BY_ZERO; }
+  *out = r;
   return errc::OK;
 }
 
@@ -516,8 +429,6 @@ __device__ inline errc ansi_mod(double* out, double const* a, double const* b)
 template <typename R>
 __device__ inline errc ansi_mod(decimal<R>* out, decimal<R> const* a, decimal<R> const* b)
 {
-  if (b->value() == 0) { return errc::DIVISION_BY_ZERO; }
-
   decimal<R> div;
 
   if (errc e = ansi_div(&div, a, b); e != errc::OK) { return e; }
