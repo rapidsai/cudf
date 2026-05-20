@@ -170,7 +170,8 @@ class ValidationMethod:
         A name indicating the source of the expected results.
 
         - 'polars-cpu': Run polars against the same data
-        - 'duckdb': Compare against pre-computed DuckDB results
+        - 'duckdb': Run duckdb against the same data
+        - 'duckdb-disk': Compare to duckdb pregenerated results on disk
 
     comparison_method
         How the comparison was performed. Currently, only
@@ -180,11 +181,25 @@ class ValidationMethod:
     comparison_options
         Additional options passed to the comparison method, controlling
         things like the tolerance for floating point comparisons.
+
+    expected_location
+        Optional path to disk-based expected results, must be provided if
+        source is "duckdb-disk".
     """
 
-    expected_source: Literal["polars-cpu", "duckdb"]
+    expected_source: Literal["polars-cpu", "duckdb", "duckdb-disk"]
     comparison_method: Literal["polars"]
     comparison_options: dict[str, Any]
+    expected_location: Path | None
+
+    def expected_file(self, q_id: int) -> Path:
+        """Return path to disk-based result for the given query."""
+        if self.expected_location is None:
+            raise RuntimeError("No expected location given")
+        p = self.expected_location / f"q{q_id:02d}.parquet"
+        if not p.exists():
+            raise FileNotFoundError(f"Expected result file {p} does not exist")
+        return p
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -494,19 +509,19 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
-        if args.validate_directory:
+        if args.validate_directory is not None:
             validation_method = ValidationMethod(
-                expected_source="duckdb",
+                expected_source="duckdb-disk",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
+                expected_location=args.validate_directory,
             )
-        elif args.validate:
+        elif args.validate_against is not None:
             validation_method = ValidationMethod(
-                expected_source="polars-cpu"
-                if args.baseline == "polars-cpu"
-                else "duckdb",
+                args.validate_against,
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
+                expected_location=None,
             )
         else:
             validation_method = None
@@ -902,11 +917,10 @@ def run_polars_query(
     engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> QueryRunResult:
     """Run all iterations for a single query. Caller must wrap in try/except."""
-    query_result = getattr(benchmark, f"q{q_id}")(run_config)
+    query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
     q = query_result.frame
 
     print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
@@ -923,8 +937,9 @@ def run_polars_query(
         casts.extend(benchmark.EXPECTED_CASTS_TIMESTAMP.get(q_id, []))
 
     expected: pl.DataFrame | None = None
-    if args.validate:
-        match args.baseline:
+    validation_method = run_config.validation_method
+    if validation_method is not None:
+        match validation_method.expected_source:
             case "polars-cpu":
                 expected = q.collect()
             case "duckdb":
@@ -938,12 +953,12 @@ def run_polars_query(
                     suffix=run_config.suffix,
                     run_config=run_config,
                 ).with_columns(*casts)
-            case _:
-                raise ValueError(f"Invalid baseline: {args.baseline}")
-    elif validation_files is not None:
-        expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
-    else:
-        expected = None
+            case "duckdb-disk":
+                expected = pl.read_parquet(
+                    validation_method.expected_file(q_id)
+                ).with_columns(*casts)
+            case baseline:
+                raise ValueError(f"Invalid baseline: {baseline}")
 
     if args.output_expected_directory is not None:
         assert expected is not None, (
@@ -1020,7 +1035,6 @@ def _run_query_loop(
     engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> tuple[
     defaultdict[int, list[SuccessRecord | FailedRecord]],
@@ -1044,7 +1058,6 @@ def _run_query_loop(
                 engine=engine,
                 numeric_type=numeric_type,
                 date_type=date_type,
-                validation_files=validation_files,
                 prepare_validation_result=prepare_validation_result,
             )
         except Exception:
@@ -1107,7 +1120,6 @@ def run_polars_cpu(
     run_config: Any,
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using the Polars CPU streaming engine."""
     records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1117,7 +1129,6 @@ def run_polars_cpu(
         engine=None,
         numeric_type=numeric_type,
         date_type=date_type,
-        validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(
@@ -1132,7 +1143,6 @@ def run_polars_in_memory(
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using a single-process GPU in-memory engine."""
     engine_options = {
@@ -1151,7 +1161,6 @@ def run_polars_in_memory(
         engine=engine,
         numeric_type=numeric_type,
         date_type=date_type,
-        validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
@@ -1167,7 +1176,6 @@ def run_polars_spmd(
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     from cudf_polars.engine.spmd import SPMDEngine
@@ -1205,7 +1213,6 @@ def run_polars_spmd(
             engine,
             numeric_type,
             date_type,
-            validation_files,
             prepare_validation_result=_allgather_result,
         )
         if engine.rank > 0:
@@ -1226,7 +1233,6 @@ def run_polars_ray(
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Ray actor-based distributed execution."""
     from cudf_polars.engine.ray import RayEngine
@@ -1258,7 +1264,6 @@ def run_polars_ray(
             engine,
             numeric_type,
             date_type,
-            validation_files,
         )
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
@@ -1275,7 +1280,6 @@ def run_polars_dask(
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
-    validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Dask distributed execution."""
     import distributed
@@ -1310,13 +1314,7 @@ def run_polars_dask(
         ) as engine:
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
             records, plans, validation_failures, query_failures = _run_query_loop(
-                benchmark,
-                args,
-                run_config,
-                engine,
-                numeric_type,
-                date_type,
-                validation_files,
+                benchmark, args, run_config, engine, numeric_type, date_type
             )
             run_config = dataclasses.replace(
                 run_config, records=dict(records), plans=plans
@@ -1661,17 +1659,6 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     args.output.write("\n")
 
 
-def list_validation_files(
-    validate_directory: Path,
-) -> dict[int, Path]:
-    """List the validation files in the given directory."""
-    validation_files: dict[int, Path] = {}
-    for q_path in validate_directory.glob("q*.parquet"):
-        q_id = int(q_path.stem.lstrip("q").lstrip("_"))
-        validation_files[q_id] = q_path
-    return validation_files
-
-
 def check_input_data_type(
     run_config: RunConfig,
 ) -> tuple[Literal["decimal", "float"], Literal["date", "timestamp"]]:
@@ -1900,23 +1887,28 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Print the query plans.",
         default=True,
     )
-    parser.add_argument(
-        "--validate",
-        action=argparse.BooleanOptionalAction,
-        default=False,
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--validate-against",
+        choices=["duckdb", "polars-cpu"],
+        default=None,
         help=(
             "Validate the result against CPU execution. This will "
-            "run the query with both GPU and baseline engine (CPU polars or DuckDB), collect the "
-            "results in memory, and compare them using polars'. "
+            "run the query, collect the results in memory and validate against a result from the "
+            "selected CPU engine (CPU polars or DuckDB), comparing them using polars'. "
             "At larger scale factors, computing the expected result can be slow so "
             "--validate-directory should be used instead."
         ),
     )
-    parser.add_argument(
-        "--baseline",
-        choices=["duckdb", "polars-cpu"],
-        default="duckdb",
-        help="Which engine to use as the baseline for validation.",
+    group.add_argument(
+        "--validate-directory",
+        type=Path,
+        default=None,
+        help=(
+            "Validate the results against a directory with a pre-computed set of 'golden' results. "
+            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "zero-padded query number."
+        ),
     )
     parser.add_argument(
         "--results-directory",
@@ -1929,16 +1921,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Optional directory to write expected results as parquet files.",
-    )
-    parser.add_argument(
-        "--validate-directory",
-        type=Path,
-        default=None,
-        help=(
-            "Validate the results against a directory with a pre-computed set of 'golden' results. "
-            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
-            "zero-padded query number."
-        ),
     )
     parser.add_argument(
         "--validation-abs-tol",
@@ -2013,8 +1995,6 @@ def parse_args(
             "use --target-partition-size instead."
         )
 
-    if parsed_args.validate_directory and parsed_args.validate:
-        raise ValueError("Specify either --validate-directory or --validate, not both.")
     if (
         parsed_args.validate_directory is not None
         and not parsed_args.validate_directory.exists()
@@ -2048,13 +2028,18 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             "(in-memory, dask, ray, spmd)."
         )
 
-    if run_config.validation_method is not None and run_config.frontend in _CPU_ENGINES:
-        raise ValueError(
-            f"--validate/--validate-directory is not supported with --frontend "
-            f"{run_config.frontend}; validation compares a candidate engine against "
-            "a CPU baseline, so it only applies to GPU frontends "
-            "(in-memory, dask, ray, spmd)."
-        )
+    if run_config.validation_method is not None:
+        validate_against = run_config.validation_method.expected_source
+        if validate_against == run_config.frontend:
+            raise ValueError(
+                f"--validate-against {validate_against} is not supported with --frontend "
+                f"{run_config.frontend}; validation compares a candidate engine against "
+                "a baseline, so it only applies when the two are different."
+            )
+        if run_config.frontend == "duckdb":
+            raise ValueError(
+                "Validation is not currently supported with --frontend duckdb"
+            )
 
     if args.debug and run_config.frontend in _CPU_ENGINES:
         raise ValueError(
@@ -2076,63 +2061,27 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             )
 
     parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
-    validation_files = (
-        list_validation_files(args.validate_directory)
-        if args.validate_directory is not None
-        else None
-    )
     numeric_type, date_type = check_input_data_type(run_config)
     match args.frontend:
         case "dask":
             run_polars_dask(
-                benchmark,
-                args,
-                run_config,
-                parquet_options,
-                numeric_type,
-                date_type,
-                validation_files,
+                benchmark, args, run_config, parquet_options, numeric_type, date_type
             )
         case "duckdb":
             run_duckdb(benchmark().duckdb_queries, args)
         case "in-memory":
             run_polars_in_memory(
-                benchmark,
-                args,
-                run_config,
-                parquet_options,
-                numeric_type,
-                date_type,
-                validation_files,
+                benchmark, args, run_config, parquet_options, numeric_type, date_type
             )
         case "polars-cpu":
-            run_polars_cpu(
-                benchmark,
-                args,
-                run_config,
-                numeric_type,
-                date_type,
-                validation_files,
-            )
+            run_polars_cpu(benchmark, args, run_config, numeric_type, date_type)
         case "ray":
             run_polars_ray(
-                benchmark,
-                args,
-                run_config,
-                parquet_options,
-                numeric_type,
-                date_type,
-                validation_files,
+                benchmark, args, run_config, parquet_options, numeric_type, date_type
             )
         case "spmd":
             run_polars_spmd(
-                benchmark,
-                args,
-                run_config,
-                parquet_options,
-                numeric_type,
-                date_type,
-                validation_files,
+                benchmark, args, run_config, parquet_options, numeric_type, date_type
             )
         case _:
             raise ValueError(f"Unknown --frontend: {args.frontend!r}")
