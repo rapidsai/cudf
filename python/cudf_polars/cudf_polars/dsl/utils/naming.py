@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.expr import Col, NamedExpr
@@ -42,15 +43,12 @@ def _concrete_prefix(names: Sequence[str | NamedExpr]) -> tuple[str, ...]:
     # Exclude NamedExprs that are not concrete Col references.
     # We don't throw out the entire NamedExpr tuple if a prefix
     # of the tuple is concrete.
-    concrete: list[str] = []
-    for n in names:
-        if isinstance(n, str):
-            concrete.append(n)
-        elif isinstance(n.value, Col):
-            concrete.append(n.value.name)
-        else:
-            break
-    return tuple(concrete)
+    return tuple(
+        n.name if isinstance(n, NamedExpr) else n
+        for n in itertools.takewhile(
+            lambda n: isinstance(n, str) or isinstance(n.value, Col), names
+        )
+    )
 
 
 def names_to_indices(

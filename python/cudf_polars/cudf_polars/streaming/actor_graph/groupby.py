@@ -150,7 +150,6 @@ class DecomposedGroupBy:
         else:  # pragma: no cover
             raise TypeError(f"Unsupported IR type: {type(ir)}")
 
-        # Distinguish between output and shuffle indices
         output_indices = _key_indices(ir, ir.schema)
         if isinstance(ir, Distinct):
             shuffle_indices = output_indices

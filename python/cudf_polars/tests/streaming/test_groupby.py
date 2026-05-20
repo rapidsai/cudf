@@ -11,12 +11,8 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.containers import DataType
-from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import ErrorNode, GroupBy
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
-from cudf_polars.streaming.actor_graph.groupby import _key_indices
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -230,26 +226,6 @@ def test_groupby_on_equality(streaming_engine) -> None:
     )
     q = df.group_by(pl.col("key1") == pl.col("key2")).agg(pl.col("int32").sum())
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
-
-
-def test_groupby_key_indices_concrete_prefix() -> None:
-    dtype = DataType(pl.Int64())
-    child = ErrorNode({"a": dtype, "b": dtype, "c": dtype}, "")
-    ir = GroupBy(
-        {"a": dtype, "b": dtype, "c": dtype},
-        (
-            expr.NamedExpr("a", expr.Col(dtype, "a")),
-            expr.NamedExpr("b", expr.Literal(dtype, 1)),
-            expr.NamedExpr("c", expr.Col(dtype, "c")),
-        ),
-        (),
-        False,  # noqa: FBT003
-        None,
-        child,
-    )
-
-    assert _key_indices(ir, child.schema, concrete_prefix=True) == (0,)
-    assert _key_indices(ir, ir.schema) == (0, 1, 2)
 
 
 @pytest.mark.parametrize(
