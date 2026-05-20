@@ -3,17 +3,6 @@
 
 """Pytest plugin used together with ``-p cudf.pandas`` to run the pandas
 test suite under cudf.pandas.
-
-Loaded via ``pytest -p cudf.pandas._pandas_tests_plugin``.  Provides:
-
-- An autouse session fixture that softens ``tm.assert_produces_warning``
-  and ``pytest.raises`` so cudf.pandas-induced behavior does not cause
-  noise.
-- ``sys.setprofile``-based tracking of ``_slow_function_call`` /
-  ``_fast_function_call`` counts per pandas test module, dumped per
-  xdist worker as ``function_call_counts_worker_<id>.json``.
-- A ``pytest_collection_modifyitems`` hook that applies skip/xfail
-  markers to known-bad pandas tests via three lookup dictionaries.
 """
 
 import contextlib

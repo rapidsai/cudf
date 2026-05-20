@@ -13,20 +13,6 @@
 # Run all tests
 #   run-pandas-tests.sh --tb=line --report-log=log.json
 #
-# This script creates a `pandas-testing` directory if it doesn't exist and
-# clones the pandas repository inside it.  The only modification made to the
-# clone is renaming its inner package directory from `pandas/` to
-# `pandas_src/`: this prevents pytest from loading `pandas/conftest.py` as
-# the module `pandas.conftest`, which would otherwise collide with the
-# installed (cudf.pandas-wrapped) `pandas` module in `sys.modules` and cause
-# a recursion in cudf.pandas's fast-slow proxy during test collection.
-#
-# The pandas test suite is then invoked directly against
-# `pandas/pandas_src/tests/` with two pytest plugins loaded:
-#
-#   -p cudf.pandas
-#   -p cudf.pandas._pandas_tests_plugin
-#
 # If running locally, it's recommended to pass '-m "not slow and not single_cpu and not db"'
 
 set -euo pipefail
@@ -50,14 +36,14 @@ if [ ! -d "pandas" ]; then
     mv pandas/pandas pandas/pandas_src
 fi
 
-# Pytest auto-discovers pandas/pyproject.toml so rootdir is set to
-# `pandas-testing/pandas/` and node ids come out as
-# `pandas_src/tests/<...>::<test>`.  The only ini option we override is
-# `filterwarnings`: pandas's default of `["error:::pandas", ...]` converts
-# pandas-origin warnings into test failures, which is incompatible with the
-# additional warnings that cudf.pandas raises.
+# --override-ini="filterwarnings=" overrides pandas default filterwarnings = ["error"]
+
+# TODO: Remove --override-ini="empty_parameter_set_mark=skip"
+# Some pandas fixtures/parametrize call `__dict__` which returns an empty dict
+# under cudf.pandas's fast-slow proxy.
 PANDAS_CI="1" python -m pytest \
     --override-ini="filterwarnings=" \
+    --override-ini="empty_parameter_set_mark=skip" \
     --import-mode=importlib \
     -p cudf.pandas \
     -p cudf.pandas._pandas_tests_plugin \
