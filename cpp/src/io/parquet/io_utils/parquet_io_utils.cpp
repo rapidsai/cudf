@@ -139,7 +139,7 @@ fetch_byte_ranges_to_device_async(
     auto const io_size   = cuda::std::get<1>(tuple);
     auto const dest      = cuda::std::get<2>(tuple);
 
-    if (not datasource.supports_device_read() or not datasource.is_device_read_preferred(io_size)) {
+    if (not datasource.is_device_read_preferred(io_size)) {
       // Asynchronously read column chunk data to a host buffer
       host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
       copy_dsts.push_back(static_cast<void*>(dest));
