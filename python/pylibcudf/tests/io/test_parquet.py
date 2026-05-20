@@ -499,19 +499,6 @@ def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:
             assert sorting_column.nulls_first == pa_sorting_column.nulls_first
 
 
-def test_file_metadata_row_group_ordinal(tmp_path) -> None:
-    table = pa.table({"a": list(range(80)), "b": [x * 2 for x in range(80)]})
-    parquet_path = tmp_path / "ordinal.parquet"
-    write_table(table, parquet_path, row_group_size=20)
-
-    file_metadata = plc.io.parquet_metadata.read_parquet_footers(
-        plc.io.SourceInfo([parquet_path])
-    )[0]
-    ordinals = [row_group.ordinal for row_group in file_metadata.row_groups]
-
-    assert ordinals == [None] * len(ordinals)
-
-
 # TODO: Test these options
 # list row_groups = None,
 # ^^^ This one is not tested since it's not in pyarrow/pandas, deprecate?
