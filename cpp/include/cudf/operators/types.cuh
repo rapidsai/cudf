@@ -35,8 +35,9 @@ namespace detail {
  * @brief Computes an integer power of ten.
  *
  * @tparam T Integral exponent and return type.
- * @param exponent Exponent value.
+ * @param exponent Non-negative exponent value.
  * @return Ten raised to @p exponent.
+ * @pre exponent >= 0.
  */
 template <typename T>
 __device__ constexpr T ipow10(T exponent)
