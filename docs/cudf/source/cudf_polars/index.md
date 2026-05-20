@@ -93,6 +93,7 @@ profiling
 other_engines
 memory_errors
 api
+developer_docs
 ```
 
 ## Launch on Google Colab

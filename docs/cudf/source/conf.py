@@ -82,7 +82,7 @@ extensions = [
     "myst_nb",
 ]
 
-remove_from_toctrees = ["user_guide/api_docs/api/*"]
+remove_from_toctrees = ["cudf/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
@@ -231,7 +231,7 @@ html_theme_options = {
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
-    "navbar_align": "right",
+    "navbar_align": "content",
     "navigation_with_keys": True,
 }
 include_pandas_compat = True
