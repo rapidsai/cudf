@@ -15,7 +15,7 @@ def test_names_to_indices_concrete_prefix() -> None:
     schema = {"a": dtype, "b": dtype, "c": dtype}
     names = (
         expr.NamedExpr("a_alias", expr.Col(dtype, "a")),
-        expr.NamedExpr("b_alias", expr.Col(dtype, "b")),
+        "b",
         expr.NamedExpr("computed", expr.Literal(dtype, 1)),
         expr.NamedExpr("c_alias", expr.Col(dtype, "c")),
     )
