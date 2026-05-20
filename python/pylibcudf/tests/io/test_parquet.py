@@ -5,6 +5,7 @@ import os
 
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.parquet as pq
 import pytest
 from pyarrow.parquet import read_table, write_table
 from utils import (
@@ -389,6 +390,107 @@ def test_file_metadata_from_bytes(
 def test_file_metadata_from_bytes_empty() -> None:
     with pytest.raises(RuntimeError, match="Cannot initialize schema"):
         plc.io.parquet_metadata.FileMetaData.from_bytes(memoryview(b""))
+
+
+def test_file_metadata_row_groups_and_column_chunks() -> None:
+    table = pa.table(
+        {
+            "a": list(range(100)),
+            "b": [x * 10 for x in range(100)],
+        }
+    )
+    sink = io.BytesIO()
+    write_table(table, sink, row_group_size=25)
+    sink.seek(0)
+    parquet_file = pq.ParquetFile(sink)
+    sink.seek(0)
+
+    source_info = plc.io.SourceInfo([sink])
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(source_info)[
+        0
+    ]
+
+    assert (
+        len(file_metadata.row_groups) == parquet_file.metadata.num_row_groups
+    )
+
+    for rg_idx, row_group in enumerate(file_metadata.row_groups):
+        pa_row_group = parquet_file.metadata.row_group(rg_idx)
+        assert row_group.num_rows == pa_row_group.num_rows
+        assert row_group.total_byte_size == pa_row_group.total_byte_size
+        assert row_group.total_compressed_size is None or (
+            row_group.total_compressed_size >= 0
+        )
+        assert row_group.file_offset is None or row_group.file_offset >= 0
+        assert row_group.ordinal is None or row_group.ordinal == rg_idx
+
+        assert len(row_group.columns) == pa_row_group.num_columns
+        for col_idx, column_chunk in enumerate(row_group.columns):
+            pa_col_chunk = pa_row_group.column(col_idx)
+            assert column_chunk.file_path == ""
+            assert column_chunk.file_offset == 0
+            assert column_chunk.num_values == pa_col_chunk.num_values
+            assert (
+                column_chunk.total_uncompressed_size
+                == pa_col_chunk.total_uncompressed_size
+            )
+            assert (
+                column_chunk.total_compressed_size
+                == pa_col_chunk.total_compressed_size
+            )
+            assert (
+                column_chunk.path_in_schema[-1] == pa_col_chunk.path_in_schema
+            )
+
+
+def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:
+    table = pa.table({"a": list(range(50)), "b": [x * 10 for x in range(50)]})
+    sorting_columns = pq.SortingColumn.from_ordering(
+        table.schema, [("a", "ascending")]
+    )
+
+    parquet_path = tmp_path / "sorted.parquet"
+    write_table(
+        table, parquet_path, row_group_size=25, sorting_columns=sorting_columns
+    )
+
+    parquet_file = pq.ParquetFile(parquet_path)
+    source_info = plc.io.SourceInfo([parquet_path])
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(source_info)[
+        0
+    ]
+
+    for rg_idx, row_group in enumerate(file_metadata.row_groups):
+        pa_sorting_columns = parquet_file.metadata.row_group(
+            rg_idx
+        ).sorting_columns
+        assert pa_sorting_columns is not None
+        assert row_group.sorting_columns is not None
+        assert len(row_group.sorting_columns) == len(pa_sorting_columns)
+
+        for sorting_column, pa_sorting_column in zip(
+            row_group.sorting_columns, pa_sorting_columns, strict=True
+        ):
+            assert sorting_column.column_idx == pa_sorting_column.column_index
+            assert sorting_column.descending == pa_sorting_column.descending
+            assert sorting_column.nulls_first == pa_sorting_column.nulls_first
+
+
+def test_file_metadata_row_group_ordinal(tmp_path) -> None:
+    table = pa.table({"a": list(range(80)), "b": [x * 2 for x in range(80)]})
+    parquet_path = tmp_path / "ordinal.parquet"
+    write_table(table, parquet_path, row_group_size=20)
+
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo([parquet_path])
+    )[0]
+    ordinals = [row_group.ordinal for row_group in file_metadata.row_groups]
+
+    # Parquet writers may omit row-group ordinal metadata.
+    if all(ordinal is None for ordinal in ordinals):
+        assert ordinals == [None] * len(ordinals)
+    else:
+        assert ordinals == list(range(len(ordinals)))
 
 
 # TODO: Test these options

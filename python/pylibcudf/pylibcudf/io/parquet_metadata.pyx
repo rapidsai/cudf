@@ -3,6 +3,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from pylibcudf.io.types cimport SourceInfo
@@ -13,7 +14,12 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
 )
 from pylibcudf.libcudf.io.parquet cimport parquet_reader_options
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
-from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
+from pylibcudf.libcudf.io.parquet_schema cimport (
+    ColumnChunk as cpp_ColumnChunk,
+    FileMetaData as cpp_FileMetaData,
+    RowGroup as cpp_RowGroup,
+    SortingColumn as cpp_SortingColumn,
+)
 from pylibcudf.libcudf.utilities.span cimport host_span
 from pylibcudf.types cimport DataType
 
@@ -21,10 +27,13 @@ ctypedef const unique_ptr[datasource] const_unique_ptr_datasource
 
 
 __all__ = [
+    "ColumnChunk",
     "FileMetaData",
     "ParquetColumnSchema",
     "ParquetMetadata",
     "ParquetSchema",
+    "RowGroup",
+    "SortingColumn",
     "read_parquet_footers",
     "read_parquet_metadata",
 ]
@@ -260,6 +269,166 @@ cdef class ParquetMetadata:
         }
 
 
+cdef class SortingColumn:
+    """Sort metadata for a row group column."""
+
+    def __init__(self):
+        raise ValueError("SortingColumn cannot be constructed directly")
+
+    @staticmethod
+    cdef SortingColumn from_cpp(cpp_SortingColumn sorting_column):
+        cdef SortingColumn result = SortingColumn.__new__(SortingColumn)
+        result.c_obj = sorting_column
+        return result
+
+    @property
+    def column_idx(self):
+        """Column index (within the row group)."""
+        return self.c_obj.column_idx
+
+    @property
+    def descending(self):
+        """Whether this column is sorted in descending order."""
+        return self.c_obj.descending
+
+    @property
+    def nulls_first(self):
+        """Whether null values are ordered before non-null values."""
+        return self.c_obj.nulls_first
+
+
+cdef class ColumnChunk:
+    """Metadata for a row group's column chunk."""
+
+    def __init__(self):
+        raise ValueError("ColumnChunk cannot be constructed directly")
+
+    @staticmethod
+    cdef ColumnChunk from_cpp(cpp_ColumnChunk column_chunk):
+        cdef ColumnChunk result = ColumnChunk.__new__(ColumnChunk)
+        result.c_obj = column_chunk
+        return result
+
+    @property
+    def file_path(self):
+        """Relative file path for this column chunk."""
+        return self.c_obj.file_path.decode("utf-8")
+
+    @property
+    def file_offset(self):
+        """Deprecated byte offset to column metadata."""
+        return self.c_obj.file_offset
+
+    @property
+    def offset_index_offset(self):
+        """File offset of the chunk's OffsetIndex."""
+        return self.c_obj.offset_index_offset
+
+    @property
+    def offset_index_length(self):
+        """Size of the chunk's OffsetIndex, in bytes."""
+        return self.c_obj.offset_index_length
+
+    @property
+    def column_index_offset(self):
+        """File offset of the chunk's ColumnIndex."""
+        return self.c_obj.column_index_offset
+
+    @property
+    def column_index_length(self):
+        """Size of the chunk's ColumnIndex, in bytes."""
+        return self.c_obj.column_index_length
+
+    @property
+    def schema_idx(self):
+        """Derived index in the flattened schema."""
+        return self.c_obj.schema_idx
+
+    @property
+    def path_in_schema(self):
+        """Column path components in the flattened schema."""
+        cdef string path
+        return [path.decode("utf-8") for path in self.c_obj.meta_data.path_in_schema]
+
+    @property
+    def num_values(self):
+        """Number of values in this chunk."""
+        return self.c_obj.meta_data.num_values
+
+    @property
+    def total_uncompressed_size(self):
+        """Total uncompressed page bytes for this chunk."""
+        return self.c_obj.meta_data.total_uncompressed_size
+
+    @property
+    def total_compressed_size(self):
+        """Total compressed page bytes for this chunk."""
+        return self.c_obj.meta_data.total_compressed_size
+
+
+cdef class RowGroup:
+    """Parquet row group metadata."""
+
+    def __init__(self):
+        raise ValueError("RowGroup cannot be constructed directly")
+
+    @staticmethod
+    cdef RowGroup from_cpp(cpp_RowGroup row_group):
+        cdef RowGroup result = RowGroup.__new__(RowGroup)
+        result.c_obj = row_group
+        return result
+
+    @property
+    def columns(self):
+        """Column chunk metadata for each column in this row group."""
+        cdef cpp_ColumnChunk column_chunk
+        return [
+            ColumnChunk.from_cpp(column_chunk) for column_chunk in self.c_obj.columns
+        ]
+
+    @property
+    def total_byte_size(self):
+        """Total uncompressed byte size in this row group."""
+        return self.c_obj.total_byte_size
+
+    @property
+    def num_rows(self):
+        """Number of rows in this row group."""
+        return self.c_obj.num_rows
+
+    @property
+    def sorting_columns(self):
+        """Optional row sort order metadata."""
+        cdef cpp_SortingColumn sorting_column
+        if not self.c_obj.sorting_columns.has_value():
+            return None
+        return [
+            SortingColumn.from_cpp(sorting_column)
+            for sorting_column in self.c_obj.sorting_columns.value()
+        ]
+
+    @property
+    def file_offset(self):
+        """Optional byte offset to first page in this row group."""
+        if not self.c_obj.file_offset.has_value():
+            return None
+        return self.c_obj.file_offset.value()
+
+    @property
+    def total_compressed_size(self):
+        """Optional total compressed bytes for this row group."""
+        if not self.c_obj.total_compressed_size.has_value():
+            return None
+        return self.c_obj.total_compressed_size.value()
+
+    @property
+    def ordinal(self):
+        """Optional row group ordinal within the file."""
+        if not self.c_obj.ordinal.has_value():
+            return None
+        return self.c_obj.ordinal.value()
+
+
 cdef class FileMetaData:
     """Parquet file footer metadata.
 
@@ -295,6 +464,12 @@ cdef class FileMetaData:
     def created_by(self):
         """Get the application that created the file."""
         return self.c_obj.created_by.decode("utf-8")
+
+    @property
+    def row_groups(self):
+        """Get row group metadata in this file."""
+        cdef cpp_RowGroup row_group
+        return [RowGroup.from_cpp(row_group) for row_group in self.c_obj.row_groups]
 
     @classmethod
     def from_bytes(cls, const uint8_t[::1] footer_bytes):

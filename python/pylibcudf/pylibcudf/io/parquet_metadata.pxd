@@ -2,7 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types cimport SourceInfo
-from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
+from pylibcudf.libcudf.io.parquet_schema cimport (
+    ColumnChunk as cpp_ColumnChunk,
+    FileMetaData as cpp_FileMetaData,
+    RowGroup as cpp_RowGroup,
+    SortingColumn as cpp_SortingColumn,
+)
 from pylibcudf.libcudf.io.parquet_metadata cimport(
     parquet_metadata,
     parquet_schema,
@@ -63,6 +68,24 @@ cdef class FileMetaData:
 
     @staticmethod
     cdef FileMetaData from_cpp(cpp_FileMetaData metadata)
+
+cdef class SortingColumn:
+    cdef cpp_SortingColumn c_obj
+
+    @staticmethod
+    cdef SortingColumn from_cpp(cpp_SortingColumn sorting_column)
+
+cdef class ColumnChunk:
+    cdef cpp_ColumnChunk c_obj
+
+    @staticmethod
+    cdef ColumnChunk from_cpp(cpp_ColumnChunk column_chunk)
+
+cdef class RowGroup:
+    cdef cpp_RowGroup c_obj
+
+    @staticmethod
+    cdef RowGroup from_cpp(cpp_RowGroup row_group)
 
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info)
 cpdef list read_parquet_footers(SourceInfo src_info)
