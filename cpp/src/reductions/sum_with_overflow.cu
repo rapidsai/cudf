@@ -150,8 +150,10 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
       overflow_sum_op<DeviceType>{});
   }
 
+  // On overflow, zero the sum value; the boolean flag is the source of truth.
+  auto const overflowed = result.wraps != 0;
   return make_sum_overflow_struct_scalar<Source>(
-    result.sum, result.wraps != 0, true, col.type(), stream, mr);
+    overflowed ? DeviceType{0} : result.sum, overflowed, true, col.type(), stream, mr);
 }
 
 struct sum_with_overflow_dispatcher {
