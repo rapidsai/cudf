@@ -46,7 +46,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
-    has_computed_key,
     maybe_remap_partitioning,
     process_children,
     recv_metadata,
@@ -1046,17 +1045,15 @@ async def _choose_strategy(
 ) -> tuple[TableSizeStats, TableSizeStats, JoinStrategy]:
     """Sample both sides, aggregate estimates, and choose broadcast vs shuffle."""
     nranks = comm.nranks
-    # Computed keys (e.g. str.slice) hash differently from the raw column, so
-    # existing partitioning metadata cannot be trusted for compatibility checks.
     left_partitioning = NormalizedPartitioning.from_keys(
-        None if has_computed_key(ir.left_on) else left_metadata.partitioning,
+        left_metadata.partitioning,
         nranks,
-        keys=names_to_indices(ir.left_on, ir.children[0].schema),
+        keys=names_to_indices(ir.left_on, ir.children[0].schema, concrete_prefix=True),
     )
     right_partitioning = NormalizedPartitioning.from_keys(
-        None if has_computed_key(ir.right_on) else right_metadata.partitioning,
+        right_metadata.partitioning,
         nranks,
-        keys=names_to_indices(ir.right_on, ir.children[1].schema),
+        keys=names_to_indices(ir.right_on, ir.children[1].schema, concrete_prefix=True),
     )
 
     if left_partitioning.is_aligned_with(right_partitioning, context.br()):
