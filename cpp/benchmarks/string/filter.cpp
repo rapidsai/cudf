@@ -34,33 +34,39 @@ static void bench_filter(nvbench::state& state)
   auto data_size = column->alloc_size();
   state.add_global_memory_reads<nvbench::int8_t>(data_size);
 
-  auto const mem_stats_logger = cudf::memory_stats_logger();
   if (api == "filter") {
     auto const types = cudf::strings::string_character_types::SPACE;
     {
       auto result = cudf::strings::filter_characters_of_type(input, types);
       state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters_of_type(input, types);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else if (api == "chars") {
     state.add_global_memory_writes<nvbench::int8_t>(data_size);
     std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
       {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters(input, filter_table);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else if (api == "strip") {
     {
       auto result = cudf::strings::strip(input);
       state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::strip(input); });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   }
-  state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_filter)

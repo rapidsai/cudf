@@ -39,25 +39,28 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  auto const mem_stats_logger = cudf::memory_stats_logger();
-
   if (from_dur) {
     state.add_global_memory_reads<DataType>(num_rows);
     state.add_global_memory_writes<int8_t>(format.size() * num_rows);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::from_durations(input, format); });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else {
     auto source = cudf::strings::from_durations(input, format);
     auto view   = cudf::strings_column_view(source->view());
     state.add_global_memory_reads<int8_t>(source->alloc_size());
     state.add_global_memory_writes<DataType>(num_rows);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
+
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::to_durations(view, data_type, format);
     });
-  }
 
-  state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  }
 }
 
 NVBENCH_BENCH_TYPES(bench_convert_duration, NVBENCH_TYPE_AXES(Types))

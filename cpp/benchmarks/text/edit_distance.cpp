@@ -38,8 +38,11 @@ static void bench_edit_distance_utf8(nvbench::state& state)
   // output are integers (one per row)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { auto result = nvtext::edit_distance(sv1, sv2); });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 static void bench_edit_distance_ascii(nvbench::state& state)
@@ -104,21 +107,21 @@ static void bench_edit_distance_ascii(nvbench::state& state)
   // output are integers (one per row)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { auto result = nvtext::edit_distance(sv1, sv2); });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 static void bench_edit_distance(nvbench::state& state)
 {
-  auto const mem_stats_logger = cudf::memory_stats_logger();
-  auto const encode           = state.get_string("encode");
+  auto const encode = state.get_string("encode");
   if (encode == "ascii") {
     bench_edit_distance_ascii(state);
   } else {
     bench_edit_distance_utf8(state);
   }
-  state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_edit_distance)

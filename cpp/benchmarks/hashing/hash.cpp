@@ -91,6 +91,7 @@ static void bench_hash(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha512(data->view()); });
   } else {
     state.skip(hash_name + ": unknown hash name");
+    return;
   }
 
   state.add_buffer_size(

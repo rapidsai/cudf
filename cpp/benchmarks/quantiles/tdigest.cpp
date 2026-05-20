@@ -89,6 +89,8 @@ void bm_tdigest_merge(nvbench::state& state)
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
+               // re-fetch mr so allocations are routed through the statistics adaptor
+               auto mr = cudf::get_current_device_resource_ref();
                timer.start();
                auto result = cudf::tdigest::detail::group_merge_tdigest(tdigest,
                                                                         group_offsets->view(),
@@ -137,6 +139,8 @@ void bm_tdigest_reduce(nvbench::state& state)
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
+               // re-fetch mr so allocations are routed through the statistics adaptor
+               auto mr = cudf::get_current_device_resource_ref();
                timer.start();
                auto result = cudf::tdigest::detail::group_tdigest(*input,
                                                                   group_offsets->view(),
