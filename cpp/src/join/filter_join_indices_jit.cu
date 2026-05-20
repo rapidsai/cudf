@@ -51,10 +51,11 @@ namespace {
 jitify2::StringVec build_join_filter_template_params(
   std::span<transform_input const> inputs,
   std::span<std::optional<int32_t>> table_sources,
+  bool has_user_data,
   null_aware is_null_aware)
 {
   jitify2::StringVec template_params;
-  template_params.emplace_back(jitify2::reflection::reflect(false));  // has_user_data = false
+  template_params.emplace_back(jitify2::reflection::reflect(has_user_data));
   template_params.emplace_back(jitify2::reflection::reflect(is_null_aware));
 
   jitify2::StringVec accessors;
@@ -76,7 +77,7 @@ jitify2::StringVec build_join_filter_template_params(
                                  "cudf::column_device_view_core",
                                  element,
                                  true,
-                                 0  // scalars dont belong to a table, so just use 0 as placeholder
+                                 0  // scalars don't belong to a table, so just use 0 as placeholder
                                  ));
     }
   }
@@ -120,7 +121,8 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
            : cudf::jit::parse_single_function_cuda(predicate_code, "GENERIC_JOIN_FILTER_OP");
 
   // Build template parameters and kernel name
-  auto template_args = build_join_filter_template_params(inputs, table_sources, is_null_aware);
+  auto template_args =
+    build_join_filter_template_params(inputs, table_sources, has_user_data, is_null_aware);
   auto kernel_name =
     jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
 
@@ -480,8 +482,10 @@ filter_join_indices_jit(cudf::table_view const& left,
   auto filter_result = row_ir::ast_converter::filter(
     row_ir::target::CUDA, predicate, left, right, "filter_operation", stream, mr);
 
-  auto template_args = build_join_filter_template_params(
-    filter_result.inputs, filter_result.input_table_sources, filter_result.is_null_aware);
+  auto template_args = build_join_filter_template_params(filter_result.inputs,
+                                                         filter_result.input_table_sources,
+                                                         filter_result.user_data.has_value(),
+                                                         filter_result.is_null_aware);
 
   auto const cuda_source =
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
@@ -499,7 +503,7 @@ filter_join_indices_jit(cudf::table_view const& left,
                             right_indices,
                             filter_result.inputs,
                             predicate_results.data(),
-                            std::nullopt,
+                            filter_result.user_data,
                             stream,
                             mr);
 

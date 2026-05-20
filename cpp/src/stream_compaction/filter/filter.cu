@@ -41,6 +41,16 @@ std::unique_ptr<table> filter(std::string const& predicate_udf,
                            [&](auto const& col) { return col.size() == row_size; }),
                "All columns to filter must have the same number of rows.",
                std::invalid_argument);
+  CUDF_EXPECTS(std::all_of(predicate_inputs.begin(),
+                           predicate_inputs.end(),
+                           [&](auto& input) {
+                             if (auto* col = std::get_if<column_view>(&input)) {
+                               return col->size() == row_size;
+                             }
+                             return true;
+                           }),
+               "All predicate input columns must have the same number of rows as the filter table.",
+               std::invalid_argument);
 
   transform_output outputs[] = {transform_output{data_type{type_id::BOOL8}, predicate_nullability}};
 

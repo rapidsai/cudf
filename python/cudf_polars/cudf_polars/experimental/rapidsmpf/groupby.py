@@ -15,7 +15,6 @@ from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
-    Partitioning,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -26,7 +25,6 @@ from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.groupby import combine, decompose
-from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -34,6 +32,8 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    _make_hash_shuffle_metadata,
+    allgather_and_reduce,
     allgather_reduce,
     chunkwise_evaluate,
     empty_table_chunk,
@@ -308,26 +308,13 @@ async def _tree_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     if need_allgather:
-        allgather = AllGatherManager(context, comm, collective_id)
-        with allgather.inserting() as inserter:
-            inserter.insert(
-                0,
-                _enforce_schema(
-                    aggregated, decomposed.reduction_ir.schema, context.br()
-                ),
-            )
-
-        stream = ir_context.get_cuda_stream()
-        aggregated = await evaluate_chunk(
+        aggregated = await allgather_and_reduce(
             context,
-            TableChunk.from_pylibcudf_table(
-                await allgather.extract_concatenated(stream),
-                stream,
-                exclusive_view=True,
-                br=context.br(),
-            ),
+            comm,
+            collective_id,
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
             decomposed.reduction_ir,
-            ir_context=ir_context,
+            ir_context,
         )
 
     if decomposed.select_ir is not None:
@@ -401,31 +388,9 @@ async def _shuffle_reduce(
         options = Options(get_environment_variables())
         shuffle_comm = single_comm(options, comm.progress_thread)
         shuffle_context = Context(shuffle_comm.logger, context.br(), options)
-    shuf_nranks = shuffle_comm.nranks
-    shuf_rank = shuffle_comm.rank
-    modulus = max(shuf_nranks, modulus)
-
-    if shuf_nranks == 1:
-        inter_rank_scheme = (
-            None
-            if metadata_in.partitioning is None
-            else metadata_in.partitioning.inter_rank
-        )
-        local_scheme = HashScheme(
-            column_indices=decomposed.output_indices, modulus=modulus
-        )
-        local_output_count = modulus
-    else:
-        inter_rank_scheme = HashScheme(
-            column_indices=decomposed.output_indices, modulus=modulus
-        )
-        local_scheme = "inherit"
-        local_output_count = (modulus - shuf_rank + shuf_nranks - 1) // shuf_nranks
-
-    metadata_out = ChannelMetadata(
-        local_count=local_output_count,
-        partitioning=Partitioning(inter_rank_scheme, local_scheme),
-        duplicated=metadata_in.duplicated,
+    modulus = max(shuffle_comm.nranks, modulus)
+    metadata_out = _make_hash_shuffle_metadata(
+        shuffle_comm, decomposed.output_indices, modulus, metadata_in
     )
     await send_metadata(ch_out, context, metadata_out)
 
@@ -676,7 +641,7 @@ async def groupby_actor(
             keys=_key_indices(ir, ir.children[0].schema),
         )
         require_tree = _require_tree(ir)
-        fully_partitioned = bool(partitioning)
+        fully_partitioned = partitioning.is_strictly_partitioned()
         fallback_case = (
             # NOTE: This criteria means that we fell back
             # to one partition at lowering time.

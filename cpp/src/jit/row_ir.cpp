@@ -194,7 +194,10 @@ node::node(opcode op, std::optional<int32_t> target_scale, std::vector<std::uniq
                std::runtime_error);
 }
 
-node::node(input_reference input) : reference_{input}, op_{opcode::GET_INPUT} {}
+node::node(input_reference input)
+  : reference_{input}, op_{opcode::GET_INPUT}  // NOLINT(modernize-use-default-member-init)
+{
+}
 
 node::node(output_reference reference, std::unique_ptr<node> arg)
   : reference_{reference}, op_{opcode::SET_OUTPUT}
@@ -303,6 +306,9 @@ void node::instantiate(instance_context& ctx)
       type_ = args_[0]->get_type();
     } break;
     case opcode::PREDICATE: {
+      CUDF_EXPECTS(args_[0]->get_type().id() == type_id::BOOL8,
+                   "Predicate operator requires a boolean argument.",
+                   std::runtime_error);
       type_ = data_type{type_id::BOOL8, 0};
     } break;
     default: {
@@ -451,7 +457,7 @@ std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_
   bool output_is_always_valid = std::all_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_valid(); });
 
-  bool may_evaluate_null = !output_is_always_valid || has_nullable_inputs;
+  bool may_evaluate_null = output_is_always_valid ? false : (has_nullable_inputs || is_null_aware);
 
   auto null_policy =
     may_evaluate_null ? output_nullability::PRESERVE : output_nullability::ALL_VALID;
@@ -595,17 +601,7 @@ transform_args ast_converter::filter(target target_id,
                                      rmm::device_async_resource_ref mr)
 {
   auto filter = ast::detail::predicate{expr};
-  auto transform =
-    compute_column(target_id, filter, left_table, right_table, function_name, stream, mr);
-
-  CUDF_EXPECTS(transform.outputs.size() == 1,
-               "Filter expression must have exactly one output column.",
-               std::invalid_argument);
-  CUDF_EXPECTS(transform.outputs[0].type.id() == type_id::BOOL8,
-               "Filter expression must return a boolean type.",
-               std::invalid_argument);
-
-  return transform;
+  return compute_column(target_id, filter, left_table, right_table, function_name, stream, mr);
 }
 
 }  // namespace cudf::detail::row_ir
