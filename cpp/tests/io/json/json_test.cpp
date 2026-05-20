@@ -2060,6 +2060,51 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
                     c_validity.cbegin()});
 }
 
+TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
+{
+  // Test recovery mode with various malformed JSON patterns
+  for (int num_lines : {2, 4, 8, 16}) {
+    // Test "{\n" pattern
+    {
+      std::string data;
+      for (int i = 0; i < num_lines - 1; ++i) {
+        data += "{\n";
+      }
+      data += "{";
+
+      cudf::io::json_reader_options in_options =
+        cudf::io::json_reader_options::builder(
+          cudf::io::source_info{cudf::host_span<std::byte const>{
+            reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+          .lines(true)
+          .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      EXPECT_EQ(result.tbl->num_rows(), 0) << "Failed {\\n pattern with " << num_lines << " lines";
+    }
+
+    // Test {"\n pattern
+    {
+      std::string data;
+      for (int i = 0; i < num_lines - 1; ++i) {
+        data += "{\"\n";
+      }
+      data += "{\"";
+
+      cudf::io::json_reader_options in_options =
+        cudf::io::json_reader_options::builder(
+          cudf::io::source_info{cudf::host_span<std::byte const>{
+            reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+          .lines(true)
+          .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      EXPECT_EQ(result.tbl->num_rows(), 0)
+        << "Failed {\"\\n pattern with " << num_lines << " lines";
+    }
+  }
+}
+
 TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
 {
   /**
