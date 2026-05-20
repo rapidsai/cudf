@@ -1233,6 +1233,12 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     pd.core.window.ewm.ExponentialMovingWindowGroupby,
 )
 
+OnlineExponentialMovingWindow = make_intermediate_proxy_type(
+    "OnlineExponentialMovingWindow",
+    _Unusable,
+    pd.core.window.ewm.OnlineExponentialMovingWindow,
+)
+
 EWMMeanState = make_intermediate_proxy_type(
     "EWMMeanState",
     _Unusable,
