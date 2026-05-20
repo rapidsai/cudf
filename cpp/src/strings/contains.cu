@@ -85,17 +85,17 @@ std::unique_ptr<column> contains_re(strings_column_view const& input,
   // check for potential fast-paths
   auto [fp, literal] = prog.get_literal_fast_path();
   switch (fp) {
-    case regex_program::literal_fast_path::LITERAL_ONLY: {
+    case literal_fast_path::LITERAL_ONLY: {
       auto const target =
         cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
       return contains(input, target, stream, mr);
     }
-    case regex_program::literal_fast_path::STARTS_WITH: {
+    case literal_fast_path::STARTS_WITH: {
       auto const target =
         cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
       return starts_with(input, target, stream, mr);
     }
-    case regex_program::literal_fast_path::ENDS_WITH: {
+    case literal_fast_path::ENDS_WITH: {
       auto const target =
         cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
       return ends_with(input, target, stream, mr);
@@ -113,7 +113,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& input,
 {
   // check for potential fast-paths (all types call starts_with)
   auto [fp, literal] = prog.get_literal_fast_path();
-  if (fp != regex_program::literal_fast_path::NO_FAST_PATH) {
+  if (fp != literal_fast_path::NONE) {
     auto const target =
       cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
     return starts_with(input, target, stream, mr);
@@ -128,7 +128,7 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
                                  rmm::device_async_resource_ref mr)
 {
   auto [fp, literal] = prog.get_literal_fast_path();
-  if (fp == regex_program::literal_fast_path::LITERAL_ONLY) {
+  if (fp == literal_fast_path::LITERAL_ONLY) {
     auto const target =
       cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
     return count(input, target, stream, mr);
