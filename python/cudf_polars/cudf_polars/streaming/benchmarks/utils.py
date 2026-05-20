@@ -196,10 +196,16 @@ class ValidationMethod:
         """Return path to disk-based result for the given query."""
         if self.expected_location is None:
             raise RuntimeError("No expected location given")
-        p = Path(self.expected_location) / f"q_{q_id:02d}.parquet"
-        if not p.exists():
-            raise FileNotFoundError(f"Expected result file {p} does not exist")
-        return p
+
+        # search for either q_{q_id:02d}.parquet or q{q_id:02d}.parquet
+        files = list(Path(self.expected_location).glob(f"q*{q_id:02d}.parquet"))
+        if not files:
+            raise FileNotFoundError(f"Expected result file for query {q_id} not found")
+        elif len(files) > 1:
+            raise ValueError(
+                f"Multiple expected result files for query {q_id}: {files}"
+            )
+        return files[0]
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -1906,8 +1912,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=None,
         help=(
             "Validate the results against a directory with a pre-computed set of 'golden' results. "
-            "The directory should contain one parquet file per query, named 'q_DD.parquet', where DD is the "
-            "zero-padded query number."
+            "The directory should contain one parquet file per query, named 'q_DD.parquet', or `qDD.parquet` "
+            "where DD is the zero-padded query number."
         ),
     )
     parser.add_argument(
