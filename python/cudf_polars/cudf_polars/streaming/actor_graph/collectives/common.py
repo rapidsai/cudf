@@ -35,14 +35,15 @@ _collective_id_vacancy_lock: threading.Lock = threading.Lock()
 
 def _get_new_collective_id_unsafe() -> int:
     # Not thread safe, must be called with _collective_id_vacancy_lock held
-    if not _collective_id_vacancy:
+    try:
+        # All ranks must choose the same collective IDs during lowering.
+        # Since 3.7, dict.popitem() is guaranteed LIFO.
+        collective_id, _ = _collective_id_vacancy.popitem()
+    except KeyError:
         raise ValueError(
             f"Cannot shuffle more than {Shuffler.max_concurrent_shuffles} "
             "times in a single query."
-        )
-    # All ranks must choose the same collective IDs during lowering.
-    # Since 3.7, dict.popitem() is guaranteed LIFO.
-    collective_id, _ = _collective_id_vacancy.popitem()
+        ) from None
     return collective_id
 
 
