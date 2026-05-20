@@ -12,6 +12,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <span>
+
 namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
@@ -48,11 +50,11 @@ size_type concatenate_masks(host_span<column_view const> views,
                             rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::concatenate_masks(host_span<column_view const>, rmm::device_async_resource_ref)
+ * @copydoc cudf::concatenate_masks(std::span<column_view const>, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+rmm::device_buffer concatenate_masks(std::span<column_view const> views,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr);
 
