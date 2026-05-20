@@ -498,11 +498,18 @@ struct SchemaElement {
   /**
    * @brief Check if the schema element is a stub
    *
+   * A LIST- or MAP-annotated REPEATED group is the list/map itself in the legacy 2-level
+   * encoding (e.g. Thrift- or parquet-avro 1.7-written files nested inside an outer LIST), not
+   * the wrapper that should be collapsed. Excluding it here keeps `list<list<primitive>>` and
+   * `list<map<...>>` from being collapsed by one nesting level downstream. See
+   * https://github.com/NVIDIA/spark-rapids/issues/11589 (and #11592 for the Avro variant).
+   *
    * @return True if the schema element is a stub, false otherwise
    */
   [[nodiscard]] bool is_stub() const
   {
-    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1;
+    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1 &&
+           converted_type != ConvertedType::LIST && converted_type != ConvertedType::MAP;
   }
 
   /**
