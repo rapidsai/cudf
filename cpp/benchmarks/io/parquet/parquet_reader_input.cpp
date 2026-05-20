@@ -23,7 +23,7 @@ void BM_parquet_read_data_common(nvbench::state& state,
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
-  auto const compression = cudf::io::compression_type::SNAPPY;
+  auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -114,6 +114,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_decode")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("compression_type", {"NONE"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -134,6 +135,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type
   .set_name("parquet_read_fixed_width_struct")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("compression_type", {"NONE"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})

@@ -5,6 +5,7 @@
 
 #include "compute_groupby.hpp"
 #include "compute_single_pass_aggs.hpp"
+#include "groupby/common/utils.hpp"
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
 #include "output_utils.hpp"
@@ -58,36 +59,11 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 {
   auto const num_keys = keys.num_rows();
 
-  [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
-    [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
-    if (!skip_rows_with_nulls) {
-      return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
-    }
-
-    if (keys.num_columns() == 1) {
-      auto const& keys_col = keys.column(0);
-      // Only use the input null mask directly if the keys table was not sliced.
-      if (keys_col.offset() == 0) {
-        return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
-                keys_col.null_mask()};
-      }
-      // If the keys table was sliced, we need to copy the null mask to ensure its first bit aligns
-      // with the first row of the keys table.
-      auto null_mask_data =
-        cudf::copy_bitmask(keys_col, stream, cudf::get_current_device_resource_ref());
-      auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
-      return {std::move(null_mask_data), null_mask};
-    }
-
-    auto [null_mask_data, null_count] =
-      cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref());
-    if (null_count == 0) {
-      return {rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
-    }
-
-    auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
-    return {std::move(null_mask_data), null_mask};
-  }();
+  [[maybe_unused]] auto [row_bitmask_data, row_bitmask] =
+    skip_rows_with_nulls
+      ? cudf::groupby::detail::compute_row_bitmask(keys, stream)
+      : std::pair<rmm::device_buffer, bitmask_type const*>{
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
 
   auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
     auto const num_columns =
