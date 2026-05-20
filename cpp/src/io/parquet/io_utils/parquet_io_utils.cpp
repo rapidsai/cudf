@@ -177,7 +177,7 @@ fetch_byte_ranges_to_device_async(
       }
     });
 
-    // Schedule a batched memcpy from host buffersto device
+    // Schedule a batched memcpy from host buffers to device
     if (not host_buffers.empty()) {
       CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
         copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
