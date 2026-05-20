@@ -96,14 +96,18 @@ __device__ inline errc ceil(double* out, double const* a)
 template <typename R>
 __device__ inline errc ceil(decimal<R>* out, decimal<R> const* a)
 {
-  auto factor = detail::ipow10(static_cast<R>(a->scale()));
+  if (a->scale() >= 0) {
+    *out = *a;
+    return errc::OK;
+  }
+  auto factor = detail::ipow10(-static_cast<R>(a->scale()));
   auto div    = a->value() / factor;
   auto rem    = a->value() % factor;
   if (rem == 0) {
     *out = *a;
   } else {
     auto val = a->value() > 0 ? (div + 1) : div;
-    *out     = decimal<R>{numeric::scaled_integer<R>{val, a->scale()}};
+    *out     = decimal<R>{numeric::scaled_integer<R>{val * factor, a->scale()}};
   }
   return errc::OK;
 }
@@ -216,14 +220,18 @@ __device__ inline errc floor(double* out, double const* a)
 template <typename R>
 __device__ inline errc floor(decimal<R>* out, decimal<R> const* a)
 {
-  auto factor = detail::ipow10(static_cast<R>(a->scale()));
+  if (a->scale() >= 0) {
+    *out = *a;
+    return errc::OK;
+  }
+  auto factor = detail::ipow10(-static_cast<R>(a->scale()));
   auto div    = a->value() / factor;
   auto rem    = a->value() % factor;
   if (rem == 0) {
     *out = *a;
   } else {
     auto val = a->value() > 0 ? div : (div - 1);
-    *out     = decimal<R>{numeric::scaled_integer<R>{val, a->scale()}};
+    *out     = decimal<R>{numeric::scaled_integer<R>{val * factor, a->scale()}};
   }
   return errc::OK;
 }
