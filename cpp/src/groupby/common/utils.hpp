@@ -11,6 +11,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace cudf {
@@ -18,7 +19,7 @@ namespace groupby {
 namespace detail {
 
 template <typename RequestType>
-inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
+inline std::vector<aggregation_result> extract_results(std::span<RequestType const> requests,
                                                        cudf::detail::result_cache& cache,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
