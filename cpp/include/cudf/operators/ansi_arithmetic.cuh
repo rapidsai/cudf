@@ -619,6 +619,14 @@ __device__ inline errc ansi_abs(decimal<R>* out, decimal<R> const* a)
   return errc::OK;
 }
 
+/**
+ * `@brief` Computes absolute value for optional inputs with ANSI overflow checks.
+ *
+ * `@tparam` T Value type.
+ * `@param` out Destination optional value.
+ * `@param` a Optional input value.
+ * `@return` Operation status from underlying abs, or errc::OK.
+ */
 template <typename T>
 __device__ inline errc ansi_abs(optional<T>* out, optional<T> const* a)
 {
