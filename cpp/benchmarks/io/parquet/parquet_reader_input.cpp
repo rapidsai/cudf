@@ -20,10 +20,10 @@ void BM_parquet_read_data_common(nvbench::state& state,
                                  data_profile const& profile,
                                  nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
-  auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
+  auto const d_type        = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const source_type   = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const data_size     = static_cast<size_t>(state.get_int64("data_size"));
+  auto const compression   = retrieve_compression_type_enum(state.get_string("compression_type"));
   auto const rg_size_bytes = state.get_int64("row_group_size_bytes");
   auto const rg_size_rows  = state.get_int64("row_group_size_rows");
   cuio_source_sink_pair source_sink(source_type);
