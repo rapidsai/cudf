@@ -23,7 +23,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
-from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
@@ -485,9 +485,13 @@ def _enforce_schema(
     )
 
 
-def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
+def _key_indices(
+    ir: GroupBy | Distinct, schema: Schema, *, concrete_prefix: bool = False
+) -> tuple[int, ...]:
     schema_keys = {n: i for i, n in enumerate(schema.keys())}
     if isinstance(ir, GroupBy):
+        if concrete_prefix:
+            return names_to_indices(ir.keys, schema, concrete_prefix=True)
         groupby_key_names = tuple(ne.name for ne in ir.keys)
         if not all(k in schema_keys for k in groupby_key_names):
             return ()
@@ -638,7 +642,7 @@ async def groupby_actor(
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             nranks,
-            keys=_key_indices(ir, ir.children[0].schema),
+            keys=_key_indices(ir, ir.children[0].schema, concrete_prefix=True),
         )
         require_tree = _require_tree(ir)
         fully_partitioned = partitioning.is_strictly_partitioned()
