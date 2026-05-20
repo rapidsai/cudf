@@ -425,7 +425,7 @@ void initialize()
 {
   RTCX_FUNC_RANGE();
 
-  std::call_once(*init_libraries_flag, [] {
+  std::call_once(init_libraries_flag.value(), [] {
     cu.emplace(LibCuda::_load());
     RTCX_EXPECTS(
       cu->Init(0) == CUDA_SUCCESS, "Failed to initialize CUDA driver API", std::runtime_error);
@@ -438,12 +438,14 @@ void teardown()
 {
   RTCX_FUNC_RANGE();
 
-  std::call_once(*teardown_libraries_flag, [] {
+  std::call_once(teardown_libraries_flag.value(), [] {
     nvjitlink.reset();
     nvrtc.reset();
     cu.reset();
     init_libraries_flag.reset();
     teardown_libraries_flag.reset();
+    init_libraries_flag.emplace();
+    teardown_libraries_flag.emplace();
   });
 }
 
