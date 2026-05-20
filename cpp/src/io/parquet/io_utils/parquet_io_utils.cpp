@@ -59,7 +59,7 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(
   cudf::io::datasource& datasource,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  std::span<cudf::io::text::byte_range_info const> byte_ranges,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
