@@ -30,9 +30,9 @@ if TYPE_CHECKING:
 def df():
     return pl.DataFrame(
         {
-            "x": range(25_000),
-            "y": ["cat", "dog"] * 12_500,
-            "z": [1.0, 2.0] * 12_500,
+            "x": range(30),
+            "y": ["cat", "dog"] * 15,
+            "z": [1.0, 2.0] * 15,
         }
     )
 

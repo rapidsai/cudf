@@ -350,6 +350,7 @@ _COMPARISON_BINOPS = {
 }
 
 
+@nvtx_annotate_cudf_polars(message="_parquet_physical_types")
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
@@ -648,6 +649,7 @@ class Scan(IR):
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
 
+    @nvtx_annotate_cudf_polars(message="Scan.fast_count")
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
         meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -659,6 +661,7 @@ class Scan(IR):
         return max(total_rows, 0)
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
     def _get_parquet_row_count_from_metadata(
         paths: list[str], skip_rows: int, n_rows: int
     ) -> int:
@@ -835,13 +838,11 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():  # pragma: no cover
+                while reader.has_next():
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(  # pragma: no cover
-                        len(concatenated_columns) - 1, -1, -1
-                    ):
+                    for i in reversed(range(len(concatenated_columns))):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )

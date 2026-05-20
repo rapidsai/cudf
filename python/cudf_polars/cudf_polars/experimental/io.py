@@ -23,6 +23,7 @@ from cudf_polars.dsl.ir import (
     Scan,
     Sink,
 )
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -460,6 +461,7 @@ class ParquetMetadata:
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
 
+    @nvtx_annotate_cudf_polars(message="ParquetMetadata")
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
@@ -513,6 +515,7 @@ class ParquetMetadata:
         self.row_count = row_count
 
 
+@nvtx_annotate_cudf_polars(message="_sample_rg_sizes")
 def _sample_rg_sizes(
     metadata: ParquetMetadata,
     target_cols: list[str],

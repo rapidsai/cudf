@@ -352,10 +352,7 @@ def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFram
     local filesystem, falls back to scanning ``{path}/{table_name}`` as a
     directory of parquet files.
     """
-    file_path = Path(path) / f"{table_name}{suffix}"
-    if suffix and not file_path.exists():
-        # Directory-based layout: e.g. tpch-rs partitioned output
-        return pl.scan_parquet(Path(path) / table_name)
+    file_path = str(path).removesuffix("/") + f"/{table_name}{suffix}"
     return pl.scan_parquet(file_path)
 
 
@@ -1132,7 +1129,9 @@ def run_polars_cpu(
         validation_files=validation_files,
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_in_memory(
@@ -1165,7 +1164,9 @@ def run_polars_in_memory(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
-    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=None
+    )
 
 
 def run_polars_spmd(
