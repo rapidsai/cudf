@@ -142,81 +142,76 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
-    hd_filter = (
+
+    # Pre-filter each small table before joining against store_sales [58 partitions].
+    filtered_hdemo = household_demographics.filter(
         ((pl.col("hd_dep_count") == hd1) & (pl.col("hd_vehicle_count") <= hd1 + 2))
         | ((pl.col("hd_dep_count") == hd2) & (pl.col("hd_vehicle_count") <= hd2 + 2))
         | ((pl.col("hd_dep_count") == hd3) & (pl.col("hd_vehicle_count") <= hd3 + 2))
+    ).select("hd_demo_sk")
+    filtered_store = store.filter(pl.col("s_store_name") == s_store_name).select(
+        "s_store_sk"
     )
-    base_query = (
-        store_sales.join(
-            time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk", how="inner"
+    # Restrict time_dim to the union of all 8 slot conditions; every surviving row maps
+    # to exactly one bucket, so the downstream pl.when chain is exhaustive.
+    filtered_time = time_dim.filter(
+        ((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
+        | pl.col("t_hour").is_in([9, 10, 11])
+        | ((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
+    ).select(["t_time_sk", "t_hour", "t_minute"])
+
+    bucket_names = [
+        "h8_30_to_9",
+        "h9_to_9_30",
+        "h9_30_to_10",
+        "h10_to_10_30",
+        "h10_30_to_11",
+        "h11_to_11_30",
+        "h11_30_to_12",
+        "h12_to_12_30",
+    ]
+
+    # Collapse the 58-partition store_sales pipeline to an 8-row bucket-count table first.
+    # The 8 conditional sums in the final select then operate on [1] partition, so even if
+    # the streaming executor creates separate sub-plans for each sum, each reads only the
+    # tiny CACHE'd group_by output rather than re-scanning store_sales.
+    counts_lf = (
+        store_sales.select(["ss_sold_time_sk", "ss_hdemo_sk", "ss_store_sk"])
+        .join(filtered_time, left_on="ss_sold_time_sk", right_on="t_time_sk")
+        .join(filtered_hdemo, left_on="ss_hdemo_sk", right_on="hd_demo_sk", how="semi")
+        .join(filtered_store, left_on="ss_store_sk", right_on="s_store_sk", how="semi")
+        .select(
+            pl.when((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
+            .then(pl.lit(0))
+            .when((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
+            .then(pl.lit(1))
+            .when((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
+            .then(pl.lit(2))
+            .when((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
+            .then(pl.lit(3))
+            .when((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
+            .then(pl.lit(4))
+            .when((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
+            .then(pl.lit(5))
+            .when((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
+            .then(pl.lit(6))
+            .when((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
+            .then(pl.lit(7))
+            .alias("bucket")
         )
-        .join(
-            household_demographics,
-            left_on="ss_hdemo_sk",
-            right_on="hd_demo_sk",
-            how="inner",
-        )
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
-        .filter(
-            hd_filter
-            & (
-                pl.col("s_store_name").is_not_null()
-                & (pl.col("s_store_name") == s_store_name)
-            )
-        )
+        .group_by("bucket")
+        .agg(pl.len().cast(pl.Int64).alias("cnt"))
     )
+
     return QueryResult(
-        frame=base_query.select(
+        frame=counts_lf.select(
             [
-                pl.when((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
-                .then(1)
-                .otherwise(0)
+                pl.when(pl.col("bucket") == i)
+                .then(pl.col("cnt"))
+                .otherwise(pl.lit(0).cast(pl.Int64))
                 .sum()
-                .cast(pl.Int64)
-                .alias("h8_30_to_9"),
-                pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h9_to_9_30"),
-                pl.when((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h9_30_to_10"),
-                pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h10_to_10_30"),
-                pl.when((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h10_30_to_11"),
-                pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h11_to_11_30"),
-                pl.when((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h11_30_to_12"),
-                pl.when((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int64)
-                .alias("h12_to_12_30"),
+                .alias(name)
+                for i, name in enumerate(bucket_names)
             ]
         ),
         sort_by=[],

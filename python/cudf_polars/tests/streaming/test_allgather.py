@@ -15,8 +15,8 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.utils import allgather_reduce
-from cudf_polars.streaming.collectives.allgather import AllGatherManager
 
 
 async def _test_allgather(engine) -> None:

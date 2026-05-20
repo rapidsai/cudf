@@ -102,57 +102,56 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     aggcelse = params["aggcelse"]
     rc = params["rc"]
 
-    # Load required tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
 
-    # Define bucket configurations: (min_qty, max_qty, count_threshold)
-    buckets = [
-        (1, 20, rc[0]),
-        (21, 40, rc[1]),
-        (41, 60, rc[2]),
-        (61, 80, rc[3]),
-        (81, 100, rc[4]),
-    ]
+    thresholds = pl.LazyFrame({"bucket": [1, 2, 3, 4, 5], "threshold": list(rc)})
 
-    bucket_expressions = []
-    for i, (min_qty, max_qty, _) in enumerate(buckets, 1):
-        condition = pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
-        bucket_expressions.extend(
-            [
-                condition.sum().alias(f"count_{i}"),
-                pl.when(condition)
-                .then(pl.col(aggcthen))
-                .otherwise(None)
-                .mean()
-                .alias(f"avg_then_{i}"),
-                pl.when(condition)
-                .then(pl.col(aggcelse))
-                .otherwise(None)
-                .mean()
-                .alias(f"avg_else_{i}"),
-            ]
+    # Single scan: the 5 ss_quantity ranges are non-overlapping, so a group_by
+    # computes all counts and averages in one pass over store_sales.
+    stats = (
+        store_sales.with_columns(
+            pl.when(pl.col("ss_quantity").is_between(1, 20))
+            .then(pl.lit(1))
+            .when(pl.col("ss_quantity").is_between(21, 40))
+            .then(pl.lit(2))
+            .when(pl.col("ss_quantity").is_between(41, 60))
+            .then(pl.lit(3))
+            .when(pl.col("ss_quantity").is_between(61, 80))
+            .then(pl.lit(4))
+            .when(pl.col("ss_quantity").is_between(81, 100))
+            .then(pl.lit(5))
+            .alias("bucket")
         )
-
-    combined_stats = store_sales.select(bucket_expressions)
-
-    # Select appropriate value per bucket based on count threshold
-    bucket_values = []
-    for i, (_min_qty, _max_qty, threshold) in enumerate(buckets, 1):
-        bucket = (
-            pl.when(pl.col(f"count_{i}") > threshold)
-            .then(pl.col(f"avg_then_{i}"))
-            .otherwise(pl.col(f"avg_else_{i}"))
-            .alias(f"bucket{i}")
+        .filter(pl.col("bucket").is_not_null())
+        .group_by("bucket")
+        .agg(
+            pl.len().alias("count"),
+            pl.col(aggcthen).mean().alias("avg_then"),
+            pl.col(aggcelse).mean().alias("avg_else"),
         )
-        bucket_values.append(bucket)
+        .join(thresholds, on="bucket")
+        .select(
+            pl.col("bucket"),
+            pl.when(pl.col("count") > pl.col("threshold"))
+            .then(pl.col("avg_then"))
+            .otherwise(pl.col("avg_else"))
+            .alias("value"),
+        )
+        .sort("bucket")
+    )
 
-    # Create result DataFrame with one row (using reason table as in SQL)
+    # Pivot 5 rows → 1 row with 5 named columns (operates on 5 rows, trivially fast)
+    wide = stats.select(
+        pl.col("value").filter(pl.col("bucket") == i).first().alias(f"bucket{i}")
+        for i in range(1, 6)
+    )
+
     return QueryResult(
         frame=(
             reason.filter(pl.col("r_reason_sk") == 1)
-            .join(combined_stats, how="cross")
-            .select(bucket_values)
+            .join(wide, how="cross")
+            .select([f"bucket{i}" for i in range(1, 6)])
             .limit(1)
         ),
         sort_by=[],
