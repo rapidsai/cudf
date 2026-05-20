@@ -12,7 +12,7 @@ Rather than loading an entire dataset into GPU memory at once, the streaming eng
 decomposes input data into a sequence of *chunks* and processes them independently.
 `target_partition_size` controls the target size of each chunk in bytes. Chunks flow
 through the query graph, being filtered, transformed, aggregated, and joined.
-When operations change the size of a chunk, chunks are split or combined to
+When operations change the size of a chunk, chunks may be split or combined to
 be approximately `target_partition_size` bytes.
 
 The default chunk size is the lesser of 1.5 GB and 2.5% of the smallest GPU in the
