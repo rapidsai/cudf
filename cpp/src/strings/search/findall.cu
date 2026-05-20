@@ -108,7 +108,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   }
 
   auto const groups = prog.groups_count();
-  CUDF_EXPECTS(groups <= 1, "findall does not support more than 1 capture groups");
+  CUDF_EXPECTS(groups <= 1, "findall does not support more than 1 capture group");
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
