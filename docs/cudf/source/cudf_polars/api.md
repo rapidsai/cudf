@@ -55,7 +55,7 @@ The engine classes share a common base class:
 ```{eval-rst}
 .. autofunction:: cudf_polars.engine.spmd.allgather_polars_dataframe
 
-.. autofunction:: cudf_polars.streaming.collectives.common.reserve_op_id
+.. autofunction:: cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id
 ```
 
 ## Internal configuration objects

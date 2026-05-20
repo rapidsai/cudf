@@ -141,7 +141,7 @@ def allgather_polars_dataframe(
         Rank-local DataFrame to contribute.
     op_id
         Operation ID for this AllGather collective. Must be identical on every
-        rank. For example, use :func:`~cudf_polars.streaming.collectives.common.reserve_op_id` to obtain a collision-free
+        rank. For example, use :func:`~cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id` to obtain a collision-free
         ID from the same pool used internally by cudf-polars. Avoid passing
         hardcoded integers.
 

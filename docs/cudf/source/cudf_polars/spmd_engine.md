@@ -140,7 +140,7 @@ use the helper below.
 the full dataset on every rank:
 
 ```python
-from cudf_polars.streaming.collectives.common import reserve_op_id
+from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.engine.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
@@ -158,7 +158,7 @@ with SPMDEngine() as engine:
 ```
 
 `op_id` identifies the collective across ranks. All ranks must pass the same value.
-{func}`~cudf_polars.streaming.collectives.common.reserve_op_id` draws from the same
+{func}`~cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id` draws from the same
 pool that cudf-polars uses internally for shuffle and join collectives, so there is no risk of
 collision. Do not pass hardcoded integers: they may silently collide with an ID reserved by an
 active collective inside `collect()`.
