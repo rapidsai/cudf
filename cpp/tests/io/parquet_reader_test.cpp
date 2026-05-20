@@ -2403,8 +2403,7 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
   ASSERT_EQ(outer_child.num_children(), 2);
   EXPECT_EQ(outer_child.child(0).type().id(), cudf::type_id::INT32);
   ASSERT_EQ(outer_child.child(1).type().id(), cudf::type_id::LIST);
-  auto const inner_child =
-    outer_child.child(1).child(cudf::lists_column_view::child_column_index);
+  auto const inner_child = outer_child.child(1).child(cudf::lists_column_view::child_column_index);
   // The critical assertion: the inner repeated single-field group must be a
   // STRUCT, not collapsed to a primitive (see issue #22541).
   ASSERT_EQ(inner_child.type().id(), cudf::type_id::STRUCT);
