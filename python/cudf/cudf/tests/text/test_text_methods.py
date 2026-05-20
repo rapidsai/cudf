@@ -529,7 +529,7 @@ def test_character_tokenize_series():
     assert_eq(expected, actual)
 
     sr = cudf.Series([""])
-    expected = cudf.Series([], dtype="object")
+    expected = cudf.Series([], dtype="str")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -645,7 +645,7 @@ def test_character_tokenize_index():
     assert_eq(expected, actual)
 
     sr = cudf.Index([""])
-    expected = cudf.Index([], dtype="object")
+    expected = cudf.Index([], dtype="str")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
