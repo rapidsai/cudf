@@ -9,7 +9,7 @@ and tune memory-related behaviour in your workloads.
 ## How the engine uses GPU memory
 
 Rather than loading an entire dataset into GPU memory at once, the streaming engine
-decomposes input data into a sequence of *chunks* and processes them one at a time.
+decomposes input data into a sequence of *chunks* and processes them independently.
 `target_partition_size` controls the target size of each chunk in bytes. Chunks flow
 through the query graph, being filtered, transformed, aggregated, and joined, and
 intermediate results are also chunked.
