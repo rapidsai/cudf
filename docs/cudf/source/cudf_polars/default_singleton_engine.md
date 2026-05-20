@@ -5,11 +5,9 @@
 construct a streaming engine explicitly. It runs the same streaming executor as the explicit
 engines (Ray, Dask, SPMD), conceptually similar to
 [Polars' own streaming engine](https://docs.pola.rs/user-guide/concepts/streaming/) but on the
-GPU. Under the hood it's backed by
-{class}`~cudf_polars.engine.default_singleton_engine.DefaultSingletonEngine`,
-a process-wide singleton specialization of
-{class}`~cudf_polars.engine.spmd.SPMDEngine`. At most one live
-instance exists per process; it is created lazily on first use and torn down at interpreter
+GPU. Under the hood it's backed by {class}`~cudf_polars.engine.default_singleton_engine.DefaultSingletonEngine`,
+a process-wide singleton specialization of {class}`~cudf_polars.engine.spmd.SPMDEngine`. At most one live
+instance exists per process, which is created lazily on first use and torn down at interpreter
 exit. Ray is the showcased explicit engine (see {doc}`usage`); this page documents what
 `engine="gpu"` does *without* you having to construct anything.
 

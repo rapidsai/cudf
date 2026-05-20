@@ -142,11 +142,11 @@ coordinated or they will fight:
   to `DaskEngine` so it does not try to re-pin affinity on top of dask-cuda's binding.
 * **Do not pass `--rmm-pool-size`, `--rmm-managed-memory`, or similar RMM flags** to
   `dask-cuda-worker`. Let `DaskEngine` own the memory resource via its `memory_resource_config`
-  (see {doc}`options`); otherwise two different memory resources will be installed on the same
+  (see {doc}`options`) otherwise two different memory resources will be installed on the same
   worker.
 * **Do not pass `--enable-tcp-over-ucx`, `--enable-infiniband`, `--enable-nvlink`, or
   `--enable-rdmacm`** to `dask-cuda-worker`. `DaskEngine` bootstraps its own UCXX communicator
-  and will select transports itself; enabling them on both sides can produce inconsistent UCX
+  and will select transports itself. Enabling them on both sides can produce inconsistent UCX
   configuration across the cluster.
 
 ```bash

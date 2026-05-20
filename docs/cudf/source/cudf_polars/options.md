@@ -2,7 +2,7 @@
 # Configuration Options
 
 {class}`~cudf_polars.engine.options.StreamingOptions` is the recommended
-way to configure the streaming engines (Ray, Dask, SPMD; the default `engine="gpu"` accepts no
+way to configure the streaming engines (Ray, Dask, SPMD. The default `engine="gpu"` accepts no
 options, see the note below). Build one and pass it to `RayEngine.from_options()`
 to construct a {class}`~cudf_polars.engine.ray.RayEngine`:
 
@@ -62,9 +62,8 @@ and `{"0", "false", "no", "n"}` as false.
 
 ## Building from a dictionary
 
-{meth}`~cudf_polars.engine.options.StreamingOptions.from_dict` accepts a
-flat dict of field names. Unknown keys raise `TypeError`; `None` values leave the field
-unspecified:
+{meth}`~cudf_polars.engine.options.StreamingOptions.from_dict` accepts a flat dict of field names.
+Unknown keys raise `TypeError` and `None` values leave the field unspecified:
 
 ```python
 opts = StreamingOptions.from_dict({

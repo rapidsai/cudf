@@ -3,11 +3,11 @@
 
 `cudf-polars` runs your Polars `LazyFrame` queries on GPU. You select GPU execution by passing
 an `engine=` argument to `.collect()` or `.sink_*()`. See {doc}`engines` for the conceptual
-picture; this page walks through running your first query.
+picture, this page walks through running your first query.
 
-We always recommend constructing an engine object and using it in a context manager to ensure proper resource cleanup. The engine constructor is
-where you specify {class}`~cudf_polars.engine.options.StreamingOptions`
-such as `spill_to_pinned_memory` or `fallback_mode`. Ray is the showcased example below; see also
+We always recommend constructing an engine object and using it in a context manager to ensure proper
+resource cleanup. The engine constructor is where you specify {class}`~cudf_polars.engine.options.StreamingOptions`
+such as `spill_to_pinned_memory` or `fallback_mode`. Ray is the showcased example below, see also
 {doc}`other_engines`.
 
 ## Your first GPU query

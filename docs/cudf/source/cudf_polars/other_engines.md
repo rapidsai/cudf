@@ -9,12 +9,11 @@ other ways to run cudf-polars:
   GPU. Use this when you already have a Dask deployment or a preferred Dask launcher.
 * **{doc}`spmd_engine`** is single program, multiple data: the same script runs once per GPU,
   typically launched with `rrun`. Single-rank mode needs no external cluster at all.
-* **{doc}`default_singleton_engine`** documents what `engine="gpu"` does under the hood
-  when no engine is constructed explicitly. Useful to *understand*; for any non-trivial
-  workflow we recommend constructing an explicit engine so you can pass
-  {class}`~cudf_polars.engine.options.StreamingOptions`.
-* **{doc}`in_memory_engine`** (`engine=pl.GPUEngine(executor="in-memory")`) is the only non-streaming path. Suitable
-  for small queries (data that fits in device memory), debugging, or when you specifically
+* **{doc}`default_singleton_engine`** documents what `engine="gpu"` does under the hood when no
+  engine is constructed explicitly. Useful to *understand*, but for any non-trivial workflow we
+  recommend constructing an explicit engine so you can pass {class}`~cudf_polars.engine.options.StreamingOptions`.
+* **{doc}`in_memory_engine`** (`engine=pl.GPUEngine(executor="in-memory")`) is the only non-streaming
+  path. Suitable for small queries (data that fits in device memory), debugging, or when you specifically
   need `LazyFrame.profile`.
 
 See {doc}`engines` for the conceptual comparison with `RayEngine` (cluster model, runtime

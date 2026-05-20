@@ -45,16 +45,16 @@ details.
 
 | Engine                                        | Cluster model                                           | Extra runtime dependency | Typical use                                                                     |
 | --------------------------------------------- | --------------------------------------------------------| ------------------------ | ------------------------------------------------------------------------------- |
-| {class}`~cudf_polars.engine.ray.RayEngine`    | Single client; one Ray actor per GPU                    | [Ray][ray-docs]          | Works from a laptop to a cloud cluster. No separate cluster setup needed.       |
-| {class}`~cudf_polars.engine.dask.DaskEngine`  | Single client; one Dask worker per GPU                  | [Dask distributed][dask] | Teams with an existing Dask deployment or a preferred Dask launcher.            |
+| {class}`~cudf_polars.engine.ray.RayEngine`    | Single client, one Ray actor per GPU                    | [Ray][ray-docs]          | Works from a laptop to a cloud cluster. No separate cluster setup needed.       |
+| {class}`~cudf_polars.engine.dask.DaskEngine`  | Single client, one Dask worker per GPU                  | [Dask distributed][dask] | Teams with an existing Dask deployment or a preferred Dask launcher.            |
 | {class}`~cudf_polars.engine.spmd.SPMDEngine`  | Same script runs once per GPU, joined by a communicator | UCXX (under `rrun`)      | HPC / SPMD launchers such as `rrun`. Single-rank mode needs no cluster at all.  |
 | [`engine="gpu"`](default_singleton_engine.md) | Implicit process-wide singleton on one GPU; no cluster  | None                     | Default when no engine is constructed. Short scripts and notebooks. No options. |
 
 All four approaches use the same execution model under the hood, so which to select depends
 on your preferred deployment method, not performance tradeoffs. For any non-trivial workflow,
-construct one of the first three engines explicitly (see {doc}`usage`); `engine="gpu"` is a
-convenience and accepts no options, so it cannot be tuned. See
-{doc}`default_singleton_engine` for details on the implementation that backs it.
+construct one of the first three engines explicitly (see {doc}`usage`). `engine="gpu"` is a
+convenience and accepts no options, so it cannot be tuned. See {doc}`default_singleton_engine`
+for details on the implementation that backs it.
 
 ## Result collection
 

@@ -14,10 +14,9 @@ to override this behaviour.
 
 ## Single-GPU setup
 
-To use {class}`~cudf_polars.engine.spmd.SPMDEngine` on a single GPU,
-create the engine and run your Python script as normal. You still get the full streaming
-executor (partitioned inputs, spilling, scaling past device memory); you just don't need any
-multi-process coordination:
+To use {class}`~cudf_polars.engine.spmd.SPMDEngine` on a single GPU, create the engine and
+run your Python script as normal. You still get the full streaming executor (partitioned inputs,
+spilling, scaling past device memory), you just don't need any multi-process coordination:
 
 ```python
 # python my_script.py
@@ -99,7 +98,7 @@ that are useful in SPMD code:
 ## Query symmetry requirement
 
 All ranks must execute the **same sequence of queries in the same order**. Collective operations
-are matched using internal operation IDs; if one rank executes a collective that another rank
+are matched using internal operation IDs. If one rank executes a collective that another rank
 does not, the program will deadlock.
 
 In practice:
@@ -132,7 +131,7 @@ with SPMDEngine() as engine:
 
 Unlike `RayEngine` / `DaskEngine`, where `.collect()` gathers every partition to the client,
 here each rank's `.collect()` returns *its own* fragment. If you want to keep processing the
-data rank-by-rank, just use that fragment directly; if you need a single concatenated view,
+data rank-by-rank, just use that fragment directly. If you need a single concatenated view,
 use the helper below.
 
 `collect()` returns a rank-local result. Use

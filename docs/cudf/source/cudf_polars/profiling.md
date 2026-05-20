@@ -60,7 +60,7 @@ print(total)
 
 ## GPU Profiling
 
-For streaming queries, we recommend profiling with [NVIDIA NSight Systems][nsight]; `cudf-polars`
+For streaming queries, we recommend profiling with [NVIDIA NSight Systems][nsight]. `cudf-polars`
 includes [nvtx][nvtx] annotations to help you understand where time is being spent. Streaming
 engines do not support `LazyFrame.profile`, since `profile` requires a single in-memory pass.
 
@@ -73,7 +73,7 @@ q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15
 profile = q.profile(engine=pl.GPUEngine(executor="in-memory"))
 ```
 
-The result is `(result_df, timings_df)`; see the Polars docs link above for the schema.
+The result is `(result_df, timings_df)`, see the Polars docs link above for the schema.
 
 ## Tracing
 
