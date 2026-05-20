@@ -470,15 +470,15 @@ class RayEngine(StreamingEngine):
         Hardware binding is disabled implicitly but the caller must
         pass ``engine_options={"allow_gpu_sharing": True}`` explicitly
         to acknowledge the multi-tenant GPU semantics.
-        .. note::
-            Oversubscription does not increase throughput. When multiple
-            ranks share a GPU, they compete for the same compute and
-            memory resources, which may increase memory pressure and
-            reduce overall performance. This option is primarily useful
-            for testing multi-rank code paths on machines with fewer
-            GPUs than ranks, and for downstream projects that need to
-            validate distributed logic in resource-constrained CI
-            environments.
+
+        Note, oversubscription does not increase throughput. When multiple
+        ranks share a GPU, they compete for the same compute and
+        memory resources, which may increase memory pressure and
+        reduce overall performance. This option is primarily useful
+        for testing multi-rank code paths on machines with fewer
+        GPUs than ranks, and for downstream projects that need to
+        validate distributed logic in resource-constrained CI
+        environments.
 
     Raises
     ------
@@ -671,7 +671,7 @@ class RayEngine(StreamingEngine):
         ray_init_options: dict[str, object] | None = None,
     ) -> RayEngine:
         """
-        Create a :class:`RayEngine` from a :class:`StreamingOptions` object.
+        Create a :class:`RayEngine` from a :class:`~cudf_polars.engine.options.StreamingOptions` object.
 
         This is the recommended way to construct a ``RayEngine`` for typical
         use. All RapidsMPF, executor, and engine options are read from
@@ -725,7 +725,7 @@ class RayEngine(StreamingEngine):
 
         Returns
         -------
-        List of :class:`ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
 
