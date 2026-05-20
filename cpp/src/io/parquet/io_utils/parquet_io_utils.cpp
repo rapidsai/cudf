@@ -57,11 +57,10 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges_to_device_async(
-  cudf::io::datasource& datasource,
-  std::span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
+                                  std::span<cudf::io::text::byte_range_info const> byte_ranges,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   static std::mutex mutex;
 

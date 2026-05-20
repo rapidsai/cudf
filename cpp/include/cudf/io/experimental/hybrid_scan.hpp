@@ -369,8 +369,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_byte_range(
-    std::span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups using column chunk statistics
@@ -475,8 +474,7 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of filter columns
    */
   [[nodiscard]] std::vector<byte_range_info> filter_column_chunks_byte_ranges(
-    std::span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materializes filter columns and updates the input row mask to only the rows
@@ -508,8 +506,7 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of payload columns
    */
   [[nodiscard]] std::vector<byte_range_info> payload_column_chunks_byte_ranges(
-    std::span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materialize payload columns and applies the row mask to the output table
@@ -540,8 +537,7 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of all (or selected) columns
    */
   [[nodiscard]] std::vector<byte_range_info> all_column_chunks_byte_ranges(
-    std::span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materializes all (or selected) columns and returns the final output table

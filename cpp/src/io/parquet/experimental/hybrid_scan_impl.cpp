@@ -280,8 +280,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
 hybrid_scan_reader_impl::secondary_filters_byte_ranges(
-  std::span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+  std::span<std::vector<size_type> const> row_group_indices, parquet_reader_options const& options)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   auto [expr_conv, output_dtypes] = prepare_filter_and_output_types(options);
@@ -459,8 +458,7 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
-  std::span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+  std::span<std::vector<size_type> const> row_group_indices, parquet_reader_options const& options)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
@@ -470,8 +468,7 @@ hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
-  std::span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+  std::span<std::vector<size_type> const> row_group_indices, parquet_reader_options const& options)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
@@ -481,8 +478,7 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::all_column_chunks_byte_ranges(
-  std::span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+  std::span<std::vector<size_type> const> row_group_indices, parquet_reader_options const& options)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 

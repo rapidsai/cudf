@@ -387,7 +387,7 @@ For host-side data, prefer `std::span` and reserve `cudf::host_span` for the cas
 libcudf-specific extensions are actually needed.
 
 Use `std::span<T>` when the parameter is purely a host buffer view and the function does not need
-to know whether the memory is device-accessible. 
+to know whether the memory is device-accessible.
 
 Use `cudf::host_span<T>` only when one of the following applies:
 

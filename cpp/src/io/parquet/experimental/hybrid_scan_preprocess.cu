@@ -87,18 +87,17 @@ void hybrid_scan_reader_impl::prepare_row_groups(
            _file_itm_data.num_rows_per_source,
            _file_itm_data.num_input_row_groups,
            _file_itm_data.surviving_row_groups) =
-    _extended_metadata->select_row_groups(
-      {},
-      cudf::host_span<std::vector<size_type> const>{row_group_indices.data(),
-                                                    row_group_indices.size()},
-      {},
-      {},
-      {},
-      {},
-      {},
-      {},
-      {},
-      _stream);
+    _extended_metadata->select_row_groups({},
+                                          cudf::host_span<std::vector<size_type> const>{
+                                            row_group_indices.data(), row_group_indices.size()},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          _stream);
 
   CUDF_EXPECTS(
     std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
@@ -196,18 +195,18 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   rmm::cuda_stream_view stream)
 {
   // Create row group information for the input row group indices
-  auto const row_groups_info = std::get<2>(_extended_metadata->select_row_groups(
-    {},
-    cudf::host_span<std::vector<size_type> const>{row_group_indices.data(),
-                                                  row_group_indices.size()},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    _stream));
+  auto const row_groups_info = std::get<2>(
+    _extended_metadata->select_row_groups({},
+                                          cudf::host_span<std::vector<size_type> const>{
+                                            row_group_indices.data(), row_group_indices.size()},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          {},
+                                          _stream));
 
   CUDF_EXPECTS(
     row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
