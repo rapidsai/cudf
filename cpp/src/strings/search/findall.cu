@@ -106,12 +106,12 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
+  auto const groups = prog.groups_count();
+  CUDF_EXPECTS(groups <= 1, "findall does not support more than 1 capture group");
+
   if (input.is_empty()) {
     return cudf::lists::detail::make_empty_lists_column(input.parent().type());
   }
-
-  auto const groups = prog.groups_count();
-  CUDF_EXPECTS(groups <= 1, "findall does not support more than 1 capture group");
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
