@@ -7,6 +7,7 @@ from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.io.parquet import ParquetReaderOptions
+from pylibcudf.io.parquet_metadata import FileMetaData
 from pylibcudf.io.text import ByteRangeInfo
 from pylibcudf.io.types import TableWithMetadata
 from pylibcudf.span import Span
@@ -20,14 +21,6 @@ except ImportError:
 class UseDataPageMask(IntEnum):
     YES: int
     NO: int
-
-class FileMetaData:
-    @property
-    def version(self) -> int: ...
-    @property
-    def num_rows(self) -> int: ...
-    @property
-    def created_by(self) -> str: ...
 
 class HybridScanReader:
     def __init__(

@@ -80,25 +80,24 @@ bool operation::may_evaluate_null(table_view const& left,
                      });
 };
 
-cudf::size_type detail::filter_predicate::accept(detail::expression_parser& visitor) const
+cudf::size_type detail::predicate::accept(detail::expression_parser& visitor) const
 {
-  CUDF_FAIL(
-    "filter_predicate is an internal expression and should not be visited by expression_parser",
-    std::invalid_argument);
+  CUDF_FAIL("predicate is an internal expression and should not be visited by expression_parser",
+            std::invalid_argument);
 }
 
-std::reference_wrapper<expression const> detail::filter_predicate::accept(
+std::reference_wrapper<expression const> detail::predicate::accept(
   detail::expression_transformer& visitor) const
 {
   CUDF_FAIL(
-    "filter_predicate is an internal expression and should not be visited by "
+    "predicate is an internal expression and should not be visited by "
     "expression_transformer",
     std::invalid_argument);
 }
 
-bool detail::filter_predicate::may_evaluate_null(table_view const& left,
-                                                 table_view const& right,
-                                                 rmm::cuda_stream_view stream) const
+bool detail::predicate::may_evaluate_null(table_view const& left,
+                                          table_view const& right,
+                                          rmm::cuda_stream_view stream) const
 {
   return false;
 }
@@ -135,7 +134,7 @@ std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
     std::invalid_argument);
 }
 
-std::unique_ptr<cudf::detail::row_ir::node> detail::filter_predicate::accept(
+std::unique_ptr<cudf::detail::row_ir::node> detail::predicate::accept(
   cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
