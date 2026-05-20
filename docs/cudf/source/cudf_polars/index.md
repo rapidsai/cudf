@@ -44,8 +44,9 @@ with RayEngine() as engine:
 ```
 
 See {doc}`usage` for the full tutorial, {doc}`engines` for a conceptual overview of the
-available engines, and {doc}`options` for the
-{class}`~cudf_polars.engine.options.StreamingOptions` configuration.
+available engines, {doc}`options` for the
+{class}`~cudf_polars.engine.options.StreamingOptions` configuration, and
+{doc}`memory_errors` for guidance on out-of-memory errors and memory tuning.
 
 ## Benchmark
 
@@ -90,6 +91,7 @@ engines
 options
 profiling
 other_engines
+memory_errors
 api
 ```
 
