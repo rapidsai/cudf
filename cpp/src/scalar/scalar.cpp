@@ -518,7 +518,7 @@ struct_scalar::struct_scalar(table_view const& data,
   assert_valid_size();
 }
 
-struct_scalar::struct_scalar(host_span<column_view const> data,
+struct_scalar::struct_scalar(std::span<column_view const> data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
