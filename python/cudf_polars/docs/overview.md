@@ -631,19 +631,19 @@ annotated with nvtx ranges.
 
 # Query Plans
 
-The module `cudf_polars.experimental.explain` contains functions for dumping
+The module `cudf_polars.streaming.explain` contains functions for dumping
 the query for a given `LazyFrame`.
 
 
 ## Structured Output
 
-`cudf_polars.experimental.explain.serialize_query` can be used to output
+`cudf_polars.streaming.explain.serialize_query` can be used to output
 the query plan in a structured format.
 
 ```python
 >>> import dataclasses
 >>> import polars as pl
->>> from cudf_polars.experimental.explain import serialize_query
+>>> from cudf_polars.streaming.explain import serialize_query
 >>> q = pl.LazyFrame({"a": ['a', 'b', 'a'], "b": [1, 2, 3]}).group_by("a").agg(pl.len())
 >>> dataclasses.asdict(serialize_query(q, engine=pl.GPUEngine()))
 {'roots': ['526964741'],
