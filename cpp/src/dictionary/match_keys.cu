@@ -91,7 +91,7 @@ struct unique_keys_dispatch_fn {
 }  // namespace
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  cudf::host_span<dictionary_column_view const> input,
+  std::span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -163,7 +163,7 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
 // external API
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  cudf::host_span<dictionary_column_view const> input,
+  std::span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
