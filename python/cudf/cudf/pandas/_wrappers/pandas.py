@@ -661,6 +661,7 @@ try:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
@@ -677,6 +678,7 @@ except ImportError:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
