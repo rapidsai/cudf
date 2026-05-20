@@ -94,5 +94,6 @@ amortized across them.
 | `RAPIDSMPF_PINNED_MEMORY` | disabled | Set to `true` to enable pinned host memory for spill buffers. |
 | `RAPIDSMPF_PINNED_INITIAL_POOL_SIZE` | (none) | Size of the pinned memory pool to pre-allocate (e.g. `32GB`). |
 
-For the full list of memory and spill configuration options see the
+For the full list of engine configuration options, including `target_partition_size`,
+see {doc}`options`. For the full list of memory and spill configuration options see the
 [RapidsMPF configuration reference](https://docs.rapids.ai/api/rapidsmpf/stable/configuration/#general).
