@@ -46,7 +46,7 @@ PANDAS_CI="1" python -m pytest \
     --override-ini="empty_parameter_set_mark=skip" \
     --import-mode=importlib \
     -p cudf.pandas \
-    -p cudf.pandas._pandas_tests_plugin \
+    -p cudf.pandas._pandas_testing_plugin \
     pandas/pandas_src/tests/ \
     "$@"
 
