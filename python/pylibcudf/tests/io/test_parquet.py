@@ -430,6 +430,11 @@ def test_file_metadata_row_groups_and_column_chunks() -> None:
             meta_data = column_chunk.meta_data
             assert column_chunk.file_path == ""
             assert column_chunk.file_offset == 0
+            assert isinstance(column_chunk.offset_index_offset, int)
+            assert isinstance(column_chunk.offset_index_length, int)
+            assert isinstance(column_chunk.column_index_offset, int)
+            assert isinstance(column_chunk.column_index_length, int)
+            assert isinstance(column_chunk.schema_idx, int)
             assert meta_data.num_values == pa_col_chunk.num_values
             assert (
                 meta_data.total_uncompressed_size
@@ -440,6 +445,25 @@ def test_file_metadata_row_groups_and_column_chunks() -> None:
                 == pa_col_chunk.total_compressed_size
             )
             assert meta_data.path_in_schema[-1] == pa_col_chunk.path_in_schema
+
+
+def test_new_file_metadata_wrappers_not_directly_constructible() -> None:
+    with pytest.raises(
+        ValueError, match="SortingColumn cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.SortingColumn()
+    with pytest.raises(
+        ValueError, match="ColumnChunk cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.ColumnChunk()
+    with pytest.raises(
+        ValueError, match="ColumnChunkMetaData cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.ColumnChunkMetaData()
+    with pytest.raises(
+        ValueError, match="RowGroup cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.RowGroup()
 
 
 def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:
