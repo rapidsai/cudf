@@ -501,15 +501,22 @@ struct SchemaElement {
    * A LIST- or MAP-annotated REPEATED group is the list/map itself in the legacy 2-level
    * encoding (e.g. Thrift- or parquet-avro 1.7-written files nested inside an outer LIST), not
    * the wrapper that should be collapsed. Excluding it here keeps `list<list<primitive>>` and
-   * `list<map<...>>` from being collapsed by one nesting level downstream. See
-   * https://github.com/NVIDIA/spark-rapids/issues/11589 (and #11592 for the Avro variant).
+   * `list<map<...>>` from being collapsed by one nesting level downstream. The check covers
+   * both annotation sources: the deprecated `converted_type` and the newer `logical_type`,
+   * since a Parquet file may carry only one. See
+   * https://github.com/NVIDIA/spark-rapids/issues/11589 (and NVIDIA/spark-rapids#11592 for
+   * the Avro variant).
    *
    * @return True if the schema element is a stub, false otherwise
    */
   [[nodiscard]] bool is_stub() const
   {
+    auto const is_list_or_map_logical_type =
+      logical_type.has_value() &&
+      (logical_type->type == LogicalType::LIST || logical_type->type == LogicalType::MAP);
     return repetition_type == FieldRepetitionType::REPEATED && num_children == 1 &&
-           converted_type != ConvertedType::LIST && converted_type != ConvertedType::MAP;
+           converted_type != ConvertedType::LIST && converted_type != ConvertedType::MAP &&
+           !is_list_or_map_logical_type;
   }
 
   /**
