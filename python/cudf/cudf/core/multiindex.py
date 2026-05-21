@@ -24,7 +24,9 @@ from cudf.core.algorithms import factorize
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.utils import access_columns
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_string,
+)
 from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
@@ -36,11 +38,9 @@ from cudf.core.index import (
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     dtype_from_pylibcudf_column,
     is_column_like,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
@@ -214,24 +214,26 @@ class MultiIndex(Index):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and nan_as_null is False
-                and not is_dtype_obj_numeric(result_col.dtype)
-                and not is_pandas_nullable_extension_dtype(level.dtype)
-                and result_col.has_nulls(include_nan=False)
-            ):
-                raise MixedTypeError(
-                    "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
-                )
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and not is_dtype_obj_numeric(result_col.dtype)
-                and result_col.has_nulls(include_nan=False)
-                and nan_as_null is False
-                and not is_pandas_nullable_extension_dtype(level.dtype)
-            ):
-                result_col = result_col.fillna(np.nan)
+            # TODO: Pandas-3.0: Investigate with pandas test suite and remove
+            # the following checks if they are obsolete now.
+            # if (
+            #     cudf.get_option("mode.pandas_compatible")
+            #     and nan_as_null is False
+            #     and not is_dtype_obj_numeric(result_col.dtype)
+            #     and not is_pandas_nullable_extension_dtype(level.dtype)
+            #     and result_col.has_nulls(include_nan=False)
+            # ):
+            #     raise MixedTypeError(
+            #         "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
+            #     )
+            # if (
+            #     cudf.get_option("mode.pandas_compatible")
+            #     and not is_dtype_obj_numeric(result_col.dtype)
+            #     and result_col.has_nulls(include_nan=False)
+            #     and nan_as_null is False
+            #     and not is_pandas_nullable_extension_dtype(level.dtype)
+            # ):
+            #     result_col = result_col.fillna(np.nan)
             source_data[i] = ColumnBase.create(
                 result_col.plc_column, level.dtype
             )
@@ -282,9 +284,9 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def astype(self, dtype: Dtype, copy: bool = True) -> Self:
-        if cudf.dtype(dtype) != CUDF_STRING_DTYPE:
+        if not is_dtype_obj_string(cudf.dtype(dtype)):
             raise TypeError(
-                "Setting a MultiIndex dtype to anything other than object is "
+                "Setting a MultiIndex dtype to anything other than string is "
                 "not supported"
             )
         return self
@@ -782,20 +784,19 @@ class MultiIndex(Index):
                 verify=False,
             )
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            data_table = cudf.concat(
-                [
-                    frame,
-                    cudf.DataFrame._from_data(
-                        ColumnAccessor(
-                            {"idx": ColumnBase.from_range(range(len(frame)))},
-                            verify=False,
-                        )
-                    ),
-                ],
-                axis=1,
-            )
+
+        data_table = cudf.concat(
+            [
+                frame,
+                cudf.DataFrame._from_data(
+                    ColumnAccessor(
+                        {"idx": ColumnBase.from_range(range(len(frame)))},
+                        verify=False,
+                    )
+                ),
+            ],
+            axis=1,
+        )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
@@ -1017,7 +1018,7 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def __getitem__(self, index):
-        flatten = isinstance(index, int)
+        flatten = is_integer(index)
 
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -1197,27 +1198,6 @@ class MultiIndex(Index):
         )
         return level_values
 
-    def _is_numeric(self) -> bool:
-        return False
-
-    def _is_boolean(self) -> bool:
-        return False
-
-    def _is_integer(self) -> bool:
-        return False
-
-    def _is_floating(self) -> bool:
-        return False
-
-    def _is_object(self) -> bool:
-        return False
-
-    def _is_categorical(self) -> bool:
-        return False
-
-    def _is_interval(self) -> bool:
-        return False
-
     @classmethod
     @_performance_tracking
     def _concat(cls, objs) -> Self:
@@ -1306,7 +1286,7 @@ class MultiIndex(Index):
                    names=['number', 'color'])
         >>> idx.dtypes
         number     int64
-        color     object
+        color       str
         dtype: object
         """
         # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
@@ -1803,11 +1783,11 @@ class MultiIndex(Index):
         ...         names=["x", "y"],
         ...       )
         >>> index
-        MultiIndex([( 'a',  '1'),
-                    ( 'a',  '5'),
-                    ( 'b', <NA>),
-                    ( 'c', <NA>),
-                    (<NA>,  '1')],
+        MultiIndex([('a', '1'),
+                    ('a', '5'),
+                    ('b', nan),
+                    ('c', nan),
+                    (nan, '1')],
                    names=['x', 'y'])
         >>> index.fillna('hello')
         MultiIndex([(    'a',     '1'),
@@ -1817,8 +1797,7 @@ class MultiIndex(Index):
                     ('hello',     '1')],
                    names=['x', 'y'])
         """
-
-        return super().fillna(value=value)
+        return super()._fillna(value=value)
 
     @_performance_tracking
     def unique(self, level: int | None = None) -> Self | Index:

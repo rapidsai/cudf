@@ -21,9 +21,11 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from pytest_httpserver import HTTPServer
@@ -153,30 +155,30 @@ def test_scan(
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_negative_slice_pushdown_raises(tmp_path):
+def test_negative_slice_pushdown_raises(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet")
     # Take the last row
     q = q.slice(-1, 1)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_unsupported_raises(tmp_path):
+def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
     df.write_ipc(tmp_path / "df.ipc")
     q = pl.scan_ipc(tmp_path / "df.ipc")
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_ndjson_nrows_notimplemented(tmp_path, df):
+def test_scan_ndjson_nrows_notimplemented(engine: pl.GPUEngine, tmp_path, df):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
     df.write_ndjson(tmp_path / "df.jsonl")
     q = pl.scan_ndjson(tmp_path / "df.jsonl", n_rows=1)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_scan_row_index_projected_out(tmp_path):
@@ -255,31 +257,33 @@ def test_scan_csv_multi_differing_colnames(tmp_path):
         q.explain()
 
 
-def test_scan_csv_skip_after_header_not_implemented(tmp_path):
+def test_scan_csv_skip_after_header_not_implemented(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
 
     q = pl.scan_csv(tmp_path / "test.csv", skip_rows_after_header=1)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_csv_null_values_per_column_not_implemented(tmp_path):
+def test_scan_csv_null_values_per_column_not_implemented(
+    engine: pl.GPUEngine, tmp_path
+):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
 
     q = pl.scan_csv(tmp_path / "test.csv", null_values={"foo": "1", "baz": "5"})
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_csv_comment_str_not_implemented(tmp_path):
+def test_scan_csv_comment_str_not_implemented(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n// 1,2,3\n3,4,5""")
 
     q = pl.scan_csv(tmp_path / "test.csv", comment_prefix="// ")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_scan_csv_comment_char(engine: pl.GPUEngine, tmp_path):
@@ -316,7 +320,7 @@ def test_scan_csv_skip_initial_empty_rows(engine: pl.GPUEngine, tmp_path):
 
     q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1, has_header=False)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
     q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
 
@@ -346,30 +350,32 @@ def test_scan_ndjson_schema(engine: pl.GPUEngine, df, tmp_path, schema):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_ndjson_unsupported(df, tmp_path):
+def test_scan_ndjson_unsupported(engine: pl.GPUEngine, df, tmp_path):
     make_partitioned_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_parquet_nested_null_raises(tmp_path):
+def test_scan_parquet_nested_null_raises(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": pl.Series([None], dtype=pl.List(pl.Null))})
 
     df.write_parquet(tmp_path / "file.pq")
 
     q = pl.scan_parquet(tmp_path / "file.pq")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_parquet_only_row_index_raises(df, tmp_path):
+def test_scan_parquet_only_row_index_raises(engine: pl.GPUEngine, df, tmp_path):
     make_partitioned_source(df, tmp_path / "file", "parquet")
     q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("n_rows", [None, 2])
-def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
+def test_scan_include_file_path(
+    engine: pl.GPUEngine, request, tmp_path, format, scan_fn, df, n_rows
+):
     if n_rows is not None:
         df = df.head(n_rows)
     make_partitioned_source(df, tmp_path / "file", format)
@@ -377,7 +383,7 @@ def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
     q = scan_fn(tmp_path / "file", include_file_paths="files", n_rows=n_rows)
 
     if format == "ndjson":
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
         assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
@@ -390,14 +396,13 @@ def chunked_slice(request):
 
 
 @pytest.fixture(scope="module")
-def large_df(df, tmpdir_factory, chunked_slice):
-    # Something big enough that we get more than a single chunk,
-    # empirically determined
-    df = pl.concat([df] * 1000)
-    df = pl.concat([df] * 10)
-    df = pl.concat([df] * 10)
-    path = str(tmpdir_factory.mktemp("data") / "large.pq")
-    make_partitioned_source(df, path, "parquet")
+def chunked_df(df, tmpdir_factory, chunked_slice):
+    # Many small row groups so that ``pass_read_limit`` (one pass per row
+    # group) and ``chunk_read_limit`` (one output chunk per page within a
+    # pass) can force the libcudf chunked reader to return multiple chunks.
+    df = pl.concat([df] * 100)
+    path = str(tmpdir_factory.mktemp("data") / "chunked.pq")
+    make_partitioned_source(df, path, "parquet", row_group_size=10)
     n_rows = len(df)
     q = pl.scan_parquet(path)
     if chunked_slice == "no_slice":
@@ -411,24 +416,30 @@ def large_df(df, tmpdir_factory, chunked_slice):
 
 
 @pytest.mark.parametrize(
-    "chunk_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"chunk_{x}"
-)
-@pytest.mark.parametrize(
-    "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
+    "chunk_read_limit, pass_read_limit",
+    [
+        (0, 0),
+        (0, 1),
+        (1, 0),
+        (1, 1),
+        (2, 1),
+        (1, 2),
+    ],
+    ids=lambda x: f"limit_{x}",
 )
 @pytest.mark.parametrize(
     "filter", [None, pl.col("a") > 3], ids=["no_filters", "with_filters"]
 )
 def test_scan_parquet_chunked(
-    large_df,
+    chunked_df,
     chunk_read_limit,
     pass_read_limit,
     filter,
 ):
     if filter is None:
-        q = large_df
+        q = chunked_df
     else:
-        q = large_df.filter(filter)
+        q = chunked_df.filter(filter)
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
@@ -492,11 +503,13 @@ def test_scan_csv_with_and_without_header(
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
+def test_scan_csv_without_header_and_new_column_names_raises(
+    engine: pl.GPUEngine, df, tmp_path
+):
     path = tmp_path / "test.csv"
     make_partitioned_source(df, path, "csv", write_kwargs={"include_header": False})
     q = pl.scan_csv(path, has_header=False)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
@@ -508,13 +521,13 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_from_file_uri(tmp_path: Path) -> None:
+def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path) -> None:
     tmp_path.mkdir(exist_ok=True)
     path = tmp_path / "out.parquet"
     df = pl.DataFrame({"a": 1})
     df.write_parquet(path)
     q = pl.scan_parquet(f"file://{path}")
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("chunked", [False, True])
@@ -582,6 +595,10 @@ def test_scan_parquet_remote(
     )
 
 
+@pytest.mark.xfail(
+    condition=not POLARS_VERSION_LT_139,
+    reason="polars 1.39+ ndjson remote reader requires range request support",
+)
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
     tmp_path: Path,
@@ -651,7 +668,7 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_138,
-            reason="polars fails ahead of time",
+            reason="polars >= 1.38 raises duplicate row_index name ahead of time",
         )
     )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
@@ -660,15 +677,17 @@ def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
         "index"
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
-def test_scan_compressed_file_raises(tmp_path, compression, file_type):
+def test_scan_compressed_file_raises(
+    engine: pl.GPUEngine, tmp_path: Path, compression: str, file_type: str
+):
     if file_type == "csv":
         data = b"a,b\n1,2\n3,4\n"
-        scan_fn = pl.scan_csv
+        scan_fn: Callable = pl.scan_csv
     else:
         data = b'{"a":1,"b":2}\n{"a":3,"b":4}\n'
         scan_fn = pl.scan_ndjson
@@ -686,7 +705,7 @@ def test_scan_compressed_file_raises(tmp_path, compression, file_type):
             f.write(cctx.compress(data))
 
     q = scan_fn(path)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
@@ -700,8 +719,7 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="height parameter added in Polars 1.38",
+    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
