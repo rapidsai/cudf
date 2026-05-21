@@ -3766,7 +3766,6 @@ NODEIDS_THAT_FAIL = {
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-exp]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-expm1]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log10]": "TODO: Add a reason for failure",
-    "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log1p]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log2]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-sin]": "TODO: Add a reason for failure",
