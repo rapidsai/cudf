@@ -739,6 +739,7 @@ def test_scan_parquet_zero_width_with_limit(
         (pl.Duration("us"), pl.lit(dt.timedelta(seconds=1), dtype=pl.Duration("ns"))),
         (pl.Duration("ns"), pl.lit(dt.timedelta(seconds=1), dtype=pl.Duration("us"))),
         (pl.Int32, pl.lit(2, dtype=pl.Int64)),
+        (pl.Decimal(15, 2), pl.lit(1.5, dtype=pl.Float64)),
     ],
     ids=repr,
 )
@@ -763,6 +764,12 @@ def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
                 dt.timedelta(seconds=1, microseconds=1),
                 dt.timedelta(seconds=2),
             ],
+            dtype=column_dtype,
+        )
+    elif isinstance(column_dtype, pl.Decimal):
+        col = pl.Series(
+            "A",
+            [Decimal("1.00"), Decimal("1.50"), Decimal("1.99"), Decimal("2.00")],
             dtype=column_dtype,
         )
     else:  # integer
