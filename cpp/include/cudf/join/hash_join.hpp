@@ -12,6 +12,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -307,6 +308,118 @@ class hash_join {
     cudf::table_view const& left,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs an inner join on a partition of the probe table.
+   *
+   * This method executes an inner join between a specific partition of the probe table
+   * (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling inner_join_match_context().
+   *
+   * The returned left_indices are relative to the original complete probe table, not just the
+   * partition, so they can be used directly with the original probe table.
+   *
+   * @throw std::invalid_argument If `context.left_table_context` is null, if its
+   * `_match_counts` is null, or if `[left_start_idx, left_end_idx)` is outside the bounds
+   * of the left table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_inner_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs a left join on a partition of the probe table.
+   *
+   * This method executes a left join between a specific partition of the probe table
+   * (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling left_join_match_context().
+   *
+   * The returned left_indices are relative to the original complete probe table.
+   *
+   * @throw std::invalid_argument If `context.left_table_context` is null, if its
+   * `_match_counts` is null, or if `[left_start_idx, left_end_idx)` is outside the bounds
+   * of the left table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_left_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs a full join probe on a partition of the probe table.
+   *
+   * This method executes the probe-side of a full join between a specific partition of the probe
+   * table (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling full_join_match_context().
+   *
+   * @note This method does NOT include unmatched build rows (the complement).  After all
+   * partitions have been processed, pass the collected results to
+   * `finalize_partitioned_full_join()` to obtain the complete full join output.
+   *
+   * The returned left_indices are relative to the original complete probe table.
+   *
+   * @throw std::invalid_argument If `context.left_table_context` is null, if its
+   * `_match_counts` is null, or if `[left_start_idx, left_end_idx)` is outside the bounds
+   * of the left table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_full_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Finalizes a partitioned full join by concatenating all per-partition results
+   * and appending the unmatched right rows (the complement).
+   *
+   * Call this method after calling `partitioned_full_join()` for every partition.  It combines
+   * the per-partition indices with the unmatched right row indices (a global property
+   * across all partitions) and returns a single `(left_indices, right_indices)` pair equivalent
+   * to the output of `full_join()`.
+   *
+   * @param left_partials Per-partition `left_indices` views produced by `partitioned_full_join()`
+   * @param right_partials Per-partition `right_indices` views produced by `partitioned_full_join()`
+   * @param left_table_num_rows Total number of rows in the original left table
+   * @param right_table_num_rows Total number of rows in the right table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] representing the full
+   *         join output.
+   */
+  [[nodiscard]] static std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                                 std::unique_ptr<rmm::device_uvector<size_type>>>
+  finalize_partitioned_full_join(
+    cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+    cudf::host_span<cudf::device_span<size_type const> const> right_partials,
+    size_type left_table_num_rows,
+    size_type right_table_num_rows,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   std::unique_ptr<impl_type const> _impl;
