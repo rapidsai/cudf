@@ -741,7 +741,6 @@ def test_scan_parquet_zero_width_with_limit(
         (pl.Int32, pl.lit(2, dtype=pl.Int64)),
         (pl.Decimal(15, 2), pl.lit(1.5, dtype=pl.Float64)),
     ],
-    ids=repr,
 )
 @pytest.mark.parametrize("closed", ["both", "left", "right", "none"])
 def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
