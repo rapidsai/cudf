@@ -251,10 +251,8 @@ ndarray = make_final_proxy_type(
         # Note: __arrow_array__ is intentionally NOT defined here. The proxy
         # already exposes __array_interface__, which pyarrow uses to ingest
         # numpy data. Exposing __arrow_array__ on a plain numpy.ndarray proxy
-        # made pa.array(proxy, mask=...) reject the mask= kwarg (pyarrow does
-        # not allow combining mask= with the __arrow_array__ protocol), which
-        # broke pandas masked arrays' own __arrow_array__ that calls
-        # pa.array(self._data, mask=self._mask, type=type).
+        # makes pa.array(proxy, mask=...) reject the mask= kwarg, since pyarrow
+        # does not allow combining mask= with the __arrow_array__ protocol.
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
         "__array_ufunc__": ndarray__array_ufunc__,
