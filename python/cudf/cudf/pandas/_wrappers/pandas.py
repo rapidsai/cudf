@@ -5,6 +5,7 @@ import contextlib
 import copyreg
 import datetime
 import functools
+import gc
 import inspect
 import os
 import pickle
@@ -22,6 +23,8 @@ import pyarrow.dataset as ds  # noqa: F401
 from pandas._libs.tslibs import offsets as liboffsets
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.compat._optional import import_optional_dependency
+from pandas.io.excel._openpyxl import OpenpyxlWriter as pd_OpenpyxlWriter
+from pandas.io.excel._xlsxwriter import XlsxWriter as pd_XlsxWriter
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -339,6 +342,41 @@ def _DataFrame_to_excel(self, *args, **kwargs):
     if engine in (None, "openpyxl"):
         _cache_openpyxl_formula_results(excel_writer)
     return result
+
+
+def _ExcelWriter__exit__(self, exc_type, exc_value, traceback):
+    try:
+        return self._fsproxy_wrapped.__exit__(exc_type, exc_value, traceback)
+    except IndexError as err:
+        if (
+            exc_type is None
+            and isinstance(self._fsproxy_wrapped, pd_OpenpyxlWriter)
+            and not self._fsproxy_wrapped.book.worksheets
+            and str(err) == "At least one sheet must be visible"
+        ):
+            handle = self._fsproxy_wrapped._handles.handle
+            for obj in gc.get_objects():
+                if isinstance(obj, zipfile.ZipFile) and obj.fp is handle:
+                    obj.fp = None
+            self._fsproxy_wrapped.book._archive = None
+            self._fsproxy_wrapped._handles.close()
+            return None
+        raise
+
+
+def _ExcelWriter__new__(cls, *args, **kwargs):
+    if cls is not ExcelWriter:
+        return object.__new__(cls)
+
+    from ..module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        writer = pd.ExcelWriter(*args, **kwargs)
+    return _maybe_wrap_result(writer, pd.ExcelWriter, *args, **kwargs)
+
+
+def _ExcelWriter__init__(self, *args, **kwargs):
+    pass
 
 
 DataFrame = make_final_proxy_type(
@@ -1399,10 +1437,39 @@ ExcelWriter = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__exit__": _ExcelWriter__exit__,
         "__fspath__": _FastSlowAttribute("__fspath__"),
+        "__init__": _ExcelWriter__init__,
+        "__new__": _ExcelWriter__new__,
     },
     bases=(os.PathLike,),
     metaclasses=(abc.ABCMeta,),
+)
+
+OpenpyxlWriter = make_final_proxy_type(
+    "OpenpyxlWriter",
+    _Unusable,
+    pd_OpenpyxlWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__exit__": _ExcelWriter__exit__,
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
+)
+
+XlsxWriter = make_final_proxy_type(
+    "XlsxWriter",
+    _Unusable,
+    pd_XlsxWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__exit__": _ExcelWriter__exit__,
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
 )
 
 try:
