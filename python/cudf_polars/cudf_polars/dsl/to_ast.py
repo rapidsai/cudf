@@ -180,7 +180,7 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
         )
     c1, c2 = node.children
     if c1.dtype != c2.dtype:
-        if isinstance(c1, expr.Literal):
+        if isinstance(c1, expr.Literal):  # pragma: no cover
             c1 = c1.astype(c2.dtype)
         elif isinstance(c2, expr.Literal):
             c2 = c2.astype(c1.dtype)
