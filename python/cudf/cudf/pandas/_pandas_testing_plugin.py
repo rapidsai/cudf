@@ -14,6 +14,19 @@ from functools import wraps
 
 import pytest
 
+from . import install
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_load_initial_conftests(early_config, parser, args):
+    # Similar as in cudf.pandas/__init__.py, but we need tryfirst=True
+    try:
+        install()
+    except RuntimeError:
+        raise RuntimeError(
+            "An existing plugin has already loaded pandas. Interposing failed."
+        )
+
 
 def replace_kwargs(new_kwargs):
     def wrapper(func):
