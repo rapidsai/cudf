@@ -76,6 +76,8 @@ UOP_TO_ASTOP = {
     plc.unary.UnaryOperator.NOT: plc_expr.ASTOperator.NOT,
 }
 
+_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
 
 class ASTState(TypedDict):
     """
@@ -182,6 +184,14 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
             c1 = c1.astype(c2.dtype)
         elif isinstance(c2, expr.Literal):
             c2 = c2.astype(c1.dtype)
+        elif (
+            isinstance(c1, (expr.Col, expr.ColRef)) and c1.dtype.id() in _DECIMAL_IDS
+        ) or (
+            isinstance(c2, (expr.Col, expr.ColRef)) and c2.dtype.id() in _DECIMAL_IDS
+        ):
+            # Allow mixed-precision decimal, or mixed decimal-float operations through
+            # unchanged.
+            pass
         else:
             raise NotImplementedError("BinOp with mismatching dtypes")
     children = (c1, c2)
