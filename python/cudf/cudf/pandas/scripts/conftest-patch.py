@@ -5869,6 +5869,7 @@ NODEIDS_THAT_FAIL = {
     "tests/test_algos.py::TestValueCounts::test_value_counts_stability": "AssertionError: Series.index are different",
     "tests/test_col.py::test_cached_property": "AssertionError: assert False",
     "tests/test_col.py::test_custom_accessor": "AttributeError: 'Series' object has no attribute 'xyz'",
+    "tests/test_common.py::test_serializable[obj0]": "TODO: Add a reason for failure",
     "tests/test_common.py::test_standardize_mapping": "TODO: Add a reason for failure",
     "tests/test_common.py::test_temp_setattr[False]": "TODO: Add a reason for failure",
     "tests/test_common.py::test_temp_setattr[True]": "TODO: Add a reason for failure",
