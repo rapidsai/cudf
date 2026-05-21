@@ -47,7 +47,9 @@ namespace io::parquet::experimental {
  * indexed by source order except for the row mask which is a single BOOL8 column spanning all rows
  * from all sources concatenated in source order, then row-group order within a source.
  *
- * @note Detailed usage documentation will be added once all APIs are in place.
+ * @note Detailed usage documentation will be added once all APIs are in place. This reader will
+ * eventually move to `hybrid_scan.hpp` and the existing single-file reader (`hybrid_scan_reader`)
+ * will become its subclass. Only keeping this separate here for now to reduce noise.
  */
 class hybrid_scan_multifile {
  public:
