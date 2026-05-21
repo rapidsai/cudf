@@ -994,8 +994,11 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Input row bitmask should be of type BOOL8");
 
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
+  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<cudf::size_type>::max()),
+               "Total rows in row groups exceed the cudf column size limit",
+               std::overflow_error);
 
-  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
+  CUDF_EXPECTS(std::cmp_less_equal(row_mask_offset + total_rows, row_mask.size()),
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
@@ -1091,8 +1094,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
     if (row_mask.nullable() and row_mask.null_count() > 0) {
       thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                       cuda::counting_iterator{row_mask_offset},
-                       cuda::counting_iterator{row_mask_offset + total_rows},
+                       cuda::counting_iterator<cudf::size_type>(row_mask_offset),
+                       cuda::counting_iterator<cudf::size_type>(row_mask_offset + total_rows),
                        [row_mask  = row_mask.template begin<bool>(),
                         null_mask = row_mask.null_mask()] __device__(auto const row_idx) {
                          if (not bit_is_set(null_mask, row_idx)) { row_mask[row_idx] = true; }
@@ -1126,7 +1129,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     cudf::detail::make_device_uvector_async(host_tree_level_ptrs, stream, mr);
 
   // Build Fenwick tree levels (zeroth level is just the row mask itself)
-  auto prev_level_size = total_rows;
+  auto prev_level_size = static_cast<cudf::size_type>(total_rows);
   std::for_each(
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{num_levels - 1},
