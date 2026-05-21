@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 import numpy as np
 import pandas as pd
+import pyarrow.compute as pc
 
 import pylibcudf as plc
 
@@ -1806,6 +1807,19 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+        ):
+            result_col = ColumnBase.from_arrow(
+                getattr(pc, "utf8_is_digit")(self._column.to_arrow())
+            )
+            if self._column.dtype.na_value is np.nan:
+                result_col = result_col.fillna(False)
+            return self._return_pandas_string_nullable_result(
+                result_col,
+                pd.BooleanDtype(),
+            )
         return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.DIGIT
