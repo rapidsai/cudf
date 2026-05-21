@@ -1116,6 +1116,13 @@ class StringMethods(BaseAccessor):
         if not isinstance(repl, str):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
+        if (
+            regex is True
+            and getattr(self._column.dtype, "storage", None) == "pyarrow"
+            and isinstance(pat, str)
+        ):
+            pat = _replace_unescaped_dollar_with_end_anchor(pat)
+
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 0:
             result = self._column.replace_re(
