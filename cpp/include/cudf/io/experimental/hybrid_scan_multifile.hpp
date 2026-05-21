@@ -86,22 +86,12 @@ class hybrid_scan_multifile {
   /**
    * @brief Get the per-source byte range of the page index in each Parquet file
    *
-   * The returned vector always has one entry per source. A source's entry is a
-   * default-constructed `byte_range_info{}` if that source has no row groups, no columns, or no
-   * page index offsets. A `CUDF_LOG_WARN` is emitted once if some sources have a page index and
-   * others do not.
-   *
    * @return Vector of page index byte ranges, one per source
    */
   [[nodiscard]] std::vector<byte_range_info> page_index_byte_range() const;
 
   /**
    * @brief Setup the per-source page index within each Parquet file metadata
-   *
-   * Materializes `ColumnIndex` and `OffsetIndex` (page index) inside each source's
-   * `FileMetaData`. The input span size must equal the number of sources. A per-source empty
-   * span is skipped with a one-time warning. Sources whose corresponding span is non-empty must
-   * have row groups and valid page index offsets.
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
    */
@@ -110,9 +100,6 @@ class hybrid_scan_multifile {
 
   /**
    * @brief Get all available per-source row group indices from the parquet files
-   *
-   * If `options.get_row_groups()` is non-empty, its size must equal the number of sources and it
-   * is returned as-is. Otherwise builds `[0 .. per_source_num_row_groups[i])` for each source.
    *
    * @param options Parquet reader options
    * @return Vector of row group indices, one inner vector per source
