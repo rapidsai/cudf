@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 
 
 class IntervalColumn(ColumnBase):
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+    }
+
     @functools.cached_property
     def subtype(self) -> DtypeObj:
         return subtype_from_interval_dtype(self.dtype)
@@ -161,15 +166,18 @@ class IntervalColumn(ColumnBase):
         reflect, op = self._check_reflected_op(op)
         if not isinstance(other, type(self)):
             return NotImplemented
-        if op == "NULL_EQUALS":
+        if op in {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
             lefts_equal = self.left._binaryop(other.left, "NULL_EQUALS")
             rights_equal = self.right._binaryop(other.right, "NULL_EQUALS")
-            return binaryop.binaryop(
+            result = binaryop.binaryop(
                 lefts_equal,
                 rights_equal,
                 "__and__",
                 get_dtype_of_same_kind(self.dtype, lefts_equal.dtype),
             )
+            if op in {"__ne__", "NULL_NOT_EQUALS"}:
+                result = ~result
+            return result
         else:
             raise TypeError(f"{op} not supported with {type(other).__name__}")
 

@@ -1153,8 +1153,6 @@ NODEIDS_THAT_FAIL = {
     "tests/extension/test_interval.py::TestIntervalArray::test_EA_types[c]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_EA_types[python]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_astype_own_type[False]": "TODO: Add a reason for failure",
-    "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[eq]": "TODO: Add a reason for failure",
-    "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[ne]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_grouping_grouper": "AssertionError: ndarray Expected type <class 'numpy.ndarray'>, found <class 'pandas.arrays.ArrowStringArray'> instead",
     "tests/extension/test_interval.py::TestIntervalArray::test_in_numeric_groupby": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_is_extension_array_dtype": "TODO: Add a reason for failure",
