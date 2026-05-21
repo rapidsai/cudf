@@ -726,10 +726,6 @@ def test_scan_parquet_zero_width_with_limit(
     assert_gpu_result_equal(q, engine=active_engine)
 
 
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_139,
-    reason="Change due to https://github.com/pola-rs/polars/pull/26663",
-)
 @pytest.mark.parametrize(
     "column_dtype, lit",
     [
