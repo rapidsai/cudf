@@ -1003,7 +1003,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                std::invalid_argument);
 
   // Return an empty vector if all rows are invalid or all rows are required
-  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
+  if (std::cmp_equal(row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream),
+                     total_rows) or
       cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
                            row_mask.template begin<bool>() + row_mask_offset + total_rows,
                            cuda::std::identity{},
