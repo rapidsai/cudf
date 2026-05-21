@@ -47,6 +47,30 @@ def _is_supported_regex_flags(flags: int) -> bool:
     )
 
 
+def _replace_unescaped_dollar_with_end_anchor(pat: str) -> str:
+    parts: list[str] = []
+    escaped = False
+    in_character_class = False
+    for char in pat:
+        if escaped:
+            parts.append(char)
+            escaped = False
+        elif char == "\\":
+            parts.append(char)
+            escaped = True
+        elif char == "[":
+            parts.append(char)
+            in_character_class = True
+        elif char == "]":
+            parts.append(char)
+            in_character_class = False
+        elif char == "$" and not in_character_class:
+            parts.append(r"\Z")
+        else:
+            parts.append(char)
+    return "".join(parts)
+
+
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
@@ -4429,11 +4453,46 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)
+        pyarrow_string_dtype = (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+        )
+        input_dtype = self._column.dtype
+        pyarrow_nullable_string_dtype = (
+            isinstance(input_dtype, pd.StringDtype)
+            and input_dtype.storage == "pyarrow"
+            and input_dtype.na_value is pd.NA
+        )
+        if pyarrow_string_dtype:
+            pat = _replace_unescaped_dollar_with_end_anchor(pat)
         result = self._column.matches_re(pat, flags)
+        if (
+            na is no_default
+            and self._column._PANDAS_NA_VALUE is None
+            and self._column.has_nulls()
+        ):
+            result_index = (
+                self._parent.index.to_pandas()
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result_name = (
+                self._parent.name
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            return cast(
+                "Series | Index",
+                pd.Series(
+                    result.to_pandas(), index=result_index, name=result_name
+                ),
+            )
         if na is not no_default:
             result = result.fillna(na)
-        elif self._column._PANDAS_NA_VALUE in {np.nan, None}:
-            result = result.fillna(False)
+        elif self._column._PANDAS_NA_VALUE is np.nan:
+            result = result.set_mask(None, 0)
+        if pyarrow_nullable_string_dtype:
+            result = cast("StringColumn", result.astype(pd.BooleanDtype()))
         return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
