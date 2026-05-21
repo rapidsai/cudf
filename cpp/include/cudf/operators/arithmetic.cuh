@@ -19,8 +19,8 @@ namespace ops {
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_signed_v<T> || cuda::std::is_floating_point_v<T>)
 __device__ inline errc abs(T* out, T const* a)
+  requires(cuda::std::is_signed_v<T> || cuda::std::is_floating_point_v<T>)
 {
   *out = (*a < 0) ? -*a : *a;
   return errc::OK;
@@ -30,13 +30,11 @@ __device__ inline errc abs(T* out, T const* a)
  * @brief Returns unsigned input unchanged for absolute value.
  *
  * @tparam T Unsigned input and output type.
- * @param out Destination value.
- * @param a Input value.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_unsigned_v<T>)
 __device__ inline errc abs(T* out, T const* a)
+  requires(cuda::std::is_unsigned_v<T>)
 {
   *out = *a;
   return errc::OK;
@@ -46,8 +44,6 @@ __device__ inline errc abs(T* out, T const* a)
  * @brief Computes absolute value for fixed-point decimal values.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Input decimal value.
  * @return errc::OK.
  */
 template <typename R>
@@ -165,8 +161,8 @@ __device__ inline errc div(optional<T>* out, optional<T> const* a, optional<T> c
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc floor_div(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T>)
 {
   *out = cudf::detail::integral_floor_div(*a, *b);
   return errc::OK;
@@ -401,8 +397,8 @@ __device__ inline errc mul(optional<T>* out, optional<T> const* a, optional<T> c
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_signed_v<T>)
 __device__ inline errc neg(T* out, T const* a)
+  requires(cuda::std::is_signed_v<T>)
 {
   *out = -(*a);
   return errc::OK;
@@ -493,8 +489,8 @@ __device__ inline errc sub(optional<T>* out, optional<T> const* a, optional<T> c
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T> || cuda::std::is_integral_v<T>)
 __device__ inline errc true_div(double* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T> || cuda::std::is_integral_v<T>)
 {
   *out = static_cast<double>(*a) / static_cast<double>(*b);
   return errc::OK;

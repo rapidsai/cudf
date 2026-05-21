@@ -23,8 +23,8 @@ namespace ops {
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_add(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T>)
 {
   T r;
   if (cuda::add_overflow(r, *a, *b)) { return errc::OVERFLOW; }
@@ -36,14 +36,11 @@ __device__ inline errc ansi_add(T* out, T const* a, T const* b)
  * @brief Adds floating-point operands.
  *
  * @tparam T Floating-point type.
- * @param out Destination value.
- * @param a Left operand.
- * @param b Right operand.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T>)
 __device__ inline errc ansi_add(T* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T>)
 {
   *out = *a + *b;
   return errc::OK;
@@ -53,9 +50,6 @@ __device__ inline errc ansi_add(T* out, T const* a, T const* b)
  * @brief Adds fixed-point decimal operands with overflow detection.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Left operand.
- * @param b Right operand.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename R>
@@ -76,9 +70,6 @@ __device__ inline errc ansi_add(decimal<R>* out, decimal<R> const* a, decimal<R>
  * @brief Adds optional operands with ANSI overflow behavior.
  *
  * @tparam T Operand and result type.
- * @param out Destination optional value.
- * @param a Left optional operand.
- * @param b Right optional operand.
  * @return Operation status from underlying add, or errc::OK.
  */
 template <typename T>
@@ -108,8 +99,8 @@ __device__ inline errc ansi_add(optional<T>* out, optional<T> const* a, optional
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_sub(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T>)
 {
   T r;
   if (cuda::sub_overflow(r, *a, *b)) { return errc::OVERFLOW; }
@@ -121,14 +112,11 @@ __device__ inline errc ansi_sub(T* out, T const* a, T const* b)
  * @brief Subtracts floating-point operands.
  *
  * @tparam T Floating-point type.
- * @param out Destination value.
- * @param a Minuend.
- * @param b Subtrahend.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T>)
 __device__ inline errc ansi_sub(T* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T>)
 {
   *out = *a - *b;
   return errc::OK;
@@ -138,9 +126,6 @@ __device__ inline errc ansi_sub(T* out, T const* a, T const* b)
  * @brief Subtracts fixed-point decimal operands with overflow detection.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Minuend.
- * @param b Subtrahend.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename R>
@@ -161,9 +146,6 @@ __device__ inline errc ansi_sub(decimal<R>* out, decimal<R> const* a, decimal<R>
  * @brief Subtracts optional operands with ANSI overflow behavior.
  *
  * @tparam T Operand and result type.
- * @param out Destination optional value.
- * @param a Optional minuend.
- * @param b Optional subtrahend.
  * @return Operation status from underlying subtract, or errc::OK.
  */
 template <typename T>
@@ -192,8 +174,8 @@ __device__ inline errc ansi_sub(optional<T>* out, optional<T> const* a, optional
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T>)
 {
   T r;
   if (cuda::mul_overflow(r, *a, *b)) { return errc::OVERFLOW; }
@@ -205,14 +187,11 @@ __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
  * @brief Multiplies floating-point operands.
  *
  * @tparam T Floating-point type.
- * @param out Destination value.
- * @param a Left operand.
- * @param b Right operand.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T>)
 __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T>)
 {
   *out = *a * *b;
   return errc::OK;
@@ -222,9 +201,6 @@ __device__ inline errc ansi_mul(T* out, T const* a, T const* b)
  * @brief Multiplies fixed-point decimal operands with overflow detection.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Left operand.
- * @param b Right operand.
  * @return errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename R>
@@ -241,9 +217,6 @@ __device__ inline errc ansi_mul(decimal<R>* out, decimal<R> const* a, decimal<R>
  * @brief Multiplies optional operands with ANSI overflow behavior.
  *
  * @tparam T Operand and result type.
- * @param out Destination optional value.
- * @param a Left optional operand.
- * @param b Right optional operand.
  * @return Operation status from underlying multiply, or errc::OK.
  */
 template <typename T>
@@ -272,8 +245,8 @@ __device__ inline errc ansi_mul(optional<T>* out, optional<T> const* a, optional
  * @return errc::DIVISION_BY_ZERO on zero divisor, errc::OVERFLOW on overflow, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
 __device__ inline errc ansi_div(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T>)
 {
   if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   T r;
@@ -286,14 +259,11 @@ __device__ inline errc ansi_div(T* out, T const* a, T const* b)
  * @brief Divides floating-point operands.
  *
  * @tparam T Floating-point type.
- * @param out Destination value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T>)
 __device__ inline errc ansi_div(T* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T>)
 {
   *out = *a / *b;
   return errc::OK;
@@ -303,9 +273,6 @@ __device__ inline errc ansi_div(T* out, T const* a, T const* b)
  * @brief Divides fixed-point decimal operands with ANSI checks.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::OVERFLOW on overflow or zero divisor, else errc::OK.
  */
 template <typename R>
@@ -324,9 +291,6 @@ __device__ inline errc ansi_div(decimal<R>* out, decimal<R> const* a, decimal<R>
  * @brief Divides optional operands with ANSI overflow behavior.
  *
  * @tparam T Operand and result type.
- * @param out Destination optional value.
- * @param a Optional dividend.
- * @param b Optional divisor.
  * @return Operation status from underlying divide, or errc::OK.
  */
 template <typename T>
@@ -355,8 +319,8 @@ __device__ inline errc ansi_div(optional<T>* out, optional<T> const* a, optional
  * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
 __device__ inline errc ansi_mod(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
 {
   if (*b == 0) { return errc::DIVISION_BY_ZERO; }
 
@@ -374,14 +338,11 @@ __device__ inline errc ansi_mod(T* out, T const* a, T const* b)
  * @brief Computes unsigned integral modulus with ANSI checks.
  *
  * @tparam T Unsigned integral type.
- * @param out Destination value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
 __device__ inline errc ansi_mod(T* out, T const* a, T const* b)
+  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
 {
   if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   *out = *a % *b;
@@ -391,9 +352,6 @@ __device__ inline errc ansi_mod(T* out, T const* a, T const* b)
 /**
  * @brief Computes floating-point modulus for float operands with ANSI checks.
  *
- * @param out Destination value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
  */
 __device__ inline errc ansi_mod(float* out, float const* a, float const* b)
@@ -406,9 +364,6 @@ __device__ inline errc ansi_mod(float* out, float const* a, float const* b)
 /**
  * @brief Computes floating-point modulus for double operands with ANSI checks.
  *
- * @param out Destination value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::DIVISION_BY_ZERO on zero divisor, else errc::OK.
  */
 __device__ inline errc ansi_mod(double* out, double const* a, double const* b)
@@ -422,9 +377,6 @@ __device__ inline errc ansi_mod(double* out, double const* a, double const* b)
  * @brief Computes fixed-point decimal modulus with ANSI checks.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Dividend.
- * @param b Divisor.
  * @return errc::DIVISION_BY_ZERO or propagated status, else errc::OK.
  */
 template <typename R>
@@ -444,9 +396,6 @@ __device__ inline errc ansi_mod(decimal<R>* out, decimal<R> const* a, decimal<R>
  * @brief Computes modulus for optional operands with ANSI behavior.
  *
  * @tparam T Operand and result type.
- * @param out Destination optional value.
- * @param a Optional dividend.
- * @param b Optional divisor.
  * @return Operation status from underlying modulus, or errc::OK.
  */
 template <typename T>
@@ -474,8 +423,8 @@ __device__ inline errc ansi_mod(optional<T>* out, optional<T> const* a, optional
  * @return errc::OVERFLOW on minimum representable input, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
 __device__ inline errc ansi_abs(T* out, T const* a)
+  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
 {
   if (*a == cuda::std::numeric_limits<T>::min()) { return errc::OVERFLOW; }
   *out = (*a < 0) ? -(*a) : *a;
@@ -486,13 +435,11 @@ __device__ inline errc ansi_abs(T* out, T const* a)
  * @brief Returns unsigned input unchanged for ANSI absolute value.
  *
  * @tparam T Unsigned integral type.
- * @param out Destination value.
- * @param a Input value.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
 __device__ inline errc ansi_abs(T* out, T const* a)
+  requires(cuda::std::is_integral_v<T> && cuda::std::is_unsigned_v<T>)
 {
   *out = *a;
   return errc::OK;
@@ -502,13 +449,11 @@ __device__ inline errc ansi_abs(T* out, T const* a)
  * @brief Computes absolute value for floating-point inputs.
  *
  * @tparam T Floating-point type.
- * @param out Destination value.
- * @param a Input value.
  * @return errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_floating_point_v<T>)
 __device__ inline errc ansi_abs(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
 {
   *out = (*a < 0) ? -(*a) : *a;
   return errc::OK;
@@ -518,8 +463,6 @@ __device__ inline errc ansi_abs(T* out, T const* a)
  * @brief Computes absolute value for decimal inputs with ANSI overflow checks.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Input decimal value.
  * @return errc::OVERFLOW on minimum representable input, else errc::OK.
  */
 template <typename R>
@@ -535,8 +478,6 @@ __device__ inline errc ansi_abs(decimal<R>* out, decimal<R> const* a)
  * @brief Computes absolute value for optional inputs with ANSI overflow checks.
  *
  * @tparam T Value type.
- * @param out Destination optional value.
- * @param a Optional input value.
  * @return Operation status from underlying abs, or errc::OK.
  */
 template <typename T>
@@ -564,8 +505,8 @@ __device__ inline errc ansi_abs(optional<T>* out, optional<T> const* a)
  * @return errc::OVERFLOW on minimum representable input, else errc::OK.
  */
 template <typename T>
-  requires(cuda::std::is_signed_v<T>)
 __device__ inline errc ansi_neg(T* out, T const* a)
+  requires(cuda::std::is_signed_v<T>)
 {
   if (*a == cuda::std::numeric_limits<T>::min()) { return errc::OVERFLOW; }
   *out = -(*a);
@@ -576,8 +517,6 @@ __device__ inline errc ansi_neg(T* out, T const* a)
  * @brief Computes unary negation for decimal inputs with ANSI overflow checks.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Input decimal value.
  * @return errc::OVERFLOW on minimum representable input, else errc::OK.
  */
 template <typename R>
@@ -593,8 +532,6 @@ __device__ inline errc ansi_neg(decimal<R>* out, decimal<R> const* a)
  * @brief Computes unary negation for optional inputs with ANSI checks.
  *
  * @tparam T Signed type.
- * @param out Destination optional value.
- * @param a Optional input value.
  * @return Operation status from underlying negate, or errc::OK.
  */
 template <typename T>

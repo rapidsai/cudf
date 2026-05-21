@@ -352,8 +352,8 @@ __device__ inline errc cast_to_u64(optional<uint64_t>* out, optional<T> const* a
  * @return errc::OK.
  */
 template <typename T>
-  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 __device__ inline errc cast_to_f32(float* out, T const* a)
+  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 {
   *out = static_cast<float>(*a);
   return errc::OK;
@@ -404,8 +404,8 @@ __device__ inline errc cast_to_f32(optional<float>* out, optional<T> const* a)
  * @return errc::OK.
  */
 template <typename T>
-  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 __device__ inline errc cast_to_f64(double* out, T const* a)
+  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 {
   *out = static_cast<double>(*a);
   return errc::OK;
