@@ -748,10 +748,6 @@ std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
 {
   CUDF_FUNC_RANGE();
   validate_variant_struct(variant_column);
-  // Validate once; the intermediate from detail::get_variant_field is always a well-formed
-  // VARIANT struct, so detail::cast_variant can skip its own validation.
-  // The intermediate is a strict temporary (freed on return), so allocate it from the
-  // current device resource rather than the caller's `mr`.
   auto intermediate = detail::get_variant_field(
     variant_column, path, stream, cudf::get_current_device_resource_ref());
   return detail::cast_variant(intermediate->view(), desired_type, stream, mr);
