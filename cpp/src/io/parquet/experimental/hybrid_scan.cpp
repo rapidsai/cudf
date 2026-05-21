@@ -15,33 +15,36 @@ namespace cudf::io::parquet::experimental {
 
 hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
                                        parquet_reader_options const& options)
-  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(footer_bytes, options)}
 {
+  auto const footers = std::vector<cudf::host_span<uint8_t const>>{footer_bytes};
+  _impl              = std::make_unique<detail::hybrid_scan_reader_impl>(footers, options);
 }
 
 hybrid_scan_reader::hybrid_scan_reader(FileMetaData const& parquet_metadata,
                                        parquet_reader_options const& options)
-  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(parquet_metadata, options)}
 {
+  auto const metadatas = std::vector<FileMetaData>{parquet_metadata};
+  _impl                = std::make_unique<detail::hybrid_scan_reader_impl>(metadatas, options);
 }
 
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
 [[nodiscard]] text::byte_range_info hybrid_scan_reader::page_index_byte_range() const
 {
-  return _impl->page_index_byte_range();
+  return _impl->page_index_byte_range().front();
 }
 
 [[nodiscard]] FileMetaData hybrid_scan_reader::parquet_metadata() const
 {
-  return _impl->parquet_metadata();
+  return _impl->parquet_metadata().front();
 }
 
 void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
 {
   CUDF_FUNC_RANGE();
 
-  return _impl->setup_page_index(page_index_bytes);
+  auto const per_source = std::vector<cudf::host_span<uint8_t const>>{page_index_bytes};
+  return _impl->setup_page_index(per_source);
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
@@ -53,7 +56,7 @@ std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
   // If row groups are specified in parquet reader options, return them as is
   if (options.get_row_groups().size() == 1) { return options.get_row_groups().front(); }
 
-  return _impl->all_row_groups(options);
+  return _impl->all_row_groups(options).front();
 }
 
 size_type hybrid_scan_reader::total_rows_in_row_groups(

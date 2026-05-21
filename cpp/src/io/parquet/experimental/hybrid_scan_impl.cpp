@@ -64,10 +64,10 @@ namespace {
 
 }  // namespace
 
-hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
-                                                 parquet_reader_options const& options)
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(
+  cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
+  parquet_reader_options const& options)
 {
-  // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
     options.is_enabled_use_arrow_schema(),
@@ -76,28 +76,28 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
-hybrid_scan_reader_impl::hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
-                                                 parquet_reader_options const& options)
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(
+  cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
   _metadata = std::make_unique<aggregate_reader_metadata>(
-    parquet_metadata,
+    parquet_metadatas,
     options.is_enabled_use_arrow_schema(),
     options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
-FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
+std::vector<FileMetaData> hybrid_scan_reader_impl::parquet_metadata() const
 {
   return _extended_metadata->parquet_metadata();
 }
 
-byte_range_info hybrid_scan_reader_impl::page_index_byte_range() const
+std::vector<byte_range_info> hybrid_scan_reader_impl::page_index_byte_range() const
 {
   return _extended_metadata->page_index_byte_range();
 }
 
 void hybrid_scan_reader_impl::setup_page_index(
-  cudf::host_span<uint8_t const> page_index_bytes) const
+  cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes) const
 {
   _extended_metadata->setup_page_index(page_index_bytes);
 }
@@ -200,13 +200,10 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                  [](auto const& buff) { return inline_column_buffer::empty_like(buff); });
 }
 
-std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
+std::vector<std::vector<size_type>> hybrid_scan_reader_impl::all_row_groups(
   parquet_reader_options const& options) const
 {
-  auto const num_row_groups = _extended_metadata->get_num_row_groups();
-  auto row_groups_indices   = std::vector<size_type>(num_row_groups);
-  std::iota(row_groups_indices.begin(), row_groups_indices.end(), size_type{0});
-  return row_groups_indices;
+  return _extended_metadata->all_row_groups(options);
 }
 
 size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
