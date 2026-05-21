@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import NamedExpr
+from cudf_polars.dsl.expr import Col, NamedExpr
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Sequence
 
     from cudf_polars.typing import Schema
 
@@ -38,8 +38,26 @@ def unique_names(names: Iterable[str]) -> Generator[str, None, None]:
         i += 1
 
 
+def _concrete_prefix(names: Sequence[str | NamedExpr]) -> tuple[str, ...]:
+    # Exclude NamedExprs that are not concrete Col references.
+    # We don't throw out the entire NamedExpr tuple if a prefix
+    # of the tuple is concrete.
+    prefix: list[str] = []
+    for name in names:
+        if isinstance(name, str):
+            prefix.append(name)
+        elif isinstance(name.value, Col):
+            prefix.append(name.value.name)
+        else:
+            break
+    return tuple(prefix)
+
+
 def names_to_indices(
-    names: tuple[str | NamedExpr, ...], schema: Schema
+    names: tuple[str | NamedExpr, ...],
+    schema: Schema,
+    *,
+    concrete_prefix: bool = False,
 ) -> tuple[int, ...]:
     """
     Return column indices for the given names in schema order.
@@ -53,11 +71,17 @@ def names_to_indices(
         The names to get indices for.
     schema
         The schema to get indices from.
+    concrete_prefix
+        If True, use only the prefix of names corresponding
+        to concrete column references. If False (default),
+        use all names.
 
     Returns
     -------
     The column indices for each name in schema order.
     """
     keys = list(schema.keys())
+    if concrete_prefix:
+        names = _concrete_prefix(names)
     str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
     return tuple(keys.index(n) for n in str_names)
