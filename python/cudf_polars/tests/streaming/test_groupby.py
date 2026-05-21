@@ -304,7 +304,7 @@ def test_shuffle_reduce_insert_finished_called_on_oom(streaming_engine_factory):
     df = pl.LazyFrame({"a": range(10), "b": range(10)})
     with (
         patch.object(ShuffleManager.Inserter, "insert_hash", foo),
-        pytest.raises(ExceptionGroup) as exc_info,
+        pytest.raises(MemoryError) as exc_info,
     ):
         df.group_by("a").agg(pl.col("b").sum()).collect(engine=streaming_engine)
-    assert any("OOM in insert_hash" in str(e) for e in exc_info.value.exceptions)
+    assert "OOM in insert_hash" in str(exc_info.value)
