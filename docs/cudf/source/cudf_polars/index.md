@@ -50,32 +50,21 @@ available engines, {doc}`options` for the
 
 ## Benchmark
 
-```{note}
-The following benchmarks were performed with the `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY`
-environment variable set to `"0"`. Using managed memory (the default) imposes a performance cost
-in order to avoid out of memory errors. Peak performance can still be attained by setting the
-environment variable to `0`.
-```
+Polars delivers high performance across a wide range of data scales through multiple execution engines. The default CPU engine is highly optimized for interactive and medium-scale analytics on a single node. The Polars GPU engine allows you to seamlessly move to GPU nodes, providing meaningful acceleration when your dataset grows to tens to hundreds of gigabytes or larger.
 
-We reproduced the [Polars Decision Support (PDS)](https://github.com/pola-rs/polars-benchmark)
-benchmark to compare Polars GPU engine with the default CPU settings across several dataset sizes.
-Here are the results:
+We ran the Polars Decision Support (PDS) benchmarks to compare the Polars GPU engine with the CPU engine at larger scale factors to show how the GPU engine delivers meaningful speedups as dataset size grows:
 
-```{figure} ../_static/pds_benchmark_polars.png
+```{figure} ../_static/polars_tpcds_sf1k.png
 :width: 600px
 ```
 
-You can see up to 13x speedup using the GPU engine on the compute-heavy PDS queries involving
-complex aggregation and join operations. Below are the speedups for the top performing queries:
+On a single GPU, you can run TB-scale workloads with significant speedups compared to running on CPU. You can also scale up to run on multiple GPUs for processing even larger workloads:
 
-```{figure} ../_static/compute_heavy_queries_polars.png
+```{figure} ../_static/polars_tpcds_sf3k.png
 :width: 1000px
 ```
 
-*PDS-H benchmark | GPU: NVIDIA H100 PCIe | CPU: Intel Xeon W9-3495X (Sapphire Rapids) | Storage:
-Local NVMe*
-
-You can reproduce the results by visiting the [Polars Decision Support (PDS) GitHub repository](https://github.com/pola-rs/polars-benchmark).
+For more information on the benchmarks being run, see the PDS-DS queries in the [cuDF GitHub repository](https://github.com/rapidsai/cudf/tree/main/python/cudf_polars/cudf_polars/streaming/benchmarks).
 
 ## Learn More
 
