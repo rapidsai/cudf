@@ -4,7 +4,6 @@
  */
 #pragma once
 
-#include <cudf/operators/detail/promote.cuh>
 #include <cudf/operators/math.cuh>
 #include <cudf/operators/types.cuh>
 
