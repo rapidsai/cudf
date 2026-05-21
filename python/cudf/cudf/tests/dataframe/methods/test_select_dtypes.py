@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -21,8 +21,8 @@ def test_select_dtype():
         gdf.select_dtypes(include=["float64"]),
     )
     assert_eq(
-        pdf.select_dtypes(include=["object", "int", "category"]),
-        gdf.select_dtypes(include=["object", "int", "category"]),
+        pdf.select_dtypes(include=["str", "int", "category"]),
+        gdf.select_dtypes(include=["str", "int", "category"]),
     )
 
     assert_eq(
@@ -72,12 +72,12 @@ def test_select_dtype():
     )
     pdf = gdf.to_pandas()
     assert_eq(
-        pdf.select_dtypes(include=["object", "int", "category"]),
-        gdf.select_dtypes(include=["object", "int", "category"]),
+        pdf.select_dtypes(include=["str", "int", "category"]),
+        gdf.select_dtypes(include=["str", "int", "category"]),
     )
     assert_eq(
-        pdf.select_dtypes(include=["object"], exclude=["category"]),
-        gdf.select_dtypes(include=["object"], exclude=["category"]),
+        pdf.select_dtypes(include=["str"], exclude=["category"]),
+        gdf.select_dtypes(include=["str"], exclude=["category"]),
     )
 
     gdf = cudf.DataFrame({"a": range(10), "b": range(10, 20)})
@@ -91,8 +91,8 @@ def test_select_dtype():
         gdf.select_dtypes(include=["float"]),
     )
     assert_eq(
-        pdf.select_dtypes(include=["object"]),
-        gdf.select_dtypes(include=["object"]),
+        pdf.select_dtypes(include=["str"]),
+        gdf.select_dtypes(include=["str"]),
     )
     assert_eq(
         pdf.select_dtypes(include=["int"]), gdf.select_dtypes(include=["int"])
@@ -102,12 +102,12 @@ def test_select_dtype():
         gdf.select_dtypes(exclude=["float"]),
     )
     assert_eq(
-        pdf.select_dtypes(exclude=["object"]),
-        gdf.select_dtypes(exclude=["object"]),
+        pdf.select_dtypes(exclude=["str"]),
+        gdf.select_dtypes(exclude=["str"]),
     )
     assert_eq(
-        pdf.select_dtypes(include=["int"], exclude=["object"]),
-        gdf.select_dtypes(include=["int"], exclude=["object"]),
+        pdf.select_dtypes(include=["int"], exclude=["str"]),
+        gdf.select_dtypes(include=["int"], exclude=["str"]),
     )
 
     assert_exceptions_equal(
@@ -120,12 +120,12 @@ def test_select_dtype():
     )
     pdf = gdf.to_pandas()
     assert_eq(
-        pdf.select_dtypes(exclude=["object"]),
-        gdf.select_dtypes(exclude=["object"]),
+        pdf.select_dtypes(exclude=["str"]),
+        gdf.select_dtypes(exclude=["str"]),
     )
     assert_eq(
-        pdf.select_dtypes(include=["int"], exclude=["object"]),
-        gdf.select_dtypes(include=["int"], exclude=["object"]),
+        pdf.select_dtypes(include=["int"], exclude=["str"]),
+        gdf.select_dtypes(include=["int"], exclude=["str"]),
     )
 
     gdf = cudf.DataFrame(
