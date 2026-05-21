@@ -491,8 +491,27 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for col_name, col in self._column_labels_and_values
             ):
                 return self.copy(deep=False)
+
+        def astype_column(col_name, col):
+            target_dtype = dtype.get(col_name, col.dtype)
+            try:
+                return col.astype(target_dtype, copy=copy)
+            except NotImplementedError as err:
+                if not (
+                    isinstance(target_dtype, np.dtype)
+                    and target_dtype == np.dtype("O")
+                    and isinstance(col.dtype, (pd.StringDtype, pd.ArrowDtype))
+                    and col.dtype.na_value is pd.NA
+                    and str(err).startswith(
+                        "Casting nullable string columns with pd.NA to object"
+                    )
+                ):
+                    raise
+                with cudf.option_context("mode.pandas_compatible", False):
+                    return col.astype(target_dtype, copy=copy)
+
         casted = (
-            col.astype(dtype.get(col_name, col.dtype), copy=copy)
+            astype_column(col_name, col)
             for col_name, col in self._column_labels_and_values
         )
         ca = self._data._from_columns_like_self(casted, verify=False)
