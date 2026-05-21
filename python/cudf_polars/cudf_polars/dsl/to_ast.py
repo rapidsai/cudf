@@ -176,7 +176,16 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
                 )
             ),
         )
-    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
+    c1, c2 = node.children
+    if c1.dtype != c2.dtype:
+        if isinstance(c1, expr.Literal):
+            c1 = c1.astype(c2.dtype)
+        elif isinstance(c2, expr.Literal):
+            c2 = c2.astype(c1.dtype)
+        else:
+            raise NotImplementedError("BinOp with mismatching dtypes")
+    children = (c1, c2)
+    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, children))
 
 
 @_to_ast.register
