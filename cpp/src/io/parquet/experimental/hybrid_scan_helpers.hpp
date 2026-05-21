@@ -114,14 +114,14 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @return Vector of byte ranges of the page index, one per source
    */
-  [[nodiscard]] std::vector<text::byte_range_info> page_index_byte_range() const;
+  [[nodiscard]] std::vector<text::byte_range_info> page_index_byte_ranges() const;
 
   /**
    * @brief Get the Parquet file metadata for every source
    *
    * @return Vector of file metadata, one per source
    */
-  [[nodiscard]] std::vector<FileMetaData> parquet_metadata() const;
+  [[nodiscard]] std::vector<FileMetaData> parquet_metadatas() const;
 
   /**
    * @brief Setup and populate the page index structs in every source's `FileMetaData`
