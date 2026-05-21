@@ -193,7 +193,9 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
             # unchanged.
             pass
         else:
-            raise NotImplementedError("BinOp with mismatching dtypes")
+            raise NotImplementedError(
+                "BinOp with mismatching dtypes"
+            )  # pragma: no cover
     children = (c1, c2)
     return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, children))
 
