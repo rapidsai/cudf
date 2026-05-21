@@ -2062,22 +2062,47 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
 
 TEST_F(JsonReaderTest, JSONLinesRecoveringMalformedOpenBraces)
 {
-  std::string data =
-    // Two lines with just an open brace (malformed JSON)
-    "{\n"
-    "{";
+  // Test recovery mode with various malformed JSON patterns
+  for (int num_lines : {2, 4, 8, 16}) {
+    // Test "{\n" pattern
+    {
+      std::string data;
+      for (int i = 0; i < num_lines - 1; ++i) {
+        data += "{\n";
+      }
+      data += "{";
 
-  cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+      cudf::io::json_reader_options in_options =
+        cudf::io::json_reader_options::builder(
+          cudf::io::source_info{cudf::host_span<std::byte const>{
+            reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+          .lines(true)
+          .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
 
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      EXPECT_EQ(result.tbl->num_rows(), 0) << "Failed {\\n pattern with " << num_lines << " lines";
+    }
 
-  // All rows are invalid with no schema to infer, so we expect 0 rows
-  EXPECT_EQ(result.tbl->num_rows(), 0);
+    // Test {"\n pattern
+    {
+      std::string data;
+      for (int i = 0; i < num_lines - 1; ++i) {
+        data += "{\"\n";
+      }
+      data += "{\"";
+
+      cudf::io::json_reader_options in_options =
+        cudf::io::json_reader_options::builder(
+          cudf::io::source_info{cudf::host_span<std::byte const>{
+            reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+          .lines(true)
+          .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      EXPECT_EQ(result.tbl->num_rows(), 0)
+        << "Failed {\"\\n pattern with " << num_lines << " lines";
+    }
+  }
 }
 
 TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
