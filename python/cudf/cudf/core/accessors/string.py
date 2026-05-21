@@ -159,6 +159,69 @@ class StringMethods(BaseAccessor):
 
     _column: StringColumn
 
+    def _return_pandas_string_nullable_result(
+        self,
+        result_col: ColumnBase,
+        target_dtype,
+    ) -> Series | Index:
+        if self._column.dtype == np.dtype("object"):
+            result_index = (
+                self._parent.index.to_pandas()
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result_name = (
+                self._parent.name
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result = pd.Series(
+                result_col.to_pandas().astype(object),
+                index=result_index,
+                name=result_name,
+            )
+            if target_dtype == pd.Int64Dtype():
+                return cast("Series | Index", result.astype(np.float64))
+            if target_dtype == pd.BooleanDtype():
+                result[result.isna()] = np.nan
+                return cast("Series | Index", result)
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+            and self._column.dtype.na_value is pd.NA
+        ):
+            result_col = result_col.astype(target_dtype)
+        return self._return_or_inplace(result_col)
+
+    def _return_pandas_string_object_result(
+        self, result_col: ColumnBase | dict[int, StringColumn]
+    ) -> Series | Index:
+        if isinstance(result_col, dict):
+            return self._return_or_inplace(result_col)
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+            and self._column.dtype.na_value is pd.NA
+        ):
+            result_index = (
+                self._parent.index.to_pandas()
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result_name = (
+                self._parent.name
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result = pd.Series(
+                result_col.to_pandas().astype(object),
+                index=result_index,
+                name=result_name,
+            )
+            result[result.isna()] = None
+            return cast("Series | Index", result)
+        return self._return_or_inplace(result_col)
+
     def __init__(self, parent: Series | Index):
         value_type = (
             parent.dtype.leaf_type
@@ -262,7 +325,9 @@ class StringMethods(BaseAccessor):
         3    <NA>
         dtype: int32
         """
-        return self._return_or_inplace(self._column.count_characters())
+        return self._return_pandas_string_nullable_result(
+            self._column.count_characters(), pd.Int64Dtype()
+        )
 
     def byte_count(self) -> Series | Index:
         """
@@ -1538,10 +1603,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.DECIMAL
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isalnum(self) -> Series | Index:
@@ -1613,10 +1679,11 @@ class StringMethods(BaseAccessor):
         2    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.ALPHANUM
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isalpha(self) -> Series | Index:
@@ -1675,10 +1742,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.ALPHA
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isdigit(self) -> Series | Index:
@@ -1743,10 +1811,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.DIGIT
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isnumeric(self) -> Series | Index:
@@ -1817,10 +1886,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.NUMERIC
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isupper(self) -> Series | Index:
@@ -1880,11 +1950,12 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.UPPER,
                 plc.strings.char_types.StringCharacterTypes.CASE_TYPES,
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def islower(self) -> Series | Index:
@@ -1944,11 +2015,12 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.LOWER,
                 plc.strings.char_types.StringCharacterTypes.CASE_TYPES,
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isipv4(self) -> Series | Index:
@@ -2213,7 +2285,9 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(self._column.is_title())
+        return self._return_pandas_string_nullable_result(
+            self._column.is_title(), pd.BooleanDtype()
+        )
 
     def filter_alphanum(
         self, repl: str | None = None, keep: bool = True
@@ -2758,6 +2832,8 @@ class StringMethods(BaseAccessor):
                     n,
                 )
 
+        if not expand:
+            return self._return_pandas_string_object_result(result_table)
         return self._return_or_inplace(result_table, expand=expand)
 
     def rsplit(
@@ -2937,6 +3013,8 @@ class StringMethods(BaseAccessor):
                     n,
                 )
 
+        if not expand:
+            return self._return_pandas_string_object_result(result_table)
         return self._return_or_inplace(result_table, expand=expand)
 
     def split_part(
@@ -3768,7 +3846,7 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
-        return self._return_or_inplace(
+        return self._return_pandas_string_object_result(
             self._column.findall(method, pat, flags)
         )
 
@@ -4023,10 +4101,11 @@ class StringMethods(BaseAccessor):
         2    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.SPACE
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def _starts_ends_with(
@@ -4215,8 +4294,8 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        return self._return_or_inplace(
-            self._column.find(method, sub, start, end)
+        return self._return_pandas_string_nullable_result(
+            self._column.find(method, sub, start, end), pd.Int64Dtype()
         )
 
     def find(
