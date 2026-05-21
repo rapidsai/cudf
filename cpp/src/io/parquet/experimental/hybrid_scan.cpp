@@ -42,9 +42,7 @@ hybrid_scan_reader::~hybrid_scan_reader() = default;
 void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
 {
   CUDF_FUNC_RANGE();
-
-  auto const per_source = std::vector<cudf::host_span<uint8_t const>>{page_index_bytes};
-  return _impl->setup_page_indexes(per_source);
+  return _impl->setup_page_indexes(std::vector<cudf::host_span<uint8_t const>>{page_index_bytes});
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
