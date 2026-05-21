@@ -14,7 +14,7 @@ dependencies:
 - cachetools
 - clang-tools==20.1.8
 - clang==20.1.8
-- cmake>=3.30.4
+- cmake>=4.0
 - cramjam
 - cuda-cudart-dev
 - cuda-nvcc
@@ -65,9 +65,9 @@ dependencies:
 - nvtx>=0.2.1
 - openpyxl
 - packaging
-- pandas>=2.0,<2.4.0
+- pandas>=3.0.0,<3.1.0
 - pandoc
-- polars>=1.35,<1.39
+- polars>=1.35,<1.40
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4

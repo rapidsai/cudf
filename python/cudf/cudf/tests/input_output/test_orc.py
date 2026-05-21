@@ -16,7 +16,6 @@ from packaging import version
 from pyarrow import orc
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import (
     ORCWriter,
     is_supported_read_orc,
@@ -142,10 +141,6 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     assert_eq(expect, got)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Bug in older version of pandas",
-)
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
     expect = pd.read_orc(path)
@@ -639,7 +634,11 @@ def normalized_equals(value1, value2):
     if isinstance(value1, float) or isinstance(value2, float):
         return np.isclose(value1, value2)
 
-    return value1 == value2
+    try:
+        assert_eq(value1, value2)
+        return True
+    except AssertionError:
+        return False
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
@@ -1505,8 +1504,10 @@ def test_orc_writer_lists_empty_rg():
     df = cudf.read_orc(buffer)
     assert_eq(df, cudf_in)
 
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_in, pdf_out)
+    # Compare via pyarrow since pd.read_orc converts nullable integer
+    # lists to float arrays ([None] -> [nan]), losing the original types.
+    pa_out = orc.ORCFile(buffer).read()
+    assert pa_out.equals(cudf_in.to_arrow())
 
 
 def test_statistics_sum_overflow():
@@ -1679,24 +1680,18 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    assert_eq(expected, got, check_index_type=True)
+    # When columns is an empty list, pandas uses dtype='object' for
+    # the empty column Index while cudf uses dtype='str'. Avoid
+    # checking the column index type in that case.
+    check_col_type = columns is None or len(columns) > 0
+    assert_eq(
+        expected, got, check_index_type=True, check_column_type=check_col_type
+    )
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
 @pytest.mark.parametrize("index", [True, False, None])
-@pytest.mark.parametrize(
-    "columns",
-    [
-        None,
-        pytest.param(
-            [],
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="Bug in older version of pandas",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("columns", [None, []])
 def test_orc_columns_and_index_param(index_obj, index, columns):
     run_orc_columns_and_index_param(index_obj, index, columns)
 
