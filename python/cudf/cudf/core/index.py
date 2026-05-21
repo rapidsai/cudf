@@ -1670,6 +1670,10 @@ class Index(SingleColumnFrame):
     def _concat(cls, objs):
         if all(isinstance(obj, RangeIndex) for obj in objs):
             result = _concat_range_index(objs)
+        elif any(isinstance(obj, cudf.MultiIndex) for obj in objs):
+            raise TypeError(
+                "cudf does not support appending Index and MultiIndex objects"
+            )
         else:
             data = concat_columns([o._column for o in objs])
             if cls is IntervalIndex:
