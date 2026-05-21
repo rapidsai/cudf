@@ -681,6 +681,27 @@ def parse_single_row_loc_key(
                 else:
                     return MaskIndexer(BooleanMask(key, n))
             elif index.dtype.kind == "M":
+                if is_scalar and isinstance(key.element_indexing(0), str):
+                    try:
+                        loc = index.get_loc(key.element_indexing(0))
+                    except (TypeError, ValueError):
+                        pass
+                    else:
+                        if isinstance(loc, slice):
+                            return SliceIndexer(loc)
+                        elif is_integer(loc):
+                            return ScalarIndexer(
+                                GatherMap.from_column_unchecked(
+                                    cast(
+                                        cudf.core.column.NumericalColumn,
+                                        as_column([loc]),
+                                    ),
+                                    len(index),
+                                    nullify=False,
+                                )
+                            )
+                        else:
+                            return MaskIndexer(BooleanMask(as_column(loc), n))
                 # Try to turn strings into datetimes
                 key = as_column(key, dtype=index.dtype)
             haystack = index._column

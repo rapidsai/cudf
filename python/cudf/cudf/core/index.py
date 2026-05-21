@@ -16,6 +16,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas._libs.tslibs.parsing import parse_datetime_string_with_reso
 
 import pylibcudf as plc
 
@@ -97,6 +98,72 @@ def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     if not isinstance(index_like, Index):
         return Index(index_like, nan_as_null=nan_as_null)
     return index_like
+
+
+_DATETIME_RESOLUTION_ORDER = {
+    "year": 9,
+    "quarter": 8,
+    "month": 7,
+    "day": 6,
+    "hour": 5,
+    "minute": 4,
+    "second": 3,
+    "millisecond": 2,
+    "microsecond": 1,
+    "nanosecond": 0,
+}
+
+
+def _datetime_index_resolution(index: DatetimeIndex) -> str:
+    if len(index) == 0:
+        return "day"
+
+    min_value, max_value = index._column.minmax()
+    for resolution, attr, divisor in (
+        ("nanosecond", "nanosecond", 1),
+        ("microsecond", "nanosecond", 1_000),
+        ("millisecond", "microsecond", 1_000),
+        ("second", "second", 1),
+        ("minute", "minute", 1),
+        ("hour", "hour", 1),
+    ):
+        if any(
+            getattr(value, attr) // divisor for value in (min_value, max_value)
+        ):
+            return resolution
+    return "day"
+
+
+def _datetime_slice_bounds(
+    parsed: datetime.datetime,
+    resolution: str,
+    unit: Literal["s", "ms", "us", "ns"],
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    start = cast(pd.Timestamp, pd.Timestamp(parsed).as_unit(unit))
+    if resolution == "year":
+        end = start + pd.DateOffset(years=1)
+    elif resolution == "quarter":
+        end = start + pd.DateOffset(months=3)
+    elif resolution == "month":
+        end = start + pd.DateOffset(months=1)
+    elif resolution == "day":
+        end = start + pd.Timedelta(days=1)
+    elif resolution == "hour":
+        end = start + pd.Timedelta(hours=1)
+    elif resolution == "minute":
+        end = start + pd.Timedelta(minutes=1)
+    elif resolution == "second":
+        end = start + pd.Timedelta(seconds=1)
+    elif resolution == "millisecond":
+        end = start + pd.Timedelta(milliseconds=1)
+    elif resolution == "microsecond":
+        end = start + pd.Timedelta(microseconds=1)
+    else:
+        end = start + pd.Timedelta(nanoseconds=1)
+    return start, cast(
+        pd.Timestamp,
+        (end.as_unit(unit) - pd.Timedelta(1, unit=unit)).as_unit(unit),
+    )
 
 
 def _get_result_name(
@@ -3456,6 +3523,27 @@ class DatetimeIndex(Index):
         if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
+
+    def get_loc(self, key) -> int | slice | cupy.ndarray:
+        if isinstance(key, str):
+            try:
+                parsed, resolution = parse_datetime_string_with_reso(key, None)
+            except ValueError:
+                return super().get_loc(key)
+            if (
+                _DATETIME_RESOLUTION_ORDER[resolution]
+                > _DATETIME_RESOLUTION_ORDER[_datetime_index_resolution(self)]
+            ):
+                start, end = _datetime_slice_bounds(
+                    parsed,
+                    resolution,
+                    cast(Literal["s", "ms", "us", "ns"], self.unit),
+                )
+                if self.is_monotonic_decreasing:
+                    mask = (self._column >= start) & (self._column <= end)
+                    return mask.values
+                return self.find_label_range(slice(start, end))
+        return super().get_loc(key)
 
     def find_label_range(self, loc: slice) -> slice:
         # For indexing, try to interpret slice arguments as datetime-convertible
