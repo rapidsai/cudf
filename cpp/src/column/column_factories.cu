@@ -68,7 +68,10 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
     d_str.empty() ? cudf::strings::detail::string_index_pair{"", 0}
                   : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), row_value);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    indices.begin(),
+    indices.end(),
+    row_value);
   return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
 
