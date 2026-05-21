@@ -5344,7 +5344,6 @@ NODEIDS_THAT_FAIL = {
     "tests/strings/test_split_partition.py::test_partition_series_stdlib[string=string[python]-rpartition]": "TODO: Add a reason for failure",
     "tests/strings/test_split_partition.py::test_split_nan_expand[string=object]": "AssertionError: DataFrame.iloc[:, 0] (column name='0') are different",
     "tests/strings/test_strings.py::test_index_str_accessor_multiindex_raises": "TODO: Add a reason for failure",
-    "tests/strings/test_strings.py::test_string_slice_out_of_bounds[string=object]": "AssertionError: Series are different",
     "tests/test_algos.py::TestFactorize::test_factorize[multi-False]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
     "tests/test_algos.py::TestFactorize::test_factorize[multi-True]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
     "tests/test_algos.py::TestFactorize::test_factorize[tuples-False]": "AssertionError: Index are different",
