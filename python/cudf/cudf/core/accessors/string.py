@@ -71,6 +71,33 @@ def _replace_unescaped_dollar_with_end_anchor(pat: str) -> str:
     return "".join(parts)
 
 
+def _normalize_pyarrow_replacement_backrefs(pat: str, repl: str) -> str:
+    group_count = re.compile(pat).groups
+    normalized_parts: list[str] = []
+    index = 0
+
+    for match in re.finditer(r"\\([1-9][0-9]*)", repl):
+        normalized_parts.append(repl[index : match.start()])
+        digits = match.group(1)
+        group_number = int(digits)
+        if group_number <= group_count:
+            normalized_parts.append(rf"${{{group_number}}}")
+        elif len(digits) > 1:
+            ambiguous_group_number = int(digits[0])
+            if ambiguous_group_number <= group_count:
+                normalized_parts.append(
+                    rf"${{{ambiguous_group_number}}}{digits[1:]}"
+                )
+            else:
+                normalized_parts.append(match.group(0))
+        else:
+            normalized_parts.append(match.group(0))
+        index = match.end()
+
+    normalized_parts.append(repl[index:])
+    return "".join(normalized_parts)
+
+
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
@@ -1121,7 +1148,16 @@ class StringMethods(BaseAccessor):
             and getattr(self._column.dtype, "storage", None) == "pyarrow"
             and isinstance(pat, str)
         ):
+            pat = self._remove_named_capture_groups(pat)
             pat = _replace_unescaped_dollar_with_end_anchor(pat)
+            normalized_repl = _normalize_pyarrow_replacement_backrefs(
+                pat, repl
+            )
+            if normalized_repl != repl or re.search(r"\\[1-9]", repl):
+                result = self._column.replace_with_backrefs(
+                    pat, normalized_repl
+                )
+                return self._return_or_inplace(result)
 
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 0:
