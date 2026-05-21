@@ -388,3 +388,59 @@ def test_dynamic_planning_skips_compile_time_partition_wise_join():
         right_ir: PartitionInfo(1, partitioned_on=()),
     }
     assert not _use_pwise_join(executor, partition_info, join_ir)
+
+
+def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
+    """Join on a computed key expression."""
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1,
+            max_rows_per_partition=4,
+            broadcast_limit=1,  # Disable broadcast joins
+        ),
+    )
+    if engine.nranks < 2:
+        pytest.skip("bug only manifests on 2+ ranks")
+
+    zip_prefixes = ["10", "20", "30", "40"]
+    full_zips = ["10001", "20001", "30001", "40001"]
+    reps = 4
+
+    # Start with joins on concrete column references
+    # to establish left and right partitioning metadata.
+    left_a = pl.LazyFrame(
+        {
+            "zip_prefix": zip_prefixes * reps,
+            "val_a": list(range(len(zip_prefixes) * reps)),
+        }
+    )
+    left_b = pl.LazyFrame(
+        {
+            "zip_prefix": zip_prefixes * reps,
+            "val_b": list(range(100, 100 + len(zip_prefixes) * reps)),
+        }
+    )
+    left = left_a.join(left_b, on="zip_prefix", how="inner")
+
+    right_a = pl.LazyFrame(
+        {
+            "full_zip": full_zips * reps,
+            "val_c": list(range(200, 200 + len(full_zips) * reps)),
+        }
+    )
+    right_b = pl.LazyFrame(
+        {
+            "full_zip": full_zips * reps,
+            "val_d": list(range(300, 300 + len(full_zips) * reps)),
+        }
+    )
+    right = right_a.join(right_b, on="full_zip", how="inner")
+
+    # Now join on a computed key expression.
+    # This should not silently drop rows across ranks
+    q = left.join(
+        right,
+        left_on="zip_prefix",
+        right_on=pl.col("full_zip").str.slice(0, 2),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

@@ -20,7 +20,7 @@ filtering, concatenating, joining, groupby and window operations -
 among many others.
 
 The best way to check if we support a particular Pandas API is to search
-our [API docs](/user_guide/api_docs/index).
+our [API docs](/cudf/api_docs/index).
 
 ## Data types
 
@@ -161,7 +161,7 @@ For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a
 Series of floats.  If you need to compare floating point results, you
 should typically do so using the functions provided in the
-[`cudf.testing`](/user_guide/api_docs/general_utilities)
+[`cudf.testing`](/cudf/api_docs/general_utilities)
 module, which allow you to compare values up to a desired precision.
 
 ## Column names
