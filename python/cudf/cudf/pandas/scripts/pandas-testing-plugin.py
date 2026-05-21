@@ -124,7 +124,6 @@ NODEIDS_THAT_FAIL = {
     "tests/arithmetic/test_numeric.py::TestAdditionSubtraction::test_series_operators_arithmetic[python-pow-slice]": "AssertionError: Series are different",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[numexpr]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[python]": "TODO: Add a reason for failure",
-    "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_ser_div_ser[numexpr-float32-int64]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[numexpr]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[python]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[numexpr-idx0-2-expected0]": "TODO: Add a reason for failure",
