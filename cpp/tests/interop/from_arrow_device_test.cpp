@@ -581,6 +581,87 @@ TEST_F(FromArrowDeviceTest, StringViewType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({expected_col}), *got_cudf_table_view);
 }
 
+TEST_F(FromArrowDeviceTest, StringViewTypeWithProducerOwnedPrivateData)
+{
+  auto data = std::vector<std::string>({"hello",
+                                        "worldy",
+                                        "much longer string",
+                                        "",
+                                        "another even longer string",
+                                        "",
+                                        "other string"});
+
+  auto validity = std::vector<bool>{true, true, true, false, true, true, true};
+  auto expected_col =
+    cudf::test::strings_column_wrapper(data.begin(), data.end(), validity.begin());
+  auto expected_view = cudf::column_view(expected_col);
+
+  nanoarrow::UniqueArray input;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(input.get(), NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(input.get()));
+  for (auto const& str : data) {
+    auto item = ArrowStringView{str.c_str(), static_cast<int64_t>(str.size())};
+    NANOARROW_THROW_NOT_OK(ArrowArrayAppendString(input.get(), item));
+  }
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+
+  nanoarrow::UniqueSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRING_VIEW));
+  ArrowArrayView view;
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema.get(), nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input.get(), nullptr));
+  ASSERT_GT(view.n_variadic_buffers, 0);
+
+  auto stream  = cudf::get_default_stream();
+  auto items   = view.buffer_views[1].data.as_binary_view;
+  auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                                items,
+                                input->length * sizeof(ArrowBinaryView),
+                                cudaMemcpyDefault,
+                                stream.value()));
+  auto variadics     = std::vector<rmm::device_buffer>();
+  auto variadic_ptrs = std::vector<char*>();
+  for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
+    variadics.emplace_back(view.variadic_buffers[i], view.variadic_buffer_sizes[i], stream);
+    variadic_ptrs.push_back(static_cast<char*>(variadics.back().data()));
+  }
+  stream.synchronize();
+
+  auto device_buffers =
+    std::vector<void const*>(NANOARROW_BINARY_VIEW_FIXED_BUFFERS + variadic_ptrs.size());
+  device_buffers[0] = expected_view.null_mask();
+  device_buffers[1] = d_items.data();
+  for (std::size_t i = 0; i < variadic_ptrs.size(); ++i) {
+    device_buffers[i + NANOARROW_BINARY_VIEW_FIXED_BUFFERS] = variadic_ptrs[i];
+  }
+
+  int producer_private_data = 0;
+  ArrowArray device_array{};
+  device_array.length       = input->length;
+  device_array.null_count   = expected_view.null_count();
+  device_array.offset       = 0;
+  device_array.n_buffers    = static_cast<int64_t>(device_buffers.size());
+  device_array.n_children   = 0;
+  device_array.buffers      = device_buffers.data();
+  device_array.children     = nullptr;
+  device_array.dictionary   = nullptr;
+  device_array.release      = nullptr;
+  device_array.private_data = &producer_private_data;
+
+  ArrowDeviceArray input_device_array;
+  input_device_array.device_id   = rmm::get_current_cuda_device().value();
+  input_device_array.device_type = ARROW_DEVICE_CUDA;
+  input_device_array.sync_event  = nullptr;
+  input_device_array.array       = device_array;
+
+  // Mirrors external Arrow C Device producers where ArrowArray.private_data is producer-owned
+  // and not Nanoarrow state.
+  auto got_cudf_col = cudf::from_arrow_device_column(schema.get(), &input_device_array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_view, *got_cudf_col);
+}
+
 void slice_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
 {
   auto op = [&](ArrowArray* array) {
