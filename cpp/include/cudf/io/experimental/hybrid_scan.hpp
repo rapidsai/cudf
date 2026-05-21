@@ -19,15 +19,13 @@
 #include <utility>
 #include <vector>
 
-namespace CUDF_EXPORT cudf {
-namespace io::parquet::experimental::detail {
+namespace cudf::io::parquet::experimental::detail {
 /**
  * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
  *        Hybrid Scan operation.
  */
 class hybrid_scan_reader_impl;
-}  // namespace io::parquet::experimental::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf::io::parquet::experimental::detail
 
 //! Using `byte_range_info` from cudf::io::text
 using cudf::io::text::byte_range_info;

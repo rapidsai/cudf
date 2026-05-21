@@ -86,20 +86,20 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
-std::vector<FileMetaData> hybrid_scan_reader_impl::parquet_metadata() const
+std::vector<FileMetaData> hybrid_scan_reader_impl::parquet_metadatas() const
 {
-  return _extended_metadata->parquet_metadata();
+  return _extended_metadata->parquet_metadatas();
 }
 
-std::vector<byte_range_info> hybrid_scan_reader_impl::page_index_byte_range() const
+std::vector<byte_range_info> hybrid_scan_reader_impl::page_index_byte_ranges() const
 {
-  return _extended_metadata->page_index_byte_range();
+  return _extended_metadata->page_index_byte_ranges();
 }
 
-void hybrid_scan_reader_impl::setup_page_index(
+void hybrid_scan_reader_impl::setup_page_indexes(
   cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes) const
 {
-  _extended_metadata->setup_page_index(page_index_bytes);
+  _extended_metadata->setup_page_indexes(page_index_bytes);
 }
 
 void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode,

@@ -111,7 +111,7 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
     cudf::host_span<cudf::host_span<uint8_t const> const>{inputs.footer_byte_spans}, options);
 
   // Get parquet metadata and check
-  auto parquet_metadata = reader->parquet_metadata();
+  auto parquet_metadata = reader->parquet_metadatas();
   ASSERT_EQ(parquet_metadata.size(), num_sources);
   for (auto const& meta : parquet_metadata) {
     ASSERT_FALSE(meta.row_groups.empty());
@@ -120,7 +120,7 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
   }
 
   // Setup page index
-  auto const page_index_byte_ranges = reader->page_index_byte_range();
+  auto const page_index_byte_ranges = reader->page_index_byte_ranges();
   ASSERT_EQ(page_index_byte_ranges.size(), num_sources);
   EXPECT_TRUE(std::all_of(page_index_byte_ranges.begin(),
                           page_index_byte_ranges.end(),
@@ -133,18 +133,17 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
 
   auto iter = cuda::zip_iterator(page_index_byte_ranges.begin(), inputs.datasources.begin());
   std::for_each(iter, iter + num_sources, [&](auto const& pair) {
-    auto const& pgidx_byte_range = cuda::std::get<0>(pair);
-    auto const& datasource       = cuda::std::get<1>(pair);
+    auto const& [pgidx_byte_range, datasource] = pair;
     page_index_buffers.emplace_back(
       cudf::io::parquet::fetch_page_index_to_host(*datasource, pgidx_byte_range));
     page_index_byte_spans.emplace_back(*page_index_buffers.back());
   });
 
-  reader->setup_page_index(
+  reader->setup_page_indexes(
     cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
 
   // Check if page index is now present in each parquet metadata
-  parquet_metadata = reader->parquet_metadata();
+  parquet_metadata = reader->parquet_metadatas();
   for (auto const& meta : parquet_metadata) {
     EXPECT_TRUE(meta.row_groups[0].columns[0].offset_index.has_value());
     EXPECT_TRUE(meta.row_groups[0].columns[0].column_index.has_value());
@@ -175,7 +174,7 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
       cudf::host_span<cudf::io::parquet::FileMetaData const>{parquet_metadata}, options);
 
   // Check if the new metadata is the same as the existing one
-  auto const new_metadata = reader_with_existing_metadata->parquet_metadata();
+  auto const new_metadata = reader_with_existing_metadata->parquet_metadatas();
   ASSERT_EQ(new_metadata.size(), num_sources);
   EXPECT_TRUE(std::all_of(new_metadata.begin(), new_metadata.end(), [&](auto const& meta) {
     return meta.row_groups.size() == parquet_metadata.front().row_groups.size();
@@ -202,7 +201,7 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
     inputs.footer_byte_spans, options);
 
   // Check parquet metadata
-  auto const parquet_metadata = reader->parquet_metadata();
+  auto const parquet_metadata = reader->parquet_metadatas();
   ASSERT_EQ(parquet_metadata.size(), num_sources);
   EXPECT_FALSE(parquet_metadata.front().row_groups.empty());
   EXPECT_TRUE(parquet_metadata.back().row_groups.empty());
@@ -214,7 +213,7 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
   EXPECT_TRUE(all_rgs.back().empty());
 
   // Check page index byte ranges
-  auto const page_index_byte_ranges = reader->page_index_byte_range();
+  auto const page_index_byte_ranges = reader->page_index_byte_ranges();
   ASSERT_EQ(page_index_byte_ranges.size(), num_sources);
   EXPECT_FALSE(page_index_byte_ranges.front().is_empty());
   EXPECT_TRUE(page_index_byte_ranges.back().is_empty());

@@ -19,15 +19,13 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
-namespace io::parquet::experimental::detail {
+namespace cudf::io::parquet::experimental::detail {
 /**
  * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
  *        Hybrid Scan operation.
  */
 class hybrid_scan_reader_impl;
-}  // namespace io::parquet::experimental::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf::io::parquet::experimental::detail
 
 //! Using `byte_range_info` from cudf::io::text
 using cudf::io::text::byte_range_info;
@@ -77,25 +75,25 @@ class hybrid_scan_multifile {
   ~hybrid_scan_multifile();
 
   /**
-   * @brief Get the per-source Parquet file footer metadata
+   * @brief Get parquet metadatas for all sources
    *
-   * @return Vector of file metadata, one per source
+   * @return Vector of parquet metadata, one per source
    */
-  [[nodiscard]] std::vector<FileMetaData> parquet_metadata() const;
+  [[nodiscard]] std::vector<FileMetaData> parquet_metadatas() const;
 
   /**
-   * @brief Get the per-source byte range of the page index in each Parquet file
+   * @brief Get byte ranges of the page index for all sources
    *
    * @return Vector of page index byte ranges, one per source
    */
-  [[nodiscard]] std::vector<byte_range_info> page_index_byte_range() const;
+  [[nodiscard]] std::vector<byte_range_info> page_index_byte_ranges() const;
 
   /**
    * @brief Setup the per-source page index within each Parquet file metadata
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
    */
-  void setup_page_index(
+  void setup_page_indexes(
     cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes) const;
 
   /**

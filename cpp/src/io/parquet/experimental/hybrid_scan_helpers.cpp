@@ -135,15 +135,15 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
   }
 }
 
-std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_range() const
+std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ranges() const
 {
   std::vector<text::byte_range_info> page_index_byte_ranges;
   page_index_byte_ranges.reserve(per_file_metadata.size());
   std::transform(per_file_metadata.begin(),
                  per_file_metadata.end(),
                  std::back_inserter(page_index_byte_ranges),
-                 [](auto const& pfm) -> text::byte_range_info {
-                   auto const& row_groups = pfm.row_groups;
+                 [](auto const& file_metadata) -> text::byte_range_info {
+                   auto const& row_groups = file_metadata.row_groups;
                    if (row_groups.empty() or row_groups.front().columns.empty()) { return {}; }
 
                    auto const min_offset = row_groups.front().columns.front().column_index_offset;
@@ -158,12 +158,12 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ra
   return page_index_byte_ranges;
 }
 
-std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadata() const
+std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadatas() const
 {
   return {per_file_metadata.begin(), per_file_metadata.end()};
 }
 
-void aggregate_reader_metadata::setup_page_index(
+void aggregate_reader_metadata::setup_page_indexes(
   cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes)
 {
   CUDF_EXPECTS(page_index_bytes.size() == per_file_metadata.size(),
@@ -171,14 +171,12 @@ void aggregate_reader_metadata::setup_page_index(
 
   auto iter = cuda::zip_iterator(page_index_bytes.begin(), per_file_metadata.begin());
   std::for_each(iter, iter + page_index_bytes.size(), [&](auto const& pair) {
-    auto const& pgidx_bytes = cuda::std::get<0>(pair);
+    // Get the page index bytes and file metadata
+    auto const& [pgidx_bytes, file_metadata] = pair;
+    auto const& row_groups                   = file_metadata.row_groups;
 
     // Return early if empty page index buffer span
     if (pgidx_bytes.empty()) { return; }
-
-    // Get the file metadata and setup the page index
-    auto& file_metadata    = cuda::std::get<1>(pair);
-    auto const& row_groups = file_metadata.row_groups;
 
     // Check for empty parquet file
     CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),

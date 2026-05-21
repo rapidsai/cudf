@@ -15,28 +15,28 @@ namespace cudf::io::parquet::experimental {
 
 hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
                                        parquet_reader_options const& options)
+  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(
+      std::vector<cudf::host_span<uint8_t const>>{footer_bytes}, options)}
 {
-  auto const footers = std::vector<cudf::host_span<uint8_t const>>{footer_bytes};
-  _impl              = std::make_unique<detail::hybrid_scan_reader_impl>(footers, options);
 }
 
 hybrid_scan_reader::hybrid_scan_reader(FileMetaData const& parquet_metadata,
                                        parquet_reader_options const& options)
+  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(
+      std::vector<FileMetaData>{parquet_metadata}, options)}
 {
-  auto const metadatas = std::vector<FileMetaData>{parquet_metadata};
-  _impl                = std::make_unique<detail::hybrid_scan_reader_impl>(metadatas, options);
 }
 
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
 [[nodiscard]] text::byte_range_info hybrid_scan_reader::page_index_byte_range() const
 {
-  return _impl->page_index_byte_range().front();
+  return _impl->page_index_byte_ranges().front();
 }
 
 [[nodiscard]] FileMetaData hybrid_scan_reader::parquet_metadata() const
 {
-  return _impl->parquet_metadata().front();
+  return _impl->parquet_metadatas().front();
 }
 
 void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
@@ -44,7 +44,7 @@ void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_in
   CUDF_FUNC_RANGE();
 
   auto const per_source = std::vector<cudf::host_span<uint8_t const>>{page_index_bytes};
-  return _impl->setup_page_index(per_source);
+  return _impl->setup_page_indexes(per_source);
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(

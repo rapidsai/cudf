@@ -58,19 +58,19 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                    parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan_multifile::parquet_metadata
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::parquet_metadatas
    */
-  [[nodiscard]] std::vector<FileMetaData> parquet_metadata() const;
+  [[nodiscard]] std::vector<FileMetaData> parquet_metadatas() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan_multifile::page_index_byte_range
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::page_index_byte_ranges
    */
-  [[nodiscard]] std::vector<byte_range_info> page_index_byte_range() const;
+  [[nodiscard]] std::vector<byte_range_info> page_index_byte_ranges() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_page_index
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_page_indexes
    */
-  void setup_page_index(
+  void setup_page_indexes(
     cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes) const;
 
   /**
