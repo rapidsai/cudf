@@ -159,13 +159,11 @@ Use these env vars to trace what is happening at the proxy layer:
 | `CUDF_PANDAS_DEBUGGING=1` | Runs both cudf and pandas paths in parallel, warns on result divergence |
 
 ```bash
-rm -rf pandas-testing/pandas-tests/
 CUDF_PANDAS_FAIL_ON_FALLBACK=1 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
     "<node_id>" -xvs
 ```
 
 ```bash
-rm -rf pandas-testing/pandas-tests/
 LOG_FAST_FALLBACK=1 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
     "<node_id>" -xvs 2>&1 | grep -i fallback
 ```
@@ -188,8 +186,6 @@ The fix must be **tightly scoped** and try to keep it minimal. Fixing one edge c
 
 **Classify the failure mode** before writing a fix: is it a specific issue (e.g. one method handles a keyword incorrectly) or a broad failure mode (e.g. dtype casting inconsistency that affects many operations)? For broad issues, consider whether the fix should be applied at a shared/base level rather than patching individual methods.
 
-**First check if the problem exists in cudf classic** (i.e. `import cudf` without `cudf.pandas`). If the bug is in cudf core, fix it there. Only move to cudf.pandas-specific fixes if cudf classic behaves correctly.
-
 Common fix locations:
 
 | What fails | Where to look |
@@ -206,13 +202,17 @@ When a fix touches column operations that call into `pylibcudf`, consult `python
 
 Note: `mode.pandas_compatible` is automatically set to `True` when cudf.pandas is active. Account for this in any conditional logic, but do not add new guards for it without explicit user approval.
 
+If the bug is not in cudf core, move to cudf.pandas-specific fixes.
+
 ---
 
 ## Step 4b — Fix a Proxy/Dispatch Bug
 
-Only reach this step after Step 3a has confirmed that cudf itself is correct.
+Only reach this step after Step 3a has confirmed that cudf itself is correct. Some of the common cases you should consider at this stage:
 
-**Most common cause**: a pandas return type has no registered cudf proxy. Check `python/cudf/cudf/pandas/_wrappers/pandas.py` — this file registers which pandas types map to which cudf types using `make_final_proxy_type()` and related functions. If a new pandas type needs wrapping, add the registration here.
+**Most common cause**: a pandas object in a particular state is not round-tripping correctly through cudf's conversion APIs. `cudf.from_pandas()` and `<object>.to_pandas()` are culprits here. To debug this case, set up the standalone instrumented script as described in step 3c. Then instrument the code to perform direct modifications and testing of the proxy state, for instance by accessing the `_fsproxy_fast` and `_fsproxy_slow` attributes of the relevant objects and calling `cudf.from_pandas` and `<object>.to_pandas` to see if information is being lost or corrupted in one of the conversions.
+
+**Next most common cause**: a pandas return type has no registered cudf proxy. Check `python/cudf/cudf/pandas/_wrappers/pandas.py` — this file registers which pandas types map to which cudf types using `make_final_proxy_type()` and related functions. If a new pandas type needs wrapping, add the registration here.
 
 **`fast_slow_proxy.py` and `module_accelerator.py`** are core infrastructure files. Fix them only if you believe the bug is in one of them.
 
@@ -225,7 +225,6 @@ Three checks are required. Run them in order.
 **a. Target test passes:**
 
 ```bash
-rm -rf pandas-testing/pandas-tests/
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh "<node_id>" -xvs
 ```
 
@@ -234,7 +233,6 @@ Expected: exit code 0, test shows `PASSED`.
 **b. Fix runs on GPU (no silent fallback):**
 
 ```bash
-rm -rf pandas-testing/pandas-tests/
 CUDF_PANDAS_FAIL_ON_FALLBACK=1 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
     "<node_id>" -xvs
 ```
@@ -246,7 +244,6 @@ Exception: some tests intentionally validate fallback behavior. If `FAIL_ON_FALL
 **c. No regressions in the module:**
 
 ```bash
-rm -rf pandas-testing/pandas-tests/
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
     "tests/<module_directory>/" --tb=line -q
 ```
