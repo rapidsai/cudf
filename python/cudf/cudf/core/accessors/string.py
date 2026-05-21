@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import re
 import warnings
 from typing import TYPE_CHECKING, Literal, cast, overload
@@ -27,6 +28,8 @@ from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     can_convert_to_column,
 )
+
+re_parser = importlib.import_module("re._parser")
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -69,6 +72,28 @@ def _massage_string_arg(
         expected = ", ".join(allowed_types[:-1]) + ", or " + allowed_types[-1]
 
     raise ValueError(f"Expected {expected} for {name} but got {type(value)}")
+
+
+def _optional_capture_groups(pat: str, flags: int) -> set[int]:
+    optional_groups = set()
+
+    def collect(subpattern, optional: bool) -> None:
+        for op, args in subpattern:
+            if op is re_parser.SUBPATTERN:
+                group_number, _, _, nested = args
+                if group_number is not None and optional:
+                    optional_groups.add(group_number - 1)
+                collect(nested, optional)
+            elif op in (re_parser.MAX_REPEAT, re_parser.MIN_REPEAT):
+                min_repeat, _, nested = args
+                collect(nested, optional or min_repeat == 0)
+            elif op is re_parser.BRANCH:
+                _, branches = args
+                for branch in branches:
+                    collect(branch, optional)
+
+    collect(re_parser.parse(pat, flags), False)
+    return optional_groups
 
 
 class StringMethods(BaseAccessor):
@@ -627,21 +652,37 @@ class StringMethods(BaseAccessor):
             )
 
         compiled = re.compile(pat)
-        group_names = list(compiled.groupindex.keys())
-        if len(group_names) > 0:
+        if isinstance(self._parent, cudf.Index):
+            if expand is False and compiled.groups > 1:
+                raise ValueError(
+                    "only one regex group is supported with Index"
+                )
+            return cudf.Series._from_column(self._column).str.extract(
+                pat, flags=flags, expand=expand
+            )
+        group_names: list[str | int] = list(range(compiled.groups))
+        for name, group_number in compiled.groupindex.items():
+            group_names[group_number - 1] = name
+        optional_groups = _optional_capture_groups(pat, flags)
+        if compiled.groupindex:
             pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         data = self._column.extract(pat, flags)
+        for key in optional_groups & data.keys():
+            mask = (data[key] != "").fillna(False)
+            mask_buffer, null_count = mask.as_mask()
+            data[key] = data[key].set_mask(mask_buffer, null_count)
         result_name = None
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
-            if len(group_names) > 0:
-                result_name = group_names[0]
+            result_name = (
+                group_names[0] if isinstance(group_names[0], str) else None
+            )
         elif expand is False and len(data) > 1:
             expand = True
-        if len(group_names) == len(data):
-            named_data = {}
-            for key, value in data.items():
-                named_data[group_names[key]] = value
+        if any(isinstance(name, str) for name in group_names):
+            named_data: dict[str | int, ColumnBase] = {
+                group_names[key]: value for key, value in data.items()
+            }
             data = named_data  # type: ignore[assignment]
         return self._return_or_inplace(
             data, expand=expand, replace_name=result_name
