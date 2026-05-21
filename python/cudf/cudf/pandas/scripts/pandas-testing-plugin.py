@@ -7103,7 +7103,6 @@ NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/strings/test_string_array.py::test_string_array[string[pyarrow]-split2]": "Flaky/order-dependent",
     "tests/strings/test_string_array.py::test_string_array[string[python]-split0]": "Flaky/version-sensitive cudf.pandas dispatch",
     "tests/strings/test_string_array.py::test_string_array[string[python]-split2]": "Flaky/version-sensitive cudf.pandas dispatch",
-    "tests/strings/test_strings.py::test_empty_str_methods[string=string[pyarrow]]": "Flaky/version-sensitive cudf.pandas dispatch",
     "tests/strings/test_strings.py::test_pipe_failures[string=string[pyarrow]]": "Flaky/order-dependent",
     "tests/strings/test_strings.py::test_split_join_roundtrip[string=str[pyarrow]]": "Flaky/version-sensitive cudf.pandas dispatch",
     "tests/strings/test_strings.py::test_split_join_roundtrip[string=str[python]]": "Flaky/version-sensitive cudf.pandas dispatch",

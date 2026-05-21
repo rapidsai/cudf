@@ -160,11 +160,34 @@ class StringMethods(BaseAccessor):
 
     _column: StringColumn
 
+    def _is_empty_pandas_string_input(self) -> bool:
+        return len(self._column) == 0 and isinstance(
+            self._column.dtype, (np.dtype, pd.StringDtype)
+        )
+
+    def _empty_pandas_string_result(self, dtype) -> Series | Index:
+        return self._return_or_inplace(column_empty(0, dtype=dtype))
+
     def _return_pandas_string_nullable_result(
         self,
         result_col: ColumnBase,
         target_dtype,
     ) -> Series | Index:
+        if self._is_empty_pandas_string_input():
+            if self._column.dtype == np.dtype("object"):
+                if target_dtype == pd.Int64Dtype():
+                    return self._empty_pandas_string_result(np.dtype(np.int64))
+                if target_dtype == pd.BooleanDtype():
+                    return self._empty_pandas_string_result(np.dtype(np.bool_))
+            elif (
+                isinstance(self._column.dtype, pd.StringDtype)
+                and self._column.dtype.na_value is np.nan
+            ):
+                if target_dtype == pd.Int64Dtype():
+                    return self._empty_pandas_string_result(np.dtype(np.int64))
+                if target_dtype == pd.BooleanDtype():
+                    return self._empty_pandas_string_result(np.dtype(np.bool_))
+            return self._empty_pandas_string_result(target_dtype)
         if self._column.dtype == np.dtype("object"):
             result_index = (
                 self._parent.index.to_pandas()
@@ -194,11 +217,27 @@ class StringMethods(BaseAccessor):
             result_col = result_col.astype(target_dtype)
         return self._return_or_inplace(result_col)
 
+    def _return_pandas_string_int_result(
+        self, result_col: ColumnBase
+    ) -> Series | Index:
+        return self._return_pandas_string_nullable_result(
+            result_col, pd.Int64Dtype()
+        )
+
+    def _return_pandas_string_bool_result(
+        self, result_col: ColumnBase
+    ) -> Series | Index:
+        return self._return_pandas_string_nullable_result(
+            result_col, pd.BooleanDtype()
+        )
+
     def _return_pandas_string_object_result(
         self, result_col: ColumnBase | dict[int, StringColumn]
     ) -> Series | Index:
         if isinstance(result_col, dict):
             return self._return_or_inplace(result_col)
+        if self._is_empty_pandas_string_input():
+            return self._empty_pandas_string_result(np.dtype("object"))
         if (
             isinstance(self._column.dtype, pd.StringDtype)
             and self._column.dtype.storage == "pyarrow"
@@ -326,8 +365,8 @@ class StringMethods(BaseAccessor):
         3    <NA>
         dtype: int32
         """
-        return self._return_pandas_string_nullable_result(
-            self._column.count_characters(), pd.Int64Dtype()
+        return self._return_pandas_string_int_result(
+            self._column.count_characters()
         )
 
     def byte_count(self) -> Series | Index:
@@ -973,22 +1012,27 @@ class StringMethods(BaseAccessor):
                 result_col = input_column.str_contains(pat_normed)
         else:
             # TODO: we silently ignore the `regex=` flag here
-            col_pat = as_column(pat, dtype=DEFAULT_STRING_DTYPE)
+            col_pat = cast(
+                "StringColumn", as_column(pat, dtype=DEFAULT_STRING_DTYPE)
+            )
             if case is False:
                 input_column = self._column.to_lower()
-                col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
+                col_pat = col_pat.to_lower()
             else:
                 input_column = self._column
-            result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+            result_col = input_column.str_contains(col_pat)
+        bool_result_col = cast("ColumnBase", result_col)
         if (
             na is no_default
             and self._column._PANDAS_NA_VALUE in {np.nan, None}
             and self._column.has_nulls()
         ):
-            result_col = result_col.fillna(False)
+            bool_result_col = bool_result_col.fillna(False)
         if na is not no_default:
-            result_col = result_col.fillna(na)
-        return self._return_or_inplace(result_col)
+            bool_result_col = bool_result_col.fillna(na)
+        if self._is_empty_pandas_string_input():
+            return self._return_pandas_string_bool_result(bool_result_col)
+        return self._return_or_inplace(bool_result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
         """
@@ -3837,7 +3881,10 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)
-        return self._return_or_inplace(self._column.count_re(pat, flags))
+        result_col = self._column.count_re(pat, flags)
+        if self._is_empty_pandas_string_input():
+            return self._return_pandas_string_int_result(result_col)
+        return self._return_or_inplace(result_col)
 
     def _findall(
         self,
@@ -4122,9 +4169,10 @@ class StringMethods(BaseAccessor):
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
         pat: str | tuple[str, ...],
     ) -> Series | Index:
-        return self._return_or_inplace(
-            self._column.starts_ends_with(method, pat)
-        )
+        result_col = self._column.starts_ends_with(method, pat)
+        if self._is_empty_pandas_string_input():
+            return self._return_pandas_string_bool_result(result_col)
+        return self._return_or_inplace(result_col)
 
     def endswith(self, pat: str | tuple[str, ...]) -> Series | Index:
         """
