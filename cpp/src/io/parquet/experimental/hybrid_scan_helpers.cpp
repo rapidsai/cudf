@@ -202,7 +202,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
   auto const& opts_row_groups = options.get_row_groups();
   if (not opts_row_groups.empty()) {
     CUDF_EXPECTS(opts_row_groups.size() == per_file_metadata.size(),
-                 "Row groups in parquet reader options must have one inner vector per source");
+                 "Row groups in parquet reader options must specify one vector per data source");
     return opts_row_groups;
   }
 
@@ -224,18 +224,21 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
 {
   std::size_t total_rows = 0;
 
-  std::for_each(cuda::counting_iterator<std::size_t>{0},
-                cuda::counting_iterator{row_group_indices.size()},
-                [&](auto const src_idx) {
-                  auto const& pfm = per_file_metadata[src_idx];
-                  for (auto const row_group_idx : row_group_indices[src_idx]) {
-                    CUDF_EXPECTS(std::cmp_less(row_group_idx, pfm.row_groups.size()),
-                                 "Row group index out of bounds");
-                    total_rows += pfm.row_groups[row_group_idx].num_rows;
-                  }
-                });
-  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
-               "Total number of rows exceeds cudf::size_type's limit");
+  std::for_each(
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
+    [&](auto const src_idx) {
+      auto const& pfm = per_file_metadata[src_idx];
+      for (auto const row_group_idx : row_group_indices[src_idx]) {
+        CUDF_EXPECTS(
+          std::cmp_greater_equal(row_group_idx, size_type{0}) and
+            std::cmp_less(row_group_idx, pfm.row_groups.size()),
+          "Encountered out-of-bounds row group index for data source. Row group index: " +
+            std::to_string(row_group_idx) + ", Source index: " + std::to_string(src_idx) +
+            ", Number of row groups: " + std::to_string(pfm.row_groups.size()));
+        total_rows += pfm.row_groups[row_group_idx].num_rows;
+      }
+    });
 
   return static_cast<size_type>(total_rows);
 }
