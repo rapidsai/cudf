@@ -211,7 +211,6 @@ class StringMethods(BaseAccessor):
                 return cast("Series | Index", result)
         if (
             isinstance(self._column.dtype, pd.StringDtype)
-            and self._column.dtype.storage == "pyarrow"
             and self._column.dtype.na_value is pd.NA
         ):
             result_col = result_col.astype(target_dtype)
