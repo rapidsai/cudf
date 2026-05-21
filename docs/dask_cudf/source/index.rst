@@ -26,7 +26,7 @@ should feel familiar to you. If not, we recommend starting with `10
 minutes to Dask
 <https://docs.dask.org/en/stable/10-minutes-to-dask.html>`__ followed
 by `10 minutes to cuDF and Dask cuDF
-<https://docs.rapids.ai/api/cudf/stable/user_guide/10min.html>`__.
+<https://docs.rapids.ai/api/cudf/stable/cudf/10min.html>`__.
 
 After reviewing the sections below, please see the
 :ref:`Best Practices <best-practices>` page for further guidance on
@@ -202,7 +202,7 @@ API Reference
 
 Generally speaking, Dask cuDF tries to offer exactly the same API as
 Dask DataFrame. There are, however, some minor differences mostly because
-cuDF does not :doc:`perfectly mirror <cudf:user_guide/PandasCompat>`
+cuDF does not `perfectly mirror <https://docs.rapids.ai/api/cudf/stable/cudf/PandasCompat.html>`__
 the pandas API, or because cuDF provides additional configuration
 flags (these mostly occur in data reading and writing interfaces).
 
