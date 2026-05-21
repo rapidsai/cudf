@@ -54,7 +54,11 @@ std::unique_ptr<table> copy_if(table_view const& input,
   auto const begin = cuda::counting_iterator<size_type>{0};
   auto const end   = begin + input.num_rows();
   auto const indices_end =
-    thrust::copy_if(rmm::exec_policy_nosync(stream), begin, end, indices.begin(), filter);
+    thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    begin,
+                    end,
+                    indices.begin(),
+                    filter);
 
   auto const output_size =
     static_cast<size_type>(cuda::std::distance(indices.begin(), indices_end));

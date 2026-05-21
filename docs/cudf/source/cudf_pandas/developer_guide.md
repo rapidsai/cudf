@@ -1,5 +1,5 @@
 # cudf.pandas
-The use of the cuDF pandas accelerator mode (`cudf.pandas`) is explained [in the user guide](../cudf_pandas/index.rst).
+The use of the cuDF pandas accelerator mode (`cudf.pandas`) is explained [in the user guide](index.rst).
 The purpose of this document is to explain how the fast-slow proxy mechanism works and document internal environment variables that can be used to debug `cudf.pandas` itself.
 
 ## fast-slow proxy mechanism

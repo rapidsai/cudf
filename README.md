@@ -8,10 +8,10 @@ Accelerated Data Science suite of libraries.
 
 cuDF is composed of multiple libraries including:
 
-* [libcudf](https://docs.rapids.ai/api/cudf/stable/libcudf_docs/): A CUDA C++ library with [Apache Arrow](https://arrow.apache.org/) compliant
+* [libcudf](https://docs.rapids.ai/api/cudf/stable/libcudf/): A CUDA C++ library with [Apache Arrow](https://arrow.apache.org/) compliant
 data structures and fundamental algorithms for tabular data.
 * [pylibcudf](https://docs.rapids.ai/api/cudf/stable/pylibcudf/): A Python library providing [Cython](https://cython.org/) bindings for libcudf.
-* [cudf](https://docs.rapids.ai/api/cudf/stable/user_guide/): A Python library providing
+* [cudf](https://docs.rapids.ai/api/cudf/stable/cudf/): A Python library providing
     - A DataFrame library mirroring the [pandas](https://pandas.pydata.org/) API
     - A zero-code change accelerator, [cudf.pandas](https://docs.rapids.ai/api/cudf/stable/cudf_pandas/), for existing pandas code.
 * [cudf-polars](https://docs.rapids.ai/api/cudf/stable/cudf_polars/): A Python library providing a GPU engine for [Polars](https://pola.rs/)
