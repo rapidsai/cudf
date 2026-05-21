@@ -206,7 +206,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::all_row_groups(
   return _extended_metadata->all_row_groups(options);
 }
 
-size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
+std::size_t hybrid_scan_reader_impl::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
   return _extended_metadata->total_rows_in_row_groups(row_group_indices);

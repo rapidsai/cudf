@@ -219,7 +219,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
   return row_groups;
 }
 
-size_type aggregate_reader_metadata::total_rows_in_row_groups(
+std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
   std::size_t total_rows = 0;
@@ -240,7 +240,7 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
       }
     });
 
-  return static_cast<size_type>(total_rows);
+  return total_rows;
 }
 
 std::tuple<std::vector<input_column_info>,

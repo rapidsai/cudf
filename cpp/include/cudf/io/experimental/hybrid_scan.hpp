@@ -342,7 +342,7 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @return Total number of top-level rows in the row groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**

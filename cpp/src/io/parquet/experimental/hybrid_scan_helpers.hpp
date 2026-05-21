@@ -149,7 +149,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @return Total number of top-level rows in the row groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
