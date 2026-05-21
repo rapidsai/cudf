@@ -10,7 +10,7 @@
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
-enum errc : int { OK = 0, OVERFLOW = 1, DIVISION_BY_ZERO = 2 };
+enum class errc : int { OK = 0, OVERFLOW = 1, DIVISION_BY_ZERO = 2 };
 
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf
