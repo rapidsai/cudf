@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/getenv_or.hpp"
-
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
@@ -290,7 +289,8 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
 CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 {
   // use cudaMemcpyAsync for all pinned copies
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
   return threshold;
 }
 
@@ -304,7 +304,8 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
   return threshold;
 }
 
