@@ -590,6 +590,11 @@ TEST_F(StringsContainsTests, IncompleteClassesRange)
     prog     = cudf::strings::regex_program::create("[a-f-q-z]");  // same as [a-fq-z-]
     results  = cudf::strings::contains_re(sv, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+    expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 0, 1, 1});
+    prog     = cudf::strings::regex_program::create("[g-g-z]");  // same as [gz-]
+    results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 1, 1});
