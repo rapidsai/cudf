@@ -35,24 +35,32 @@ from cudf_polars.streaming.actor_graph.utils import (
 _SCHEMA = {"key": DataType(pl.Int32()), "val": DataType(pl.Int32())}
 _NAMES = list(_SCHEMA)
 _DTYPES = list(_SCHEMA.values())
+_Boundary = int | tuple[int, ...]
+
+
+def _boundary_value(boundary: _Boundary, index: int) -> int:
+    return boundary[index] if isinstance(boundary, tuple) else boundary
 
 
 def _make_scheme(
     context,
-    boundary: int | tuple[int, ...],
+    boundary: _Boundary | list[_Boundary],
     *,
     key_indices: tuple[int, ...] = (0,),
     strict: bool = True,
     stream,
 ) -> OrderScheme:
-    boundary_values = (
-        boundary if isinstance(boundary, tuple) else (boundary,) * len(key_indices)
+    boundary_rows: list[_Boundary] = (
+        boundary if isinstance(boundary, list) else [boundary]
     )
     boundary_df = DataFrame.from_polars(
         pl.DataFrame(
             {
-                f"k{i}": pl.Series([value], dtype=pl.Int32())
-                for i, value in enumerate(boundary_values)
+                f"k{i}": pl.Series(
+                    [_boundary_value(value, i) for value in boundary_rows],
+                    dtype=pl.Int32(),
+                )
+                for i in range(len(key_indices))
             }
         ),
         stream,
@@ -279,11 +287,45 @@ def test_adjust_orderscheme_sparse_boundary_shift(
 
 
 @pytest.mark.spmd
+def test_adjust_orderscheme_emits_empty_owned_partitions(spmd_engine) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    if comm.nranks != 2:
+        pytest.skip("This test expects exactly two ranks.")
+
+    keys = [0, 1, 2] if comm.rank == 0 else [5, 8]
+    stream = context.get_stream_from_pool()
+    input_scheme = _make_scheme(context, 5, stream=stream)
+    output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
+
+    with reserve_op_id() as op_id:
+        output = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame(keys),
+                input_scheme,
+                output_scheme,
+                collective_id=op_id,
+            )
+        )
+
+    expected = {
+        0: {0: [0, 1, 2], 1: []},
+        1: {2: [5], 3: [8]},
+    }[comm.rank]
+    assert set(output) == set(expected)
+    for pid, keys in expected.items():
+        assert output[pid]["key"].to_list() == keys
+        assert output[pid]["val"].to_list() == keys
+
+
+@pytest.mark.spmd
 @pytest.mark.parametrize(
     "target_boundary,expected",
     [
         (3, {0: [0, 1, 2], 1: [3, 4, 5, 6, 7]}),
-        (0, {1: list(range(8))}),
+        (0, {0: [], 1: list(range(8))}),
     ],
 )
 def test_adjust_orderscheme_single_rank_no_collective(

@@ -19,7 +19,7 @@ import pylibcudf as plc
 from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.streaming.actor_graph.utils import concat_batch
+from cudf_polars.streaming.actor_graph.utils import concat_batch, empty_table_chunk
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
@@ -283,8 +283,7 @@ async def adjust_orderscheme(
         chunk = (
             await concat_batch(chunks, context, ref_ir.schema, ir_context)
             if chunks
-            else None
+            else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
         )
-        if chunk is not None and chunk.table_view().num_rows() > 0:
-            await ch_out.send(context, Message(pid, chunk))
+        await ch_out.send(context, Message(pid, chunk))
     await ch_out.drain(context)
