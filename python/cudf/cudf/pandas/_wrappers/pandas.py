@@ -1525,6 +1525,17 @@ def _register_assert_produces_warning(*args, **kwargs):
     return null_assert_produces_warning(*args, **kwargs)
 
 
+def null_raises_chained_assignment_error(*args, **kwargs):
+    # This assertion function also uses assert_produces_warning
+    # we want to ignore in pandas unit tests.
+    return null_assert_produces_warning(*args, **kwargs)
+
+
+@register_proxy_func(pd._testing.raises_chained_assignment_error)
+def _register_raises_chained_assignment_error(*args, **kwargs):
+    return null_raises_chained_assignment_error(*args, **kwargs)
+
+
 @nvtx.annotate(
     "CUDF_PANDAS_DATAFRAME_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
