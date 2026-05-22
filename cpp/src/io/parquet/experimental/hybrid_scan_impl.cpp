@@ -881,7 +881,7 @@ void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   std::span<std::vector<size_type> const> row_group_indices,
   std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-  std::span<bool const> data_page_mask)
+  host_span<bool const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {

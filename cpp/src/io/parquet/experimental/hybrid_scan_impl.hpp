@@ -402,7 +402,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void prepare_data(read_mode mode,
                     std::span<std::vector<size_type> const> row_group_indices,
                     std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-                    std::span<bool const> data_page_mask);
+                    host_span<bool const> data_page_mask);
 
   /**
    * @brief Create descriptors for filter column chunks and decode dictionary page headers
@@ -444,7 +444,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   void handle_chunking(read_mode mode,
                        std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-                       std::span<bool const> data_page_mask);
+                       host_span<bool const> data_page_mask);
 
   /**
    * @brief Setup step for the next input read pass.
