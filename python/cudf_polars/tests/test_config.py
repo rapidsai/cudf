@@ -379,6 +379,18 @@ def test_target_partition_from_env(
         assert len(recwarn) == 0
 
 
+def test_target_partition_defaults_to_device_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.delenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", raising=False)
+        m.setattr(cudf_polars.utils.config, "get_total_device_memory", lambda: 32 << 30)
+
+        config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
+        assert config.executor.min_device_size == 32 << 30
+        assert config.executor.target_partition_size == int((32 << 30) * 0.025)
+
+
 def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
