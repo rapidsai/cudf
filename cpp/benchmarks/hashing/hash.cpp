@@ -6,7 +6,6 @@
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/hashing.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -33,22 +32,7 @@ static void bench_hash(nvbench::state& state)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  // collect statistics
-  auto chars_size = std::size_t{0};
-  for (auto col_idx = cudf::size_type{1}; col_idx < num_cols; col_idx += 2) {
-    cudf::strings_column_view input(data->get_column(col_idx).view());
-    chars_size += input.chars_size(stream);
-  }
-  // add memory read from string column
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  // add memory read from int64_t column
-  state.add_global_memory_reads<nvbench::int64_t>(static_cast<int64_t>(num_rows) *
-                                                  ((num_cols + 1) / 2));
-  // add memory read from bitmaks
-  if (!no_nulls) {
-    state.add_global_memory_reads<nvbench::int8_t>(num_cols *
-                                                   cudf::bitmask_allocation_size_bytes(num_rows));
-  }
+  state.add_global_memory_reads<nvbench::int8_t>(data->alloc_size());
   // memory written depends on used hash
 
   if (hash_name == "murmurhash3_x86_32") {
