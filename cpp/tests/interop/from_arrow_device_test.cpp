@@ -562,7 +562,7 @@ TEST_F(FromArrowDeviceTest, StringViewType)
   child_array.dictionary = nullptr;
   child_array.release    = nullptr;
 
-  ArrowArray* children[] = {&child_array};
+  ArrowArray* children[]       = {&child_array};
   void const* struct_buffers[] = {nullptr};
   ArrowArray struct_array{};
   struct_array.length     = input.length;
