@@ -282,6 +282,8 @@ def pytest_configure(config: pytest.Config):
     # test that shares a worker with a ray/dask test, so the suppression must
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
+    # https://github.com/open-telemetry/opentelemetry-python/issues/5231 (used by Ray)
+    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
