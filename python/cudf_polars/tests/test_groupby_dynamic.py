@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_ir_translation_raises
 
 
-def test_groupby_dynamic_raises():
+def test_groupby_dynamic_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "dt": [
@@ -26,4 +26,4 @@ def test_groupby_dynamic_raises():
         .group_by_dynamic("dt", every="1q")
         .agg(pl.col("dt").count().alias("num_values"))
     )
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
