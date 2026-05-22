@@ -1033,14 +1033,8 @@ class StringMethods(BaseAccessor):
                 )
 
             if regex:
-                warnings.warn(
-                    "regex support for multiple replace patterns  "
-                    "will be removed in a future version.",
-                    FutureWarning,
-                )
-                result = self._column.replace_re(
-                    list(pat),
-                    as_column(repl, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
+                raise ValueError(
+                    "multiple pattern replace with regex=True is not supported"
                 )
             else:
                 result = self._column.replace_multiple(
