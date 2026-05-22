@@ -309,16 +309,16 @@ struct row_list_ptrs {
 };
 
 __device__ inline row_list_ptrs get_row_lists(
-  cudf::detail::lists_column_device_view const& meta_lists_device_view,
-  cudf::detail::lists_column_device_view const& val_lists_device_view,
+  cudf::detail::lists_column_device_view const& metadata,
+  cudf::detail::lists_column_device_view const& values,
   size_type row)
 {
-  auto const meta_begin = meta_lists_device_view.offset_at(row);
-  auto const meta_end   = meta_lists_device_view.offset_at(row + 1);
-  auto const val_begin  = val_lists_device_view.offset_at(row);
-  auto const val_end    = val_lists_device_view.offset_at(row + 1);
-  auto const meta_child = meta_lists_device_view.child();
-  auto const val_child  = val_lists_device_view.child();
+  auto const meta_begin = metadata.offset_at(row);
+  auto const meta_end   = metadata.offset_at(row + 1);
+  auto const val_begin  = values.offset_at(row);
+  auto const val_end    = values.offset_at(row + 1);
+  auto const meta_child = metadata.child();
+  auto const val_child  = values.child();
   return {meta_child.data<uint8_t>() + meta_begin,
           meta_end - meta_begin,
           val_child.data<uint8_t>() + val_begin,
@@ -328,9 +328,8 @@ __device__ inline row_list_ptrs get_row_lists(
 constexpr int block_size = 256;
 
 CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
-  column_device_view variant_device_view,
-  cudf::detail::lists_column_device_view meta_lists_device_view,
-  cudf::detail::lists_column_device_view val_lists_device_view,
+  cudf::detail::lists_column_device_view metadata,
+  cudf::detail::lists_column_device_view values,
   column_device_view path_device_view,
   device_span<size_type> d_sizes,
   device_span<size_type> d_src_offsets,
@@ -341,15 +340,13 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
   if (tid >= num_rows) { return; }
   auto const row = static_cast<size_type>(tid);
 
-  if (variant_device_view.nullable() && !variant_device_view.is_valid_nocheck(row)) {
+  if (!cudf::bit_is_set(d_null_mask, row)) {
     d_sizes[row]       = 0;
     d_src_offsets[row] = 0;
-    cudf::clear_bit(d_null_mask, row);
     return;
   }
 
-  auto const [meta_ptr, meta_len, val_ptr, val_len] =
-    get_row_lists(meta_lists_device_view, val_lists_device_view, row);
+  auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(metadata, values, row);
 
   auto const fs = device_locate_path(meta_ptr, meta_len, val_ptr, val_len, path_device_view);
   if (fs.length == 0) {
@@ -372,7 +369,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
 // replaced with a cooperative copy (warp- or block-per-row, e.g.
 // `cuda::memcpy_async`) once this path becomes a measured hot spot.
 CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_copy_kernel(
-  cudf::detail::lists_column_device_view val_lists_device_view,
+  cudf::detail::lists_column_device_view values,
   device_span<size_type const> d_src_offsets,
   device_span<size_type const> d_offsets,
   device_span<uint8_t> d_out_bytes,
@@ -389,8 +386,8 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_copy_kernel(
   auto const len       = d_offsets[row + 1] - dst_begin;
   if (len == 0) { return; }
 
-  auto const val_begin = val_lists_device_view.offset_at(row);
-  auto const* val_ptr  = val_lists_device_view.child().data<uint8_t>() + val_begin;
+  auto const val_begin = values.offset_at(row);
+  auto const* val_ptr  = values.child().data<uint8_t>() + val_begin;
   auto const* src      = val_ptr + d_src_offsets[row];
   auto* dst            = d_out_bytes.data() + dst_begin;
   for (size_type i = 0; i < len; ++i) {
@@ -400,8 +397,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_copy_kernel(
 
 template <typename T>
 CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
-  column_device_view variant_device_view,
-  cudf::detail::lists_column_device_view val_lists_device_view,
+  cudf::detail::lists_column_device_view values,
   T* d_output,
   bitmask_type* d_null_mask,
   size_type num_rows)
@@ -410,15 +406,14 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   if (tid >= num_rows) { return; }
   auto const row = static_cast<size_type>(tid);
 
-  if (variant_device_view.nullable() && !variant_device_view.is_valid_nocheck(row)) {
+  if (!cudf::bit_is_set(d_null_mask, row)) {
     d_output[row] = 0;
-    cudf::clear_bit(d_null_mask, row);
     return;
   }
 
-  auto const val_begin = val_lists_device_view.offset_at(row);
-  auto const val_end   = val_lists_device_view.offset_at(row + 1);
-  auto const val_child = val_lists_device_view.child();
+  auto const val_begin = values.offset_at(row);
+  auto const val_end   = values.offset_at(row + 1);
+  auto const val_child = values.child();
   auto const* val_ptr  = val_child.data<uint8_t>() + val_begin;
   auto const val_len   = val_end - val_begin;
 
@@ -432,8 +427,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
 }
 
 struct cast_variant_string_fn {
-  column_device_view variant_device_view;
-  cudf::detail::lists_column_device_view val_lists_device_view;
+  cudf::detail::lists_column_device_view d_values;
   bitmask_type* d_null_mask;
   size_type* d_sizes;
   char* d_chars;
@@ -441,15 +435,14 @@ struct cast_variant_string_fn {
 
   __device__ void operator()(size_type row)
   {
-    if (variant_device_view.nullable() && !variant_device_view.is_valid_nocheck(row)) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
       if (!d_chars) { d_sizes[row] = 0; }
-      cudf::clear_bit(d_null_mask, row);
       return;
     }
 
-    auto const val_begin = val_lists_device_view.offset_at(row);
-    auto const val_end   = val_lists_device_view.offset_at(row + 1);
-    auto const val_child = val_lists_device_view.child();
+    auto const val_begin = d_values.offset_at(row);
+    auto const val_end   = d_values.offset_at(row + 1);
+    auto const val_child = d_values.child();
     auto const* val_ptr  = val_child.data<uint8_t>() + val_begin;
     auto const val_len   = val_end - val_begin;
 
@@ -561,33 +554,35 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   CUDF_EXPECTS(meta_view.type().id() == type_id::LIST && val_view.type().id() == type_id::LIST,
                "VARIANT metadata and value children must be lists",
                std::invalid_argument);
+  CUDF_EXPECTS(lists_column_view{meta_view}.child().type().id() == type_id::UINT8 &&
+                 lists_column_view{val_view}.child().type().id() == type_id::UINT8,
+               "VARIANT metadata and value children must be list<uint8>",
+               std::invalid_argument);
 
-  auto variant_device_view = column_device_view::create(variant_column, stream);
-  auto meta_device_view    = column_device_view::create(meta_view, stream);
-  auto val_device_view     = column_device_view::create(val_view, stream);
+  auto meta_device_view = column_device_view::create(meta_view, stream);
+  auto val_device_view  = column_device_view::create(val_view, stream);
   cudf::detail::lists_column_device_view meta_lists_device_view(*meta_device_view);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
 
-  // Allocate sizes array, source-offset memo, and null mask (all-valid initially).
   // d_src_offsets caches the per-row intra-value byte offset returned by
   // device_locate_path so the copy kernel can skip re-parsing.
   rmm::device_uvector<size_type> d_sizes(num_rows, stream, temp_mr);
   rmm::device_uvector<size_type> d_src_offsets(num_rows, stream, temp_mr);
-  auto null_mask    = cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
+  auto null_mask =
+    variant_column.nullable()
+      ? cudf::detail::copy_bitmask(variant_column, stream, mr)
+      : cudf::create_null_mask(variant_column.size(), mask_state::ALL_VALID, stream, mr);
   auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
-  // Pass 1: parse the path per row, compute output sizes, and memoize the
-  // intra-blob source offset for the copy kernel.
+  // Pass 1: parse the path per row and compute output sizes
   auto grid = cudf::detail::grid_1d{num_rows, block_size};
   get_variant_field_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    *variant_device_view,
     meta_lists_device_view,
     val_lists_device_view,
     *path_device_view,
     d_sizes,
     d_src_offsets,
     d_null_mask);
-  CUDF_CUDA_TRY(cudaPeekAtLastError());
 
   // Convert sizes to offsets
   auto [offsets_column, total_bytes] =
@@ -603,7 +598,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   if (total_bytes > 0) {
     get_variant_field_copy_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
       val_lists_device_view, d_src_offsets, d_offsets, d_out_bytes, d_null_mask);
-    CUDF_CUDA_TRY(cudaPeekAtLastError());
   }
 
   // Build the output value list<uint8> column
@@ -655,23 +649,22 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
                "VARIANT value child must be a list",
                std::invalid_argument);
 
-  auto variant_device_view = column_device_view::create(variant_column, stream);
-  auto val_device_view     = column_device_view::create(val_view, stream);
+  auto val_device_view = column_device_view::create(val_view, stream);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
+
+  // Initialize the null mask using the parent struct (or all-valid).
+  auto null_mask =
+    variant_column.nullable()
+      ? cudf::detail::copy_bitmask(variant_column, stream, mr)
+      : cudf::create_null_mask(variant_column.size(), mask_state::ALL_VALID, stream, mr);
+  auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
   auto launch_int = [&]<typename T>(std::in_place_type_t<T>) {
     rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(T), stream, mr};
-    auto null_mask    = cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
-    auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_int_kernel<T>
-      <<<grid.num_blocks, block_size, 0, stream.value()>>>(*variant_device_view,
-                                                           val_lists_device_view,
-                                                           static_cast<T*>(data.data()),
-                                                           d_null_mask,
-                                                           num_rows);
-    CUDF_CUDA_TRY(cudaPeekAtLastError());
+    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      val_lists_device_view, static_cast<T*>(data.data()), d_null_mask, num_rows);
 
     auto const null_count =
       num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
@@ -692,11 +685,7 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
   }
 
   // STRING path
-  auto null_mask    = cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
-  auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
-
-  cast_variant_string_fn fn{
-    *variant_device_view, val_lists_device_view, d_null_mask, nullptr, nullptr, {}};
+  cast_variant_string_fn fn{val_lists_device_view, d_null_mask, nullptr, nullptr, {}};
   auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(fn, num_rows, stream, mr);
 
