@@ -23,7 +23,7 @@ from cudf_polars.dsl.ir import (
     Scan,
     Sink,
 )
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import log_io_event, nvtx_annotate_cudf_polars
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -512,9 +512,14 @@ class ParquetMetadata:
 
         total_file_count = len(self.paths)
         sampled_file_count = len(self.sample_paths)
-        sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(list(self.sample_paths))
-        )
+        with log_io_event(
+            phase="metadata",
+            paths=self.sample_paths,
+            is_statistics=True,
+        ):
+            sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+                plc.io.SourceInfo(list(self.sample_paths))
+            )
 
         if total_file_count == sampled_file_count:
             row_count = sample_metadata.num_rows()
@@ -578,7 +583,13 @@ def _sample_rg_sizes(
     options.set_column_names(target_cols)
     options.set_row_groups(list(samples.values()))
     stream = get_cuda_stream()
-    tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
+    with log_io_event(
+        phase="data",
+        paths=tuple(samples),
+        is_statistics=True,
+    ):
+        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
+
     result = {
         name: column.device_buffer_size() // n_sampled
         for name, column in zip(

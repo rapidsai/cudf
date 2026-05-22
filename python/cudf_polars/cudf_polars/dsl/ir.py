@@ -47,7 +47,11 @@ from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import (
+    log_do_evaluate,
+    log_io_event,
+    nvtx_annotate_cudf_polars,
+)
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -352,7 +356,14 @@ _COMPARISON_BINOPS = {
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
-    metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+    with log_io_event(
+        phase="metadata",
+        paths=paths,
+        is_statistics=False,
+    ):
+        metadata = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(paths)
+        )
     column_types = metadata.schema().column_types()
 
     if columns is not None:
@@ -650,9 +661,14 @@ class Scan(IR):
     @nvtx_annotate_cudf_polars(message="Scan.fast_count")
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
-        meta = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(self.paths)
-        )
+        with log_io_event(
+            phase="metadata",
+            paths=self.paths,
+            is_statistics=False,
+        ):
+            meta = plc.io.parquet_metadata.read_parquet_metadata(
+                plc.io.SourceInfo(self.paths)
+            )
         total_rows = meta.num_rows() - self.skip_rows
         if self.n_rows != -1:
             total_rows = min(total_rows, self.n_rows)
@@ -832,12 +848,20 @@ class Scan(IR):
                     pass_read_limit=parquet_options.pass_read_limit,
                     stream=stream,
                 )
-                chunk = reader.read_chunk()
+                with log_io_event(
+                    phase="data",
+                    paths=paths,
+                ):
+                    chunk = reader.read_chunk()
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
                 while reader.has_next():
-                    columns = reader.read_chunk().tbl.columns()
+                    with log_io_event(
+                        phase="data",
+                        paths=paths,
+                    ):
+                        columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
                     for i in reversed(range(len(concatenated_columns))):
@@ -861,9 +885,13 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                tbl_w_meta = plc.io.parquet.read_parquet(
-                    parquet_reader_options, stream=stream
-                )
+                with log_io_event(
+                    phase="data",
+                    paths=paths,
+                ):
+                    tbl_w_meta = plc.io.parquet.read_parquet(
+                        parquet_reader_options, stream=stream
+                    )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 num_rows = (

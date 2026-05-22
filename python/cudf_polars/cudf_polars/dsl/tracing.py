@@ -57,6 +57,7 @@ class Scope(str, enum.Enum):
     PLAN = "plan"
     ACTOR = "actor"
     EVALUATE_IR_NODE = "evaluate_ir_node"
+    IO = "io"
 
 
 @functools.cache
@@ -235,3 +236,45 @@ def log(message: str, **kwargs: Any) -> None:
     if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
         log = structlog.get_logger()
         log.info(message, **kwargs)
+
+
+def common_path_prefix(paths: list[str] | tuple[str, ...]) -> str:
+    """Return a stable common path prefix for a path collection."""
+    if len(paths) == 0:
+        return ""
+    prefix = os.path.commonprefix(paths)
+    if "/" in prefix:
+        return prefix.rsplit("/", 1)[0] + "/"
+    return prefix
+
+
+@contextlib.contextmanager
+def log_io_event(
+    *,
+    phase: Literal["metadata", "data"],
+    paths: list[str] | tuple[str, ...],
+    is_statistics: bool = False,
+    offset: int = -1,
+    size: int = -1,
+) -> Generator[None, None, None]:
+    """
+    Emit a structured IO trace event.
+
+    ``offset`` and ``size`` represent physical byte ranges when known.
+    A value of ``-1`` means the information is not available at this layer.
+    """
+    start = time.monotonic_ns()
+    yield
+    stop = time.monotonic_ns()
+    log(
+        "IO event",
+        scope=Scope.IO.value,
+        phase=phase,
+        start=start,
+        stop=stop,
+        is_statistics=is_statistics,
+        prefix=common_path_prefix(paths),
+        path_count=len(paths),
+        offset=offset,
+        size=size,
+    )
