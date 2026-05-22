@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 from typing import cast
 
 import pytest
@@ -371,7 +370,6 @@ def test_target_partition_from_env(
     monkeypatch: pytest.MonkeyPatch, recwarn: pytest.WarningsRecorder
 ) -> None:
     with monkeypatch.context() as m:
-        m.setitem(sys.modules, "pynvml", None)
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
 
         engine = pl.GPUEngine(executor="streaming")
