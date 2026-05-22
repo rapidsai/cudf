@@ -80,8 +80,8 @@ This ensures that docstring style is consistent and conformant across the codeba
 Documentation is compiled using Sphinx, which pulls docstrings from the code.
 Rather than simply listing all APIs, however, we aim to mimic the pandas documentation.
 To do so, we organize API docs into specific pages and sections.
-These pages are stored in `docs/cudf/source/api_docs`.
-For example, all `DataFrame` documentation is contained in `docs/cudf/source/api_docs/dataframe.rst`.
+These pages are stored in `docs/cudf/source/cudf/api_docs`.
+For example, all `DataFrame` documentation is contained in `docs/cudf/source/cudf/api_docs/dataframe.rst`.
 That page contains sections like "Computations / descriptive stats" to make APIs more easily discoverable.
 
 Within each section, documentation is created using [`autosummary`](https://www.sphinx-doc.org/en/master/usage/extensions/autosummary.html)
@@ -174,7 +174,7 @@ All such API compatibility notes are collected and displayed in the rendered doc
 ## Writing documentation pages
 
 In addition to docstrings, our docs also contain a number of more dedicated user guides.
-These pages are stored in `docs/cudf/source/user_guide`.
+These pages are stored in `docs/cudf/source/cudf`.
 These pages are all written using MyST, a superset of Markdown.
 MyST allows developers to write using familiar Markdown syntax,
 while also providing the full power of reST where needed.

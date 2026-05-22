@@ -16,6 +16,7 @@ import polars as pl
 
 import rmm.mr
 
+from cudf_polars.engine.core import _find_memory_error
 from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import (
@@ -533,3 +534,42 @@ def test_over_nonscalar_duplicated_input(
                 f"coarse_g={cg}: expected dense ranks [1, 2, 3] "
                 f"but got {grp['rank_x'].to_list()}"
             )
+
+
+def test_find_memory_error() -> None:
+    err = MemoryError("oom")
+    assert _find_memory_error(err) is err
+
+    inner = MemoryError("oom")
+    assert _find_memory_error(BaseExceptionGroup("g", [inner])) is inner
+
+    inner = MemoryError("oom")
+    assert (
+        _find_memory_error(
+            BaseExceptionGroup(
+                "outer", [BaseExceptionGroup("inner", [ValueError("x"), inner])]
+            )
+        )
+        is inner
+    )
+
+    assert _find_memory_error(BaseExceptionGroup("g", [ValueError("x")])) is None
+
+
+@pytest.mark.spmd
+def test_memory_error_hint(spmd_engine: SPMDEngine) -> None:
+    """MemoryError from the actor network is re-raised with a configuration hint."""
+    q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") + 1)
+
+    for exc in [
+        MemoryError("CUDA out of memory"),
+        BaseExceptionGroup("unhandled errors", [MemoryError("CUDA out of memory")]),
+    ]:
+        with (
+            patch(
+                "cudf_polars.engine.core.run_actor_network",
+                side_effect=exc,
+            ),
+            pytest.raises(MemoryError, match="target_partition_size"),
+        ):
+            q.collect(engine=spmd_engine)
