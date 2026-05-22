@@ -7,14 +7,10 @@
 
 #include <cudf/types.hpp>
 
+#include <cuda/std/algorithm>
+
 namespace cudf {
 namespace detail {
-
-template <class T>
-T minimum(T a, T b)
-{
-  return b < a ? b : a;
-}
 
 struct window_wrapper_base {
   cudf::size_type const* group_offsets = nullptr;
@@ -70,7 +66,7 @@ struct preceding_window_wrapper : public window_wrapper_base {
   {
     auto group_label = group_labels[idx];
     auto group_start = group_offsets[group_label];
-    return minimum(window, idx - group_start + 1);  // Preceding includes current row.
+    return cuda::std::min(window, idx - group_start + 1);  // Preceding includes current row.
   }
 };
 
@@ -93,7 +89,7 @@ struct following_window_wrapper : public window_wrapper_base {
     auto group_end =
       group_offsets[group_label +
                     1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
-    return minimum(window, (group_end - 1) - idx);
+    return cuda::std::min(window, (group_end - 1) - idx);
   }
 };
 
