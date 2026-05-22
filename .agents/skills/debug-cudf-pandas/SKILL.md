@@ -19,6 +19,16 @@ When the pandas test suite is run with `-p cudf.pandas`, test failures indicate 
 
 Your job is to find the root cause and implement the fix.
 
+## Unacceptable Fix Patterns
+
+The following patterns are prohibited regardless of whether they make a test pass. Stop immediately and ask the user if the only apparent solution falls into one of these categories.
+
+- **Esoteric/test-specific special cases**: Do not implement narrow, brittle logic targeting only the specific failing node IDs (e.g. special-casing a single dtype/shape combination). If a test is failing, find the general API contract mismatch and fix it at that level.
+- **Pandas CPU fallback as a fix**: Typically you should not make tests pass by simply raising an exception inside cudf to force CPU fallback. Falling back to pandas/CPU is only an acceptable fix if attempting to fix the bug leads to discovering that large features must be implemented in cudf to support the change (e.g. a completely new class).
+- **Private pandas APIs**: Do not import or call any symbol from `pandas.core`, `pandas.compat`, or any underscored pandas module (e.g. `pandas._libs.tslibs.parsing`). These are explicitly unstable per the pandas API policy. Use public pandas APIs or write equivalent local logic instead.
+- **PyArrow as a CPU execution backend**: Do not route GPU operations through `pyarrow.compute` on CPU as a substitute for cudf/libcudf semantics. Arrow is an interchange format; it is not an acceptable execution backend for cudf operations.
+- **Returning pandas objects from cudf APIs**: cudf public methods (`Series`, `Index`, `DataFrame` operations and accessors) must return cudf-native objects, not `pd.Series`, `pd.Index`, or `pd.DataFrame`. Use `_return_or_inplace` and the existing cudf container reconstruction helpers.
+
 ---
 
 ## Prerequisites
@@ -148,6 +158,8 @@ Results:
 - **cudf raises an exception** → missing feature or bug → evaluate scope; may need user input if the feature is large. Note: this may be OK if the test is verifying that an exception *should* be raised.
 - **cudf result matches pandas** → proxy/dispatch bug → go to Step 4b
 
+**Classify the root cause before writing any fix.** Ask yourself: Is this a specific method/keyword handling bug? A broad dtype casting mismatch affecting many operations? A proxy/wrapping issue? A missing cudf capability? For broad issues, the fix should be applied at the shared/base layer, not patched per individual method. If the only apparent fix is test-shaped (i.e. it looks like it exists to make exactly these node IDs pass), step back and re-examine the general API contract.
+
 ### 3b. Environment variable diagnostics (run through cudf.pandas)
 
 Use these env vars to trace what is happening at the proxy layer:
@@ -167,6 +179,8 @@ CUDF_PANDAS_FAIL_ON_FALLBACK=1 bash python/cudf/cudf/pandas/scripts/run-pandas-t
 LOG_FAST_FALLBACK=1 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
     "<node_id>" -xvs 2>&1 | grep -i fallback
 ```
+
+**Fallback is a diagnostic signal, not a fix.** If `CUDF_PANDAS_FAIL_ON_FALLBACK=1` causes the test to fail, routing the operation to pandas CPU is not acceptable as a final solution unless adding GPU support would require implementing large, entirely unsupported features. Bug fixes for cudf's behavior (e.g. to add support for a particular dtype to a function) are the expected path.
 
 ### 3c. Standalone instrumented script
 
@@ -203,6 +217,11 @@ When a fix touches column operations that call into `pylibcudf`, consult `python
 Note: `mode.pandas_compatible` is automatically set to `True` when cudf.pandas is active. Account for this in any conditional logic, but do not add new guards for it without explicit user approval.
 
 If the bug is not in cudf core, move to cudf.pandas-specific fixes.
+
+**Prohibited in cudf implementation fixes:**
+- Do not call `pandas._libs.*` or any other private/underscored pandas module. Use public pandas APIs (`pd.Timestamp`, `pd.to_datetime`, `pd.DateOffset`, etc.) and write equivalent local logic if needed.
+- Do not convert to pyarrow and use `pyarrow.compute` as a substitute for libcudf behavior. If libcudf doesn't support the exact semantics, consult the user before adding a pyarrow fallback.
+- Do not construct and return `pd.Series(...)`, `pd.Index(...)`, or `pd.DataFrame(...)` from cudf public methods. Use `_return_or_inplace`, `_from_column`, or other cudf container reconstruction helpers so that return types remain cudf-native.
 
 ---
 
