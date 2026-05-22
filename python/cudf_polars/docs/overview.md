@@ -557,9 +557,9 @@ an exception (usually `NotImplementedError`), use the utility function
 from cudf_polars.testing.asserts import assert_ir_translation_raises
 
 
-def test_whatever():
+def test_whatever(engine):
     unsupported_query = ...
-    assert_ir_translation_raises(unsupported_query, NotImplementedError)
+    assert_ir_translation_raises(unsupported_query, engine, NotImplementedError)
 ```
 
 This test will fail if translation does not raise.
