@@ -66,11 +66,11 @@ __device__ inline uint_result device_read_uint_le(uint8_t const* data,
   return {v, true};
 }
 
-// Parse metadata header, walk dictionary entries, return the index of `key` or -1.
+// Parse metadata header, walk dictionary entries, return the index of `key` or -1
 //
 // All offset arithmetic widens to uint64_t before any narrowing cast so a
 // malformed metadata blob with offsets >= 2^31 cannot wrap a `size_type`
-// past the bounds checks.
+// past the bounds checks
 __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
                                                   size_type meta_len,
                                                   char const* key,
@@ -94,10 +94,10 @@ __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
   if (offsets_start + offsets_bytes > meta_len) { return -1; }
 
   size_type const strings_base = offsets_start + offsets_bytes;
-  // Bytes available for dictionary string payloads.
+  // Bytes available for dictionary string payloads
   auto const strings_extent = static_cast<uint64_t>(meta_len - strings_base);
 
-  // Carry forward the previous offset to avoid re-reading it each iteration.
+  // Carry forward the previous offset to avoid re-reading it each iteration
   auto prev_off_r = device_read_uint_le(meta, meta_len, offsets_start, offset_size);
   if (!prev_off_r.ok) { return -1; }
 
@@ -126,17 +126,17 @@ __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
 }
 
 // Parse an object value header, find the field with the given dictionary index,
-// return the sub-span {offset_from_value_start, length} of the field's encoded value.
-// Returns {0, 0} on failure.
+// return the sub-span {offset_from_value_start, length} of the field's encoded value
+// Returns {0, 0} on failure
 //
 // Per the Variant spec, field IDs are sorted lexicographically by name but field VALUES
-// may be stored in any order, so field_offsets are NOT necessarily monotonically increasing.
+// may be stored in any order, so field_offsets are NOT necessarily monotonically increasing
 // To find a field's byte range we locate the smallest offset strictly greater than the
-// field's start offset among all entries (including the sentinel), giving the tightest bound.
+// field's start offset among all entries (including the sentinel), giving the tightest bound
 //
 // All offset values read from `val` are kept in `uint64_t` until we have validated that
 // they fit within the value-data extent; this prevents a malformed blob with field
-// offsets >= 2^31 from wrapping `size_type` past the bounds checks.
+// offsets >= 2^31 from wrapping `size_type` past the bounds checks
 __device__ inline field_span device_locate_object_field(uint8_t const* val,
                                                         size_type val_len,
                                                         int dict_idx)
@@ -166,10 +166,10 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   if (field_offs_start + field_offs_bytes > val_len) { return {0, 0}; }
 
   size_type const values_base = field_offs_start + field_offs_bytes;
-  // Maximum legitimate field-offset value: bytes available after values_base.
+  // Maximum legitimate field-offset value: bytes available after values_base
   auto const values_extent = static_cast<uint64_t>(val_len - values_base);
 
-  // Find the matching field ID and its start offset.
+  // Find the matching field ID and its start offset
   bool found             = false;
   uint64_t match_start_u = 0;
   for (size_type i = 0; i < n; ++i) {
@@ -189,7 +189,7 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   if (!found) { return {0, 0}; }
 
   // Find the tightest end: the smallest offset strictly greater than match_start
-  // among all n+1 offset entries (the sentinel at index n is the total data size).
+  // among all n+1 offset entries (the sentinel at index n is the total data size)
   uint64_t match_end_u = values_extent;
   for (size_type j = 0; j <= n; ++j) {
     auto const oj_r =
@@ -235,7 +235,7 @@ __device__ inline int_decode_result<T> device_decode_int(uint8_t const* enc, siz
 
 // Walk a path of object-key steps level by level starting at (val, val_len) and return the span
 // of the final value relative to the root val pointer. Returns {0, 0} on failure (empty path, key
-// absent, kind mismatch, or truncated data).
+// absent, kind mismatch, or truncated data)
 __device__ inline field_span device_locate_path(uint8_t const* meta,
                                                 size_type meta_len,
                                                 uint8_t const* val,
@@ -299,8 +299,8 @@ __device__ inline string_decode_result device_decode_string_info(uint8_t const* 
   return {0, 0, false};
 }
 
-// Reads the metadata and value list bytes for a given row from device views.
-// Returns pointers into device memory and the lengths.
+// Reads the metadata and value list bytes for a given row from device views
+// Returns pointers into device memory and the lengths
 struct row_list_ptrs {
   uint8_t const* meta_ptr;
   size_type meta_len;
@@ -364,10 +364,10 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
 // so this kernel does no Variant parsing — it just copies `d_sizes[row]` bytes
 // from the row's value blob (offset by the cached intra-blob offset) to the
 // output buffer. The per-row size is recovered from the offsets column as
-// `d_offsets[row + 1] - d_offsets[row]`.
+// `d_offsets[row + 1] - d_offsets[row]`
 // TODO: pass-2 is a pure gather, so the per-thread byte loop here can be
-// replaced with a cooperative copy (warp- or block-per-row, e.g.
-// `cuda::memcpy_async`) once this path becomes a measured hot spot.
+// replaced with a cooperative copy (warp- or block-per-row, e.g
+// `cuda::memcpy_async`) once this path becomes a measured hot spot
 CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_copy_kernel(
   cudf::detail::lists_column_device_view values,
   device_span<size_type const> d_src_offsets,
@@ -474,7 +474,7 @@ void validate_variant_struct(column_view const& variant_column)
     std::invalid_argument);
 
   // Use raw children for type checks; sliced-row-count alignment is handled implicitly
-  // by `structs_column_view::get_sliced_child` everywhere we actually walk the data.
+  // by `structs_column_view::get_sliced_child` everywhere we actually walk the data
   CUDF_EXPECTS(variant_column.child(0).type().id() == type_id::LIST &&
                  variant_column.child(1).type().id() == type_id::LIST,
                "VARIANT metadata and value children must be lists",
@@ -523,12 +523,12 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  // Validate the path even for empty input columns.
+  // Validate the path even for empty input columns
   auto const steps = parse_variant_path(path);
 
   auto const num_rows = variant_column.size();
   if (num_rows == 0) {
-    // creating manually because empty_like would include shredded columns
+    // Creating manually because empty_like would include shredded columns
     auto meta_child = cudf::make_lists_column(
       0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
     auto val_child = cudf::make_lists_column(
@@ -544,7 +544,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   auto path_column      = build_path_column(steps, stream, temp_mr);
   auto path_device_view = column_device_view::create(path_column->view(), stream);
 
-  // Resolve children with respect to any slice/offset on the parent struct.
+  // Resolve children with respect to any slice/offset on the parent struct
   structs_column_view const variant_struct{variant_column};
   auto const meta_view = variant_struct.get_sliced_child(0, stream);
   auto const val_view  = variant_struct.get_sliced_child(1, stream);
@@ -563,7 +563,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
 
   rmm::device_uvector<size_type> d_sizes(num_rows, stream, temp_mr);
-  // Caches the per-row intra-value byte offset.
+  // Caches the per-row intra-value byte offset
   rmm::device_uvector<size_type> d_src_offsets(num_rows, stream, temp_mr);
   auto null_mask =
     variant_column.nullable()
@@ -590,7 +590,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   device_span<size_type const> d_offsets{offsets_column->view().data<size_type>(),
                                          static_cast<std::size_t>(num_rows + 1)};
 
-  // Pass 2: gather/copy directly into the output value child buffer.
+  // Pass 2: gather/copy directly into the output value child buffer
   auto val_child = make_numeric_column(data_type{type_id::UINT8},
                                        static_cast<size_type>(total_bytes),
                                        mask_state::UNALLOCATED,
@@ -606,7 +606,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   auto val_out =
     make_lists_column(num_rows, std::move(offsets_column), std::move(val_child), 0, {});
 
-  // Copy input metadata column for the output (deep copy materializes any slice).
+  // Copy input metadata column for the output (deep copy materializes any slice)
   auto meta_out = std::make_unique<column>(meta_view, stream, mr);
 
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
@@ -645,7 +645,7 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
   auto val_device_view = column_device_view::create(val_view, stream);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
 
-  // Initialize the null mask using the parent struct (or all-valid).
+  // Initialize the null mask using the parent struct (or all-valid)
   auto null_mask =
     variant_column.nullable()
       ? cudf::detail::copy_bitmask(variant_column, stream, mr)
