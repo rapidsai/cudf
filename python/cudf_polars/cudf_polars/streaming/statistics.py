@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import DataFrameScan, Scan
@@ -42,15 +43,22 @@ def collect_statistics(
 
     stats = StatsCollector()
 
-    # Parquet sources
-    for needed_cols, scan_nodes in parquet_groups.values():
-        source = _build_source_info(
-            scan_nodes[0],
-            config_options,
-            needed_cols=frozenset(needed_cols),
-        )
-        for node in scan_nodes:
-            stats.scan_stats[node] = source
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        futures = {}
+        for needed_cols, scan_nodes in parquet_groups.values():
+            future = pool.submit(
+                _build_source_info,
+                scan_nodes[0],
+                config_options,
+                needed_cols=frozenset(needed_cols),
+            )
+            futures[future] = scan_nodes
+
+        for future in concurrent.futures.as_completed(futures):
+            scan_nodes = futures.pop(future)
+            source = future.result()
+            for node in scan_nodes:
+                stats.scan_stats[node] = source
 
     # DataFrameScan sources
     for node in dataframe_scans:
