@@ -431,28 +431,13 @@ struct cast_variant_string_fn {
   }
 };
 
-void validate_variant_struct(column_view const& variant_column)
+void validate_variant_child(column_view const& child)
 {
-  CUDF_EXPECTS(variant_column.type().id() == type_id::STRUCT,
-               "VARIANT column must be struct type",
+  CUDF_EXPECTS(child.type().id() == type_id::LIST,
+               "VARIANT metadata/value column must be a list",
                std::invalid_argument);
-  CUDF_EXPECTS(
-    variant_column.num_children() >= 2,
-    "VARIANT struct must start with metadata and value children (list<uint8>) before any optional "
-    "shredded columns",
-    std::invalid_argument);
-
-  // Use raw children for type checks; sliced-row-count alignment is handled implicitly
-  // by `structs_column_view::get_sliced_child` everywhere we actually walk the data
-  CUDF_EXPECTS(variant_column.child(0).type().id() == type_id::LIST &&
-                 variant_column.child(1).type().id() == type_id::LIST,
-               "VARIANT metadata and value children must be lists",
-               std::invalid_argument);
-  lists_column_view const meta_lists{variant_column.child(0)};
-  lists_column_view const val_lists{variant_column.child(1)};
-  CUDF_EXPECTS(meta_lists.child().type().id() == type_id::UINT8 &&
-                 val_lists.child().type().id() == type_id::UINT8,
-               "VARIANT metadata and value children must be list<uint8>",
+  CUDF_EXPECTS(lists_column_view{child}.child().type().id() == type_id::UINT8,
+               "VARIANT metadata/value column must be list<uint8>",
                std::invalid_argument);
 }
 
@@ -492,20 +477,23 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
+  // Validate the variant column
+  CUDF_EXPECTS(variant_column.type().id() == type_id::STRUCT,
+               "VARIANT column must be struct type",
+               std::invalid_argument);
+  CUDF_EXPECTS(variant_column.num_children() >= 2,
+               "VARIANT struct must have at least two children",
+               std::invalid_argument);
+  validate_variant_child(variant_column.child(0));
+  validate_variant_child(variant_column.child(1));
+
   // Validate the path even for empty input columns
   auto const steps = parse_variant_path(path);
 
   auto const num_rows = variant_column.size();
   if (num_rows == 0) {
-    // Creating manually because empty_like would include shredded columns
-    auto meta_child = cudf::make_lists_column(
+    return cudf::make_lists_column(
       0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
-    auto val_child = cudf::make_lists_column(
-      0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
-    std::vector<std::unique_ptr<column>> children;
-    children.push_back(std::move(meta_child));
-    children.push_back(std::move(val_child));
-    return make_structs_column(0, std::move(children), 0, {}, stream, mr);
   }
 
   auto const temp_mr = cudf::get_current_device_resource_ref();
@@ -517,14 +505,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   structs_column_view const variant_struct{variant_column};
   auto const meta_view = variant_struct.get_sliced_child(0, stream);
   auto const val_view  = variant_struct.get_sliced_child(1, stream);
-
-  CUDF_EXPECTS(meta_view.type().id() == type_id::LIST && val_view.type().id() == type_id::LIST,
-               "VARIANT metadata and value children must be lists",
-               std::invalid_argument);
-  CUDF_EXPECTS(lists_column_view{meta_view}.child().type().id() == type_id::UINT8 &&
-                 lists_column_view{val_view}.child().type().id() == type_id::UINT8,
-               "VARIANT metadata and value children must be list<uint8>",
-               std::invalid_argument);
 
   auto meta_device_view = column_device_view::create(meta_view, stream);
   auto val_device_view  = column_device_view::create(val_view, stream);
@@ -584,53 +564,37 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
       src_iter, dst_iter, d_sizes.begin(), static_cast<std::size_t>(num_rows), stream);
   }
 
-  auto val_out =
-    make_lists_column(num_rows, std::move(offsets_column), std::move(val_child), 0, {});
-
-  // Copy input metadata column for the output (deep copy materializes any slice)
-  auto meta_out = std::make_unique<column>(meta_view, stream, mr);
-
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
 
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(meta_out));
-  children.push_back(std::move(val_out));
-  return create_structs_hierarchy(num_rows,
-                                  std::move(children),
-                                  null_count,
-                                  null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                                  stream,
-                                  mr);
+  return make_lists_column(num_rows,
+                           std::move(offsets_column),
+                           std::move(val_child),
+                           null_count,
+                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
 }
 
-std::unique_ptr<column> cast_variant(column_view const& variant_column,
+std::unique_ptr<column> cast_variant(column_view const& values,
                                      data_type desired_type,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
+  validate_variant_child(values);
   auto const tid = desired_type.id();
   CUDF_EXPECTS(tid == type_id::STRING || tid == type_id::INT8 || tid == type_id::INT16 ||
                  tid == type_id::INT32 || tid == type_id::INT64,
                "cast_variant supports STRING and INT8/INT16/INT32/INT64 only",
                std::invalid_argument);
 
-  size_type const num_rows = variant_column.size();
+  size_type const num_rows = values.size();
   if (num_rows == 0) { return cudf::make_empty_column(desired_type); }
 
-  structs_column_view const variant_struct{variant_column};
-  auto const val_view = variant_struct.get_sliced_child(1, stream);
-  CUDF_EXPECTS(val_view.type().id() == type_id::LIST,
-               "VARIANT value child must be a list",
-               std::invalid_argument);
-
-  auto val_device_view = column_device_view::create(val_view, stream);
+  auto val_device_view = column_device_view::create(values, stream);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
 
-  // Initialize the null mask using the parent struct (or all-valid)
-  auto null_mask =
-    variant_column.nullable()
-      ? cudf::detail::copy_bitmask(variant_column, stream, mr)
-      : cudf::create_null_mask(variant_column.size(), mask_state::ALL_VALID, stream, mr);
+  // Initialize the null mask from the values column (or all-valid)
+  auto null_mask    = values.nullable()
+                        ? cudf::detail::copy_bitmask(values, stream, mr)
+                        : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
   auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
   auto launch_int = [&]<typename T>(std::in_place_type_t<T>) {
@@ -682,18 +646,16 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  validate_variant_struct(variant_column);
   return detail::get_variant_field(variant_column, path, stream, mr);
 }
 
-std::unique_ptr<column> cast_variant(column_view const& variant_column,
+std::unique_ptr<column> cast_variant(column_view const& values,
                                      data_type desired_type,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  validate_variant_struct(variant_column);
-  return detail::cast_variant(variant_column, desired_type, stream, mr);
+  return detail::cast_variant(values, desired_type, stream, mr);
 }
 
 std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
@@ -703,10 +665,9 @@ std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  validate_variant_struct(variant_column);
-  auto intermediate = detail::get_variant_field(
+  auto value = detail::get_variant_field(
     variant_column, path, stream, cudf::get_current_device_resource_ref());
-  return detail::cast_variant(intermediate->view(), desired_type, stream, mr);
+  return detail::cast_variant(value->view(), desired_type, stream, mr);
 }
 
 }  // namespace io::parquet::experimental
