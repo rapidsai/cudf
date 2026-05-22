@@ -191,6 +191,16 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
       assertEquals(1, listView.getNumChildren());
       HostColumnVectorCore intGrandchild = listView.getChildColumnView(0);
       assertEquals(6, intGrandchild.getRowCount(), "purged inner row count");
+      int[] expectedInner = {1, 2, 3, 4, 5, 11};
+      for (int i = 0; i < expectedInner.length; i++) {
+        assertFalse(intGrandchild.isNull(i), "inner " + i);
+        assertEquals(expectedInner[i], intGrandchild.getInt(i), "inner " + i);
+      }
+      HostMemoryBuffer listOffsets = listView.getOffsets();
+      int[] expectedOffsets = {0, 2, 5, 5, 5, 6};
+      for (int i = 0; i < expectedOffsets.length; i++) {
+        assertEquals(expectedOffsets[i], listOffsets.getInt(i * 4L), "offset " + i);
+      }
     }
   }
 }
