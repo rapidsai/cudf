@@ -5,7 +5,11 @@
 #pragma once
 
 #include <cudf/detail/integral_math.cuh>
-#include <cudf/operators/types.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
+#include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -16,42 +20,36 @@ namespace ops {
  * @tparam T Input and output type.
  * @param out Destination value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc abs(T* out, T const* a)
+__device__ void abs(T* out, T const* a)
   requires(cuda::std::is_signed_v<T> || cuda::std::is_floating_point_v<T>)
 {
   *out = (*a < 0) ? -*a : *a;
-  return errc::OK;
 }
 
 /**
  * @brief Returns unsigned input unchanged for absolute value.
  *
  * @tparam T Unsigned input and output type.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc abs(T* out, T const* a)
+__device__ void abs(T* out, T const* a)
   requires(cuda::std::is_unsigned_v<T>)
 {
   *out = *a;
-  return errc::OK;
 }
 
 /**
  * @brief Computes absolute value for fixed-point decimal values.
  *
  * @tparam R Decimal representation type.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc abs(decimal<R>* out, decimal<R> const* a)
+__device__ void abs(numeric::decimal<R>* out, numeric::decimal<R> const* a)
 {
   auto rep = a->value() < 0 ? -a->value() : a->value();
-  *out     = decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
-  return errc::OK;
+  *out     = numeric::decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
 }
 
 /**
@@ -60,19 +58,17 @@ __device__ inline errc abs(decimal<R>* out, decimal<R> const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc abs(optional<T>* out, optional<T> const* a)
+__device__ void abs(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     abs(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -82,13 +78,11 @@ __device__ inline errc abs(optional<T>* out, optional<T> const* a)
  * @param out Destination value.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc add(T* out, T const* a, T const* b)
+__device__ void add(T* out, T const* a, T const* b)
 {
   *out = (*a + *b);
-  return errc::OK;
 }
 
 /**
@@ -98,19 +92,19 @@ __device__ inline errc add(T* out, T const* a, T const* b)
  * @param out Destination optional value.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc add(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void add(cuda::std::optional<T>* out,
+                    cuda::std::optional<T> const* a,
+                    cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     add(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -120,13 +114,11 @@ __device__ inline errc add(optional<T>* out, optional<T> const* a, optional<T> c
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc div(T* out, T const* a, T const* b)
+__device__ void div(T* out, T const* a, T const* b)
 {
   *out = (*a / *b);
-  return errc::OK;
 }
 
 /**
@@ -136,19 +128,19 @@ __device__ inline errc div(T* out, T const* a, T const* b)
  * @param out Destination optional value.
  * @param a Optional dividend.
  * @param b Optional divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc div(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void div(cuda::std::optional<T>* out,
+                    cuda::std::optional<T> const* a,
+                    cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     div(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -158,14 +150,12 @@ __device__ inline errc div(optional<T>* out, optional<T> const* a, optional<T> c
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc floor_div(T* out, T const* a, T const* b)
+__device__ void floor_div(T* out, T const* a, T const* b)
   requires(cuda::std::is_integral_v<T>)
 {
   *out = cudf::detail::integral_floor_div(*a, *b);
-  return errc::OK;
 }
 
 /**
@@ -174,12 +164,10 @@ __device__ inline errc floor_div(T* out, T const* a, T const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc floor_div(float* out, float const* a, float const* b)
+__device__ inline void floor_div(float* out, float const* a, float const* b)
 {
   *out = ::floorf(*a / *b);
-  return errc::OK;
 }
 
 /**
@@ -188,12 +176,10 @@ __device__ inline errc floor_div(float* out, float const* a, float const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc floor_div(double* out, double const* a, double const* b)
+__device__ inline void floor_div(double* out, double const* a, double const* b)
 {
   *out = ::floor(*a / *b);
-  return errc::OK;
 }
 
 /**
@@ -203,19 +189,19 @@ __device__ inline errc floor_div(double* out, double const* a, double const* b)
  * @param out Destination optional value.
  * @param a Optional dividend.
  * @param b Optional divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc floor_div(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void floor_div(cuda::std::optional<T>* out,
+                          cuda::std::optional<T> const* a,
+                          cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     floor_div(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -225,13 +211,11 @@ __device__ inline errc floor_div(optional<T>* out, optional<T> const* a, optiona
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc mod(T* out, T const* a, T const* b)
+__device__ void mod(T* out, T const* a, T const* b)
 {
   *out = (*a % *b);
-  return errc::OK;
 }
 
 /**
@@ -240,13 +224,8 @@ __device__ inline errc mod(T* out, T const* a, T const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc mod(float* out, float const* a, float const* b)
-{
-  *out = ::fmodf(*a, *b);
-  return errc::OK;
-}
+__device__ inline void mod(float* out, float const* a, float const* b) { *out = ::fmodf(*a, *b); }
 
 /**
  * @brief Computes floating-point remainder for double operands.
@@ -254,13 +233,8 @@ __device__ inline errc mod(float* out, float const* a, float const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc mod(double* out, double const* a, double const* b)
-{
-  *out = ::fmod(*a, *b);
-  return errc::OK;
-}
+__device__ inline void mod(double* out, double const* a, double const* b) { *out = ::fmod(*a, *b); }
 
 /**
  * @brief Computes remainder for optional operands.
@@ -269,19 +243,19 @@ __device__ inline errc mod(double* out, double const* a, double const* b)
  * @param out Destination optional value.
  * @param a Optional dividend.
  * @param b Optional divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc mod(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void mod(cuda::std::optional<T>* out,
+                    cuda::std::optional<T> const* a,
+                    cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     mod(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -291,13 +265,11 @@ __device__ inline errc mod(optional<T>* out, optional<T> const* a, optional<T> c
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc pymod(T* out, T const* a, T const* b)
+__device__ void pymod(T* out, T const* a, T const* b)
 {
   *out = (*a % *b + *b) % *b;
-  return errc::OK;
 }
 
 /**
@@ -306,12 +278,10 @@ __device__ inline errc pymod(T* out, T const* a, T const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc pymod(float* out, float const* a, float const* b)
+__device__ inline void pymod(float* out, float const* a, float const* b)
 {
   *out = ::fmodf(::fmodf(*a, *b) + *b, *b);
-  return errc::OK;
 }
 
 /**
@@ -320,12 +290,10 @@ __device__ inline errc pymod(float* out, float const* a, float const* b)
  * @param out Destination value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
-__device__ inline errc pymod(double* out, double const* a, double const* b)
+__device__ inline void pymod(double* out, double const* a, double const* b)
 {
   *out = ::fmod(::fmod(*a, *b) + *b, *b);
-  return errc::OK;
 }
 
 /**
@@ -335,19 +303,19 @@ __device__ inline errc pymod(double* out, double const* a, double const* b)
  * @param out Destination optional value.
  * @param a Optional dividend.
  * @param b Optional divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc pymod(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void pymod(cuda::std::optional<T>* out,
+                      cuda::std::optional<T> const* a,
+                      cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     pymod(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -357,13 +325,11 @@ __device__ inline errc pymod(optional<T>* out, optional<T> const* a, optional<T>
  * @param out Destination value.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc mul(T* out, T const* a, T const* b)
+__device__ void mul(T* out, T const* a, T const* b)
 {
   *out = (*a * *b);
-  return errc::OK;
 }
 
 /**
@@ -373,19 +339,19 @@ __device__ inline errc mul(T* out, T const* a, T const* b)
  * @param out Destination optional value.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc mul(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void mul(cuda::std::optional<T>* out,
+                    cuda::std::optional<T> const* a,
+                    cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     mul(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -394,14 +360,12 @@ __device__ inline errc mul(optional<T>* out, optional<T> const* a, optional<T> c
  * @tparam T Signed input and output type.
  * @param out Destination value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc neg(T* out, T const* a)
+__device__ void neg(T* out, T const* a)
   requires(cuda::std::is_signed_v<T>)
 {
   *out = -(*a);
-  return errc::OK;
 }
 
 /**
@@ -410,14 +374,12 @@ __device__ inline errc neg(T* out, T const* a)
  * @tparam Rep Decimal representation type.
  * @param out Destination decimal value.
  * @param a Input decimal value.
- * @return errc::OK.
  */
 template <typename Rep>
-__device__ inline errc neg(decimal<Rep>* out, decimal<Rep> const* a)
+__device__ void neg(numeric::decimal<Rep>* out, numeric::decimal<Rep> const* a)
 {
   auto rep = -a->value();
-  *out     = decimal<Rep>{numeric::scaled_integer<Rep>{rep, a->scale()}};
-  return errc::OK;
+  *out     = numeric::decimal<Rep>{numeric::scaled_integer<Rep>{rep, a->scale()}};
 }
 
 /**
@@ -426,19 +388,17 @@ __device__ inline errc neg(decimal<Rep>* out, decimal<Rep> const* a)
  * @tparam T Signed input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc neg(optional<T>* out, optional<T> const* a)
+__device__ void neg(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     neg(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -448,13 +408,11 @@ __device__ inline errc neg(optional<T>* out, optional<T> const* a)
  * @param out Destination value.
  * @param a Minuend.
  * @param b Subtrahend.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc sub(T* out, T const* a, T const* b)
+__device__ void sub(T* out, T const* a, T const* b)
 {
   *out = *a - *b;
-  return errc::OK;
 }
 
 /**
@@ -464,19 +422,19 @@ __device__ inline errc sub(T* out, T const* a, T const* b)
  * @param out Destination optional value.
  * @param a Optional minuend.
  * @param b Optional subtrahend.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc sub(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void sub(cuda::std::optional<T>* out,
+                    cuda::std::optional<T> const* a,
+                    cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     sub(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -486,14 +444,12 @@ __device__ inline errc sub(optional<T>* out, optional<T> const* a, optional<T> c
  * @param out Destination double value.
  * @param a Dividend.
  * @param b Divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc true_div(double* out, T const* a, T const* b)
+__device__ void true_div(double* out, T const* a, T const* b)
   requires(cuda::std::is_floating_point_v<T> || cuda::std::is_integral_v<T>)
 {
   *out = static_cast<double>(*a) / static_cast<double>(*b);
-  return errc::OK;
 }
 
 /**
@@ -503,19 +459,19 @@ __device__ inline errc true_div(double* out, T const* a, T const* b)
  * @param out Destination optional double value.
  * @param a Optional dividend.
  * @param b Optional divisor.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc true_div(optional<double>* out, optional<T> const* a, optional<T> const* b)
+__device__ void true_div(cuda::std::optional<double>* out,
+                         cuda::std::optional<T> const* a,
+                         cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     double r;
     true_div(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 }  // namespace ops

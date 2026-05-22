@@ -5,7 +5,11 @@
 #pragma once
 
 #include <cudf/fixed_point/conv.hpp>
-#include <cudf/operators/types.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
+#include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -17,13 +21,11 @@ namespace ops {
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_b8(bool* out, T const* a)
+__device__ void cast_to_b8(bool* out, T const* a)
 {
   *out = static_cast<bool>(*a);
-  return errc::OK;
 }
 
 /**
@@ -32,19 +34,17 @@ __device__ inline errc cast_to_b8(bool* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_b8(optional<bool>* out, optional<T> const* a)
+__device__ void cast_to_b8(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     bool r;
     cast_to_b8(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -54,13 +54,11 @@ __device__ inline errc cast_to_b8(optional<bool>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i8(int8_t* out, T const* a)
+__device__ void cast_to_i8(int8_t* out, T const* a)
 {
   *out = static_cast<int8_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -69,19 +67,17 @@ __device__ inline errc cast_to_i8(int8_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i8(optional<int8_t>* out, optional<T> const* a)
+__device__ void cast_to_i8(cuda::std::optional<int8_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     int8_t r;
     cast_to_i8(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -91,13 +87,11 @@ __device__ inline errc cast_to_i8(optional<int8_t>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i16(int16_t* out, T const* a)
+__device__ void cast_to_i16(int16_t* out, T const* a)
 {
   *out = static_cast<int16_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -106,19 +100,17 @@ __device__ inline errc cast_to_i16(int16_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i16(optional<int16_t>* out, optional<T> const* a)
+__device__ void cast_to_i16(cuda::std::optional<int16_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     int16_t r;
     cast_to_i16(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -128,13 +120,11 @@ __device__ inline errc cast_to_i16(optional<int16_t>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i32(int32_t* out, T const* a)
+__device__ void cast_to_i32(int32_t* out, T const* a)
 {
   *out = static_cast<int32_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -143,19 +133,17 @@ __device__ inline errc cast_to_i32(int32_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i32(optional<int32_t>* out, optional<T> const* a)
+__device__ void cast_to_i32(cuda::std::optional<int32_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     int32_t r;
     cast_to_i32(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -165,13 +153,11 @@ __device__ inline errc cast_to_i32(optional<int32_t>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i64(int64_t* out, T const* a)
+__device__ void cast_to_i64(int64_t* out, T const* a)
 {
   *out = static_cast<int64_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -180,19 +166,17 @@ __device__ inline errc cast_to_i64(int64_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_i64(optional<int64_t>* out, optional<T> const* a)
+__device__ void cast_to_i64(cuda::std::optional<int64_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     int64_t r;
     cast_to_i64(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -202,13 +186,11 @@ __device__ inline errc cast_to_i64(optional<int64_t>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u8(uint8_t* out, T const* a)
+__device__ void cast_to_u8(uint8_t* out, T const* a)
 {
   *out = static_cast<uint8_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -217,19 +199,17 @@ __device__ inline errc cast_to_u8(uint8_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u8(optional<uint8_t>* out, optional<T> const* a)
+__device__ void cast_to_u8(cuda::std::optional<uint8_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     uint8_t r;
     cast_to_u8(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -239,13 +219,11 @@ __device__ inline errc cast_to_u8(optional<uint8_t>* out, optional<T> const* a)
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u16(uint16_t* out, T const* a)
+__device__ void cast_to_u16(uint16_t* out, T const* a)
 {
   *out = static_cast<uint16_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -254,19 +232,17 @@ __device__ inline errc cast_to_u16(uint16_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u16(optional<uint16_t>* out, optional<T> const* a)
+__device__ void cast_to_u16(cuda::std::optional<uint16_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     uint16_t r;
     cast_to_u16(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -276,13 +252,11 @@ __device__ inline errc cast_to_u16(optional<uint16_t>* out, optional<T> const* a
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u32(uint32_t* out, T const* a)
+__device__ void cast_to_u32(uint32_t* out, T const* a)
 {
   *out = static_cast<uint32_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -291,19 +265,17 @@ __device__ inline errc cast_to_u32(uint32_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u32(optional<uint32_t>* out, optional<T> const* a)
+__device__ void cast_to_u32(cuda::std::optional<uint32_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     uint32_t r;
     cast_to_u32(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -313,13 +285,11 @@ __device__ inline errc cast_to_u32(optional<uint32_t>* out, optional<T> const* a
  * @tparam T Source type.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u64(uint64_t* out, T const* a)
+__device__ void cast_to_u64(uint64_t* out, T const* a)
 {
   *out = static_cast<uint64_t>(*a);
-  return errc::OK;
 }
 
 /**
@@ -328,19 +298,17 @@ __device__ inline errc cast_to_u64(uint64_t* out, T const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_u64(optional<uint64_t>* out, optional<T> const* a)
+__device__ void cast_to_u64(cuda::std::optional<uint64_t>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     uint64_t r;
     cast_to_u64(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -349,14 +317,12 @@ __device__ inline errc cast_to_u64(optional<uint64_t>* out, optional<T> const* a
  * Overloads support integral, floating-point, fixed-point decimal, and optional inputs.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_f32(float* out, T const* a)
-  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
+__device__ void cast_to_f32(float* out, T const* a)
+  requires(cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>)
 {
   *out = static_cast<float>(*a);
-  return errc::OK;
 }
 
 /**
@@ -365,13 +331,11 @@ __device__ inline errc cast_to_f32(float* out, T const* a)
  * @tparam R Source decimal representation type.
  * @param out Destination cast value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_f32(float* out, decimal<R> const* a)
+__device__ void cast_to_f32(float* out, numeric::decimal<R> const* a)
 {
   *out = convert_fixed_to_floating<float>(*a);
-  return errc::OK;
 }
 
 /**
@@ -380,19 +344,17 @@ __device__ inline errc cast_to_f32(float* out, decimal<R> const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_f32(optional<float>* out, optional<T> const* a)
+__device__ void cast_to_f32(cuda::std::optional<float>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     float r;
     cast_to_f32(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -401,14 +363,12 @@ __device__ inline errc cast_to_f32(optional<float>* out, optional<T> const* a)
  * Overloads support integral, floating-point, fixed-point decimal, and optional inputs.
  * @param out Destination cast value.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_f64(double* out, T const* a)
-  requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
+__device__ void cast_to_f64(double* out, T const* a)
+  requires(cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>)
 {
   *out = static_cast<double>(*a);
-  return errc::OK;
 }
 
 /**
@@ -417,13 +377,11 @@ __device__ inline errc cast_to_f64(double* out, T const* a)
  * @tparam R Source decimal representation type.
  * @param out Destination cast value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_f64(double* out, decimal<R> const* a)
+__device__ void cast_to_f64(double* out, numeric::decimal<R> const* a)
 {
   *out = convert_fixed_to_floating<double>(*a);
-  return errc::OK;
 }
 
 /**
@@ -432,19 +390,17 @@ __device__ inline errc cast_to_f64(double* out, decimal<R> const* a)
  * @tparam T Source type.
  * @param out Destination optional cast value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cast_to_f64(optional<double>* out, optional<T> const* a)
+__device__ void cast_to_f64(cuda::std::optional<double>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     double r;
     cast_to_f64(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 namespace detail {
@@ -456,19 +412,17 @@ namespace detail {
  * @tparam From Source representation type.
  * @param out Destination decimal value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename To, typename From>
-__device__ inline errc decimal_cast(decimal<To>* out, decimal<From> const* a)
+__device__ void decimal_cast(numeric::decimal<To>* out, numeric::decimal<From> const* a)
 {
   auto rep = static_cast<To>(a->value());
-  *out     = decimal<To>{numeric::scaled_integer<To>{rep, a->scale()}};
-  return errc::OK;
+  *out     = numeric::decimal<To>{numeric::scaled_integer<To>{rep, a->scale()}};
 }
 
 }  // namespace detail
 
-// TODO: CAST_TO_DEC32 for int & float
+// TODO(lamarrr): CAST_TO_DEC32 for int & float
 
 /**
  * @brief Casts decimal input values to decimal32.
@@ -477,10 +431,9 @@ __device__ inline errc decimal_cast(decimal<To>* out, decimal<From> const* a)
  * @tparam R Source decimal representation type.
  * @param out Destination decimal32 value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec32(numeric::decimal32* out, decimal<R> const* a)
+__device__ void cast_to_dec32(numeric::decimal32* out, numeric::decimal<R> const* a)
 {
   return detail::decimal_cast(out, a);
 }
@@ -491,20 +444,18 @@ __device__ inline errc cast_to_dec32(numeric::decimal32* out, decimal<R> const* 
  * @tparam R Source decimal representation type.
  * @param out Destination optional decimal32 value.
  * @param a Optional decimal input value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec32(optional<numeric::decimal32>* out,
-                                     optional<decimal<R>> const* a)
+__device__ void cast_to_dec32(cuda::std::optional<numeric::decimal32>* out,
+                              cuda::std::optional<numeric::decimal<R>> const* a)
 {
   if (a->has_value()) {
     numeric::decimal32 r;
     cast_to_dec32(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -514,10 +465,9 @@ __device__ inline errc cast_to_dec32(optional<numeric::decimal32>* out,
  * @tparam R Source decimal representation type.
  * @param out Destination decimal64 value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec64(numeric::decimal64* out, decimal<R> const* a)
+__device__ void cast_to_dec64(numeric::decimal64* out, numeric::decimal<R> const* a)
 {
   return detail::decimal_cast(out, a);
 }
@@ -528,20 +478,18 @@ __device__ inline errc cast_to_dec64(numeric::decimal64* out, decimal<R> const* 
  * @tparam R Source decimal representation type.
  * @param out Destination optional decimal64 value.
  * @param a Optional decimal input value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec64(optional<numeric::decimal64>* out,
-                                     optional<decimal<R>> const* a)
+__device__ void cast_to_dec64(cuda::std::optional<numeric::decimal64>* out,
+                              cuda::std::optional<numeric::decimal<R>> const* a)
 {
   if (a->has_value()) {
     numeric::decimal64 r;
     cast_to_dec64(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -551,10 +499,9 @@ __device__ inline errc cast_to_dec64(optional<numeric::decimal64>* out,
  * @tparam R Source decimal representation type.
  * @param out Destination decimal128 value.
  * @param a Source decimal value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec128(numeric::decimal128* out, decimal<R> const* a)
+__device__ void cast_to_dec128(numeric::decimal128* out, numeric::decimal<R> const* a)
 {
   return detail::decimal_cast(out, a);
 }
@@ -565,20 +512,18 @@ __device__ inline errc cast_to_dec128(numeric::decimal128* out, decimal<R> const
  * @tparam R Source decimal representation type.
  * @param out Destination optional decimal128 value.
  * @param a Optional decimal input value.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc cast_to_dec128(optional<numeric::decimal128>* out,
-                                      optional<decimal<R>> const* a)
+__device__ void cast_to_dec128(cuda::std::optional<numeric::decimal128>* out,
+                               cuda::std::optional<numeric::decimal<R>> const* a)
 {
   if (a->has_value()) {
     numeric::decimal128 r;
     cast_to_dec128(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -589,13 +534,13 @@ __device__ inline errc cast_to_dec128(optional<numeric::decimal128>* out,
  * @param out Destination decimal value.
  * @param a Source decimal value.
  * @param new_scale Target decimal scale.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc rescale(decimal<R>* out, decimal<R> const* a, int32_t const* new_scale)
+__device__ void rescale(numeric::decimal<R>* out,
+                        numeric::decimal<R> const* a,
+                        int32_t const* new_scale)
 {
   *out = a->rescaled(numeric::scale_type{*new_scale});
-  return errc::OK;
 }
 
 /**
@@ -605,21 +550,19 @@ __device__ inline errc rescale(decimal<R>* out, decimal<R> const* a, int32_t con
  * @param out Destination optional decimal value.
  * @param a Optional source decimal value.
  * @param new_scale Optional target decimal scale.
- * @return errc::OK.
  */
 template <typename R>
-__device__ inline errc rescale(optional<decimal<R>>* out,
-                               optional<decimal<R>> const* a,
-                               optional<int32_t> const* new_scale)
+__device__ void rescale(cuda::std::optional<numeric::decimal<R>>* out,
+                        cuda::std::optional<numeric::decimal<R>> const* a,
+                        cuda::std::optional<int32_t> const* new_scale)
 {
   if (a->has_value() && new_scale->has_value()) {
-    decimal<R> r;
+    numeric::decimal<R> r;
     rescale(&r, &a->value(), &new_scale->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 }  // namespace ops

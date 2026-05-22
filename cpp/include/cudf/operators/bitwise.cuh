@@ -4,7 +4,9 @@
  */
 #pragma once
 
-#include <cudf/operators/types.cuh>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -16,13 +18,11 @@ namespace ops {
  * @param out Destination for the computed value.
  * @param a Left input operand.
  * @param b Right input operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_and(T* out, T const* a, T const* b)
+__device__ void bit_and(T* out, T const* a, T const* b)
 {
   *out = (*a & *b);
-  return errc::OK;
 }
 
 /**
@@ -32,19 +32,19 @@ __device__ inline errc bit_and(T* out, T const* a, T const* b)
  * @param out Destination optional result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_and(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void bit_and(cuda::std::optional<T>* out,
+                        cuda::std::optional<T> const* a,
+                        cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     bit_and(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -53,13 +53,11 @@ __device__ inline errc bit_and(optional<T>* out, optional<T> const* a, optional<
  * @tparam T Operand and result type.
  * @param out Destination for the computed value.
  * @param a Input operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_invert(T* out, T const* a)
+__device__ void bit_invert(T* out, T const* a)
 {
   *out = ~(*a);
-  return errc::OK;
 }
 
 /**
@@ -68,19 +66,17 @@ __device__ inline errc bit_invert(T* out, T const* a)
  * @tparam T Operand and result type.
  * @param out Destination optional result.
  * @param a Optional input operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_invert(optional<T>* out, optional<T> const* a)
+__device__ void bit_invert(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     bit_invert(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -90,13 +86,11 @@ __device__ inline errc bit_invert(optional<T>* out, optional<T> const* a)
  * @param out Destination for the computed value.
  * @param a Left input operand.
  * @param b Right input operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_or(T* out, T const* a, T const* b)
+__device__ void bit_or(T* out, T const* a, T const* b)
 {
   *out = (*a | *b);
-  return errc::OK;
 }
 
 /**
@@ -106,19 +100,19 @@ __device__ inline errc bit_or(T* out, T const* a, T const* b)
  * @param out Destination optional result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void bit_or(cuda::std::optional<T>* out,
+                       cuda::std::optional<T> const* a,
+                       cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     bit_or(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -128,13 +122,11 @@ __device__ inline errc bit_or(optional<T>* out, optional<T> const* a, optional<T
  * @param out Destination for the computed value.
  * @param a Left input operand.
  * @param b Right input operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_xor(T* out, T const* a, T const* b)
+__device__ void bit_xor(T* out, T const* a, T const* b)
 {
   *out = (*a ^ *b);
-  return errc::OK;
 }
 
 /**
@@ -144,19 +136,19 @@ __device__ inline errc bit_xor(T* out, T const* a, T const* b)
  * @param out Destination optional result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_xor(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void bit_xor(cuda::std::optional<T>* out,
+                        cuda::std::optional<T> const* a,
+                        cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     bit_xor(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -166,13 +158,11 @@ __device__ inline errc bit_xor(optional<T>* out, optional<T> const* a, optional<
  * @param out Destination for the computed value.
  * @param a Input value.
  * @param b Shift count.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_shift_left(T* out, T const* a, T const* b)
+__device__ void bit_shift_left(T* out, T const* a, T const* b)
 {
   *out = (*a << *b);
-  return errc::OK;
 }
 
 /**
@@ -182,19 +172,19 @@ __device__ inline errc bit_shift_left(T* out, T const* a, T const* b)
  * @param out Destination optional result.
  * @param a Optional input value.
  * @param b Optional shift count.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_shift_left(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void bit_shift_left(cuda::std::optional<T>* out,
+                               cuda::std::optional<T> const* a,
+                               cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     bit_shift_left(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -204,13 +194,11 @@ __device__ inline errc bit_shift_left(optional<T>* out, optional<T> const* a, op
  * @param out Destination for the computed value.
  * @param a Input value.
  * @param b Shift count.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_shift_right(T* out, T const* a, T const* b)
+__device__ void bit_shift_right(T* out, T const* a, T const* b)
 {
   *out = (*a >> *b);
-  return errc::OK;
 }
 
 /**
@@ -220,19 +208,19 @@ __device__ inline errc bit_shift_right(T* out, T const* a, T const* b)
  * @param out Destination optional result.
  * @param a Optional input value.
  * @param b Optional shift count.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc bit_shift_right(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void bit_shift_right(cuda::std::optional<T>* out,
+                                cuda::std::optional<T> const* a,
+                                cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     T r;
     bit_shift_right(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 }  // namespace ops

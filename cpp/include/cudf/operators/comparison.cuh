@@ -4,7 +4,9 @@
  */
 #pragma once
 
-#include <cudf/operators/types.cuh>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -16,13 +18,11 @@ namespace ops {
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc equal(bool* out, T const* a, T const* b)
+__device__ void equal(bool* out, T const* a, T const* b)
 {
   *out = (*a == *b);
-  return errc::OK;
 }
 
 /**
@@ -32,10 +32,11 @@ __device__ inline errc equal(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void equal(cuda::std::optional<bool>* out,
+                      cuda::std::optional<T> const* a,
+                      cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -46,7 +47,6 @@ __device__ inline errc equal(optional<bool>* out, optional<T> const* a, optional
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 /**
@@ -56,13 +56,11 @@ __device__ inline errc equal(optional<bool>* out, optional<T> const* a, optional
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc not_equal(bool* out, T const* a, T const* b)
+__device__ void not_equal(bool* out, T const* a, T const* b)
 {
   *out = (*a != *b);
-  return errc::OK;
 }
 
 /**
@@ -72,10 +70,11 @@ __device__ inline errc not_equal(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc not_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void not_equal(cuda::std::optional<bool>* out,
+                          cuda::std::optional<T> const* a,
+                          cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -86,7 +85,6 @@ __device__ inline errc not_equal(optional<bool>* out, optional<T> const* a, opti
   } else {
     *out = true;
   }
-  return errc::OK;
 }
 
 /**
@@ -96,13 +94,11 @@ __device__ inline errc not_equal(optional<bool>* out, optional<T> const* a, opti
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc greater(bool* out, T const* a, T const* b)
+__device__ void greater(bool* out, T const* a, T const* b)
 {
   *out = (*a > *b);
-  return errc::OK;
 }
 
 /**
@@ -112,10 +108,11 @@ __device__ inline errc greater(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc greater(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void greater(cuda::std::optional<bool>* out,
+                        cuda::std::optional<T> const* a,
+                        cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -124,7 +121,6 @@ __device__ inline errc greater(optional<bool>* out, optional<T> const* a, option
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 /**
@@ -134,13 +130,11 @@ __device__ inline errc greater(optional<bool>* out, optional<T> const* a, option
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc greater_equal(bool* out, T const* a, T const* b)
+__device__ void greater_equal(bool* out, T const* a, T const* b)
 {
   *out = (*a >= *b);
-  return errc::OK;
 }
 
 /**
@@ -150,12 +144,11 @@ __device__ inline errc greater_equal(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc greater_equal(optional<bool>* out,
-                                     optional<T> const* a,
-                                     optional<T> const* b)
+__device__ void greater_equal(cuda::std::optional<bool>* out,
+                              cuda::std::optional<T> const* a,
+                              cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -164,7 +157,6 @@ __device__ inline errc greater_equal(optional<bool>* out,
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 /**
@@ -174,13 +166,11 @@ __device__ inline errc greater_equal(optional<bool>* out,
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc less(bool* out, T const* a, T const* b)
+__device__ void less(bool* out, T const* a, T const* b)
 {
   *out = (*a < *b);
-  return errc::OK;
 }
 
 /**
@@ -190,10 +180,11 @@ __device__ inline errc less(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc less(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void less(cuda::std::optional<bool>* out,
+                     cuda::std::optional<T> const* a,
+                     cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -202,7 +193,6 @@ __device__ inline errc less(optional<bool>* out, optional<T> const* a, optional<
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 /**
@@ -212,13 +202,11 @@ __device__ inline errc less(optional<bool>* out, optional<T> const* a, optional<
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc less_equal(bool* out, T const* a, T const* b)
+__device__ void less_equal(bool* out, T const* a, T const* b)
 {
   *out = (*a <= *b);
-  return errc::OK;
 }
 
 /**
@@ -228,10 +216,11 @@ __device__ inline errc less_equal(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc less_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void less_equal(cuda::std::optional<bool>* out,
+                           cuda::std::optional<T> const* a,
+                           cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     bool r;
@@ -240,7 +229,6 @@ __device__ inline errc less_equal(optional<bool>* out, optional<T> const* a, opt
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 /**
@@ -250,13 +238,11 @@ __device__ inline errc less_equal(optional<bool>* out, optional<T> const* a, opt
  * @param out Destination for the comparison result.
  * @param a Left operand.
  * @param b Right operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc null_equal(bool* out, T const* a, T const* b)
+__device__ void null_equal(bool* out, T const* a, T const* b)
 {
   *out = (*a == *b);
-  return errc::OK;
 }
 
 /**
@@ -266,10 +252,11 @@ __device__ inline errc null_equal(bool* out, T const* a, T const* b)
  * @param out Destination optional boolean result.
  * @param a Left optional operand.
  * @param b Right optional operand.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc null_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+__device__ void null_equal(cuda::std::optional<bool>* out,
+                           cuda::std::optional<T> const* a,
+                           cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
     *out = (*(*a) == *(*b));
@@ -278,7 +265,6 @@ __device__ inline errc null_equal(optional<bool>* out, optional<T> const* a, opt
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 }  // namespace ops

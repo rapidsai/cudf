@@ -6,12 +6,23 @@
 
 #include <cudf/utilities/export.hpp>
 
-#include <cuda/std/cstdint>
+#include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
-enum class errc : cuda::std::int8_t { SUCCESS = 0, OVERFLOW = 1, DIVISION_BY_ZERO = 2 };
+/**
+ * @brief Copies an input value to the output.
+ *
+ * @tparam T Value type.
+ * @param out Destination value.
+ * @param a Input value.
+ */
+template <typename T>
+__device__ void identity(T* out, T const* a)
+{
+  *out = *a;
+}
 
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf

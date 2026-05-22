@@ -5,7 +5,9 @@
 
 #pragma once
 
-#include <cudf/operators/types.cuh>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -16,13 +18,11 @@ namespace ops {
  * @tparam T Input type.
  * @param out Destination for the null test result.
  * @param a Input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc is_null(bool* out, T const* a)
+__device__ void is_null(bool* out, T const* a)
 {
   *out = false;
-  return errc::OK;
 }
 
 /**
@@ -31,13 +31,11 @@ __device__ inline errc is_null(bool* out, T const* a)
  * @tparam T Input value type.
  * @param out Destination optional boolean result.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc is_null(optional<bool>* out, optional<T> const* a)
+__device__ void is_null(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
 {
   *out = !a->has_value();
-  return errc::OK;
 }
 
 /**
@@ -47,23 +45,21 @@ __device__ inline errc is_null(optional<bool>* out, optional<T> const* a)
  * @param out Destination optional value.
  * @param a Optional input value.
  * @param condition Optional boolean condition.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc nullify_if(optional<T>* out,
-                                  optional<T> const* a,
-                                  optional<bool> const* condition)
+__device__ void nullify_if(cuda::std::optional<T>* out,
+                           cuda::std::optional<T> const* a,
+                           cuda::std::optional<bool> const* condition)
 {
   if (condition->has_value() && a->has_value()) {
     if (condition->value()) {
-      *out = nullopt;
+      *out = cuda::std::nullopt;
     } else {
       *out = a->value();
     }
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -73,13 +69,11 @@ __device__ inline errc nullify_if(optional<T>* out,
  * @param out Destination value.
  * @param a First value.
  * @param b Second value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc coalesce(T* out, T const* a, T const* b)
+__device__ void coalesce(T* out, T const* a, T const* b)
 {
   *out = *a;
-  return errc::OK;
 }
 
 /**
@@ -89,19 +83,19 @@ __device__ inline errc coalesce(T* out, T const* a, T const* b)
  * @param out Destination optional value.
  * @param a First optional value.
  * @param b Second optional value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc coalesce(optional<T>* out, optional<T> const* a, optional<T> const* b)
+__device__ void coalesce(cuda::std::optional<T>* out,
+                         cuda::std::optional<T> const* a,
+                         cuda::std::optional<T> const* b)
 {
   if (a->has_value()) {
     *out = a->value();
   } else if (b->has_value()) {
     *out = b->value();
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -109,29 +103,22 @@ __device__ inline errc coalesce(optional<T>* out, optional<T> const* a, optional
  *
  * @param out Destination boolean predicate.
  * @param a Input boolean predicate.
- * @return errc::OK.
  */
-__device__ inline errc predicate(bool* out, bool const* a)
-{
-  *out = *a;
-  return errc::OK;
-}
+__device__ inline void predicate(bool* out, bool const* a) { *out = *a; }
 
 /**
  * @brief Converts an optional predicate to a non-nullable predicate.
  *
  * @param out Destination optional boolean predicate.
  * @param a Optional input boolean predicate.
- * @return errc::OK.
  */
-__device__ inline errc predicate(optional<bool>* out, optional<bool> const* a)
+__device__ inline void predicate(cuda::std::optional<bool>* out, cuda::std::optional<bool> const* a)
 {
   if (a->has_value()) {
     *out = a->value();
   } else {
     *out = false;
   }
-  return errc::OK;
 }
 
 }  // namespace ops

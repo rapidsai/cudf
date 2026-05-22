@@ -4,7 +4,9 @@
  */
 #pragma once
 
-#include <cudf/operators/types.cuh>
+#include <cudf/utilities/export.hpp>
+
+#include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
@@ -15,26 +17,16 @@ namespace ops {
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arccos(float* out, float const* a)
-{
-  *out = ::acosf(*a);
-  return errc::OK;
-}
+__device__ inline void arccos(float* out, float const* a) { *out = ::acosf(*a); }
 
 /**
  * @brief Computes inverse cosine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arccos(double* out, double const* a)
-{
-  *out = ::acos(*a);
-  return errc::OK;
-}
+__device__ inline void arccos(double* out, double const* a) { *out = ::acos(*a); }
 
 /**
  * @brief Computes inverse cosine for optional input.
@@ -42,19 +34,17 @@ __device__ inline errc arccos(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arccos(optional<T>* out, optional<T> const* a)
+__device__ void arccos(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arccos(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -63,26 +53,16 @@ __device__ inline errc arccos(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arccosh(float* out, float const* a)
-{
-  *out = ::acoshf(*a);
-  return errc::OK;
-}
+__device__ inline void arccosh(float* out, float const* a) { *out = ::acoshf(*a); }
 
 /**
  * @brief Computes inverse hyperbolic cosine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arccosh(double* out, double const* a)
-{
-  *out = ::acosh(*a);
-  return errc::OK;
-}
+__device__ inline void arccosh(double* out, double const* a) { *out = ::acosh(*a); }
 
 /**
  * @brief Computes inverse hyperbolic cosine for optional input.
@@ -90,19 +70,17 @@ __device__ inline errc arccosh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arccosh(optional<T>* out, optional<T> const* a)
+__device__ void arccosh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arccosh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -111,26 +89,16 @@ __device__ inline errc arccosh(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arcsin(float* out, float const* a)
-{
-  *out = ::asinf(*a);
-  return errc::OK;
-}
+__device__ inline void arcsin(float* out, float const* a) { *out = ::asinf(*a); }
 
 /**
  * @brief Computes inverse sine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arcsin(double* out, double const* a)
-{
-  *out = ::asin(*a);
-  return errc::OK;
-}
+__device__ inline void arcsin(double* out, double const* a) { *out = ::asin(*a); }
 
 /**
  * @brief Computes inverse sine for optional input.
@@ -138,19 +106,17 @@ __device__ inline errc arcsin(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arcsin(optional<T>* out, optional<T> const* a)
+__device__ void arcsin(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arcsin(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -159,26 +125,16 @@ __device__ inline errc arcsin(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arcsinh(float* out, float const* a)
-{
-  *out = ::asinhf(*a);
-  return errc::OK;
-}
+__device__ inline void arcsinh(float* out, float const* a) { *out = ::asinhf(*a); }
 
 /**
  * @brief Computes inverse hyperbolic sine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arcsinh(double* out, double const* a)
-{
-  *out = ::asinh(*a);
-  return errc::OK;
-}
+__device__ inline void arcsinh(double* out, double const* a) { *out = ::asinh(*a); }
 
 /**
  * @brief Computes inverse hyperbolic sine for optional input.
@@ -186,19 +142,17 @@ __device__ inline errc arcsinh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arcsinh(optional<T>* out, optional<T> const* a)
+__device__ void arcsinh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arcsinh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -207,26 +161,16 @@ __device__ inline errc arcsinh(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arctan(float* out, float const* a)
-{
-  *out = ::atanf(*a);
-  return errc::OK;
-}
+__device__ inline void arctan(float* out, float const* a) { *out = ::atanf(*a); }
 
 /**
  * @brief Computes inverse tangent for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arctan(double* out, double const* a)
-{
-  *out = ::atan(*a);
-  return errc::OK;
-}
+__device__ inline void arctan(double* out, double const* a) { *out = ::atan(*a); }
 
 /**
  * @brief Computes inverse tangent for optional input.
@@ -234,19 +178,17 @@ __device__ inline errc arctan(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arctan(optional<T>* out, optional<T> const* a)
+__device__ void arctan(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arctan(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -255,26 +197,16 @@ __device__ inline errc arctan(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arctanh(float* out, float const* a)
-{
-  *out = ::atanhf(*a);
-  return errc::OK;
-}
+__device__ inline void arctanh(float* out, float const* a) { *out = ::atanhf(*a); }
 
 /**
  * @brief Computes inverse hyperbolic tangent for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc arctanh(double* out, double const* a)
-{
-  *out = ::atanh(*a);
-  return errc::OK;
-}
+__device__ inline void arctanh(double* out, double const* a) { *out = ::atanh(*a); }
 
 /**
  * @brief Computes inverse hyperbolic tangent for optional input.
@@ -282,19 +214,17 @@ __device__ inline errc arctanh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc arctanh(optional<T>* out, optional<T> const* a)
+__device__ void arctanh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     arctanh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -303,26 +233,16 @@ __device__ inline errc arctanh(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc cos(float* out, float const* a)
-{
-  *out = ::cosf(*a);
-  return errc::OK;
-}
+__device__ inline void cos(float* out, float const* a) { *out = ::cosf(*a); }
 
 /**
  * @brief Computes cosine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc cos(double* out, double const* a)
-{
-  *out = ::cos(*a);
-  return errc::OK;
-}
+__device__ inline void cos(double* out, double const* a) { *out = ::cos(*a); }
 
 /**
  * @brief Computes cosine for optional input.
@@ -330,19 +250,17 @@ __device__ inline errc cos(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cos(optional<T>* out, optional<T> const* a)
+__device__ void cos(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     cos(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -351,26 +269,16 @@ __device__ inline errc cos(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc cosh(float* out, float const* a)
-{
-  *out = ::coshf(*a);
-  return errc::OK;
-}
+__device__ inline void cosh(float* out, float const* a) { *out = ::coshf(*a); }
 
 /**
  * @brief Computes hyperbolic cosine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc cosh(double* out, double const* a)
-{
-  *out = ::cosh(*a);
-  return errc::OK;
-}
+__device__ inline void cosh(double* out, double const* a) { *out = ::cosh(*a); }
 
 /**
  * @brief Computes hyperbolic cosine for optional input.
@@ -378,19 +286,17 @@ __device__ inline errc cosh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc cosh(optional<T>* out, optional<T> const* a)
+__device__ void cosh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     cosh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -399,26 +305,16 @@ __device__ inline errc cosh(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc sin(float* out, float const* a)
-{
-  *out = ::sinf(*a);
-  return errc::OK;
-}
+__device__ inline void sin(float* out, float const* a) { *out = ::sinf(*a); }
 
 /**
  * @brief Computes sine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc sin(double* out, double const* a)
-{
-  *out = ::sin(*a);
-  return errc::OK;
-}
+__device__ inline void sin(double* out, double const* a) { *out = ::sin(*a); }
 
 /**
  * @brief Computes sine for optional input.
@@ -426,19 +322,17 @@ __device__ inline errc sin(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc sin(optional<T>* out, optional<T> const* a)
+__device__ void sin(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     sin(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -447,26 +341,16 @@ __device__ inline errc sin(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc sinh(float* out, float const* a)
-{
-  *out = ::sinhf(*a);
-  return errc::OK;
-}
+__device__ inline void sinh(float* out, float const* a) { *out = ::sinhf(*a); }
 
 /**
  * @brief Computes hyperbolic sine for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc sinh(double* out, double const* a)
-{
-  *out = ::sinh(*a);
-  return errc::OK;
-}
+__device__ inline void sinh(double* out, double const* a) { *out = ::sinh(*a); }
 
 /**
  * @brief Computes hyperbolic sine for optional input.
@@ -474,19 +358,17 @@ __device__ inline errc sinh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc sinh(optional<T>* out, optional<T> const* a)
+__device__ void sinh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     sinh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -495,26 +377,16 @@ __device__ inline errc sinh(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc tan(float* out, float const* a)
-{
-  *out = ::tanf(*a);
-  return errc::OK;
-}
+__device__ inline void tan(float* out, float const* a) { *out = ::tanf(*a); }
 
 /**
  * @brief Computes tangent for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc tan(double* out, double const* a)
-{
-  *out = ::tan(*a);
-  return errc::OK;
-}
+__device__ inline void tan(double* out, double const* a) { *out = ::tan(*a); }
 
 /**
  * @brief Computes tangent for optional input.
@@ -522,19 +394,17 @@ __device__ inline errc tan(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc tan(optional<T>* out, optional<T> const* a)
+__device__ void tan(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     tan(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 /**
@@ -543,26 +413,16 @@ __device__ inline errc tan(optional<T>* out, optional<T> const* a)
  * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc tanh(float* out, float const* a)
-{
-  *out = ::tanhf(*a);
-  return errc::OK;
-}
+__device__ inline void tanh(float* out, float const* a) { *out = ::tanhf(*a); }
 
 /**
  * @brief Computes hyperbolic tangent for double input.
  *
  * @param out Destination for the computed value.
  * @param a Input value.
- * @return errc::OK.
  */
-__device__ inline errc tanh(double* out, double const* a)
-{
-  *out = ::tanh(*a);
-  return errc::OK;
-}
+__device__ inline void tanh(double* out, double const* a) { *out = ::tanh(*a); }
 
 /**
  * @brief Computes hyperbolic tangent for optional input.
@@ -570,19 +430,17 @@ __device__ inline errc tanh(double* out, double const* a)
  * @tparam T Input and output type.
  * @param out Destination optional value.
  * @param a Optional input value.
- * @return errc::OK.
  */
 template <typename T>
-__device__ inline errc tanh(optional<T>* out, optional<T> const* a)
+__device__ void tanh(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
 {
   if (a->has_value()) {
     T r;
     tanh(&r, &a->value());
     *out = r;
   } else {
-    *out = nullopt;
+    *out = cuda::std::nullopt;
   }
-  return errc::OK;
 }
 
 }  // namespace ops
