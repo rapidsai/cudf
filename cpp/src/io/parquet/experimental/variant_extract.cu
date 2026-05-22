@@ -397,12 +397,10 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_copy_kernel(
 
 template <typename T>
 CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
-  cudf::detail::lists_column_device_view values,
-  T* d_output,
-  bitmask_type* d_null_mask,
-  size_type num_rows)
+  cudf::detail::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
 {
-  auto const tid = cudf::detail::grid_1d::global_thread_id();
+  auto const num_rows = static_cast<size_type>(d_output.size());
+  auto const tid      = cudf::detail::grid_1d::global_thread_id();
   if (tid >= num_rows) { return; }
   auto const row = static_cast<size_type>(tid);
 
@@ -525,7 +523,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  // validate the path even for empty input columns
+  // Validate the path even for empty input columns.
   auto const steps = parse_variant_path(path);
 
   auto const num_rows = variant_column.size();
@@ -564,9 +562,8 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   cudf::detail::lists_column_device_view meta_lists_device_view(*meta_device_view);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
 
-  // d_src_offsets caches the per-row intra-value byte offset returned by
-  // device_locate_path so the copy kernel can skip re-parsing.
   rmm::device_uvector<size_type> d_sizes(num_rows, stream, temp_mr);
+  // Caches the per-row intra-value byte offset.
   rmm::device_uvector<size_type> d_src_offsets(num_rows, stream, temp_mr);
   auto null_mask =
     variant_column.nullable()
@@ -593,31 +590,27 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   device_span<size_type const> d_offsets{offsets_column->view().data<size_type>(),
                                          static_cast<std::size_t>(num_rows + 1)};
 
-  // Pass 2: pure gather/copy using the memoized source offsets.
-  auto d_out_bytes = rmm::device_uvector<uint8_t>(total_bytes, stream, mr);
+  // Pass 2: gather/copy directly into the output value child buffer.
+  auto val_child = make_numeric_column(data_type{type_id::UINT8},
+                                       static_cast<size_type>(total_bytes),
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       mr);
   if (total_bytes > 0) {
+    device_span<uint8_t> d_out_bytes{val_child->mutable_view().data<uint8_t>(),
+                                     static_cast<std::size_t>(total_bytes)};
     get_variant_field_copy_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
       val_lists_device_view, d_src_offsets, d_offsets, d_out_bytes, d_null_mask);
   }
 
-  // Build the output value list<uint8> column
-  auto uint8_child = std::make_unique<column>(data_type{type_id::UINT8},
-                                              static_cast<size_type>(total_bytes),
-                                              d_out_bytes.release(),
-                                              rmm::device_buffer{},
-                                              0);
   auto val_out =
-    make_lists_column(num_rows, std::move(offsets_column), std::move(uint8_child), 0, {});
+    make_lists_column(num_rows, std::move(offsets_column), std::move(val_child), 0, {});
 
   // Copy input metadata column for the output (deep copy materializes any slice).
   auto meta_out = std::make_unique<column>(meta_view, stream, mr);
 
-  // Compute null count
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
 
-  // Assemble struct without propagating nulls into children — the struct-level
-  // null mask is authoritative.  Skipping superimpose_and_sanitize_nulls avoids
-  // an expensive purge_nonempty_nulls deep-copy of the metadata list column.
   std::vector<std::unique_ptr<column>> children;
   children.push_back(std::move(meta_out));
   children.push_back(std::move(val_out));
@@ -664,7 +657,9 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
     cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      val_lists_device_view, static_cast<T*>(data.data()), d_null_mask, num_rows);
+      val_lists_device_view,
+      {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)},
+      d_null_mask);
 
     auto const null_count =
       num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
