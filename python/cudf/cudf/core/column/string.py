@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import itertools
 import re
-import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -748,25 +747,6 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(
                     result,
                     get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-                ),
-            )
-
-    def edit_distance_matrix(self) -> ListColumn:
-        warnings.warn(
-            "edit_distance_matrix is deprecated. Use edit_distance instead.",
-            FutureWarning,
-        )
-        with self.access(mode="read", scope="internal"):
-            result = plc.nvtext.edit_distance.edit_distance_matrix(
-                self.plc_column
-            )
-            return cast(
-                cudf.core.column.lists.ListColumn,
-                ColumnBase.create(
-                    result,
-                    cudf.ListDtype(
-                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
-                    ),
                 ),
             )
 
