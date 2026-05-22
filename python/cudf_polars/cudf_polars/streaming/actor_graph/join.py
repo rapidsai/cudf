@@ -36,6 +36,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     NormalizedPartitioning,
@@ -276,17 +277,10 @@ async def _broadcast_join_large_chunk(
         df = _concat(*join_results, context=ir_context)
         del join_results
 
-    if tracer is not None:
-        tracer.add_chunk(table=df.table)
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True, br=context.br()
-            ),
-        ),
+    output_chunk = TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
     )
+    await send_chunk(context, ch_out, output_chunk, seq_num, tracer=tracer)
     del df, large_df
 
 
@@ -476,17 +470,16 @@ async def _join_chunks(
                 context=ir_context,
             )
             del left_chunk, right_chunk
-        if tracer is not None:
-            tracer.add_chunk(table=df.table)
 
-        await ch_out.send(
+        output_chunk = TableChunk.from_pylibcudf_table(
+            df.table, df.stream, exclusive_view=True, br=context.br()
+        )
+        await send_chunk(
             context,
-            Message(
-                left_msg.sequence_number,
-                TableChunk.from_pylibcudf_table(
-                    df.table, df.stream, exclusive_view=True, br=context.br()
-                ),
-            ),
+            ch_out,
+            output_chunk,
+            left_msg.sequence_number,
+            tracer=tracer,
         )
         del df
 
