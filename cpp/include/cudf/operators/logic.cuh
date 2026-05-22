@@ -215,13 +215,13 @@ __device__ void if_else(T* out, T const* true_value, T const* false_value, bool 
 }
 
 /**
- * @brief Selects one of two optional values based on an optional predicate.
+ * @brief Selects one of two optional values based on a predicate.
  *
  * @tparam T Selected value type.
  * @param out Destination optional selected value.
  * @param true_value Optional value selected when @p pred is true.
  * @param false_value Optional value selected when @p pred is false.
- * @param pred Optional selection predicate.
+ * @param pred Selection predicate.
  */
 template <typename T>
 __device__ void if_else(cuda::std::optional<T>* out,
@@ -229,13 +229,7 @@ __device__ void if_else(cuda::std::optional<T>* out,
                         cuda::std::optional<T> const* false_value,
                         cuda::std::optional<bool> const* pred)
 {
-  if (pred->has_value() && true_value->has_value() && false_value->has_value()) {
-    T r;
-    if_else<T>(&r, &true_value->value(), &false_value->value(), &pred->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  *out = pred->value_or(false) ? *true_value : *false_value;
 }
 
 }  // namespace ops
