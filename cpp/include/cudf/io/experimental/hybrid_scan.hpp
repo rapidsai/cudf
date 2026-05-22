@@ -128,7 +128,7 @@ enum class use_data_page_mask : bool {
  * auto all_row_group_indices = reader->all_row_groups(options);
  *
  * // Span to track the indices of row groups currently at hand
- * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
+ * auto current_row_group_indices = std::span<size_type const>(all_row_group_indices);
  *
  * // Optional: Prune row group indices to the ones that start within the byte range
  * auto byte_range_filtered_row_group_indices =
