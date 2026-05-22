@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.experimental.explain import SerializablePlan
 from cudf_polars.quent._types import (
     Edge,
     Operator,
@@ -15,13 +14,14 @@ from cudf_polars.quent._types import (
     Port,
     new_quent_id,
 )
+from cudf_polars.streaming.explain import SerializablePlan
 
 if TYPE_CHECKING:
     import uuid
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.explain import SerializableIRNode
     from cudf_polars.quent import Query, Worker
+    from cudf_polars.streaming.explain import SerializableIRNode
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})

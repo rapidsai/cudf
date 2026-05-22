@@ -28,7 +28,6 @@ By default, only the `\n` character is recognized as a line break. The [cudf::st
 - Unescaped special characters (listed in the third row of the Characters table below) when they are intended to match as literals.
 - Unmatched paired special characters like `()`, `[]`, and `{}`.
 - Empty groups, classes, or quantifiers. That is, `()` and `[]` without an enclosing expression and `{}` without a valid integer.
-- Incomplete ranges in character classes like `[-z]`, `[a-]`, and `[-]`.
 - Unqualified quantifiers. That is, a quantifier with no preceding item to match like `*a`, `a⎮?`, `(+)`, `{2}a`, etc.
 
 ## Features Supported

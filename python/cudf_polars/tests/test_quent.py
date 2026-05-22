@@ -28,7 +28,7 @@ from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+    from cudf_polars.engine.core import StreamingEngine
     from cudf_polars.quent import QuentContext
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -317,7 +317,7 @@ def test_build_plan_without_parent_operators_has_empty_list(
 
 
 def test_port_names_for_node_leaf() -> None:
-    from cudf_polars.experimental.explain import SerializableIRNode
+    from cudf_polars.streaming.explain import SerializableIRNode
 
     node = SerializableIRNode(
         id="1", children=[], schema={}, properties={}, type="Scan"
@@ -326,7 +326,7 @@ def test_port_names_for_node_leaf() -> None:
 
 
 def test_port_names_for_node_single_child() -> None:
-    from cudf_polars.experimental.explain import SerializableIRNode
+    from cudf_polars.streaming.explain import SerializableIRNode
 
     node = SerializableIRNode(
         id="1", children=["2"], schema={}, properties={}, type="Filter"
@@ -335,7 +335,7 @@ def test_port_names_for_node_single_child() -> None:
 
 
 def test_port_names_for_node_join() -> None:
-    from cudf_polars.experimental.explain import SerializableIRNode
+    from cudf_polars.streaming.explain import SerializableIRNode
 
     node = SerializableIRNode(
         id="1", children=["2", "3"], schema={}, properties={}, type="Join"
@@ -344,7 +344,7 @@ def test_port_names_for_node_join() -> None:
 
 
 def test_port_names_for_node_multi_child() -> None:
-    from cudf_polars.experimental.explain import SerializableIRNode
+    from cudf_polars.streaming.explain import SerializableIRNode
 
     node = SerializableIRNode(
         id="1",
@@ -362,8 +362,8 @@ def test_port_names_for_node_multi_child() -> None:
 
 
 def test_lower_ir_graph_with_node_map() -> None:
-    from cudf_polars.experimental.parallel import lower_ir_graph_with_node_map
-    from cudf_polars.experimental.statistics import collect_statistics
+    from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
+    from cudf_polars.streaming.statistics import collect_statistics
 
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
     engine = pl.GPUEngine(executor="streaming")
@@ -503,16 +503,16 @@ def engine_with_quent_context(
     backend = request.param
     if backend == "ray":
         pytest.importorskip("ray")
-        import cudf_polars.experimental.rapidsmpf.frontend.ray
+        import cudf_polars.engine.ray
 
-        return cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine(
+        return cudf_polars.engine.ray.RayEngine(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "dask":
         pytest.importorskip("distributed")
-        import cudf_polars.experimental.rapidsmpf.frontend.dask
+        import cudf_polars.engine.dask
 
-        return cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine(
+        return cudf_polars.engine.dask.DaskEngine(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "spmd":
@@ -523,7 +523,7 @@ def engine_with_quent_context(
         from rapidsmpf.config import Options, get_environment_variables
         from rapidsmpf.progress_thread import ProgressThread
 
-        import cudf_polars.experimental.rapidsmpf.frontend.spmd
+        import cudf_polars.engine.spmd
 
         if bootstrap.is_running_with_rrun():
             comm = bootstrap.create_ucxx_comm(
@@ -535,7 +535,7 @@ def engine_with_quent_context(
                 Options(get_environment_variables()), ProgressThread()
             )
 
-        return cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine(
+        return cudf_polars.engine.spmd.SPMDEngine(
             executor_options={"quent_context": quent_context}, comm=comm
         )
     else:
