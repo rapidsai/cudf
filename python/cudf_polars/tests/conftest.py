@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -25,10 +25,28 @@ if TYPE_CHECKING:
     from cudf_polars.engine.spmd import SPMDEngine
 
 
-# Number of ranks for multi-rank streaming engines that share one GPU
-# (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
-# ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
-NUM_RANKS = 2
+@pytest.fixture(scope="session")
+def ray_num_ranks() -> int:
+    """
+    Number of ranks for multi-rank streaming engines that share one GPU
+    (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
+    ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
+    """
+    return 2
+
+
+@pytest.fixture(scope="session")
+def ray_init_options(ray_num_ranks: int) -> dict[str, Any]:
+    """
+    Keyword arguments forwarded to `ray.init` to configure the Ray cluster
+    for testing, especially in a CI environment.
+    """
+    return {
+        "num_cpus": ray_num_ranks,
+        "num_gpus": 0,
+        "include_dashboard": False,
+        "object_store_memory": 256 * 1024 * 1024,  # 256 MB
+    }
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -65,6 +83,8 @@ def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 @pytest.fixture(scope="session")
 def _unconfigured_engine(
     _engine_param: EngineFixtureParam,
+    ray_num_ranks: int,
+    ray_init_options,
 ) -> Generator[tuple[pl.GPUEngine, StreamingOptions | None], None, None]:
     """
     Fixture generating an engine resource and options to apply before use.
@@ -110,9 +130,9 @@ def _unconfigured_engine(
                 # otherwise ``RayEngine`` defaults to
                 # ``get_num_gpus_in_ray_cluster()``
                 engine = RayEngine(
-                    num_ranks=NUM_RANKS,
+                    num_ranks=ray_num_ranks,
                     engine_options={"allow_gpu_sharing": True},
-                    ray_init_options={"include_dashboard": False},
+                    ray_init_options=ray_init_options,
                 )
             case _:  # pragma: no cover
                 raise ValueError(

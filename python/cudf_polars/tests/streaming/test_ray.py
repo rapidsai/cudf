@@ -22,18 +22,16 @@ from cudf_polars.engine.ray import RayEngine  # noqa: E402
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-NUM_RANKS = 2
-
 
 @pytest.fixture(scope="module")
-def engine() -> Iterator[RayEngine]:
+def engine(ray_num_ranks: int) -> Iterator[RayEngine]:
     """Create one Ray cluster + GPU actors shared across the test session."""
     with RayEngine(
         # Use a small partition size so tests exercise the multi-partition
         # code path deterministically, regardless of input size.
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=NUM_RANKS,
+        num_ranks=ray_num_ranks,
         ray_init_options={"include_dashboard": False},
     ) as engine:
         yield engine
@@ -78,12 +76,12 @@ def test_raises_inside_rrun() -> None:
         RayEngine()
 
 
-def test_num_ranks_requires_allow_gpu_sharing() -> None:
+def test_num_ranks_requires_allow_gpu_sharing(ray_num_ranks: int) -> None:
     """num_ranks requires engine_options['allow_gpu_sharing']=True."""
     with pytest.raises(ValueError, match="allow_gpu_sharing"):
-        RayEngine(num_ranks=NUM_RANKS)
+        RayEngine(num_ranks=ray_num_ranks)
     with pytest.raises(ValueError, match="allow_gpu_sharing"):
-        RayEngine(num_ranks=NUM_RANKS, engine_options={"allow_gpu_sharing": False})
+        RayEngine(num_ranks=ray_num_ranks, engine_options={"allow_gpu_sharing": False})
 
 
 def test_num_ranks_must_be_positive() -> None:
@@ -132,23 +130,22 @@ def test_run(engine: RayEngine) -> None:
     assert len(set(result)) == engine.nranks
 
 
-def test_num_ranks_oversubscribes() -> None:
+def test_num_ranks_oversubscribes(ray_num_ranks: int) -> None:
     """num_ranks creates the requested number of actors sharing GPU 0."""
-    n = 2
     with RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=n,
+        num_ranks=ray_num_ranks,
         ray_init_options={"include_dashboard": False},
     ) as engine:
-        assert engine.nranks == n
-        assert len(engine.rank_actors) == n
+        assert engine.nranks == ray_num_ranks
+        assert len(engine.rank_actors) == ray_num_ranks
         result = pl.LazyFrame({"a": [1, 2, 3, 4]}).collect(engine=engine)
         assert sorted(result["a"].to_list()) == [1, 2, 3, 4]
 
 
 @pytest.fixture(scope="module")
-def reset_engine() -> Iterator[RayEngine]:
+def reset_engine(ray_num_ranks: int) -> Iterator[RayEngine]:
     """Module-scoped engine for reset tests — independent of ``engine``.
 
     These tests exercise :meth:`RayEngine._reset` (which mutates the
@@ -158,7 +155,7 @@ def reset_engine() -> Iterator[RayEngine]:
     with RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=NUM_RANKS,
+        num_ranks=ray_num_ranks,
         ray_init_options={"include_dashboard": False},
     ) as e:
         yield e
@@ -208,12 +205,12 @@ def test_reset_collects_after_options_change(reset_engine: RayEngine) -> None:
     assert sorted(result["a"].to_list()) == [1, 2, 3, 4, 5]
 
 
-def test_reset_after_shutdown_raises() -> None:
+def test_reset_after_shutdown_raises(ray_num_ranks: int) -> None:
     """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=NUM_RANKS,
+        num_ranks=ray_num_ranks,
         ray_init_options={"include_dashboard": False},
     )
     engine.shutdown()
@@ -256,12 +253,12 @@ def test_reset_rejects_construction_time_engine_options(
         )
 
 
-def test_shutdown_skips_when_ray_not_initialized() -> None:
+def test_shutdown_skips_when_ray_not_initialized(ray_num_ranks: int) -> None:
     """``shutdown`` short-circuits if ``ray.is_initialized()`` is ``False``."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=NUM_RANKS,
+        num_ranks=ray_num_ranks,
         ray_init_options={"include_dashboard": False},
     )
     try:
