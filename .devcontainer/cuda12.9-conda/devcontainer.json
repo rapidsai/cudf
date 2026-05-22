@@ -6,7 +6,10 @@
       "CUDA": "12.9",
       "PYTHON_PACKAGE_MANAGER": "conda",
       "BASE": "rapidsai/devcontainers:26.08-cpp-mambaforge"
-    }
+    },
+    "cacheFrom": [
+      "ghcr.io/rapidsai/cudf/devcontainer:26.08-cuda12.9-conda"
+    ]
   },
   "runArgs": [
     "--rm",
