@@ -44,18 +44,18 @@ def collect_statistics(
     stats = StatsCollector()
 
     with concurrent.futures.ThreadPoolExecutor() as pool:
-        futures = {}
-        for needed_cols, scan_nodes in parquet_groups.values():
-            future = pool.submit(
+        future_to_scan_nodes = {
+            pool.submit(
                 _build_source_info,
                 scan_nodes[0],
                 config_options,
                 needed_cols=frozenset(needed_cols),
-            )
-            futures[future] = scan_nodes
+            ): scan_nodes
+            for needed_cols, scan_nodes in parquet_groups.values()
+        }
 
-        for future in concurrent.futures.as_completed(futures):
-            scan_nodes = futures.pop(future)
+        for future in concurrent.futures.as_completed(future_to_scan_nodes):
+            scan_nodes = future_to_scan_nodes[future]
             source = future.result()
             for node in scan_nodes:
                 stats.scan_stats[node] = source
