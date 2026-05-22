@@ -124,4 +124,73 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
       assertFalse(newListChild.hasNonEmptyNulls());
     }
   }
+
+  @Test
+  void testMergeAndSetValidityStructPropagatesToChildren() {
+    try (ColumnVector c0 = ColumnVector.fromInts(1, 2, 3, 4, 5);
+         ColumnVector c1 = ColumnVector.fromInts(10, 20, 30, 40, 50);
+         ColumnVector struct = ColumnVector.makeStruct(c0, c1);
+         ColumnVector mask = ColumnVector.fromBoxedInts(0, 0, null, null, 0);
+         ColumnVector merged = struct.mergeAndSetValidity(BinaryOp.BITWISE_AND, mask);
+         HostColumnVector hostMerged = merged.copyToHost()) {
+      assertEquals(2, hostMerged.getNullCount(), "parent null count");
+      assertFalse(hostMerged.isNull(0));
+      assertFalse(hostMerged.isNull(1));
+      assertTrue(hostMerged.isNull(2));
+      assertTrue(hostMerged.isNull(3));
+      assertFalse(hostMerged.isNull(4));
+
+      // Each child should have the same null mask as the parent.
+      assertEquals(2, hostMerged.getNumChildren());
+      for (int i = 0; i < hostMerged.getNumChildren(); i++) {
+        HostColumnVectorCore child = hostMerged.getChildColumnView(i);
+        assertEquals(2, child.getNullCount(), "child " + i + " null count");
+        assertFalse(child.isNull(0), "child " + i + " row 0");
+        assertFalse(child.isNull(1), "child " + i + " row 1");
+        assertTrue(child.isNull(2),  "child " + i + " row 2");
+        assertTrue(child.isNull(3),  "child " + i + " row 3");
+        assertFalse(child.isNull(4), "child " + i + " row 4");
+      }
+    }
+  }
+
+  @Test
+  void testMergeAndSetValidityStructOfListPropagatesAndPurges() {
+    HostColumnVector.DataType intType  = new HostColumnVector.BasicType(true, DType.INT32);
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true, intType);
+    // Inner INT has 11 elements grouped into 5 lists.
+    try (ColumnVector listChild = ColumnVector.fromLists(listType,
+             Arrays.asList(1, 2),
+             Arrays.asList(3, 4, 5),
+             Arrays.asList(6),  // will be masked null.
+             Arrays.asList(7, 8, 9, 10),  // will be masked null.
+             Arrays.asList(11));
+         ColumnVector struct = ColumnVector.makeStruct(listChild);
+         ColumnVector mask = ColumnVector.fromBoxedInts(0, 0, null, null, 0);
+         ColumnVector merged = struct.mergeAndSetValidity(BinaryOp.BITWISE_AND, mask);
+         HostColumnVector hostMerged = merged.copyToHost()) {
+      assertEquals(2, hostMerged.getNullCount(), "parent null count");
+      assertFalse(hostMerged.isNull(0));
+      assertFalse(hostMerged.isNull(1));
+      assertTrue(hostMerged.isNull(2));
+      assertTrue(hostMerged.isNull(3));
+      assertFalse(hostMerged.isNull(4));
+
+      // The LIST child should have the same null mask as the parent.
+      assertEquals(1, hostMerged.getNumChildren());
+      HostColumnVectorCore listView = hostMerged.getChildColumnView(0);
+      assertEquals(2, listView.getNullCount(), "list child null count");
+      assertFalse(listView.isNull(0));
+      assertFalse(listView.isNull(1));
+      assertTrue(listView.isNull(2));
+      assertTrue(listView.isNull(3));
+      assertFalse(listView.isNull(4));
+
+      // The LIST's offsets should be purged. Rows 2 and 3 collapse 
+      // so the inner INT should have only 6 elements.
+      assertEquals(1, listView.getNumChildren());
+      HostColumnVectorCore intGrandchild = listView.getChildColumnView(0);
+      assertEquals(6, intGrandchild.getRowCount(), "purged inner row count");
+    }
+  }
 }
