@@ -6,7 +6,10 @@
 #pragma once
 
 #include <cuda/std/cassert>
+
+#ifndef __CUDACC_RTC__
 #include <cuda_runtime.h>
+#endif
 
 /**
  * @brief `assert`-like macro for device code
