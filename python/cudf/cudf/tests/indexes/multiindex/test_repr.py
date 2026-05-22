@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -55,10 +55,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
                 MultiIndex([(<NA>, 'abc'),
-                            (   1,  <NA>),
+                            (   1,   nan),
                             (   2, 'xyz'),
-                            (   3,  <NA>)],
-                        names=['a', 'b'])
+                            (   3,   nan)],
+                           names=['a', 'b'])
                 """
             ),
         ),
@@ -75,10 +75,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
             MultiIndex([(<NA>, 'abc'),
-                        ( nan,  <NA>),
+                        (<NA>,   nan),
                         ( 2.0, 'xyz'),
-                        ( 3.0,  <NA>)],
-                    names=['a', 'b'])
+                        ( 3.0,   nan)],
+                       names=['a', 'b'])
             """
             ),
         ),
@@ -95,10 +95,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
             MultiIndex([(                          'NaT', 'abc'),
-                        ('1970-01-01 00:00:00.000000001',  <NA>),
+                        ('1970-01-01 00:00:00.000000001',   nan),
                         ('1970-01-01 00:00:00.000000002', 'xyz'),
-                        ('1970-01-01 00:00:00.000000003',  <NA>)],
-                    names=['a', 'b'])
+                        ('1970-01-01 00:00:00.000000003',   nan)],
+                       names=['a', 'b'])
             """
             ),
         ),
@@ -115,10 +115,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
                 MultiIndex([(                          'NaT', 'abc', 0.345),
-                            ('1970-01-01 00:00:00.000000001',  <NA>,  <NA>),
+                            ('1970-01-01 00:00:00.000000001',   nan,  <NA>),
                             ('1970-01-01 00:00:00.000000002', 'xyz', 100.0),
-                            ('1970-01-01 00:00:00.000000003',  <NA>,  10.0)],
-                        names=['a', 'b', 'c'])
+                            ('1970-01-01 00:00:00.000000003',   nan,  10.0)],
+                           names=['a', 'b', 'c'])
                 """
             ),
         ),
@@ -135,10 +135,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
                 MultiIndex([('abc',                         NaT, 0.345),
-                            ( <NA>, '0 days 00:00:00.000000001',  <NA>),
+                            (  nan, '0 days 00:00:00.000000001',  <NA>),
                             ('xyz', '0 days 00:00:00.000000002', 100.0),
-                            ( <NA>, '0 days 00:00:00.000000003',  10.0)],
-                        names=['a', 'b', 'c'])
+                            (  nan, '0 days 00:00:00.000000003',  10.0)],
+                           names=['a', 'b', 'c'])
                 """
             ),
         ),
@@ -155,10 +155,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
                 MultiIndex([(0.345, 'abc'),
-                            ( <NA>,  <NA>),
+                            ( <NA>,   nan),
                             (100.0, 'xyz'),
-                            ( 10.0,  <NA>)],
-                        names=['c', 'a'])
+                            ( 10.0,   nan)],
+                           names=['c', 'a'])
                 """
             ),
         ),
@@ -176,11 +176,11 @@ def test_multiindex_repr(pmi, max_seq_items):
             .index,
             textwrap.dedent(
                 """
-            MultiIndex([(NaT, <NA>),
-                        (NaT, <NA>),
-                        (NaT, <NA>),
-                        (NaT, <NA>)],
-                    names=['b', 'a'])
+            MultiIndex([(NaT, nan),
+                        (NaT, nan),
+                        (NaT, nan),
+                        (NaT, nan)],
+                       names=['b', 'a'])
             """
             ),
         ),
@@ -206,11 +206,11 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
     MultiIndex([(   1,                     'abc',   0.3232,    <NA>),
-                (   2,            'def, hi, bye',      nan,     100),
-                (<NA>,                      <NA>,      1.0, 2000324),
+                (   2,            'def, hi, bye',     <NA>,     100),
+                (<NA>,                       nan,      1.0, 2000324),
                 (   3, ', one, two, three, four',     <NA>,    <NA>),
-                (   5,                      <NA>, -0.34534,    <NA>)],
-            names=['a', 'b', 'c', 'd'])
+                (   5,                       nan, -0.34534,    <NA>)],
+               names=['a', 'b', 'c', 'd'])
     """
             ),
         ),
@@ -236,11 +236,11 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
     MultiIndex([(                    'abc',    1,   0.3232,    <NA>),
-                (           'def, hi, bye',    2,      nan,     100),
-                (                     <NA>, <NA>,      1.0, 2000324),
+                (           'def, hi, bye',    2,     <NA>,     100),
+                (                      nan, <NA>,      1.0, 2000324),
                 (', one, two, three, four',    3,     <NA>,    <NA>),
-                (                     <NA>,    5, -0.34534,    <NA>)],
-            names=['b', 'a', 'c', 'd'])
+                (                      nan,    5, -0.34534,    <NA>)],
+               names=['b', 'a', 'c', 'd'])
     """
             ),
         ),
@@ -266,11 +266,11 @@ def test_multiindex_repr(pmi, max_seq_items):
             textwrap.dedent(
                 """
     MultiIndex([('(abc',                     'abc',   0.3232,    <NA>),
-                (   '2',            'def, hi, bye',      nan,     100),
-                (  <NA>,                      <NA>,      1.0, 2000324),
+                (   '2',            'def, hi, bye',     <NA>,     100),
+                (   nan,                       nan,      1.0, 2000324),
                 (   '3', ', one, two, three, four',     <NA>,    <NA>),
-                (   '5',                      <NA>, -0.34534,    <NA>)],
-            names=['a', 'b', 'c', 'd'])
+                (   '5',                       nan, -0.34534,    <NA>)],
+               names=['a', 'b', 'c', 'd'])
     """
             ),
         ),

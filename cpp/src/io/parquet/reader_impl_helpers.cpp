@@ -20,6 +20,7 @@
 #include <cudf/logger.hpp>
 
 #include <cuda/iterator>
+#include <cuda/numeric>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -1368,36 +1369,38 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
   auto filtered_row_group_indices =
     std::vector<std::vector<size_type>>(input_row_group_indices.size());
 
-  std::for_each(
-    input_row_group_indices.front().begin(),
-    input_row_group_indices.front().end(),
-    [&](auto const& rg_idx) {
-      // Get the file offset of this row group
-      auto const row_group_file_offset = [&]() {
-        auto const& rg = per_file_metadata.front().row_groups[rg_idx];
-        if (rg.file_offset.has_value()) {
-          return rg.file_offset.value();
-        } else if (rg.columns.front().file_offset != 0) {
-          return rg.columns.front().file_offset;
-        } else {
-          auto const& col_meta = rg.columns.front().meta_data;
-          return col_meta.dictionary_page_offset != 0
-                   ? std::min(col_meta.dictionary_page_offset, col_meta.data_page_offset)
-                   : col_meta.data_page_offset;
-        }
-      }();
+  std::for_each(input_row_group_indices.front().begin(),
+                input_row_group_indices.front().end(),
+                [&](auto const& rg_idx) {
+                  // Get the file offset of this row group
+                  auto const row_group_file_offset = [&]() {
+                    auto const& rg = per_file_metadata.front().row_groups[rg_idx];
+                    if (rg.file_offset.has_value()) {
+                      return rg.file_offset.value();
+                    } else if (rg.columns.front().file_offset != 0) {
+                      return rg.columns.front().file_offset;
+                    } else {
+                      auto const& col_meta = rg.columns.front().meta_data;
+                      return col_meta.dictionary_page_offset != 0
+                               ? std::min(col_meta.dictionary_page_offset,
+                                          col_meta.data_page_offset)
+                               : col_meta.data_page_offset;
+                    }
+                  }();
 
-      // Check if the row group starts within the byte range: row group file offset is >=
-      // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
-      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
-      auto const is_within_byte_range =
-        std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
-        (not bytes_to_read.has_value() or
-         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
-         std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
+                  // Check if the row group starts within the byte range: row group file offset is
+                  // >= bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset
+                  // overflows size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+                  auto const is_within_byte_range =
+                    std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
+                    (not bytes_to_read.has_value() or
+                     cuda::add_overflow<size_t>(bytes_to_skip, bytes_to_read.value()).overflow or
+                     std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
 
-      if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
-    });
+                  if (is_within_byte_range) {
+                    filtered_row_group_indices.front().emplace_back(rg_idx);
+                  }
+                });
 
   return filtered_row_group_indices;
 }
