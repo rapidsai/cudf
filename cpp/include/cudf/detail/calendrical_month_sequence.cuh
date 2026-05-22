@@ -39,7 +39,7 @@ struct calendrical_month_sequence_functor {
     auto output             = cudf::make_fixed_width_column(
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{n},
                       output->mutable_view().begin<T>(),

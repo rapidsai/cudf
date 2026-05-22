@@ -393,6 +393,17 @@ class StreamingEngine(pl.GPUEngine):
         raise NotImplementedError
 
 
+def _find_memory_error(exc: BaseException) -> MemoryError | None:
+    """Recursively search for MemoryErrors."""
+    if isinstance(exc, MemoryError):
+        return exc
+    elif isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            if (mem_error := _find_memory_error(sub)) is not None:
+                return mem_error
+    return None
+
+
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
@@ -457,7 +468,21 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(ctx, actors=nodes)
+    try:
+        run_actor_network(ctx, actors=nodes)
+    except (MemoryError, BaseExceptionGroup) as e:
+        if (mem_error := _find_memory_error(e)) is not None:
+            target_partition_size = config_options.executor.target_partition_size
+            hint = (
+                f"Try lowering `target_partition_size` (current {target_partition_size}) "
+                f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
+                f"\nSee https://docs.rapids.ai/api/cudf/stable/cudf_polars/memory_errors/ "
+                f"for troubleshooting guidance."
+                f"\nOriginal error:\n{mem_error}"
+            )
+            raise MemoryError(hint) from e
+        else:
+            raise
 
     messages = output.release()
     chunks = [
