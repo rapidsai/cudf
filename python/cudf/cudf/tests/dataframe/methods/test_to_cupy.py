@@ -207,9 +207,7 @@ def test_to_numpy_object_dtype_boxes_values(constructor, data, dtype):
         ["a", "b", None],
     ],
 )
-def test_to_numpy_object_dtype_preserves_none_string_nulls(
-    constructor, data
-):
+def test_to_numpy_object_dtype_preserves_none_string_nulls(constructor, data):
     values = pd.Series(data, dtype=object, name="x")
     if constructor == "DataFrame":
         pd_obj = pd.DataFrame({"x": values})
