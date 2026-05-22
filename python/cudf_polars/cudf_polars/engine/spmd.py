@@ -141,7 +141,7 @@ def allgather_polars_dataframe(
         Rank-local DataFrame to contribute.
     op_id
         Operation ID for this AllGather collective. Must be identical on every
-        rank. For example, use :func:`reserve_op_id` to obtain a collision-free
+        rank. For example, use :func:`~cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id` to obtain a collision-free
         ID from the same pool used internally by cudf-polars. Avoid passing
         hardcoded integers.
 
@@ -309,7 +309,7 @@ class SPMDEngine(StreamingEngine):
     time, before RMM and communicator initialisation, so that CPU affinity, NUMA
     memory policy, and ``UCX_NET_DEVICES`` are set as early as possible. By default,
     binding is skipped under ``rrun`` (which already performs its own binding),
-    see :attr:`HardwareBindingPolicy.skip_under_rrun`.
+    see ``HardwareBindingPolicy.skip_under_rrun``.
 
     Examples
     --------
@@ -425,7 +425,7 @@ class SPMDEngine(StreamingEngine):
     @classmethod
     def from_options(cls, options: StreamingOptions) -> SPMDEngine:
         """
-        Create an :class:`SPMDEngine` from a :class:`StreamingOptions` object.
+        Create an :class:`SPMDEngine` from a :class:`~cudf_polars.engine.options.StreamingOptions` object.
 
         This is the recommended way to construct an ``SPMDEngine`` for typical
         use. All RapidsMPF, executor, and engine options are read from
@@ -590,7 +590,7 @@ class SPMDEngine(StreamingEngine):
 
         Returns
         -------
-        List of :class:`ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
         """
         data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
         with reserve_op_id() as op_id:

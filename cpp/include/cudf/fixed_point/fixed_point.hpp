@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/numeric>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -603,8 +604,7 @@ class fixed_point {
 template <typename Rep, typename T>
 CUDF_HOST_DEVICE inline auto addition_overflow(T lhs, T rhs)
 {
-  return rhs > 0 ? lhs > cuda::std::numeric_limits<Rep>::max() - rhs
-                 : lhs < cuda::std::numeric_limits<Rep>::min() - rhs;
+  return cuda::add_overflow<Rep>(lhs, rhs).overflow;
 }
 
 /** @brief Function for identifying integer overflow when subtracting
@@ -618,8 +618,7 @@ CUDF_HOST_DEVICE inline auto addition_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDF_HOST_DEVICE inline auto subtraction_overflow(T lhs, T rhs)
 {
-  return rhs > 0 ? lhs < cuda::std::numeric_limits<Rep>::min() + rhs
-                 : lhs > cuda::std::numeric_limits<Rep>::max() + rhs;
+  return cuda::sub_overflow<Rep>(lhs, rhs).overflow;
 }
 
 /** @brief Function for identifying integer overflow when dividing
@@ -633,7 +632,7 @@ CUDF_HOST_DEVICE inline auto subtraction_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDF_HOST_DEVICE inline auto division_overflow(T lhs, T rhs)
 {
-  return lhs == cuda::std::numeric_limits<Rep>::min() && rhs == -1;
+  return cuda::div_overflow<Rep>(lhs, rhs).overflow;
 }
 
 /** @brief Function for identifying integer overflow when multiplying
@@ -647,11 +646,7 @@ CUDF_HOST_DEVICE inline auto division_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDF_HOST_DEVICE inline auto multiplication_overflow(T lhs, T rhs)
 {
-  auto const min = cuda::std::numeric_limits<Rep>::min();
-  auto const max = cuda::std::numeric_limits<Rep>::max();
-  if (rhs > 0) { return lhs > max / rhs || lhs < min / rhs; }
-  if (rhs < -1) { return lhs > min / rhs || lhs < max / rhs; }
-  return rhs == -1 && lhs == min;
+  return cuda::mul_overflow<Rep>(lhs, rhs).overflow;
 }
 
 // PLUS Operation
