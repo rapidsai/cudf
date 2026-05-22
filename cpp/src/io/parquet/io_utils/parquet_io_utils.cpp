@@ -73,7 +73,8 @@ fetch_byte_ranges_to_device_async(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  static std::mutex mutex;
+  static std::mutex host_read_mutex;
+  static std::mutex device_read_mutex;
 
   auto const num_sources = datasources.size();
 
@@ -177,21 +178,29 @@ fetch_byte_ranges_to_device_async(
   auto iter = cuda::make_zip_iterator(
     io_source_indices.begin(), io_offsets.begin(), io_sizes.begin(), destinations.begin());
 
-  // Schedule host reads in parallel
-  std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
-    auto const src_idx   = cuda::std::get<0>(tuple);
-    auto const io_offset = cuda::std::get<1>(tuple);
-    auto const io_size   = cuda::std::get<2>(tuple);
-    auto const dest      = cuda::std::get<3>(tuple);
+  // Schedule host reads holding the `host_read_mutex` so that all reads for a caller thread
+  // are scheduled without interleaving with reads from other threads yielding better pipelining
+  {
+    std::scoped_lock<std::mutex> lock(host_read_mutex);
 
-    auto& datasource = datasources[src_idx].get();
-    if (not datasource.supports_device_read() or not datasource.is_device_read_preferred(io_size)) {
-      // Asynchronously read column chunk data to a host buffer
-      host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
-      copy_dsts.push_back(static_cast<void*>(dest));
-      copy_sizes.push_back(io_size);
-    }
-  });
+    std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
+      auto const src_idx   = cuda::std::get<0>(tuple);
+      auto const io_offset = cuda::std::get<1>(tuple);
+      auto const io_size   = cuda::std::get<2>(tuple);
+      auto const dest      = cuda::std::get<3>(tuple);
+
+      auto& datasource = datasources[src_idx].get();
+      if (not datasource.is_device_read_preferred(io_size)) {
+        // Asynchronously read column chunk data to a host buffer
+        host_read_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+          [&datasource, io_offset, io_size]() -> host_read_buffer {
+            return datasource.host_read(io_offset, io_size);
+          }));
+        copy_dsts.push_back(static_cast<void*>(dest));
+        copy_sizes.push_back(io_size);
+      }
+    });
+  }
 
   // Complete host reads
   if (not host_read_tasks.empty()) {
@@ -207,9 +216,10 @@ fetch_byte_ranges_to_device_async(
   // `device_read_async` is not guaranteed to follow stream-ordering (see datasource API docs)
   stream.synchronize();
 
-  // Ensure all device reads for this thread are scheduled together
+  // Schedule device reads holding the `device_read_mutex` so that all reads for a caller thread
+  // are scheduled without interleaving with reads from other threads yielding better pipelining
   {
-    std::scoped_lock<std::mutex> lock(mutex);
+    std::scoped_lock<std::mutex> lock(device_read_mutex);
 
     std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
       auto const src_idx   = cuda::std::get<0>(tuple);
