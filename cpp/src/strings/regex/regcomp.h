@@ -130,12 +130,7 @@ class reprog {
   void finalize();
   void check_for_errors();
 
-  /// If instructions are only include a sequence of characters
-  [[nodiscard]] std::string literal_only() const;
-  /// If literal plus beginning anchor only
-  [[nodiscard]] std::string starts_with_only() const;
-  /// If literal plus ending anchor only
-  [[nodiscard]] std::string ends_with_only() const;
+  [[nodiscard]] std::pair<literal_fast_path, std::string> check_for_literal_fast_path() const;
 
 #ifndef NDEBUG
   void print();

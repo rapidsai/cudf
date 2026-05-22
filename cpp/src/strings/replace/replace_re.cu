@@ -103,7 +103,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto const maxrepl = max_replace_count.value_or(-1);
 
   auto [fp, literal] = prog.get_literal_fast_path();
-  if (fp == regex_program::literal_fast_path::LITERAL_ONLY) {
+  if (fp == literal_fast_path::LITERAL_ONLY) {
     auto const target =
       cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
     return replace(input, target, replacement, maxrepl, stream, mr);

@@ -60,7 +60,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if variant == "in-memory":
         engine = polars.GPUEngine(executor="in-memory", raise_on_fail=raise_on_fail)
     else:
-        from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+        from cudf_polars.engine.spmd import SPMDEngine
 
         executor_options: dict[str, object] = {}
         if blocksize == "small":
@@ -135,8 +135,7 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
-# TODO: This is just Mapping[str, str]?
-EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
+EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
@@ -256,7 +255,15 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
-    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. Fixed in 1.39.",
+    "tests/unit/functions/test_concat.py::test_concat_with_empty_dataframes_strict_25725": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/sql/test_window_functions.py::test_over_with_order_by": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_windows": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
 }
 
 
@@ -302,6 +309,12 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # Short term adds in the aftermath of the rapidsmpf switch to get CI passing
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async": "Flaky, otherwise TBD",
     "tests/unit/operations/test_join.py::test_join_where_nested_expr_21066": "Flaky, otherwise TBD",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-ndjson]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
 }
 
 
@@ -370,12 +383,14 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
 # xfail for tests that produce different results than CPU Polars
 STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
-    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
@@ -425,7 +440,14 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_over_with_order_by": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
 }
 
 
@@ -450,15 +472,5 @@ def pytest_collection_modifyitems(
             is not None
         ):
             item.add_marker(pytest.mark.xfail(reason=s_reason))
-        elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
-            if isinstance(entry, tuple):
-                # the second entry in the tuple is the condition to xfail on
-                reason, condition = entry
-                item.add_marker(
-                    pytest.mark.xfail(
-                        condition=condition,
-                        reason=reason,
-                    ),
-                )
-            else:
-                item.add_marker(pytest.mark.xfail(reason=entry))
+        elif (reason := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
+            item.add_marker(pytest.mark.xfail(reason=reason))

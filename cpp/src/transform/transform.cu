@@ -245,7 +245,7 @@ auto reflect(udf_source_type source_type,
     auto element   = std::visit([](auto& c) { return reflect_input_element(c); }, in);
     bool as_scalar = std::holds_alternative<scalar_column_view>(in);
     auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+                      .instantiate(i, column, element, as_scalar, 0);
     in_types.push_back(accessor);
   }
 
@@ -257,7 +257,7 @@ auto reflect(udf_source_type source_type,
     auto element   = std::visit([](auto& c) { return reflect_output_element(c); }, out);
     bool as_scalar = false;  // never scalar
     auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+                      .instantiate(i, column, element, as_scalar, 0);
 
     out_types.push_back(accessor);
   }
@@ -922,19 +922,20 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  detail::row_ir::ast_args ast_args{.table = table};
   auto args = detail::row_ir::ast_converter::compute_column(
-    detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
-  return transform_extended(args.inputs,
-                            args.udf,
-                            args.output_type,
-                            args.source_type,
-                            args.user_data,
-                            args.is_null_aware,
-                            args.row_size,
-                            args.null_policy,
-                            stream,
-                            mr);
+    detail::row_ir::target::CUDA, expr, table, {}, "compute_operation", stream, mr);
+  auto result = multi_transform(args.udf,
+                                args.source_type,
+                                args.is_null_aware,
+                                args.user_data,
+                                args.inputs,
+                                args.outputs,
+                                std::move(args.string_offsets),
+                                args.row_size,
+                                stream,
+                                mr);
+  auto cols   = result->release();
+  return std::move(cols[0]);
 }
 
 }  // namespace cudf

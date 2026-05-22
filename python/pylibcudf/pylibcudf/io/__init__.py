@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from . import (
@@ -14,9 +14,11 @@ from . import (
     timezone,
     types,
 )
+from .parquet_metadata import FileMetaData
 from .types import SinkInfo, SourceInfo, TableWithMetadata
 
 __all__ = [
+    "FileMetaData",
     "SinkInfo",
     "SourceInfo",
     "TableWithMetadata",

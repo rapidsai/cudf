@@ -783,7 +783,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &pandas pandas>=2.0,<2.4.0
+          - &pandas pandas>=3.0.0,<3.1.0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -838,7 +838,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.39
+          - polars>=1.35,<1.40
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -901,11 +901,11 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==2.0.*
+              - pandas==3.0.*
               - numba-cuda==0.22.2,<0.29.0
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==2.3.3
+              - pandas==3.0.3
           - matrix:
             packages:
       - output_types: conda

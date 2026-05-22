@@ -1215,74 +1215,48 @@ void reprog::check_for_errors()
   }
 }
 
-std::string reprog::literal_only() const
+std::pair<literal_fast_path, std::string> reprog::check_for_literal_fast_path() const
 {
-  std::string literal;
-  if (_flags != regex_flags::DEFAULT) { return literal; }
-  if (_startinst_ids.size() > 2) { return literal; }
+  if (_flags != regex_flags::DEFAULT) { return {literal_fast_path::NONE, {}}; }
+  if (_startinst_ids.size() > 2) { return {literal_fast_path::NONE, {}}; }
   auto const count = static_cast<size_type>(_insts.size());
-  if (count < 2) { return literal; }
-  auto inst = _insts[_startinst_id];
-  while (inst.type == CHAR && inst.u1.c != 0) {
-    std::array<char, 5> utf8                     = {};
-    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
-    literal += utf8.data();
-    auto const id = inst.u2.next_id;
-    if (id < 0 || id >= count) { break; }
-    inst = _insts[id];
-  }
-  if (inst.type != END) { literal.clear(); }
-  return literal;
-}
+  if (count < 2) { return {literal_fast_path::NONE, {}}; }
 
-std::string reprog::starts_with_only() const
-{
-  std::string literal;
-  if (_flags != regex_flags::DEFAULT) { return literal; }
-  if (_startinst_ids.size() > 2) { return literal; }
-  auto const count = static_cast<size_type>(_insts.size());
-  if (count < 3) { return literal; }
   auto inst = _insts[_startinst_id];
-  if (inst.type != BOL) { return literal; }
-  inst = _insts[inst.u2.next_id];
-  while (inst.type == CHAR && inst.u1.c != 0) {
-    std::array<char, 5> utf8                     = {};
-    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
-    literal += utf8.data();
-    auto const id = inst.u2.next_id;
-    if (id < 0 || id >= count) { break; }
-    inst = _insts[id];
-  }
-  if (inst.type != END) { literal.clear(); }
-  return literal;
-}
 
-std::string reprog::ends_with_only() const
-{
+  // Optional BOL at the start of the pattern
+  bool const has_bol = (inst.type == BOL);
+  if (has_bol) {
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { return {literal_fast_path::NONE, {}}; }
+    inst = _insts[id];
+  }
+
+  // Accumulate sequential CHAR bytes
   std::string literal;
-  if (_flags != regex_flags::DEFAULT) { return literal; }
-  if (_startinst_ids.size() > 2) { return literal; }
-  auto const count = static_cast<size_type>(_insts.size());
-  if (count < 3) { return literal; }
-  auto inst = _insts[_startinst_id];
   while (inst.type == CHAR && inst.u1.c != 0) {
     std::array<char, 5> utf8                     = {};
     utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
     literal += utf8.data();
     auto const id = inst.u2.next_id;
-    if (id < 0 || id >= count) { break; }
+    if (id < 0 || id >= count) { return {literal_fast_path::NONE, {}}; }
     inst = _insts[id];
   }
-  if (inst.type != EOL) {
-    literal.clear();
-  } else {
+  if (literal.empty()) { return {literal_fast_path::NONE, {}}; }
+
+  // If we are at END then we are literal-only or starts-with.
+  if (inst.type == END) {
+    return {has_bol ? literal_fast_path::STARTS_WITH : literal_fast_path::LITERAL_ONLY,
+            std::move(literal)};
+  }
+  // Final check for ends-with: EOL followed by END
+  if (!has_bol && inst.type == EOL) {
     auto const id = inst.u2.next_id;
-    if (id >= 0 && id < count) {
-      inst = _insts[id];
-      if (inst.type != END) { literal.clear(); }
+    if (id >= 0 && id < count && _insts[id].type == END) {
+      return {literal_fast_path::ENDS_WITH, std::move(literal)};
     }
   }
-  return literal;
+  return {literal_fast_path::NONE, {}};
 }
 
 #ifndef NDEBUG
@@ -1384,12 +1358,13 @@ void reprog::print()
   }
   if (_num_capturing_groups) { printf("Number of capturing groups: %d\n", _num_capturing_groups); }
 
-  auto literal = literal_only();
-  if (!literal.empty()) { printf("literal: %s\n", literal.c_str()); }
-  literal = starts_with_only();
-  if (!literal.empty()) { printf("starts_with: %s\n", literal.c_str()); }
-  literal = ends_with_only();
-  if (!literal.empty()) { printf("ends_with: %s\n", literal.c_str()); }
+  auto [fp, literal] = check_for_literal_fast_path();
+  switch (fp) {
+    case literal_fast_path::LITERAL_ONLY: printf("literal-only: %s\n", literal.c_str()); break;
+    case literal_fast_path::STARTS_WITH: printf("starts-with: %s\n", literal.c_str()); break;
+    case literal_fast_path::ENDS_WITH: printf("ends-with: %s\n", literal.c_str()); break;
+    default: break;
+  }
 }
 #endif
 
