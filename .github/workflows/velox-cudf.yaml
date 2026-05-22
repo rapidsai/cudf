@@ -1,0 +1,96 @@
+name: velox-cudf
+
+on:
+  workflow_call:
+
+jobs:
+  velox-cudf-build:
+    runs-on: linux-amd64-cpu8
+    container:
+      image: ghcr.io/facebookincubator/velox-dev:adapters
+    env:
+      CC: /opt/rh/gcc-toolset-14/root/bin/gcc
+      CXX: /opt/rh/gcc-toolset-14/root/bin/g++
+      CUDAHOSTCXX: /opt/rh/gcc-toolset-14/root/bin/g++
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          repository: facebookincubator/velox
+          ref: main
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          path: cudf-local
+      - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 43200 # 12h
+      - name: "Build velox-cudf"
+        env:
+          SCCACHE_S3_KEY_PREFIX: velox-cudf
+          SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX: velox-cudf/preprocessor
+          SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE: true
+        run: |
+          set -euo pipefail
+
+          ###
+          # Setup sccache client
+          ###
+
+          # Install jq
+          dnf -y install jq
+
+          # Download gha-tools
+          wget https://github.com/rapidsai/gha-tools/releases/latest/download/tools.tar.gz -O - | tar -xz -C /usr/local/bin
+
+          # Build cluster endpoint
+          export SCCACHE_DIST_SCHEDULER_URL="https://$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/').linux.sccache.rapids.nvidia.com"
+
+          export SCCACHE_DIST_AUTH_TOKEN="$(
+            curl -fsSL -H "Authorization: Bearer $(
+              curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=token.rapids.nvidia.com" \
+            | jq -r '.value'
+            )" https://token.rapids.nvidia.com/gh/token/exchange \
+          | jq -r '.token')"
+
+          # Install sccache client
+          . rapids-install-sccache
+
+          # Configure sccache
+          . rapids-configure-sccache
+
+          export CPP_PARALLEL_LEVEL="$PARALLEL_LEVEL"
+
+          echo "------------------------"
+          env | sort
+          echo "------------------------"
+
+          # Increase the nofile ulimit to build with as much parallelism as possible
+          ulimit -n $(ulimit -Hn)
+
+          # Start the sccache daemon
+          sccache --start-server
+
+          # Verify sccache version and distributed compilation
+          sccache --show-stats
+
+          if sccache --dist-status 2>/dev/null | jq -er '.SchedulerStatus? != null' >/dev/null 2>&1; then
+              echo "Distributed compilation is available:"
+              sccache --dist-status | jq -r '["scheduler URL: " + .SchedulerStatus[0], "server count: " + (.SchedulerStatus[1].servers | length | tostring)][]';
+          else
+              echo "Error: Distributed compilation not available, check connectivity"
+              cat "$SCCACHE_ERROR_LOG";
+              exit 1
+          fi
+
+          # Build velox with local cudf override
+          CUDA_ARCHITECTURES=90 \
+          EXTRA_CMAKE_FLAGS="-DFETCHCONTENT_SOURCE_DIR_CUDF=$GITHUB_WORKSPACE/cudf-local" \
+          make cudf
+
+          sccache --show-stats
