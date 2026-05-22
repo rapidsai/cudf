@@ -47,22 +47,19 @@ __device__ void execute_transform_op(void* user_data, size_type element_idx, Arg
 }
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <null_aware is_null_aware,
-          bool has_user_data,
-          typename InputAccessors,
-          typename OutputAccessors>
-CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  bitmask_type const* __restrict__ stencil,
-                                  void* __restrict__ user_data,
-                                  column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols)
+template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
+__device__ void transform_kernel(size_type row_size,
+                                 bitmask_type const* __restrict__ stencil,
+                                 void* __restrict__ user_data,
+                                 column_device_view_core const* __restrict__ input_cols,
+                                 mutable_column_device_view_core const* __restrict__ output_cols)
 {
   // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   auto start  = detail::grid_1d::global_thread_id();
   auto stride = detail::grid_1d::grid_stride();
 
   for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
-    if constexpr (is_null_aware == null_aware::NO) {
+    if constexpr (is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
 
       auto ins = InputAccessors::map(
@@ -111,3 +108,13 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
 }  // namespace jit
 }  // namespace cudf
+
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type row_size,
+  cudf::bitmask_type const* __restrict__ stencil,
+  void* __restrict__ user_data,
+  cudf::column_device_view_core const* __restrict__ input_cols,
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols)
+{
+  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols);
+}

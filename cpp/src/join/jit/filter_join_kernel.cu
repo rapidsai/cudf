@@ -23,6 +23,7 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -46,12 +47,12 @@ __device__ void execute_predicate_op(void* user_data,
 }
 
 template <bool has_user_data, null_aware is_null_aware, typename Accessors>
-CUDF_KERNEL void filter_join_kernel(cudf::size_type num_rows,
-                                    cudf::size_type const* __restrict__ left_indices,
-                                    cudf::size_type const* __restrict__ right_indices,
-                                    cudf::column_device_view_core const* __restrict__ columns,
-                                    bool* __restrict__ predicate_results,
-                                    void* __restrict__ user_data)
+__device__ void filter_join_kernel(cudf::size_type num_rows,
+                                   cudf::size_type const* __restrict__ left_indices,
+                                   cudf::size_type const* __restrict__ right_indices,
+                                   cudf::column_device_view_core const* __restrict__ columns,
+                                   bool* __restrict__ predicate_results,
+                                   void* __restrict__ user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -96,3 +97,14 @@ CUDF_KERNEL void filter_join_kernel(cudf::size_type num_rows,
 }
 
 }  // namespace cudf::join::jit
+
+extern "C" __global__ void cudf_kernel_entry(cudf::size_type const* __restrict__ left_indices,
+                                             cudf::size_type const* __restrict__ right_indices,
+                                             cudf::column_device_view_core const* left_tables,
+                                             cudf::column_device_view_core const* right_tables,
+                                             bool* predicate_results,
+                                             void* user_data)
+{
+  CUDF_KERNEL_INSTANCE(
+    left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
+}
