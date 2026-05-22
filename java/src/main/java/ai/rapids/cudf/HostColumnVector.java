@@ -69,7 +69,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * @param hostDataBuffer     the host side data for the vector
    * @param hostValidityBuffer Arrow-like validity buffer, 1 bit per row with padding for
    *                           64-bit alignment; may be null if nullCount is 0
-   * @throws IllegalArgumentException if type is LIST
+   * @throws IllegalArgumentException if type is LIST or STRING
    * @throws IllegalStateException    if nullCount is greater than 0 but hostValidityBuffer is null
    */
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -121,8 +121,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * @param offsetBuffer       for STRING, the offsets into hostDataBuffer indicating the
    *                           start and end of each entry, must be (rows + 1) ints;
    *                           must be null for all other non-LIST types
-   * @throws IllegalArgumentException if type is LIST, or if offsetBuffer is non-null for a
-   *                                  non-STRING type
+   * @throws IllegalArgumentException if type is LIST; if offsetBuffer is null for STRING; or
+   *                                  if offsetBuffer is non-null for a non-STRING type
    * @throws IllegalStateException    if nullCount is greater than 0 but hostValidityBuffer is null
    */
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -135,11 +135,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
       throw new IllegalArgumentException(
           "This constructor should not be used for LIST type. Use the nested constructor instead");
     }
+    if (type.equals(DType.STRING) && offsetBuffer == null) {
+      throw new IllegalArgumentException("offsetBuffer is required for STRING type");
+    }
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
     if (!type.equals(DType.STRING) && offsetBuffer != null) {
-      throw new IllegalArgumentException("offsets are only supported for STRING and LIST");
+      throw new IllegalArgumentException("offsetBuffer is only supported for STRING");
     }
     refCount = 0;
     incRefCountInternal(true);

@@ -946,6 +946,21 @@ public class ColumnVectorTest extends CudfTestBase {
         new HostColumnVector(DType.LIST, 0, Optional.of(0L), null, null, null));
   }
 
+  @Test
+  void testHostColumnVectorPublicCtorRejectsStringType() {
+    assertThrows(IllegalArgumentException.class, () ->
+        new HostColumnVector(DType.STRING, 0, Optional.of(0L), null, null));
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorOffsetForNonStringMessage() {
+    try (HostMemoryBuffer offsets = HostMemoryBuffer.allocate(8)) {
+      IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+          new HostColumnVector(DType.INT32, 0, Optional.of(0L), null, null, offsets));
+      assertEquals("offsetBuffer is only supported for STRING", ex.getMessage());
+    }
+  }
+
   static final long HOST_ALIGN_BYTES = ColumnView.hostPaddingSizeInBytes();
 
   static void assertHostAligned(long expectedDeviceSize, ColumnView cv) {
