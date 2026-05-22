@@ -167,6 +167,23 @@ def test_negative_slice_pushdown_raises(engine: pl.GPUEngine, tmp_path):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+@pytest.mark.parametrize("chunked", [False, True], ids=["single_read", "chunked"])
+def test_scan_parquet_prefetch_file_metadata(
+    tmp_path: Path, df: pl.DataFrame, *, chunked: bool
+):
+    make_partitioned_source(df, tmp_path / "file", "parquet")
+    q = pl.scan_parquet(tmp_path / "file")
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={
+            "chunked": chunked,
+            "prefetch_file_metadata": True,
+        },
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 

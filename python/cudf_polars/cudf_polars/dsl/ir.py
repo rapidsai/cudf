@@ -14,6 +14,7 @@ can be considered as functions:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import contextvars
 import functools
@@ -47,7 +48,10 @@ from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import (
+    log_do_evaluate,
+    nvtx_annotate_cudf_polars,
+)
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -66,7 +70,6 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-    from concurrent.futures import ThreadPoolExecutor
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -129,9 +132,12 @@ class IRExecutionContext:
         Identifier for the query being executed.
     """
 
-    py_executor: ThreadPoolExecutor | None = field(default=None)
+    py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    parquet_file_metadata: dict[
+        tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]
+    ] = field(default_factory=dict)
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -183,6 +189,81 @@ class IRExecutionContext:
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
         ) as result_stream:
             yield result_stream
+
+
+@nvtx_annotate_cudf_polars(message="PrefetchParquetFootersForPaths")
+def _fetch_parquet_footers_for_paths(
+    paths: tuple[str, ...],
+) -> tuple[tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]]:
+    metadata = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo(list(paths))
+    )
+    return paths, metadata
+
+
+@nvtx_annotate_cudf_polars(message="PrefetchParquetFileMetadataForIR")
+def prefetch_parquet_file_metadata_for_ir(
+    root: IR,
+    context: IRExecutionContext,
+) -> None:
+    """
+    Prefetch parquet metadata for all parquet scans in an IR graph.
+
+    Parameters
+    ----------
+    root
+        The root of the IR graph, which will be traversed.
+    context
+        The IR execution context. Its ``py_executor`` is used to fetch
+        metadata concurrently, its ``parquet_file_metadata`` is mutated
+        to cache the newly read parquet metadata.
+    """
+    from cudf_polars.dsl.traversal import traversal
+
+    groups = {
+        tuple(node.paths)
+        for node in traversal([root])
+        if isinstance(node, Scan) and node.typ == "parquet" and node.paths
+    }
+    if not groups:
+        return
+
+    missing_files = {
+        (path,)
+        for group in groups
+        for path in group
+        if (path,) not in context.parquet_file_metadata
+    }
+
+    cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
+
+    if context.py_executor is None:
+        cm = executor = concurrent.futures.ThreadPoolExecutor()
+        # We didn't create the executor, so we don't close it.
+    else:
+        cm = contextlib.nullcontext()
+        executor = context.py_executor
+
+    if len(missing_files) > 0:
+        with cm:
+            futures = [
+                executor.submit(_fetch_parquet_footers_for_paths, missing_file)
+                for missing_file in missing_files
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                paths, metadata = future.result()
+                context.parquet_file_metadata.setdefault(paths, metadata)
+
+    for group in groups:
+        context.parquet_file_metadata.setdefault(
+            group,
+            list(
+                itertools.chain.from_iterable(
+                    context.parquet_file_metadata[(path,)] for path in group
+                )
+            ),
+        )
 
 
 _BINOPS = {
@@ -802,6 +883,16 @@ class Scan(IR):
                     df,
                 )
         elif typ == "parquet":
+            if parquet_options.prefetch_file_metadata:
+                try:
+                    parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+                except KeyError as e:
+                    raise AssertionError(
+                        f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                    ) from e
+            else:
+                parquet_metadatas = None
+
             filters = None
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
@@ -830,6 +921,7 @@ class Scan(IR):
                     parquet_reader_options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
                     pass_read_limit=parquet_options.pass_read_limit,
+                    parquet_metadatas=parquet_metadatas,
                     stream=stream,
                 )
                 chunk = reader.read_chunk()
@@ -862,7 +954,9 @@ class Scan(IR):
                     )
             else:
                 tbl_w_meta = plc.io.parquet.read_parquet(
-                    parquet_reader_options, stream=stream
+                    parquet_reader_options,
+                    parquet_metadatas=parquet_metadatas,
+                    stream=stream,
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)

@@ -58,6 +58,17 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine_factor
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
+def test_scan_parquet_prefetch_file_metadata(tmp_path, df, streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1_000,
+            parquet_options={"prefetch_file_metadata": True},
+        ),
+    )
+    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
+
+
 # ---------------------------------------------------------------------------
 # Tests migrated from tests/streaming/test_scan.py
 # ---------------------------------------------------------------------------
