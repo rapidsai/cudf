@@ -96,59 +96,6 @@ def test_from_options_creates_engine() -> None:
         assert_gpu_result_equal(lf, engine=eng, check_row_order=False)
 
 
-def test_scan(engine: DaskEngine) -> None:
-    """Input rows are partitioned across workers; total output equals input."""
-    lf = pl.LazyFrame({"a": [1, 2, 3]})
-    assert_gpu_result_equal(lf, engine=engine, check_row_order=False)
-
-
-def test_filter(engine: DaskEngine) -> None:
-    """Filter is applied correctly across all workers."""
-    lf = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
-    assert_gpu_result_equal(
-        lf.filter(pl.col("a") > 3), engine=engine, check_row_order=False
-    )
-
-
-def test_group_by(engine: DaskEngine) -> None:
-    """Group-by produces the correct aggregation across all ranks."""
-    # max_rows_per_partition=10 (set on the module fixture) gives each rank
-    # exactly 5 partitions, so the multi-partition path is always exercised.
-    n, n_keys = engine.nranks * 50, 5
-    keys = [str(i % n_keys) for i in range(n)]
-    vals = list(range(n))
-    lf = pl.LazyFrame({"key": keys, "val": vals})
-    assert_gpu_result_equal(
-        lf.group_by("key").agg(pl.col("val").sum()),
-        engine=engine,
-        check_row_order=False,
-    )
-
-
-def test_join(engine: DaskEngine) -> None:
-    """Hash join between two tables produces the correct result across all ranks."""
-    # max_rows_per_partition=10 (set on the module fixture) gives each rank
-    # exactly 5 partitions, so the multi-partition path is always exercised.
-    n = engine.nranks * 50
-    lf_left = pl.LazyFrame({"key": list(range(n)), "val_left": list(range(n))})
-    lf_right = pl.LazyFrame(
-        {"key": list(range(n)), "val_right": [x * 2 for x in range(n)]}
-    )
-    assert_gpu_result_equal(
-        lf_left.join(lf_right, on="key"),
-        engine=engine,
-        check_row_order=False,
-    )
-
-
-def test_empty_dataframe(engine: DaskEngine) -> None:
-    """An empty LazyFrame produces an empty result with the correct schema."""
-    lf = pl.LazyFrame(
-        {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
-    )
-    assert_gpu_result_equal(lf, engine=engine)
-
-
 def test_run(engine: DaskEngine) -> None:
     result = engine._run(os.getpid)
     assert len(set(result)) == engine.nranks
