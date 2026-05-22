@@ -1,4 +1,4 @@
-# cuDF User Guide
+# cudf
 
 ```{toctree}
 :maxdepth: 2
@@ -18,4 +18,5 @@ PandasCompat
 copy-on-write
 memory-profiling
 pandas-2.0-breaking-changes
+developer_guide/index
 ```
