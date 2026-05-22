@@ -882,7 +882,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise {@code mergeOp} of null masks in the columns given as arguments, AND-ed with this column's
-   * existing null mask. 
+   * existing null mask.
    *
    * For STRUCT columns the new mask is also pushed down into every descendant column, to
    * stay consistent with the parent. For LIST/STRING columns the resultant offsets are

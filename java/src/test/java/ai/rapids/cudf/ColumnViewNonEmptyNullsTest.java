@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2023, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -186,7 +186,7 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
       assertTrue(listView.isNull(3));
       assertFalse(listView.isNull(4));
 
-      // The LIST's offsets should be purged. Rows 2 and 3 collapse 
+      // The LIST's offsets should be purged. Rows 2 and 3 collapse
       // so the inner INT should have only 6 elements.
       assertEquals(1, listView.getNumChildren());
       HostColumnVectorCore intGrandchild = listView.getChildColumnView(0);
