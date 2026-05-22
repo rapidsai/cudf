@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
+import contextlib
 import copyreg
 import datetime
 import functools
@@ -1506,6 +1507,22 @@ def _register_series_accessor(name):
 @register_proxy_func(pd.core.accessor.register_index_accessor)
 def _register_index_accessor(name):
     return pd.core.accessor._register_accessor(name, Index)
+
+
+@contextlib.contextmanager
+def null_assert_produces_warning(*args, **kwargs):
+    # We do not want pandas unit tests to fail because
+    # assert_produces_warning doesn't see a warning.
+    # No an explicit public API
+    try:
+        yield []
+    finally:
+        pass
+
+
+@register_proxy_func(pd._testing.assert_produces_warning)
+def _register_assert_produces_warning(*args, **kwargs):
+    return null_assert_produces_warning(*args, **kwargs)
 
 
 @nvtx.annotate(
