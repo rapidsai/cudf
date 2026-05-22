@@ -25,11 +25,11 @@
 #include <cooperative_groups/reduce.h>
 #include <cub/cub.cuh>
 #include <cuda/atomic>
+#include <cuda/numeric>
 #include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
-#include <limits>
 #include <numeric>
 #include <span>
 
@@ -212,7 +212,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
       auto const num_words =
         num_bitmask_words(end_bits[i]) - begin_bits[i] / detail::size_in_bits<bitmask_type>();
       // Handle overflow if any
-      if (num_words >= std::numeric_limits<size_t>::max() - cumulative_null_mask_words) {
+      if (cuda::add_overflow<size_t>(cumulative_null_mask_words, num_words).overflow) {
         average_nullmask_words +=
           cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
         cumulative_null_mask_words = 0;
