@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
+import cudf_polars.io
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 
 
@@ -43,22 +44,23 @@ def collect_statistics(
 
     stats = StatsCollector()
 
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        future_to_scan_nodes = {
-            pool.submit(
-                _build_source_info,
-                scan_nodes[0],
-                config_options,
-                needed_cols=frozenset(needed_cols),
-            ): scan_nodes
-            for needed_cols, scan_nodes in parquet_groups.values()
-        }
+    pool = cudf_polars.io.io_threadpool()
 
-        for future in concurrent.futures.as_completed(future_to_scan_nodes):
-            scan_nodes = future_to_scan_nodes[future]
-            source = future.result()
-            for node in scan_nodes:
-                stats.scan_stats[node] = source
+    future_to_scan_nodes = {
+        pool.submit(
+            _build_source_info,
+            scan_nodes[0],
+            config_options,
+            needed_cols=frozenset(needed_cols),
+        ): scan_nodes
+        for needed_cols, scan_nodes in parquet_groups.values()
+    }
+
+    for future in concurrent.futures.as_completed(future_to_scan_nodes):
+        scan_nodes = future_to_scan_nodes[future]
+        source = future.result()
+        for node in scan_nodes:
+            stats.scan_stats[node] = source
 
     # DataFrameScan sources
     for node in dataframe_scans:
