@@ -102,13 +102,9 @@ kernel get_udf_kernel(std::string const& source_file,
   char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
     {"cudf/detail/operation-udf.hpp", "cudf/detail/kernel-instance.hpp"};
   char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
-    {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
+    {cuda_source.c_str(), kernel_instance_source.c_str()};
 
-  return get_kernel(std::format("{}.jit.cu", source_file),
-                    source_file,
-                    include_names,
-                    include_headers,
-                    kernel_name);
+  return get_kernel(source_file, source_file, include_names, include_headers, kernel_name);
 }
 
 }  // namespace jit

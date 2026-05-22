@@ -48,10 +48,10 @@ namespace detail {
 namespace {
 
 std::vector<std::string> build_join_filter_template_params(
-  std::vector<column_view> const& left_columns,
-  std::vector<column_view> const& right_columns,
+  std::span<transform_input const> inputs,
+  std::span<std::optional<int32_t>> table_sources,
   bool has_user_data,
-  null_aware is_null_aware)
+  bool is_null_aware)
 {
   std::vector<std::string> template_params;
   template_params.emplace_back(rtcx::reflect(has_user_data));
@@ -76,7 +76,7 @@ std::vector<std::string> build_join_filter_template_params(
         "cudf::column_device_view_core",
         cudf::type_to_name(scalar.as_column_view().type()),
         rtcx::reflect(true),
-        rtxc::reflect(0)  // scalars don't belong to a table, so just use 0 as placeholder
+        rtcx::reflect(0)  // scalars don't belong to a table, so just use 0 as placeholder
         ));
     }
   }
@@ -92,7 +92,7 @@ kernel build_join_filter_kernel(std::string const& predicate_code,
                                 std::span<std::optional<int32_t>> table_sources,
                                 bool is_ptx,
                                 bool has_user_data,
-                                null_aware is_null_aware,
+                                bool is_null_aware,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
@@ -124,7 +124,8 @@ kernel build_join_filter_kernel(std::string const& predicate_code,
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
 
   // Get compiled kernel
-  return cudf::jit::get_udf_kernel("join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
+  return cudf::jit::get_udf_kernel(
+    "cudf/cpp/src/join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 }
 
 // Launch the JIT kernel for join filtering
@@ -169,7 +170,7 @@ void launch_join_filter_kernel(kernel const& kernel,
 
   auto cfg = kernel.max_occupancy_config(0, 0);
 
-  kernel->launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 // Same join semantics handling as the AST version
@@ -422,7 +423,7 @@ filter_join_indices_jit(cudf::table_view const& left,
                                          table_sources,
                                          is_ptx,
                                          false,  // has_user_data = false for now
-                                         null_aware::NO,
+                                         false,
                                          stream,
                                          mr);
 
@@ -478,17 +479,18 @@ filter_join_indices_jit(cudf::table_view const& left,
   auto filter_result = row_ir::ast_converter::filter(
     row_ir::target::CUDA, predicate, left, right, "filter_operation", stream, mr);
 
-  auto template_args = build_join_filter_template_params(filter_result.inputs,
-                                                         filter_result.input_table_sources,
-                                                         filter_result.user_data.has_value(),
-                                                         filter_result.is_null_aware);
+  auto template_args =
+    build_join_filter_template_params(filter_result.inputs,
+                                      filter_result.input_table_sources,
+                                      filter_result.user_data.has_value(),
+                                      filter_result.is_null_aware == null_aware::YES);
 
   auto const cuda_source =
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
 
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
-  auto kernel =
-    cudf::jit::get_udf_kernel("join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
+  auto kernel      = cudf::jit::get_udf_kernel(
+    "cudf/cpp/src/join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 
   // Allocate and compute predicate results
   auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream);

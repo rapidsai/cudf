@@ -320,8 +320,8 @@ constexpr std::uint8_t hash[{}] =
 
 }}
 )***",
-    namespace_decl,
     id,
+    namespace_decl,
     include_dirs.size(),
     include_dirs_list,
     file_indices_list,

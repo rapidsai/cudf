@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <string>
+#include <optional>
 
 namespace cudf::detail {
 

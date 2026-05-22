@@ -12,12 +12,12 @@
 #include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <filesystem>
 #include <memory>
 
 namespace cudf {
 
-context::context(context_config const& cfg, init_flags flags)
-  : _config{cfg}, _program_cache_init_flag{}, _program_cache{nullptr}
+context::context(context_config const& cfg, init_flags flags) : _config{cfg}, _jit_cache_init_flag{}
 {
   initialize_components(flags);
 }
@@ -56,6 +56,18 @@ void context::ensure_jit_cache_initialized()
 
 context::~context() { rtcx::teardown(); }
 
+rtcx::cache_t& context::rtcx_cache()
+{
+  ensure_jit_cache_initialized();
+  return *_rtcx_cache;
+}
+
+jit_bundle_t& context::jit_bundle()
+{
+  ensure_jit_cache_initialized();
+  return *_jit_bundle;
+}
+
 bool context::dump_codegen() const { return _config.dump_codegen; }
 
 bool context::use_jit() const { return _config.use_jit; }
@@ -71,11 +83,12 @@ void context::initialize_components(init_flags flags)
 
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  if (auto cudf = getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH"); cudf.has_value()) {
+  if (auto cudf = detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
+      cudf.has_value()) {
     return std::filesystem::path(*cudf);
   }
 
-  if (auto home = getenv_optional<std::string>("HOME"); home.has_value()) {
+  if (auto home = detail::getenv_optional<std::string>("HOME"); home.has_value()) {
     return std::filesystem::path(*home) / ".libcudf";
   }
 
@@ -98,17 +111,18 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen          = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit               = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache     = get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
-    bool disable_jit_cache     = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
-    bool clear_jit_cache       = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
-    bool disable_cuda_cache    = get_bool_env_or("LIBCUDF_JIT_DISABLE_CUDA_CACHE", false);
-    bool jit_verbose           = get_bool_env_or("LIBCUDF_JIT_VERBOSE", false);
-    bool dump_jit_trace        = get_bool_env_or("LIBCUDF_JIT_DUMP_TRACE", false);
-    bool dump_jit_time_profile = get_bool_env_or("LIBCUDF_JIT_DUMP_TIME_PROFILE", false);
+    bool dump_codegen          = detail::get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit               = detail::get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool preload_jit_cache     = detail::get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
+    bool disable_jit_cache     = detail::get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
+    bool clear_jit_cache       = detail::get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+    bool disable_cuda_cache    = detail::get_bool_env_or("LIBCUDF_JIT_DISABLE_CUDA_CACHE", false);
+    bool jit_verbose           = detail::get_bool_env_or("LIBCUDF_JIT_VERBOSE", false);
+    bool dump_jit_trace        = detail::get_bool_env_or("LIBCUDF_JIT_DUMP_TRACE", false);
+    bool dump_jit_time_profile = detail::get_bool_env_or("LIBCUDF_JIT_DUMP_TIME_PROFILE", false);
 
-    auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
+    auto kernel_cache_limit_process =
+      detail::getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 

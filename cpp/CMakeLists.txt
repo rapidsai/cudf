@@ -404,6 +404,56 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+add_embed(cudf_jit_embed)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
+  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
+  cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY
+  cudf/cpp/src/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
+  cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
+  cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
+  cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_jit_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
+  cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
+  embed_includes(
+    cudf_jit_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
+    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
+  )
+endforeach()
+
+embed(cudf_jit_embed COMPRESSION zstd)
+
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 add_library(
@@ -662,11 +712,11 @@ add_library(
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
+  src/jit/cache.cpp
   src/jit/helpers.cpp
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
-  src/jit/jit.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
@@ -962,7 +1012,7 @@ add_library(
   ${cudf_jit_embed_SOURCE_DIR}/cudf_jit_embed.s
 )
 
-add_dependencies(cudf cudf_jit_embed cudf_fragments)
+add_dependencies(cudf cudf_jit_embed)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu

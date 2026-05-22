@@ -46,7 +46,7 @@ __device__ void execute_predicate_op(void* user_data,
   }
 }
 
-template <bool has_user_data, null_aware is_null_aware, typename Accessors>
+template <bool has_user_data, bool is_null_aware, typename Accessors>
 __device__ void filter_join_kernel(cudf::size_type num_rows,
                                    cudf::size_type const* __restrict__ left_indices,
                                    cudf::size_type const* __restrict__ right_indices,
@@ -68,7 +68,7 @@ __device__ void filter_join_kernel(cudf::size_type num_rows,
 
     // Each accessor receives both tables and both indices, and internally selects
     // the appropriate table based on whether it's a left or right accessor.
-    if constexpr (is_null_aware == null_aware::YES) {
+    if constexpr (is_null_aware) {
       // Null-aware path: pass optional<T> inputs, get optional<bool> result
       cuda::std::optional<bool> result{false};
       auto inputs = Accessors::map([&]<typename... A>() {

@@ -39,22 +39,6 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
   return ctx.finalize();
 }
 
-rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments,
-                  std::span<rtcx::memory_fragment const> memory_fragments)
-{
-  rtcx::sha256_context ctx;
-  for (auto const& fragment : file_fragments) {
-    ctx.update(
-      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
-  }
-
-  for (auto const& fragment : memory_fragments) {
-    ctx.update(fragment.data);
-  }
-
-  return ctx.finalize();
-}
-
 void install_file_set(std::string_view target_dir,
                       std::span<uint8_t const> compressed_binary,
                       size_t uncompressed_size,
@@ -315,7 +299,7 @@ kernel get_kernel(std::string const& name,
   auto header_include_names_hash = hash(header_include_names).to_hex_string();
   auto headers_hash              = hash(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
-  auto source_file = std::format("{}/cudf/cpp/src/{}", bundle.get_directory(), source_file_id);
+  auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
   auto cache_key = std::format(R"***(cuLibrary
 name={}

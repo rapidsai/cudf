@@ -180,7 +180,7 @@ kernel instantiate(bool is_null_aware,
                                        ins,
                                        outs);
 
-  return jit::get_udf_kernel("transform/jit/kernel.cu", kernel, cuda_source);
+  return jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu", kernel, cuda_source);
 }
 
 void launch(cudf::kernel const& kernel,
@@ -833,7 +833,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 
   auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
-  jit_transform::run(is_null_aware,
+  jit_transform::run(is_null_aware == null_aware::YES,
                      user_data.has_value(),
                      row_size,
                      stencil_has_nulls ? stencil_arg : nullptr,
