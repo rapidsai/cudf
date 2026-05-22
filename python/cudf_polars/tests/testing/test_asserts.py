@@ -11,7 +11,7 @@ import pytest
 import polars as pl
 import polars.testing
 
-from cudf_polars.experimental.benchmarks.asserts import (
+from cudf_polars.streaming.benchmarks.asserts import (
     ValidationError,
     assert_tpch_result_equal,
 )
@@ -40,28 +40,32 @@ def test_translation_assert_raises(engine: pl.GPUEngine):
 
     with pytest.raises(AssertionError):
         # This should fail, because we can translate this query.
-        assert_ir_translation_raises(df, NotImplementedError)
+        assert_ir_translation_raises(df, engine, NotImplementedError)
 
     class E(Exception):
         pass
 
     unsupported = df.group_by_dynamic("time", every="1d").agg(pl.col("n").sum())
     # Unsupported query should raise NotImplementedError
-    assert_ir_translation_raises(unsupported, NotImplementedError)
+    assert_ir_translation_raises(unsupported, engine, NotImplementedError)
 
     with pytest.raises(AssertionError):
         # This should fail, because we can't translate this query, but it doesn't raise E.
-        assert_ir_translation_raises(unsupported, E)
+        assert_ir_translation_raises(unsupported, engine, E)
 
 
-def test_sink_ir_translation_raises_bad_extension():
+def test_sink_ir_translation_raises_bad_extension(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     # Should raise because ".foo" is not a recognized file extension
     with pytest.raises(ValueError, match="Unsupported file format: .foo"):
-        assert_sink_ir_translation_raises(df, Path("out.foo"), {}, NotImplementedError)
+        assert_sink_ir_translation_raises(
+            df, Path("out.foo"), engine, {}, NotImplementedError
+        )
 
 
-def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path):
+def test_sink_ir_translation_raises_sink_error_before_translation(
+    tmp_path: Path, engine: pl.GPUEngine
+):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     # Should raise because "foo" is not a valid write kwarg,
     # so the sink_* function fails before IR translation
@@ -70,7 +74,7 @@ def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path
         match="Sink function raised an exception before translation: .*foo",
     ):
         assert_sink_ir_translation_raises(
-            df, tmp_path / "out.csv", {"foo": True}, NotImplementedError
+            df, tmp_path / "out.csv", engine, {"foo": True}, NotImplementedError
         )
 
 

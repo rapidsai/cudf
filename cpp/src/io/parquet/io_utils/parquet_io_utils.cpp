@@ -219,7 +219,7 @@ fetch_byte_ranges_to_device_async(
 
       auto& datasource = datasources[src_idx].get();
       // Directly read the column chunk data to the device buffer if supported
-      if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
+      if (datasource.is_device_read_preferred(io_size)) {
         device_read_tasks.emplace_back(
           datasource.device_read_async(io_offset, io_size, dest, stream));
       }
