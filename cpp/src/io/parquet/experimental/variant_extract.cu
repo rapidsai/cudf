@@ -566,8 +566,8 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                        stream,
                                        mr);
   if (total_bytes > 0) {
-    auto* out_base = val_child->mutable_view().data<uint8_t>();
-    auto src_iter  = thrust::make_transform_iterator(
+    auto const out_base = val_child->mutable_view().data<uint8_t>();
+    auto src_iter       = thrust::make_transform_iterator(
       thrust::counting_iterator<size_type>(0),
       cuda::proclaim_return_type<uint8_t const*>(
         [vlv   = val_lists_device_view,
