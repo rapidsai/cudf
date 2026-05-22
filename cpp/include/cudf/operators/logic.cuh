@@ -220,7 +220,7 @@ __device__ void if_else(T* out, T const* true_value, T const* false_value, bool 
  * @tparam T Selected value type.
  * @param out Destination optional selected value.
  * @param true_value Optional value selected when @p pred is true.
- * @param false_value Optional value selected when @p pred is false.
+ * @param false_value Optional value selected when @p pred is false or null.
  * @param pred Selection predicate.
  */
 template <typename T>
