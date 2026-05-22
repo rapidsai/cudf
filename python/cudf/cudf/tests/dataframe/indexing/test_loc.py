@@ -10,11 +10,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -795,7 +790,13 @@ def test_sliced_indexing():
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-    sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+    # Preserve None as None (not NaT) so pandas treats it as an open bound.
+    # pd.to_datetime(None) returns NaT, which pandas rejects as a slice
+    # bound on a non-monotonic datetime index.
+    sli = slice(
+        pd.to_datetime(sli.start) if sli.start is not None else None,
+        pd.to_datetime(sli.stop) if sli.stop is not None else None,
+    )
 
     if is_dataframe is True:
         pd_data = pd.DataFrame(
@@ -822,13 +823,7 @@ def test_loc_datetime_index(sli, is_dataframe):
         slice(None, "2009"),
     ],
 )
-def test_loc_datetime_index_string_slice_non_monotonic(request, sli):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_210,
-            reason="See https://github.com/pandas-dev/pandas/issues/53983",
-        )
-    )
+def test_loc_datetime_index_string_slice_non_monotonic(sli):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3]},
         index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
@@ -900,23 +895,18 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="No warning in older versions of pandas",
-)
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
-    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    # Use float columns so both cudf and pandas can hold NaN when aligning
+    # RHS columns that don't match the loc selection (int64 can't hold NaN).
+    gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]})
     pdf = gdf.to_pandas()
 
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
         {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
     )
-    with pytest.warns(FutureWarning):
-        # Seems to be a false warning from pandas,
-        # but nevertheless catching it.
-        expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
-            {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
-        )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
 
     assert_eq(expected, actual)
 

@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     import rmm.mr
 
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
+    from cudf_polars.engine.ray import RankActor
 
 
 __all__ = [
@@ -265,32 +265,23 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-@functools.cache
-def default_target_partition_size() -> int:
-    """Return the default blocksize."""
-    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        # Fall back to a conservative 1GB default.
-        return 1_000_000_000
-
-    blocksize = int(device_size * 0.025)
-
-    # Use lower and upper bounds of 1GB and 10GB
-    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
+def default_target_partition_size(min_device_size: int | None) -> int:
+    """Return the default target partition size."""
+    _DEFAULT_TARGET_PARTITION_SIZE = 1_500_000_000
+    if min_device_size is None:  # pragma: no cover
+        return _DEFAULT_TARGET_PARTITION_SIZE
+    # Limit to 2.5% of the minimum device memory across all ranks.
+    return min(max(int(min_device_size * 0.025), 1), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
-@functools.cache
-def default_broadcast_join_limit() -> int:
-    """Return the default broadcast join limit."""
-    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        # We probably want to broadcast in most cases.
-        return 32
-
-    # Target about 12.5% of the device memory when
-    # default_target_partition_size is used to set the
-    # target partition size (i.e. 5x the 2.5% default).
-    return min(5, int(max(1, (device_size * 0.125) // 1e9)))
+def default_broadcast_limit(min_device_size: int | None) -> int:
+    """Return the default broadcast limit."""
+    # TODO: Need empirical data to determine the optimal value.
+    _DEFAULT_BROADCAST_LIMIT = 16_000_000_000
+    if min_device_size is None:  # pragma: no cover
+        return _DEFAULT_BROADCAST_LIMIT
+    # Limit to 15% of the minimum device memory across all ranks.
+    return min(max(int(min_device_size * 0.15), 1), _DEFAULT_BROADCAST_LIMIT)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -471,9 +462,8 @@ class SPMDContext:
         This dataclass is **not picklable** because :class:`Communicator`,
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
-        ``SPMDContext`` locally inside
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`, so
-        pickling is never required. Do not use this class with Dask or any other
+        ``SPMDContext`` locally inside :class:`~cudf_polars.engine.spmd.SPMDEngine`,
+        so pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
     Parameters
@@ -499,16 +489,15 @@ class RayContext:
     .. note::
         This dataclass holds Ray actor handles, which are only valid within the
         Ray session that created them. It is stripped from ``config_options``
-        before pickling for remote actor calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`
-        by :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`.
-        Do not persist or transfer this object across Ray sessions.
+        before pickling for remote actor calls in :func:`~cudf_polars.engine.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.engine.ray.RayEngine`. Do not persist or transfer
+        this object across Ray sessions.
 
     Parameters
     ----------
     rank_actors
-        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
-        handles, one per GPU in the cluster.
+        List of :class:`~cudf_polars.engine.ray.RankActor` handles, one per GPU
+        in the cluster.
     """
 
     rank_actors: list[ActorHandle[RankActor]]
@@ -523,7 +512,7 @@ class DaskContext:
         This dataclass holds a :class:`~distributed.Client` handle, which is
         only valid within the Dask session that created it. It is stripped from
         ``config_options`` before pickling for remote worker calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        :func:`~cudf_polars.engine.dask.evaluate_pipeline_dask_mode`.
         Do not persist or transfer this object across Dask sessions.
 
     Parameters
@@ -534,7 +523,7 @@ class DaskContext:
         Unique identifier for this RapidsMPF bootstrap session.
     owned_client
         Client to close on shutdown, if created internally by
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+        :class:`~cudf_polars.engine.dask.DaskEngine`.
     owned_cluster
         Cluster to close on shutdown, if created internally.
     """
@@ -585,20 +574,14 @@ class StreamingExecutor:
         - keyword argument to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
-        By default, cudf-polars uses a target partition size of 1/40th of the
-        device memory.
-
-        The pynvml library is used to query the total device memory on the first
-        visible GPU. If the device size is not available, the default target
-        partition size will be 1GB. The default will always be between 1GB and 10GB.
-
-        NOTE: If this configuration is changed manually, it is recommended to set
-        `broadcast_join_limit` manually as well.
-    broadcast_join_limit
-        The maximum number of partitions to allow for the smaller table in
-        a broadcast join. For example, if the target partition size is 1GB and the
-        broadcast join limit is 5, then the smaller table will be broadcasted
-        if it is smaller than 5GB.
+        By default, cudf-polars uses the minimum of 1.5GB or 2.5% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``target_partition_size`` will be 1.5GB.
+    broadcast_limit
+        The maximum number of bytes to broadcast in a single operation.
+        By default, cudf-polars uses the minimum of 16GB or 15% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``broadcast_limit`` will be 16GB.
     client_device_threshold
         Threshold for spilling data from device memory.
         Default is 50% of device memory on the client process.
@@ -654,9 +637,9 @@ class StreamingExecutor:
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
-    broadcast_join_limit: int = dataclasses.field(
+    broadcast_limit: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
+            f"{_env_prefix}__BROADCAST_LIMIT", int, default=0
         )
     )
     client_device_threshold: float = dataclasses.field(
@@ -687,6 +670,7 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+    min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
@@ -700,17 +684,20 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.target_partition_size == 0:
+        if (
+            isinstance(self.target_partition_size, int)
+            and self.target_partition_size < 1
+        ):
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_target_partition_size(),
+                default_target_partition_size(self.min_device_size),
             )
-        if self.broadcast_join_limit == 0:
+        if isinstance(self.broadcast_limit, int) and self.broadcast_limit < 1:
             object.__setattr__(
                 self,
-                "broadcast_join_limit",
-                default_broadcast_join_limit(),
+                "broadcast_limit",
+                default_broadcast_limit(self.min_device_size),
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
 
@@ -737,8 +724,8 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-        if not isinstance(self.broadcast_join_limit, int):
-            raise TypeError("broadcast_join_limit must be an int")
+        if not isinstance(self.broadcast_limit, int):
+            raise TypeError("broadcast_limit must be an int")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
@@ -936,6 +923,8 @@ class ConfigOptions(Generic[ExecutorType]):
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
+                if "min_device_size" not in user_executor_options:
+                    user_executor_options["min_device_size"] = get_total_device_memory()
 
                 # Handle dynamic_planning: check user config, then env var
                 user_dynamic_planning = user_executor_options.get(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from string import ascii_letters
@@ -62,5 +62,13 @@ def test_feather_writer(tmp_path, pdf):
 
     expect = pa.feather.read_table(pdf_fname)
     got = pa.feather.read_table(gdf_fname)
-
+    # For empty dataframes, pandas writes category dict with null values type
+    # while cudf writes it with string values type. Cast to match.
+    if len(expect) == 0 and "col_category" in expect.column_names:
+        idx = expect.schema.get_field_index("col_category")
+        expect = expect.set_column(
+            idx,
+            got.schema.field(idx),
+            expect.column(idx).cast(got.schema.field(idx).type),
+        )
     assert pa.Table.equals(expect, got)
