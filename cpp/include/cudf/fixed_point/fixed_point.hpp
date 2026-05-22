@@ -654,33 +654,6 @@ CUDF_HOST_DEVICE inline auto multiplication_overflow(T lhs, T rhs)
   return rhs == -1 && lhs == min;
 }
 
-/**
- * @brief Whether `detail::shift<Rep, Rad>(val, scale)` would incur signed-integer overflow
- *
- * Mirrors the overflow conditions of `multiplication_overflow` /
- * `division_overflow` on the intermediate scale factor. Used by the
- * overflow-aware free functions in `detail/safe_arithmetic.hpp`.
- *
- * @tparam Rep Representation type
- * @tparam Rad Radix
- * @tparam T   Type of the value being shifted (typically `Rep`)
- * @param val The value being shifted
- * @param scale The amount to shift the value by
- * @return true if the shift would overflow `Rep`, false otherwise
- */
-template <typename Rep, Radix Rad, typename T>
-CUDF_HOST_DEVICE inline constexpr bool shift_overflows(T const& val, scale_type const& scale)
-{
-  auto const v = static_cast<Rep>(val);
-  if (scale == 0) { return false; }
-  if (scale > 0) {
-    Rep const divisor = detail::ipow<Rep, Rad>(static_cast<int32_t>(scale));
-    return division_overflow<Rep>(v, divisor);
-  }
-  Rep const multiplier = detail::ipow<Rep, Rad>(static_cast<int32_t>(-scale));
-  return multiplication_overflow<Rep>(v, multiplier);
-}
-
 // PLUS Operation
 template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,

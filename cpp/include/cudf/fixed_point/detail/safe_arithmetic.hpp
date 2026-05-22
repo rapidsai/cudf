@@ -46,6 +46,32 @@ struct safe_result {
 };
 
 /**
+ * @brief Whether `shift<Rep, Rad>(val, scale)` would incur signed-integer overflow
+ *
+ * Mirrors the overflow conditions of `multiplication_overflow` /
+ * `division_overflow` on the intermediate scale factor.
+ *
+ * @tparam Rep Representation type
+ * @tparam Rad Radix
+ * @tparam T   Type of the value being shifted (typically `Rep`)
+ * @param val The value being shifted
+ * @param scale The amount to shift the value by
+ * @return true if the shift would overflow `Rep`, false otherwise
+ */
+template <typename Rep, Radix Rad, typename T>
+CUDF_HOST_DEVICE inline constexpr bool shift_overflows(T const& val, scale_type const& scale)
+{
+  auto const v = static_cast<Rep>(val);
+  if (scale == 0) { return false; }
+  if (scale > 0) {
+    Rep const divisor = ipow<Rep, Rad>(static_cast<int32_t>(scale));
+    return division_overflow<Rep>(v, divisor);
+  }
+  Rep const multiplier = ipow<Rep, Rad>(static_cast<int32_t>(-scale));
+  return multiplication_overflow<Rep>(v, multiplier);
+}
+
+/**
  * @brief Rescale a `fixed_point` value, reporting whether the underlying shift overflows
  *
  * Equivalent to `x.rescaled(new_scale)` but surfaces the shift overflow flag
@@ -215,9 +241,10 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pymod(fixed_point<Rep, Rad> l
 /**
  * @brief Overflow-checked floating-point -> `fixed_point` conversion
  *
- * Uses `convert_floating_to_integral_checked` (in `floating_conversion.hpp`)
- * for base-10 decimals, which saturates and reports overflow. For base-2
- * radixes there is no checked path today, so `overflow` is always `false`.
+ * Uses `convert_floating_to_integral<Rep, true>` (in
+ * `floating_conversion.hpp`) for base-10 decimals, which saturates and reports
+ * overflow. For base-2 radixes there is no checked path today, so `overflow`
+ * is always `false`.
  *
  * @tparam Fixed    Target `fixed_point` instantiation
  * @tparam Floating Source floating-point type
@@ -234,7 +261,7 @@ safe_convert_floating_to_fixed(Floating floating, scale_type scale)
 {
   using Rep = typename Fixed::rep;
   if constexpr (Fixed::rad == Radix::BASE_10) {
-    auto const [value, overflow] = convert_floating_to_integral_checked<Rep>(floating, scale);
+    auto const [value, overflow] = convert_floating_to_integral<Rep, true>(floating, scale);
     return safe_result<Rep, Fixed::rad>{Fixed{scaled_integer<Rep>{value, scale}}, overflow};
   } else {
     Rep const value = static_cast<Rep>(shift<Rep, Fixed::rad>(floating, scale));
