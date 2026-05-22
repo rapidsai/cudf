@@ -1150,6 +1150,178 @@ def test_series_astype_null_categorical():
     assert_eq(expect, got)
 
 
+# Tests for the pandas-compatible Categorical.astype fix in
+# CategoricalColumn.as_numerical_column: when nulls are present and the target
+# is a non-nullable numpy int/uint/bool dtype, raise ValueError to mirror
+# pandas (which represents NaN via float-promoted categories and so cannot
+# convert to integer/bool).
+_CATEGORICAL_NAN_INT_DTYPES = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+]
+
+
+@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, None],
+        [1, 2, 3, None, None],
+        [None, None, None],
+    ],
+)
+def test_categorical_astype_nan_to_int_pandas_compat(data, dtype):
+    psr = pd.Series(data, dtype="category")
+    gsr = cudf.Series(data, dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            psr.astype,
+            gsr.astype,
+            ([dtype],),
+            ([dtype],),
+        )
+
+
+@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
+def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(dtype):
+    # Confirms the np.dtype(...) form takes the same path as the string form
+    # (the fix is gated on `isinstance(dtype, np.dtype)`).
+    psr = pd.Series([1, 2, None], dtype="category")
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            psr.astype,
+            gsr.astype,
+            ([np.dtype(dtype)],),
+            ([np.dtype(dtype)],),
+        )
+
+
+def test_categorical_astype_nan_to_bool_pandas_compat():
+    # cudf raises in pandas-compatible mode; pandas itself does not raise
+    # (it returns NaN -> True). So we only assert cudf's behavior here.
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(
+            ValueError, match="Cannot convert float NaN to bool"
+        ):
+            gsr.astype("bool")
+        with pytest.raises(
+            ValueError, match="Cannot convert float NaN to bool"
+        ):
+            gsr.astype(np.dtype("bool"))
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_categorical_astype_nan_to_float_pandas_compat(dtype):
+    # Float targets must still succeed (dtype.kind == 'f', no raise).
+    psr = pd.Series([1, 2, None], dtype="category")
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(psr.astype(dtype), gsr.astype(dtype))
+
+
+@pytest.mark.parametrize("dtype", [*_CATEGORICAL_NAN_INT_DTYPES, "bool"])
+def test_categorical_astype_no_nulls_pandas_compat(dtype):
+    # No nulls => null_count == 0 => fix's guard does not trigger.
+    psr = pd.Series([1, 2, 3], dtype="category")
+    gsr = cudf.Series([1, 2, 3], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(psr.astype(dtype), gsr.astype(dtype))
+
+
+@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
+def test_categorical_astype_nan_to_int_default_mode(dtype):
+    # Without pandas_compatible, cudf preserves the existing behavior:
+    # NaN flows through the mask and the cast succeeds as a nullable column.
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    got = gsr.astype(dtype)
+    assert got.dtype == np.dtype(dtype)
+    assert got.null_count == 1
+    assert got.dropna().to_arrow().to_pylist() == [1, 2]
+
+
+def test_categorical_astype_nan_to_bool_default_mode():
+    # Default mode allows casting categorical-with-nulls to bool (the fix
+    # only raises under pandas_compatible mode).
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    got = gsr.astype("bool")
+    assert got.dtype == np.dtype("bool")
+    assert got.null_count == 1
+    assert got.dropna().to_arrow().to_pylist() == [True, True]
+
+
+@pytest.mark.parametrize(
+    "ext_dtype",
+    [
+        pd.Int8Dtype(),
+        pd.Int16Dtype(),
+        pd.Int32Dtype(),
+        pd.Int64Dtype(),
+        pd.UInt8Dtype(),
+        pd.UInt32Dtype(),
+        pd.UInt64Dtype(),
+    ],
+)
+def test_categorical_astype_nan_to_nullable_extension_pandas_compat(ext_dtype):
+    # Nullable extension dtypes are not np.dtype instances, so the guard
+    # `isinstance(dtype, np.dtype)` is False and no error is raised.
+    psr = pd.Series([1, 2, None], dtype="category")
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(psr.astype(ext_dtype), gsr.astype(ext_dtype))
+
+
+@pytest.mark.parametrize(
+    "pa_type",
+    [pa.int8(), pa.int64(), pa.uint32(), pa.bool_()],
+)
+def test_categorical_astype_nan_to_arrow_pandas_compat(pa_type):
+    # ArrowDtype is also not an np.dtype, so the fix's guard skips it.
+    arrow_dtype = pd.ArrowDtype(pa_type)
+    psr = pd.Series([1, 2, None], dtype="category")
+    gsr = cudf.Series([1, 2, None], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(psr.astype(arrow_dtype), gsr.astype(arrow_dtype))
+
+
+@pytest.mark.parametrize("dtype", ["int8", "int64", "uint32"])
+def test_categoricalindex_astype_nan_to_int_pandas_compat(dtype):
+    # The same path is exercised through CategoricalIndex.astype, which was
+    # the originally failing case (`test_astype_nan_to_int[*-CategoricalIndex]`).
+    pi = pd.CategoricalIndex([1, 2, None])
+    gi = cudf.CategoricalIndex([1, 2, None])
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_exceptions_equal(
+            pi.astype,
+            gi.astype,
+            ([dtype],),
+            ([dtype],),
+        )
+
+
+def test_categoricalindex_astype_nan_to_bool_pandas_compat():
+    gi = cudf.CategoricalIndex([1, 2, None])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(
+            ValueError, match="Cannot convert float NaN to bool"
+        ):
+            gi.astype("bool")
+
+
+def test_categoricalindex_astype_nan_to_float_pandas_compat():
+    pi = pd.CategoricalIndex([1, 2, None])
+    gi = cudf.CategoricalIndex([1, 2, None])
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(pi.astype("float64"), gi.astype("float64"))
+
+
 @pytest.mark.parametrize("precision, scale", [(7, 2), (11, 4), (18, 9)])
 def test_typecast_from_float_to_decimal(
     request, float_types_as_str, precision, scale
