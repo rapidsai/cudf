@@ -5344,6 +5344,8 @@ NODEIDS_THAT_FAIL = {
     "tests/strings/test_split_partition.py::test_partition_series_stdlib[string=string[python]-rpartition]": "TODO: Add a reason for failure",
     "tests/strings/test_split_partition.py::test_split_nan_expand[string=object]": "AssertionError: DataFrame.iloc[:, 0] (column name='0') are different",
     "tests/strings/test_strings.py::test_index_str_accessor_multiindex_raises": "TODO: Add a reason for failure",
+    "tests/strings/test_strings.py::test_isnumeric_unicode[string=str[pyarrow]-isdigit-expected2]": "Test requires pyarrow.compute.utf8_is_digit Unicode semantics which differ from libcudf/Python unicodedata; cannot match without using pyarrow.compute as a CPU execution backend",
+    "tests/strings/test_strings.py::test_isnumeric_unicode[string=string[pyarrow]-isdigit-expected2]": "Test requires pyarrow.compute.utf8_is_digit Unicode semantics which differ from libcudf/Python unicodedata; cannot match without using pyarrow.compute as a CPU execution backend",
     "tests/test_algos.py::TestFactorize::test_factorize[multi-False]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
     "tests/test_algos.py::TestFactorize::test_factorize[multi-True]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
     "tests/test_algos.py::TestFactorize::test_factorize[tuples-False]": "AssertionError: Index are different",
