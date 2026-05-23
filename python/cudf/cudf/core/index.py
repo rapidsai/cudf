@@ -5675,8 +5675,9 @@ def _concat_indexes_with_multiindex(indexes: list[Index]) -> Index:
         for obj in indexes
     )
     scalar_dtype = _common_flattened_label_scalar_dtype(indexes)
+    level_dtypes = _common_flattened_label_level_dtypes(indexes, nlevels)
     flattened = [
-        _flatten_index_for_concat(obj, nlevels, scalar_dtype)
+        _flatten_index_for_concat(obj, nlevels, scalar_dtype, level_dtypes)
         for obj in indexes
     ]
     return Index._from_column(concat_columns(flattened))
@@ -5693,35 +5694,60 @@ def _common_flattened_label_scalar_dtype(indexes: list[Index]):
     return find_common_type(dtypes) if dtypes else np.dtype("object")
 
 
+def _common_flattened_label_level_dtypes(
+    indexes: list[Index], nlevels: int
+) -> list:
+    level_dtypes = []
+    for level in range(nlevels):
+        dtypes = [
+            obj._columns[level].dtype
+            for obj in indexes
+            if isinstance(obj, cudf.MultiIndex) and level < obj.nlevels
+        ]
+        if any(isinstance(dtype, CategoricalDtype) for dtype in dtypes):
+            dtypes.append(DEFAULT_STRING_DTYPE)
+        level_dtypes.append(
+            find_common_type(dtypes) if dtypes else np.dtype("object")
+        )
+    return level_dtypes
+
+
 def _flatten_index_for_concat(
-    index: Index, nlevels: int, scalar_dtype
+    index: Index, nlevels: int, scalar_dtype, level_dtypes: list
 ) -> ColumnBase:
     if isinstance(index, cudf.MultiIndex):
         return _multiindex_as_flattened_label_column(
-            index, nlevels, scalar_dtype
+            index, nlevels, scalar_dtype, level_dtypes
         )
     else:
-        return _index_as_flattened_label_column(index, nlevels, scalar_dtype)
+        return _index_as_flattened_label_column(
+            index, nlevels, scalar_dtype, level_dtypes
+        )
 
 
 def _multiindex_as_flattened_label_column(
-    index: MultiIndex, nlevels: int, scalar_dtype
+    index: MultiIndex, nlevels: int, scalar_dtype, level_dtypes: list
 ) -> ColumnBase:
     level_columns = list(index._columns)
     children = [as_column(1, length=len(index), dtype=np.dtype("int8"))]
     children.append(column_empty(len(index), dtype=scalar_dtype))
-    children.extend(col.copy(deep=True) for col in level_columns)
     children.extend(
-        column_empty(len(index), dtype=np.dtype("object"))
-        for _ in range(nlevels - len(level_columns))
+        col.astype(level_dtypes[i])
+        if col.dtype != level_dtypes[i]
+        else col.copy(deep=True)
+        for i, col in enumerate(level_columns)
+    )
+    children.extend(
+        column_empty(len(index), dtype=level_dtypes[i])
+        for i in range(len(level_columns), nlevels)
     )
     return _flattened_label_column_from_children(
-        children, level_columns, nlevels, scalar_dtype
+        children, nlevels, scalar_dtype, level_dtypes
     )
 
 
 def _index_as_flattened_label_column(
-    index: Index, nlevels: int, scalar_dtype
+    index: Index, nlevels: int, scalar_dtype, level_dtypes: list
 ) -> ColumnBase:
     children = [as_column(0, length=len(index), dtype=np.dtype("int8"))]
     children.append(
@@ -5730,27 +5756,23 @@ def _index_as_flattened_label_column(
         else index._column.copy(deep=True)
     )
     children.extend(
-        column_empty(len(index), dtype=np.dtype("object"))
-        for _ in range(nlevels)
+        column_empty(len(index), dtype=level_dtype)
+        for level_dtype in level_dtypes
     )
     return _flattened_label_column_from_children(
-        children, (), nlevels, scalar_dtype
+        children, nlevels, scalar_dtype, level_dtypes
     )
 
 
 def _flattened_label_column_from_children(
-    children: list[ColumnBase], level_columns, nlevels: int, scalar_dtype
+    children: list[ColumnBase], nlevels: int, scalar_dtype, level_dtypes: list
 ) -> ColumnBase:
     dtype = StructDtype(
         {
             _FLATTENED_LABEL_KIND_FIELD: np.dtype("int8"),
             _FLATTENED_LABEL_SCALAR_FIELD_PREFIX + "0": scalar_dtype,
             **{
-                _FLATTENED_LABEL_LEVEL_FIELD_PREFIX + str(i): (
-                    level_columns[i].dtype
-                    if i < len(level_columns)
-                    else np.dtype("object")
-                )
+                _FLATTENED_LABEL_LEVEL_FIELD_PREFIX + str(i): level_dtypes[i]
                 for i in range(nlevels)
             },
         }
