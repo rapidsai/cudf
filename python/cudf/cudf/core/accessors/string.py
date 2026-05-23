@@ -188,32 +188,22 @@ class StringMethods(BaseAccessor):
                 if target_dtype == pd.BooleanDtype():
                     return self._empty_pandas_string_result(np.dtype(np.bool_))
             return self._empty_pandas_string_result(target_dtype)
-        if self._column.dtype == np.dtype("object"):
-            result_index = (
-                self._parent.index.to_pandas()
-                if isinstance(self._parent, cudf.Series)
-                else None
-            )
-            result_name = (
-                self._parent.name
-                if isinstance(self._parent, cudf.Series)
-                else None
-            )
-            result = pd.Series(
-                result_col.to_pandas().astype(object),
-                index=result_index,
-                name=result_name,
-            )
-            if target_dtype == pd.Int64Dtype():
-                return cast("Series | Index", result.astype(np.float64))
-            if target_dtype == pd.BooleanDtype():
-                result[result.isna()] = np.nan
-                return cast("Series | Index", result)
+        if target_dtype == pd.Int64Dtype():
+            if self._column.dtype == np.dtype("object"):
+                return self._return_or_inplace(
+                    result_col.astype(np.dtype("float64"))
+                )
+            result_col = result_col.astype(target_dtype)
         if (
             isinstance(self._column.dtype, pd.StringDtype)
             and self._column.dtype.na_value is pd.NA
         ):
             result_col = result_col.astype(target_dtype)
+        if self._column.dtype == np.dtype("object"):
+            if target_dtype == pd.BooleanDtype():
+                return self._return_or_inplace(
+                    result_col.astype(np.dtype("object"))
+                )
         return self._return_or_inplace(result_col)
 
     def _return_pandas_string_int_result(
@@ -242,23 +232,7 @@ class StringMethods(BaseAccessor):
             and self._column.dtype.storage == "pyarrow"
             and self._column.dtype.na_value is pd.NA
         ):
-            result_index = (
-                self._parent.index.to_pandas()
-                if isinstance(self._parent, cudf.Series)
-                else None
-            )
-            result_name = (
-                self._parent.name
-                if isinstance(self._parent, cudf.Series)
-                else None
-            )
-            result = pd.Series(
-                result_col.to_pandas().astype(object),
-                index=result_index,
-                name=result_name,
-            )
-            result[result.isna()] = None
-            return cast("Series | Index", result)
+            return self._return_or_inplace(result_col)
         return self._return_or_inplace(result_col)
 
     def __init__(self, parent: Series | Index):
@@ -3881,7 +3855,7 @@ class StringMethods(BaseAccessor):
             )
         pat = self._remove_named_capture_groups(pat)
         result_col = self._column.count_re(pat, flags)
-        if self._is_empty_pandas_string_input():
+        if isinstance(self._column.dtype, pd.StringDtype):
             return self._return_pandas_string_int_result(result_col)
         return self._return_or_inplace(result_col)
 
