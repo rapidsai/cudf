@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 import itertools
 import operator
+import re
 import warnings
 from collections import Counter
 from collections.abc import Hashable, MutableMapping
@@ -16,7 +17,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas._libs.tslibs.parsing import parse_datetime_string_with_reso
 
 import pylibcudf as plc
 
@@ -112,6 +112,42 @@ _DATETIME_RESOLUTION_ORDER = {
     "microsecond": 1,
     "nanosecond": 0,
 }
+
+_DATETIME_STRING_RESOLUTION_PATTERNS = (
+    (re.compile(r"^\d{4}$"), "year"),
+    (re.compile(r"^\d{4}Q[1-4]$"), "quarter"),
+    (re.compile(r"^\d{4}-\d{1,2}$"), "month"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}$"), "day"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}$"), "hour"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}$"), "minute"),
+    (
+        re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}:\d{1,2}$"),
+        "second",
+    ),
+)
+_DATETIME_FRACTIONAL_SECOND_PATTERN = re.compile(
+    r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}:\d{1,2}\.(\d{1,9})$"
+)
+
+
+def _parse_datetime_string_with_reso(
+    key: str,
+) -> tuple[pd.Timestamp, str]:
+    parsed = cast(pd.Timestamp, pd.Timestamp(key))
+
+    for pattern, resolution in _DATETIME_STRING_RESOLUTION_PATTERNS:
+        if pattern.match(key):
+            return parsed, resolution
+
+    if match := _DATETIME_FRACTIONAL_SECOND_PATTERN.match(key):
+        fraction_digits = len(match.group(1))
+        if fraction_digits <= 3:
+            return parsed, "millisecond"
+        if fraction_digits <= 6:
+            return parsed, "microsecond"
+        return parsed, "nanosecond"
+
+    return parsed, "nanosecond"
 
 
 def _datetime_index_resolution(index: DatetimeIndex) -> str:
@@ -3527,7 +3563,7 @@ class DatetimeIndex(Index):
     def get_loc(self, key) -> int | slice | cupy.ndarray:
         if isinstance(key, str):
             try:
-                parsed, resolution = parse_datetime_string_with_reso(key, None)
+                parsed, resolution = _parse_datetime_string_with_reso(key)
             except ValueError:
                 return super().get_loc(key)
             if (
