@@ -266,7 +266,7 @@ embed_output generate_cxx_source_files_data(std::string_view id,
 
   auto cxx_header = std::format(
     R"***(
-// Auto-generated header for embedded files with ID: {}
+// Auto-generated header for embedded files
 #pragma once
 
 #include <cstdint>
@@ -320,7 +320,6 @@ constexpr std::uint8_t hash[{}] =
 
 }}
 )***",
-    id,
     namespace_decl,
     include_dirs.size(),
     include_dirs_list,

@@ -28,6 +28,7 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -59,7 +60,7 @@ __device__ void transform_kernel(size_type row_size,
   auto stride = detail::grid_1d::grid_stride();
 
   for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
-    if constexpr (is_null_aware) {
+    if constexpr (!is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
 
       auto ins = InputAccessors::map(
