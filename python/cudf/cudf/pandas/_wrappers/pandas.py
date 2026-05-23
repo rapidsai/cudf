@@ -9,7 +9,6 @@ import gc
 import inspect
 import os
 import pickle
-import re
 import zipfile
 
 import numpy as np
@@ -286,64 +285,6 @@ def _to_xarray(self):
         return xr.Dataset.from_dataframe(self)
 
 
-_OPENPYXL_EMPTY_FORMULA_VALUE = re.compile(
-    rb"(<c\b(?:(?!</c>).)*<f\b(?:(?!</c>).)*</f>)<v></v>(</c>)",
-    re.DOTALL,
-)
-
-
-def _cache_openpyxl_formula_results(excel_writer):
-    if not isinstance(excel_writer, (str, bytes, os.PathLike)):
-        return
-
-    path = os.fspath(excel_writer)
-    tmp_path = f"{path}.cudf_pandas_tmp"
-    changed = False
-    try:
-        with zipfile.ZipFile(path) as zin:
-            entries = []
-            for info in zin.infolist():
-                data = zin.read(info.filename)
-                if info.filename.startswith("xl/worksheets/"):
-                    new_data = _OPENPYXL_EMPTY_FORMULA_VALUE.sub(
-                        rb"\g<1><v>0</v>\g<2>", data
-                    )
-                    changed |= new_data != data
-                    data = new_data
-                entries.append((info, data))
-    except (FileNotFoundError, IsADirectoryError, zipfile.BadZipFile):
-        return
-
-    if not changed:
-        return
-
-    try:
-        with zipfile.ZipFile(tmp_path, "w") as zout:
-            for info, data in entries:
-                zout.writestr(info, data)
-        os.replace(tmp_path, path)
-    finally:
-        try:
-            os.remove(tmp_path)
-        except FileNotFoundError:
-            pass
-
-
-def _DataFrame_to_excel(self, *args, **kwargs):
-    result = _fast_slow_function_call(
-        lambda self, args, kwargs: self.to_excel(*args, **kwargs),
-        None,
-        self,
-        args,
-        kwargs,
-    )[0]
-    excel_writer = kwargs.get("excel_writer", args[0] if args else None)
-    engine = kwargs.get("engine")
-    if engine in (None, "openpyxl"):
-        _cache_openpyxl_formula_results(excel_writer)
-    return result
-
-
 def _ExcelWriter__exit__(self, exc_type, exc_value, traceback):
     try:
         return self._fsproxy_wrapped.__exit__(exc_type, exc_value, traceback)
@@ -412,7 +353,6 @@ DataFrame = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "to_xarray": _to_xarray,
-        "to_excel": _DataFrame_to_excel,
     },
 )
 
