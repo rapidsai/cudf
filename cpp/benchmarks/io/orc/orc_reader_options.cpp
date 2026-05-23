@@ -85,6 +85,9 @@ void BM_orc_read_varying_options(nvbench::state& state,
 
   auto const num_stripes =
     cudf::io::read_orc_metadata(source_sink.make_source_info()).num_stripes();
+  CUDF_EXPECTS(RowSelection != row_selection::STRIPES || num_stripes >= num_chunks,
+               "STRIPES option requires at least one stripe per read chunk");
+
   auto const chunk_row_cnt = cudf::util::div_rounding_up_unsafe(view.num_rows(), num_chunks);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
