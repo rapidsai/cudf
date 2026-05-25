@@ -512,12 +512,11 @@ namespace {
 // When `mismatched_columns_out` is non-null, the names of top-level output columns whose JSON
 // value tree contained a schema-mismatch are pushed onto it (deduplicated, order preserved by
 // the column order of the result). When null, schema-mismatch information is dropped.
-table_with_metadata device_parse_nested_json_impl(
-  device_span<SymbolT const> d_input,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  std::vector<std::string>* mismatched_columns_out)
+table_with_metadata device_parse_nested_json_impl(device_span<SymbolT const> d_input,
+                                                  cudf::io::json_reader_options const& options,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr,
+                                                  std::vector<std::string>* mismatched_columns_out)
 {
   CUDF_FUNC_RANGE();
 
@@ -733,7 +732,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return device_parse_nested_json_impl(d_input, options, stream, mr, /*mismatched_columns_out=*/nullptr);
+  return device_parse_nested_json_impl(
+    d_input, options, stream, mr, /*mismatched_columns_out=*/nullptr);
 }
 
 device_parse_nested_json_result device_parse_nested_json_with_diagnostics(

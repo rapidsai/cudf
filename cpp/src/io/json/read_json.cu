@@ -841,8 +841,7 @@ json_reader_result read_json_with_diagnostics(host_span<std::unique_ptr<datasour
     if (seen.insert(name).second) { deduped.emplace_back(std::move(name)); }
   }
 
-  return json_reader_result{std::move(data),
-                            json_reader_diagnostics{std::move(deduped)}};
+  return json_reader_result{std::move(data), json_reader_diagnostics{std::move(deduped)}};
 }
 
 }  // namespace cudf::io::json::detail
