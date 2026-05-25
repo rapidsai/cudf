@@ -9294,6 +9294,8 @@ public class TableTest extends CudfTestBase {
       optBuilder.withCompressionType(CompressionType.NONE)
       .withRowGroupSizeRows(10000)
       .withRowGroupSizeBytes(10000)
+      .withMaxDictionarySize(2 * 1024 * 1024)
+      .withDictionaryPolicy(ParquetWriterOptions.DictionaryPolicy.ALWAYS)
       .build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
@@ -9323,6 +9325,34 @@ public class TableTest extends CudfTestBase {
         assertEquals(0, statistics.numSkippedBytes);
         assertEquals(Double.NaN, statistics.compressionRatio);
       }
+    }
+  }
+
+  /**
+   * Exercises the file-chunked Parquet write path with the dictionary configuration
+   * setters so any signature/forwarding drift between {@code writeParquetFileBegin}
+   * and {@code writeParquetBufferBegin} is caught.
+   */
+  @Test
+  void testParquetWriteToFileChunkedWithDictionaryOptions() throws IOException {
+    File tempFile = File.createTempFile("test-dict-options", ".parquet");
+    try (Table table0 = getExpectedFileTableWithDecimals()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 5)
+          .withDecimalColumn("ninth", 6)
+          .withCompressionType(CompressionType.NONE)
+          .withMaxDictionarySize(2 * 1024 * 1024)
+          .withDictionaryPolicy(ParquetWriterOptions.DictionaryPolicy.ALWAYS)
+          .build();
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
     }
   }
 
