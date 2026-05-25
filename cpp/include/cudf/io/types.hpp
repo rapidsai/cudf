@@ -229,14 +229,6 @@ struct column_name_info {
   std::optional<bool> is_binary;           ///< Column is binary (i.e. not a list)
   std::optional<int32_t> type_length;      ///< Byte width of data (for fixed length data)
   std::vector<column_name_info> children;  ///< Child column names
-  /// @brief JSON reader diagnostic: when reading with a user-supplied schema, set to `true` on each
-  ///        top-level column whose JSON value, or any descendant value, had a category (`NC_STRUCT`
-  ///        / `NC_LIST` / `NC_VAL`) that did not match the requested schema type. Left
-  ///        `std::nullopt` when no mismatch is detected, and always `std::nullopt` for other
-  ///        readers and for non-top-level columns. Consumers can use this signal to implement their
-  ///        own policy on schema mismatch (e.g. Spark's `JacksonParser` nulls the entire depth-1
-  ///        ancestor field for such rows).
-  std::optional<bool> had_schema_mismatch;
 
   /**
    * @brief Construct a column name info with a name, optional nullabilty, and no children
@@ -264,7 +256,7 @@ struct column_name_info {
   {
     return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
             (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
-            (had_schema_mismatch == rhs.had_schema_mismatch) && (children == rhs.children));
+            (children == rhs.children));
   };
 };
 

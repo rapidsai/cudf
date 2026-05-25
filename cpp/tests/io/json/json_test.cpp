@@ -3675,11 +3675,12 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
   }
 }
 
-// Tests for the per-top-level-column `had_schema_mismatch` diagnostic on `column_name_info`,
-// added so downstream callers (e.g. spark-rapids-jni) can implement their own policy when a
-// JSON value's node category does not match the requested schema. cuDF itself does NOT change
-// the column contents on mismatch (existing CHILD_NULL_ONLY behavior); only this diagnostic
-// flag is surfaced.
+// Tests for the per-top-level-column schema-mismatch diagnostic surfaced by
+// `read_json_with_diagnostics`. Downstream callers (e.g. spark-rapids-jni) use this signal to
+// implement their own policy when a JSON value's node category does not match the requested
+// schema. cuDF itself does NOT change the column contents on mismatch (existing
+// CHILD_NULL_ONLY behavior); the diagnostic is reported on a separate side channel so the
+// public `column_name_info`/`table_metadata` ABI is unaffected.
 // See https://github.com/rapidsai/cudf/issues/22423.
 
 // Build schema for: struct<c1: int64, c2: list<struct<c3: int64, c4: string>>>.
@@ -3699,10 +3700,9 @@ cudf::io::schema_element make_nested_mismatch_schema_st()
     std::vector<std::string>{"c1", "c2"}};
 }
 
-TEST_F(JsonReaderTest, SchemaMismatchDiagNoMismatchUnset)
+TEST_F(JsonReaderTest, SchemaMismatchDiagNoMismatchEmpty)
 {
-  // Well-formed nested JSON: schema matches everywhere, so the diagnostic stays unset
-  // (std::nullopt) on every top-level column.
+  // Well-formed nested JSON: schema matches everywhere, so the diagnostic list stays empty.
   std::string const json = "{\"data\": {\"c2\": [{\"c3\": 19, \"c4\": \"x\"}], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
                                 {{"data", make_nested_mismatch_schema_st()}}};
@@ -3714,16 +3714,16 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagNoMismatchUnset)
                 .dtypes(root)
                 .prune_columns(true)
                 .build();
-  auto result = cudf::io::read_json(opts);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1u);
-  EXPECT_FALSE(result.metadata.schema_info[0].had_schema_mismatch.has_value());
+  auto result = cudf::io::read_json_with_diagnostics(opts);
+  ASSERT_EQ(result.data.metadata.schema_info.size(), 1u);
+  EXPECT_TRUE(result.diagnostics.top_level_columns_with_schema_mismatch.empty());
 }
 
-TEST_F(JsonReaderTest, SchemaMismatchDiagNestedMismatchSet)
+TEST_F(JsonReaderTest, SchemaMismatchDiagNestedMismatchListed)
 {
   // df2 case from SPARK-33134: {"data": {"c2":[19],"c1":123456}}
   // c2 expects list<struct> but JSON has list<int>; nested mismatch at depth 3.
-  // Diagnostic on top-level "data" column should be `true`. The cudf result table is unchanged
+  // Diagnostic should list top-level "data" column. The cudf result table is unchanged
   // (data row stays populated, partial — existing CHILD_NULL_ONLY behavior).
   std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
@@ -3736,19 +3736,19 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagNestedMismatchSet)
                 .dtypes(root)
                 .prune_columns(true)
                 .build();
-  auto result = cudf::io::read_json(opts);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1u);
-  ASSERT_TRUE(result.metadata.schema_info[0].had_schema_mismatch.has_value());
-  EXPECT_TRUE(*result.metadata.schema_info[0].had_schema_mismatch);
+  auto result = cudf::io::read_json_with_diagnostics(opts);
+  ASSERT_EQ(result.data.metadata.schema_info.size(), 1u);
+  EXPECT_EQ(result.diagnostics.top_level_columns_with_schema_mismatch,
+            std::vector<std::string>{"data"});
   // Default cudf behavior: column itself is not nulled (caller applies policy).
-  EXPECT_EQ(result.tbl->get_column(0).null_count(), 0);
+  EXPECT_EQ(result.data.tbl->get_column(0).null_count(), 0);
 }
 
-TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchSet)
+TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchListed)
 {
   // c2 is a scalar while the schema requests list<struct>. This fully prunes c2 from the parsed
   // device column tree, so the reader synthesizes it from the schema as an all-null top-level
-  // column. The diagnostic must still be `true` for c2, while c1 stays unset.
+  // column. The diagnostic must still list "c2", while "c1" must not appear.
   std::string const json = "{\"c2\": 19, \"c1\": 123456}\n";
   auto root_schema       = make_nested_mismatch_schema_st();
   auto opts              = cudf::io::json_reader_options::builder(
@@ -3759,20 +3759,21 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagRootLevelMismatchSet)
                 .dtypes(root_schema)
                 .prune_columns(true)
                 .build();
-  auto result = cudf::io::read_json(opts);
-  ASSERT_EQ(result.metadata.schema_info.size(), 2u);
-  EXPECT_FALSE(result.metadata.schema_info[0].had_schema_mismatch.has_value());  // c1
-  ASSERT_TRUE(result.metadata.schema_info[1].had_schema_mismatch.has_value());   // c2
-  EXPECT_TRUE(*result.metadata.schema_info[1].had_schema_mismatch);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::LIST);
-  EXPECT_EQ(result.tbl->get_column(1).null_count(), 1);
+  auto result = cudf::io::read_json_with_diagnostics(opts);
+  ASSERT_EQ(result.data.metadata.schema_info.size(), 2u);
+  EXPECT_EQ(result.diagnostics.top_level_columns_with_schema_mismatch,
+            std::vector<std::string>{"c2"});
+  EXPECT_EQ(result.data.tbl->get_column(1).type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(result.data.tbl->get_column(1).null_count(), 1);
 }
 
-TEST_F(JsonReaderTest, SchemaMismatchDiagDescendantOnlyNotOnChildren)
+TEST_F(JsonReaderTest, SchemaMismatchDiagPlainReadJsonUnaffected)
 {
-  // The diagnostic is only attached to top-level columns. Verify by inspecting the children of
-  // a struct that itself sets the flag: their own `had_schema_mismatch` stays unset (children's
-  // flags are not surfaced — they are an internal detail of the reader's tree walk).
+  // The plain `read_json` path does not pay the cost of collecting diagnostics: its result
+  // matches the pre-PR behavior bit-for-bit (column count, null counts, schema_info contents).
+  // The diagnostic side-channel is exposed only through `read_json_with_diagnostics`, so
+  // existing downstream consumers — including those that bake `column_name_info`'s destructor
+  // into their own binaries — see no observable change.
   std::string const json = "{\"data\": {\"c2\": [19], \"c1\": 123456}}\n";
   cudf::io::schema_element root{cudf::data_type{cudf::type_id::STRUCT},
                                 {{"data", make_nested_mismatch_schema_st()}}};
@@ -3786,12 +3787,7 @@ TEST_F(JsonReaderTest, SchemaMismatchDiagDescendantOnlyNotOnChildren)
                 .build();
   auto result = cudf::io::read_json(opts);
   ASSERT_EQ(result.metadata.schema_info.size(), 1u);
-  // Top-level "data" has the flag.
-  EXPECT_TRUE(result.metadata.schema_info[0].had_schema_mismatch.value_or(false));
-  // Children of "data" do not have the flag set even if their own subtree contained a mismatch.
-  for (auto const& child : result.metadata.schema_info[0].children) {
-    EXPECT_FALSE(child.had_schema_mismatch.has_value());
-  }
+  EXPECT_EQ(result.tbl->get_column(0).null_count(), 0);
 }
 
 TEST_F(JsonReaderTest, MalformedFieldNameWithBrace)

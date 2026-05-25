@@ -510,8 +510,9 @@ std::
   // Collected during mark_is_pruned: each col_id whose JSON-tree category did not match the
   // requested schema type (and was therefore pruned). After `construct_tree` returns we walk each
   // entry up to its top-level ancestor and add that ancestor's name to
-  // `root.schema_mismatch_column_names`, which feeds the per-top-level diagnostic on
-  // `column_name_info`.
+  // `root.schema_mismatch_column_names`, which (when the caller invoked
+  // `device_parse_nested_json_with_diagnostics`) feeds
+  // `json_reader_diagnostics::top_level_columns_with_schema_mismatch`.
   auto mismatched_col_ids = std::vector<NodeIndexT>{};
 
   // recursive lambda on schema to mark columns as pruned.
@@ -533,8 +534,8 @@ std::
     if (!pass) {
       // The JSON tree's actual category for this node disagrees with the requested schema type
       // (e.g. JSON has a scalar where schema expects a struct). Record the col_id so that after
-      // `construct_tree` builds the device tree we can walk up to the top-level ancestor and set
-      // the `had_schema_mismatch` diagnostic on that top-level `column_name_info`.
+      // `construct_tree` builds the device tree we can walk up to the top-level ancestor and
+      // record the diagnostic on `device_json_column::schema_mismatch_column_names`.
       mismatched_col_ids.push_back(root);
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
@@ -867,8 +868,8 @@ std::
 
   // For each schema-mismatched col_id (collected in `mark_is_pruned` above), record the name of
   // its top-level output column on `root.schema_mismatch_column_names`. The diagnostic is only
-  // surfaced on top-level `column_name_info` entries, so we do not need to mark intermediate
-  // ancestors' `device_json_column`s.
+  // surfaced per top-level output column, so we do not need to mark intermediate ancestors'
+  // `device_json_column`s.
   for (auto const mismatched_id : mismatched_col_ids) {
     add_top_level_schema_mismatch(mismatched_id);
   }
