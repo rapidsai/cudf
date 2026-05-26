@@ -923,6 +923,8 @@ class ConfigOptions(Generic[ExecutorType]):
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
+                if "min_device_size" not in user_executor_options:
+                    user_executor_options["min_device_size"] = get_total_device_memory()
 
                 # Handle dynamic_planning: check user config, then env var
                 user_dynamic_planning = user_executor_options.get(
