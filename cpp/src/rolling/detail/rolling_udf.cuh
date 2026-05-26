@@ -88,12 +88,12 @@ inline std::unique_ptr<column> rolling_window_udf_impl(
     0, stream, cudf::get_current_device_resource_ref()};
 
   std::string kernel_reflection =
-    rtcx::reflect_template("cudf::rolling::jit::rolling_window_kernel",
-                           cudf::type_to_name(input.type()),
-                           cudf::type_to_name(output->type()),
-                           udf_agg._operator_name,
-                           preceding_window_str,
-                           following_window_str);
+    jitify2::reflection::Template("cudf::rolling::jit::rolling_window_kernel")  //
+      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
+                   cudf::type_to_name(output->type()),
+                   udf_agg._operator_name,
+                   preceding_window_str,
+                   following_window_str);
 
   auto kernel =
     cudf::jit::get_udf_kernel("cudf/cpp/src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
