@@ -4,7 +4,9 @@
  */
 #pragma once
 
-#include "strings/regex/regcomp.h"
+#include "glushkov.cuh"
+#include "reclass.hpp"
+#include "regcomp.h"
 
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -26,6 +28,7 @@ namespace detail {
 // Forward declaration so reprog_device::create() can reference the type without
 // pulling glushkov_regcomp.h (a host-only header) into device compilation units.
 struct glushkov_host_program;
+struct glushkov_program_device;
 
 /**
  * @brief Template type used on `find` to specify desired position values in returned match_result
@@ -45,19 +48,6 @@ constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog
 constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
 constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
-/**
- * @brief Regex class stored on the device and executed by reprog_device.
- *
- * This class holds the unique data for any regex CCLASS instruction.
- */
-struct alignas(16) reclass_device {
-  int32_t builtins{};
-  int32_t count{};
-  reclass_range const* literals{};
-
-  __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
-};
-
 class reprog;
 
 // Include Glushkov device program definitions here so that
@@ -65,7 +55,7 @@ class reprog;
 // This file is included inside the cudf::strings::detail namespace block,
 // so all declarations in glushkov.cuh land in that namespace.
 // NOTE: glushkov.cuh must NOT include regex.cuh (no circular dependency).
-#include "strings/regex/glushkov.cuh"
+// #include "strings/regex/glushkov.cuh"
 
 /**
  * @brief Regex program of instructions/data for a specific regex pattern.
@@ -359,16 +349,6 @@ __device__ __forceinline__ string_view string_from_match(match_pair const result
   auto const [begin, end] = match_positions_to_bytes(result, d_str, last);
   return {d_str.data() + begin, end - begin};
 }
-
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
-
-// is_newline is used by both glushkov.inl and regex.inl; define it once here
-// in the cudf::strings::detail namespace so both includes can reference it.
-namespace cudf {
-namespace strings {
-namespace detail {
 
 /**
  * @brief Check for supported new-line characters

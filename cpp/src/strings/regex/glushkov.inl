@@ -44,19 +44,18 @@
  * DataSource and delegate to the impl.
  */
 
+#include <cuda/bit>
+
 namespace cudf {
 namespace strings {
 namespace detail {
 
-/// Count trailing zeros in a 64-bit value (portable across host and device).
-__host__ __device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
+// Count least-significant zeros in a 64-bit value
+// (portable across host and device) -- dw: not necessary
+__device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
 {
-#ifdef __CUDA_ARCH__
-  assert(x != 0ull);
-  return static_cast<uint32_t>(__ffsll(static_cast<long long>(x)) - 1);
-#else
-  return static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(x)));
-#endif
+  // dw: use this directly; no need for this inline function
+  return static_cast<uint32_t>(cuda::std::countr_zero(x));
 }
 
 /**
@@ -72,8 +71,8 @@ __host__ __device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
  * @param accept_mask Bitmask of accepting positions.
  * @return            State with lower-priority alternatives killed.
  */
-__host__ __device__ __forceinline__ g_state_t glushkov_priority_kill(g_state_t const state,
-                                                                     g_state_t const accept_mask)
+__device__ __forceinline__ g_state_t glushkov_priority_kill(g_state_t const state,
+                                                            g_state_t const accept_mask)
 {
   auto const lsb_a = glushkov_ctz64(state & accept_mask);
   if (lsb_a < 63) { return state & ((g_state_t(1) << (lsb_a + 1)) - 1); }

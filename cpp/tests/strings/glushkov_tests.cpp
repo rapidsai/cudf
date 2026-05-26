@@ -945,3 +945,14 @@ TEST_F(GlushkovRegexTests, NullablePatternFallbackParity)
     check_replace_parity(sv, pattern);
   }
 }
+
+TEST_F(GlushkovRegexTests, LazyQuantifiers)
+{
+  auto input =
+    cudf::test::strings_column_wrapper{"ab", "abc", "xdefx", "xghix", "jkl", "abc xdefx xghix jkl"};
+  auto sv = cudf::strings_column_view(input);
+
+  check_parity(sv, "abc??");
+  check_parity(sv, "x.*?x");
+  check_parity(sv, "x.+?x");
+}

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,7 +23,8 @@
  *   - capture-group extraction (uses Thompson NFA always)
  */
 
-#include "strings/regex/regcomp.h"
+#include "reclass.hpp"
+#include "regcomp.h"
 
 #include <array>
 #include <cstdint>
@@ -33,22 +34,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
-/// Maximum number of character-consuming positions (states) in the Glushkov NFA.
-/// Patterns with more positions fall back to Thompson NFA automatically.
-constexpr int32_t GLUSHKOV_MAX_STATES = 64;
-
-/// Maximum shift amounts for the Hyperscan-style shift-and optimisation.
-constexpr int32_t GLUSHKOV_MAX_SHIFTS = 8;
-
-/// Size of the precomputed ASCII reach table (characters 0–127).
-#ifndef GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
-#define GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
-constexpr int32_t GLUSHKOV_ASCII_TABLE_SIZE = 128;
-#endif
-
-/// Bitmask type: bit i is set when Glushkov position i is active.
-using g_state_t = uint64_t;
 
 /**
  * @brief Host-side compiled Glushkov NFA program.
@@ -62,7 +47,7 @@ struct glushkov_host_program {
   uint32_t num_states{};    ///< Number of character-consuming positions
   g_state_t first_set{};    ///< Bitmask: positions reachable before first character
   g_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
-  bool nullable{};          ///< True if the empty string satisfies the pattern
+  // bool nullable{};          ///< True if the empty string satisfies the pattern
 
   /// follow_table[p] = bitmask of positions that can immediately follow position p.
   std::array<g_state_t, GLUSHKOV_MAX_STATES> follow_table{};

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,7 +33,7 @@
  * exception successor masks.
  */
 
-#include "strings/regex/glushkov_regcomp.h"
+#include "glushkov_regcomp.h"
 
 #include <algorithm>
 #include <map>
@@ -381,7 +381,7 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   // ---- Step 1: Reject ineligible patterns ----------------------------------
   // Glushkov cannot handle zero-width assertions or lazy quantifiers (the
   // bit-parallel NFA always returns the greedy/longest match).
-  if (prog.has_lazy()) { return nullptr; }
+  // if (prog.has_lazy()) { return nullptr; }
   for (int32_t i = 0; i < num_insts; ++i) {
     if (is_assertion(prog.insts_data()[i].type)) { return nullptr; }
   }
@@ -429,6 +429,7 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   }
 
   // ---- Step 4: first_set = ε_closure(startinst) ∩ {char-consuming} ------
+  bool empty_matchable = false;
   {
     bool is_accept   = false;
     bool has_assert  = false;
@@ -438,14 +439,16 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
       int32_t const pos = inst_to_pos[iid];
       if (pos >= 0) { gp->first_set |= g_state_t(1) << pos; }
     }
-    if (is_accept) { gp->nullable = true; }
+    // if (is_accept) { gp->nullable = true; }
+    empty_matchable = is_accept;
   }
 
   // Nullable patterns have ε-paths not represented as Glushkov positions.
   // When the ε-path is the first alternative (e.g. `(|a)`), Thompson gives it
   // highest priority (its END fires first), but Glushkov has no position to
   // represent that priority.  Fall back to Thompson for correctness.
-  if (gp->nullable) { return nullptr; }
+  // if (gp->nullable) { return nullptr; }
+  if (empty_matchable) { return nullptr; }
 
   // ---- Step 5: follow_table + accept_mask for each position --------------
   for (uint32_t idx = 0; idx < gp->num_states; ++idx) {

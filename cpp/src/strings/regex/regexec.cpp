@@ -85,11 +85,11 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   // _shift_masks: 8-byte aligned
   off                          = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const smasks_off = off;
-  off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t);
+  off += GLUSHKOV_MAX_SHIFTS * sizeof(g_state_t);
 
   // _shift_amounts: 1-byte aligned (uint8_t array)
   std::size_t const samts_off = off;
-  off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t);
+  off += GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
 
   // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × g_state_t = 1 KB)
   off                               = cudf::util::round_up_unsafe(off, alignof(g_state_t));
@@ -122,13 +122,13 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   u_char* const d_base = d_raw->data();
 
   // ---- Place glushkov_program_device header --------------------------------
-  auto* h_gp_dev             = new (h_base + hdr_off) glushkov_program_device{};
-  h_gp_dev->num_states       = num_states;
-  h_gp_dev->shift_count      = num_shifts;
-  h_gp_dev->first_set        = h_gp.first_set;
-  h_gp_dev->accept_mask      = h_gp.accept_mask;
-  h_gp_dev->exception_mask   = h_gp.exception_mask;
-  h_gp_dev->nullable         = h_gp.nullable;
+  auto* h_gp_dev           = new (h_base + hdr_off) glushkov_program_device{};
+  h_gp_dev->num_states     = num_states;
+  h_gp_dev->shift_count    = num_shifts;
+  h_gp_dev->first_set      = h_gp.first_set;
+  h_gp_dev->accept_mask    = h_gp.accept_mask;
+  h_gp_dev->exception_mask = h_gp.exception_mask;
+  // h_gp_dev->nullable         = h_gp.nullable;
   h_gp_dev->has_startchar    = h_gp.has_startchar;
   h_gp_dev->startchar        = h_gp.startchar;
   h_gp_dev->_codepoint_flags = d_codepoint_flags;
@@ -144,12 +144,11 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   // ---- _shift_masks --------------------------------------------------------
   h_gp_dev->_shift_masks = reinterpret_cast<g_state_t const*>(d_base + smasks_off);
   std::memcpy(
-    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t));
+    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS * sizeof(g_state_t));
 
   // ---- _shift_amounts ------------------------------------------------------
   h_gp_dev->_shift_amounts = reinterpret_cast<uint8_t const*>(d_base + samts_off);
-  std::memcpy(
-    h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t));
+  std::memcpy(h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t));
 
   // ---- _reach_ascii -------------------------------------------------------
   h_gp_dev->_reach_ascii = reinterpret_cast<g_state_t const*>(d_base + reach_ascii_off);
@@ -269,7 +268,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
+  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
   // ---- Optional Glushkov program ------------------------------------------
   rmm::device_uvector<u_char>* d_glushkov_buffer = nullptr;
