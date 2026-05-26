@@ -34,6 +34,11 @@ static void bench_contains(nvbench::state& state)
   auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
   auto const pattern_index = state.get_int64("pattern");
 
+  if (std::cmp_greater_equal(pattern_index, patterns.size())) {
+    state.skip("invalid pattern index");
+    return;
+  }
+
   auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 

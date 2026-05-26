@@ -24,12 +24,17 @@ static std::vector<std::string> const patterns = {
   "[a-z]+Z",               // 6: late-failure + low hit rate (~23% on 32-char, ~79% on 256-char)
 };
 
-static void bench_split(nvbench::state& state)
+static void bench_split_re(nvbench::state& state)
 {
   auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const min_width     = static_cast<cudf::size_type>(state.get_int64("min_width"));
   auto const max_width     = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const pattern_index = state.get_int64("pattern");
+
+  if (std::cmp_greater_equal(pattern_index, patterns.size())) {
+    state.skip("invalid pattern index");
+    return;
+  }
 
   auto prog = cudf::strings::regex_program::create(patterns[pattern_index]);
 
@@ -49,7 +54,7 @@ static void bench_split(nvbench::state& state)
   });
 }
 
-NVBENCH_BENCH(bench_split)
+NVBENCH_BENCH(bench_split_re)
   .set_name("split_re")
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
