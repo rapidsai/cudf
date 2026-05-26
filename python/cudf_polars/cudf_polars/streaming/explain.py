@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import dataclasses
 import datetime
 import functools
@@ -59,6 +60,7 @@ def explain_query(
     engine: pl.GPUEngine,
     *,
     physical: bool = True,
+    executor: concurrent.futures.Executor | None = None,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -72,23 +74,29 @@ def explain_query(
     physical : bool, default True
         If True, show the physical (lowered) plan.
         If False, show the logical (pre-lowering) plan.
+    executor: concurrent.futures.Executor, optional
+        Executor to use for IO operations. This function does not start
+        or shutdown the executor. If not provided, a new thread pool executor
+        is created and used.
 
     Returns
     -------
     str
         A string representation of the IR plan.
     """
+    if executor is None:
+        executor = concurrent.futures.ThreadPoolExecutor()
     config = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     if physical:
-        stats = collect_statistics(ir, config)
+        stats = collect_statistics(ir, config, executor)
         lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
-            return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+            return _repr_ir_tree(ir, stats=collect_statistics(ir, config, executor))
         else:
             return _repr_ir_tree(ir)
 

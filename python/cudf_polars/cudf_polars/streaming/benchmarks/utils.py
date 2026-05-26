@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import dataclasses
 import importlib
 import io
@@ -690,8 +691,11 @@ def print_query_plan(
     engine: None | pl.GPUEngine = None,
     *,
     print_plans: bool = True,
+    executor: concurrent.futures.Executor | None = None,
 ) -> tuple[str | None, str | None]:
     """Print the query plan."""
+    if executor is None:
+        executor = concurrent.futures.ThreadPoolExecutor()
     logical_plan = plan = None
     if run_config.frontend == "polars-cpu":
         if args.explain_logical:

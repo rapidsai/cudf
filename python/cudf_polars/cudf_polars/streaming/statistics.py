@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
-import cudf_polars.io
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 
 
@@ -25,8 +24,21 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 def collect_statistics(
     root: IR,
     config_options: ConfigOptions[StreamingExecutor],
+    executor: concurrent.futures.Executor,
 ) -> StatsCollector:
-    """Collect DataSourceInfo for each leaf Scan/DataFrameScan node."""
+    """
+    Collect DataSourceInfo for each leaf Scan/DataFrameScan node.
+
+    Parameters
+    ----------
+    root: IR
+        The root of the IR graph.
+    config_options: ConfigOptions[StreamingExecutor]
+        The configuration options.
+    executor: concurrent.futures.Executor
+        Executor to use for IO operations. This function does not start
+        or shutdown the executor.
+    """
     # Group parquet Scan nodes by paths, accumulating the union of needed columns
     # across all Scan nodes that read the same files.
     parquet_groups: dict[tuple[str, ...], tuple[set[str], list[Scan]]] = {}
@@ -44,10 +56,8 @@ def collect_statistics(
 
     stats = StatsCollector()
 
-    pool = cudf_polars.io.io_threadpool()
-
     future_to_scan_nodes = {
-        pool.submit(
+        executor.submit(
             _build_source_info,
             scan_nodes[0],
             config_options,
