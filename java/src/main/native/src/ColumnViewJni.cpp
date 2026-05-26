@@ -2231,24 +2231,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       return release_as_jlong(copy);
     }
 
-    // Merge the null masks of the provided columns using the binary op.
-    auto const input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
-    rmm::device_buffer merge_mask;
-    cudf::size_type merge_null_count = 0;
-    cudf::binary_operator op         = static_cast<cudf::binary_operator>(bin_op);
-    switch (op) {
-      case cudf::binary_operator::BITWISE_AND: {
-        std::tie(merge_mask, merge_null_count) = cudf::bitmask_and(input_table);
-        break;
-      }
-      case cudf::binary_operator::BITWISE_OR: {
-        std::tie(merge_mask, merge_null_count) = cudf::bitmask_or(input_table);
-        break;
-      }
-      default:
-        JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
+    auto const op = static_cast<cudf::binary_operator>(bin_op);
+    if (op != cudf::binary_operator::BITWISE_AND && op != cudf::binary_operator::BITWISE_OR) {
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
     }
+
+    // Merge the null masks of the provided columns using the binary op.
+    auto const input_table              = cudf::table_view{n_cudf_columns.get_dereferenced()};
+    auto [merge_mask, merge_null_count] = [&]() -> std::pair<rmm::device_buffer, cudf::size_type> {
+      switch (op) {
+        case cudf::binary_operator::BITWISE_AND: return cudf::bitmask_and(input_table);
+        case cudf::binary_operator::BITWISE_OR: return cudf::bitmask_or(input_table);
+        default: CUDF_FAIL("Unsupported merge operation");
+      }
+    }();
 
     // Now apply the merged mask to the original by AND-ing it into
     // the parent's null mask. This will also push it down through any
