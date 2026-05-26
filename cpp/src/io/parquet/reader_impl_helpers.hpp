@@ -155,6 +155,14 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
+/**
+ * @brief Struct to store the result of applying row-group statistics filters.
+ */
+struct stats_filter_result {
+  std::optional<std::vector<std::vector<size_type>>> row_groups;  // filtered row group indices
+  bool has_stats;  // indicates whether any usable row-group statistics were observed
+};
+
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;
@@ -314,9 +322,9 @@ class aggregate_reader_metadata {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Surviving row group indices if any of them are filtered.
+   * @return Struct of row group filtering results.
    */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_stats_filters(
+  [[nodiscard]] stats_filter_result apply_stats_filters(
     host_span<std::vector<size_type> const> input_row_group_indices,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,

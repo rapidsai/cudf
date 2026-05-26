@@ -312,9 +312,12 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto const stats_filtered_row_group_indices = apply_stats_filters(
+  // NOTE: The `has_stats` field of the result is intentionally ignored here; the hybrid scan
+  // public API does not currently surface a "no usable stats" signal to the caller.
+  auto const stats_result = apply_stats_filters(
     row_group_indices, total_row_groups, output_dtypes, output_column_schemas, filter, stream);
 
+  auto stats_filtered_row_group_indices = stats_result.row_groups;
   return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
