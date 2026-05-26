@@ -156,12 +156,10 @@ def test_rank_methods_with_nulls_or_ties(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("seed", [42])
-@pytest.mark.parametrize("method", ["random"])
-def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> None:
-    expr = pl.col("a").rank(method=method, seed=seed)
+def test_rank_unsupported(engine: pl.GPUEngine, ldf: pl.LazyFrame) -> None:
+    expr = pl.col("a").rank(method="random", seed=42)
     q = ldf.select(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
