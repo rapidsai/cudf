@@ -69,10 +69,6 @@ __device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t
 }
 
 // Parse metadata header, walk dictionary entries, return the index of `key` or -1
-//
-// All offset arithmetic widens to uint64_t before any narrowing cast so a
-// malformed metadata blob with offsets >= 2^31 cannot wrap a `size_type`
-// past the bounds checks
 __device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf::string_view key)
 {
   auto const meta_len = static_cast<size_type>(meta.size());
@@ -134,10 +130,6 @@ __device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf
 // may be stored in any order, so field_offsets are NOT necessarily monotonically increasing
 // To find a field's byte range we locate the smallest offset strictly greater than the
 // field's start offset among all entries (including the sentinel), giving the tightest bound
-//
-// All offset values read from `val` are kept in `uint64_t` until we have validated that
-// they fit within the value-data extent; this prevents a malformed blob with field
-// offsets >= 2^31 from wrapping `size_type` past the bounds checks
 __device__ inline field_span locate_object_field(device_span<uint8_t const> val, int dict_idx)
 {
   auto const val_len = static_cast<size_type>(val.size());
@@ -231,13 +223,8 @@ __device__ inline field_span locate_path(device_span<uint8_t const> meta,
                                          device_span<uint8_t const> val,
                                          column_device_view path)
 {
-  auto const depth = path.size();
-  if (depth <= 0) { return {0, 0}; }
-
   device_span<uint8_t const> sub_val = val;
-  size_type abs_offset               = 0;
-
-  for (size_type i = 0; i < depth; ++i) {
+  for (size_type i = 0; i < path.size(); ++i) {
     auto const name = path.element<cudf::string_view>(i);
 
     int const dict_idx = find_key_in_metadata(meta, name);
@@ -247,10 +234,10 @@ __device__ inline field_span locate_path(device_span<uint8_t const> meta,
     if (fs.empty()) { return {0, 0}; }
 
     sub_val = sub_val.subspan(fs.offset, fs.length);
-    abs_offset += fs.offset;
   }
 
-  return {abs_offset, static_cast<size_type>(sub_val.size())};
+  return {static_cast<size_type>(sub_val.data() - val.data()),
+          static_cast<size_type>(sub_val.size())};
 }
 
 struct string_decode_result {
