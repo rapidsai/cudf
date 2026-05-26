@@ -98,13 +98,14 @@ __device__ void filter_join_kernel(cudf::size_type num_rows,
 
 }  // namespace cudf::join::jit
 
-extern "C" __global__ void cudf_kernel_entry(cudf::size_type const* __restrict__ left_indices,
-                                             cudf::size_type const* __restrict__ right_indices,
-                                             cudf::column_device_view_core const* left_tables,
-                                             cudf::column_device_view_core const* right_tables,
-                                             bool* predicate_results,
-                                             void* user_data)
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type num_rows,
+  cudf::size_type const* __restrict__ left_indices,
+  cudf::size_type const* __restrict__ right_indices,
+  cudf::column_device_view_core const* __restrict__ columns,
+  bool* __restrict__ predicate_results,
+  void* __restrict__ user_data)
 {
   CUDF_KERNEL_INSTANCE(
-    left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
+    num_rows, left_indices, right_indices, columns, predicate_results, user_data);
 }
