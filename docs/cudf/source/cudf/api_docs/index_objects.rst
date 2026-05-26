@@ -38,7 +38,6 @@ Properties
    Index.transpose
    Index.T
    Index.values
-   Index.values_host
 
 Modifying and computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
