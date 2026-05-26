@@ -299,7 +299,7 @@ kernel get_kernel(std::string const& name,
   auto header_include_names_hash = hash(header_include_names).to_hex_string();
   auto headers_hash              = hash(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
-  auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
+  auto source_file               = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
   auto cache_key = std::format(R"***(cuLibrary
 name={}

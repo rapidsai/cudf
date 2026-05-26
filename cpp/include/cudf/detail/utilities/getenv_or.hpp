@@ -8,9 +8,9 @@
 #include <cudf/logger.hpp>
 
 #include <cstdlib>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <optional>
 
 namespace cudf::detail {
 
