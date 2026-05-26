@@ -19,8 +19,6 @@
 #include <limits>
 #include <vector>
 
-namespace {
-
 using ints_column      = cudf::test::fixed_width_column_wrapper<int32_t>;
 using size_type_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
@@ -34,8 +32,6 @@ void expect_range_windows_equal(
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 }
-
-}  // namespace
 
 TEST(MultiOrderByRangeWindows, UngroupedPeerBounds)
 {
