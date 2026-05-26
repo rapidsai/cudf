@@ -66,11 +66,16 @@ def collect_statistics(
         for needed_cols, scan_nodes in parquet_groups.values()
     }
 
-    for future in concurrent.futures.as_completed(future_to_scan_nodes):
-        scan_nodes = future_to_scan_nodes[future]
-        source = future.result()
-        for node in scan_nodes:
-            stats.scan_stats[node] = source
+    try:
+        for future in concurrent.futures.as_completed(future_to_scan_nodes):
+            scan_nodes = future_to_scan_nodes[future]
+            source = future.result()
+            for node in scan_nodes:
+                stats.scan_stats[node] = source
+    except Exception:
+        for pending in future_to_scan_nodes:
+            pending.cancel()
+        raise
 
     # DataFrameScan sources
     for node in dataframe_scans:
