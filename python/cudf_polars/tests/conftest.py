@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.engine.core import StreamingEngine
     from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.ray import RayEngine
     from cudf_polars.engine.spmd import SPMDEngine
 
 
@@ -185,6 +186,15 @@ def spmd_engine_factory(
 
 
 @pytest.fixture
+def ray_engine(
+    _unconfigured_engine: tuple[RayEngine, StreamingOptions],
+) -> RayEngine:
+    """Return the shared configured :class:`RayEngine`."""
+    engine, options = _unconfigured_engine
+    return configure_streaming_engine(engine, options)
+
+
+@pytest.fixture
 def streaming_engine_factory(
     _unconfigured_engine: tuple[StreamingEngine, StreamingOptions],
 ) -> Callable[[StreamingOptions], StreamingEngine]:
@@ -314,6 +324,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
     if "spmd_engine" in fixtures or "spmd_engine_factory" in fixtures:
         engines = ["spmd"]
+    elif "ray_engine" in fixtures:
+        engines = ["ray"]
     elif "streaming_engine" in fixtures or "streaming_engine_factory" in fixtures:
         engines = STREAMING_ENGINE_FIXTURE_PARAMS
     elif "engine" in fixtures:

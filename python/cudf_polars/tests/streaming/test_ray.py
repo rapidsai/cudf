@@ -23,20 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-@pytest.fixture(scope="module")
-def engine(ray_num_ranks: int) -> Iterator[RayEngine]:
-    """Create one Ray cluster + GPU actors shared across the test session."""
-    with RayEngine(
-        # Use a small partition size so tests exercise the multi-partition
-        # code path deterministically, regardless of input size.
-        executor_options={"max_rows_per_partition": 10},
-        engine_options={"allow_gpu_sharing": True},
-        num_ranks=ray_num_ranks,
-        ray_init_options={"include_dashboard": False},
-    ) as engine:
-        yield engine
-
-
 pytestmark = [
     pytest.mark.skipif(
         is_running_with_rrun(),
@@ -91,72 +77,65 @@ def test_num_ranks_must_be_positive() -> None:
 
 
 # ---------------------------------------------------------------------------
-# GPU tests — share a single Ray cluster + actor set for the whole session
+# GPU tests — reuse the session-scoped Ray cluster from conftest
 # ---------------------------------------------------------------------------
 
 
-def test_yields_engine(
-    engine: RayEngine,
-) -> None:
+def test_yields_engine(ray_engine: RayEngine) -> None:
     """RayEngine is a GPUEngine with at least one rank."""
-    assert isinstance(engine, pl.GPUEngine)
-    assert engine.nranks >= 1
+    assert isinstance(ray_engine, pl.GPUEngine)
+    assert ray_engine.nranks >= 1
 
 
-def test_executor_options_forwarded(
-    engine: RayEngine,
-) -> None:
+def test_executor_options_forwarded(ray_engine: RayEngine) -> None:
     """Reserved executor_options keys are injected into the engine config."""
-    opts = engine.config["executor_options"]
+    opts = ray_engine.config["executor_options"]
     assert opts["cluster"] == "ray"
     assert isinstance(opts["ray_context"], RayContext)
-    assert engine.rank_actors == opts["ray_context"].rank_actors
-    assert len(engine.rank_actors) == engine.nranks
+    assert ray_engine.rank_actors == opts["ray_context"].rank_actors
+    assert len(ray_engine.rank_actors) == ray_engine.nranks
 
 
-def test_gather_cluster_info(engine: RayEngine) -> None:
+def test_gather_cluster_info(ray_engine: RayEngine) -> None:
     """gather_cluster_info returns one ClusterInfo per rank with expected fields."""
-    infos = engine.gather_cluster_info()
-    assert len(infos) == engine.nranks
+    infos = ray_engine.gather_cluster_info()
+    assert len(infos) == ray_engine.nranks
     for info in infos:
         assert isinstance(info.hostname, str)
         assert isinstance(info.pid, int)
     # Each actor runs in its own process.
-    assert len({info.pid for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == ray_engine.nranks
 
 
-def test_run(engine: RayEngine) -> None:
-    result = engine._run(os.getpid)
-    assert len(set(result)) == engine.nranks
+def test_run(ray_engine: RayEngine) -> None:
+    result = ray_engine._run(os.getpid)
+    assert len(set(result)) == ray_engine.nranks
 
 
-def test_num_ranks_oversubscribes(ray_num_ranks: int) -> None:
+def test_num_ranks_oversubscribes(ray_engine: RayEngine, ray_num_ranks: int) -> None:
     """num_ranks creates the requested number of actors sharing GPU 0."""
-    with RayEngine(
-        executor_options={"max_rows_per_partition": 10},
-        engine_options={"allow_gpu_sharing": True},
-        num_ranks=ray_num_ranks,
-        ray_init_options={"include_dashboard": False},
-    ) as engine:
-        assert engine.nranks == ray_num_ranks
-        assert len(engine.rank_actors) == ray_num_ranks
-        result = pl.LazyFrame({"a": [1, 2, 3, 4]}).collect(engine=engine)
-        assert sorted(result["a"].to_list()) == [1, 2, 3, 4]
+    assert ray_engine.nranks == ray_num_ranks
+    assert len(ray_engine.rank_actors) == ray_num_ranks
+    result = pl.LazyFrame({"a": [1, 2, 3, 4]}).collect(engine=ray_engine)
+    assert sorted(result["a"].to_list()) == [1, 2, 3, 4]
 
 
 @pytest.fixture(scope="module")
-def reset_engine(ray_num_ranks: int) -> Iterator[RayEngine]:
-    """Module-scoped engine for reset tests — independent of ``engine``.
+def reset_engine(
+    ray_num_ranks: int,
+    ray_init_options: dict[str, object],
+) -> Iterator[RayEngine]:
+    """Module-scoped engine for reset tests — independent of ``ray_engine``.
 
     These tests exercise :meth:`RayEngine._reset` (which mutates the
-    engine in-place) and the shutdown guard. A dedicated fixture keeps
-    those mutations from leaking into the other tests.
+    engine in-place). A dedicated fixture keeps those mutations from
+    leaking into the conftest-shared ``ray_engine``.
     """
     with RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
         num_ranks=ray_num_ranks,
-        ray_init_options={"include_dashboard": False},
+        ray_init_options=ray_init_options,
     ) as e:
         yield e
 
@@ -205,13 +184,16 @@ def test_reset_collects_after_options_change(reset_engine: RayEngine) -> None:
     assert sorted(result["a"].to_list()) == [1, 2, 3, 4, 5]
 
 
-def test_reset_after_shutdown_raises(ray_num_ranks: int) -> None:
+def test_reset_after_shutdown_raises(
+    ray_num_ranks: int,
+    ray_init_options: dict[str, object],
+) -> None:
     """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
         num_ranks=ray_num_ranks,
-        ray_init_options={"include_dashboard": False},
+        ray_init_options=ray_init_options,
     )
     engine.shutdown()
     engine.shutdown()  # idempotent
@@ -253,13 +235,16 @@ def test_reset_rejects_construction_time_engine_options(
         )
 
 
-def test_shutdown_skips_when_ray_not_initialized(ray_num_ranks: int) -> None:
+def test_shutdown_skips_when_ray_not_initialized(
+    ray_num_ranks: int,
+    ray_init_options: dict[str, object],
+) -> None:
     """``shutdown`` short-circuits if ``ray.is_initialized()`` is ``False``."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
         num_ranks=ray_num_ranks,
-        ray_init_options={"include_dashboard": False},
+        ray_init_options=ray_init_options,
     )
     try:
         with patch("ray.is_initialized", return_value=False):
