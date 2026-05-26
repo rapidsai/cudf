@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+
 import pytest
 
 import polars as pl
@@ -309,7 +311,9 @@ def test_broadcast_limit(left, right, broadcast_limit):
         for node in lower_ir_graph(
             ir,
             config_options,
-            collect_statistics(ir, config_options),
+            collect_statistics(
+                ir, config_options, concurrent.futures.ThreadPoolExecutor()
+            ),
         )[1]
         if isinstance(node, Shuffle)
     ]
@@ -350,7 +354,9 @@ def test_cache_preserves_partitioning_join():
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     lowered_ir, partition_info = lower_ir_graph(
-        ir, config_options, collect_statistics(ir, config_options)
+        ir,
+        config_options,
+        collect_statistics(ir, config_options, concurrent.futures.ThreadPoolExecutor()),
     )
 
     # Cache should preserve partitioning on 'key'

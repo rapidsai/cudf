@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import pickle
 
 import pytest
@@ -51,7 +52,11 @@ def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_parti
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
     ir, info = lower_ir_graph(
-        qir, config_options, collect_statistics(qir, config_options)
+        qir,
+        config_options,
+        collect_statistics(
+            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+        ),
     )
     count = info[ir].count
     if max_rows_per_partition < total_row_count:
@@ -88,7 +93,13 @@ def test_join_in_memory_lazy_stable_id_pickle(streaming_engine_factory):
     right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect(engine=engine).lazy()
     qir = Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(engine)
-    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
+    ir, _ = lower_ir_graph(
+        qir,
+        config_options,
+        collect_statistics(
+            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+        ),
+    )
     _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
@@ -100,7 +111,13 @@ def test_dataframescan_pickle(df):
     )
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
-    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
+    ir, _ = lower_ir_graph(
+        qir,
+        config_options,
+        collect_statistics(
+            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+        ),
+    )
 
     # Pickle and unpickle the IR (which contains DataFrameScan)
     pickled = pickle.dumps(ir)

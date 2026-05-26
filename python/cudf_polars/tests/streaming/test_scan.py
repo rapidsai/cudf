@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+
 import pytest
 
 import polars as pl
@@ -101,7 +103,11 @@ def test_target_partition_size(
     qir = Translator(q._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
     ir, info = lower_ir_graph(
-        qir, config_options, collect_statistics(qir, config_options)
+        qir,
+        config_options,
+        collect_statistics(
+            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+        ),
     )
     count = info[ir].count
     if blocksize <= 12_000:

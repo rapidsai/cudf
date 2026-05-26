@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import pickle
 from typing import TYPE_CHECKING
@@ -54,11 +55,20 @@ def stats_engine():
     )
 
 
-def test_base_stats_dataframescan(df, stats_engine):
+@pytest.fixture(scope="module")
+def stats_executor() -> concurrent.futures.ThreadPoolExecutor:
+    return concurrent.futures.ThreadPoolExecutor()
+
+
+def test_base_stats_dataframescan(
+    df, stats_engine, stats_executor: concurrent.futures.Executor
+):
     row_count = df.height
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
-    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(stats_engine))
+    stats = collect_statistics(
+        ir, ConfigOptions.from_polars_engine(stats_engine), stats_executor
+    )
 
     source = stats.scan_stats[ir]
     assert source.row_count == row_count
@@ -78,6 +88,7 @@ def test_base_stats_parquet(
     row_group_size,
     max_footer_samples,
     max_row_group_samples,
+    stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     _clear_source_info_cache()
     make_partitioned_source(
@@ -98,7 +109,9 @@ def test_base_stats_parquet(
         },
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(engine))
+    stats = collect_statistics(
+        ir, ConfigOptions.from_polars_engine(engine), stats_executor
+    )
     source = stats.scan_stats[ir]
 
     if max_footer_samples:
@@ -113,11 +126,15 @@ def test_base_stats_parquet(
         assert source.column_storage_size("y") is None
 
 
-def test_dataframescan_stats_pickle(stats_engine):
+def test_dataframescan_stats_pickle(
+    stats_engine, stats_executor: concurrent.futures.ThreadPoolExecutor
+):
     df = pl.DataFrame({"x": range(100), "y": [1, 2] * 50})
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
-    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(stats_engine))
+    stats = collect_statistics(
+        ir, ConfigOptions.from_polars_engine(stats_engine), stats_executor
+    )
 
     # Pickle and unpickle the stats collector
     pickled = pickle.dumps(stats)
@@ -224,12 +241,14 @@ def test_parquet_empty_per_file_means() -> None:
     assert info.per_file_means == {}
 
 
-def test_serialize_stats_roundtrip_dataframescan(stats_engine: pl.GPUEngine) -> None:
+def test_serialize_stats_roundtrip_dataframescan(
+    stats_engine: pl.GPUEngine, stats_executor: concurrent.futures.ThreadPoolExecutor
+) -> None:
     df = pl.DataFrame({"x": range(200), "y": [1, 2] * 100})
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
     config = ConfigOptions.from_polars_engine(stats_engine)
-    stats = collect_statistics(ir, config)
+    stats = collect_statistics(ir, config, stats_executor)
 
     serialized = stats.serialize(ir)
     wire = json.loads(json.dumps(serialized))
@@ -243,7 +262,9 @@ def test_serialize_stats_roundtrip_dataframescan(stats_engine: pl.GPUEngine) -> 
 
 
 def test_serialize_stats_roundtrip_parquet(
-    tmp_path: pathlib.Path, df: pl.DataFrame
+    tmp_path: pathlib.Path,
+    df: pl.DataFrame,
+    stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     _clear_source_info_cache()
     make_partitioned_source(df, tmp_path, "parquet", n_files=3)
@@ -256,7 +277,7 @@ def test_serialize_stats_roundtrip_parquet(
     q = pl.scan_parquet(tmp_path)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     config = ConfigOptions.from_polars_engine(engine)
-    stats = collect_statistics(ir, config)
+    stats = collect_statistics(ir, config, stats_executor)
 
     serialized = stats.serialize(ir)
     wire = json.loads(json.dumps(serialized))

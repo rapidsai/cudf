@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+
 import pytest
 
 import polars as pl
@@ -101,7 +103,13 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
     mask = expr.NamedExpr("m", expr.Literal(DataType(pl.Boolean()), value=True))
     root = Filter(hstack_schema, mask, hstack)
     config_options = ConfigOptions.from_polars_engine(engine)
-    lower_ir_graph(root, config_options, collect_statistics(root, config_options))
+    lower_ir_graph(
+        root,
+        config_options,
+        collect_statistics(
+            root, config_options, concurrent.futures.ThreadPoolExecutor()
+        ),
+    )
 
 
 def test_with_columns_scalar_upstream_20981(engine):
@@ -132,7 +140,9 @@ def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
 
     config_options = ConfigOptions.from_polars_engine(engine)
     lowered, _ = lower_ir_graph(
-        ir, config_options, collect_statistics(ir, config_options)
+        ir,
+        config_options,
+        collect_statistics(ir, config_options, concurrent.futures.ThreadPoolExecutor()),
     )
 
     # Both paths must lower to a single Repartition computing one aggregation.
