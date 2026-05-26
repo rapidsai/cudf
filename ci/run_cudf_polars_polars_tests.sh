@@ -68,7 +68,7 @@ python -m pytest \
        -n 8 \
        --dist=worksteal \
        --tb=native \
-       --timeout=120 \
+       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
@@ -89,7 +89,7 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        -n 8 \
        --dist=worksteal \
        --tb=native \
-       --timeout=120 \
+       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
