@@ -10,10 +10,9 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_scalar.hpp>
-
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 namespace CUDF_EXPORT cudf {
 
@@ -225,42 +224,42 @@ std::unique_ptr<column> binary_operation(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Decimal fixed-point binary operation with a global overflow flag.
+ * @brief Decimal fixed-point binary operation with a per-row overflow column.
  *
- * Like `binary_operation` for two base-10 decimal operands, but sets @p overflow_flag to a
- * non-zero value on the device if any **active** (non-null) row overflows during arithmetic or
- * when rescaling to @p output_type. The caller must reset @p overflow_flag to zero before launch
- * (this API does so asynchronously on @p stream) and synchronize @p stream before reading the flag
- * on the host.
+ * Like `binary_operation` for two base-10 decimal operands, but additionally returns a
+ * `BOOL8` column of the same length as the result. Element `i` of that column is `true`
+ * iff row `i` is an **active** (non-null on both sides) row whose arithmetic or rescale
+ * to @p output_type overflowed. Rows that are null on either side, or rows whose
+ * arithmetic completed without overflow, hold `false`. The overflow column has no null
+ * mask.
  *
  * Supported operators: ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD.
  *
- * @param overflow_flag Device scalar updated with `atomicMax` to non-zero when overflow occurs.
+ * @return A pair `{result, overflow}` where `result` is the arithmetic result column
+ *         (same semantics as `binary_operation`) and `overflow` is the per-row BOOL8
+ *         overflow column described above.
  */
-std::unique_ptr<column> binary_operation_safe(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   scalar const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::device_scalar<std::uint32_t>& overflow_flag,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-std::unique_ptr<column> binary_operation_safe(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   column_view const& lhs,
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::device_scalar<std::uint32_t>& overflow_flag,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-std::unique_ptr<column> binary_operation_safe(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   column_view const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::device_scalar<std::uint32_t>& overflow_flag,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -18,8 +18,6 @@
 #include <cuda/iterator>
 #include <thrust/for_each.h>
 
-#include <cstdint>
-
 namespace cudf {
 namespace binops {
 namespace compiled {
@@ -86,7 +84,8 @@ struct SafePyMod {
 // (caller-validated). Each thread loads the raw integer rep, wraps it in a
 // regular `fixed_point` value (no sticky-flag layer), calls the matching
 // `safe_*` free function, rescales to the output scale via `safe_rescaled`,
-// and atomicMax's the global flag if any active row reports overflow.
+// and writes a per-row overflow bit (`true` iff active row && (op or rescale)
+// overflowed) to the `d_overflow_per_row` buffer.
 template <typename Decimal, typename SafeOp>
 struct decimal_safe_op_kernel {
   using Rep = typename Decimal::rep;
@@ -97,7 +96,7 @@ struct decimal_safe_op_kernel {
   bool is_lhs_scalar;
   bool is_rhs_scalar;
   numeric::scale_type out_scale;
-  unsigned int* d_overflow;
+  bool* d_overflow_per_row;
 
   __device__ __forceinline__ void operator()(size_type i) const
   {
@@ -115,8 +114,8 @@ struct decimal_safe_op_kernel {
     auto const rescaled_res = numeric::detail::safe_rescaled(op_res.value, out_scale);
     bool const bad          = op_res.overflow || rescaled_res.overflow;
 
-    if (row_active && bad) { atomicMax(d_overflow, 1u); }
-    out.data<Rep>()[i] = rescaled_res.value.value();
+    d_overflow_per_row[i] = row_active && bad;
+    out.data<Rep>()[i]    = rescaled_res.value.value();
   }
 };
 
@@ -127,12 +126,12 @@ void launch_decimal_safe_kernel(mutable_column_device_view& outd,
                                 bool is_lhs_scalar,
                                 bool is_rhs_scalar,
                                 size_type n,
-                                unsigned int* d_overflow,
+                                bool* d_overflow_per_row,
                                 rmm::cuda_stream_view stream)
 {
   auto const out_scale = numeric::scale_type{outd.type().scale()};
   decimal_safe_op_kernel<Decimal, SafeOp> kern{
-    outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, out_scale, d_overflow};
+    outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, out_scale, d_overflow_per_row};
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream), cuda::counting_iterator<size_type>{0}, n, kern);
 }
@@ -144,38 +143,38 @@ void dispatch_op_and_run(mutable_column_device_view& outd,
                          bool is_lhs_scalar,
                          bool is_rhs_scalar,
                          size_type n,
-                         unsigned int* d_overflow,
+                         bool* d_overflow_per_row,
                          binary_operator op,
                          rmm::cuda_stream_view stream)
 {
   switch (op) {
     case binary_operator::ADD:
       launch_decimal_safe_kernel<Decimal, SafeAdd>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::SUB:
       launch_decimal_safe_kernel<Decimal, SafeSub>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::MUL:
       launch_decimal_safe_kernel<Decimal, SafeMul>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::DIV:
       launch_decimal_safe_kernel<Decimal, SafeDiv>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::MOD:
       launch_decimal_safe_kernel<Decimal, SafeMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::PMOD:
       launch_decimal_safe_kernel<Decimal, SafePMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     case binary_operator::PYMOD:
       launch_decimal_safe_kernel<Decimal, SafePyMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
       break;
     default:
       CUDF_FAIL("binary_operation_safe only supports ADD, SUB, MUL, DIV, MOD, PMOD, and PYMOD.");
@@ -190,11 +189,11 @@ void apply_binary_op_safe(mutable_column_view& out,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
                           binary_operator op,
-                          unsigned int* d_overflow_flag,
+                          bool* d_overflow_per_row,
                           rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(d_overflow_flag != nullptr,
-               "binary_operation_safe requires a non-null device overflow flag.");
+  CUDF_EXPECTS(d_overflow_per_row != nullptr,
+               "binary_operation_safe requires a non-null device per-row overflow buffer.");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id() && lhs.type().id() == out.type().id(),
                "binary_operation_safe requires lhs/rhs/out to share the same decimal storage type.");
 
@@ -212,7 +211,7 @@ void apply_binary_op_safe(mutable_column_view& out,
                                               is_lhs_scalar,
                                               is_rhs_scalar,
                                               out.size(),
-                                              d_overflow_flag,
+                                              d_overflow_per_row,
                                               op,
                                               stream);
       break;
@@ -223,7 +222,7 @@ void apply_binary_op_safe(mutable_column_view& out,
                                               is_lhs_scalar,
                                               is_rhs_scalar,
                                               out.size(),
-                                              d_overflow_flag,
+                                              d_overflow_per_row,
                                               op,
                                               stream);
       break;
@@ -234,7 +233,7 @@ void apply_binary_op_safe(mutable_column_view& out,
                                                is_lhs_scalar,
                                                is_rhs_scalar,
                                                out.size(),
-                                               d_overflow_flag,
+                                               d_overflow_per_row,
                                                op,
                                                stream);
       break;

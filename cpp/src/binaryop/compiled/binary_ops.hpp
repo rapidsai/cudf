@@ -137,13 +137,14 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream);
 
 /**
- * @brief Decimal fixed-point binary operation that updates a global overflow flag.
+ * @brief Decimal fixed-point binary operation that records per-row overflow.
  *
  * Like `binary_operation` but only supports the seven base-10 decimal arithmetic operators
- * (ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD) and updates @p d_overflow_flag (via `atomicMax`)
- * with `1u` if any active (non-null) row overflows during arithmetic or rescale to the
- * output scale. The caller is responsible for zeroing @p d_overflow_flag prior to the call
- * and synchronizing @p stream before reading it.
+ * (ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD). For each row, writes `true` to
+ * @p d_overflow_per_row[i] iff row `i` is an active (non-null on both sides) row whose
+ * arithmetic or rescale to the output scale overflows; otherwise writes `false`. The
+ * @p d_overflow_per_row buffer is expected to point at @p out.size() bytes of device
+ * memory and is fully overwritten by the kernel.
  *
  * Both operands must be base-10 decimals of the same storage type as @p out.
  */
@@ -151,19 +152,19 @@ void binary_operation_safe(mutable_column_view& out,
                            scalar const& lhs,
                            column_view const& rhs,
                            binary_operator op,
-                           unsigned int* d_overflow_flag,
+                           bool* d_overflow_per_row,
                            rmm::cuda_stream_view stream);
 void binary_operation_safe(mutable_column_view& out,
                            column_view const& lhs,
                            scalar const& rhs,
                            binary_operator op,
-                           unsigned int* d_overflow_flag,
+                           bool* d_overflow_per_row,
                            rmm::cuda_stream_view stream);
 void binary_operation_safe(mutable_column_view& out,
                            column_view const& lhs,
                            column_view const& rhs,
                            binary_operator op,
-                           unsigned int* d_overflow_flag,
+                           bool* d_overflow_per_row,
                            rmm::cuda_stream_view stream);
 
 /**
@@ -178,7 +179,7 @@ void apply_binary_op_safe(mutable_column_view& out,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
                           binary_operator op,
-                          unsigned int* d_overflow_flag,
+                          bool* d_overflow_per_row,
                           rmm::cuda_stream_view stream);
 
 // Defined in util.cpp
