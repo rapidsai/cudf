@@ -87,6 +87,7 @@ std::filesystem::path get_cache_dir()
   return kernel_cache_path;
 }
 
+
 std::string get_program_cache_dir()
 {
 #if defined(JITIFY_USE_CACHE)
