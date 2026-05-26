@@ -24,6 +24,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -51,6 +52,7 @@ constexpr int variant_version_v1 = 1;
 struct field_span {
   size_type offset;
   size_type length;
+  [[nodiscard]] __device__ constexpr bool empty() const { return length == 0; }
 };
 
 __device__ inline cuda::std::optional<uint64_t> read_uint_le(uint8_t const* data,
@@ -250,7 +252,7 @@ __device__ inline field_span locate_path(uint8_t const* meta,
     if (dict_idx < 0) { return {0, 0}; }
 
     auto const fs = locate_object_field(sub_val, sub_len, dict_idx);
-    if (fs.length == 0) { return {0, 0}; }
+    if (fs.empty()) { return {0, 0}; }
 
     sub_val += fs.offset;
     abs_offset += fs.offset;
@@ -342,7 +344,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
   auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(metadata, values, row);
 
   auto const fs = locate_path(meta_ptr, meta_len, val_ptr, val_len, path_device_view);
-  if (fs.length == 0) {
+  if (fs.empty()) {
     d_sizes[row]       = 0;
     d_src_offsets[row] = 0;
     cudf::clear_bit(d_null_mask, row);
@@ -429,6 +431,63 @@ void validate_variant_child(column_view const& child)
                "VARIANT metadata/value column must be list<uint8>",
                std::invalid_argument);
 }
+
+struct cast_variant_launcher {
+  cudf::detail::lists_column_device_view values;
+  size_type num_rows;
+  data_type desired_type;
+  bitmask_type* d_null_mask;
+  rmm::device_buffer null_mask;
+  rmm::cuda_stream_view stream;
+  rmm::device_async_resource_ref mr;
+
+  template <typename T>
+  std::unique_ptr<column> operator()()
+    requires(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
+             cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>)
+  {
+    rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(T), stream, mr};
+
+    auto grid = cudf::detail::grid_1d{num_rows, block_size};
+    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
+
+    auto const null_count =
+      num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
+    return std::make_unique<column>(desired_type,
+                                    num_rows,
+                                    std::move(data),
+                                    null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                                    null_count);
+  }
+
+  template <typename T>
+  std::unique_ptr<column> operator()()
+    requires(cuda::std::is_same_v<T, cudf::string_view>)
+  {
+    cast_variant_string_fn fn{values, d_null_mask, nullptr, nullptr, {}};
+    auto [offsets_column, chars] =
+      cudf::strings::detail::make_strings_children(fn, num_rows, stream, mr);
+
+    auto const null_count =
+      num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
+    return make_strings_column(num_rows,
+                               std::move(offsets_column),
+                               chars.release(),
+                               null_count,
+                               null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
+  }
+
+  template <typename T>
+  std::unique_ptr<column> operator()()
+    requires(not(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
+                 cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t> ||
+                 cuda::std::is_same_v<T, cudf::string_view>))
+  {
+    CUDF_FAIL("unsupported type for variant cast: " + desired_type.to_string(),
+              std::invalid_argument);
+  }
+};
 
 std::unique_ptr<column> build_path_column(std::vector<std::string> const& steps,
                                           rmm::cuda_stream_view stream,
@@ -567,14 +626,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                                      rmm::device_async_resource_ref mr)
 {
   validate_variant_child(values);
-  auto const tid = desired_type.id();
-  CUDF_EXPECTS(tid == type_id::STRING || tid == type_id::INT8 || tid == type_id::INT16 ||
-                 tid == type_id::INT32 || tid == type_id::INT64,
-               "cast_variant supports STRING and INT8/INT16/INT32/INT64 only",
-               std::invalid_argument);
-
   size_type const num_rows = values.size();
-  if (num_rows == 0) { return cudf::make_empty_column(desired_type); }
 
   auto val_device_view = column_device_view::create(values, stream);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);
@@ -585,45 +637,14 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                         : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
   auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
-  auto launch_int = [&]<typename T>(std::in_place_type_t<T>) {
-    rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(T), stream, mr};
-
-    auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      val_lists_device_view,
-      {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)},
-      d_null_mask);
-
-    auto const null_count =
-      num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
-
-    return std::make_unique<column>(desired_type,
-                                    num_rows,
-                                    std::move(data),
-                                    null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                                    null_count);
-  };
-
-  switch (tid) {
-    case type_id::INT8: return launch_int(std::in_place_type<int8_t>);
-    case type_id::INT16: return launch_int(std::in_place_type<int16_t>);
-    case type_id::INT32: return launch_int(std::in_place_type<int32_t>);
-    case type_id::INT64: return launch_int(std::in_place_type<int64_t>);
-    default: break;
-  }
-
-  // STRING path
-  cast_variant_string_fn fn{val_lists_device_view, d_null_mask, nullptr, nullptr, {}};
-  auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(fn, num_rows, stream, mr);
-
-  auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
-
-  return make_strings_column(num_rows,
-                             std::move(offsets_column),
-                             chars.release(),
-                             null_count,
-                             null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
+  return cudf::type_dispatcher(desired_type,
+                               cast_variant_launcher{val_lists_device_view,
+                                                     num_rows,
+                                                     desired_type,
+                                                     d_null_mask,
+                                                     std::move(null_mask),
+                                                     stream,
+                                                     mr});
 }
 
 }  // namespace detail
