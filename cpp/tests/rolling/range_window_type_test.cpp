@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,122 @@
 #include <cudf/table/table_view.hpp>
 
 #include <limits>
+#include <vector>
+
+namespace {
+
+using ints_column      = cudf::test::fixed_width_column_wrapper<int32_t>;
+using size_type_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+void expect_range_windows_equal(
+  std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> const& result,
+  cudf::column_view const& expect_preceding,
+  cudf::column_view const& expect_following)
+{
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    std::get<0>(result)->view(), expect_preceding, cudf::test::debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
+}
+
+}  // namespace
+
+TEST(MultiOrderByRangeWindows, UngroupedPeerBounds)
+{
+  auto const orderby0 = ints_column{1, 1, 1, 2, 2, 3};
+  auto const orderby1 = ints_column{1, 1, 2, 1, 1, 1};
+
+  std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
+  auto const orderby = cudf::table_view{{orderby0, orderby1}};
+
+  expect_range_windows_equal(
+    cudf::make_range_windows(cudf::table_view{},
+                             orderby,
+                             cudf::host_span<cudf::order const>{orders},
+                             cudf::host_span<cudf::null_order const>{null_orders},
+                             cudf::current_row{},
+                             cudf::current_row{}),
+    size_type_column{1, 2, 1, 1, 2, 1},
+    size_type_column{1, 0, 0, 1, 0, 0});
+
+  expect_range_windows_equal(
+    cudf::make_range_windows(cudf::table_view{},
+                             orderby,
+                             cudf::host_span<cudf::order const>{orders},
+                             cudf::host_span<cudf::null_order const>{null_orders},
+                             cudf::unbounded{},
+                             cudf::current_row{}),
+    size_type_column{1, 2, 3, 4, 5, 6},
+    size_type_column{1, 0, 0, 1, 0, 0});
+}
+
+TEST(MultiOrderByRangeWindows, GroupedPeerBounds)
+{
+  auto const group_keys = ints_column{0, 0, 0, 1, 1, 1, 1, 1};
+  auto const orderby0   = ints_column{1, 1, 2, 1, 1, 1, 2, 2};
+  auto const orderby1   = ints_column{1, 2, 1, 1, 1, 2, 1, 1};
+
+  std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
+
+  expect_range_windows_equal(
+    cudf::make_range_windows(cudf::table_view{{group_keys}},
+                             cudf::table_view{{orderby0, orderby1}},
+                             cudf::host_span<cudf::order const>{orders},
+                             cudf::host_span<cudf::null_order const>{null_orders},
+                             cudf::unbounded{},
+                             cudf::current_row{}),
+    size_type_column{1, 2, 3, 1, 2, 3, 4, 5},
+    size_type_column{0, 0, 0, 1, 0, 0, 1, 0});
+
+  expect_range_windows_equal(
+    cudf::make_range_windows(cudf::table_view{{group_keys}},
+                             cudf::table_view{{orderby0, orderby1}},
+                             cudf::host_span<cudf::order const>{orders},
+                             cudf::host_span<cudf::null_order const>{null_orders},
+                             cudf::current_row{},
+                             cudf::unbounded{}),
+    size_type_column{1, 1, 1, 1, 2, 1, 1, 2},
+    size_type_column{2, 1, 0, 4, 3, 2, 1, 0});
+}
+
+TEST(MultiOrderByRangeWindows, CurrentRowIncludesNullPeers)
+{
+  auto const orderby0 = ints_column{{0, 0, 1, 1}, {false, false, true, true}};
+  auto const orderby1 = ints_column{1, 1, 1, 2};
+
+  std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
+
+  expect_range_windows_equal(
+    cudf::make_range_windows(cudf::table_view{},
+                             cudf::table_view{{orderby0, orderby1}},
+                             cudf::host_span<cudf::order const>{orders},
+                             cudf::host_span<cudf::null_order const>{null_orders},
+                             cudf::current_row{},
+                             cudf::current_row{}),
+    size_type_column{1, 2, 1, 1},
+    size_type_column{1, 0, 0, 0});
+}
+
+TEST(MultiOrderByRangeWindows, BoundedRangesAreUnsupported)
+{
+  auto const orderby0 = ints_column{1, 1, 2};
+  auto const orderby1 = ints_column{1, 2, 1};
+  auto const delta    = cudf::make_fixed_width_scalar<int32_t>(1);
+
+  std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
+
+  EXPECT_THROW(cudf::make_range_windows(cudf::table_view{},
+                                        cudf::table_view{{orderby0, orderby1}},
+                                        cudf::host_span<cudf::order const>{orders},
+                                        cudf::host_span<cudf::null_order const>{null_orders},
+                                        cudf::bounded_closed{*delta},
+                                        cudf::current_row{}),
+               cudf::logic_error);
+}
 
 template <typename T>
 struct UngroupedBase : cudf::test::BaseFixture {
