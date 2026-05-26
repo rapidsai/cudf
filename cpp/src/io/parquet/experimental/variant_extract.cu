@@ -31,6 +31,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -47,27 +48,22 @@ namespace {
 
 constexpr int variant_version_v1 = 1;
 
-struct uint_result {
-  uint64_t value;
-  bool ok;
-};
-
 struct field_span {
   size_type offset;
   size_type length;
 };
 
-__device__ inline uint_result device_read_uint_le(uint8_t const* data,
-                                                  size_type len,
-                                                  size_type pos,
-                                                  int width)
+__device__ inline cuda::std::optional<uint64_t> read_uint_le(uint8_t const* data,
+                                                             size_type len,
+                                                             size_type pos,
+                                                             int width)
 {
-  if (pos + width > len) { return {0, false}; }
+  if (pos + width > len) { return cuda::std::nullopt; }
   uint64_t v = 0;
   for (int i = 0; i < width; ++i) {
     v |= static_cast<uint64_t>(data[pos + i]) << (8 * i);
   }
-  return {v, true};
+  return v;
 }
 
 // Parse metadata header, walk dictionary entries, return the index of `key` or -1
@@ -75,10 +71,10 @@ __device__ inline uint_result device_read_uint_le(uint8_t const* data,
 // All offset arithmetic widens to uint64_t before any narrowing cast so a
 // malformed metadata blob with offsets >= 2^31 cannot wrap a `size_type`
 // past the bounds checks
-__device__ inline int device_find_key_in_metadata(uint8_t const* meta,
-                                                  size_type meta_len,
-                                                  char const* key,
-                                                  size_type key_len)
+__device__ inline int find_key_in_metadata(uint8_t const* meta,
+                                           size_type meta_len,
+                                           char const* key,
+                                           size_type key_len)
 {
   if (meta_len < 1) { return -1; }
   uint8_t const header = meta[0];
@@ -87,9 +83,9 @@ __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
-  auto const dict_size_r = device_read_uint_le(meta, meta_len, pos, offset_size);
-  if (!dict_size_r.ok) { return -1; }
-  auto const dict_size = static_cast<size_type>(dict_size_r.value);
+  auto const dict_size_r = read_uint_le(meta, meta_len, pos, offset_size);
+  if (!dict_size_r) { return -1; }
+  auto const dict_size = static_cast<size_type>(*dict_size_r);
   pos += offset_size;
 
   // Read dictionary_size + 1 offsets
@@ -102,15 +98,15 @@ __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
   auto const strings_extent = static_cast<uint64_t>(meta_len - strings_base);
 
   // Carry forward the previous offset to avoid re-reading it each iteration
-  auto prev_off_r = device_read_uint_le(meta, meta_len, offsets_start, offset_size);
-  if (!prev_off_r.ok) { return -1; }
+  auto prev_off_r = read_uint_le(meta, meta_len, offsets_start, offset_size);
+  if (!prev_off_r) { return -1; }
 
   for (size_type i = 0; i < dict_size; ++i) {
     auto const next_off_r =
-      device_read_uint_le(meta, meta_len, offsets_start + (i + 1) * offset_size, offset_size);
-    if (!next_off_r.ok) { return -1; }
-    auto const prev_u = prev_off_r.value;
-    auto const next_u = next_off_r.value;
+      read_uint_le(meta, meta_len, offsets_start + (i + 1) * offset_size, offset_size);
+    if (!next_off_r) { return -1; }
+    auto const prev_u = *prev_off_r;
+    auto const next_u = *next_off_r;
     prev_off_r        = next_off_r;
     if (next_u < prev_u || next_u > strings_extent) { return -1; }
     auto const slen_u = next_u - prev_u;
@@ -141,9 +137,9 @@ __device__ inline int device_find_key_in_metadata(uint8_t const* meta,
 // All offset values read from `val` are kept in `uint64_t` until we have validated that
 // they fit within the value-data extent; this prevents a malformed blob with field
 // offsets >= 2^31 from wrapping `size_type` past the bounds checks
-__device__ inline field_span device_locate_object_field(uint8_t const* val,
-                                                        size_type val_len,
-                                                        int dict_idx)
+__device__ inline field_span locate_object_field(uint8_t const* val,
+                                                 size_type val_len,
+                                                 int dict_idx)
 {
   if (val_len < 1) { return {0, 0}; }
   uint8_t const vm     = val[0];
@@ -156,9 +152,9 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   bool const is_large      = ((value_header >> 4) & 0x01) != 0;
 
   size_type pos         = 1;
-  auto const num_elts_r = device_read_uint_le(val, val_len, pos, is_large ? 4 : 1);
-  if (!num_elts_r.ok) { return {0, 0}; }
-  auto const n = static_cast<size_type>(num_elts_r.value);
+  auto const num_elts_r = read_uint_le(val, val_len, pos, is_large ? 4 : 1);
+  if (!num_elts_r) { return {0, 0}; }
+  auto const n = static_cast<size_type>(*num_elts_r);
   pos += is_large ? 4 : 1;
 
   size_type const field_ids_start = pos;
@@ -178,15 +174,15 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   uint64_t match_start_u = 0;
   for (size_type i = 0; i < n; ++i) {
     auto const fid_r =
-      device_read_uint_le(val, val_len, field_ids_start + i * field_id_size, field_id_size);
-    if (!fid_r.ok) { return {0, 0}; }
-    if (static_cast<int>(fid_r.value) != dict_idx) { continue; }
+      read_uint_le(val, val_len, field_ids_start + i * field_id_size, field_id_size);
+    if (!fid_r) { return {0, 0}; }
+    if (static_cast<int>(*fid_r) != dict_idx) { continue; }
 
     auto const o_r =
-      device_read_uint_le(val, val_len, field_offs_start + i * field_off_size, field_off_size);
-    if (!o_r.ok) { return {0, 0}; }
-    if (o_r.value > values_extent) { return {0, 0}; }
-    match_start_u = o_r.value;
+      read_uint_le(val, val_len, field_offs_start + i * field_off_size, field_off_size);
+    if (!o_r) { return {0, 0}; }
+    if (*o_r > values_extent) { return {0, 0}; }
+    match_start_u = *o_r;
     found         = true;
     break;
   }
@@ -197,10 +193,10 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   uint64_t match_end_u = values_extent;
   for (size_type j = 0; j <= n; ++j) {
     auto const oj_r =
-      device_read_uint_le(val, val_len, field_offs_start + j * field_off_size, field_off_size);
-    if (!oj_r.ok) { continue; }
-    if (oj_r.value > values_extent) { continue; }
-    if (oj_r.value > match_start_u && oj_r.value < match_end_u) { match_end_u = oj_r.value; }
+      read_uint_le(val, val_len, field_offs_start + j * field_off_size, field_off_size);
+    if (!oj_r) { continue; }
+    if (*oj_r > values_extent) { continue; }
+    if (*oj_r > match_start_u && *oj_r < match_end_u) { match_end_u = *oj_r; }
   }
 
   if (match_end_u < match_start_u) { return {0, 0}; }
@@ -208,43 +204,37 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
           static_cast<size_type>(match_end_u - match_start_u)};
 }
 
-template <typename T>
-struct int_decode_result {
-  T value;
-  bool ok;
-};
-
 // Variant primitive ints: basic_type=0, header6 maps INT{8,16,32,64} -> {3,4,5,6}.
 template <typename T>
-__device__ inline int_decode_result<T> device_decode_int(uint8_t const* enc, size_type len)
+__device__ inline cuda::std::optional<T> decode_int(uint8_t const* enc, size_type len)
 {
   static_assert(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
                   cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>,
-                "device_decode_int: unsupported width");
+                "decode_int: unsupported width");
   constexpr int header6_for = cuda::std::is_same_v<T, int8_t>    ? 3
                               : cuda::std::is_same_v<T, int16_t> ? 4
                               : cuda::std::is_same_v<T, int32_t> ? 5
                                                                  : 6;
   constexpr int width       = sizeof(T);
-  if (len < 1 + width) { return {0, false}; }
+  if (len < 1 + width) { return cuda::std::nullopt; }
   uint8_t const vm = enc[0];
-  if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != header6_for) { return {0, false}; }
+  if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != header6_for) { return cuda::std::nullopt; }
   using U = cuda::std::make_unsigned_t<T>;
   U u     = 0;
   for (int i = 0; i < width; ++i) {
     u |= static_cast<U>(enc[1 + i]) << (8 * i);
   }
-  return {static_cast<T>(u), true};
+  return static_cast<T>(u);
 }
 
 // Walk a path of object-key steps level by level starting at (val, val_len) and return the span
 // of the final value relative to the root val pointer. Returns {0, 0} on failure (empty path, key
 // absent, kind mismatch, or truncated data)
-__device__ inline field_span device_locate_path(uint8_t const* meta,
-                                                size_type meta_len,
-                                                uint8_t const* val,
-                                                size_type val_len,
-                                                column_device_view path_device_view)
+__device__ inline field_span locate_path(uint8_t const* meta,
+                                         size_type meta_len,
+                                         uint8_t const* val,
+                                         size_type val_len,
+                                         column_device_view path_device_view)
 {
   auto const depth = path_device_view.size();
   if (depth <= 0) { return {0, 0}; }
@@ -256,11 +246,10 @@ __device__ inline field_span device_locate_path(uint8_t const* meta,
   for (size_type i = 0; i < depth; ++i) {
     auto const name = path_device_view.element<cudf::string_view>(i);
 
-    int const dict_idx =
-      device_find_key_in_metadata(meta, meta_len, name.data(), name.size_bytes());
+    int const dict_idx = find_key_in_metadata(meta, meta_len, name.data(), name.size_bytes());
     if (dict_idx < 0) { return {0, 0}; }
 
-    auto const fs = device_locate_object_field(sub_val, sub_len, dict_idx);
+    auto const fs = locate_object_field(sub_val, sub_len, dict_idx);
     if (fs.length == 0) { return {0, 0}; }
 
     sub_val += fs.offset;
@@ -277,7 +266,7 @@ struct string_decode_result {
   bool ok;
 };
 
-__device__ inline string_decode_result device_decode_string_info(uint8_t const* enc, size_type len)
+__device__ inline string_decode_result decode_string_info(uint8_t const* enc, size_type len)
 {
   if (len < 1) { return {0, 0, false}; }
   uint8_t const vm     = enc[0];
@@ -352,7 +341,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
 
   auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(metadata, values, row);
 
-  auto const fs = device_locate_path(meta_ptr, meta_len, val_ptr, val_len, path_device_view);
+  auto const fs = locate_path(meta_ptr, meta_len, val_ptr, val_len, path_device_view);
   if (fs.length == 0) {
     d_sizes[row]       = 0;
     d_src_offsets[row] = 0;
@@ -384,9 +373,9 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   auto const* val_ptr  = val_child.data<uint8_t>() + val_begin;
   auto const val_len   = val_end - val_begin;
 
-  auto const result = device_decode_int<T>(val_ptr, val_len);
-  if (result.ok) {
-    d_output[row] = result.value;
+  auto const decoded = decode_int<T>(val_ptr, val_len);
+  if (decoded.has_value()) {
+    d_output[row] = *decoded;
   } else {
     d_output[row] = 0;
     cudf::clear_bit(d_null_mask, row);
@@ -413,7 +402,7 @@ struct cast_variant_string_fn {
     auto const* val_ptr  = val_child.data<uint8_t>() + val_begin;
     auto const val_len   = val_end - val_begin;
 
-    auto const info = device_decode_string_info(val_ptr, val_len);
+    auto const info = decode_string_info(val_ptr, val_len);
     if (!info.ok) {
       if (!d_chars) { d_sizes[row] = 0; }
       cudf::clear_bit(d_null_mask, row);
@@ -565,7 +554,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   }
 
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
-
   return make_lists_column(num_rows,
                            std::move(offsets_column),
                            std::move(val_child),

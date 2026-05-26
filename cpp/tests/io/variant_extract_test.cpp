@@ -665,3 +665,15 @@ TEST_F(CastVariantTest, ApachePrimitiveString)
   cudf::test::strings_column_wrapper expected({expected_str});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
+
+TEST_F(CastVariantTest, MismatchedTypeYieldsNull)
+{
+  // Casting an object value to a primitive must produce null, not throw
+  auto stream      = cudf::test::get_default_stream();
+  auto struc       = make_apache_variant(afv::object_primitive);
+  auto const value = cudf::structs_column_view{struc}.get_sliced_child(1, stream);
+  auto got         = cudf::io::parquet::experimental::cast_variant(
+    value, cudf::data_type{cudf::type_id::INT32}, stream);
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
