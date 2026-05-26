@@ -22,7 +22,7 @@ import cudf
 from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
 from cudf.errors import MixedTypeError
-from cudf.utils.dtypes import is_mixed_with_object_dtype
+from cudf.utils.dtypes import DEFAULT_STRING_DTYPE, is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from typing import Self
@@ -61,7 +61,7 @@ class _NestedGetItemDict(dict):
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ for nested elements."""
         # As described in the pandas docs
-        # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
         # accessing nested elements of a multiindex must be done using a tuple.
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.
@@ -320,11 +320,17 @@ class ColumnAccessor(MutableMapping):
                             diff,
                         )
                         return pd.RangeIndex(new_range, name=self.name)
+            # Avoid pandas returning Index[object]
+            dtype = (
+                self.label_dtype
+                if self.label_dtype is not None or len(self.names) > 0
+                else DEFAULT_STRING_DTYPE
+            )
             result = pd.Index(
                 self.names,
                 name=self.name,
                 tupleize_cols=False,
-                dtype=self.label_dtype,
+                dtype=dtype,
             )
         return result
 
@@ -394,10 +400,7 @@ class ColumnAccessor(MutableMapping):
         """
         Make a copy of this ColumnAccessor.
         """
-        if deep or cudf.get_option("copy_on_write"):
-            data = {k: v.copy(deep=deep) for k, v in self._data.items()}
-        else:
-            data = self._data.copy()
+        data = {k: v.copy(deep=deep) for k, v in self._data.items()}
         return self.__class__(
             data=data,
             multiindex=self.multiindex,
@@ -527,8 +530,7 @@ class ColumnAccessor(MutableMapping):
             new_keys[n][i], new_keys[n][j] = row[j], row[i]  # type: ignore[call-overload, index]
             new_dict.update({row: tuple(new_keys[n])})
 
-        # TODO: Change to deep=False when copy-on-write is default
-        new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
+        new_data = {new_dict[k]: v.copy(deep=False) for k, v in self.items()}
 
         # swap level_names for i and j
         new_names = list(self.level_names)

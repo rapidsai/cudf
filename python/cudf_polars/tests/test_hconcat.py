@@ -2,14 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 
-def test_hconcat():
+def test_hconcat(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -18,16 +21,27 @@ def test_hconcat():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"))
     query = pl.concat([ldf, ldf2], how="horizontal")
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_hconcat_different_heights():
+def test_hconcat_different_heights(engine: pl.GPUEngine):
     left = pl.LazyFrame({"a": [1, 2, 3, 4]})
 
     right = pl.LazyFrame({"b": [[1], [2]], "c": ["a", "bcde"]})
 
     q = pl.concat([left, right], how="horizontal")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.skipif(POLARS_VERSION_LT_139, reason="strict keyword added in polars 1.39")
+def test_hconcat_strict_different_heights():
+    left = pl.LazyFrame({"a": [1, 2, 3]})
+    right = pl.LazyFrame({"b": [4, 5]})
+    q = pl.concat([left, right], how="horizontal", strict=True)
+    with pytest.raises(pl.exceptions.ShapeError):
+        q.collect()
+    with pytest.raises(pl.exceptions.ShapeError):
+        q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
 def test_hconcat_should_broadcast():
@@ -42,7 +56,7 @@ def test_hconcat_should_broadcast():
     child2 = DataFrameScan({"b": DataType(pl.Float64())}, df2._df, None)
 
     schema = {"a": DataType(pl.Int64()), "b": DataType(pl.Float64())}
-    node = HConcat(schema, True, child1, child2)  # noqa: FBT003
+    node = HConcat(schema, True, False, child1, child2)  # noqa: FBT003
     result = node.evaluate(cache={}, timer=None, context=context)
 
     polars_result = result.to_polars()

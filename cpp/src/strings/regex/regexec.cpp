@@ -269,7 +269,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
+  cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
 
   // ---- Optional Glushkov program ------------------------------------------
   rmm::device_uvector<u_char>* d_glushkov_buffer = nullptr;
@@ -325,7 +325,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 {
   _buffer       = buffer;
   _thread_count = thread_count;
-  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+  _max_insts    = max_insts > 0 ? max_insts : _insts_count;
 }
 
 int32_t reprog_device::compute_shared_memory_size_thompson() const

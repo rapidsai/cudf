@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -10,11 +10,12 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["findall", "find_re"]
 
 cpdef Column findall(
-    Column input, RegexProgram pattern, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, RegexProgram pattern, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a lists column of strings for each matching occurrence using
@@ -37,22 +38,23 @@ cpdef Column findall(
         New lists column of strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_findall.findall(
             input.view(),
             pattern.c_obj.get()[0],
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column find_re(
-    Column input, RegexProgram pattern, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, RegexProgram pattern, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns character positions where the pattern first matches
@@ -75,15 +77,16 @@ cpdef Column find_re(
         New column of integers
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_findall.find_re(
             input.view(),
             pattern.c_obj.get()[0],
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
