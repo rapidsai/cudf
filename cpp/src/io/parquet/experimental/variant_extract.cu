@@ -50,12 +50,6 @@ namespace {
 
 constexpr int variant_version_v1 = 1;
 
-struct field_span {
-  size_type offset;
-  size_type length;
-  [[nodiscard]] __device__ constexpr bool empty() const { return length == 0; }
-};
-
 __device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t const> data,
                                                              size_type pos,
                                                              int width)
@@ -130,13 +124,14 @@ __device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf
 // may be stored in any order, so field_offsets are NOT necessarily monotonically increasing
 // To find a field's byte range we locate the smallest offset strictly greater than the
 // field's start offset among all entries (including the sentinel), giving the tightest bound
-__device__ inline field_span locate_object_field(device_span<uint8_t const> val, int dict_idx)
+__device__ inline device_span<uint8_t const> locate_object_field(device_span<uint8_t const> val,
+                                                                 int dict_idx)
 {
   auto const val_len = static_cast<size_type>(val.size());
-  if (val_len < 1) { return {0, 0}; }
+  if (val_len < 1) { return {}; }
   uint8_t const vm     = val[0];
   int const basic_type = vm & 0x03;
-  if (basic_type != 2) { return {0, 0}; }  // not object
+  if (basic_type != 2) { return {}; }  // not object
 
   int const value_header   = (vm >> 2) & 0x3F;
   int const field_off_size = (value_header & 0x03) + 1;
@@ -145,17 +140,17 @@ __device__ inline field_span locate_object_field(device_span<uint8_t const> val,
 
   size_type pos         = 1;
   auto const num_elts_r = read_uint_le(val, pos, is_large ? 4 : 1);
-  if (!num_elts_r) { return {0, 0}; }
+  if (!num_elts_r) { return {}; }
   auto const n = static_cast<size_type>(*num_elts_r);
   pos += is_large ? 4 : 1;
 
   size_type const field_ids_start = pos;
   size_type const field_ids_bytes = n * field_id_size;
-  if (field_ids_start + field_ids_bytes > val_len) { return {0, 0}; }
+  if (field_ids_start + field_ids_bytes > val_len) { return {}; }
 
   size_type const field_offs_start = field_ids_start + field_ids_bytes;
   size_type const field_offs_bytes = (n + 1) * field_off_size;
-  if (field_offs_start + field_offs_bytes > val_len) { return {0, 0}; }
+  if (field_offs_start + field_offs_bytes > val_len) { return {}; }
 
   size_type const values_base = field_offs_start + field_offs_bytes;
   // Maximum legitimate field-offset value: bytes available after values_base
@@ -166,17 +161,17 @@ __device__ inline field_span locate_object_field(device_span<uint8_t const> val,
   uint64_t match_start_u = 0;
   for (size_type i = 0; i < n; ++i) {
     auto const fid_r = read_uint_le(val, field_ids_start + i * field_id_size, field_id_size);
-    if (!fid_r) { return {0, 0}; }
+    if (!fid_r) { return {}; }
     if (static_cast<int>(*fid_r) != dict_idx) { continue; }
 
     auto const o_r = read_uint_le(val, field_offs_start + i * field_off_size, field_off_size);
-    if (!o_r) { return {0, 0}; }
-    if (*o_r > values_extent) { return {0, 0}; }
+    if (!o_r) { return {}; }
+    if (*o_r > values_extent) { return {}; }
     match_start_u = *o_r;
     found         = true;
     break;
   }
-  if (!found) { return {0, 0}; }
+  if (!found) { return {}; }
 
   // Find the tightest end: the smallest offset strictly greater than match_start
   // among all n+1 offset entries (the sentinel at index n is the total data size)
@@ -188,9 +183,9 @@ __device__ inline field_span locate_object_field(device_span<uint8_t const> val,
     if (*oj_r > match_start_u && *oj_r < match_end_u) { match_end_u = *oj_r; }
   }
 
-  if (match_end_u < match_start_u) { return {0, 0}; }
-  return {values_base + static_cast<size_type>(match_start_u),
-          static_cast<size_type>(match_end_u - match_start_u)};
+  if (match_end_u < match_start_u) { return {}; }
+  return val.subspan(values_base + static_cast<size_type>(match_start_u),
+                     static_cast<size_type>(match_end_u - match_start_u));
 }
 
 // Variant primitive ints: basic_type=0, header6 maps INT{8,16,32,64} -> {3,4,5,6}.
@@ -217,27 +212,22 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
 }
 
 // Walk a path of object-key steps level by level starting at `val` and return the span of the
-// final value relative to the root `val` pointer. Returns {0, 0} on failure (empty path, key
-// absent, kind mismatch, or truncated data)
-__device__ inline field_span locate_path(device_span<uint8_t const> meta,
-                                         device_span<uint8_t const> val,
-                                         column_device_view path)
+// final value (subspan of `val`). Returns an empty span on failure.
+__device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t const> meta,
+                                                         device_span<uint8_t const> val,
+                                                         column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
     auto const name = path.element<cudf::string_view>(i);
 
     int const dict_idx = find_key_in_metadata(meta, name);
-    if (dict_idx < 0) { return {0, 0}; }
+    if (dict_idx < 0) { return {}; }
 
-    auto const fs = locate_object_field(sub_val, dict_idx);
-    if (fs.empty()) { return {0, 0}; }
-
-    sub_val = sub_val.subspan(fs.offset, fs.length);
+    sub_val = locate_object_field(sub_val, dict_idx);
+    if (sub_val.empty()) { return {}; }
   }
-
-  return {static_cast<size_type>(sub_val.data() - val.data()),
-          static_cast<size_type>(sub_val.size())};
+  return sub_val;
 }
 
 struct string_decode_result {
@@ -312,16 +302,16 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
 
   auto const [meta, val] = metadata_and_value_at(metadata, values, row);
 
-  auto const fs = locate_path(meta, val, path);
-  if (fs.empty()) {
+  auto const field = locate_path(meta, val, path);
+  if (field.empty()) {
     d_sizes[row]       = 0;
     d_src_offsets[row] = 0;
     cudf::clear_bit(d_null_mask, row);
     return;
   }
 
-  d_sizes[row]       = fs.length;
-  d_src_offsets[row] = fs.offset;
+  d_sizes[row]       = static_cast<size_type>(field.size());
+  d_src_offsets[row] = static_cast<size_type>(field.data() - val.data());
 }
 
 template <typename T>
