@@ -17,9 +17,13 @@ from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import DaskContext
 
-distributed = pytest.importorskip("distributed")
+# try/except instead of pytest.importorskip so mypy can use distributed for type checking
+try:
+    import distributed
+except ImportError:
+    pytest.skip("distributed not installed", allow_module_level=True)
 
-from cudf_polars.engine.dask import DaskEngine  # noqa: E402
+from cudf_polars.engine.dask import DaskEngine
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -34,7 +38,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def dask_client() -> Iterator[distributed.Client]:  # type: ignore[name-defined]
+def dask_client() -> Iterator[distributed.Client]:
     # Use for DaskEngine constructor tests to avoid re-creating the cluster
     # Otherwise, use session-scoped DaskEngine in conftest
     with (
@@ -53,7 +57,7 @@ def dask_client() -> Iterator[distributed.Client]:  # type: ignore[name-defined]
 # ---------------------------------------------------------------------------
 
 
-def test_from_options(dask_client: distributed.Client) -> None:  # type: ignore[name-defined]
+def test_from_options(dask_client: distributed.Client) -> None:
     """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
     opts = StreamingOptions(fallback_mode="silent")
     with DaskEngine.from_options(opts, dask_client=dask_client) as engine:
@@ -91,7 +95,7 @@ def test_worker_host_memory_limit(dask_engine: DaskEngine) -> None:
     assert worker["memory_limit"] == distributed.system.MEMORY_LIMIT
 
 
-def test_from_options_creates_engine(dask_client: distributed.Client) -> None:  # type: ignore[name-defined]
+def test_from_options_creates_engine(dask_client: distributed.Client) -> None:
     """DaskEngine.from_options produces a working engine and runs a query."""
     opts = StreamingOptions(max_rows_per_partition=10, fallback_mode="silent")
     with DaskEngine.from_options(opts, dask_client=dask_client) as eng:
@@ -107,7 +111,7 @@ def test_run(dask_engine: DaskEngine) -> None:
 
 
 @pytest.fixture(scope="module")
-def reset_engine(dask_client: distributed.Client) -> Iterator[DaskEngine]:  # type: ignore[name-defined]
+def reset_engine(dask_client: distributed.Client) -> Iterator[DaskEngine]:
     """Module-scoped engine for reset tests — independent of ``dask_engine``.
 
     These tests exercise :meth:`DaskEngine._reset` (which mutates the
@@ -164,7 +168,7 @@ def test_reset_collects_after_options_change(reset_engine: DaskEngine) -> None:
     )
 
 
-def test_reset_after_shutdown_raises(dask_client: distributed.Client) -> None:  # type: ignore[name-defined]
+def test_reset_after_shutdown_raises(dask_client: distributed.Client) -> None:
     """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = DaskEngine(
         dask_client=dask_client,
