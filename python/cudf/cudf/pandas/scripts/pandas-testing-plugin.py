@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
 import json
-import os
 import sys
 import traceback
 from collections import defaultdict
@@ -24,17 +22,8 @@ def replace_kwargs(new_kwargs):
     return wrapper
 
 
-@contextlib.contextmanager
-def null_assert_warnings(*args, **kwargs):
-    try:
-        yield []
-    finally:
-        pass
-
-
 @pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
-    tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
@@ -7908,6 +7897,7 @@ NODEIDS_TO_SKIP: dict[str, str] = {
 }
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
     for item in items:
         if (reason := NODEIDS_TO_SKIP.get(item.nodeid, None)) is not None:
@@ -7925,6 +7915,3 @@ def pytest_collection_modifyitems(session, config, items):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (reason := NODEIDS_THAT_FAIL.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.xfail(reason=reason))
-
-
-sys.path.append(os.path.dirname(__file__))
