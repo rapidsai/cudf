@@ -2246,6 +2246,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       }
     }();
 
+    // bitmask_and / bitmask_or can return an empty mask, meaning the merged mask is all-valid.
+    // If so, we do not need to touch the original mask.
+    if (merge_mask.is_empty()) { return release_as_jlong(copy); }
+
     // Now apply the merged mask to the original by AND-ing it into
     // the parent's null mask. This will also push it down through any
     // descendants for STRUCTs so that child masks stay consistent ,

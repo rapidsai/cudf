@@ -203,4 +203,62 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testMergeAndSetValidityStructAndWithAllValidMask() {
+    try (ColumnVector child = ColumnVector.fromInts(1, 2, 3, 4, 5);
+         ColumnVector base = ColumnVector.makeStruct(child);
+         ColumnVector baseMask = ColumnVector.fromBoxedInts(1, 1, null, 1, 1);
+         ColumnVector nullableBase = base.mergeAndSetValidity(BinaryOp.BITWISE_AND, baseMask);
+         ColumnVector allValidMask0 = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnVector allValidMask1 = ColumnVector.fromInts(2, 2, 2, 2, 2);
+         ColumnVector merged = nullableBase.mergeAndSetValidity(
+             BinaryOp.BITWISE_AND, allValidMask0, allValidMask1);
+         HostColumnVector hostMerged = merged.copyToHost()) {
+      assertEquals(1, hostMerged.getNullCount(), "parent null count");
+      assertFalse(hostMerged.isNull(0));
+      assertFalse(hostMerged.isNull(1));
+      assertTrue(hostMerged.isNull(2));
+      assertFalse(hostMerged.isNull(3));
+      assertFalse(hostMerged.isNull(4));
+
+      assertEquals(1, hostMerged.getNumChildren());
+      HostColumnVectorCore childView = hostMerged.getChildColumnView(0);
+      assertEquals(1, childView.getNullCount(), "child null count");
+      assertFalse(childView.isNull(0));
+      assertFalse(childView.isNull(1));
+      assertTrue(childView.isNull(2));
+      assertFalse(childView.isNull(3));
+      assertFalse(childView.isNull(4));
+    }
+  }
+
+  @Test
+  void testMergeAndSetValidityStructOrWithAllValidMask() {
+    try (ColumnVector child = ColumnVector.fromInts(1, 2, 3, 4, 5);
+         ColumnVector base = ColumnVector.makeStruct(child);
+         ColumnVector baseMask = ColumnVector.fromBoxedInts(1, 1, null, 1, 1);
+         ColumnVector nullableBase = base.mergeAndSetValidity(BinaryOp.BITWISE_AND, baseMask);
+         ColumnVector nullableMask = ColumnVector.fromBoxedInts(1, null, 1, 1, 1);
+         ColumnVector allValidMask = ColumnVector.fromInts(1, 1, 1, 1, 1);
+         ColumnVector merged = nullableBase.mergeAndSetValidity(
+             BinaryOp.BITWISE_OR, nullableMask, allValidMask);
+         HostColumnVector hostMerged = merged.copyToHost()) {
+      assertEquals(1, hostMerged.getNullCount(), "parent null count");
+      assertFalse(hostMerged.isNull(0));
+      assertFalse(hostMerged.isNull(1));
+      assertTrue(hostMerged.isNull(2));
+      assertFalse(hostMerged.isNull(3));
+      assertFalse(hostMerged.isNull(4));
+
+      assertEquals(1, hostMerged.getNumChildren());
+      HostColumnVectorCore childView = hostMerged.getChildColumnView(0);
+      assertEquals(1, childView.getNullCount(), "child null count");
+      assertFalse(childView.isNull(0));
+      assertFalse(childView.isNull(1));
+      assertTrue(childView.isNull(2));
+      assertFalse(childView.isNull(3));
+      assertFalse(childView.isNull(4));
+    }
+  }
 }
