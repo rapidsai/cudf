@@ -145,20 +145,20 @@ def mixed_left_anti_join(
 class FilteredJoin:
     def __init__(
         self,
-        build: Table,
+        right: Table,
         compare_nulls: NullEquality,
         load_factor: float = ...,
         stream: CudaStreamLike | None = None,
     ) -> None: ...
     def semi_join(
         self,
-        probe: Table,
+        left: Table,
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def anti_join(
         self,
-        probe: Table,
+        left: Table,
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
