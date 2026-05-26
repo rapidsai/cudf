@@ -182,7 +182,7 @@ def _body_concurrent_warm_path() -> None:
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=120)
 
         assert len(results) == 8
         assert all(r is main_engine for r in results)
@@ -294,7 +294,7 @@ def _body_worker_thread_isolation() -> None:
     t = threading.Thread(target=creator)
     t.start()
     create_done.wait()
-    t.join()
+    t.join(timeout=120)
     live = dse._state.instance
     assert live is not None
     live.shutdown()  # different thread than the one that constructed
@@ -398,7 +398,7 @@ _ALL_BODIES = [
     "body", _ALL_BODIES, ids=lambda b: b.__name__.removeprefix("_body_")
 )
 def test_default_singleton_engine(
-    proc_pool: ProcessPoolExecutor, body: Callable[[], None]
+    proc_pool: ProcessPoolExecutor, body: Callable[[], None], timeout_seconds: int
 ) -> None:
     """Run each ``_body_*`` function in an isolated subprocess."""
-    proc_pool.submit(_run, body).result()
+    proc_pool.submit(_run, body).result(timeout=timeout_seconds)

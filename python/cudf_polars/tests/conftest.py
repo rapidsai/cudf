@@ -275,6 +275,14 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
+@pytest.fixture
+def timeout_seconds() -> int:
+    """
+    Conservative timeout for APIs that accept a timeout parameter.
+    """
+    return 120
+
+
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
