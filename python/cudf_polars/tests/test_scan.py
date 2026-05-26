@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime as dt
 import gzip
 import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pytest
 import zstandard as zstd
 from werkzeug import Response
@@ -736,3 +738,60 @@ def test_scan_parquet_zero_width_with_limit(
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
     assert_gpu_result_equal(q, engine=active_engine)
+
+
+@pytest.mark.parametrize(
+    "column_dtype, lit",
+    [
+        (pl.Datetime("us"), np.datetime64("2021-01-02")),
+        (pl.Datetime("us"), pl.lit(dt.date(2021, 1, 2), dtype=pl.Date)),
+        (pl.Datetime("ms"), pl.lit(dt.date(2021, 1, 2), dtype=pl.Date)),
+        (pl.Datetime("ns"), pl.lit(dt.date(2021, 1, 2), dtype=pl.Date)),
+        (pl.Datetime("ns"), pl.lit(dt.datetime(2021, 1, 2), dtype=pl.Datetime("us"))),
+        (pl.Datetime("us"), pl.lit(dt.datetime(2021, 1, 2), dtype=pl.Datetime("ns"))),
+        (pl.Datetime("ns"), pl.lit(dt.datetime(2021, 1, 2), dtype=pl.Datetime("ms"))),
+        (pl.Duration("us"), pl.lit(dt.timedelta(seconds=1), dtype=pl.Duration("ns"))),
+        (pl.Duration("ns"), pl.lit(dt.timedelta(seconds=1), dtype=pl.Duration("us"))),
+        (pl.Int32, pl.lit(2, dtype=pl.Int64)),
+        (pl.Decimal(15, 2), pl.lit(1.5, dtype=pl.Float64)),
+    ],
+)
+@pytest.mark.parametrize("closed", ["both", "left", "right", "none"])
+def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
+    engine: pl.GPUEngine, tmp_path, column_dtype, lit, closed
+):
+    if isinstance(column_dtype, pl.Datetime):
+        rows = [
+            dt.datetime(2021, 1, 1),
+            dt.datetime(2021, 1, 2),
+            dt.datetime(2021, 1, 2, 0, 0, 0, 1),
+            dt.datetime(2021, 1, 3),
+        ]
+        col = pl.Series("A", rows, dtype=column_dtype)
+    elif isinstance(column_dtype, pl.Duration):
+        col = pl.Series(
+            "A",
+            [
+                dt.timedelta(seconds=0),
+                dt.timedelta(seconds=1),
+                dt.timedelta(seconds=1, microseconds=1),
+                dt.timedelta(seconds=2),
+            ],
+            dtype=column_dtype,
+        )
+    elif isinstance(column_dtype, pl.Decimal):
+        col = pl.Series(
+            "A",
+            [Decimal("1.00"), Decimal("1.50"), Decimal("1.99"), Decimal("2.00")],
+            dtype=column_dtype,
+        )
+    else:  # integer
+        col = pl.Series("A", [0, 1, 2, 3], dtype=column_dtype)
+
+    pl.DataFrame([col]).write_parquet(tmp_path / "f.parquet")
+
+    q = pl.scan_parquet(tmp_path / "f.parquet").filter(
+        pl.col("A").is_between(lit, lit, closed=closed)
+    )
+
+    assert_gpu_result_equal(q, engine=engine)
