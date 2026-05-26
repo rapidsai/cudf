@@ -63,25 +63,26 @@ __device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t
 }
 
 // Parse metadata header, walk dictionary entries, return the index of `key` or -1
-__device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf::string_view key)
+__device__ inline cuda::std::optional<size_type> find_key_in_metadata(
+  device_span<uint8_t const> meta, cudf::string_view key)
 {
   auto const meta_len = static_cast<size_type>(meta.size());
-  if (meta_len < 1) { return -1; }
+  if (meta_len < 1) { return cuda::std::nullopt; }
   uint8_t const header = meta[0];
   int const version    = header & 0x0F;
-  if (version != variant_version_v1) { return -1; }
+  if (version != variant_version_v1) { return cuda::std::nullopt; }
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
   auto const dict_size_r = read_uint_le(meta, pos, offset_size);
-  if (!dict_size_r) { return -1; }
+  if (!dict_size_r) { return cuda::std::nullopt; }
   auto const dict_size = static_cast<size_type>(*dict_size_r);
   pos += offset_size;
 
   // Read dictionary_size + 1 offsets
   size_type const offsets_start = pos;
   size_type const offsets_bytes = (dict_size + 1) * offset_size;
-  if (offsets_start + offsets_bytes > meta_len) { return -1; }
+  if (offsets_start + offsets_bytes > meta_len) { return cuda::std::nullopt; }
 
   size_type const strings_base = offsets_start + offsets_bytes;
   // Bytes available for dictionary string payloads
@@ -89,17 +90,17 @@ __device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf
 
   // Carry forward the previous offset to avoid re-reading it each iteration
   auto prev_off_r = read_uint_le(meta, offsets_start, offset_size);
-  if (!prev_off_r) { return -1; }
+  if (!prev_off_r) { return cuda::std::nullopt; }
 
   auto const key_len  = key.size_bytes();
   auto const* key_ptr = key.data();
   for (size_type i = 0; i < dict_size; ++i) {
     auto const next_off_r = read_uint_le(meta, offsets_start + (i + 1) * offset_size, offset_size);
-    if (!next_off_r) { return -1; }
+    if (!next_off_r) { return cuda::std::nullopt; }
     auto const prev_u = *prev_off_r;
     auto const next_u = *next_off_r;
     prev_off_r        = next_off_r;
-    if (next_u < prev_u || next_u > strings_extent) { return -1; }
+    if (next_u < prev_u || next_u > strings_extent) { return cuda::std::nullopt; }
     auto const slen_u = next_u - prev_u;
     if (slen_u != static_cast<uint64_t>(key_len)) { continue; }
     auto const soff = static_cast<size_type>(prev_u);
@@ -113,7 +114,7 @@ __device__ inline int find_key_in_metadata(device_span<uint8_t const> meta, cudf
     }
     if (match) { return i; }
   }
-  return -1;
+  return cuda::std::nullopt;
 }
 
 // Parse an object value header, find the field with the given dictionary index,
@@ -221,10 +222,10 @@ __device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t con
   for (size_type i = 0; i < path.size(); ++i) {
     auto const name = path.element<cudf::string_view>(i);
 
-    int const dict_idx = find_key_in_metadata(meta, name);
-    if (dict_idx < 0) { return {}; }
+    auto const dict_idx = find_key_in_metadata(meta, name);
+    if (!dict_idx.has_value()) { return {}; }
 
-    sub_val = locate_object_field(sub_val, dict_idx);
+    sub_val = locate_object_field(sub_val, dict_idx.value());
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
