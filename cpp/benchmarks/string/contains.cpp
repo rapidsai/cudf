@@ -54,7 +54,7 @@ static void bench_contains(nvbench::state& state)
 
 NVBENCH_BENCH(bench_contains)
   .set_name("contains")
-  .add_int64_axis("row_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("row_width", {64, 128, 256})
+  .add_int64_axis("num_rows", {262144, 2097152})
   .add_int64_axis("hit_rate", {50, 100})  // percentage
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
