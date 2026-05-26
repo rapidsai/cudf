@@ -44,7 +44,7 @@ def ray_init_options(ray_num_ranks: int) -> dict[str, Any]:
     """
     return {
         "num_cpus": ray_num_ranks,
-        "num_gpus": 0,
+        "num_gpus": 0,  # the main Ray cluster doesn't need to be GPU aware, the RankActors are via ray.remote
         "include_dashboard": False,
         "object_store_memory": 256 * 1024 * 1024,  # 256 MB
     }
