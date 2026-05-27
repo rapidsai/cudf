@@ -392,6 +392,15 @@ class parquet_reader_options {
    * To read row groups [0, 2] from the first input and [1] from the second input, call:
    *   set_row_groups({{0, 2}, {1}});
    *
+   * Output ordering: rows from `sources[i]` are emitted before rows from `sources[j]` for
+   * `j > i`. Within each source, row groups appear in the exact order given by the inner
+   * vector; the reader does not sort or deduplicate the indices, and repeated indices are
+   * emitted multiple times. An empty inner vector means that source contributes no rows but
+   * does not affect the order of the remaining sources. When this setter is not called, all
+   * row groups are read in source order, then in on-disk order within each source. Row groups
+   * removed by predicate pushdown (statistics, dictionary, or bloom filter pruning) are
+   * dropped in place; the remaining row groups keep their relative order.
+   *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.
    */
@@ -597,6 +606,9 @@ class parquet_reader_options_builder {
 
   /**
    * @brief Sets vector of individual row groups to read.
+   *
+   * See `parquet_reader_options::set_row_groups()` for the semantics of the outer/inner
+   * vector layout and for the guaranteed output ordering across sources and row groups.
    *
    * @param row_groups Vector of row groups to read
    * @return this for chaining
@@ -821,6 +833,18 @@ class parquet_reader_options_builder {
  *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
+ * @note Row group output ordering
+ *
+ * When reading from multiple sources, all rows from `sources[i]` are emitted before any rows
+ * from `sources[j]` for `j > i`. Within each source, row groups are emitted in the order
+ * passed to `parquet_reader_options::row_groups()`; the reader does not sort or deduplicate
+ * the indices, and repeated indices are emitted multiple times. An empty inner vector means
+ * that source contributes no rows but does not affect the order of the remaining sources.
+ * When `row_groups` is not set, all row groups are emitted in source order and in on-disk
+ * order within each source. Row groups removed by predicate pushdown (statistics, dictionary,
+ * or bloom filter pruning) are simply dropped; the remaining row groups keep their relative
+ * order.
+ *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -844,6 +868,9 @@ table_with_metadata read_parquet(
  *  auto options = cudf::io::parquet_reader_options::builder();
  *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
+ *
+ * Output ordering across `sources` and across the row groups selected per source is the same
+ * as for the `parquet_reader_options`-only overload above.
  *
  * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
