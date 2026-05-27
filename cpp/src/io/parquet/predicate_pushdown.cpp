@@ -20,9 +20,15 @@
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
+// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <string_view>
+// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -30,6 +36,25 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
+// Accumulates the wall-clock duration of the most recent apply_stats_filters call on
+// the calling thread, in nanoseconds. Exposed to the parquet_reader_metadata benchmark
+// via the external accessor declared below, so the benchmark can measure the
+// apply_stats_filters body in isolation without subtracting noisy end-to-end times.
+thread_local std::int64_t g_apply_stats_filters_ns = 0;
+
+struct apply_stats_filters_scope_timer {
+  std::chrono::high_resolution_clock::time_point const start;
+  apply_stats_filters_scope_timer() : start(std::chrono::high_resolution_clock::now()) {}
+  ~apply_stats_filters_scope_timer()
+  {
+    g_apply_stats_filters_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                 std::chrono::high_resolution_clock::now() - start)
+                                 .count();
+  }
+};
+// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
 /**
  * @brief Converts column chunk statistics to 2 device columns - min, max values.
@@ -127,27 +152,38 @@ struct row_group_stats_caster : public stats_caster_base {
  * @brief Checks if any row-group statistics are available for the input row groups.
  *        This is independent of whether the predicate can actually use those stats.
  *
+ * Only the first selected row group of each source is inspected. Every major Parquet
+ * writer (cuDF, Arrow C++, arrow-rs, parquet-mr) decides stats emission per column at
+ * writer setup, so within a single column either all row groups carry stats or none
+ * do; different columns within the same file can differ (Arrow-C++/arrow-rs/parquet-mr
+ * expose per-column toggles), which is why we still walk every column chunk of that
+ * one row group instead of only the first chunk. `null_count` is included alongside
+ * min/max because some writers emit only `null_count` and the spec requires readers
+ * to treat its absence as "unknown".
+ *
  * @param per_file_metadata The metadata of the file.
  * @param input_row_group_indices The indices of the input row groups.
- * @return True if any column chunk in the input row groups carries row-group statistics.
+ * @return True if any column chunk in the first selected row group of any source
+ *         carries row-group statistics.
  */
 [[nodiscard]] bool any_row_group_stats_available(
   std::vector<metadata> const& per_file_metadata,
   host_span<std::vector<size_type> const> input_row_group_indices)
 {
-  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
-    for (auto const rg_idx : input_row_group_indices[src_idx]) {
-      auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-      for (auto const& colchunk : row_group.columns) {
-        auto const& stats = colchunk.meta_data.statistics;
-        if (stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
-            stats.max.has_value() or stats.null_count.has_value()) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
+  auto const colchunk_has_stats = [](auto const& colchunk) {
+    auto const& s = colchunk.meta_data.statistics;
+    return s.min_value.has_value() or s.max_value.has_value() or s.min.has_value() or
+           s.max.has_value() or s.null_count.has_value();
+  };
+  return std::any_of(
+    cuda::counting_iterator<size_t>{0},
+    cuda::counting_iterator{input_row_group_indices.size()},
+    [&](size_t src_idx) {
+      if (input_row_group_indices[src_idx].empty()) { return false; }
+      auto const& row_group =
+        per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
+      return std::any_of(row_group.columns.begin(), row_group.columns.end(), colchunk_has_stats);
+    });
 }
 
 }  // namespace
@@ -160,12 +196,35 @@ stats_filter_result aggregate_reader_metadata::apply_stats_filters(
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
+  // BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
+  apply_stats_filters_scope_timer const _apply_stats_filters_timer;
+  // END BENCHMARK-ONLY INSTRUMENTATION (#17864).
+
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Check if any row-group statistics are available for the input row groups
-  auto const has_stats = any_row_group_stats_available(per_file_metadata, input_row_group_indices);
-  // Return early if no usable row-group statistics were observed
-  if (!has_stats) { return {std::nullopt, false}; }
+  // BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
+  // When CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH=1 is set, mimic the exact
+  // pre-PR behavior for benchmarking: skip BOTH the any_row_group_stats_available
+  // sniff AND the early-return fast-path, and pretend has_stats=true so the rest
+  // of the function and the surrounding filter_row_groups treat the metadata as
+  // "stats present, no pruning happened" (i.e. num_row_groups_after_stats_filter
+  // = total_row_groups, the conflated pre-PR behavior). This lets one build
+  // measure "with this PR" and "without this PR" by flipping a single env var.
+  // After this instrumentation is reverted, the line reduces to the original
+  //
+  //     auto const has_stats =
+  //       any_row_group_stats_available(per_file_metadata, input_row_group_indices);
+  //     if (!has_stats) { return {std::nullopt, false}; }
+  static bool const apply_stats_filters_fastpath_enabled = [] {
+    auto const* env = std::getenv("CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH");
+    return env == nullptr or std::string_view{env} == "0";
+  }();
+  auto const has_stats =
+    apply_stats_filters_fastpath_enabled
+      ? any_row_group_stats_available(per_file_metadata, input_row_group_indices)
+      : true;
+  if (apply_stats_filters_fastpath_enabled and not has_stats) { return {std::nullopt, false}; }
+  // END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
   // Get a boolean mask indicating which columns can participate in stats based filtering
   auto const [stats_columns_mask, has_is_null_operator] =
@@ -351,5 +410,19 @@ aggregate_reader_metadata::filter_row_groups(
     bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : stats_filtered_row_groups,
     {after_stats_filter, std::make_optional(num_bloom_filtered_row_groups)}};
 }
+
+// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
+// Returns the wall-clock duration in nanoseconds of the most recent
+// apply_stats_filters call on the calling thread. Used by
+// parquet_reader_metadata.cpp (BM_parquet_apply_stats_filter_isolated) to time
+// the apply_stats_filters body in isolation from the surrounding read_parquet
+// I/O and decode costs. Reset to 0 by every entry into apply_stats_filters.
+// The visibility("default") attribute is required because libcudf is built
+// with -fvisibility=hidden; without it the benchmark cannot resolve the symbol.
+__attribute__((visibility("default"))) std::int64_t last_apply_stats_filters_duration_ns()
+{
+  return g_apply_stats_filters_ns;
+}
+// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
 }  // namespace cudf::io::parquet::detail
