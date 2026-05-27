@@ -157,8 +157,6 @@ extend-unsafe-fixes = [
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
 "docs/cudf/source/cudf/missing-data.ipynb" = ["E711"]
-# Lots of pytest implicitly injected attributes in conftest-patch.py
-"python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
 "ci/*" = ["T201"]
