@@ -30,7 +30,7 @@ static void bench_replace(nvbench::state& state)
   auto const pattern_index = state.get_int64("pattern");
   auto const rtype         = state.get_string("type");
 
-  if (std::cmp_greater_equal(pattern_index, patterns.size())) {
+  if (pattern_index < 0 || std::cmp_greater_equal(pattern_index, patterns.size())) {
     state.skip("invalid pattern index");
     return;
   }
