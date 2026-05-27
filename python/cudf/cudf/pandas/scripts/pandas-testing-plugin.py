@@ -2792,6 +2792,7 @@ NODEIDS_THAT_FAIL = {
     "tests/groupby/test_groupby.py::test_as_index_select_column": "TODO: Add a reason for failure",
     "tests/groupby/test_groupby.py::test_group_name_available_in_inference_pass": "TODO: Add a reason for failure",
     "tests/groupby/test_groupby.py::test_group_on_two_row_multiindex_returns_one_tuple_key": "TODO: Add a reason for failure",
+    "tests/groupby/test_groupby.py::test_groupby_all_nan_groups_drop": "TODO: Add a reason for failure",
     "tests/groupby/test_groupby.py::test_groupby_as_index_select_column_sum_empty_df": "AssertionError: <class 'cudf.core.dataframe.DataFrame'> Expected type <class 'cudf.core.dataframe.DataFrame'>, found <class 'cudf.core.series.Series'> instead",
     "tests/groupby/test_groupby.py::test_groupby_column_index_name_lost[any]": "RuntimeError: Fast-to-slow transfer is blocked",
     "tests/groupby/test_groupby.py::test_groupby_column_index_name_lost[shift]": "TODO: Add a reason for failure",
