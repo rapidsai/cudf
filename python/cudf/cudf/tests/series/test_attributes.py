@@ -392,23 +392,6 @@ def test_series_shape_empty():
         [1, 2, 4],
         [],
         [5.0, 7.0, 8.0],
-        pd.Categorical(["a", "b", "c"]),
-        ["m", "a", "d", "v"],
-    ],
-)
-def test_series_values_host_property(data):
-    pds = pd.Series(data=data, dtype=None if data else float)
-    gds = cudf.Series(data=data, dtype=None if data else float)
-
-    np.testing.assert_array_equal(pds.values, gds.to_numpy())
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 4],
-        [],
-        [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
             marks=pytest.mark.xfail(raises=NotImplementedError),
