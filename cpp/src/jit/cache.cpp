@@ -9,7 +9,7 @@
 
 #include <cuda_runtime.h>
 
-#include <cudf_jit_embed.hpp>
+#include <cudf_cuda_embed.hpp>
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
@@ -112,11 +112,11 @@ void install_cudf_jit_files(std::string const& target_dir, std::string const& tm
     std::runtime_error);
 
   install_file_set(tmp_dir_path,
-                   cudf_jit_embed::files,
-                   cudf_jit_embed::files_uncompressed_size,
-                   cudf_jit_embed::file_ranges,
-                   cudf_jit_embed::file_destinations,
-                   cudf_jit_embed::files_compression);
+                   cudf_cuda_embed::files,
+                   cudf_cuda_embed::files_uncompressed_size,
+                   cudf_cuda_embed::file_ranges,
+                   cudf_cuda_embed::file_destinations,
+                   cudf_cuda_embed::files_compression);
 
   // rename the temporary directory to the target install directory
   if (::rename(tmp_dir_path, target_dir.c_str()) == -1) {
@@ -164,7 +164,7 @@ void jit_bundle_t::ensure_installed() const
 
 std::string jit_bundle_t::get_hash() const
 {
-  auto str = rtcx::sha256_hex_string::make(cudf_jit_embed::hash);
+  auto str = rtcx::sha256_hex_string::make(cudf_cuda_embed::hash);
   return std::string{str.view()};
 }
 
@@ -178,7 +178,7 @@ std::vector<std::string> jit_bundle_t::get_include_directories() const
   std::vector<std::string> directories;
   auto base_dir = get_directory();
 
-  for (auto dir : cudf_jit_embed::include_directories) {
+  for (auto dir : cudf_cuda_embed::include_directories) {
     directories.emplace_back(std::format("{}/{}", base_dir, dir));
   }
 

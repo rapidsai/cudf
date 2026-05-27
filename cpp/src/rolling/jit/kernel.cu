@@ -45,20 +45,22 @@ template <typename InType,
           class agg_op,
           typename PrecedingWindowType,
           typename FollowingWindowType>
-CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
-                                       InType const* const __restrict__ in_col,
-                                       cudf::bitmask_type const* const __restrict__ in_col_valid,
-                                       OutType* __restrict__ out_col,
-                                       cudf::bitmask_type* __restrict__ out_col_valid,
-                                       cudf::size_type* __restrict__ output_valid_count,
-                                       detail::window_wrapper_base b_preceding_window_begin,
-                                       detail::window_wrapper_base b_following_window_begin,
-                                       cudf::size_type min_periods)
+__device__ void rolling_window_kernel(cudf::size_type nrows,
+                                      void const* __restrict__ p_in_col,
+                                      cudf::bitmask_type const* const __restrict__ in_col_valid,
+                                      void* __restrict__ p_out_col,
+                                      cudf::bitmask_type* __restrict__ out_col_valid,
+                                      cudf::size_type* __restrict__ output_valid_count,
+                                      detail::window_wrapper_base b_preceding_window_begin,
+                                      detail::window_wrapper_base b_following_window_begin,
+                                      cudf::size_type min_periods)
 {
   auto i                                           = cudf::detail::grid_1d::global_thread_id();
   auto const stride                                = cudf::detail::grid_1d::grid_stride();
   PrecedingWindowType const preceding_window_begin = b_preceding_window_begin;
   FollowingWindowType const following_window_begin = b_following_window_begin;
+  auto const* const in_col                         = static_cast<InType const*>(p_in_col);
+  auto* const out_col                              = static_cast<OutType*>(p_out_col);
 
   cudf::size_type warp_valid_count{0};
 
@@ -113,8 +115,8 @@ CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
 
 extern "C" __global__ void cudf_kernel_entry(
   cudf::size_type nrows,
-  void const* const __restrict__ in_col,
-  cudf::bitmask_type const* const __restrict__ in_col_valid,
+  void const* __restrict__ in_col,
+  cudf::bitmask_type const* __restrict__ in_col_valid,
   void* __restrict__ out_col,
   cudf::bitmask_type* __restrict__ out_col_valid,
   cudf::size_type* __restrict__ output_valid_count,
