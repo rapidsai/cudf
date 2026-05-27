@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.dask import DaskEngine
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.engine.spmd import SPMDEngine
 
@@ -165,6 +166,15 @@ def spmd_engine_factory(
 
 
 @pytest.fixture
+def dask_engine(
+    _unconfigured_engine: tuple[DaskEngine, StreamingOptions],
+) -> DaskEngine:
+    """Return the shared configured :class:`DaskEngine`."""
+    engine, options = _unconfigured_engine
+    return configure_streaming_engine(engine, options)
+
+
+@pytest.fixture
 def streaming_engine_factory(
     _unconfigured_engine: tuple[StreamingEngine, StreamingOptions],
 ) -> Callable[[StreamingOptions], StreamingEngine]:
@@ -282,6 +292,8 @@ def pytest_configure(config: pytest.Config):
     # test that shares a worker with a ray/dask test, so the suppression must
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
+    # https://github.com/open-telemetry/opentelemetry-python/issues/5231 (used by Ray)
+    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -292,6 +304,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
     if "spmd_engine" in fixtures or "spmd_engine_factory" in fixtures:
         engines = ["spmd"]
+    elif "dask_engine" in fixtures:
+        engines = ["dask"]
     elif "streaming_engine" in fixtures or "streaming_engine_factory" in fixtures:
         engines = STREAMING_ENGINE_FIXTURE_PARAMS
     elif "engine" in fixtures:
