@@ -1020,8 +1020,15 @@ class StringMethods(BaseAccessor):
             raise a `NotImplementedError` if anything other than the default
             value is set.
         """
-        if case is not None:
-            raise NotImplementedError("`case` parameter is not yet supported")
+        if case is not None and case is not True:
+            if regex:
+                raise NotImplementedError(
+                    "`case=False` is not yet supported when `regex=True`"
+                )
+            if can_convert_to_column(pat):
+                raise NotImplementedError(
+                    "`case=False` is not yet supported for list-like `pat`"
+                )
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
@@ -1064,9 +1071,14 @@ class StringMethods(BaseAccessor):
                 n,
             )
         else:
-            result = self._column.replace_str(
+            if case is False:
+                input_col = self._column.to_lower()
+                pat = pat.lower()  # type: ignore[union-attr]
+            else:
+                input_col = self._column
+            result = input_col.replace_str(
                 pat,  # type: ignore[arg-type]
-                repl,
+                pa_repl,
                 n,
             )
         return self._return_or_inplace(result)
