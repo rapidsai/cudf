@@ -1016,9 +1016,11 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.replace`
 
-            The parameters `case` and `flags` are not yet supported and will
-            raise a `NotImplementedError` if anything other than the default
-            value is set.
+            The parameter `case` is supported only when `regex=False`.
+            `case=False` with `regex=True` is not yet supported and will raise
+            a `NotImplementedError`.
+            The `flags` parameter is not yet supported and will raise a
+            `NotImplementedError` if anything other than the default value is set.
         """
         if case is not None and case is not True:
             if regex:
