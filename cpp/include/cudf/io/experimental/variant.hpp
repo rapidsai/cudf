@@ -25,69 +25,61 @@ namespace io::parquet::experimental {
  */
 
 /**
- * @brief Extract the raw VARIANT-encoded bytes of a nested field by JSONPath-like path string.
+ * @brief Extract the raw VARIANT-encoded bytes of a nested object field by JSONPath-like path.
  *
- * Walks `path` step by step, descending into object values (`basic_type == 2`) at name steps and
- * into array values (`basic_type == 3`) at integer index steps. Returns a new VARIANT struct column
- * (`struct<list<uint8>, list<uint8>>`) where child 0 is the original `metadata` (copied once) and
- * child 1 contains the raw encoded bytes of the value at the end of the path for each row. The
- * metadata dictionary is shared across all nesting levels in the Variant spec, so passing it
- * through preserves validity for further operations on the extracted values.
+ * Walks `path` step by step, descending into object values (`basic_type == 2`) at each name step.
+ * Returns a `list<uint8>` column containing the raw encoded bytes of the value at the end of
+ * the path for each row.
  *
  * Null is produced when the struct row is null, a name step's key is absent from the dictionary,
- * an index step is out of bounds, or a step's kind does not match the current value's type (index
- * step on an object or name step on an array).
+ * or the current value is not an object (`basic_type != 2`).
  *
- * Path grammar (subset of JSONPath; no filters or expressions):
- *   path   := "$"? first_step step*
- *   step   := "." name | "[" index "]" | "[" quoted "]"
- *   name   := [A-Za-z_][A-Za-z0-9_]*   (first step may also be a bare name)
- *   quoted := "'...'" | "\"...\""   (no escape handling; may not contain the wrapping quote char)
- *   index  := non-negative base-10 integer
+ * Path grammar:
+ *   path  := "$"? first_step ("." name)*
+ *   first := name | "." name
+ *   name  := [A-Za-z_][A-Za-z0-9_]*
  *
  * Examples:
- *   "x"                         -> top-level field "x" (leading $ optional)
- *   "$.foo.bar"                 -> object descent foo -> bar
- *   "$.foo[0].bar"              -> object -> array[0] -> object
- *   "$[0].item002[0].item003"   -> array[0] -> obj.item002 -> array[0] -> obj.item003
- *   "$['weird.key'][2]"         -> object key literally named "weird.key", then array[2]
+ *   "x"          -> top-level field "x" (leading $ optional)
+ *   "$.foo"      -> top-level field "foo"
+ *   "$.foo.bar"  -> object descent foo -> bar
  *
  * @param variant_column Struct column (VARIANT materialization) with `list<uint8>` children
- * @param path JSONPath-like path string identifying the target value
+ *                       (`metadata`, `value`), plus optional shredded siblings
+ * @param path JSONPath-like path string identifying the target object field
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @return VARIANT struct column with the extracted field's encoded bytes
+ * @return `list<uint8>` column with the extracted field's encoded bytes
  *
- * @throws std::invalid_argument on empty path, `[*]` wildcard, negative index, or malformed syntax
+ * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
+ *         which require array-indexing support that is not yet implemented)
  */
-std::unique_ptr<column> get_variant_field(
+[[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,
   std::string_view path,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Decode a VARIANT struct column's `value` blobs into a typed cuDF column.
+ * @brief Decode a VARIANT value column's blobs into a typed cuDF column.
  *
- * Each row's `value` child (child 1) is interpreted as a Variant-encoded primitive and decoded
- * into `desired_type`. Supported targets: `INT8`, `INT16`, `INT32`, `INT64`, `STRING`. Type
- * matching is strict: an INT16-encoded value cast to `INT32` produces null. Null is produced
- * when the struct row is null or the encoded type does not match `desired_type`.
+ * A null value is produced when the input row is null or the encoded type does not match
+ * `desired_type`.
  *
- * @param variant_column Struct column (VARIANT materialization) with `list<uint8>` children
+ * @param values `list<uint8>` column of VARIANT-encoded value bytes
  * @param desired_type Target cuDF type (`STRING` or `INT8`/`INT16`/`INT32`/`INT64`)
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
  */
-std::unique_ptr<column> cast_variant(
-  column_view const& variant_column,
+[[nodiscard]] std::unique_ptr<column> cast_variant(
+  column_view const& values,
   data_type desired_type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Convenience wrapper: extract a nested value by path and decode into a typed column.
+ * @brief Convenience wrapper: extract a nested object value by path and decode into a typed column.
  *
  * Equivalent to `cast_variant(get_variant_field(variant_column, path), desired_type)`.
  *
@@ -96,12 +88,11 @@ std::unique_ptr<column> cast_variant(
  * @param desired_type Target type: `STRING` or `INT8`/`INT16`/`INT32`/`INT64`
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @return Column of `desired_type` with one row per struct row; null where the struct row is null,
- *         any step along the path misses, or the final encoded value does not match `desired_type`
+ * @return Column of `desired_type`
  *
- * @throws std::invalid_argument on empty path, `[*]` wildcard, negative index, or malformed syntax
+ * @throws std::invalid_argument on empty path or malformed syntax
  */
-std::unique_ptr<column> extract_variant_field(
+[[nodiscard]] std::unique_ptr<column> extract_variant_field(
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,

@@ -5,14 +5,16 @@
 # cmake-format: on
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 
 include(../../../../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
 include(rapids-cpm)
-rapids_cpm_init()
+rapids_cpm_init(
+  OVERRIDE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../cpp/cmake/thirdparty/patches/override.json"
+)
 
 rapids_cuda_init_architectures(CUDF_JNI)
 
@@ -89,6 +91,10 @@ get_target_property(CUDF_CXX_FLAGS cudf::cudf CUDF_CXX_FLAGS)
 get_target_property(CUDF_CUDA_FLAGS cudf::cudf CUDF_CUDA_FLAGS)
 get_target_property(CUDF_CXX_DEFINITIONS cudf::cudf CUDF_CXX_DEFINITIONS)
 get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
+
+# The Java/JNI build always triggers static builds of both libcudf itself and its dependencies, and
+# therefore needs all of them to be installed to link against later.
+set(CUDF_INSTALL_LIBRARY_DEPS ON)
 
 # ##################################################################################################
 # * nvtx3 and nvcomp-------------------------------------------------------------------------------

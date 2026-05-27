@@ -5,107 +5,46 @@
 
 #include "variant_path.hpp"
 
-#include <cctype>
-#include <charconv>
+#include <cudf/utilities/error.hpp>
+
 #include <cstddef>
-#include <limits>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 
 namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
-constexpr bool is_name_start(char c)
-{
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-constexpr bool is_name_cont(char c) { return is_name_start(c) || (c >= '0' && c <= '9'); }
+// Dot-notation field names accept any byte except the structural characters '.' and '['.
+[[nodiscard]] constexpr bool is_name_char(char c) { return c != '.' && c != '['; }
 
 [[noreturn]] void throw_parse_error(std::string_view path, std::size_t pos, std::string_view msg)
 {
-  throw std::invalid_argument("invalid variant path \"" + std::string{path} + "\" at position " +
-                              std::to_string(pos) + ": " + std::string{msg});
+  CUDF_FAIL("invalid variant path \"" + std::string{path} + "\" at position " +
+              std::to_string(pos) + ": " + std::string{msg},
+            std::invalid_argument);
 }
 
-// Read an unquoted identifier starting at `pos`. Returns the new position after the name.
-// Throws if no valid name is present at `pos`.
 std::size_t read_unquoted_name(std::string_view path, std::size_t pos, std::string& out)
 {
   auto const start = pos;
   auto const len   = path.size();
-  if (pos >= len || !is_name_start(path[pos])) {
-    throw_parse_error(path, pos, "expected field name (letter or '_')");
+  if (pos >= len || !is_name_char(path[pos])) {
+    throw_parse_error(path, pos, "field name cannot be empty");
   }
   ++pos;
-  while (pos < len && is_name_cont(path[pos])) {
+  while (pos < len && is_name_char(path[pos])) {
     ++pos;
   }
   out.assign(path.data() + start, pos - start);
   return pos;
 }
 
-// Read a bracketed step starting AFTER the '['. Returns the new position after the closing ']'.
-std::size_t read_bracket_step(std::string_view path,
-                              std::size_t pos,
-                              std::vector<variant_path_step>& out)
-{
-  auto const len = path.size();
-  if (pos >= len) { throw_parse_error(path, pos, "unterminated '[' in variant path"); }
-
-  char const nc = path[pos];
-  if (nc == '*') { throw_parse_error(path, pos, "variant path wildcard '[*]' is not supported"); }
-  if (nc == '-') { throw_parse_error(path, pos, "negative variant path index is not supported"); }
-  if (nc == ']') { throw_parse_error(path, pos, "empty '[]' in variant path"); }
-
-  if (nc == '\'' || nc == '"') {
-    char const quote = nc;
-    ++pos;
-    auto const start = pos;
-    while (pos < len && path[pos] != quote) {
-      ++pos;
-    }
-    if (pos >= len) { throw_parse_error(path, pos, "unterminated quoted name"); }
-    if (pos == start) { throw_parse_error(path, pos, "empty quoted name"); }
-    std::string name{path.data() + start, pos - start};
-    ++pos;  // consume closing quote
-    if (pos >= len || path[pos] != ']') {
-      throw_parse_error(path, pos, "expected ']' after quoted name");
-    }
-    ++pos;
-    out.emplace_back(std::move(name));
-    return pos;
-  }
-
-  if (nc >= '0' && nc <= '9') {
-    auto const start = pos;
-    while (pos < len && path[pos] >= '0' && path[pos] <= '9') {
-      ++pos;
-    }
-    long long val = 0;
-    auto [p, ec]  = std::from_chars(path.data() + start, path.data() + pos, val);
-    if (ec != std::errc{} ||
-        val > static_cast<long long>(std::numeric_limits<cudf::size_type>::max())) {
-      throw_parse_error(path, start, "index out of range");
-    }
-    if (pos >= len || path[pos] != ']') {
-      throw_parse_error(path, pos, "expected ']' after index");
-    }
-    ++pos;
-    out.emplace_back(static_cast<cudf::size_type>(val));
-    return pos;
-  }
-
-  throw_parse_error(path, pos, "unexpected character after '['");
-}
-
 }  // namespace
 
-std::vector<variant_path_step> parse_variant_path(std::string_view path)
+std::vector<std::string> parse_variant_path(std::string_view path)
 {
-  std::vector<variant_path_step> steps;
+  std::vector<std::string> steps;
   auto const len  = path.size();
   std::size_t pos = 0;
 
@@ -117,13 +56,11 @@ std::vector<variant_path_step> parse_variant_path(std::string_view path)
     char const c = path[pos];
     if (c == '.') {
       ++pos;
+      if (pos >= len) { throw_parse_error(path, pos - 1, "trailing '.' with no field name"); }
       std::string name;
       pos = read_unquoted_name(path, pos, name);
       steps.emplace_back(std::move(name));
-    } else if (c == '[') {
-      ++pos;
-      pos = read_bracket_step(path, pos, steps);
-    } else if (first && is_name_start(c)) {
+    } else if (first && is_name_char(c)) {
       // Allow a bare leading name (e.g. "x" or "foo" with no leading '$').
       std::string name;
       pos = read_unquoted_name(path, pos, name);
@@ -134,7 +71,7 @@ std::vector<variant_path_step> parse_variant_path(std::string_view path)
     first = false;
   }
 
-  if (steps.empty()) { throw std::invalid_argument("variant path must contain at least one step"); }
+  CUDF_EXPECTS(!steps.empty(), "variant path is empty", std::invalid_argument);
 
   return steps;
 }

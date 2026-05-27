@@ -5,35 +5,26 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
 
 /**
- * @brief One step in a parsed VARIANT path: either a dictionary field name or an array index.
+ * @brief Parse a JSONPath-like VARIANT path string into an ordered sequence of object-key steps.
  *
- * String alternative (`std::string`): descend into an object via the key with that name.
- * Integer alternative (`cudf::size_type`): descend into an array via that non-negative index.
+ * Grammar — object descent only:
+ *   path  := "$"? first_step ("." name)*
+ *   first := name | "." name
+ *   name  := [^.\[]+
+ *
+ * Names accept any byte except '.' (step separator) and '[' (start of a bracket step,
+ * reserved for future array indexing and quoted-name syntax).
+ *
+ * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
+ *         which require array-indexing support that is not yet implemented)
  */
-using variant_path_step = std::variant<std::string, cudf::size_type>;
-
-/**
- * @brief Parse a JSONPath-like VARIANT path string into an ordered sequence of steps.
- *
- * Grammar (subset of JSONPath; no filters/expressions):
- *   path   := "$"? first_step step*
- *   step   := "." name | "[" index "]" | "[" quoted "]"
- *   name   := [A-Za-z_][A-Za-z0-9_]*   (first step may also be a bare name)
- *   quoted := "'...'" | "\"...\""   (no escape handling; may not contain the wrapping quote char)
- *   index  := non-negative base-10 integer
- *
- * @throws std::invalid_argument on empty path, `[*]` wildcard, negative index, or malformed syntax
- */
-std::vector<variant_path_step> parse_variant_path(std::string_view path);
+[[nodiscard]] std::vector<std::string> parse_variant_path(std::string_view path);
 
 }  // namespace cudf::io::parquet::experimental::detail
