@@ -74,7 +74,7 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   size_type pos          = 1;
   auto const dict_size_r = read_uint_le(meta, pos, offset_size);
   if (!dict_size_r) { return cuda::std::nullopt; }
-  auto const dict_size = static_cast<size_type>(*dict_size_r);
+  auto const dict_size = *dict_size_r;
   pos += offset_size;
 
   // Read dictionary_size + 1 offsets
@@ -84,7 +84,7 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
 
   size_type const strings_base = offsets_start + offsets_bytes;
   // Bytes available for dictionary string payloads
-  auto const strings_extent = static_cast<uint64_t>(meta_len - strings_base);
+  auto const strings_extent = meta_len - strings_base;
 
   // Carry forward the previous offset to avoid re-reading it each iteration
   auto prev_off_r = read_uint_le(meta, offsets_start, offset_size);
@@ -98,7 +98,7 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
     prev_off_r        = next_off_r;
     if (next_u < prev_u || next_u > strings_extent) { return cuda::std::nullopt; }
     cudf::string_view const entry{
-      reinterpret_cast<char const*>(meta.data() + strings_base + static_cast<size_type>(prev_u)),
+      reinterpret_cast<char const*>(meta.data() + strings_base + prev_u),
       static_cast<size_type>(next_u - prev_u)};
     if (entry == key) { return i; }
   }
@@ -130,7 +130,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   size_type pos         = 1;
   auto const num_elts_r = read_uint_le(val, pos, is_large ? 4 : 1);
   if (!num_elts_r) { return {}; }
-  auto const n = static_cast<size_type>(*num_elts_r);
+  auto const n = *num_elts_r;
   pos += is_large ? 4 : 1;
 
   size_type const field_ids_start = pos;
@@ -143,7 +143,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
 
   size_type const values_base = field_offs_start + field_offs_bytes;
   // Maximum legitimate field-offset value: bytes available after values_base
-  auto const values_extent = static_cast<uint64_t>(val_len - values_base);
+  auto const values_extent = val_len - values_base;
 
   // Find the matching field ID and its start offset
   bool found             = false;
@@ -173,8 +173,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   }
 
   if (match_end_u < match_start_u) { return {}; }
-  return val.subspan(values_base + static_cast<size_type>(match_start_u),
-                     static_cast<size_type>(match_end_u - match_start_u));
+  return val.subspan(values_base + match_start_u, match_end_u - match_start_u);
 }
 
 // Variant primitive ints: basic_type=0, value_header maps INT{8,16,32,64} -> {3,4,5,6}.
@@ -279,7 +278,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
   auto const num_rows = static_cast<size_type>(d_sizes.size());
   auto const tid      = cudf::detail::grid_1d::global_thread_id();
   if (tid >= num_rows) { return; }
-  auto const row = static_cast<size_type>(tid);
+  auto const row = tid;
 
   if (!cudf::bit_is_set(d_null_mask, row)) {
     d_sizes[row]       = 0;
@@ -308,7 +307,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   auto const num_rows = static_cast<size_type>(d_output.size());
   auto const tid      = cudf::detail::grid_1d::global_thread_id();
   if (tid >= num_rows) { return; }
-  auto const row = static_cast<size_type>(tid);
+  auto const row = tid;
 
   if (!cudf::bit_is_set(d_null_mask, row)) {
     d_output[row] = 0;
@@ -389,7 +388,7 @@ struct cast_variant_launcher {
     requires(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
              cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>)
   {
-    rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(T), stream, mr};
+    rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
     cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
@@ -530,11 +529,8 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                          static_cast<std::size_t>(num_rows + 1)};
 
   // Copy values into the output buffer
-  auto val_child = make_numeric_column(data_type{type_id::UINT8},
-                                       static_cast<size_type>(total_bytes),
-                                       mask_state::UNALLOCATED,
-                                       stream,
-                                       mr);
+  auto val_child = make_numeric_column(
+    data_type{type_id::UINT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
   if (total_bytes > 0) {
     auto const out_base = val_child->mutable_view().data<uint8_t>();
     auto src_iter       = thrust::make_transform_iterator(
@@ -550,8 +546,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
         [out_base, d_off = d_offsets.data()] __device__(size_type row) -> uint8_t* {
           return out_base + d_off[row];
         }));
-    cudf::detail::batched_memcpy_async(
-      src_iter, dst_iter, d_sizes.begin(), static_cast<std::size_t>(num_rows), stream);
+    cudf::detail::batched_memcpy_async(src_iter, dst_iter, d_sizes.begin(), num_rows, stream);
   }
 
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
