@@ -173,7 +173,7 @@ through additional environment variables. For example, to disable the memory-rel
 CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0
 ```
 
-To disable IO traces, set `LOG_IO=0`.
+To disable IO traces, set `CUDF_POLARS_LOG_IO=0`.
 
 And to disable the memory and dataframe metrics, which essentially leaves just the duration
 metrics, set
