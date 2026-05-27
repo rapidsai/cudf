@@ -40,12 +40,18 @@ def ray_num_ranks() -> int:
 @pytest.fixture(scope="session")
 def ray_init_options(ray_num_ranks: int) -> dict[str, Any]:
     """
-    Keyword arguments forwarded to `ray.init` to configure the Ray cluster
-    for testing, especially in a CI environment.
+    Keyword arguments forwarded to ``ray.init`` for the test Ray cluster.
+
+    When using this fixture, a ``RayEngine`` must be constructed with:
+    - ``num_ranks`` set
+    - ``engine_options={"allow_gpu_sharing": True}``
+
+    This is required because the cluster is configured with ``num_gpus=0``,
+    so Ray does not autodetect or track GPU resources.
     """
     return {
         "num_cpus": ray_num_ranks,
-        "num_gpus": 0,  # the main Ray cluster doesn't need to be GPU aware, the RankActors are via ray.remote
+        "num_gpus": 0,
         "include_dashboard": False,
         "object_store_memory": 256 * 1024 * 1024,  # 256 MB
     }
@@ -86,7 +92,7 @@ def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 def _unconfigured_engine(
     _engine_param: EngineFixtureParam,
     ray_num_ranks: int,
-    ray_init_options,
+    ray_init_options: dict[str, Any],
 ) -> Generator[tuple[pl.GPUEngine, StreamingOptions | None], None, None]:
     """
     Fixture generating an engine resource and options to apply before use.
