@@ -50,9 +50,9 @@ namespace {
 
 constexpr int variant_version_v1 = 1;
 
-__device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t const> data,
-                                                             size_type pos,
-                                                             int width)
+__device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t const> data,
+                                                          size_type pos,
+                                                          int width)
 {
   if (cuda::std::cmp_greater(pos + width, data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
@@ -72,7 +72,7 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
-  auto const dict_size_r = read_uint_le(meta, pos, offset_size);
+  auto const dict_size_r = read_uint(meta, pos, offset_size);
   if (!dict_size_r) { return cuda::std::nullopt; }
   auto const dict_size = *dict_size_r;
   pos += offset_size;
@@ -87,11 +87,11 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   auto const strings_extent = meta_len - strings_base;
 
   // Carry forward the previous offset to avoid re-reading it each iteration
-  auto prev_off_r = read_uint_le(meta, offsets_start, offset_size);
+  auto prev_off_r = read_uint(meta, offsets_start, offset_size);
   if (!prev_off_r) { return cuda::std::nullopt; }
 
   for (size_type i = 0; i < dict_size; ++i) {
-    auto const next_off_r = read_uint_le(meta, offsets_start + (i + 1) * offset_size, offset_size);
+    auto const next_off_r = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
     if (!next_off_r) { return cuda::std::nullopt; }
     auto const prev_u = *prev_off_r;
     auto const next_u = *next_off_r;
@@ -128,7 +128,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   bool const is_large      = ((value_header >> 4) & 0x01) != 0;
 
   size_type pos         = 1;
-  auto const num_elts_r = read_uint_le(val, pos, is_large ? 4 : 1);
+  auto const num_elts_r = read_uint(val, pos, is_large ? 4 : 1);
   if (!num_elts_r) { return {}; }
   auto const n = *num_elts_r;
   pos += is_large ? 4 : 1;
@@ -149,11 +149,11 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   bool found             = false;
   uint64_t match_start_u = 0;
   for (size_type i = 0; i < n; ++i) {
-    auto const fid_r = read_uint_le(val, field_ids_start + i * field_id_size, field_id_size);
+    auto const fid_r = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
     if (!fid_r) { return {}; }
     if (cuda::std::cmp_not_equal(*fid_r, dict_idx)) { continue; }
 
-    auto const o_r = read_uint_le(val, field_offs_start + i * field_off_size, field_off_size);
+    auto const o_r = read_uint(val, field_offs_start + i * field_off_size, field_off_size);
     if (!o_r) { return {}; }
     if (*o_r > values_extent) { return {}; }
     match_start_u = *o_r;
@@ -166,7 +166,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   // among all n+1 offset entries (the sentinel at index n is the total data size)
   uint64_t match_end_u = values_extent;
   for (size_type j = 0; j <= n; ++j) {
-    auto const oj_r = read_uint_le(val, field_offs_start + j * field_off_size, field_off_size);
+    auto const oj_r = read_uint(val, field_offs_start + j * field_off_size, field_off_size);
     if (!oj_r) { continue; }
     if (*oj_r > values_extent) { continue; }
     if (*oj_r > match_start_u && *oj_r < match_end_u) { match_end_u = *oj_r; }
@@ -217,36 +217,32 @@ __device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t con
   return sub_val;
 }
 
-struct string_decode_result {
-  size_type length;
-  size_type data_offset;  // offset from enc[0] to first char byte
-  bool ok;
-};
-
-__device__ inline string_decode_result decode_string_info(device_span<uint8_t const> enc)
+__device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
+  device_span<uint8_t const> enc)
 {
-  auto const len = static_cast<size_type>(enc.size());
-  if (len < 1) { return {0, 0, false}; }
+  auto const len = enc.size();
+  if (len < 1) { return cuda::std::nullopt; }
   uint8_t const vm       = enc[0];
   int const basic_type   = vm & 0x03;
   int const value_header = (vm >> 2) & 0x3F;
 
   if (basic_type == 1) {
     // Short string: value_header = length
-    size_type const str_len = value_header;
-    if (1 + str_len > len) { return {0, 0, false}; }
-    return {str_len, 1, true};
+    std::size_t const str_len = value_header;
+    if (1 + str_len > len) { return cuda::std::nullopt; }
+    return enc.subspan(1, str_len);
   }
   if (basic_type == 0 && value_header == 16) {
     // Long string: 1-byte header + 4-byte LE length + char bytes
-    constexpr size_type long_string_prefix_bytes = 1 + sizeof(uint32_t);
-    if (len < long_string_prefix_bytes) { return {0, 0, false}; }
+    constexpr std::size_t long_string_prefix_bytes = 1 + sizeof(uint32_t);
+    if (len < long_string_prefix_bytes) { return cuda::std::nullopt; }
     uint32_t str_len;
     memcpy(&str_len, enc.data() + 1, sizeof(str_len));
-    if (long_string_prefix_bytes + str_len > len) { return {0, 0, false}; }
-    return {static_cast<size_type>(str_len), long_string_prefix_bytes, true};
+    // Encoded length claims more char bytes than the buffer holds: truncated/malformed blob
+    if (long_string_prefix_bytes + str_len > len) { return cuda::std::nullopt; }
+    return enc.subspan(long_string_prefix_bytes, str_len);
   }
-  return {0, 0, false};
+  return cuda::std::nullopt;
 }
 
 // Returns the metadata and value list bytes for a given row from device views
@@ -349,17 +345,17 @@ struct cast_variant_string_fn {
     device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
                                          static_cast<std::size_t>(val_end - val_begin)};
 
-    auto const info = decode_string_info(val);
-    if (!info.ok) {
+    auto const str = decode_string(val);
+    if (!str) {
       if (!d_chars) { d_sizes[row] = 0; }
       cudf::clear_bit(d_null_mask, row);
       return;
     }
 
     if (!d_chars) {
-      d_sizes[row] = info.length;
+      d_sizes[row] = str->size();
     } else {
-      memcpy(d_chars + d_offsets[row], val.data() + info.data_offset, info.length);
+      memcpy(d_chars + d_offsets[row], str->data(), str->size());
     }
   }
 };
