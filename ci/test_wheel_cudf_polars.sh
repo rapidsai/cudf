@@ -15,26 +15,8 @@ CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFF
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
 PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
-rapids-logger "Installing cudf_polars and its dependencies"
-
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
-
-# notes:
-#
-#   * echo to expand wildcard before adding `[test]` requires for pip
-#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
-#     that environment variable is ignored if any other --constraint are passed via the CLI
-#
-rapids-pip-retry install \
-    -v \
-    --prefer-binary \
-    --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,dask,ray]" \
-    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
-
-rapids-logger "Run cudf_polars tests"
 
 read -r -a VERSIONS <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_polars_compat polars_compat_version)"
 LATEST_VERSION="${VERSIONS[-1]}"
@@ -55,20 +37,35 @@ for version in "${VERSIONS[@]}"; do
     rapids-logger "Testing cudf_polars with polars ${version}.*"
 
     # Generate requirements for this polars compat version.
+    polars_requirements_txt="polars-compat-${version}-requirements.txt"
     rapids-dependency-file-generator \
         --config dependencies.yaml \
         --file-key test_cudf_polars_compat \
         --output requirements \
         --matrix "polars_compat_version=${version}" \
-        > "polars-compat-${version}-requirements.txt"
+        > "${polars_requirements_txt}"
 
-    # Create an isolated virtual environment inheriting the already-installed cudf_polars
-    # wheels so we only need to override the polars version.
-    python -m venv --system-site-packages "venv_polars_${version}"
+    env_name="venv_polars_${version}"
+    python -m venv --clear "${env_name}"
     # shellcheck disable=SC1090
-    source "venv_polars_${version}/bin/activate"
+    source "${env_name}/bin/activate"
 
-    rapids-pip-retry install -r "polars-compat-${version}-requirements.txt"
+    rapids-logger "Installing cudf_polars and its dependencies for polars ${version}.*"
+
+    # notes:
+    #
+    #   * echo to expand wildcard before adding `[test]` requires for pip
+    #   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+    #     that environment variable is ignored if any other --constraint are passed via the CLI
+    #
+    rapids-pip-retry install \
+        -v \
+        --prefer-binary \
+        --constraint "${PIP_CONSTRAINT}" \
+        "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,dask,ray]" \
+        "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+        "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+        -r "polars-compat-${version}-requirements.txt"
 
     rapids-logger "Running tests for polars ${version}.*"
 
@@ -91,7 +88,7 @@ for version in "${VERSIONS[@]}"; do
 
     test_exitcode=$?
     deactivate
-    rm -rf "venv_polars_${version}" "polars-compat-${version}-requirements.txt"
+    rm -rf "${env_name}" "${polars_requirements_txt}"
 
     if [ ${test_exitcode} -ne 0 ]; then
         EXITCODE=1
