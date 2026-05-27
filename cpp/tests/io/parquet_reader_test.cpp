@@ -29,6 +29,7 @@
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
 #include <array>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -4256,6 +4257,26 @@ TEST_F(ParquetReaderTest, LateBindSourceInfo)
   auto result = cudf::io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetReaderTest, InvalidFooterMagic)
+{
+  auto const expected = create_random_fixed_table<int>(4, 4, false);
+
+  auto const filepath = temp_env->get_temp_filepath("InvalidFooterMagic.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected));
+
+  std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
+  ASSERT_TRUE(file.is_open());
+  constexpr std::array<char, 4> bad_magic{'B', 'A', 'D', '!'};
+  file.seekp(-static_cast<std::streamoff>(bad_magic.size()), std::ios::end);
+  file.write(bad_magic.data(), bad_magic.size());
+  file.close();
+
+  auto const read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 }
 
 TEST_F(ParquetReaderTest, DecimalTypeOption)

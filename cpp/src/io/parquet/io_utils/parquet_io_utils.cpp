@@ -37,12 +37,10 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::dat
   constexpr auto ender_len  = sizeof(file_ender_s);
   size_t const len          = datasource.size();
 
-  auto header_buffer = datasource.host_read(0, header_len);
-  auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
-  auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
+
+  auto ender_buffer = datasource.host_read(len - ender_len, ender_len);
+  auto const ender  = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
