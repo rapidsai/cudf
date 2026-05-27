@@ -241,16 +241,6 @@ def log(message: str, **kwargs: Any) -> None:
         log.info(message, **kwargs)
 
 
-def common_path_prefix(paths: list[str] | tuple[str, ...]) -> str:
-    """Return a stable common path prefix for a path collection."""
-    if len(paths) == 0:
-        return ""
-    prefix = os.path.commonprefix(paths)
-    if "/" in prefix:
-        return prefix.rsplit("/", 1)[0] + "/"
-    return prefix
-
-
 @contextlib.contextmanager
 def log_io_event(
     *,
@@ -276,7 +266,7 @@ def log_io_event(
         start=start,
         stop=stop,
         is_statistics=is_statistics,
-        prefix=common_path_prefix(paths),
+        prefix=os.path.commonpath(paths),
         path_count=len(paths),
         offset=offset,
         size=size,
