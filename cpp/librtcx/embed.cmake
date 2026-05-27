@@ -26,6 +26,7 @@ function(add_embed TARGET)
   endif()
 
   add_library(${TARGET}__embed_props INTERFACE)
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX 0)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
@@ -108,6 +109,15 @@ function(embed_includes TARGET)
     PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES}
   )
 
+  get_property(
+    SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
+  list(LENGTH SOURCE_FILE_IDS IDX)
+
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX ${IDX})
+
 endfunction()
 
 # This function registers a single file to be embedded for JIT compilation.
@@ -180,6 +190,15 @@ function(embed_blob TARGET)
     APPEND
     PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST}
   )
+
+  get_property(
+    SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
+  list(LENGTH SOURCE_FILE_IDS IDX)
+
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX ${IDX})
 
 endfunction()
 

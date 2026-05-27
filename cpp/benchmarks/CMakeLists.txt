@@ -387,10 +387,20 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
+# * LTO Fragments ----------------------------------------------------------------------------
+add_embed(cudf_benchmark_fragments)
+add_fragment(cudf_benchmark_fragments FRAGMENT add SOURCE binaryop/fragments/add.cu)
+add_fragment(cudf_benchmark_fragments FRAGMENT null_max SOURCE binaryop/fragments/null_max.cu)
+embed(cudf_benchmark_fragments COMPRESSION none)
+
+# ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
 ConfigureNVBench(
   BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+  ${cudf_benchmark_fragments_SOURCE_DIR}/cudf_benchmark_fragments.s
 )
+target_include_directories(BINARYOP_NVBENCH PRIVATE ${cudf_benchmark_fragments_SOURCE_DIR})
+add_dependencies(BINARYOP_NVBENCH cudf_benchmark_fragments)
 
 # ##################################################################################################
 # * transform benchmark

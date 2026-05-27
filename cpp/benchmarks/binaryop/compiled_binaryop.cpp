@@ -1,12 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/transform.hpp>
 
+#include <cudf_benchmark_fragments.hpp>
 #include <nvbench/nvbench.cuh>
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
@@ -96,3 +98,81 @@ BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_EQUALS,          bool
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_NOT_EQUALS,      bool);
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NULL_MAX,             decimal32);
 BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  NULL_MIN,             timestamp_s);
+
+
+template <typename TypeLhs, typename TypeRhs, typename TypeOut>
+void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
+{
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+
+  auto const source_table = create_random_table(
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{num_rows});
+
+  auto lhs = cudf::column_view(source_table->get_column(0));
+  auto rhs = cudf::column_view(source_table->get_column(1));
+
+  size_t fragment_id = 0;
+  bool null_aware    = false;
+
+  switch (binop) {
+    case cudf::binary_operator::ADD: {
+      fragment_id = cudf_benchmark_fragments::add;
+      null_aware  = false;
+    } break;
+    case cudf::binary_operator::NULL_MAX: {
+      fragment_id = cudf_benchmark_fragments::null_max;
+      null_aware  = true;
+    } break;
+    default: throw std::runtime_error("Unsupported binary operator for LTO benchmark");
+  }
+
+  // Call once for hot cache.
+  cudf::transform_output output{cudf::data_type{cudf::type_to_id<TypeOut>()},
+                                cudf::output_nullability::ALL_VALID};
+
+  auto const range = cudf_benchmark_fragments::file_ranges[fragment_id];
+  std::span<uint8_t const> udf{cudf_benchmark_fragments::files.subspan(range[0], range[1])};
+
+  auto result = cudf::binary_op_lto(source_table->get_column(0),
+                                    source_table->get_column(1),
+                                    output,
+                                    udf,
+                                    cudf::lto_binary_type::FATBIN,
+                                    null_aware ? cudf::null_aware::YES : cudf::null_aware::NO
+                                   );
+
+  // use number of bytes read and written to global memory
+  state.add_global_memory_reads<TypeLhs>(num_rows);
+  state.add_global_memory_reads<TypeRhs>(num_rows);
+  state.add_global_memory_writes<TypeOut>(num_rows);
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    cudf::binary_op_lto(source_table->get_column(0),
+                        source_table->get_column(1),
+                        output,
+                        udf,
+                        cudf::lto_binary_type::FATBIN,
+                        null_aware ? cudf::null_aware::YES : cudf::null_aware::NO);
+  });
+}
+
+
+#define BM_LTO_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)      \
+  static void name(::nvbench::state& st)                                 \
+  {                                                                      \
+    ::BM_lto_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); \
+  }                                                                      \
+  NVBENCH_BENCH(name)                                                    \
+    .set_name("lto_binary_op_" BM_STRINGIFY(name))                       \
+    .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
+
+
+#define build_name_lto(a, b, c, d) a##_##b##_##c##_##d##_lto
+
+
+#define LTO_BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
+  BM_LTO_BINARYOP_BENCHMARK_DEFINE(build_name_lto(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
+
+
+LTO_BINARYOP_BENCHMARK_DEFINE(float,        float,      ADD,                  float);
+LTO_BINARYOP_BENCHMARK_DEFINE(decimal32,       decimal32,    NULL_MAX,  decimal32);

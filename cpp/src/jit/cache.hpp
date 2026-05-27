@@ -88,4 +88,15 @@ kernel get_kernel(std::string const& name,
                   std::span<char const* const> headers,
                   std::string const& kernel_instance);
 
+/**
+ * @brief Gets a kernel by linking together embedded binary fragments
+ * @param name Debug name for the kernel (used for caching and logging)
+ * @param file_fragments Paths of the fragments to link together to form the kernel
+ * @param memory_fragments Memory fragments to link
+ * @param extra_options Additional linking options
+ */
+kernel get_lto_linked_kernel(std::string const& name,
+                             std::span<rtcx::file_fragment const> file_fragments,
+                             std::span<rtcx::memory_fragment const> memory_fragments);
+
 }  // namespace CUDF_EXPORT cudf

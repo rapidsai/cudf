@@ -39,6 +39,22 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
   return ctx.finalize();
 }
 
+rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments,
+                  std::span<rtcx::memory_fragment const> memory_fragments)
+{
+  rtcx::sha256_context ctx;
+  for (auto const& fragment : file_fragments) {
+    ctx.update(
+      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
+  }
+
+  for (auto const& fragment : memory_fragments) {
+    ctx.update(fragment.data);
+  }
+
+  return ctx.finalize();
+}
+
 void install_file_set(std::string_view target_dir,
                       std::span<uint8_t const> compressed_binary,
                       size_t uncompressed_size,
@@ -330,6 +346,90 @@ kernel_instance={}
     auto source     = read_file_string(source_file.c_str());
     return compile_library_uncached(
       name.c_str(), source.c_str(), header_include_names, headers, {});
+  };
+
+  auto fut =
+    cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
+
+  auto lib = fut.get();
+  return kernel{lib, lib->get_kernel("cudf_kernel_entry")};
+}
+
+std::tuple<rtcx::library, rtcx::blob> link_library_uncached(
+  char const* name,
+  std::span<rtcx::file_fragment const> file_fragments,
+  std::span<rtcx::memory_fragment const> memory_fragments)
+{
+  CUDF_FUNC_RANGE();
+
+  auto sm   = get_current_device_physical_model();
+  auto& ctx = cudf::get_context();
+  auto& cfg = ctx.config();
+
+  std::vector<std::string> options;
+
+  options.emplace_back("-lto");
+  options.emplace_back(std::format("-arch=sm_{}", sm));
+
+  if (cfg.disable_cuda_cache) { options.emplace_back("--no-cache"); }
+
+  if (cfg.jit_verbose) { options.emplace_back("-verbose"); }
+
+  if (cfg.dump_jit_trace) { options.emplace_back("-time"); }
+
+  std::vector<char const*> options_cstr;
+
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+
+  auto params = rtcx::link_params{.name             = name,
+                                  .output_type      = rtcx::binary_type::CUBIN,
+                                  .file_fragments   = file_fragments,
+                                  .memory_fragments = memory_fragments,
+                                  .link_options     = options_cstr};
+
+  auto cubin   = rtcx::link_library(params);
+  auto library = rtcx::load_library(cubin);
+  auto blob    = rtcx::blob_t::from_buffer(std::move(cubin));
+
+  return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
+}
+
+kernel get_lto_linked_kernel(std::string const& name,
+                             std::span<rtcx::file_fragment const> file_fragments,
+                             std::span<rtcx::memory_fragment const> memory_fragments)
+{
+  CUDF_FUNC_RANGE();
+
+  auto& cache         = cudf::get_context().rtcx_cache();
+  auto& bundle        = cudf::get_context().jit_bundle();
+  auto runtime        = get_runtime_version();
+  auto driver         = get_driver_version();
+  auto sm             = get_current_device_physical_model();
+  auto bundle_hash    = bundle.get_hash();
+  auto fragments_hash = hash(file_fragments, memory_fragments).to_hex_string();
+
+  auto cache_key = std::format(R"***(cuLibrary
+name={}
+binary_type=CUBIN
+cuda_runtime={}
+cuda_driver={}
+arch={}
+bundle={}
+fragments={}
+)***",
+                               name,
+                               runtime,
+                               driver,
+                               sm,
+                               bundle_hash,
+                               fragments_hash.view());
+
+  auto cache_key_sha256 = hash(cache_key);
+
+  auto compile = [&] {
+    return link_library_uncached(name.c_str(), file_fragments, memory_fragments);
   };
 
   auto fut =

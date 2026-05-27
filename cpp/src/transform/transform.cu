@@ -23,6 +23,7 @@
 
 #include <cuda/iterator>
 
+#include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
@@ -504,14 +505,15 @@ auto get_null_transformation(null_aware is_null_aware,
   return output_may_be_nullable;
 }
 
-void perform_checks(udf_source_type source_type,
+void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
                     null_aware is_null_aware,
                     std::optional<size_type> in_row_size,
                     std::span<transform_input const> inputs,
                     std::span<transform_output const> outputs,
                     std::span<std::unique_ptr<column> const> string_offsets)
 {
-  if (source_type == udf_source_type::PTX) {
+  if (auto* udf_source = std::get_if<udf_source_type>(&source_type);
+      udf_source != nullptr && *udf_source == udf_source_type::PTX) {
     CUDF_EXPECTS(std::none_of(inputs.begin(),
                               inputs.end(),
                               [](auto& in) {
@@ -532,6 +534,28 @@ void perform_checks(udf_source_type source_type,
                  std::invalid_argument);
     CUDF_EXPECTS(is_null_aware == null_aware::NO,
                  "PTX UDFs do not support null-aware transformations",
+                 std::invalid_argument);
+  } else if (std::holds_alternative<lto_binary_type>(source_type)) {
+    [[maybe_unused]] auto binary_type = std::get<lto_binary_type>(source_type);
+    CUDF_EXPECTS(
+      std::none_of(inputs.begin(),
+                   inputs.end(),
+                   [](auto& in) {
+                     return std::visit(
+                       [](auto& c) {
+                         return !is_fixed_width(c.type()) && c.type().id() != type_id::STRING;
+                       },
+                       in);
+                   }),
+      "Transforms with LTO binaries only support fixed-width types and strings as inputs",
+      std::invalid_argument);
+    CUDF_EXPECTS(
+      std::none_of(
+        outputs.begin(), outputs.end(), [](auto& out) { return !is_fixed_width(out.type); }),
+      "Transforms with LTO binaries only support output of fixed-width types",
+      std::invalid_argument);
+    CUDF_EXPECTS(inputs.size() == 2 || inputs.size() == 1,
+                 "LTO binary transforms only support 1 or 2 inputs",
                  std::invalid_argument);
   }
 
@@ -949,6 +973,201 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                 stream,
                                 mr);
   auto cols   = result->release();
+  return std::move(cols[0]);
+}
+
+std::string_view as_tag(type_id id)
+{
+  switch (id) {
+    case type_id::BOOL8: return "bool8";
+    case type_id::INT8: return "int8";
+    case type_id::INT16: return "int16";
+    case type_id::INT32: return "int32";
+    case type_id::INT64: return "int64";
+    case type_id::UINT8: return "uint8";
+    case type_id::UINT16: return "uint16";
+    case type_id::UINT32: return "uint32";
+    case type_id::UINT64: return "uint64";
+    case type_id::FLOAT32: return "float32";
+    case type_id::FLOAT64: return "float64";
+    case type_id::STRING: return "string_view";
+    case type_id::DECIMAL32: return "decimal32";
+    case type_id::DECIMAL64: return "decimal64";
+    case type_id::DECIMAL128: return "decimal128";
+    case type_id::DURATION_DAYS: return "duration_D";
+    case type_id::DURATION_SECONDS: return "duration_s";
+    case type_id::DURATION_MILLISECONDS: return "duration_ms";
+    case type_id::DURATION_MICROSECONDS: return "duration_us";
+    case type_id::DURATION_NANOSECONDS: return "duration_ns";
+    case type_id::TIMESTAMP_DAYS: return "timestamp_D";
+    case type_id::TIMESTAMP_SECONDS: return "timestamp_s";
+    case type_id::TIMESTAMP_MILLISECONDS: return "timestamp_ms";
+    case type_id::TIMESTAMP_MICROSECONDS: return "timestamp_us";
+    case type_id::TIMESTAMP_NANOSECONDS: return "timestamp_ns";
+    default: CUDF_FAIL("Unsupported type for JIT dispatch", std::invalid_argument);
+  }
+}
+
+std::optional<std::span<uint8_t const>> dispatch_unop_lto_kernel(
+  bool null_aware,
+  std::span<transform_input const> inputs,
+  std::span<transform_output const> outputs)
+{
+  auto input_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+
+  for (size_t i = 0; i < std::size(cudf_fragments::unop_lto_kernel_FILE_INDEX); i++) {
+    auto FILE_INDEX = cudf_fragments::unop_lto_kernel_FILE_INDEX[i];
+    auto NULL_AWARE = cudf_fragments::unop_lto_kernel_NULL_AWARE[i];
+    auto TYPE       = cudf_fragments::unop_lto_kernel_TYPE[i];
+    if (as_tag(input_type) == TYPE && null_aware == NULL_AWARE) {
+      auto range = cudf_fragments::file_ranges[FILE_INDEX];
+      return cudf_fragments::files.subspan(range[0], range[1]);
+    }
+  }
+
+  return std::nullopt;
+}
+
+std::optional<std::span<uint8_t const>> dispatch_binop_lto_kernel(
+  bool null_aware,
+  std::span<transform_input const> inputs,
+  std::span<transform_output const> outputs)
+{
+  auto input_type    = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+  auto lhs_is_scalar = std::holds_alternative<scalar_column_view>(inputs[0]);
+  auto rhs_is_scalar = std::holds_alternative<scalar_column_view>(inputs[1]);
+
+  if (lhs_is_scalar) { return std::nullopt; }
+
+  for (size_t i = 0; i < std::size(cudf_fragments::binop_lto_kernel_FILE_INDEX); i++) {
+    auto FILE_INDEX    = cudf_fragments::binop_lto_kernel_FILE_INDEX[i];
+    auto NULL_AWARE    = cudf_fragments::binop_lto_kernel_NULL_AWARE[i];
+    auto TYPE          = cudf_fragments::binop_lto_kernel_TYPE[i];
+    auto RHS_IS_SCALAR = cudf_fragments::binop_lto_kernel_RHS_IS_SCALAR[i];
+    if (as_tag(input_type) == TYPE && null_aware == NULL_AWARE && rhs_is_scalar == RHS_IS_SCALAR) {
+      auto range = cudf_fragments::file_ranges[FILE_INDEX];
+      return cudf_fragments::files.subspan(range[0], range[1]);
+    }
+  }
+
+  return std::nullopt;
+}
+
+// Dispatches to the appropriate LTO kernel based on the number of inputs and outputs, their types,
+// and nullability.
+std::span<uint8_t const> dispatch_lto_kernel(bool null_aware,
+                                             std::span<transform_input const> inputs,
+                                             std::span<transform_output const> outputs)
+{
+  if (inputs.size() == 1 && outputs.size() == 1) {
+    auto input0_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+    auto output_type = outputs[0].type.id();
+    if (input0_type == output_type && is_fixed_width(data_type{input0_type})) {
+      if (auto kernel = dispatch_unop_lto_kernel(null_aware, inputs, outputs)) { return *kernel; }
+    }
+  }
+
+  if (inputs.size() == 2 && outputs.size() == 1) {
+    auto input0_type = std::visit([](auto& c) { return c.type().id(); }, inputs[0]);
+    auto input1_type = std::visit([](auto& c) { return c.type().id(); }, inputs[1]);
+    auto output_type = outputs[0].type.id();
+    if (input0_type == output_type && input1_type == output_type &&
+        is_fixed_width(data_type{input0_type})) {
+      if (auto kernel = dispatch_binop_lto_kernel(null_aware, inputs, outputs)) { return *kernel; }
+    }
+  }
+
+  CUDF_FAIL("No suitable LTO kernel found for the given transform parameters",
+            std::invalid_argument);
+}
+
+rtcx::binary_type as_rtcx_binary_type(lto_binary_type type)
+{
+  switch (type) {
+    case lto_binary_type::LTO_IR: return rtcx::binary_type::LTO_IR;
+    case lto_binary_type::FATBIN: return rtcx::binary_type::FATBIN;
+    default:
+      CUDF_FAIL(
+        std::format("Unrecognized LTO binary type {} for LTO transform", static_cast<int>(type)),
+        std::invalid_argument);
+  }
+}
+
+std::unique_ptr<table> transform_lto(std::span<transform_input const> inputs,
+                                     std::span<uint8_t const> udf,
+                                     lto_binary_type binary_type,
+                                     std::span<transform_output const> outputs,
+                                     null_aware is_null_aware,
+                                     std::optional<size_type> in_row_size,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  perform_checks(binary_type, is_null_aware, in_row_size, inputs, outputs, {});
+  auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
+  auto output_may_be_nullable = get_null_transformation(is_null_aware, inputs, outputs);
+
+  auto [output_columns, stencil] =
+    make_outputs(is_null_aware, row_size, inputs, outputs, output_may_be_nullable, {}, stream, mr);
+  auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
+  auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
+  auto kernel_fatbin     = dispatch_lto_kernel(is_null_aware == null_aware::YES, inputs, outputs);
+
+  rtcx::memory_fragment fragments[] = {
+    {.data = kernel_fatbin, .type = rtcx::binary_type::FATBIN, .name = "kernel"},
+    {.data = udf, .type = as_rtcx_binary_type(binary_type), .name = "udf"}};
+
+  auto kernel                   = get_lto_linked_kernel("transform_lto_kernel", {}, fragments);
+  auto [cols, handles]          = jit_transform::to_args(inputs, output_columns, stream, mr);
+  cudf::size_type num_inputs    = static_cast<cudf::size_type>(inputs.size());
+  cudf::size_type num_outputs   = static_cast<cudf::size_type>(outputs.size());
+  cudf::size_type num_rows      = row_size;
+  cudf::bitmask_type* p_stencil = stencil_has_nulls ? stencil_arg : nullptr;
+  auto* input_cols              = reinterpret_cast<column_device_view_core const*>(cols.data());
+  auto* output_cols =
+    reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
+
+  auto cfg        = kernel.max_occupancy_config(0, 0);
+  void* user_data = nullptr;
+
+  void* args[] = {&num_rows, &p_stencil, &user_data, &input_cols, &output_cols};
+
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+
+  auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
+  return std::make_unique<table>(std::move(finalized));
+}
+
+std::unique_ptr<column> unary_op_lto(column_view input,
+                                     transform_output output,
+                                     std::span<uint8_t const> udf,
+                                     lto_binary_type binary_type,
+                                     null_aware is_null_aware,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
+  transform_input inputs[]   = {input};
+  transform_output outputs[] = {output};
+  auto table =
+    transform_lto(inputs, udf, binary_type, outputs, is_null_aware, std::nullopt, stream, mr);
+  auto cols = table->release();
+  return std::move(cols[0]);
+}
+
+std::unique_ptr<column> binary_op_lto(column_view lhs,
+                                      transform_input rhs,
+                                      transform_output output,
+                                      std::span<uint8_t const> udf,
+                                      lto_binary_type binary_type,
+                                      null_aware is_null_aware,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  transform_input inputs[]   = {lhs, rhs};
+  transform_output outputs[] = {output};
+  auto table =
+    transform_lto(inputs, udf, binary_type, outputs, is_null_aware, std::nullopt, stream, mr);
+  auto cols = table->release();
   return std::move(cols[0]);
 }
 
