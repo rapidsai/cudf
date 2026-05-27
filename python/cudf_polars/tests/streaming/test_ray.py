@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import pytest
@@ -123,7 +123,7 @@ def test_num_ranks_oversubscribes(ray_engine: RayEngine, ray_num_ranks: int) -> 
 @pytest.fixture(scope="module")
 def reset_engine(
     ray_num_ranks: int,
-    ray_init_options: dict[str, object],
+    ray_init_options: dict[str, Any],
 ) -> Iterator[RayEngine]:
     """Module-scoped engine for reset tests — independent of ``ray_engine``.
 
@@ -186,7 +186,7 @@ def test_reset_collects_after_options_change(reset_engine: RayEngine) -> None:
 
 def test_reset_after_shutdown_raises(
     ray_num_ranks: int,
-    ray_init_options: dict[str, object],
+    ray_init_options: dict[str, Any],
 ) -> None:
     """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = RayEngine(
@@ -237,7 +237,7 @@ def test_reset_rejects_construction_time_engine_options(
 
 def test_shutdown_skips_when_ray_not_initialized(
     ray_num_ranks: int,
-    ray_init_options: dict[str, object],
+    ray_init_options: dict[str, Any],
 ) -> None:
     """``shutdown`` short-circuits if ``ray.is_initialized()`` is ``False``."""
     engine = RayEngine(
