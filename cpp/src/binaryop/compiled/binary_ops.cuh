@@ -12,9 +12,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/conv.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/unary.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -253,14 +251,16 @@ void apply_binary_op(mutable_column_view& out,
   auto lhsd = column_device_view::create(lhs, stream);
   auto rhsd = column_device_view::create(rhs, stream);
   auto outd = mutable_column_device_view::create(out, stream);
-
+  // Create binop functor instance
   if (common_dtype) {
+    // Execute it on every element
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        cuda::counting_iterator<size_type>{0},
                        out.size(),
                        binary_op_device_dispatcher<BinaryOperator>{
                          *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
+    // Execute it on every element
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        cuda::counting_iterator<size_type>{0},
                        out.size(),
