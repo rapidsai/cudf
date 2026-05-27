@@ -56,9 +56,7 @@ __device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t
 {
   if (pos + width > static_cast<size_type>(data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
-  for (int i = 0; i < width; ++i) {
-    v |= static_cast<uint64_t>(data[pos + i]) << (8 * i);
-  }
+  memcpy(&v, data.data() + pos, width);
   return v;
 }
 
@@ -92,8 +90,6 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   auto prev_off_r = read_uint_le(meta, offsets_start, offset_size);
   if (!prev_off_r) { return cuda::std::nullopt; }
 
-  auto const key_len  = key.size_bytes();
-  auto const* key_ptr = key.data();
   for (size_type i = 0; i < dict_size; ++i) {
     auto const next_off_r = read_uint_le(meta, offsets_start + (i + 1) * offset_size, offset_size);
     if (!next_off_r) { return cuda::std::nullopt; }
@@ -101,18 +97,10 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
     auto const next_u = *next_off_r;
     prev_off_r        = next_off_r;
     if (next_u < prev_u || next_u > strings_extent) { return cuda::std::nullopt; }
-    auto const slen_u = next_u - prev_u;
-    if (slen_u != static_cast<uint64_t>(key_len)) { continue; }
-    auto const soff = static_cast<size_type>(prev_u);
-    auto const slen = static_cast<size_type>(slen_u);
-    bool match      = true;
-    for (size_type c = 0; c < slen; ++c) {
-      if (meta[strings_base + soff + c] != static_cast<uint8_t>(key_ptr[c])) {
-        match = false;
-        break;
-      }
-    }
-    if (match) { return i; }
+    cudf::string_view const entry{
+      reinterpret_cast<char const*>(meta.data() + strings_base + static_cast<size_type>(prev_u)),
+      static_cast<size_type>(next_u - prev_u)};
+    if (entry == key) { return i; }
   }
   return cuda::std::nullopt;
 }
@@ -189,27 +177,26 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
                      static_cast<size_type>(match_end_u - match_start_u));
 }
 
-// Variant primitive ints: basic_type=0, header6 maps INT{8,16,32,64} -> {3,4,5,6}.
+// Variant primitive ints: basic_type=0, value_header maps INT{8,16,32,64} -> {3,4,5,6}.
 template <typename T>
 __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> enc)
 {
   static_assert(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
                   cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>,
-                "decode_int: unsupported width");
-  constexpr int header6_for = cuda::std::is_same_v<T, int8_t>    ? 3
-                              : cuda::std::is_same_v<T, int16_t> ? 4
-                              : cuda::std::is_same_v<T, int32_t> ? 5
-                                                                 : 6;
-  constexpr int width       = sizeof(T);
+                "decode_int: T must be int8_t, int16_t, int32_t, or int64_t");
+  constexpr int expected_value_header = cuda::std::is_same_v<T, int8_t>    ? 3
+                                        : cuda::std::is_same_v<T, int16_t> ? 4
+                                        : cuda::std::is_same_v<T, int32_t> ? 5
+                                                                           : 6;
+  constexpr int width                 = sizeof(T);
   if (static_cast<size_type>(enc.size()) < 1 + width) { return cuda::std::nullopt; }
   uint8_t const vm = enc[0];
-  if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != header6_for) { return cuda::std::nullopt; }
-  using U = cuda::std::make_unsigned_t<T>;
-  U u     = 0;
-  for (int i = 0; i < width; ++i) {
-    u |= static_cast<U>(enc[1 + i]) << (8 * i);
+  if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != expected_value_header) {
+    return cuda::std::nullopt;
   }
-  return static_cast<T>(u);
+  T v;
+  memcpy(&v, enc.data() + 1, width);
+  return v;
 }
 
 // Walk a path of object-key steps level by level starting at `val` and return the span of the
@@ -241,25 +228,23 @@ __device__ inline string_decode_result decode_string_info(device_span<uint8_t co
 {
   auto const len = static_cast<size_type>(enc.size());
   if (len < 1) { return {0, 0, false}; }
-  uint8_t const vm     = enc[0];
-  int const basic_type = vm & 0x03;
-  int const header6    = (vm >> 2) & 0x3F;
+  uint8_t const vm       = enc[0];
+  int const basic_type   = vm & 0x03;
+  int const value_header = (vm >> 2) & 0x3F;
 
   if (basic_type == 1) {
-    // Short string: header6 = length
-    size_type const slen = header6;
-    if (1 + slen > len) { return {0, 0, false}; }
-    return {slen, 1, true};
+    // Short string: value_header = length
+    size_type const str_len = value_header;
+    if (1 + str_len > len) { return {0, 0, false}; }
+    return {str_len, 1, true};
   }
-  if (basic_type == 0 && header6 == 16) {
+  if (basic_type == 0 && value_header == 16) {
     // Long string: 4-byte LE length follows header
     if (len < 5) { return {0, 0, false}; }
-    uint32_t slen = 0;
-    for (int i = 0; i < 4; ++i) {
-      slen |= static_cast<uint32_t>(enc[1 + i]) << (8 * i);
-    }
-    if (5 + static_cast<size_type>(slen) > len) { return {0, 0, false}; }
-    return {static_cast<size_type>(slen), 5, true};
+    uint32_t str_len;
+    memcpy(&str_len, enc.data() + 1, sizeof(str_len));
+    if (5 + static_cast<size_type>(str_len) > len) { return {0, 0, false}; }
+    return {static_cast<size_type>(str_len), 5, true};
   }
   return {0, 0, false};
 }
@@ -374,10 +359,7 @@ struct cast_variant_string_fn {
     if (!d_chars) {
       d_sizes[row] = info.length;
     } else {
-      auto* out = d_chars + d_offsets[row];
-      for (size_type i = 0; i < info.length; ++i) {
-        out[i] = static_cast<char>(val[info.data_offset + i]);
-      }
+      memcpy(d_chars + d_offsets[row], val.data() + info.data_offset, info.length);
     }
   }
 };
