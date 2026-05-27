@@ -51,3 +51,38 @@ def test_factorize_result_classes():
 
     assert isinstance(labels, cp.ndarray)
     assert isinstance(cats, cp.ndarray)
+
+    # ``np.ndarray`` input must round-trip to ``np.ndarray`` outputs to
+    # mirror ``pd.factorize(np.ndarray)``; previously cudf returned an
+    # ``Index`` for ``cats`` here.
+    np_arr = np.array(data)
+    labels, cats = cudf.factorize(np_arr)
+    assert isinstance(labels, np.ndarray)
+    assert isinstance(cats, np.ndarray)
+    p_labels, p_cats = pd.factorize(np_arr)
+    np.testing.assert_array_equal(labels, p_labels)
+    np.testing.assert_array_equal(cats, p_cats)
+
+
+def test_factorize_rangeindex_preserves_class():
+    # ``cudf.factorize(RangeIndex)`` must dispatch to ``RangeIndex.factorize``
+    # so ``cats`` stays a ``RangeIndex`` (matching ``pd.factorize``).
+    ri = cudf.RangeIndex(10)
+    p_ri = pd.RangeIndex(10)
+
+    for sort in [False, True]:
+        labels, cats = cudf.factorize(ri, sort=sort)
+        p_labels, p_cats = pd.factorize(p_ri, sort=sort)
+        assert isinstance(cats, cudf.RangeIndex)
+        assert_eq(cats, p_cats, exact=True)
+        np.testing.assert_array_equal(labels.get(), p_labels)
+
+    # decreasing range -> sort matters
+    ri2 = ri[::-1]
+    p_ri2 = p_ri[::-1]
+    for sort in [False, True]:
+        labels, cats = cudf.factorize(ri2, sort=sort)
+        p_labels, p_cats = pd.factorize(p_ri2, sort=sort)
+        assert isinstance(cats, cudf.RangeIndex)
+        assert_eq(cats, p_cats, exact=True)
+        np.testing.assert_array_equal(labels.get(), p_labels)

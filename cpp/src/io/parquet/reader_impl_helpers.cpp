@@ -10,6 +10,7 @@
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
+#include "parquet_common.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>
@@ -19,6 +20,7 @@
 #include <cudf/logger.hpp>
 
 #include <cuda/iterator>
+#include <cuda/numeric>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -212,6 +214,8 @@ type_id to_type_id(SchemaElement const& schema,
       // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
       case LogicalType::UNKNOWN: return type_id::STRING;
 
+      case LogicalType::VARIANT: return type_id::STRUCT;
+
       default: break;
     }
   }
@@ -271,8 +275,11 @@ void metadata::sanitize_schema()
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
-      auto const parent_type = schema[schema_elem.parent_idx].converted_type;
-      if (schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+      auto const& parent_schema    = schema[schema_elem.parent_idx];
+      auto const is_parent_variant = parent_schema.logical_type.has_value() &&
+                                     parent_schema.logical_type->type == LogicalType::VARIANT;
+      auto const parent_type = parent_schema.converted_type;
+      if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
         // This is a list of structs, so we need to mark this as a list, but also
@@ -1362,36 +1369,38 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
   auto filtered_row_group_indices =
     std::vector<std::vector<size_type>>(input_row_group_indices.size());
 
-  std::for_each(
-    input_row_group_indices.front().begin(),
-    input_row_group_indices.front().end(),
-    [&](auto const& rg_idx) {
-      // Get the file offset of this row group
-      auto const row_group_file_offset = [&]() {
-        auto const& rg = per_file_metadata.front().row_groups[rg_idx];
-        if (rg.file_offset.has_value()) {
-          return rg.file_offset.value();
-        } else if (rg.columns.front().file_offset != 0) {
-          return rg.columns.front().file_offset;
-        } else {
-          auto const& col_meta = rg.columns.front().meta_data;
-          return col_meta.dictionary_page_offset != 0
-                   ? std::min(col_meta.dictionary_page_offset, col_meta.data_page_offset)
-                   : col_meta.data_page_offset;
-        }
-      }();
+  std::for_each(input_row_group_indices.front().begin(),
+                input_row_group_indices.front().end(),
+                [&](auto const& rg_idx) {
+                  // Get the file offset of this row group
+                  auto const row_group_file_offset = [&]() {
+                    auto const& rg = per_file_metadata.front().row_groups[rg_idx];
+                    if (rg.file_offset.has_value()) {
+                      return rg.file_offset.value();
+                    } else if (rg.columns.front().file_offset != 0) {
+                      return rg.columns.front().file_offset;
+                    } else {
+                      auto const& col_meta = rg.columns.front().meta_data;
+                      return col_meta.dictionary_page_offset != 0
+                               ? std::min(col_meta.dictionary_page_offset,
+                                          col_meta.data_page_offset)
+                               : col_meta.data_page_offset;
+                    }
+                  }();
 
-      // Check if the row group starts within the byte range: row group file offset is >=
-      // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
-      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
-      auto const is_within_byte_range =
-        std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
-        (not bytes_to_read.has_value() or
-         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
-         std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
+                  // Check if the row group starts within the byte range: row group file offset is
+                  // >= bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset
+                  // overflows size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+                  auto const is_within_byte_range =
+                    std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
+                    (not bytes_to_read.has_value() or
+                     cuda::add_overflow<size_t>(bytes_to_skip, bytes_to_read.value()).overflow or
+                     std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
 
-      if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
-    });
+                  if (is_within_byte_range) {
+                    filtered_row_group_indices.front().emplace_back(rg_idx);
+                  }
+                });
 
   return filtered_row_group_indices;
 }
@@ -1710,7 +1719,8 @@ aggregate_reader_metadata::select_columns(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
 
-      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+      auto const& parent_schema = get_schema(schema_elem.parent_idx);
+      auto const one_level_list = schema_elem.is_one_level_list(parent_schema);
 
       // if we're at the root, this is a new output column
       auto const col_type =
@@ -1776,6 +1786,14 @@ aggregate_reader_metadata::select_columns(
 
         // pop off the extra nesting element.
         if (one_level_list) { nesting.pop_back(); }
+
+        // Flag the `metadata` / `value` BYTE_ARRAY children of a VARIANT group so that
+        // `make_column` materializes them as `list<uint8>` instead of strings.
+        if (schema_elem.type == Type::BYTE_ARRAY && parent_schema.logical_type.has_value() &&
+            parent_schema.logical_type->type == LogicalType::VARIANT &&
+            (schema_elem.name == "metadata" || schema_elem.name == "value")) {
+          output_col.string_as_binary = true;
+        }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }

@@ -9,10 +9,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.core.column.decimal import (
     Decimal32Column,
@@ -49,7 +45,10 @@ def pandas_input(all_supported_types_as_str):
             data = random_ints(np.int64, size)
         elif dtype.kind == "U":
             # Unicode strings of integers like "12345"
+            # As of pandas 3.0, pandas interprets numpy string type as object
             data = random_ints(np.int64, size).astype(dtype.str)
+            data = pd.array(data, dtype=pd.StringDtype(na_value=np.nan))
+            dtype = None
         elif dtype.kind == "f":
             # floats in [0.0, 1.0)
             data = rng.random(size=size, dtype=dtype)
@@ -451,10 +450,6 @@ def test_string_int_to_ipv4_dtype_fail(numeric_types_as_str):
         gsr._column.int2ip()
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas.",
-)
 def test_datetime_can_cast_safely():
     sr = cudf.Series(
         ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
