@@ -183,6 +183,9 @@ def _body_concurrent_warm_path(timeout_seconds: int) -> None:
             t.start()
         for t in threads:
             t.join(timeout=timeout_seconds)
+            assert not t.is_alive(), (
+                f"worker thread did not finish within {timeout_seconds}s"
+            )
 
         assert len(results) == 8
         assert all(r is main_engine for r in results)
@@ -293,8 +296,11 @@ def _body_worker_thread_isolation(timeout_seconds: int) -> None:
 
     t = threading.Thread(target=creator)
     t.start()
-    create_done.wait(timeout=timeout_seconds)
+    assert create_done.wait(timeout=timeout_seconds), (
+        f"creator did not signal completion within {timeout_seconds}s"
+    )
     t.join(timeout=timeout_seconds)
+    assert not t.is_alive(), f"creator thread did not finish within {timeout_seconds}s"
     live = dse._state.instance
     assert live is not None
     live.shutdown()  # different thread than the one that constructed
@@ -350,7 +356,9 @@ def _body_shutdown_timeout(timeout_seconds: int) -> None:
             if self is not engine:
                 real_shutdown(self)
                 return
-            release_worker.wait(timeout=timeout_seconds)
+            assert release_worker.wait(timeout=timeout_seconds), (
+                f"release_worker did not signal completion within {timeout_seconds}s"
+            )
             try:
                 # Run the real teardown so the rapidsmpf Context is
                 # destroyed on the construction (worker) thread, otherwise
@@ -372,7 +380,9 @@ def _body_shutdown_timeout(timeout_seconds: int) -> None:
             # Once the leaked worker returns it removes itself from the
             # registry; a fresh construction is allowed again.
             release_worker.set()
-            real_done.wait(timeout=timeout_seconds)
+            assert real_done.wait(timeout=timeout_seconds), (
+                f"real_done did not signal completion within {timeout_seconds}s"
+            )
             DefaultSingletonEngine.get_or_create().shutdown()
 
 
