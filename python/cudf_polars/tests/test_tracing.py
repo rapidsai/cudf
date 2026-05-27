@@ -7,13 +7,16 @@ import os
 import subprocess
 import sys
 import textwrap
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import polars as pl
 
 structlog = pytest.importorskip("structlog")
+
+if TYPE_CHECKING:
+    import pathlib
 
 
 @pytest.fixture(name="log_output")
@@ -29,15 +32,19 @@ def fixture_configure_structlog(log_output):
 def test_trace_basic(
     log_output: Any,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
 ) -> None:
     # Whether tracing is enabled is determined when cudf_polars is imported.
     # So our best way of testing this is to run things in a subprocess
     # to control the environment and isolate it from the rest of the test suite.
-    code = textwrap.dedent("""\
+    code = textwrap.dedent(f"""\
     import polars as pl
     import rmm
 
-    q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
+    df = pl.DataFrame({{"a": [1, 2, 3]}})
+    df.write_parquet("{tmp_path}/tmp.parquet")
+
+    q = pl.scan_parquet("{tmp_path}/tmp.parquet").select(pl.col("a").sum())
     q.collect(
         engine=pl.GPUEngine(
             executor="streaming", memory_resource=rmm.mr.ManagedMemoryResource()
@@ -61,6 +68,15 @@ def test_trace_basic(
     assert b"rmm_total_bytes_input" not in result
     assert b"rmm_current_bytes_output" not in result
     assert b"overhead_duration" in result
+    # IO events
+    assert b"IO event" in result
+    assert b"phase" in result
+    assert b"phase=metadata" in result
+    assert b"phase=data" in result
+    assert b"is_statistics" in result
+    assert str(tmp_path).encode() in result
+    assert b"offset" in result
+    assert b"size" in result
 
 
 def test_import_without_structlog() -> None:

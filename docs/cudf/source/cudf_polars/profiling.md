@@ -89,6 +89,7 @@ cudf-polars logs traces at three scopes (levels):
    logical plan.
 3. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
    logical node might expand to more than one physical nodes.
+4 `io`: Traces related to reading data.
 
 Each trace includes a `scope` key indicating which level that trace belongs to. `actor`-scoped
 nodes will be nested under a `plan`-scoped node. When using a streaming engine,
@@ -146,6 +147,24 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | `nvml_current_bytes_{phase}` | int | The device memory usage of this process, as reported by NVML, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
 | actor_ir_id   | int    | A unique identifier for the parent actor (streaming engines only). |
 
+
+#### scope="io"
+
+| Field Name | Type  | Description |
+| ---------- | ----- | ----------- |
+| **scope** | `Literal["io"]` | The string literal `"io"`. Useful for distinguishing from other types of traces. |
+| **phase** | `Literal["metadata", "data"]` | Which part of IO was timed: metadata loading or data reads. |
+| **start** | int | A nanosecond-precision counter indicating when this IO operation started. |
+| **stop** | int | A nanosecond-precision counter indicating when this IO operation finished. |
+| **is_statistics** | bool | Whether this IO event was emitted while collecting metadata/statistics (`True`) or while reading scan data (`False`). |
+| **prefix** | string | Common path prefix for the paths involved in this IO operation. |
+| **path_count** | int | Number of paths touched by this IO operation. |
+| **offset** | int | Physical byte offset into the file of the read when known, otherwise `-1`. |
+| **size** | int | Physical byte size of the read when known, otherwise `-1`. |
+| **event** | string | A message like `"IO event"`. |
+| actor_ir_type | string | The parent actor type (for example `"Scan"`), when emitted from a streaming actor context. |
+| actor_ir_id | int | The parent actor ID, when emitted from an IR node. |
+
 Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
 from collecting the memory or dataframe metrics can be measurable. You can disable some metrics
 through additional environment variables. For example, to disable the memory-related metrics, set:
@@ -154,10 +173,12 @@ through additional environment variables. For example, to disable the memory-rel
 CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0
 ```
 
+To disable IO traces, set `LOG_IO=0`.
+
 And to disable the memory and dataframe metrics, which essentially leaves just the duration
 metrics, set
 ```bash
-CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0 CUDF_POLARS_LOG_TRACES_DATAFRAMES=0
+CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0 CUDF_POLARS_LOG_TRACES_DATAFRAMES=0 CUDF_POLARS_LOG_IO=0
 ```
 
 Note that tracing still needs to be enabled with `CUDF_POLARS_LOG_TRACES=1`.
