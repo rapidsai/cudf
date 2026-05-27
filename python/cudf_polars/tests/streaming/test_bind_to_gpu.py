@@ -63,7 +63,7 @@ def _run_in_subprocess(target: Callable[[], None], timeout_seconds: int) -> None
 
         if proc.is_alive():
             proc.kill()
-            proc.join(timeout=timeout_seconds)
+            proc.join(timeout=5)
             raise RuntimeError(f"Subprocess timed out after {timeout_seconds} seconds")
 
         if parent_conn.poll(timeout=timeout_seconds):

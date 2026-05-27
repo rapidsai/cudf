@@ -66,7 +66,7 @@ def test_trace_basic(
     assert b"overhead_duration" in result
 
 
-def test_import_without_structlog() -> None:
+def test_import_without_structlog(timeout_seconds: int) -> None:
     # This test could avoid the subprocess by monkeypatching sys.modules, but
     # that was flaky. https://github.com/rapidsai/cudf/pull/22012#issuecomment-4284536686
     # has more details.
@@ -81,7 +81,7 @@ def test_import_without_structlog() -> None:
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
     q.collect(engine="gpu")
     """)
-    subprocess.check_call([sys.executable, "-c", code])
+    subprocess.check_call([sys.executable, "-c", code], timeout=timeout_seconds)
 
 
 def test_log_query_plan(timeout_seconds: int) -> None:
