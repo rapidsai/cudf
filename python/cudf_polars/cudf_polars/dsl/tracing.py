@@ -37,6 +37,9 @@ LOG_MEMORY = LOG_TRACES and _bool_converter(
 LOG_DATAFRAMES = LOG_TRACES and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
 )
+LOG_IO = LOG_TRACES and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_IO", "1")
+)
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
@@ -159,7 +162,7 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
-    if not LOG_TRACES:
+    if not LOG_IO:
         return func
     else:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
 
