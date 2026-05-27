@@ -111,6 +111,7 @@ jobs:
           - '!ci/test_*.sh'
           - '!ci/validate_wheel.sh'
           - '!codecov.yml'
+          - '!SECURITY.md'
         test_cpp:
           - '**'
           - '!**/REVIEW_GUIDELINES.md'
