@@ -590,20 +590,22 @@ CUDF_HOST_DEVICE inline cuda::std::pair<To, bool> checked_narrow_cast(From value
 /**
  * @brief Multiply by 10^pow10 with overflow detection (saturating)
  *
- * This is intentionally simple (looping by decimal digits): pow10 can be up to ~3e2 for doubles.
+ * Reuses the bit-size-specialized `divide_power10` / `multiply_power10` helpers above so the
+ * check and the multiply are both single table-style ops, independent of `pow10`.
  */
 template <typename T, bool CheckOverflow = false, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline cuda::std::pair<T, bool> multiply_power10_saturating(T value, int pow10)
 {
   if (pow10 <= 0) { return {value, false}; }
   if constexpr (!CheckOverflow) { return {multiply_power10<T>(value, pow10), false}; }
-  
-  auto const max_v = cuda::std::numeric_limits<T>::max();
-  for (int i = 0; i < pow10; ++i) {
-    if (value > max_v / 10) { return {max_v, true}; }
-    value = static_cast<T>(value * 10);
-  }
-  return {value, false};
+
+  // value * 10^pow10 fits in T iff value <= floor(max_v / 10^pow10). When 10^pow10 itself
+  // overflows T, divide_power10 returns 0, so the threshold becomes 0 and any nonzero value
+  // correctly saturates -- matching the per-digit loop's behavior.
+  auto const max_v     = cuda::std::numeric_limits<T>::max();
+  auto const value_max = divide_power10<T>(max_v, pow10);
+  if (value > value_max) { return {max_v, true}; }
+  return {multiply_power10<T>(value, pow10), false};
 }
 
 /**
