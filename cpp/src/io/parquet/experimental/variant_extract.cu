@@ -54,7 +54,7 @@ __device__ inline cuda::std::optional<uint64_t> read_uint_le(device_span<uint8_t
                                                              size_type pos,
                                                              int width)
 {
-  if (pos + width > static_cast<size_type>(data.size())) { return cuda::std::nullopt; }
+  if (cuda::std::cmp_greater(pos + width, data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
   memcpy(&v, data.data() + pos, width);
   return v;
@@ -151,7 +151,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   for (size_type i = 0; i < n; ++i) {
     auto const fid_r = read_uint_le(val, field_ids_start + i * field_id_size, field_id_size);
     if (!fid_r) { return {}; }
-    if (static_cast<int>(*fid_r) != dict_idx) { continue; }
+    if (cuda::std::cmp_not_equal(*fid_r, dict_idx)) { continue; }
 
     auto const o_r = read_uint_le(val, field_offs_start + i * field_off_size, field_off_size);
     if (!o_r) { return {}; }
@@ -189,7 +189,7 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
                                         : cuda::std::is_same_v<T, int32_t> ? 5
                                                                            : 6;
   constexpr int width                 = sizeof(T);
-  if (static_cast<size_type>(enc.size()) < 1 + width) { return cuda::std::nullopt; }
+  if (cuda::std::cmp_less(enc.size(), 1 + width)) { return cuda::std::nullopt; }
   uint8_t const vm = enc[0];
   if ((vm & 0x03) != 0 || ((vm >> 2) & 0x3F) != expected_value_header) {
     return cuda::std::nullopt;
@@ -239,12 +239,13 @@ __device__ inline string_decode_result decode_string_info(device_span<uint8_t co
     return {str_len, 1, true};
   }
   if (basic_type == 0 && value_header == 16) {
-    // Long string: 4-byte LE length follows header
-    if (len < 5) { return {0, 0, false}; }
+    // Long string: 1-byte header + 4-byte LE length + char bytes
+    constexpr size_type long_string_prefix_bytes = 1 + sizeof(uint32_t);
+    if (len < long_string_prefix_bytes) { return {0, 0, false}; }
     uint32_t str_len;
     memcpy(&str_len, enc.data() + 1, sizeof(str_len));
-    if (5 + static_cast<size_type>(str_len) > len) { return {0, 0, false}; }
-    return {static_cast<size_type>(str_len), 5, true};
+    if (long_string_prefix_bytes + str_len > len) { return {0, 0, false}; }
+    return {static_cast<size_type>(str_len), long_string_prefix_bytes, true};
   }
   return {0, 0, false};
 }
@@ -434,15 +435,15 @@ std::unique_ptr<column> build_path_column(std::vector<std::string> const& steps,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  auto const depth = static_cast<size_type>(steps.size());
+  auto const depth = steps.size();
 
   std::string host_chars;
   std::vector<size_type> host_offsets(depth + 1);
-  for (size_type i = 0; i < depth; ++i) {
+  for (size_t i = 0; i < depth; ++i) {
     host_offsets[i] = static_cast<size_type>(host_chars.size());
     host_chars.append(steps[i]);
   }
-  host_offsets[depth] = static_cast<size_type>(host_chars.size());
+  host_offsets[depth] = host_chars.size();
 
   auto d_offsets   = cudf::detail::make_device_uvector_async(host_offsets, stream, mr);
   auto offsets_col = std::make_unique<column>(data_type{type_id::INT32},
