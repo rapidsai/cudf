@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-import concurrent.futures
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -24,6 +24,9 @@ from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 @pytest.fixture
@@ -79,7 +82,9 @@ def test_hstack_non_scalar_cse_fallback(df, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
-def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
+def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(
+    engine, executor: concurrent.futures.ThreadPoolExecutor
+):
     """Filter → rec(HStack) so standalone non-pointwise HStack hits redirect to Select."""
     base = Translator(
         pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})._ldf.visit(), engine
@@ -107,7 +112,9 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
         root,
         config_options,
         collect_statistics(
-            root, config_options, concurrent.futures.ThreadPoolExecutor()
+            root,
+            config_options,
+            executor,
         ),
     )
 
@@ -120,7 +127,9 @@ def test_with_columns_scalar_upstream_20981(engine):
 
 
 @pytest.mark.parametrize("comm_subexpr_elim", [True, False])
-def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
+def test_cse_agg_shared_decomposition(
+    engine, comm_subexpr_elim, executor: concurrent.futures.ThreadPoolExecutor
+):
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6]})
     q = df.with_columns(
         pl.col("a").sum().alias("s"),
@@ -142,13 +151,13 @@ def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
     lowered, _ = lower_ir_graph(
         ir,
         config_options,
-        collect_statistics(ir, config_options, concurrent.futures.ThreadPoolExecutor()),
+        collect_statistics(ir, config_options, executor),
     )
 
     # Both paths must lower to a single Repartition computing one aggregation.
     repartitions = [n for n in traversal([lowered]) if isinstance(n, Repartition)]
     assert len(repartitions) == 1
-    assert len(repartitions[0].children[0].exprs) == 1
+    assert len(repartitions[0].children[0].exprs) == 1  # type: ignore[attr-defined]
     assert_gpu_result_equal(q, engine=engine, collect_kwargs={"optimizations": opts})
 
 

@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import pickle
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +17,9 @@ from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 def _assert_stable_ids_match(orig, loaded) -> None:
@@ -36,7 +39,12 @@ def df():
 
 
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
-def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_partition):
+def test_parallel_dataframescan(
+    df,
+    streaming_engine_factory,
+    max_rows_per_partition,
+    executor: concurrent.futures.ThreadPoolExecutor,
+):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=max_rows_per_partition),
     )
@@ -55,7 +63,9 @@ def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_parti
         qir,
         config_options,
         collect_statistics(
-            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+            qir,
+            config_options,
+            executor,
         ),
     )
     count = info[ir].count
@@ -83,7 +93,9 @@ def test_dataframescan_concat(request, df, streaming_engine_factory):
     assert_gpu_result_equal(df2, engine=streaming_engine)
 
 
-def test_join_in_memory_lazy_stable_id_pickle(streaming_engine_factory):
+def test_join_in_memory_lazy_stable_id_pickle(
+    streaming_engine_factory, executor: concurrent.futures.ThreadPoolExecutor
+):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1_000, raise_on_fail=True),
     )
@@ -97,13 +109,15 @@ def test_join_in_memory_lazy_stable_id_pickle(streaming_engine_factory):
         qir,
         config_options,
         collect_statistics(
-            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+            qir,
+            config_options,
+            executor,
         ),
     )
     _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
-def test_dataframescan_pickle(df):
+def test_dataframescan_pickle(df, executor: concurrent.futures.ThreadPoolExecutor):
     _engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -115,7 +129,9 @@ def test_dataframescan_pickle(df):
         qir,
         config_options,
         collect_statistics(
-            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+            qir,
+            config_options,
+            executor,
         ),
     )
 

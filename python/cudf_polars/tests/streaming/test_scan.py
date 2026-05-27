@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import concurrent.futures
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -16,6 +16,9 @@ from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +88,12 @@ def test_split_scan_predicate(tmp_path, df, mask, streaming_engine_factory):
 @pytest.mark.parametrize("n_files", [2, 3])
 @pytest.mark.parametrize("blocksize", [1_000, 10_000, 1_000_000])
 def test_target_partition_size(
-    tmp_path, df, blocksize, n_files, streaming_engine_factory
+    tmp_path,
+    df,
+    blocksize,
+    n_files,
+    streaming_engine_factory,
+    executor: concurrent.futures.ThreadPoolExecutor,
 ):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=blocksize),
@@ -106,7 +114,9 @@ def test_target_partition_size(
         qir,
         config_options,
         collect_statistics(
-            qir, config_options, concurrent.futures.ThreadPoolExecutor()
+            qir,
+            config_options,
+            executor,
         ),
     )
     count = info[ir].count

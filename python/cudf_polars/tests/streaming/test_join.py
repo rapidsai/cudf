@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import concurrent.futures
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -23,6 +23,9 @@ from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 @pytest.fixture
@@ -275,7 +278,9 @@ def test_join_maintain_order_fallback_streaming(
 
 
 @pytest.mark.parametrize("broadcast_limit", [1, 48, 128, 1024])
-def test_broadcast_limit(left, right, broadcast_limit):
+def test_broadcast_limit(
+    left, right, broadcast_limit, executor: concurrent.futures.ThreadPoolExecutor
+):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -312,7 +317,9 @@ def test_broadcast_limit(left, right, broadcast_limit):
             ir,
             config_options,
             collect_statistics(
-                ir, config_options, concurrent.futures.ThreadPoolExecutor()
+                ir,
+                config_options,
+                executor,
             ),
         )[1]
         if isinstance(node, Shuffle)
@@ -329,7 +336,9 @@ def test_broadcast_limit(left, right, broadcast_limit):
         assert len(shuffle_nodes) == 0
 
 
-def test_cache_preserves_partitioning_join():
+def test_cache_preserves_partitioning_join(
+    executor: concurrent.futures.ThreadPoolExecutor,
+):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -356,7 +365,7 @@ def test_cache_preserves_partitioning_join():
     lowered_ir, partition_info = lower_ir_graph(
         ir,
         config_options,
-        collect_statistics(ir, config_options, concurrent.futures.ThreadPoolExecutor()),
+        collect_statistics(ir, config_options, executor),
     )
 
     # Cache should preserve partitioning on 'key'

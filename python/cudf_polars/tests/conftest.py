@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import concurrent.futures
 from typing import TYPE_CHECKING
 
 import pytest
@@ -351,3 +352,9 @@ def pytest_collection_modifyitems(
             else marker.kwargs.get("reason", "unsupported on streaming engine")
         )
         item.add_marker(pytest.mark.skip(reason=reason))
+
+
+@pytest.fixture(scope="module")
+def stats_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """A thread pool to use for cudf-polars IO operations."""
+    return concurrent.futures.ThreadPoolExecutor()
