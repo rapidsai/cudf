@@ -31,6 +31,11 @@ static void bench_count(nvbench::state& state)
   auto const max_width     = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const pattern_index = state.get_int64("pattern");
 
+  if (std::cmp_greater_equal(pattern_index, patterns.size())) {
+    state.skip("invalid pattern index");
+    return;
+  }
+
   data_profile const table_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
   auto const table =
@@ -52,6 +57,6 @@ static void bench_count(nvbench::state& state)
 NVBENCH_BENCH(bench_count)
   .set_name("count")
   .add_int64_axis("min_width", {0})
-  .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("max_width", {64, 128, 256})
+  .add_int64_axis("num_rows", {262144, 2097152})
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6});
