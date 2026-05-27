@@ -6,9 +6,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/fixed_point/detail/safe_arithmetic.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -16,6 +18,7 @@
 using namespace numeric;
 
 struct SafeArithmeticTest : public cudf::test::BaseFixture {};
+struct FloatingConversionOverflowTest : public cudf::test::BaseFixture {};
 
 // ---------------------------------------------------------------------------
 // safe_add
@@ -414,6 +417,259 @@ TEST_F(SafeArithmeticTest, CallerComposesOverflowAcrossChain)
   auto const m2 = detail::safe_add(m1.value, c);  // add itself doesn't overflow
   bool const composed_overflow = m1.overflow || m2.overflow;
   EXPECT_TRUE(composed_overflow);
+}
+
+// ---------------------------------------------------------------------------
+// Floating <-> decimal conversion overflow primitives
+//
+// `safe_convert_floating_to_fixed` (above) exercises the conversion path
+// end-to-end, but the lower-level `CheckOverflow=true` primitives in
+// `floating_conversion.hpp` (`checked_left_shift`, `multiply_power10_saturating`,
+// `checked_narrow_cast`) and the top-level `convert_floating_to_integral`
+// gain little direct test coverage from that. The tests below pin down each
+// primitive's contract: on overflow, return the saturated max with the flag
+// set; otherwise return the exact result with the flag clear.
+// ---------------------------------------------------------------------------
+
+// --- checked_left_shift<true>(value, bit_shift) ----------------------------
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftZeroIsIdentity)
+{
+  auto const [v, ovf] = numeric::detail::checked_left_shift<true>(uint64_t{42}, 0);
+  EXPECT_EQ(v, uint64_t{42});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftWithinRange)
+{
+  auto const [v, ovf] = numeric::detail::checked_left_shift<true>(uint64_t{0x1234}, 4);
+  EXPECT_EQ(v, uint64_t{0x12340});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftAtBoundaryDoesNotOverflow)
+{
+  // value == max >> bit_shift is the largest input that still fits after the shift.
+  constexpr int bit_shift = 8;
+  auto const at_boundary  = std::numeric_limits<uint32_t>::max() >> bit_shift;
+  auto const [v, ovf]     = numeric::detail::checked_left_shift<true>(at_boundary, bit_shift);
+  EXPECT_EQ(v, static_cast<uint32_t>(at_boundary << bit_shift));
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftJustOverBoundarySaturates)
+{
+  constexpr int bit_shift = 8;
+  auto const just_over    = (std::numeric_limits<uint32_t>::max() >> bit_shift) + 1u;
+  auto const [v, ovf]     = numeric::detail::checked_left_shift<true>(just_over, bit_shift);
+  EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftTooLargeBitShiftSaturates)
+{
+  // Shifting by >= digits is UB on the underlying operator and saturates here.
+  auto const [v, ovf] =
+    numeric::detail::checked_left_shift<true>(uint64_t{1}, std::numeric_limits<uint64_t>::digits);
+  EXPECT_EQ(v, std::numeric_limits<uint64_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftNegativeBitShiftSaturates)
+{
+  // Negative shifts aren't expected from callers; the checked path treats them
+  // as overflow rather than falling into the underlying UB path.
+  auto const [v, ovf] = numeric::detail::checked_left_shift<true>(uint64_t{1}, -1);
+  EXPECT_EQ(v, std::numeric_limits<uint64_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedLeftShiftUncheckedNeverOverflows)
+{
+  // CheckOverflow=false (the default) must always report overflow=false.
+  auto const [v, ovf] = numeric::detail::checked_left_shift(uint64_t{0xFFFF}, 60);
+  EXPECT_FALSE(ovf);
+  // value is whatever guarded_left_shift returns; only the flag is tested here.
+  (void)v;
+}
+
+// --- multiply_power10_saturating<T, true>(value, pow10) --------------------
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10ZeroPow10IsIdentity)
+{
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint64_t, true>(123, 0);
+  EXPECT_EQ(v, uint64_t{123});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10NegativePow10IsIdentity)
+{
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint64_t, true>(123, -5);
+  EXPECT_EQ(v, uint64_t{123});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10WithinRange)
+{
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint64_t, true>(123, 6);
+  EXPECT_EQ(v, uint64_t{123'000'000});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10AtBoundaryDoesNotOverflow)
+{
+  // value == max / 10^pow10 is the largest input that fits after the multiply.
+  // For uint32_t and pow10=3: 4294967295 / 1000 == 4294967.
+  uint32_t const at_boundary = std::numeric_limits<uint32_t>::max() / 1000u;
+  auto const [v, ovf] =
+    numeric::detail::multiply_power10_saturating<uint32_t, true>(at_boundary, 3);
+  EXPECT_EQ(v, at_boundary * 1000u);
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10JustOverBoundarySaturates)
+{
+  uint32_t const just_over = (std::numeric_limits<uint32_t>::max() / 1000u) + 1u;
+  auto const [v, ovf] =
+    numeric::detail::multiply_power10_saturating<uint32_t, true>(just_over, 3);
+  EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10HugePow10SaturatesNonzero)
+{
+  // 10^pow10 itself doesn't fit in uint32_t (10^10 > 2^32); divide_power10 returns 0,
+  // so the threshold is 0 and any nonzero value saturates.
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint32_t, true>(1, 12);
+  EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, MultiplyPower10ZeroValueNeverOverflows)
+{
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint32_t, true>(0, 12);
+  EXPECT_EQ(v, uint32_t{0});
+  EXPECT_FALSE(ovf);
+}
+
+// --- checked_narrow_cast<To, true>(value) ----------------------------------
+
+TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastFits)
+{
+  auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t, true>(uint64_t{12345});
+  EXPECT_EQ(v, uint32_t{12345});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastAtBoundaryDoesNotOverflow)
+{
+  auto const at_max =
+    static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
+  auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t, true>(at_max);
+  EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastOverflowSaturates)
+{
+  auto const just_over =
+    static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1u;
+  auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t, true>(just_over);
+  EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastUncheckedNeverOverflows)
+{
+  // CheckOverflow=false truncates without ever setting the flag.
+  auto const big      = uint64_t{0x1'0000'0000ULL};
+  auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t>(big);
+  EXPECT_EQ(v, uint32_t{0});  // low 32 bits
+  EXPECT_FALSE(ovf);
+}
+
+// --- convert_floating_to_integral<Rep, true>(floating, scale) --------------
+//
+// The end-to-end conversion entry point. These tests target paths that the
+// `safe_convert_floating_to_fixed` wrapper tests above don't exercise directly,
+// in particular the sign-reapply branches that distinguish INT_MIN-exact from
+// representational overflow.
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralZero)
+{
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(0.0, scale_type{-3});
+  EXPECT_EQ(v, int64_t{0});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralPositiveFits)
+{
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(123.456, scale_type{-3});
+  EXPECT_EQ(v, int64_t{123456});
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralPositiveSaturatesToMax)
+{
+  // |1e20| >> INT32_MAX (~2.15e9) so the sign-reapply path saturates to max with overflow=true.
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int32_t, true>(1e20, scale_type{0});
+  EXPECT_EQ(v, std::numeric_limits<int32_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralNegativeIntMinExactDoesNotOverflow)
+{
+  // INT32_MIN == -2^31 = -2147483648 is exactly representable in IEEE 754 double.
+  // magnitude_u == umin_mag, which the checked path maps to {INT32_MIN, overflow=shifting_ovf}.
+  // No shifting overflow occurs for this input, so the flag should remain false.
+  auto const int32_min_as_double = static_cast<double>(std::numeric_limits<int32_t>::min());
+  auto const [v, ovf]            = numeric::detail::convert_floating_to_integral<int32_t, true>(
+    int32_min_as_double, scale_type{0});
+  EXPECT_EQ(v, std::numeric_limits<int32_t>::min());
+  EXPECT_FALSE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralNegativeJustBelowIntMinSaturates)
+{
+  // One step past INT64_MIN: magnitude_u > umin_mag -> {INT64_MIN, true}.
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(-1e20, scale_type{0});
+  EXPECT_EQ(v, std::numeric_limits<int64_t>::min());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralOverflowViaNegativeScale)
+{
+  // Scale -19 multiplies by 10^19 in the decimal rep, which exceeds INT64 range.
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(1.0, scale_type{-19});
+  EXPECT_EQ(v, std::numeric_limits<int64_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralOverflowViaPositiveScale)
+{
+  // pow10 > 0 path: 1e25 / 10^5 == 1e20 > INT64_MAX (~9.2e18).
+  auto const [v, ovf] =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(1e25, scale_type{5});
+  EXPECT_EQ(v, std::numeric_limits<int64_t>::max());
+  EXPECT_TRUE(ovf);
+}
+
+TEST_F(FloatingConversionOverflowTest, ConvertIntegralUncheckedSameValueAsChecked)
+{
+  // The unchecked path must produce the same Rep value as the checked path's
+  // first element for inputs that don't overflow (no regression in the
+  // unchecked code path after the refactor).
+  double const x        = 123.456;
+  auto const checked    = numeric::detail::convert_floating_to_integral<int64_t, true>(
+    x, scale_type{-3});
+  auto const unchecked  = numeric::detail::convert_floating_to_integral<int64_t>(
+    x, scale_type{-3});
+  EXPECT_EQ(checked.first, unchecked);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
