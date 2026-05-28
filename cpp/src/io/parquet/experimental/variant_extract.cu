@@ -176,6 +176,53 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   return val.subspan(values_base + match_start_u, match_end_u - match_start_u);
 }
 
+// Parse an array value header and return the sub-span of the element at `index` (0-based) within
+// `val`. Returns an empty span if `val` is not an array (`basic_type != 3`), if `index` is out of
+// bounds, or if the encoded data is truncated.
+//
+// Array layout per the Variant spec:
+//   byte 0: header (basic_type=3 in low 2 bits; header6 in high 6 bits)
+//     header6 bits: (offset_size - 1) in bits 0-1, is_large in bit 2, bits 3-5 unused
+//   num_elements: 1 byte if !is_large else 4 bytes (little-endian)
+//   offsets:      (num_elements + 1) entries, each `offset_size` bytes, relative to the end of
+//                 offsets
+//   values:       concatenated element blobs
+__device__ inline device_span<uint8_t const> locate_array_element(device_span<uint8_t const> val,
+                                                                  size_type index)
+{
+  auto const val_len = static_cast<size_type>(val.size());
+  if (val_len < 1) { return {}; }
+  uint8_t const vm     = val[0];
+  int const basic_type = vm & 0x03;
+  if (basic_type != 3) { return {}; }  // not array
+
+  int const header6   = (vm >> 2) & 0x3F;
+  int const off_size  = (header6 & 0x03) + 1;
+  bool const is_large = ((header6 >> 2) & 0x01) != 0;
+
+  size_type pos         = 1;
+  auto const num_elts_r = read_uint(val, pos, is_large ? 4 : 1);
+  if (!num_elts_r) { return {}; }
+  auto const n = static_cast<size_type>(*num_elts_r);
+  pos += is_large ? 4 : 1;
+
+  if (index < 0 || index >= n) { return {}; }
+
+  size_type const offs_start = pos;
+  size_type const offs_bytes = (n + 1) * off_size;
+  if (offs_start + offs_bytes > val_len) { return {}; }
+  size_type const values_base = offs_start + offs_bytes;
+  auto const values_extent    = val_len - values_base;
+
+  auto const o0 = read_uint(val, offs_start + index * off_size, off_size);
+  auto const o1 = read_uint(val, offs_start + (index + 1) * off_size, off_size);
+  if (!o0 || !o1) { return {}; }
+  auto const start_u = *o0;
+  auto const end_u   = *o1;
+  if (end_u < start_u || end_u > values_extent) { return {}; }
+  return val.subspan(values_base + start_u, end_u - start_u);
+}
+
 // Variant primitive ints: basic_type=0, value_header maps INT{8,16,32,64} -> {3,4,5,6}.
 template <typename T>
 __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> enc)
@@ -198,20 +245,43 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
   return v;
 }
 
-// Walk a path of object-key steps level by level starting at `val` and return the span of the
-// final value (subspan of `val`). Returns an empty span on failure.
+// Walk a path of object-key or array-index steps level by level starting at `val` and return
+// the span of the final value (subspan of `val`). Returns an empty span on failure.
+//
+// Each path step is encoded in the `path` strings column as either:
+//   - "<name>"  -> descend into an object by dictionary key, or
+//   - "[<N>]"   -> descend into an array by zero-based integer index.
+// The step kind is inferred from the first byte (`'['` means index).
 __device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t const> meta,
                                                          device_span<uint8_t const> val,
                                                          column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
-    auto const name = path.element<cudf::string_view>(i);
+    auto const step = path.element<cudf::string_view>(i);
+    auto const slen = step.size_bytes();
+    auto const* sd  = step.data();
 
-    auto const dict_idx = find_key_in_metadata(meta, name);
-    if (!dict_idx.has_value()) { return {}; }
-
-    sub_val = locate_object_field(sub_val, dict_idx.value());
+    if (slen >= 2 && sd[0] == '[') {
+      size_type index    = 0;
+      bool ok            = (sd[slen - 1] == ']');
+      size_type const lo = 1;
+      size_type const hi = slen - 1;
+      for (size_type k = lo; ok && k < hi; ++k) {
+        char const c = sd[k];
+        if (c < '0' || c > '9') {
+          ok = false;
+          break;
+        }
+        index = index * 10 + static_cast<size_type>(c - '0');
+      }
+      if (!ok || lo == hi) { return {}; }
+      sub_val = locate_array_element(sub_val, index);
+    } else {
+      auto const dict_idx = find_key_in_metadata(meta, step);
+      if (!dict_idx.has_value()) { return {}; }
+      sub_val = locate_object_field(sub_val, dict_idx.value());
+    }
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
