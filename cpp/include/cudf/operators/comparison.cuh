@@ -42,10 +42,8 @@ __device__ void equal(cuda::std::optional<bool>* out,
     bool r;
     equal(&r, &a->value(), &b->value());
     *out = r;
-  } else if (!a->has_value() && !b->has_value()) {
-    *out = true;
   } else {
-    *out = false;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -80,10 +78,8 @@ __device__ void not_equal(cuda::std::optional<bool>* out,
     bool r;
     not_equal(&r, &a->value(), &b->value());
     *out = r;
-  } else if (!a->has_value() && !b->has_value()) {
-    *out = false;
   } else {
-    *out = true;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -119,7 +115,7 @@ __device__ void greater(cuda::std::optional<bool>* out,
     greater(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = false;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -155,7 +151,7 @@ __device__ void greater_equal(cuda::std::optional<bool>* out,
     greater_equal(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = false;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -191,7 +187,7 @@ __device__ void less(cuda::std::optional<bool>* out,
     less(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = false;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -227,7 +223,7 @@ __device__ void less_equal(cuda::std::optional<bool>* out,
     less_equal(&r, &a->value(), &b->value());
     *out = r;
   } else {
-    *out = false;
+    *out = cuda::std::nullopt;
   }
 }
 
@@ -259,7 +255,9 @@ __device__ void null_equal(cuda::std::optional<bool>* out,
                            cuda::std::optional<T> const* b)
 {
   if (a->has_value() && b->has_value()) {
-    *out = (*(*a) == *(*b));
+    bool r;
+    null_equal(&r, &a->value(), &b->value());
+    *out = r;
   } else if (!a->has_value() && !b->has_value()) {
     *out = true;
   } else {

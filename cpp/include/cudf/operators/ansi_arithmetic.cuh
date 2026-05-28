@@ -31,7 +31,7 @@ __device__ errc ansi_add(T* out, T const* a, T const* b)
   requires(cuda::std::is_integral_v<T>)
 {
   T r;
-  if (cuda::add_overflow(r, *a, *b)) { return errc::OVERFLOW; }
+  if (cuda::add_overflow(r, *a, *b).overflow) { return errc::OVERFLOW; }
   *out = r;
   return errc::SUCCESS;
 }
@@ -377,7 +377,7 @@ __device__ errc ansi_mod(T* out, T const* a, T const* b)
  *
  * @return `errc::DIVISION_BY_ZERO` on zero divisor, else `errc::SUCCESS`.
  */
-__device__ errc ansi_mod(float* out, float const* a, float const* b)
+__device__ inline errc ansi_mod(float* out, float const* a, float const* b)
 {
   if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   *out = (*a) - (*b) * ::floorf((*a) / (*b));
@@ -389,7 +389,7 @@ __device__ errc ansi_mod(float* out, float const* a, float const* b)
  *
  * @return `errc::DIVISION_BY_ZERO` on zero divisor, else `errc::SUCCESS`.
  */
-__device__ errc ansi_mod(double* out, double const* a, double const* b)
+__device__ inline errc ansi_mod(double* out, double const* a, double const* b)
 {
   if (*b == 0) { return errc::DIVISION_BY_ZERO; }
   *out = (*a) - (*b) * ::floor((*a) / (*b));
@@ -533,9 +533,25 @@ __device__ errc ansi_abs(cuda::std::optional<T>* out, cuda::std::optional<T> con
  */
 template <typename T>
 __device__ errc ansi_neg(T* out, T const* a)
-  requires(cuda::std::is_signed_v<T>)
+  requires(cuda::std::is_integral_v<T> && cuda::std::is_signed_v<T>)
 {
   if (*a == cuda::std::numeric_limits<T>::min()) { return errc::OVERFLOW; }
+  *out = -(*a);
+  return errc::SUCCESS;
+}
+
+/**
+ * @brief Computes unary negation with ANSI overflow checks.
+ *
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input value.
+ * @return `errc::OVERFLOW` on overflow, else `errc::SUCCESS`.
+ */
+template <typename T>
+__device__ errc ansi_neg(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
   *out = -(*a);
   return errc::SUCCESS;
 }
