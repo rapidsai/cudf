@@ -68,24 +68,6 @@ class mark_join {
   mark_join& operator=(mark_join&&)      = delete;
 
   /**
-   * @brief Constructs a mark join object by building a hash table from the build table.
-   *
-   * @deprecated Deprecated in the current release. Use the overload accepting
-   *             `cudf::join_prefilter` instead. This overload will be removed in the next release.
-   *
-   * @param build The build table (typically the left table)
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  // rapids-pre-commit-hooks: disable-next-line
-  [[deprecated(
-    "Use the overload accepting cudf::join_prefilter instead."
-    " This overload will be removed in the next release.")]]
-  mark_join(cudf::table_view const& build,
-            cudf::null_equality compare_nulls = null_equality::EQUAL,
-            rmm::cuda_stream_view stream      = cudf::get_default_stream());
-
-  /**
    * @brief Constructs a mark join object with explicit prefilter selection.
    *
    * @param build The build table (typically the left table)
@@ -96,26 +78,6 @@ class mark_join {
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             cudf::join_prefilter prefilter,
-            rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @brief Constructs a mark join object with a specified load factor.
-   *
-   * @deprecated Deprecated in the current release. Use the overload accepting
-   *             `cudf::join_prefilter` instead. This overload will be removed in the next release.
-   *
-   * @param build The build table (typically the left table)
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param load_factor Hash table load factor in range (0,1]
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  // rapids-pre-commit-hooks: disable-next-line
-  [[deprecated(
-    "Use the overload accepting cudf::join_prefilter instead."
-    " This overload will be removed in the next release.")]]
-  mark_join(cudf::table_view const& build,
-            cudf::null_equality compare_nulls,
-            double load_factor,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**

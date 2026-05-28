@@ -1042,6 +1042,7 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
+          - pytest-timeout
           - zstandard
   test_python_narwhals:
     common:

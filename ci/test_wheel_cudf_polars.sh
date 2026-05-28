@@ -80,10 +80,12 @@ for version in "${VERSIONS[@]}"; do
         COVERAGE_ARGS=(--no-cov)
     fi
 
-    timeout 25m ./ci/run_cudf_polars_pytests.sh \
+    timeout 35m ./ci/run_cudf_polars_pytests.sh \
         "${COVERAGE_ARGS[@]}" \
         --numprocesses=8 \
         --dist=worksteal \
+        --durations 10 --durations-min 10 \
+        -ra \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     test_exitcode=$?
