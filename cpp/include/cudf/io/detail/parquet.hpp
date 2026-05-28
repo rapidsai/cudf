@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -256,6 +257,19 @@ class writer {
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
 
 /**
+ * @brief Reads metadata of parquet dataset.
+ *
+ * @param sources Dataset sources to read from
+ * @param metadata_size_hint Number of bytes to speculatively read from the end of each source
+ * when locating and reading footer metadata
+ *
+ * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
+ * metadata.
+ */
+parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources,
+                                       std::size_t metadata_size_hint);
+
+/**
  * @brief Constructs FileMetaData objects from parquet dataset
  *
  * @param sources Input `datasource` objects to read the dataset from
@@ -264,6 +278,18 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
   host_span<std::unique_ptr<datasource> const> sources);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param metadata_size_hint Number of bytes to speculatively read from the end of each source
+ * when locating and reading footer metadata
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<datasource> const> sources, std::size_t metadata_size_hint);
 
 }  // namespace parquet::detail
 }  // namespace io

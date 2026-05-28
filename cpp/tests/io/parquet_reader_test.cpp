@@ -28,10 +28,13 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -2872,6 +2875,42 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
+namespace {
+class TrackingFooterDatasource : public cudf::io::datasource {
+ public:
+  explicit TrackingFooterDatasource(std::vector<char> const& data) : data_(data) {}
+
+  [[nodiscard]] std::vector<std::pair<size_t, size_t>> const& reads() const { return reads_; }
+
+  void reset() { reads_.clear(); }
+
+  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
+  {
+    reads_.emplace_back(offset, size);
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto const read_size = std::min(size, data_.size() - offset);
+    std::vector<std::byte> out(read_size);
+    std::memcpy(out.data(), data_.data() + offset, read_size);
+    return cudf::io::datasource::buffer::create(std::move(out));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    reads_.emplace_back(offset, size);
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto const read_size = std::min(size, data_.size() - offset);
+    std::memcpy(dst, data_.data() + offset, read_size);
+    return read_size;
+  }
+
+  [[nodiscard]] size_t size() const override { return data_.size(); }
+
+ private:
+  std::vector<char> const& data_;
+  std::vector<std::pair<size_t, size_t>> reads_;
+};
+}  // namespace
+
 TEST_F(ParquetMetadataReaderTest, Basics)
 {
   auto const num_rows = 1200;
@@ -2930,6 +2969,40 @@ TEST_F(ParquetMetadataReaderTest, Basics)
   test_parquet_metadata(3);
 }
 
+TEST_F(ParquetMetadataReaderTest, MetadataSizeHintReadCallCount)
+{
+  auto const num_rows = 1024;
+  auto ints           = random_values<int32_t>(num_rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
+  cudf::table_view input_table({int_col});
+
+  std::vector<char> parquet_bytes;
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  TrackingFooterDatasource tracking_source(parquet_bytes);
+  auto const source = cudf::io::source_info{&tracking_source};
+
+  // A hint as large as the source should result in a single read.
+  auto const metadata_full_hint = cudf::io::read_parquet_metadata(source, tracking_source.size());
+  EXPECT_EQ(metadata_full_hint.num_rows(), num_rows);
+  ASSERT_EQ(tracking_source.reads().size(), 1);
+  EXPECT_EQ(tracking_source.reads()[0].first, 0);
+  EXPECT_EQ(tracking_source.reads()[0].second, tracking_source.size());
+
+  tracking_source.reset();
+
+  // A minimal hint (ender size only) should require a second read for the footer bytes.
+  constexpr size_t minimal_hint = 8;
+  auto const metadata_min_hint  = cudf::io::read_parquet_metadata(source, minimal_hint);
+  EXPECT_EQ(metadata_min_hint.num_rows(), num_rows);
+  ASSERT_EQ(tracking_source.reads().size(), 2);
+  EXPECT_EQ(tracking_source.reads()[0].first, tracking_source.size() - minimal_hint);
+  EXPECT_EQ(tracking_source.reads()[0].second, minimal_hint);
+}
+
 TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
 {
   auto const num_rows = 1200;
@@ -2967,6 +3040,41 @@ TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
   test_parquet_metadata(1);
   // Test with multiple files
   test_parquet_metadata(3);
+}
+
+TEST_F(ParquetMetadataReaderTest, FooterSizeHintReadCallCount)
+{
+  auto const num_rows = 1024;
+  auto ints           = random_values<int32_t>(num_rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
+  cudf::table_view input_table({int_col});
+
+  std::vector<char> parquet_bytes;
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  TrackingFooterDatasource tracking_source(parquet_bytes);
+  std::vector<std::unique_ptr<cudf::io::datasource>> sources;
+  sources.emplace_back(cudf::io::datasource::create(&tracking_source));
+
+  auto const full_hint_footers = cudf::io::read_parquet_footers(sources, tracking_source.size());
+  ASSERT_EQ(full_hint_footers.size(), 1);
+  EXPECT_EQ(full_hint_footers[0].num_rows, num_rows);
+  ASSERT_EQ(tracking_source.reads().size(), 1);
+  EXPECT_EQ(tracking_source.reads()[0].first, 0);
+  EXPECT_EQ(tracking_source.reads()[0].second, tracking_source.size());
+
+  tracking_source.reset();
+
+  constexpr size_t minimal_hint   = 8;
+  auto const minimal_hint_footers = cudf::io::read_parquet_footers(sources, minimal_hint);
+  ASSERT_EQ(minimal_hint_footers.size(), 1);
+  EXPECT_EQ(minimal_hint_footers[0].num_rows, num_rows);
+  ASSERT_EQ(tracking_source.reads().size(), 2);
+  EXPECT_EQ(tracking_source.reads()[0].first, tracking_source.size() - minimal_hint);
+  EXPECT_EQ(tracking_source.reads()[0].second, minimal_hint);
 }
 
 TEST_F(ParquetMetadataReaderTest, Nested)

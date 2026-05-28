@@ -292,6 +292,66 @@ def test_read_parquet_with_pre_materialized_metadata(
     assert_table_and_meta_eq(pa_table, result, check_field_nullability=False)
 
 
+def test_read_parquet_metadata_with_size_hint(tmp_path) -> None:
+    table = pa.table({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    path = tmp_path / "metadata_hint.parquet"
+    write_table(table, path)
+
+    source_info = plc.io.SourceInfo([path])
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        source_info, metadata_size_hint=1024
+    )
+    metadata_default = plc.io.parquet_metadata.read_parquet_metadata(
+        source_info
+    )
+
+    # We can't make any assertions that the metadata_size_hint was actually used
+    # from Python, but we can at least make sure the result is correct.
+    assert metadata.num_rows() == table.num_rows
+    assert metadata.num_rowgroups() == metadata_default.num_rowgroups()
+    assert (
+        metadata.schema().column_types()
+        == metadata_default.schema().column_types()
+    )
+
+
+def test_read_parquet_footers_with_size_hint(tmp_path) -> None:
+    table = pa.table({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    path = tmp_path / "footer_hint.parquet"
+    write_table(table, path)
+
+    source_info = plc.io.SourceInfo([path])
+    footers = plc.io.parquet_metadata.read_parquet_footers(
+        source_info, metadata_size_hint=1024
+    )
+    footers_default = plc.io.parquet_metadata.read_parquet_footers(source_info)
+
+    assert len(footers) == 1
+    assert footers[0].num_rows == table.num_rows
+    assert footers[0].num_rows == footers_default[0].num_rows
+    assert len(footers[0].row_groups) == len(footers_default[0].row_groups)
+
+
+def test_read_parquet_with_pre_materialized_metadata_size_hint(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    tmp_path,
+) -> None:
+    _, pa_table = table_data
+    path = tmp_path / "metadata_hint_read.parquet"
+    write_table(pa_table, path)
+    source_info = plc.io.SourceInfo([path])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+
+    parquet_metadatas = plc.io.parquet_metadata.read_parquet_footers(
+        source_info, metadata_size_hint=1024
+    )
+    result = plc.io.parquet.read_parquet(
+        options, parquet_metadatas=parquet_metadatas
+    )
+
+    assert_table_and_meta_eq(pa_table, result, check_field_nullability=False)
+
+
 def test_read_parquet_with_pre_materialized_metadata_len_mismatch(
     table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
     binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,

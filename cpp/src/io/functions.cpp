@@ -660,11 +660,26 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
   return detail_parquet::read_parquet_metadata(datasources);
 }
 
+parquet_metadata read_parquet_metadata(source_info const& src_info, std::size_t metadata_size_hint)
+{
+  CUDF_FUNC_RANGE();
+
+  auto datasources = make_datasources(src_info);
+  return detail_parquet::read_parquet_metadata(datasources, metadata_size_hint);
+}
+
 std::vector<parquet::FileMetaData> read_parquet_footers(
   host_span<std::unique_ptr<cudf::io::datasource> const> sources)
 {
   CUDF_FUNC_RANGE();
   return detail_parquet::read_parquet_footers(sources);
+}
+
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<cudf::io::datasource> const> sources, std::size_t metadata_size_hint)
+{
+  CUDF_FUNC_RANGE();
+  return detail_parquet::read_parquet_footers(sources, metadata_size_hint);
 }
 
 /**

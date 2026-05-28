@@ -82,4 +82,16 @@ namespace integrated_memory_optimization {
 }
 
 }  // namespace integrated_memory_optimization
+
+namespace parquet_integration {
+
+[[nodiscard]] std::size_t metadata_size_hint()
+{
+  static constexpr auto default_metadata_size_hint = std::size_t{64} * 1024;
+  static auto const metadata_size_hint             = cudf::detail::getenv_or<std::size_t>(
+    "LIBCUDF_PARQUET_METADATA_SIZE_HINT", default_metadata_size_hint);
+  return metadata_size_hint;
+}
+
+}  // namespace parquet_integration
 }  // namespace cudf::io

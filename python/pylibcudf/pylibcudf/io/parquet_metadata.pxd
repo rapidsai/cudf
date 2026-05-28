@@ -94,5 +94,8 @@ cdef class RowGroup:
     @staticmethod
     cdef RowGroup from_cpp(cpp_RowGroup row_group)
 
-cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info)
-cpdef list read_parquet_footers(SourceInfo src_info)
+cpdef ParquetMetadata read_parquet_metadata(
+    SourceInfo src_info,
+    object metadata_size_hint=*
+)
+cpdef list read_parquet_footers(SourceInfo src_info, object metadata_size_hint=*)

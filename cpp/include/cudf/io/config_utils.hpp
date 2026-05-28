@@ -1,10 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/utilities/export.hpp>
+
+#include <cstddef>
 
 namespace CUDF_EXPORT cudf {
 namespace io {
@@ -67,5 +69,20 @@ namespace integrated_memory_optimization {
 
 /** @} */  // end of group
 }  // namespace integrated_memory_optimization
+
+//! Parquet
+namespace parquet_integration {
+
+/**
+ * @brief Returns the speculative Parquet metadata read size in bytes.
+ *
+ * Controlled by the `LIBCUDF_PARQUET_METADATA_SIZE_HINT` environment variable.
+ * Defaults to 64 KiB.
+ *
+ * @return Number of bytes to speculatively read from the end of the source.
+ */
+[[nodiscard]] std::size_t metadata_size_hint();
+
+}  // namespace parquet_integration
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
