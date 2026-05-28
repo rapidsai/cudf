@@ -5,61 +5,6 @@
 # cmake-lint: disable=C0112,C0113,E1120
 
 #[=======================================================================[.rst:
-get_jit_fragment_architectures
-------------------------------
-
-Returns the CUDA architectures used for JIT fragment compilation.
-
-.. code-block:: cmake
-
-  get_jit_fragment_architectures(<out_var>)
-
-This function reads the ``rapids_cuda_architectures`` global property when it is available and falls
-back to :cmake:variable:`CMAKE_CUDA_ARCHITECTURES` otherwise. Only real architectures and the
-virtual architectures required for fragment compatibility are returned.
-
-Result Variables
-^^^^^^^^^^^^^^^^
-
-``<out_var>``
-  List of CUDA architectures for JIT fragment targets.
-
-#]=======================================================================]
-function(get_jit_fragment_architectures OUT_VAR)
-  get_property(_RAPIDS_CUDA_ARCHITECTURES GLOBAL PROPERTY rapids_cuda_architectures)
-  if(_RAPIDS_CUDA_ARCHITECTURES)
-    set(_ARCHITECTURES ${_RAPIDS_CUDA_ARCHITECTURES})
-  else()
-    set(_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES})
-  endif()
-
-  set(_FRAGMENT_ARCHITECTURES)
-  foreach(_ARCH IN LISTS _ARCHITECTURES)
-    if(_ARCH STREQUAL "RAPIDS" OR _ARCH STREQUAL "ALL")
-      if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0.0)
-        list(APPEND _FRAGMENT_ARCHITECTURES 75-real 80-real 86-real 90a-real 100f-real 120a-real
-             120
-        )
-      elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
-        list(APPEND _FRAGMENT_ARCHITECTURES 70-real 75-real 80-real 86-real 90a-real 100f-real
-             120a-real 120
-        )
-      else()
-        list(APPEND _FRAGMENT_ARCHITECTURES 70-real 75-real 80-real 86-real 90a-real 90-virtual)
-      endif()
-    elseif(_ARCH MATCHES "^[0-9]+[a-z]*(-real)?$")
-      list(APPEND _FRAGMENT_ARCHITECTURES ${_ARCH})
-    endif()
-  endforeach()
-
-  list(REMOVE_DUPLICATES _FRAGMENT_ARCHITECTURES)
-  set(${OUT_VAR}
-      ${_FRAGMENT_ARCHITECTURES}
-      PARENT_SCOPE
-  )
-endfunction()
-
-#[=======================================================================[.rst:
 add_fragment
 ------------
 
@@ -133,15 +78,12 @@ macro(add_fragment)
     set(ARG_ENTRY_NAME "kernel_entry")
   endif()
 
-  get_jit_fragment_architectures(FRAGMENT_ARCHITECTURES)
+  get_property(FRAGMENT_ARCHITECTURES GLOBAL PROPERTY rapids_cuda_architectures)
+  if(NOT FRAGMENT_ARCHITECTURES)
+    set(FRAGMENT_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES})
+  endif()
   foreach(FRAGMENT_ARCH IN LISTS FRAGMENT_ARCHITECTURES)
     string(REGEX REPLACE "-.*$" "" FRAGMENT_ARCH_ID "${FRAGMENT_ARCH}")
-    string(REGEX REPLACE "[^0-9]" "" FRAGMENT_ARCH_NUM "${FRAGMENT_ARCH_ID}")
-    if(FRAGMENT_ARCH_NUM AND FRAGMENT_ARCH_NUM LESS 80)
-      set(FRAGMENT_LTO OFF)
-    else()
-      set(FRAGMENT_LTO ON)
-    endif()
     set(OBJECT_ID ${TARGET}_${ARG_FRAGMENT}_sm${FRAGMENT_ARCH_ID})
     add_library(${OBJECT_ID} OBJECT ${ARG_SOURCE})
     target_compile_options(
@@ -161,7 +103,7 @@ macro(add_fragment)
                  CUDA_SEPARABLE_COMPILATION ON
                  CUDA_FATBIN_COMPILATION ON
                  POSITION_INDEPENDENT_CODE ON
-                 INTERPROCEDURAL_OPTIMIZATION ${FRAGMENT_LTO}
+                 INTERPROCEDURAL_OPTIMIZATION ON
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  CXX_EXTENSIONS ON

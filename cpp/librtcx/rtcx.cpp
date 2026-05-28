@@ -1374,20 +1374,6 @@ std::optional<std::string> arch_option_from_fragment_name(char const* name)
   return std::format("-arch={}", arch);
 }
 
-bool lto_supported_by_arch_option(std::string_view arch_option)
-{
-  constexpr auto prefix = std::string_view{"-arch=sm_"};
-  if (!arch_option.starts_with(prefix)) { return true; }
-
-  auto const arch = arch_option.substr(prefix.size());
-  auto value      = 0;
-  for (auto const c : arch) {
-    if (c < '0' || c > '9') { break; }
-    value = value * 10 + (c - '0');
-  }
-  return value >= 80;
-}
-
 std::vector<std::string> env_nvjitlink_options()
 {
   auto const* env = std::getenv("RTCX_NVJITLINK_OPTIONS");
@@ -1439,7 +1425,7 @@ lto_kernel get_lto_linked_kernel(cache_t& cache,
 
   std::vector<char const*> resolved_link_options;
   resolved_link_options.reserve(link_options.size() + env_options.size() + 2);
-  if (lto_supported_by_arch_option(arch_option)) { resolved_link_options.push_back("-lto"); }
+  resolved_link_options.push_back("-lto");
   resolved_link_options.push_back(arch_option.c_str());
 #if defined(RTCX_NVJITLINK_PROFILE_O3)
   resolved_link_options.push_back("-O3");
