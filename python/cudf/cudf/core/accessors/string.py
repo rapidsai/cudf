@@ -975,8 +975,8 @@ class StringMethods(BaseAccessor):
             Number of replacements to make from the start.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
-            If False, treats the pattern as a literal string.
             Raises ValueError if pat is not a string.
+            If False, treats the pattern as a literal string.
 
         Returns
         -------
