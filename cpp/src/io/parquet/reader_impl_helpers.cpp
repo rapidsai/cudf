@@ -282,20 +282,9 @@ void metadata::sanitize_schema()
       if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
-        // Backward-compatibility rule for unannotated repeated groups (Parquet 2-level
-        // legacy / parquet-mr "no annotations" path): when the repeated field is a group,
-        // the element type is the group itself, regardless of how many fields it has. A
-        // 1-field repeated group means `list<struct<one_field>>`, NOT `list<one_field>`.
-        // The previous `num_children > 1` guard accidentally restricted this rewrite to
-        // multi-field groups and let single-field cases fall through as 1-level lists,
-        // collapsing `list<list<struct<x>>>` into `list<list<x>>` against parquet-mr /
-        // Spark CPU. The `converted_type` / `logical_type` / `repetition_type` writes
-        // below are the same writes the previous code did, just relocated next to the
-        // children-swap so the rewrite is one contiguous block (no behavior change
-        // beyond the `> 1` → `>= 1` guard). No file-version gate is needed because the
-        // encoding signal is the schema itself: only legacy 2-level encodings emit
-        // unannotated REPEATED groups whose parent isn't LIST/MAP-annotated.
-        //
+        // Parquet backward-compatibility rule: when the repeated field is a group,
+        // the element type is the group itself, regardless of its field count. Rewrite
+        // as `list<struct<...>>` for any number of children >= 1.
         // Spec:
         // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
         auto const struct_node_idx = static_cast<size_type>(schema.size());
@@ -314,18 +303,13 @@ void metadata::sanitize_schema()
           schema[child_idx].parent_idx = struct_node_idx;
         }
 
-        // Mutations of `schema_elem` that don't depend on `struct_node_idx` existing in
-        // `schema` are safe to do now, while `schema_elem` is still a valid reference.
         schema_elem.converted_type  = ConvertedType::LIST;
         schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
         schema_elem.max_definition_level--;
         schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
 
-        // Append the new struct entry before installing the `{struct_node_idx}` child edge
-        // on the LIST-level entry, so the invariant "every `children_idx` in `schema`
-        // references an existing entry" holds throughout. push_back may reallocate, so do
-        // NOT use `schema_elem` past this point -- index into `schema` directly instead.
+        // push_back may reallocate; do not use `schema_elem` past this point.
         schema.push_back(std::move(struct_elem));
         schema[schema_idx].children_idx = {struct_node_idx};
         schema[schema_idx].num_children = 1;
@@ -338,8 +322,8 @@ void metadata::sanitize_schema()
       schema[schema_idx].logical_type = converted_to_logical_type(schema[schema_idx]);
     }
 
-    // Iterate by index (not by reference) because the recursive `process` call
-    // can append to `schema` and invalidate any reference / iterator held here.
+    // Recursive `process` may append to `schema`; index into it each iteration
+    // instead of holding a reference.
     auto const num_children = schema[schema_idx].num_children;
     for (size_type i = 0; i < num_children; ++i) {
       process(schema[schema_idx].children_idx[i]);

@@ -2303,23 +2303,17 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
 }
 
 // Regression test for https://github.com/rapidsai/cudf/issues/22541.
-//
-// Exercises the `num_children == 1` branch in `sanitize_schema()` that the
-// previous `num_children > 1` guard accidentally excluded. The fixture is a
-// parquet-mr-written file with a doubly-nested unannotated repeated-group
-// schema that includes a single-field repeated group at the inner level:
-//
+// Schema (single-field inner repeated group must decode as list<struct<someId>>):
 //   required group root {
 //     optional int32 primitive;
-//     repeated group myComplex {            // 2-field outer (already worked)
+//     repeated group myComplex {
 //       optional int32 id;
-//       repeated group repeatedMessage {    // 1-field inner (the new path)
+//       repeated group repeatedMessage {
 //         optional int32 someId;
 //       }
 //     }
 //   }
-//
-// To regenerate `nested_array_bytes` below from the parquet-mr source file:
+// Regenerate `nested_array_bytes` from the parquet-mr source file with:
 //   xxd -i nested-array-struct.parquet > /tmp/blob.cpp
 // (source: spark/sql/core/src/test/resources/test-data/nested-array-struct.parquet)
 TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
