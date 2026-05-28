@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "filter_join_indices_jit_kernel.cuh"
-#include "jit/filter_join_kernel.cuh"
+#include "join/filter_join_indices/filter_join_indices_jit_kernel.cuh"
+#include "join/jit/filter_join_kernel.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/algorithms/copy_if.cuh>
