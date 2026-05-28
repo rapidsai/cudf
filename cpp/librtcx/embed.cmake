@@ -187,7 +187,7 @@ endfunction()
 # for JIT compilation.
 function(embed TARGET)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS "COMPRESSION")
+  set(ONE_VALUE_ARGS "COMPRESSION" "OUTPUT_DIRECTORY")
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
@@ -195,8 +195,8 @@ function(embed TARGET)
     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
   endif()
 
-  if(NOT DEFINED ARG_COMPRESSION)
-    message(FATAL_ERROR "COMPRESSION argument is required")
+  if(NOT DEFINED ARG_COMPRESSION OR NOT DEFINED ARG_OUTPUT_DIRECTORY)
+    message(FATAL_ERROR "COMPRESSION and OUTPUT_DIRECTORY arguments are required")
   endif()
 
   if(NOT ARG_COMPRESSION STREQUAL "none" AND NOT ARG_COMPRESSION STREQUAL "zstd")
@@ -243,7 +243,7 @@ function(embed TARGET)
     PROPERTY EMBED_INCLUDE_DIRECTORIES
   )
 
-  set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+  set(OUTPUT_DIR "${ARG_OUTPUT_DIRECTORY}")
   set(EMBED_SCRIPT_TEMPLATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
   set(CONFIGURED_EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed_cfg.cpp")
   set(EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")

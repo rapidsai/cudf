@@ -21,11 +21,18 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <numeric>
+#include <optional>
 #include <source_location>
+#include <sstream>
+#include <stdexcept>
 
 #define RTCX_EXPECTS(condition_, reason_, exception_type_)                               \
   do {                                                                                   \
@@ -1334,6 +1341,181 @@ rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binar
   }
 
   return decompressed;
+}
+
+namespace {
+
+void check_cuda(cudaError_t status)
+{
+  if (status != cudaSuccess) { throw std::runtime_error{cudaGetErrorString(status)}; }
+}
+
+std::string current_device_arch_option()
+{
+  int device   = 0;
+  int cc_major = 0;
+  int cc_minor = 0;
+  check_cuda(cudaGetDevice(&device));
+  check_cuda(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+  check_cuda(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
+  return std::format("-arch=sm_{}{}", cc_major, cc_minor);
+}
+
+std::optional<std::string> arch_option_from_fragment_name(char const* name)
+{
+  if (name == nullptr) { return std::nullopt; }
+  auto const fragment_name = std::string_view{name};
+  auto const sm_pos        = fragment_name.rfind("_sm");
+  if (sm_pos == std::string_view::npos) { return std::nullopt; }
+
+  auto arch = std::string{fragment_name.substr(sm_pos + 1)};
+  if (arch.size() <= 2) { return std::nullopt; }
+  arch.insert(2, "_");
+  return std::format("-arch={}", arch);
+}
+
+bool lto_supported_by_arch_option(std::string_view arch_option)
+{
+  constexpr auto prefix = std::string_view{"-arch=sm_"};
+  if (!arch_option.starts_with(prefix)) { return true; }
+
+  auto const arch = arch_option.substr(prefix.size());
+  auto value      = 0;
+  for (auto const c : arch) {
+    if (c < '0' || c > '9') { break; }
+    value = value * 10 + (c - '0');
+  }
+  return value >= 80;
+}
+
+std::vector<std::string> env_nvjitlink_options()
+{
+  auto const* env = std::getenv("RTCX_NVJITLINK_OPTIONS");
+  if (env == nullptr) { return {}; }
+
+  std::istringstream stream{env};
+  return {std::istream_iterator<std::string>{stream}, std::istream_iterator<std::string>{}};
+}
+
+bool link_timing_enabled()
+{
+  auto const* env = std::getenv("RTCX_LINK_TIMING");
+  return env != nullptr && std::string_view{env} == "1";
+}
+
+char const* link_timing_meta()
+{
+  if (auto const* env = std::getenv("RTCX_LINK_TIMING_META")) { return env; }
+  return "";
+}
+
+void emit_link_timing(std::chrono::steady_clock::time_point start)
+{
+  auto const elapsed =
+    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  auto const* meta = link_timing_meta();
+  if (std::string_view{meta}.empty()) {
+    std::fprintf(stderr, "RTCX_LINK_TIMING build_ms=%.3f\n", elapsed);
+  } else {
+    std::fprintf(stderr, "RTCX_LINK_TIMING build_ms=%.3f %s\n", elapsed, meta);
+  }
+}
+
+}  // namespace
+
+lto_kernel get_lto_linked_kernel(cache_t& cache,
+                                 std::string const& name,
+                                 std::string const& entry_name,
+                                 std::span<memory_fragment const> memory_fragments,
+                                 std::span<char const* const> link_options)
+{
+  auto arch_option = current_device_arch_option();
+  if (!memory_fragments.empty()) {
+    if (auto fragment_arch_option = arch_option_from_fragment_name(memory_fragments.front().name)) {
+      arch_option = *fragment_arch_option;
+    }
+  }
+  auto env_options = env_nvjitlink_options();
+
+  std::vector<char const*> resolved_link_options;
+  resolved_link_options.reserve(link_options.size() + env_options.size() + 2);
+  if (lto_supported_by_arch_option(arch_option)) { resolved_link_options.push_back("-lto"); }
+  resolved_link_options.push_back(arch_option.c_str());
+#if defined(RTCX_NVJITLINK_PROFILE_O3)
+  resolved_link_options.push_back("-O3");
+#elif defined(RTCX_NVJITLINK_PROFILE_SPLIT_COMPILE)
+  resolved_link_options.push_back("-split-compile=0");
+#elif defined(RTCX_NVJITLINK_PROFILE_SPLIT_COMPILE_EXTENDED)
+  resolved_link_options.push_back("-split-compile-extended=0");
+#endif
+  for (auto const& option : env_options) {
+    resolved_link_options.push_back(option.c_str());
+  }
+  resolved_link_options.insert(
+    resolved_link_options.end(), link_options.begin(), link_options.end());
+
+  auto update_string = [](sha256_context& hasher, std::string_view value) {
+    hasher.update(std::span<std::uint8_t const>{reinterpret_cast<std::uint8_t const*>(value.data()),
+                                                value.size()});
+  };
+  auto update_scalar = [](sha256_context& hasher, auto const& value) {
+    hasher.update(
+      std::span<std::uint8_t const>{reinterpret_cast<std::uint8_t const*>(&value), sizeof(value)});
+  };
+
+  sha256_context hasher;
+  update_string(hasher, "rtcx_lto_kernel\n");
+  update_string(hasher, name);
+  update_string(hasher, "\nentry=");
+  update_string(hasher, entry_name);
+  for (auto const option : resolved_link_options) {
+    update_string(hasher, "\noption=");
+    update_string(hasher, option);
+  }
+  for (auto const& f : memory_fragments) {
+    update_string(hasher, "\nfragment=");
+    update_string(hasher, f.name != nullptr ? std::string_view{f.name} : std::string_view{});
+    update_string(hasher, "\ntype=");
+    auto const type = static_cast<std::int8_t>(f.type);
+    update_scalar(hasher, type);
+    update_string(hasher, "\nsize=");
+    auto const size = f.data.size();
+    update_scalar(hasher, size);
+    update_string(hasher, "\ndata=");
+    hasher.update(f.data);
+  }
+  auto cache_key_sha = hasher.finalize();
+
+  auto compile = [&]() -> std::tuple<library, blob> {
+    link_params params;
+    params.name             = name.c_str();
+    params.output_type      = binary_type::CUBIN;
+    params.memory_fragments = memory_fragments;
+    params.link_options     = resolved_link_options;
+    auto buf                = link_library(params);
+    auto raw_blob           = blob_t::from_buffer(std::move(buf));
+    auto shared             = std::make_shared<blob_t>(std::move(raw_blob));
+    auto lib                = load_library(shared->view());
+    return {lib, shared};
+  };
+
+  auto const emit_timing = link_timing_enabled();
+  auto const start       = std::chrono::steady_clock::now();
+  auto lib_future =
+    cache.get_or_add_library(cache_key_sha, library_compile_func::from_functor(compile));
+  auto lib = lib_future.get();
+  if (emit_timing) { emit_link_timing(start); }
+  return lto_kernel{lib, lib->get_kernel(entry_name.c_str())};
+}
+
+void launch_lto_linked_kernel(lto_kernel const& k,
+                              cuda_dim3 grid_dim,
+                              cuda_dim3 block_dim,
+                              std::uint32_t shared_mem_bytes,
+                              CUstream stream,
+                              void** kernel_params)
+{
+  k.ref.launch(grid_dim, block_dim, shared_mem_bytes, stream, kernel_params);
 }
 
 }  // namespace rtcx

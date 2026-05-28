@@ -8,6 +8,7 @@
 #include "sha256.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -1018,5 +1020,93 @@ std::string reflect_template(std::string_view template_name, TemplateArgs&&... t
 rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binary,
                                   std::size_t uncompressed_size,
                                   std::string_view compression);
+
+/// @brief Holds a linked library and a kernel reference.
+/// Library MUST outlive kernel_ref. This struct owns both.
+struct [[nodiscard]] lto_kernel {
+  library lib;     ///< Shared ownership of the linked library
+  kernel_ref ref;  ///< Reference to the specific kernel in lib
+};
+
+/// @brief Get a JIT-LTO linked kernel by linking memory fragments together.
+/// Declaration: rtcx::get_lto_linked_kernel(cache_t& cache, ...)
+/// @param cache The rtcx cache to use for caching linked libraries
+/// @param name Debug name (used for cache key)
+/// @param entry_name Name of the entry kernel in the linked library
+/// @param memory_fragments Spans of binary fragment data to link
+/// @param link_options Additional nvJitLink options (optional)
+/// @return lto_kernel struct holding library lifetime + kernel reference
+[[nodiscard]] __attribute__((visibility("default"))) lto_kernel
+get_lto_linked_kernel(cache_t& cache,
+                      std::string const& name,
+                      std::string const& entry_name,
+                      std::span<memory_fragment const> memory_fragments,
+                      std::span<char const* const> link_options = {});
+
+/// @brief Launch a previously linked LTO kernel
+__attribute__((visibility("default"))) void launch_lto_linked_kernel(lto_kernel const& k,
+                                                                     cuda_dim3 grid_dim,
+                                                                     cuda_dim3 block_dim,
+                                                                     std::uint32_t shared_mem_bytes,
+                                                                     CUstream stream,
+                                                                     void** kernel_params);
+
+/// @brief Type-safe launcher for a JIT-LTO linked kernel.
+///
+/// Library MUST outlive kernel_ref; this struct guarantees that by storing the lto_kernel which
+/// bundles both.
+struct AlgorithmLauncher {
+  explicit AlgorithmLauncher(lto_kernel kernel) : kernel_(std::move(kernel)) {}
+
+  AlgorithmLauncher(AlgorithmLauncher const&)            = delete;
+  AlgorithmLauncher& operator=(AlgorithmLauncher const&) = delete;
+  AlgorithmLauncher(AlgorithmLauncher&&)                 = default;
+  AlgorithmLauncher& operator=(AlgorithmLauncher&&)      = default;
+
+  template <typename FuncT, typename... Args>
+  void dispatch(
+    CUstream stream, cuda_dim3 grid, cuda_dim3 block, std::uint32_t shared_mem, Args&&... args)
+  {
+    static_assert(std::is_same_v<FuncT, void(std::remove_reference_t<Args>...)>,
+                  "dispatch() argument types do not match the kernel function signature FuncT");
+    std::array<void*, sizeof...(Args)> kernel_params = {
+      const_cast<void*>(static_cast<void const*>(&args))...};
+    kernel_.ref.launch(grid, block, shared_mem, stream, kernel_params.data());
+  }
+
+ private:
+  lto_kernel kernel_;
+};
+
+/// @brief Accumulates LTO-IR fragments for a single kernel entry point.
+///
+/// Call get_launcher() to link and load the assembled fragments. Caching is handled
+/// by get_lto_linked_kernel() internally via rtcx::cache_t; this struct itself holds
+/// no cache.
+///
+/// @note This struct is intended to be stack-allocated per call. Do NOT store as a
+///       static or global — the underlying rtcx cache is process-global already.
+///
+/// @note Runtime kernel arguments (e.g. a `nullable` bool, seed values, output pointers)
+///       are kernel PARAMETERS passed via AlgorithmLauncher::dispatch<FuncT>(), NOT
+///       planner concerns. The planner only decides WHICH code fragments to link.
+struct AlgorithmPlanner {
+  explicit AlgorithmPlanner(std::string entrypoint) : entrypoint_(std::move(entrypoint)) {}
+
+  void add_fragment(memory_fragment fragment) { fragments_.push_back(std::move(fragment)); }
+
+  void add_link_option(char const* option) { link_options_.push_back(option); }
+
+  [[nodiscard]] AlgorithmLauncher get_launcher(cache_t& cache) const
+  {
+    auto result = get_lto_linked_kernel(cache, entrypoint_, entrypoint_, fragments_, link_options_);
+    return AlgorithmLauncher{std::move(result)};
+  }
+
+ private:
+  std::string entrypoint_;
+  std::vector<memory_fragment> fragments_;
+  std::vector<char const*> link_options_;
+};
 
 }  // namespace rtcx
