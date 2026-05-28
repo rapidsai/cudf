@@ -296,7 +296,8 @@ void metadata::sanitize_schema()
         // encoding signal is the schema itself: only legacy 2-level encodings emit
         // unannotated REPEATED groups whose parent isn't LIST/MAP-annotated.
         //
-        // Spec: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
+        // Spec:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
         auto const struct_node_idx = static_cast<size_type>(schema.size());
 
         SchemaElement struct_elem;
