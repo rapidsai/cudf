@@ -2319,11 +2319,9 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
 //     }
 //   }
 //
-// Before the fix the inner `repeated group repeatedMessage { someId }` was
-// collapsed and the column came back as `list<struct<id, list<int>>>`. After
-// the fix it comes back as `list<struct<id, list<struct<someId>>>>`, matching
-// parquet-mr / Spark CPU. Source file:
-//   spark/sql/core/src/test/resources/test-data/nested-array-struct.parquet
+// To regenerate `nested_array_bytes` below from the parquet-mr source file:
+//   xxd -i nested-array-struct.parquet > /tmp/blob.cpp
+// (source: spark/sql/core/src/test/resources/test-data/nested-array-struct.parquet)
 TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
 {
   constexpr std::array<unsigned char, 775> nested_array_bytes{
@@ -2383,9 +2381,6 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
   auto result = cudf::io::read_parquet(read_opts);
 
   // 3 rows: (2, [{1, [{3}]}]), (5, [{4, [{6}]}]), (8, [{7, [{9}]}])
-  // Bind the table_view to a named variable so child column_views remain valid
-  // — `result.tbl->view()` is a temporary whose lifetime ends at the full
-  // expression, and column_view references into a destroyed table_view dangle.
   auto const tv = result.tbl->view();
   ASSERT_EQ(tv.num_columns(), 2);
   EXPECT_EQ(tv.column(0).size(), 3);
@@ -2394,8 +2389,6 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
   column_wrapper<int32_t> col0{2, 5, 8};
 
   // Column 1: list<struct<id:int32, repeatedMessage:list<struct<someId:int32>>>>
-  // Verify the structural type IDs first (this is what the fix is about — without
-  // the fix, the inner list child would be int32 instead of struct<someId:int32>).
   auto const& outer_list = tv.column(1);
   ASSERT_EQ(outer_list.type().id(), cudf::type_id::LIST);
   auto const outer_child = outer_list.child(cudf::lists_column_view::child_column_index);
@@ -2404,39 +2397,30 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotationsSingleFieldNested)
   EXPECT_EQ(outer_child.child(0).type().id(), cudf::type_id::INT32);
   ASSERT_EQ(outer_child.child(1).type().id(), cudf::type_id::LIST);
   auto const inner_child = outer_child.child(1).child(cudf::lists_column_view::child_column_index);
-  // The critical assertion: the inner repeated single-field group must be a
-  // STRUCT, not collapsed to a primitive (see issue #22541).
+  // Inner single-field group must be a STRUCT, not collapsed to a primitive (issue #22541).
   ASSERT_EQ(inner_child.type().id(), cudf::type_id::STRUCT);
   ASSERT_EQ(inner_child.num_children(), 1);
   EXPECT_EQ(inner_child.child(0).type().id(), cudf::type_id::INT32);
 
-  // Spot-check values: rebuild the expected column tree and compare.
-  // inner struct: someId per row = [3, 6, 9]
   column_wrapper<int32_t> inner_someid{3, 6, 9};
   auto inner_struct = cudf::test::structs_column_wrapper{{inner_someid}};
-  // inner list offsets: each outer-struct row holds 1 inner element -> [0,1,2,3]
   auto inner_list_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3}.release();
   auto inner_list = cudf::make_lists_column(
     3, std::move(inner_list_offsets), inner_struct.release(), 0, rmm::device_buffer{});
 
-  // outer struct: id per row = [1, 4, 7], with inner_list as its second child.
   column_wrapper<int32_t> outer_id{1, 4, 7};
   std::vector<std::unique_ptr<cudf::column>> outer_struct_children;
   outer_struct_children.push_back(outer_id.release());
   outer_struct_children.push_back(std::move(inner_list));
   auto outer_struct_col = cudf::test::structs_column_wrapper{{std::move(outer_struct_children)}};
 
-  // outer list offsets: each row holds 1 element -> [0,1,2,3]
   auto outer_list_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3}.release();
   auto outer_list_col = cudf::make_lists_column(
     3, std::move(outer_list_offsets), outer_struct_col.release(), 0, rmm::device_buffer{});
 
-  // Use EQUIVALENT (value-based) rather than EQUAL: the actual columns carry
-  // null masks (fields are optional/repeated, so every level is nullable) while
-  // our reconstructed expected has none. The values match — only the all-valid
-  // null-mask plumbing differs, which EQUIVALENT correctly ignores.
+  // Testing for equivalence here because we only care about the outermost validity buffers.
   table_view expected{{col0, *outer_list_col}};
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result.tbl->view(), expected);
 }

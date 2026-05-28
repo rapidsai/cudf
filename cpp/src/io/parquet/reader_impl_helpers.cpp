@@ -273,51 +273,61 @@ void metadata::sanitize_schema()
   // This code attempts to make this less messy for the code that follows.
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
-    if (schema_idx != 0 && schema[schema_idx].type == Type::UNDEFINED) {
-      auto const& parent_schema    = schema[schema[schema_idx].parent_idx];
+    auto& schema_elem = schema[schema_idx];
+    if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
+      auto const& parent_schema    = schema[schema_elem.parent_idx];
       auto const is_parent_variant = parent_schema.logical_type.has_value() &&
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
-      if (not is_parent_variant &&
-          schema[schema_idx].repetition_type == FieldRepetitionType::REPEATED &&
-          schema[schema_idx].num_children >= 1 && parent_type != ConvertedType::LIST &&
+      if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+          schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
-        // This is an unannotated 1-level legacy list (no LIST/MAP parent). Per the Parquet
-        // spec, when the repeated field is a group, the element type is the group itself.
-        // This applies regardless of the number of children: a 1-field repeated group means
-        // list<struct<one_field>>, not list<one_field>. Rewrite into the canonical
-        // list<struct<...>> form so the rest of the reader treats it as a normal list.
+        // Backward-compatibility rule for unannotated repeated groups (Parquet 2-level
+        // legacy / parquet-mr "no annotations" path): when the repeated field is a group,
+        // the element type is the group itself, regardless of how many fields it has. A
+        // 1-field repeated group means `list<struct<one_field>>`, NOT `list<one_field>`.
+        // The previous `num_children > 1` guard accidentally restricted this rewrite to
+        // multi-field groups and let single-field cases fall through as 1-level lists,
+        // collapsing `list<list<struct<x>>>` into `list<list<x>>` against parquet-mr /
+        // Spark CPU. The `converted_type` / `logical_type` / `repetition_type` writes
+        // below are the same writes the previous code did, just relocated next to the
+        // children-swap so the rewrite is one contiguous block (no behavior change
+        // beyond the `> 1` → `>= 1` guard). No file-version gate is needed because the
+        // encoding signal is the schema itself: only legacy 2-level encodings emit
+        // unannotated REPEATED groups whose parent isn't LIST/MAP-annotated.
+        //
+        // Spec: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
         auto const struct_node_idx = static_cast<size_type>(schema.size());
 
         SchemaElement struct_elem;
-        struct_elem.name            = "struct_node";
-        struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
-        struct_elem.num_children    = schema[schema_idx].num_children;
-        struct_elem.type            = Type::UNDEFINED;
-        struct_elem.converted_type  = std::nullopt;
-
-        // swap children and rewrite this node as the LIST level
-        struct_elem.children_idx           = std::move(schema[schema_idx].children_idx);
-        schema[schema_idx].children_idx    = {struct_node_idx};
-        schema[schema_idx].num_children    = 1;
-        schema[schema_idx].converted_type  = ConvertedType::LIST;
-        schema[schema_idx].logical_type    = LogicalType::LIST;
-        schema[schema_idx].repetition_type = FieldRepetitionType::OPTIONAL;
-
-        struct_elem.max_definition_level = schema[schema_idx].max_definition_level;
-        struct_elem.max_repetition_level = schema[schema_idx].max_repetition_level;
-        schema[schema_idx].max_definition_level--;
-        schema[schema_idx].max_repetition_level =
-          schema[schema[schema_idx].parent_idx].max_repetition_level;
-
-        // change parent index on new node and on children
-        struct_elem.parent_idx = schema_idx;
-        for (auto& child_idx : struct_elem.children_idx) {
+        struct_elem.name                 = "struct_node";
+        struct_elem.repetition_type      = FieldRepetitionType::REQUIRED;
+        struct_elem.num_children         = schema_elem.num_children;
+        struct_elem.type                 = Type::UNDEFINED;
+        struct_elem.converted_type       = std::nullopt;
+        struct_elem.parent_idx           = schema_idx;
+        struct_elem.max_definition_level = schema_elem.max_definition_level;
+        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        struct_elem.children_idx         = std::move(schema_elem.children_idx);
+        for (auto const child_idx : struct_elem.children_idx) {
           schema[child_idx].parent_idx = struct_node_idx;
         }
-        // add our struct — this may reallocate `schema`, so no live references
-        // into `schema` may be held across this push_back.
-        schema.push_back(struct_elem);
+
+        // Mutations of `schema_elem` that don't depend on `struct_node_idx` existing in
+        // `schema` are safe to do now, while `schema_elem` is still a valid reference.
+        schema_elem.converted_type  = ConvertedType::LIST;
+        schema_elem.logical_type    = LogicalType::LIST;
+        schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
+        schema_elem.max_definition_level--;
+        schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
+
+        // Append the new struct entry before installing the `{struct_node_idx}` child edge
+        // on the LIST-level entry, so the invariant "every `children_idx` in `schema`
+        // references an existing entry" holds throughout. push_back may reallocate, so do
+        // NOT use `schema_elem` past this point -- index into `schema` directly instead.
+        schema.push_back(std::move(struct_elem));
+        schema[schema_idx].children_idx = {struct_node_idx};
+        schema[schema_idx].num_children = 1;
       }
     }
 
