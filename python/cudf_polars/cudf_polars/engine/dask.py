@@ -109,14 +109,21 @@ def dask_setup(nanny: distributed.Nanny) -> None:
 class _WorkerContext:
     """Per-worker GPU resources stored on each Dask worker."""
 
+    # Statistics instance currently shared by the worker's progress thread
+    # and its streaming Context. Built in _setup_root / _setup_worker and
+    # replaced in-place in _reset_worker by installing a fresh Statistics
+    # on ``progress`` (the communicator forwards ``statistics()`` to its
+    # progress thread, so the swap automatically updates the comm's view).
+    stats: Statistics | None
+    # Owning reference to the worker's ProgressThread. Kept here so
+    # _reset_worker can call ``progress.set_statistics(...)`` without
+    # routing through ``comm.progress_thread`` (which would also work but
+    # adds an extra hop).
+    progress: ProgressThread | None
     comm: Communicator | None
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
-    # Single Statistics instance shared by the worker's progress thread and
-    # its streaming Context. Built once in _setup_root / _setup_worker and
-    # reused unchanged across _reset_worker calls.
-    stats: Statistics | None
 
 
 def _setup_root(
@@ -165,17 +172,25 @@ def _setup_root(
     # Build the single Statistics instance shared by the progress thread and
     # the streaming Context this worker will create in :func:`_setup_worker`.
     stats = Statistics.from_options(options)
+    progress = ProgressThread(stats)
     comm = new_communicator(
         nranks=nranks,
         ucx_worker=None,
         root_ucxx_address=None,
         options=options,
-        progress_thread=ProgressThread(stats),
+        progress_thread=progress,
     )
     setattr(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
-        _WorkerContext(comm=comm, ctx=None, py_executor=None, mr=mr, stats=stats),
+        _WorkerContext(
+            stats=stats,
+            progress=progress,
+            comm=comm,
+            ctx=None,
+            py_executor=None,
+            mr=mr,
+        ),
     )
     return get_root_ucxx_address(comm)
 
@@ -235,21 +250,26 @@ def _setup_worker(
         # Build the single Statistics instance shared by the progress thread
         # and the streaming Context built below.
         stats = Statistics.from_options(options)
+        progress = ProgressThread(stats)
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
             nranks=nranks,
             ucx_worker=None,
             root_ucxx_address=root_addr,
             options=options,
-            progress_thread=ProgressThread(stats),
+            progress_thread=progress,
         )
     else:
-        # Root worker: comm, mr, and stats were created in _setup_root.
-        mr = mp_ctx.mr
-        assert mp_ctx.comm is not None
-        assert mp_ctx.stats is not None
-        comm = mp_ctx.comm
-        stats = mp_ctx.stats
+        # Root worker: comm, mr, stats, and progress were created in _setup_root.
+        stats, progress, comm, mr = (
+            mp_ctx.stats,
+            mp_ctx.progress,
+            mp_ctx.comm,
+            mp_ctx.mr,
+        )
+        assert stats is not None
+        assert progress is not None
+        assert comm is not None
 
     barrier(comm)
     ctx = Context.from_options(comm.logger, mr, options, stats)
@@ -266,7 +286,14 @@ def _setup_worker(
     setattr(
         dask_worker,
         attr,
-        _WorkerContext(comm=comm, ctx=ctx, py_executor=py_executor, mr=mr, stats=stats),
+        _WorkerContext(
+            stats=stats,
+            progress=progress,
+            comm=comm,
+            ctx=ctx,
+            py_executor=py_executor,
+            mr=mr,
+        ),
     )
 
 
@@ -298,10 +325,11 @@ def _teardown_worker(
             if mp_ctx.ctx is not None:
                 mp_ctx.ctx.shutdown()
         finally:
-            mp_ctx.ctx = None
-            mp_ctx.comm = None
-            mp_ctx.mr = None
             mp_ctx.stats = None
+            mp_ctx.progress = None
+            mp_ctx.comm = None
+            mp_ctx.ctx = None
+            mp_ctx.mr = None
             delattr(dask_worker, attr)
 
 
@@ -331,9 +359,9 @@ def _reset_worker(
     mp_ctx: _WorkerContext | None = getattr(dask_worker, attr, None)
     if mp_ctx is None:
         raise RuntimeError(f"_reset_worker called before _setup_worker for uid={uid}")
+    assert mp_ctx.progress is not None
     assert mp_ctx.comm is not None
     assert mp_ctx.ctx is not None
-    assert mp_ctx.stats is not None
     # Collective: all ranks idle before any rank tears down its Context.
     if mp_ctx.comm.nranks > 1:
         barrier(mp_ctx.comm)
@@ -343,9 +371,10 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    # Reset the persistent Statistics in place so the communicator, its
-    # progress thread, and the new Context all keep sharing the same handle.
-    mp_ctx.stats.reset_from_options(options)
+    # Build a fresh Statistics from the new options and set it on the
+    # progress thread. Communicator will infer from progress thread.
+    mp_ctx.stats = Statistics.from_options(options)
+    mp_ctx.progress.set_statistics(mp_ctx.stats)
     mp_ctx.ctx = Context.from_options(
         mp_ctx.comm.logger, mp_ctx.mr, options, mp_ctx.stats
     )

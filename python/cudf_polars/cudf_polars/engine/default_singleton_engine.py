@@ -142,14 +142,12 @@ def _build_engine() -> DefaultSingletonEngine:
     """
     with _state.lock:
         try:
-            # Build a single Statistics instance from the resolved options
             options = resolve_rapidsmpf_options(None)
-            stats = Statistics.from_options(options)
             comm = single_communicator(
-                progress_thread=ProgressThread(stats),
+                progress_thread=ProgressThread(Statistics.from_options(options)),
                 options=options,
             )
-            instance = DefaultSingletonEngine(comm=comm, stats=stats)
+            instance = DefaultSingletonEngine(comm=comm)
             assert instance.nranks == 1
         except BaseException:
             _state.worker = None

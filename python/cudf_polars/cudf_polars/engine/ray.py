@@ -192,12 +192,11 @@ class RankActor:
             max_workers=num_py_executors,
             thread_name_prefix="ray-executor",
         )
+        # Same instance shared by all resources.
+        self._stats: Statistics | None = None
+        self._progress: ProgressThread | None = None
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
-        # Single Statistics instance shared by the progress thread and the
-        # streaming Context. Built lazily in setup_root/setup_worker and
-        # reused unchanged across :meth:`reset` calls.
-        self._stats: Statistics | None = None
 
     def setup_root(self) -> bytes:
         """
@@ -212,12 +211,13 @@ class RankActor:
         Serialized UCXX root address for communicator bootstrap.
         """
         self._stats = Statistics.from_options(self._rapidsmpf_options)
+        self._progress = ProgressThread(self._stats)
         self._comm = new_communicator(
             nranks=self._nranks,
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(self._stats),
+            progress_thread=self._progress,
         )
         return get_root_ucxx_address(self._comm)
 
@@ -239,6 +239,7 @@ class RankActor:
             # Non-root actor: ``setup_root`` did not run here, so build the
             # shared Statistics instance now before creating the communicator.
             self._stats = Statistics.from_options(self._rapidsmpf_options)
+            self._progress = ProgressThread(self._stats)
             root_ucxx_address = ucx_api.UCXAddress.create_from_buffer(
                 root_ucxx_address_as_bytes
             )
@@ -247,9 +248,10 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(self._stats),
+                progress_thread=self._progress,
             )
         assert self._stats is not None
+        assert self._progress is not None
         barrier(self._comm)
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options, self._stats
@@ -273,16 +275,17 @@ class RankActor:
         if self._ctx is None:
             raise RuntimeError("reset() requires setup_worker() to have run")
         assert self._comm is not None
-        assert self._stats is not None
+        assert self._progress is not None
         # Collective: all ranks idle before any rank tears down its Context.
         if self._comm.nranks > 1:
             barrier(self._comm)
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
-        # Reset the persistent Statistics in place so the communicator, its
-        # progress thread, and the new Context all keep sharing the same handle.
-        self._stats.reset_from_options(self._rapidsmpf_options)
+        # Build a fresh Statistics from the new options and set it on the
+        # progress thread. Communicator will infer from progress thread.
+        self._stats = Statistics.from_options(self._rapidsmpf_options)
+        self._progress.set_statistics(self._stats)
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options, self._stats
         )
@@ -304,6 +307,8 @@ class RankActor:
             self._ctx = None
             self._comm = None
             self._mr = None
+            self._progress = None
+            self._stats = None
             ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
