@@ -15,7 +15,7 @@ Pytest configurations live in `python/cudf/pyproject.toml` with 3 exceptions tha
 - cudf.pandas third party tests in `python/cudf/cudf_pandas_tests/third_party_integration_tests/tests/pytest.ini`
 - cudf.pandas unit tests in `python/cudf/cudf_pandas_tests/pytest.ini`
 
-These overrides are needed for pytest-plugin or testing configuration specific set up. Otherwise, ideally all configuration files
+These overrides are needed for pytest-plugin or testing configuration-specific set up. Otherwise, ideally all configuration files
 should reflect the same, strict pytest runtime configurations.
 
 ## Test organization
@@ -63,11 +63,11 @@ Exceptional uses cases include:
   4. Containing/all nan
   5. `INT${PRECISION}_MAX` for a given precision (e.g. `2**32` for `int32`).
 
-Additional exception use cases are also dependent on an APIs operation e.g. join.
+Additional exceptional use cases are also dependent on an APIs operation e.g. join.
 
 When writing a unit test for an API that mirrors pandas, construct the test body where pandas operations
 are done independently of cuDF operations, and assert equality for both results in the end, performing little to
-no convertions between pandas and cuDF. For example:
+no conversions between pandas and cuDF. For example:
 
 ```python
 def test_mean():
@@ -119,7 +119,7 @@ Otherwise use `pytest.mark.parametrize` on a specific test.
 
 ### Tests with expected failures (`xfail`s)
 
-For tests that are expected fail due to a known deficiency in cuDF or an external dependnecy
+For tests that are expected fail due to a known deficiency in cuDF or an external dependency
 that has the potential to be fixed, use the
 [`pytest.mark.xfail`](https://docs.pytest.org/en/stable/reference/reference.html#pytest.mark.xfail)
 fixture on the test to note that test is expected to fail.
@@ -183,10 +183,10 @@ the warning as appropriate.
 - Warnings that are explicitly thrown in cuDF should be tested using the [`pytest.warns`](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#assertwarnings) context manager.
 - If a warning originates from a package or testing dependency:
     - If practically addressible, modify the test body or cuDF codebase in a backward compatible way to avoid the warning
-    - If not addressible, use `pytest.mark.filterwarning` if it only impact a small subset of tests or add a warning filer to the appropriate configuration file if it impacts a large amount of the test suite.
+    - If not addressible, use `pytest.mark.filterwarning` if it only impact a small subset of tests or add a warning filter to the appropriate configuration file if it impacts a large amount of the test suite.
         - A [warning filter](https://docs.python.org/3/library/warnings.html#the-warnings-filter) should include at minimum a `message` and `category` component.
 
-Periodically revisit any warning filers added in configuration files and with `pytest.mark.filterwarning` as code and
+Periodically revisit any warning filters added in configuration files and with `pytest.mark.filterwarning` as code and
 dependency updates may have made them obsolete.
 
 ```{warning}
@@ -200,7 +200,7 @@ The `cudf.testing` and `cudf.testing._utils` both provides utilities for testing
 
 - When comparing specific, known objects, use `assert_frame_equal`, `assert_series_equal` and `assert_index_equal` where applicable.
 - When comparing scalar objects, use `assert` directly.
-- When comparing objects whos types might not be known or dynamic in a test, use `assert_eq`
+- When comparing objects whose types might not be known or dynamic in a test, use `assert_eq`
 - When comparing two calls that should have the same exception behavior, use `assert_exceptions_equal`
 - When comparing a singular exception call, use `pytest.raises` as a context manager.
 
