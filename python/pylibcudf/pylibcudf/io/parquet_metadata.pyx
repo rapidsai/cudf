@@ -573,10 +573,11 @@ cpdef list read_parquet_footers(SourceInfo src_info):
     list[FileMetaData]
         One footer metadata object per input source.
     """
-    cdef vector[unique_ptr[datasource]] sources = make_datasources(src_info.c_obj)
+    cdef vector[unique_ptr[datasource]] sources
     cdef vector[cpp_FileMetaData] c_result
     cdef cpp_FileMetaData metadata
     with nogil:
+        sources = make_datasources(src_info.c_obj)
         c_result = cpp_parquet_metadata.read_parquet_footers(
             host_span[const_unique_ptr_datasource](
                 <const_unique_ptr_datasource*>sources.data(),
