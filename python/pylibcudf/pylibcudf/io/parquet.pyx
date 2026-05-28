@@ -567,7 +567,8 @@ cdef class ChunkedParquetReader:
                     )
                 )
         else:
-            sources = make_datasources(options.c_obj.get_source())
+            with nogil:
+                sources = make_datasources(options.c_obj.get_source())
             c_metadatas = _build_parquet_metadatas(
                 parquet_metadatas, sources.size()
             )
@@ -658,7 +659,8 @@ cpdef read_parquet(
         with nogil:
             c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
     else:
-        sources = make_datasources(options.c_obj.get_source())
+        with nogil:
+            sources = make_datasources(options.c_obj.get_source())
         c_metadatas = _build_parquet_metadatas(parquet_metadatas, sources.size())
         with nogil:
             c_result = move(
