@@ -163,7 +163,7 @@ def foo(self):
     """
 ```
 
-All API compatibility differences from pandas will be rendered in the [pandas comparison](./PandasCompat.md) page.
+All API compatibility differences from pandas will be rendered in the [pandas comparison](../PandasCompat.md) page.
 
 ## Writing documentation pages
 
