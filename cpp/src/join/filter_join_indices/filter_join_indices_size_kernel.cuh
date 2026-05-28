@@ -5,6 +5,7 @@
 #pragma once
 
 #include "join/filter_join_indices/filter_join_indices_size_kernel.hpp"
+#include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -19,6 +20,7 @@
 
 #include <cub/block/block_reduce.cuh>
 #include <cuda/atomic>
+#include <cuda/std/cstddef>
 
 #include <cstddef>
 
@@ -35,7 +37,7 @@ namespace cudf::detail {
  * entries.
  */
 template <bool has_nulls, bool has_complex_type>
-CUDF_KERNEL __launch_bounds__(MAX_BLOCK_SIZE) void filter_join_indices_size_kernel(
+CUDF_KERNEL __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) void filter_join_indices_size_kernel(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
   cudf::device_span<cudf::size_type const> left_indices,
@@ -51,7 +53,7 @@ CUDF_KERNEL __launch_bounds__(MAX_BLOCK_SIZE) void filter_join_indices_size_kern
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  using BlockReduce = cub::BlockReduce<std::size_t, MAX_BLOCK_SIZE>;
+  using BlockReduce = cub::BlockReduce<cuda::std::size_t, DEFAULT_JOIN_BLOCK_SIZE>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
   auto const tid    = cudf::detail::grid_1d::global_thread_id();
@@ -60,10 +62,9 @@ CUDF_KERNEL __launch_bounds__(MAX_BLOCK_SIZE) void filter_join_indices_size_kern
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls, has_complex_type>{
     left_table, right_table, device_expression_data};
 
-  std::size_t thread_local_count = 0;
+  cuda::std::size_t thread_local_count = 0;
 
-  for (cudf::size_type i = tid; i < static_cast<cudf::size_type>(left_indices.size());
-       i += stride) {
+  for (auto i = tid; i < static_cast<cudf::thread_index_type>(left_indices.size()); i += stride) {
     auto const left_row_index  = left_indices[i];
     auto const right_row_index = right_indices[i];
 
@@ -107,27 +108,26 @@ CUDF_KERNEL __launch_bounds__(MAX_BLOCK_SIZE) void filter_join_indices_size_kern
     }
   }
 
-  std::size_t const block_sum = BlockReduce(temp_storage).Sum(thread_local_count);
+  cuda::std::size_t const block_sum = BlockReduce(temp_storage).Sum(thread_local_count);
 
   if (threadIdx.x == 0) {
-    cuda::atomic_ref<std::size_t, cuda::thread_scope_device> count_ref{*count_out};
+    cuda::atomic_ref<cuda::std::size_t, cuda::thread_scope_device> count_ref{*count_out};
     count_ref.fetch_add(block_sum, cuda::memory_order_relaxed);
   }
 }
 
 template <bool has_nulls, bool has_complex_type>
-void launch_filter_size_kernel(
-  cudf::table_device_view const& left_table,
-  cudf::table_device_view const& right_table,
-  cudf::device_span<cudf::size_type const> left_indices,
-  cudf::device_span<cudf::size_type const> right_indices,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  cudf::detail::grid_1d const& config,
-  std::size_t shmem_per_block,
-  cudf::join_kind join_kind,
-  std::size_t* count_out,
-  bool* left_passing_marks,
-  rmm::cuda_stream_view stream)
+void launch_filter_size_kernel(cudf::table_device_view const& left_table,
+                               cudf::table_device_view const& right_table,
+                               cudf::device_span<cudf::size_type const> left_indices,
+                               cudf::device_span<cudf::size_type const> right_indices,
+                               cudf::ast::detail::expression_device_view device_expression_data,
+                               cudf::detail::grid_1d const& config,
+                               std::size_t shmem_per_block,
+                               cudf::join_kind join_kind,
+                               std::size_t* count_out,
+                               bool* left_passing_marks,
+                               rmm::cuda_stream_view stream)
 {
   filter_join_indices_size_kernel<has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(

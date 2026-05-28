@@ -5,6 +5,7 @@
 
 #include "join/filter_join_indices/filter_join_indices_kernel.cuh"
 #include "join/filter_join_indices/filter_join_indices_size_kernel.hpp"
+#include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -375,6 +376,7 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
                std::invalid_argument);
 
   if (left_indices.empty()) { return 0; }
+  if (join_kind == join_kind::LEFT_JOIN && left.num_rows() == 0) { return 0; }
 
   auto const has_nulls = predicate.may_evaluate_null(left, right, stream);
 
@@ -389,19 +391,8 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
-  int device_id;
-  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
-  int shmem_limit_per_block;
-  CUDF_CUDA_TRY(
-    cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
-
-  auto const block_size =
-    parser.shmem_per_thread != 0
-      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / parser.shmem_per_thread)
-      : MAX_BLOCK_SIZE;
-
-  detail::grid_1d const config(left_indices.size(), block_size);
-  auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
+  detail::grid_1d const config(left_indices.size(), DEFAULT_JOIN_BLOCK_SIZE);
+  auto const shmem_per_block = parser.shmem_per_thread * DEFAULT_JOIN_BLOCK_SIZE;
 
   // The count kernel uses a single atomic counter. Allocate device_scalar zero-initialized.
   cudf::detail::device_scalar<std::size_t> d_count(std::size_t{0}, stream, mr);
