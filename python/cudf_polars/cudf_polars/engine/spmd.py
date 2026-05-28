@@ -297,6 +297,15 @@ class SPMDEngine(StreamingEngine):
         Executor-specific options (e.g. ``max_rows_per_partition``).
     engine_options
         Engine-specific keyword arguments (e.g. ``raise_on_fail``, ``parquet_options``).
+    stats
+        Pre-built :class:`~rapidsmpf.statistics.Statistics` instance to share with
+        the progress thread and the streaming :class:`~rapidsmpf.streaming.core.context.Context`.
+        Required when ``comm`` is supplied externally (the caller built its own
+        progress thread and must pass the same ``Statistics`` here). When ``None``
+        and ``comm`` is also ``None``, a fresh instance is built from
+        ``rapidsmpf_options`` via :meth:`~rapidsmpf.statistics.Statistics.from_options`.
+        Stored as ``self._stats`` and reused unchanged across :meth:`_reset` calls;
+        toggling ``StreamingOptions.statistics`` between resets has no effect.
 
     Raises
     ------
@@ -335,6 +344,7 @@ class SPMDEngine(StreamingEngine):
         rapidsmpf_options: Options | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
+        stats: Statistics | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
@@ -347,6 +357,15 @@ class SPMDEngine(StreamingEngine):
         bind_to_gpu(hw_binding)
 
         self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        # Build (or accept) a single Statistics instance that is shared by the
+        # progress thread and the streaming Context. Stored on the engine so
+        # that `_reset` reuses the same instance, preserving the
+        # ``comm.statistics is ctx.statistics()`` invariant after a reset.
+        self._stats: Statistics = (
+            stats
+            if stats is not None
+            else Statistics.from_options(self.rapidsmpf_options)
+        )
         mr_config: MemoryResourceConfig = engine_options.get(
             "memory_resource_config", MemoryResourceConfig.default()
         )
@@ -355,13 +374,13 @@ class SPMDEngine(StreamingEngine):
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(self._stats),
                     type=bootstrap.BackendType.AUTO,
                     options=self.rapidsmpf_options,
                 )
             else:
                 comm = single_communicator(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(self._stats),
                     options=self.rapidsmpf_options,
                 )
         # else: caller-provided comm; the caller retains ownership
@@ -376,7 +395,9 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            self._ctx = Context.from_options(comm.logger, mr, self.rapidsmpf_options)
+            self._ctx = Context.from_options(
+                comm.logger, mr, self.rapidsmpf_options, self._stats
+            )
             exit_stack.callback(self._cleanup_ctx)
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
@@ -466,6 +487,12 @@ class SPMDEngine(StreamingEngine):
 
         Must be called collectively on all ranks. A barrier ensures no
         rank tears down its Context while peers may still be using it.
+
+        The :class:`~rapidsmpf.statistics.Statistics` instance is **not**
+        rebuilt: the progress thread and the new Context continue to share
+        ``self._stats`` (the instance built at ``__init__``). As a result the
+        ``statistics`` field in ``rapidsmpf_options`` is read only at engine
+        construction time; toggling it between resets has no effect.
         """
         if self._ctx is None:
             raise RuntimeError("Cannot reset a shut-down engine")
@@ -486,7 +513,9 @@ class SPMDEngine(StreamingEngine):
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
-        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, rapidsmpf_options, self._stats
+        )
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,

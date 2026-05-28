@@ -585,7 +585,6 @@ def all_gather_host_data(
         comm=comm,
         op_id=op_id,
         br=br,
-        statistics=Statistics(enable=False),
     )
     # TODO: Make AllGather (bulk) a context manager so this becomes
     # with AllGather(...) as ag:

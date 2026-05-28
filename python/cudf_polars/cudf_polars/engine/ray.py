@@ -17,6 +17,7 @@ from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_comm
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -41,7 +42,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
 
@@ -193,6 +193,10 @@ class RankActor:
         )
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
+        # Single Statistics instance shared by the progress thread and the
+        # streaming Context. Built lazily in setup_root/setup_worker and
+        # reused unchanged across :meth:`reset` calls.
+        self._stats: Statistics | None = None
 
     def setup_root(self) -> bytes:
         """
@@ -206,12 +210,13 @@ class RankActor:
         -------
         Serialized UCXX root address for communicator bootstrap.
         """
+        self._stats = Statistics.from_options(self._rapidsmpf_options)
         self._comm = new_communicator(
             nranks=self._nranks,
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(),
+            progress_thread=ProgressThread(self._stats),
         )
         return get_root_ucxx_address(self._comm)
 
@@ -230,6 +235,9 @@ class RankActor:
             Serialized UCXX root address returned by :meth:`setup_root`.
         """
         if self._comm is None:
+            # Non-root actor: ``setup_root`` did not run here, so build the
+            # shared Statistics instance now before creating the communicator.
+            self._stats = Statistics.from_options(self._rapidsmpf_options)
             root_ucxx_address = ucx_api.UCXAddress.create_from_buffer(
                 root_ucxx_address_as_bytes
             )
@@ -238,11 +246,12 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(),
+                progress_thread=ProgressThread(self._stats),
             )
+        assert self._stats is not None
         barrier(self._comm)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger, self._mr, self._rapidsmpf_options, self._stats
         )
         # Set the current RMM device resource so all temporary allocations
         # in libcudf also use the same memory resource.
@@ -253,7 +262,16 @@ class RankActor:
         Rebuild the streaming Context with new options.
 
         Must be called collectively on all actors. A barrier ensures no
-        rank tears down its Context while peers may still be using it.
+        rank tears down its Context (or has its progress thread's
+        statistics swapped out) while peers may still be using it.
+
+        A fresh :class:`~rapidsmpf.statistics.Statistics` instance is built
+        from the new options via :meth:`Statistics.from_options`. The new
+        instance is installed on this actor's persistent progress thread
+        (owned by ``self._comm``) and on the communicator itself before the
+        new Context is constructed, so all three root providers share the
+        same Statistics again after reset. Toggling the ``statistics``
+        field across resets therefore takes effect on the next reset.
 
         Parameters
         ----------
@@ -263,14 +281,22 @@ class RankActor:
         if self._ctx is None:
             raise RuntimeError("reset() requires setup_worker() to have run")
         assert self._comm is not None
-        # Collective: all ranks idle before any rank tears down its Context.
+        assert self._stats is not None
+        # Collective: all ranks idle before any rank tears down its Context
+        # or swaps its progress thread's Statistics.
         if self._comm.nranks > 1:
             barrier(self._comm)
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
+        # Rebuild Statistics from the new options and propagate it to the
+        # persistent root providers (progress thread + communicator) so the
+        # subsequent Context shares the same instance.
+        self._stats = Statistics.from_options(self._rapidsmpf_options)
+        self._comm.progress_thread.set_statistics(self._stats)
+        self._comm.set_statistics(self._stats)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger, self._mr, self._rapidsmpf_options, self._stats
         )
 
     def shutdown(self) -> None:

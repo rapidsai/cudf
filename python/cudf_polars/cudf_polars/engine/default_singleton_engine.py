@@ -15,6 +15,7 @@ from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
 from rapidsmpf.progress_thread import ProgressThread
+from rapidsmpf.statistics import Statistics
 
 from cudf_polars.engine.core import (
     resolve_rapidsmpf_options,
@@ -141,11 +142,14 @@ def _build_engine() -> DefaultSingletonEngine:
     """
     with _state.lock:
         try:
+            # Build a single Statistics instance from the resolved options
+            options = resolve_rapidsmpf_options(None)
+            stats = Statistics.from_options(options)
             comm = single_communicator(
-                progress_thread=ProgressThread(),
-                options=resolve_rapidsmpf_options(None),
+                progress_thread=ProgressThread(stats),
+                options=options,
             )
-            instance = DefaultSingletonEngine(comm=comm)
+            instance = DefaultSingletonEngine(comm=comm, stats=stats)
             assert instance.nranks == 1
         except BaseException:
             _state.worker = None

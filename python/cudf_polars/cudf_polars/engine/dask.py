@@ -21,6 +21,7 @@ from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_comm
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -44,7 +45,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -113,6 +113,10 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
+    # Single Statistics instance shared by the worker's progress thread and
+    # its streaming Context. Built once in _setup_root / _setup_worker and
+    # reused unchanged across _reset_worker calls.
+    stats: Statistics | None
 
 
 def _setup_root(
@@ -158,17 +162,20 @@ def _setup_root(
     memory_resource_config = memory_resource_config or MemoryResourceConfig.default()
     base_mr = memory_resource_config.create_memory_resource()
     mr = RmmResourceAdaptor(base_mr)
+    # Build the single Statistics instance shared by the progress thread and
+    # the streaming Context this worker will create in :func:`_setup_worker`.
+    stats = Statistics.from_options(options)
     comm = new_communicator(
         nranks=nranks,
         ucx_worker=None,
         root_ucxx_address=None,
         options=options,
-        progress_thread=ProgressThread(),
+        progress_thread=ProgressThread(stats),
     )
     setattr(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
-        _WorkerContext(comm=comm, ctx=None, py_executor=None, mr=mr),
+        _WorkerContext(comm=comm, ctx=None, py_executor=None, mr=mr, stats=stats),
     )
     return get_root_ucxx_address(comm)
 
@@ -225,22 +232,27 @@ def _setup_worker(
         )
         base_mr = memory_resource_config.create_memory_resource()
         mr = RmmResourceAdaptor(base_mr)
+        # Build the single Statistics instance shared by the progress thread
+        # and the streaming Context built below.
+        stats = Statistics.from_options(options)
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
             nranks=nranks,
             ucx_worker=None,
             root_ucxx_address=root_addr,
             options=options,
-            progress_thread=ProgressThread(),
+            progress_thread=ProgressThread(stats),
         )
     else:
-        # Root worker: comm and mr were created in _setup_root.
+        # Root worker: comm, mr, and stats were created in _setup_root.
         mr = mp_ctx.mr
         assert mp_ctx.comm is not None
+        assert mp_ctx.stats is not None
         comm = mp_ctx.comm
+        stats = mp_ctx.stats
 
     barrier(comm)
-    ctx = Context.from_options(comm.logger, mr, options)
+    ctx = Context.from_options(comm.logger, mr, options, stats)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
@@ -254,7 +266,9 @@ def _setup_worker(
     setattr(
         dask_worker,
         attr,
-        _WorkerContext(comm=comm, ctx=ctx, py_executor=py_executor, mr=mr),
+        _WorkerContext(
+            comm=comm, ctx=ctx, py_executor=py_executor, mr=mr, stats=stats
+        ),
     )
 
 
@@ -289,6 +303,7 @@ def _teardown_worker(
             mp_ctx.ctx = None
             mp_ctx.comm = None
             mp_ctx.mr = None
+            mp_ctx.stats = None
             delattr(dask_worker, attr)
 
 
@@ -303,6 +318,13 @@ def _reset_worker(
 
     Must be called collectively on all workers. A barrier ensures no
     worker tears down its Context while peers may still be using it.
+
+    The :class:`~rapidsmpf.statistics.Statistics` instance is **not** rebuilt:
+    the progress thread and the new Context continue to share
+    ``mp_ctx.stats`` (the instance built in :func:`_setup_root` /
+    :func:`_setup_worker`). The ``statistics`` field in the supplied options
+    is therefore only consulted at worker setup time; toggling it across
+    resets has no effect.
 
     Parameters
     ----------
@@ -320,6 +342,7 @@ def _reset_worker(
         raise RuntimeError(f"_reset_worker called before _setup_worker for uid={uid}")
     assert mp_ctx.comm is not None
     assert mp_ctx.ctx is not None
+    assert mp_ctx.stats is not None
     # Collective: all ranks idle before any rank tears down its Context.
     if mp_ctx.comm.nranks > 1:
         barrier(mp_ctx.comm)
@@ -329,7 +352,9 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    mp_ctx.ctx = Context.from_options(mp_ctx.comm.logger, mp_ctx.mr, options)
+    mp_ctx.ctx = Context.from_options(
+        mp_ctx.comm.logger, mp_ctx.mr, options, mp_ctx.stats
+    )
     rmm.mr.set_current_device_resource(mp_ctx.ctx.br().device_mr)
 
 
