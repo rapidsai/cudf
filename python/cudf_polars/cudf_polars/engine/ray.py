@@ -186,6 +186,7 @@ class RankActor:
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
+        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
