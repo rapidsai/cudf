@@ -60,21 +60,47 @@ __device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t co
   return v;
 }
 
-// Parse metadata header, walk dictionary entries, return the index of `key` or -1
+// Read dictionary entry `i` as a `string_view` over the metadata buffer. Returns nullopt on
+// truncation or if the recorded extent overflows the strings payload.
+__device__ inline cuda::std::optional<cudf::string_view> read_dict_entry(
+  device_span<uint8_t const> meta,
+  size_type offsets_start,
+  int offset_size,
+  size_type strings_base,
+  size_type strings_extent,
+  size_type i)
+{
+  auto const lo_r = read_uint(meta, offsets_start + i * offset_size, offset_size);
+  auto const hi_r = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
+  if (!lo_r || !hi_r) { return cuda::std::nullopt; }
+  auto const lo = *lo_r;
+  auto const hi = *hi_r;
+  if (hi < lo || hi > strings_extent) { return cuda::std::nullopt; }
+  return cudf::string_view{reinterpret_cast<char const*>(meta.data() + strings_base + lo),
+                           static_cast<size_type>(hi - lo)};
+}
+
+// Parse metadata header, walk dictionary entries, return the index of `key` or nullopt.
+//
+// If the metadata header's sorted_strings flag (bit 4) is set, dictionary entries are guaranteed
+// to be in lexicographic order and we use binary search; otherwise we fall back to a linear
+// scan. The flag is set by `build_metadata` in `variant_blob_builders.hpp` for VARIANT data
+// produced by cudf benchmarks/examples.
 __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   device_span<uint8_t const> meta, cudf::string_view key)
 {
   auto const meta_len = static_cast<size_type>(meta.size());
   if (meta_len < 1) { return cuda::std::nullopt; }
-  uint8_t const header = meta[0];
-  int const version    = header & 0x0F;
-  if (version != variant_version_v1) { return cuda::std::nullopt; }
+  uint8_t const header  = meta[0];
+  int const version     = header & 0x0F;
+  bool const sorted     = ((header >> 4) & 0x01) != 0;
   int const offset_size = ((header >> 6) & 0x03) + 1;
+  if (version != variant_version_v1) { return cuda::std::nullopt; }
 
   size_type pos          = 1;
   auto const dict_size_r = read_uint(meta, pos, offset_size);
   if (!dict_size_r) { return cuda::std::nullopt; }
-  auto const dict_size = *dict_size_r;
+  auto const dict_size = static_cast<size_type>(*dict_size_r);
   pos += offset_size;
 
   // Read dictionary_size + 1 offsets
@@ -84,12 +110,32 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
 
   size_type const strings_base = offsets_start + offsets_bytes;
   // Bytes available for dictionary string payloads
-  auto const strings_extent = meta_len - strings_base;
+  auto const strings_extent = static_cast<size_type>(meta_len - strings_base);
 
-  // Carry forward the previous offset to avoid re-reading it each iteration
+  if (sorted) {
+    // Binary search; dict is lexicographically ordered per the sorted_strings flag.
+    size_type lo = 0;
+    size_type hi = dict_size;
+    while (lo < hi) {
+      size_type const mid = lo + (hi - lo) / 2;
+      auto const entry =
+        read_dict_entry(meta, offsets_start, offset_size, strings_base, strings_extent, mid);
+      if (!entry) { return cuda::std::nullopt; }
+      // string_view::compare returns <0 if `entry` < `key`, 0 if equal, >0 otherwise.
+      int const cmp = entry->compare(key);
+      if (cmp == 0) { return mid; }
+      if (cmp < 0) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return cuda::std::nullopt;
+  }
+
+  // Linear scan; carry forward the previous offset to avoid re-reading it each iteration.
   auto prev_off_r = read_uint(meta, offsets_start, offset_size);
   if (!prev_off_r) { return cuda::std::nullopt; }
-
   for (size_type i = 0; i < dict_size; ++i) {
     auto const next_off_r = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
     if (!next_off_r) { return cuda::std::nullopt; }

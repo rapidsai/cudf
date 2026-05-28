@@ -516,6 +516,40 @@ TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
 }
 
+TEST_F(ExtractVariantFieldTest, SortedMetadataBinarySearch)
+{
+  // Same scenario as LargeDictionaryAndObjectScan but with the metadata header's sorted_strings
+  // flag (bit 4) set, which exercises the GPU-side binary-search branch in `find_key_in_metadata`.
+  auto const keys = make_numeric_keys(50);
+  auto meta       = build_metadata(keys);
+  ASSERT_FALSE(meta.empty());
+  meta[0]        = static_cast<uint8_t>(meta[0] | (1U << 4));
+  auto const val = build_sequential_int32_object(50);
+  auto struc     = wrap_single_variant(meta, val);
+  auto stream    = cudf::test::get_default_stream();
+  auto const i32 = cudf::data_type{cudf::type_id::INT32};
+
+  // First, middle, last must resolve via binary search.
+  auto first = cudf::io::parquet::experimental::extract_variant_field(struc, "k00", i32, stream);
+  auto mid   = cudf::io::parquet::experimental::extract_variant_field(struc, "k24", i32, stream);
+  auto last  = cudf::io::parquet::experimental::extract_variant_field(struc, "k49", i32, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
+
+  // Absent key (lexicographically between, before, after) must return null.
+  auto missing_between = cudf::io::parquet::experimental::extract_variant_field(
+    struc, "k24a", i32, stream);  // sorts between k24 and k25
+  auto missing_before =
+    cudf::io::parquet::experimental::extract_variant_field(struc, "a", i32, stream);
+  auto missing_after =
+    cudf::io::parquet::experimental::extract_variant_field(struc, "zzz", i32, stream);
+  cudf::test::fixed_width_column_wrapper<int32_t> const null_expected({0}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing_between, null_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing_before, null_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing_after, null_expected);
+}
+
 TEST_F(ExtractVariantFieldTest, NullsAtDifferentDepths)
 {
   std::vector<std::string> const dict = {"a", "b", "c", "d"};  // fids: a=0,b=1,c=2,d=3
