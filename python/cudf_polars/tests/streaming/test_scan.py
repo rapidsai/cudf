@@ -93,7 +93,7 @@ def test_target_partition_size(
     blocksize,
     n_files,
     streaming_engine_factory,
-    io_executor: concurrent.futures.ThreadPoolExecutor,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=blocksize),
@@ -116,7 +116,7 @@ def test_target_partition_size(
         collect_statistics(
             qir,
             config_options,
-            io_executor,
+            parquet_stats_executor,
         ),
     )
     count = info[ir].count

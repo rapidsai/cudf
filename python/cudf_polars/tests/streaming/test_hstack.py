@@ -83,7 +83,7 @@ def test_hstack_non_scalar_cse_fallback(df, engine):
 
 
 def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(
-    engine, io_executor: concurrent.futures.ThreadPoolExecutor
+    engine, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
 ):
     """Filter → rec(HStack) so standalone non-pointwise HStack hits redirect to Select."""
     base = Translator(
@@ -114,7 +114,7 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(
         collect_statistics(
             root,
             config_options,
-            io_executor,
+            parquet_stats_executor,
         ),
     )
 
@@ -128,7 +128,9 @@ def test_with_columns_scalar_upstream_20981(engine):
 
 @pytest.mark.parametrize("comm_subexpr_elim", [True, False])
 def test_cse_agg_shared_decomposition(
-    engine, comm_subexpr_elim, io_executor: concurrent.futures.ThreadPoolExecutor
+    engine,
+    comm_subexpr_elim,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6]})
     q = df.with_columns(
@@ -151,7 +153,7 @@ def test_cse_agg_shared_decomposition(
     lowered, _ = lower_ir_graph(
         ir,
         config_options,
-        collect_statistics(ir, config_options, io_executor),
+        collect_statistics(ir, config_options, parquet_stats_executor),
     )
 
     # Both paths must lower to a single Repartition computing one aggregation.

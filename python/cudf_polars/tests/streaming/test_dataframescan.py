@@ -43,7 +43,7 @@ def test_parallel_dataframescan(
     df,
     streaming_engine_factory,
     max_rows_per_partition,
-    io_executor: concurrent.futures.ThreadPoolExecutor,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=max_rows_per_partition),
@@ -65,7 +65,7 @@ def test_parallel_dataframescan(
         collect_statistics(
             qir,
             config_options,
-            io_executor,
+            parquet_stats_executor,
         ),
     )
     count = info[ir].count
@@ -94,7 +94,8 @@ def test_dataframescan_concat(request, df, streaming_engine_factory):
 
 
 def test_join_in_memory_lazy_stable_id_pickle(
-    streaming_engine_factory, io_executor: concurrent.futures.ThreadPoolExecutor
+    streaming_engine_factory,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1_000, raise_on_fail=True),
@@ -111,13 +112,15 @@ def test_join_in_memory_lazy_stable_id_pickle(
         collect_statistics(
             qir,
             config_options,
-            io_executor,
+            parquet_stats_executor,
         ),
     )
     _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
-def test_dataframescan_pickle(df, io_executor: concurrent.futures.ThreadPoolExecutor):
+def test_dataframescan_pickle(
+    df, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
+):
     _engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -131,7 +134,7 @@ def test_dataframescan_pickle(df, io_executor: concurrent.futures.ThreadPoolExec
         collect_statistics(
             qir,
             config_options,
-            io_executor,
+            parquet_stats_executor,
         ),
     )
 

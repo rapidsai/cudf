@@ -56,13 +56,13 @@ def stats_engine():
 
 
 def test_base_stats_dataframescan(
-    df, stats_engine, io_executor: concurrent.futures.ThreadPoolExecutor
+    df, stats_engine, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
 ):
     row_count = df.height
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
     stats = collect_statistics(
-        ir, ConfigOptions.from_polars_engine(stats_engine), io_executor
+        ir, ConfigOptions.from_polars_engine(stats_engine), parquet_stats_executor
     )
 
     source = stats.scan_stats[ir]
@@ -83,7 +83,7 @@ def test_base_stats_parquet(
     row_group_size,
     max_footer_samples,
     max_row_group_samples,
-    io_executor: concurrent.futures.ThreadPoolExecutor,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     _clear_source_info_cache()
     make_partitioned_source(
@@ -105,7 +105,7 @@ def test_base_stats_parquet(
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_statistics(
-        ir, ConfigOptions.from_polars_engine(engine), io_executor
+        ir, ConfigOptions.from_polars_engine(engine), parquet_stats_executor
     )
     source = stats.scan_stats[ir]
 
@@ -122,13 +122,13 @@ def test_base_stats_parquet(
 
 
 def test_dataframescan_stats_pickle(
-    stats_engine, io_executor: concurrent.futures.ThreadPoolExecutor
+    stats_engine, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
 ):
     df = pl.DataFrame({"x": range(100), "y": [1, 2] * 50})
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
     stats = collect_statistics(
-        ir, ConfigOptions.from_polars_engine(stats_engine), io_executor
+        ir, ConfigOptions.from_polars_engine(stats_engine), parquet_stats_executor
     )
 
     # Pickle and unpickle the stats collector
@@ -237,13 +237,14 @@ def test_parquet_empty_per_file_means() -> None:
 
 
 def test_serialize_stats_roundtrip_dataframescan(
-    stats_engine: pl.GPUEngine, io_executor: concurrent.futures.ThreadPoolExecutor
+    stats_engine: pl.GPUEngine,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     df = pl.DataFrame({"x": range(200), "y": [1, 2] * 100})
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
     config = ConfigOptions.from_polars_engine(stats_engine)
-    stats = collect_statistics(ir, config, io_executor)
+    stats = collect_statistics(ir, config, parquet_stats_executor)
 
     serialized = stats.serialize(ir)
     wire = json.loads(json.dumps(serialized))
@@ -259,7 +260,7 @@ def test_serialize_stats_roundtrip_dataframescan(
 def test_serialize_stats_roundtrip_parquet(
     tmp_path: pathlib.Path,
     df: pl.DataFrame,
-    io_executor: concurrent.futures.ThreadPoolExecutor,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     _clear_source_info_cache()
     make_partitioned_source(df, tmp_path, "parquet", n_files=3)
@@ -272,7 +273,7 @@ def test_serialize_stats_roundtrip_parquet(
     q = pl.scan_parquet(tmp_path)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     config = ConfigOptions.from_polars_engine(engine)
-    stats = collect_statistics(ir, config, io_executor)
+    stats = collect_statistics(ir, config, parquet_stats_executor)
 
     serialized = stats.serialize(ir)
     wire = json.loads(json.dumps(serialized))
