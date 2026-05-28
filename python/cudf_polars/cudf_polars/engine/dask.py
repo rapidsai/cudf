@@ -266,9 +266,7 @@ def _setup_worker(
     setattr(
         dask_worker,
         attr,
-        _WorkerContext(
-            comm=comm, ctx=ctx, py_executor=py_executor, mr=mr, stats=stats
-        ),
+        _WorkerContext(comm=comm, ctx=ctx, py_executor=py_executor, mr=mr, stats=stats),
     )
 
 
@@ -319,13 +317,6 @@ def _reset_worker(
     Must be called collectively on all workers. A barrier ensures no
     worker tears down its Context while peers may still be using it.
 
-    The :class:`~rapidsmpf.statistics.Statistics` instance is **not** rebuilt:
-    the progress thread and the new Context continue to share
-    ``mp_ctx.stats`` (the instance built in :func:`_setup_root` /
-    :func:`_setup_worker`). The ``statistics`` field in the supplied options
-    is therefore only consulted at worker setup time; toggling it across
-    resets has no effect.
-
     Parameters
     ----------
     rapidsmpf_options_as_bytes
@@ -352,6 +343,9 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
+    # Reset the persistent Statistics in place so the communicator, its
+    # progress thread, and the new Context all keep sharing the same handle.
+    mp_ctx.stats.reset_from_options(options)
     mp_ctx.ctx = Context.from_options(
         mp_ctx.comm.logger, mp_ctx.mr, options, mp_ctx.stats
     )

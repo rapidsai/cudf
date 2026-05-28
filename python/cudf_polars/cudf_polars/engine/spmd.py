@@ -487,12 +487,6 @@ class SPMDEngine(StreamingEngine):
 
         Must be called collectively on all ranks. A barrier ensures no
         rank tears down its Context while peers may still be using it.
-
-        The :class:`~rapidsmpf.statistics.Statistics` instance is **not**
-        rebuilt: the progress thread and the new Context continue to share
-        ``self._stats`` (the instance built at ``__init__``). As a result the
-        ``statistics`` field in ``rapidsmpf_options`` is read only at engine
-        construction time; toggling it between resets has no effect.
         """
         if self._ctx is None:
             raise RuntimeError("Cannot reset a shut-down engine")
@@ -513,6 +507,9 @@ class SPMDEngine(StreamingEngine):
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
+        # Reset the persistent Statistics in place so the communicator, its
+        # progress thread, and the new Context all keep sharing the same handle.
+        self._stats.reset_from_options(rapidsmpf_options)
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, rapidsmpf_options, self._stats
         )

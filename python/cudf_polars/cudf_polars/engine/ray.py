@@ -262,16 +262,7 @@ class RankActor:
         Rebuild the streaming Context with new options.
 
         Must be called collectively on all actors. A barrier ensures no
-        rank tears down its Context (or has its progress thread's
-        statistics swapped out) while peers may still be using it.
-
-        A fresh :class:`~rapidsmpf.statistics.Statistics` instance is built
-        from the new options via :meth:`Statistics.from_options`. The new
-        instance is installed on this actor's persistent progress thread
-        (owned by ``self._comm``) and on the communicator itself before the
-        new Context is constructed, so all three root providers share the
-        same Statistics again after reset. Toggling the ``statistics``
-        field across resets therefore takes effect on the next reset.
+        rank tears down its Context while peers may still be using it.
 
         Parameters
         ----------
@@ -282,19 +273,15 @@ class RankActor:
             raise RuntimeError("reset() requires setup_worker() to have run")
         assert self._comm is not None
         assert self._stats is not None
-        # Collective: all ranks idle before any rank tears down its Context
-        # or swaps its progress thread's Statistics.
+        # Collective: all ranks idle before any rank tears down its Context.
         if self._comm.nranks > 1:
             barrier(self._comm)
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
-        # Rebuild Statistics from the new options and propagate it to the
-        # persistent root providers (progress thread + communicator) so the
-        # subsequent Context shares the same instance.
-        self._stats = Statistics.from_options(self._rapidsmpf_options)
-        self._comm.progress_thread.set_statistics(self._stats)
-        self._comm.set_statistics(self._stats)
+        # Reset the persistent Statistics in place so the communicator, its
+        # progress thread, and the new Context all keep sharing the same handle.
+        self._stats.reset_from_options(self._rapidsmpf_options)
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options, self._stats
         )
