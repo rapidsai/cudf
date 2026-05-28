@@ -581,11 +581,7 @@ def all_gather_host_data(
     -------
     List of bytes, one element per rank, ordered by rank index.
     """
-    allgather = AllGather(
-        comm=comm,
-        op_id=op_id,
-        br=br
-    )
+    allgather = AllGather(comm=comm, op_id=op_id, br=br)
     # TODO: Make AllGather (bulk) a context manager so this becomes
     # with AllGather(...) as ag:
     #     ag.insert(0, PackedData.from_host_bytes(data, br))
