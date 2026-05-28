@@ -100,7 +100,7 @@ kernel get_udf_kernel(std::string const& source_file,
  )***",
                                             kernel_name);
   char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
-    {"cudf/detail/operation-udf.hpp", "cudf/detail/kernel-instance.hpp"};
+    {"cudf/detail/operation_udf.cuh", "cudf/detail/kernel_instance.cuh"};
   char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
     {cuda_source.c_str(), kernel_instance_source.c_str()};
 

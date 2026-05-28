@@ -193,12 +193,11 @@ void launch(cudf::kernel const& kernel,
 {
   CUDF_FUNC_RANGE();
   void* args[]    = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
-  auto kernel_ref = kernel.get();
-  auto cfg        = kernel_ref.max_occupancy_config(0, 0);
+  auto cfg        = kernel.max_occupancy_config(0, 0);
   CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
                "Expected block size to be a multiple of warp size",
                std::runtime_error);
-  kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }

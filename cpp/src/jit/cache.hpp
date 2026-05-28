@@ -65,6 +65,7 @@ struct [[nodiscard]] kernel {
                    uint32_t shared_mem_bytes,
                    rmm::cuda_stream_view stream,
                    Args&&... args)
+    requires(sizeof...(Args) > 0)
   {
     void const* params[] = {&args...};  // NOLINT(modernize-avoid-c-arrays)
     launch(grid_dim, block_dim, shared_mem_bytes, stream, const_cast<void**>(params));

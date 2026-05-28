@@ -83,9 +83,10 @@ void context::initialize_components(init_flags flags)
 
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  if (auto cudf = detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
-      cudf.has_value()) {
-    return std::filesystem::path(*cudf);
+  if (auto libcudf_kernel_cache_path =
+        detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
+      libcudf_kernel_cache_path.has_value()) {
+    return std::filesystem::path(*libcudf_kernel_cache_path);
   }
 
   if (auto home = detail::getenv_optional<std::string>("HOME"); home.has_value()) {

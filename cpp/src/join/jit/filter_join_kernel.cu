@@ -17,14 +17,14 @@
 #include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
-                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
 // This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
-#include <cudf/detail/kernel-instance.hpp>
-#include <cudf/detail/operation-udf.hpp>
+#include <cudf/detail/kernel_instance.cuh>
+#include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
 namespace cudf::join::jit {

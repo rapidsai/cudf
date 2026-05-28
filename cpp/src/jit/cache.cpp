@@ -171,8 +171,9 @@ std::vector<std::string> jit_bundle_t::get_include_directories() const
 
 namespace {
 
-constexpr int MIN_CUDA_VERSION_PCH     = 12800;  // CUDA 12.8
-constexpr int MIN_CUDA_VERSION_MINIMAL = 12800;  // CUDA 12.8
+constexpr int MIN_CUDA_VERSION_PCH = 12800;  // minimum CUDA version for the "--pch" NVRTC flag
+constexpr int MIN_CUDA_VERSION_MINIMAL =
+  12800;  // minimum CUDA version for the "--minimal" NVRTC flag
 
 int32_t get_driver_version()
 {
@@ -188,7 +189,7 @@ int32_t get_runtime_version()
   return runtime_version;
 }
 
-int32_t get_current_device_physical_model()
+int32_t get_current_device_compute_capability()
 {
   int32_t device;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
@@ -211,7 +212,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   auto& ctx    = cudf::get_context();
   auto& cfg    = ctx.config();
   auto& bundle = ctx.jit_bundle();
-  auto sm      = get_current_device_physical_model();
+  auto sm      = get_current_device_compute_capability();
   auto runtime = get_runtime_version();
 
   auto include_dirs = bundle.get_include_directories();
@@ -295,7 +296,7 @@ kernel get_kernel(std::string const& name,
 
   auto runtime                   = get_runtime_version();
   auto driver                    = get_driver_version();
-  auto sm                        = get_current_device_physical_model();
+  auto sm                        = get_current_device_compute_capability();
   auto header_include_names_hash = hash(header_include_names).to_hex_string();
   auto headers_hash              = hash(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
