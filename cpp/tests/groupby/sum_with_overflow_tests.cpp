@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -251,20 +251,11 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 
     cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
 
-    // Expected sums (with overflow handled by wrapping)
-    auto overflow_sum_1 = static_cast<RepType>(static_cast<RepType>(large_positive) +
-                                               static_cast<RepType>(small_increment) +
-                                               static_cast<RepType>(large_positive));
-    auto normal_sum_2   = static_cast<RepType>(small_val1 + small_val2 + small_val3 + small_val4);
-    auto overflow_sum_3 =
-      static_cast<RepType>(static_cast<RepType>(small_val2) + static_cast<RepType>(large_positive) +
-                           static_cast<RepType>(1));
-    auto overflow_sum_4 = static_cast<RepType>(static_cast<RepType>(large_negative) +
-                                               static_cast<RepType>(small_decrement) +
-                                               static_cast<RepType>(large_negative));
+    // Overflowed groups have their sum zeroed; only the normal group retains its sum.
+    auto normal_sum_2 = static_cast<RepType>(small_val1 + small_val2 + small_val3 + small_val4);
 
     cudf::test::fixed_point_column_wrapper<RepType> expect_sum_vals{
-      {overflow_sum_1, normal_sum_2, overflow_sum_3, overflow_sum_4}, scale};
+      {RepType{0}, normal_sum_2, RepType{0}, RepType{0}}, scale};
     cudf::test::fixed_width_column_wrapper<bool> expect_overflow_vals{true, false, true, true};
 
     std::vector<std::unique_ptr<cudf::column>> children;
@@ -325,16 +316,12 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 
       cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
 
-      // Expected results: Groups 1, 3, and 4 overflow; Group 2 does not
+      // Expected results: Groups 1, 3, and 4 overflow (sum zeroed); Group 2 does not.
       auto sum_col = cudf::test::fixed_width_column_wrapper<V>{
-        static_cast<V>(static_cast<DeviceType>(large_positive) + small_increment +
-                       static_cast<DeviceType>(large_positive)),  // Group 1: overflowed result
+        static_cast<V>(0),                                                  // Group 1: overflow
         static_cast<V>(small_val1 + small_val2 + small_val3 + small_val4),  // Group 2: no overflow
-        static_cast<V>(static_cast<DeviceType>(small_val2) +
-                       static_cast<DeviceType>(large_positive) +
-                       static_cast<DeviceType>(1)),  // Group 3: overflowed result
-        static_cast<V>(static_cast<DeviceType>(large_negative) + small_decrement +
-                       static_cast<DeviceType>(large_negative))  // Group 4: overflowed result
+        static_cast<V>(0),                                                  // Group 3: overflow
+        static_cast<V>(0)                                                   // Group 4: overflow
       };
       auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{true, false, true, true};
       std::vector<std::unique_ptr<cudf::column>> children;
@@ -363,15 +350,12 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 
       cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
 
-      // Expected results: Groups 1 and 3 overflow; Groups 2 and 4 do not
+      // Expected results: Groups 1 and 3 overflow (sum zeroed); Groups 2 and 4 do not.
       auto sum_col = cudf::test::fixed_width_column_wrapper<V>{
-        static_cast<V>(static_cast<DeviceType>(large_positive) + small_increment +
-                       static_cast<DeviceType>(large_positive)),  // Group 1: overflowed result
+        static_cast<V>(0),                                                  // Group 1: overflow
         static_cast<V>(small_val1 + small_val2 + small_val3 + small_val4),  // Group 2: no overflow
-        static_cast<V>(static_cast<DeviceType>(small_val2) +
-                       static_cast<DeviceType>(large_positive) +
-                       static_cast<DeviceType>(1)),           // Group 3: overflowed result
-        static_cast<V>(small_val1 + small_val2 + small_val3)  // Group 4: no overflow
+        static_cast<V>(0),                                                  // Group 3: overflow
+        static_cast<V>(small_val1 + small_val2 + small_val3)                // Group 4: no overflow
       };
       auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{true, false, true, false};
       std::vector<std::unique_ptr<cudf::column>> children;

@@ -8020,10 +8020,6 @@ public class TableTest extends CudfTestBase {
     // exceeds int128_max ~= 1.7e38, so cudf's kernel flags overflow.
     final int scale = 0;
     BigInteger nearMax = BigInteger.TEN.pow(38).subtract(BigInteger.ONE);
-    // Expected wrapped sum for group 1: two's-complement wrap of 2*nearMax in
-    // int128. 2*nearMax > int128_max, so the signed result is 2*nearMax - 2^128.
-    BigInteger two = BigInteger.valueOf(2);
-    BigInteger group1Wrapped = nearMax.multiply(two).subtract(two.pow(128));
     BigInteger group2Sum = BigInteger.valueOf(7);  // 3 + 4
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
@@ -8040,11 +8036,9 @@ public class TableTest extends CudfTestBase {
            ColumnView ovfChild = structCol.getChildColumnView(1);
            ColumnVector sumCol = sumChild.copyToColumnVector();
            ColumnVector ovfCol = ovfChild.copyToColumnVector();
-           // expectedSum uses decimalFromBigInt because the wrapped group-1
-           // value has 39 significant digits and would not survive the
-           // MathContext(38) inside Table.TestBuilder.decimal128Column.
+           // Group 1 overflows so its sum is zeroed; group 2 sums normally.
            ColumnVector expectedSum = ColumnVector.decimalFromBigInt(scale,
-               group1Wrapped, group2Sum);
+               BigInteger.ZERO, group2Sum);
            ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
         assertEquals(DType.DTypeEnum.DECIMAL128, sumCol.getType().getTypeId());
         assertEquals(scale, sumCol.getType().getScale());
