@@ -2,23 +2,29 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
-# cmake-lint: disable=C0113,E1120
+# cmake-lint: disable=C0112,C0113,E1120
 
-# =============================================================================
-# librtcx JIT Fragment Compilation Infrastructure
-# =============================================================================
-# Provides: add_fragment(), add_composite_fragment(), get_jit_fragment_architectures() These macros
-# compile CUDA sources into per-architecture LTO-IR fatbins and embed them into a target via
-# embed_blob(). Any CUDA project using librtcx can use these to register precompiled fragments.
-#
-# Usage: include(librtcx/fragments.cmake) add_embed(my_fragments) add_fragment(my_fragments FRAGMENT
-# my_kernel SOURCE my_kernel.cu LINK_LIBRARIES dep1::dep1 dep2::dep2 INCLUDE_DIRECTORIES
-# "${CMAKE_CURRENT_SOURCE_DIR}/include" COMPILE_DEFINITIONS MY_DISABLE_EXPORTS) embed(my_fragments
-# COMPRESSION zstd OUTPUT_DIRECTORY ...)
-# =============================================================================
+#[=======================================================================[.rst:
+get_jit_fragment_architectures
+------------------------------
 
-# Fragment name convention: fragments must end with _sm<arch-num> for the runtime arch detection
-# heuristic.
+Returns the CUDA architectures used for JIT fragment compilation.
+
+.. code-block:: cmake
+
+  get_jit_fragment_architectures(<out_var>)
+
+This function reads the ``rapids_cuda_architectures`` global property when it is available and falls
+back to :cmake:variable:`CMAKE_CUDA_ARCHITECTURES` otherwise. Only real architectures and the
+virtual architectures required for fragment compatibility are returned.
+
+Result Variables
+^^^^^^^^^^^^^^^^
+
+``<out_var>``
+  List of CUDA architectures for JIT fragment targets.
+
+#]=======================================================================]
 function(get_jit_fragment_architectures OUT_VAR)
   get_property(_RAPIDS_CUDA_ARCHITECTURES GLOBAL PROPERTY rapids_cuda_architectures)
   if(_RAPIDS_CUDA_ARCHITECTURES)
@@ -53,13 +59,59 @@ function(get_jit_fragment_architectures OUT_VAR)
   )
 endfunction()
 
-# This macro is used to create object libraries for JIT compilation fragments, and embed them as
-# per-architecture fatbins in the final library. It compiles the specified source file with the
-# appropriate flags to generate fatbins containing the specified kernel, and then embeds those
-# fatbins in the final library with metadata that allows them to be looked up at runtime.
-#
-# For architectures below sm80, nvJitLink fails to accept LTO fatbins in CUDA 12.9. Disable IPO to
-# emit standard device-code fatbins instead.
+#[=======================================================================[.rst:
+add_fragment
+------------
+
+Compiles and embeds a CUDA source file as per-architecture JIT fragments.
+
+.. code-block:: cmake
+
+  add_fragment(<target>
+               FRAGMENT <name>
+               SOURCE <source>
+               [ENTRY_NAME <symbol>]
+               [KERNEL_ONLY]
+               [DEFINITIONS <definition>...]
+               [ARRAY_IDS <id>...]
+               [ARRAY_VALUES <value>...]
+               [LINK_LIBRARIES <target>...]
+               [INCLUDE_DIRECTORIES <directory>...]
+               [COMPILE_DEFINITIONS <definition>...])
+
+The generated fragment files are embedded in ``<target>`` with names of the form
+``fragments/<name>_sm<arch>.fatbin``. Fragment identifiers must use the ``_sm<arch>`` suffix so the
+runtime can select fragments for the current device architecture.
+
+``FRAGMENT``
+  Fragment name used for the generated object targets and embedded blob identifiers.
+
+``SOURCE``
+  CUDA source file compiled for each fragment architecture.
+
+``ENTRY_NAME``
+  Kernel entry symbol. Defaults to ``kernel_entry``.
+
+``KERNEL_ONLY``
+  Passes ``--kernels-used=<symbol>`` to nvlink so each fragment fatbin only retains ``ENTRY_NAME``
+  and device code reachable from that kernel.
+
+``DEFINITIONS``
+  Additional values passed to :cmake:command:`target_compile_definitions`.
+
+``ARRAY_IDS`` and ``ARRAY_VALUES``
+  Additional metadata arrays passed to :cmake:command:`embed_blob`.
+
+``LINK_LIBRARIES``
+  Targets linked by each fragment object target.
+
+``INCLUDE_DIRECTORIES``
+  Include directories used by each fragment object target.
+
+``COMPILE_DEFINITIONS``
+  Compile definitions used by each fragment object target.
+
+#]=======================================================================]
 macro(add_fragment)
   set(TARGET ${ARGV0})
   set(OPTIONS KERNEL_ONLY)
@@ -98,7 +150,7 @@ macro(add_fragment)
     )
 
     if(ARG_KERNEL_ONLY)
-      # ensure that the FATBIN symbols only contain the specified kernel
+      # Ensure that the FATBIN symbols only contain the specified kernel.
       target_compile_options(${OBJECT_ID} PRIVATE -Xnvlink=--kernels-used=${ARG_ENTRY_NAME})
     endif()
 
@@ -143,13 +195,32 @@ macro(add_fragment)
   endforeach()
 endmacro()
 
-# =============================================================================
-# This macro pre-links individual LTO-IR fragment fatbins at CMake build time into a single
-# composite fatbin using nvJitLink, then embeds it via embed_blob(). If nvJitLink is not found, the
-# composite is skipped with a warning.
-# =============================================================================
-# NOTE: add_composite_fragment has no call sites as of 2026-05-27. It is aspirational
-# infrastructure.
+#[=======================================================================[.rst:
+add_composite_fragment
+----------------------
+
+Pre-links LTO-IR fragments into a composite fatbin and embeds it in a target.
+
+.. code-block:: cmake
+
+  add_composite_fragment(<target>
+                         <composite_name>
+                         FRAGMENTS <fragment>...
+                         [ENTRY_NAME <symbol>])
+
+If a compatible ``nvJitLink`` executable is not available, the composite fragment is skipped.
+
+.. note::
+  This macro currently has no call sites. It is retained as supporting infrastructure for future
+  pre-linked fragments.
+
+``FRAGMENTS``
+  Fragment object targets to pre-link into the composite fatbin.
+
+``ENTRY_NAME``
+  Kernel entry symbol. Defaults to ``kernel_entry``.
+
+#]=======================================================================]
 macro(add_composite_fragment)
   set(_ACF_TARGET ${ARGV0})
   set(_ACF_COMPOSITE_NAME ${ARGV1})
@@ -182,20 +253,20 @@ macro(add_composite_fragment)
   if(NOT NVJITLINK_EXECUTABLE)
     message(STATUS "nvJitLink tool not found — composite fragment '${_ACF_COMPOSITE_NAME}' skipped")
   else()
-    # Collect input fatbin files from OBJECT targets of registered fragments
+    # Collect input fatbin files from OBJECT targets of registered fragments.
     set(_ACF_INPUT_FILES "")
     set(_ACF_INPUT_DEPS "")
     foreach(_ACF_FRAG_ID IN LISTS _ACF_FRAGMENTS)
-      # Each fragment was registered as OBJECT library named ${TARGET}_${FRAGMENT}
+      # Each fragment was registered as an OBJECT library named ${TARGET}_${FRAGMENT}.
       set(_ACF_OBJ_TARGET "${_ACF_TARGET}_${_ACF_FRAG_ID}")
       list(APPEND _ACF_INPUT_FILES "$<TARGET_OBJECTS:${_ACF_OBJ_TARGET}>")
       list(APPEND _ACF_INPUT_DEPS "${_ACF_OBJ_TARGET}")
     endforeach()
 
-    # Output composite fatbin path
+    # Output composite fatbin path.
     set(_ACF_COMPOSITE_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fragments/${_ACF_COMPOSITE_NAME}.fatbin")
 
-    # Custom command to run nvJitLink to pre-link fragments at build time
+    # Custom command to run nvJitLink to pre-link fragments at build time.
     add_custom_command(
       OUTPUT "${_ACF_COMPOSITE_OUTPUT}"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/fragments"
@@ -205,12 +276,12 @@ macro(add_composite_fragment)
       VERBATIM
     )
 
-    # Custom target to ensure the composite is built before embedding
+    # Custom target to ensure the composite is built before embedding.
     add_custom_target(
       "${_ACF_TARGET}_composite_${_ACF_COMPOSITE_NAME}" ALL DEPENDS "${_ACF_COMPOSITE_OUTPUT}"
     )
 
-    # Embed the composite fatbin via the existing embed_blob infrastructure
+    # Embed the composite fatbin via the existing embed_blob infrastructure.
     embed_blob(
       ${_ACF_TARGET} FILE "${_ACF_COMPOSITE_OUTPUT}" DEST "fragments/${_ACF_COMPOSITE_NAME}.fatbin"
       ID "${_ACF_COMPOSITE_NAME}"

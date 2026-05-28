@@ -4,10 +4,36 @@
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
+# cmake-lint: disable=C0103,C0112,E1120
 
 include_guard(GLOBAL)
 
-# Compute the Cartesian product of a JSON matrix file or string and return it as a JSON array.
+#[=======================================================================[.rst:
+compute_matrix_product
+----------------------
+
+Computes the Cartesian product of a JSON matrix file or string.
+
+.. code-block:: cmake
+
+  compute_matrix_product(<output_var>
+                         (MATRIX_JSON_FILE <path> | MATRIX_JSON_STRING <json>))
+
+The generated matrix product is returned as a JSON array string in ``<output_var>``.
+
+``MATRIX_JSON_FILE``
+  Path to a JSON matrix file.
+
+``MATRIX_JSON_STRING``
+  JSON matrix content.
+
+Result Variables
+^^^^^^^^^^^^^^^^
+
+``<output_var>``
+  JSON array containing the Cartesian product of the input matrix.
+
+#]=======================================================================]
 function(compute_matrix_product output_var)
   set(options)
   set(one_value MATRIX_JSON_FILE MATRIX_JSON_STRING)
@@ -38,12 +64,23 @@ function(compute_matrix_product output_var)
   )
 endfunction()
 
-# Populate parent-scope CMake variables from one JSON matrix entry object.
+#[=======================================================================[.rst:
+populate_matrix_variables
+-------------------------
+
+Populates CMake variables from a JSON matrix entry object.
+
+.. code-block:: cmake
+
+  populate_matrix_variables(<matrix_json_entry>)
+
+Each member in ``<matrix_json_entry>`` is written as a variable in the caller's scope.
+
+#]=======================================================================]
 function(populate_matrix_variables matrix_json_entry)
   string(JSON len LENGTH "${matrix_json_entry}")
   math(EXPR last "${len} - 1")
 
-  # cmake-lint: disable=C0103,E1120
   foreach(i RANGE "${last}")
     string(JSON key MEMBER "${matrix_json_entry}" "${i}")
     string(JSON value GET "${matrix_json_entry}" "${key}")

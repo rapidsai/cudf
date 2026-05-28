@@ -1021,21 +1021,30 @@ rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binar
                                   std::size_t uncompressed_size,
                                   std::string_view compression);
 
-/// @brief Holds a linked library and a kernel reference.
-/// Library MUST outlive kernel_ref. This struct owns both.
+/**
+ * @brief Linked library and kernel reference.
+ *
+ * The library must outlive the kernel reference. This type owns both objects to preserve that
+ * lifetime relationship.
+ */
 struct [[nodiscard]] lto_kernel {
   library lib;     ///< Shared ownership of the linked library
   kernel_ref ref;  ///< Reference to the specific kernel in lib
 };
 
-/// @brief Get a JIT-LTO linked kernel by linking memory fragments together.
-/// Declaration: rtcx::get_lto_linked_kernel(cache_t& cache, ...)
-/// @param cache The rtcx cache to use for caching linked libraries
-/// @param name Debug name (used for cache key)
-/// @param entry_name Name of the entry kernel in the linked library
-/// @param memory_fragments Spans of binary fragment data to link
-/// @param link_options Additional nvJitLink options (optional)
-/// @return lto_kernel struct holding library lifetime + kernel reference
+/**
+ * @brief Links memory fragments and returns a loaded kernel.
+ *
+ * The linked library is cached using the supplied `cache` and a key derived from the kernel name,
+ * entry point, link options, and fragment contents.
+ *
+ * @param cache Cache used for linked libraries
+ * @param name Name used for diagnostics and cache key generation
+ * @param entry_name Name of the kernel entry point in the linked library
+ * @param memory_fragments Binary fragments to link
+ * @param link_options Additional nvJitLink options
+ * @return Linked library and kernel reference
+ */
 [[nodiscard]] __attribute__((visibility("default"))) lto_kernel
 get_lto_linked_kernel(cache_t& cache,
                       std::string const& name,
@@ -1043,7 +1052,16 @@ get_lto_linked_kernel(cache_t& cache,
                       std::span<memory_fragment const> memory_fragments,
                       std::span<char const* const> link_options = {});
 
-/// @brief Launch a previously linked LTO kernel
+/**
+ * @brief Launches a previously linked LTO kernel.
+ *
+ * @param k Linked kernel to launch
+ * @param grid_dim CUDA grid dimensions
+ * @param block_dim CUDA block dimensions
+ * @param shared_mem_bytes Dynamic shared memory size in bytes
+ * @param stream CUDA stream used for the kernel launch
+ * @param kernel_params Kernel argument pointer array
+ */
 __attribute__((visibility("default"))) void launch_lto_linked_kernel(lto_kernel const& k,
                                                                      cuda_dim3 grid_dim,
                                                                      cuda_dim3 block_dim,
@@ -1051,11 +1069,17 @@ __attribute__((visibility("default"))) void launch_lto_linked_kernel(lto_kernel 
                                                                      CUstream stream,
                                                                      void** kernel_params);
 
-/// @brief Type-safe launcher for a JIT-LTO linked kernel.
-///
-/// Library MUST outlive kernel_ref; this struct guarantees that by storing the lto_kernel which
-/// bundles both.
+/**
+ * @brief Type-safe launcher for a JIT-LTO linked kernel.
+ *
+ * This type stores the linked kernel object, which keeps the linked library alive for all launches.
+ */
 struct AlgorithmLauncher {
+  /**
+   * @brief Constructs a launcher from a linked kernel.
+   *
+   * @param kernel Linked kernel to launch
+   */
   explicit AlgorithmLauncher(lto_kernel kernel) : kernel_(std::move(kernel)) {}
 
   AlgorithmLauncher(AlgorithmLauncher const&)            = delete;
@@ -1063,6 +1087,17 @@ struct AlgorithmLauncher {
   AlgorithmLauncher(AlgorithmLauncher&&)                 = default;
   AlgorithmLauncher& operator=(AlgorithmLauncher&&)      = default;
 
+  /**
+   * @brief Launches the linked kernel with type-checked arguments.
+   *
+   * @tparam FuncT Function signature expected by the linked kernel
+   * @tparam Args Kernel argument types
+   * @param stream CUDA stream used for the kernel launch
+   * @param grid CUDA grid dimensions
+   * @param block CUDA block dimensions
+   * @param shared_mem Dynamic shared memory size in bytes
+   * @param args Kernel arguments
+   */
   template <typename FuncT, typename... Args>
   void dispatch(
     CUstream stream, cuda_dim3 grid, cuda_dim3 block, std::uint32_t shared_mem, Args&&... args)
@@ -1078,25 +1113,46 @@ struct AlgorithmLauncher {
   lto_kernel kernel_;
 };
 
-/// @brief Accumulates LTO-IR fragments for a single kernel entry point.
-///
-/// Call get_launcher() to link and load the assembled fragments. Caching is handled
-/// by get_lto_linked_kernel() internally via rtcx::cache_t; this struct itself holds
-/// no cache.
-///
-/// @note This struct is intended to be stack-allocated per call. Do NOT store as a
-///       static or global — the underlying rtcx cache is process-global already.
-///
-/// @note Runtime kernel arguments (e.g. a `nullable` bool, seed values, output pointers)
-///       are kernel PARAMETERS passed via AlgorithmLauncher::dispatch<FuncT>(), NOT
-///       planner concerns. The planner only decides WHICH code fragments to link.
+/**
+ * @brief Accumulates LTO-IR fragments for a single kernel entry point.
+ *
+ * Call `get_launcher()` to link and load the assembled fragments. Caching is handled by
+ * `get_lto_linked_kernel()` using the supplied `rtcx::cache_t`; this object does not own a cache.
+ *
+ * Runtime kernel arguments, such as nullable flags, seed values, and output pointers, are passed to
+ * `AlgorithmLauncher::dispatch()`. This type only selects which code fragments to link.
+ *
+ * @note This type is intended to be stack-allocated per call. Do not store it as static or global
+ * state.
+ */
 struct AlgorithmPlanner {
+  /**
+   * @brief Constructs a planner for a kernel entry point.
+   *
+   * @param entrypoint Kernel entry point name
+   */
   explicit AlgorithmPlanner(std::string entrypoint) : entrypoint_(std::move(entrypoint)) {}
 
+  /**
+   * @brief Adds a fragment to the link plan.
+   *
+   * @param fragment Fragment to link
+   */
   void add_fragment(memory_fragment fragment) { fragments_.push_back(std::move(fragment)); }
 
+  /**
+   * @brief Adds an nvJitLink option to the link plan.
+   *
+   * @param option Null-terminated nvJitLink option string
+   */
   void add_link_option(char const* option) { link_options_.push_back(option); }
 
+  /**
+   * @brief Links the planned fragments and returns a launcher.
+   *
+   * @param cache Cache used for linked libraries
+   * @return Type-safe launcher for the linked kernel
+   */
   [[nodiscard]] AlgorithmLauncher get_launcher(cache_t& cache) const
   {
     auto result = get_lto_linked_kernel(cache, entrypoint_, entrypoint_, fragments_, link_options_);
