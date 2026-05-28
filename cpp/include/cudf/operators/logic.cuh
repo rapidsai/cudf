@@ -12,10 +12,10 @@ namespace CUDF_EXPORT cudf {
 namespace ops {
 
 /**
- * @brief Computes logical AND for non-optional operands with null-aware semantics.
+ * @brief Computes logical AND with null-aware semantics.
  *
  * @tparam T Operand type.
- * @param out Destination for the logical result.
+ * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
@@ -26,12 +26,12 @@ __device__ void null_logical_and(bool* out, T const* a, T const* b)
 }
 
 /**
- * @brief Computes logical AND for optional operands with three-valued semantics.
+ * @brief Computes logical AND with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination optional logical result.
- * @param a Left optional operand.
- * @param b Right optional operand.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Left operand.
+ * @param b Right operand.
  */
 template <typename T>
 __device__ void null_logical_and(cuda::std::optional<bool>* out,
@@ -54,10 +54,10 @@ __device__ void null_logical_and(cuda::std::optional<bool>* out,
 }
 
 /**
- * @brief Computes logical OR for non-optional operands with null-aware semantics.
+ * @brief Computes logical OR with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination for the logical result.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
@@ -68,12 +68,12 @@ __device__ void null_logical_or(bool* out, T const* a, T const* b)
 }
 
 /**
- * @brief Computes logical OR for optional operands with three-valued semantics.
+ * @brief Computes logical OR with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination optional logical result.
- * @param a Left optional operand.
- * @param b Right optional operand.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Left operand.
+ * @param b Right operand.
  */
 template <typename T>
 __device__ void null_logical_or(cuda::std::optional<bool>* out,
@@ -96,10 +96,10 @@ __device__ void null_logical_or(cuda::std::optional<bool>* out,
 }
 
 /**
- * @brief Computes logical AND for non-optional operands.
+ * @brief Computes logical AND with null-aware semantics.
  *
  * @tparam T Operand type.
- * @param out Destination for the logical result.
+ * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
@@ -110,12 +110,12 @@ __device__ void logical_and(bool* out, T const* a, T const* b)
 }
 
 /**
- * @brief Computes logical AND for optional operands.
+ * @brief Computes logical AND with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination optional logical result.
- * @param a Left optional operand.
- * @param b Right optional operand.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Left operand.
+ * @param b Right operand.
  */
 template <typename T>
 __device__ void logical_and(cuda::std::optional<bool>* out,
@@ -132,10 +132,10 @@ __device__ void logical_and(cuda::std::optional<bool>* out,
 }
 
 /**
- * @brief Computes logical OR for non-optional operands.
+ * @brief Computes logical OR with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination for the logical result.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
@@ -146,12 +146,12 @@ __device__ void logical_or(bool* out, T const* a, T const* b)
 }
 
 /**
- * @brief Computes logical OR for optional operands.
+ * @brief Computes logical OR with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination optional logical result.
- * @param a Left optional operand.
- * @param b Right optional operand.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Left operand.
+ * @param b Right operand.
  */
 template <typename T>
 __device__ void logical_or(cuda::std::optional<bool>* out,
@@ -168,10 +168,10 @@ __device__ void logical_or(cuda::std::optional<bool>* out,
 }
 
 /**
- * @brief Computes logical NOT for a non-optional operand.
+ * @brief Computes logical NOT with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination for the logical result.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input operand.
  */
 template <typename T>
@@ -181,11 +181,11 @@ __device__ void logical_not(bool* out, T const* a)
 }
 
 /**
- * @brief Computes logical NOT for an optional operand.
+ * @brief Computes logical NOT with null-aware semantics.
  *
- * @tparam T Operand type.
- * @param out Destination optional logical result.
- * @param a Optional input operand.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input operand.
  */
 template <typename T>
 __device__ void logical_not(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
@@ -200,10 +200,10 @@ __device__ void logical_not(cuda::std::optional<bool>* out, cuda::std::optional<
 }
 
 /**
- * @brief Selects one of two values based on a boolean predicate.
+ * @brief Selects one of two values based on a predicate.
  *
  * @tparam T Selected value type.
- * @param out Destination for the selected value.
+ * @param out Result destination.
  * @param true_value Value selected when @p pred is true.
  * @param false_value Value selected when @p pred is false.
  * @param pred Selection predicate.
@@ -215,10 +215,10 @@ __device__ void if_else(T* out, T const* true_value, T const* false_value, bool 
 }
 
 /**
- * @brief Selects one of two optional values based on a predicate.
+ * @brief Selects one of two values based on a predicate.
  *
  * @tparam T Selected value type.
- * @param out Destination optional selected value.
+ * @param out Result destination.
  * @param true_value Optional value selected when @p pred is true.
  * @param false_value Optional value selected when @p pred is false or null.
  * @param pred Selection predicate.

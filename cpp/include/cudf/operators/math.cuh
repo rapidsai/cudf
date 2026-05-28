@@ -7,34 +7,32 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/cmath>
 #include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
 /**
+ * @brief Computes cube root
+ *
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input value.
+ */
+template <typename T>
+__device__ inline void cbrt(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::cbrt(*a);
+}
+
+/**
  * @brief Computes cube root.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
- */
-__device__ inline void cbrt(float* out, float const* a) { *out = ::cbrtf(*a); }
-
-/**
- * @brief Computes cube root for double input.
- *
- * @param out Destination for the computed value.
- * @param a Input value.
- */
-__device__ inline void cbrt(double* out, double const* a) { *out = ::cbrt(*a); }
-
-/**
- * @brief Computes cube root for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
  */
 template <typename T>
 __device__ void cbrt(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -51,27 +49,23 @@ __device__ void cbrt(cuda::std::optional<T>* out, cuda::std::optional<T> const* 
 /**
  * @brief Computes ceiling.
  *
- * Scalar overloads support float and double, a decimal overload preserves scale, and an optional
- * overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void ceil(float* out, float const* a) { *out = ::ceilf(*a); }
+template <typename T>
+__device__ inline void ceil(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::ceil(*a);
+}
 
 /**
- * @brief Computes ceiling for double input.
- *
- * @param out Destination for the computed value.
- * @param a Input value.
- */
-__device__ inline void ceil(double* out, double const* a) { *out = ::ceil(*a); }
-
-/**
- * @brief Computes ceiling for decimal input.
+ * @brief Computes ceiling.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Input decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void ceil(numeric::decimal<R>* out, numeric::decimal<R> const* a)
@@ -92,11 +86,11 @@ __device__ void ceil(numeric::decimal<R>* out, numeric::decimal<R> const* a)
 }
 
 /**
- * @brief Computes ceiling for optional input.
+ * @brief Computes ceiling.
  *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void ceil(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -113,26 +107,23 @@ __device__ void ceil(cuda::std::optional<T>* out, cuda::std::optional<T> const* 
 /**
  * @brief Computes natural exponential.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void exp(float* out, float const* a) { *out = ::expf(*a); }
+template <typename T>
+__device__ inline void exp(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::exp(*a);
+}
 
 /**
- * @brief Computes natural exponential for double input.
+ * @brief Computes natural exponential.
  *
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
- */
-__device__ inline void exp(double* out, double const* a) { *out = ::exp(*a); }
-
-/**
- * @brief Computes natural exponential for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
  */
 template <typename T>
 __device__ void exp(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -147,29 +138,25 @@ __device__ void exp(cuda::std::optional<T>* out, cuda::std::optional<T> const* a
 }
 
 /**
- * @brief Computes floor.
+ * @brief Computes floor of a value.
  *
- * Scalar overloads support float and double, a decimal overload preserves scale, and an optional
- * overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void floor(float* out, float const* a) { *out = ::floorf(*a); }
+template <typename T>
+__device__ inline void floor(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::floor(*a);
+}
 
 /**
- * @brief Computes floor for double input.
- *
- * @param out Destination for the computed value.
- * @param a Input value.
- */
-__device__ inline void floor(double* out, double const* a) { *out = ::floor(*a); }
-
-/**
- * @brief Computes floor for decimal input.
+ * @brief Computes floor of a value.
  *
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Input decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void floor(numeric::decimal<R>* out, numeric::decimal<R> const* a)
@@ -190,11 +177,11 @@ __device__ void floor(numeric::decimal<R>* out, numeric::decimal<R> const* a)
 }
 
 /**
- * @brief Computes floor for optional input.
+ * @brief Computes floor of a value.
  *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void floor(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -211,26 +198,23 @@ __device__ void floor(cuda::std::optional<T>* out, cuda::std::optional<T> const*
 /**
  * @brief Computes natural logarithm.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void log(float* out, float const* a) { *out = ::logf(*a); }
+template <typename T>
+__device__ inline void log(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::log(*a);
+}
 
 /**
- * @brief Computes natural logarithm for double input.
+ * @brief Computes natural logarithm.
  *
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
- */
-__device__ inline void log(double* out, double const* a) { *out = ::log(*a); }
-
-/**
- * @brief Computes natural logarithm for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
  */
 template <typename T>
 __device__ void log(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -247,29 +231,25 @@ __device__ void log(cuda::std::optional<T>* out, cuda::std::optional<T> const* a
 /**
  * @brief Computes exponentiation.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Base value.
  * @param b Exponent value.
  */
-__device__ inline void pow(float* out, float const* a, float const* b) { *out = ::powf(*a, *b); }
+template <typename T>
+__device__ inline void pow(T* out, T const* a, T const* b)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::pow(*a, *b);
+}
 
 /**
- * @brief Computes exponentiation for double input.
+ * @brief Computes exponentiation.
  *
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Base value.
  * @param b Exponent value.
- */
-__device__ inline void pow(double* out, double const* a, double const* b) { *out = ::pow(*a, *b); }
-
-/**
- * @brief Computes exponentiation for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional base value.
- * @param b Optional exponent value.
  */
 template <typename T>
 __device__ void pow(cuda::std::optional<T>* out,
@@ -286,28 +266,25 @@ __device__ void pow(cuda::std::optional<T>* out,
 }
 
 /**
- * @brief Rounds to integral value using current rounding mode.
+ * @brief Rounds to integral value.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void rint(float* out, float const* a) { *out = ::rintf(*a); }
+template <typename T>
+__device__ inline void rint(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::rint(*a);
+}
 
 /**
- * @brief Rounds to integral value for double input.
+ * @brief Rounds to integral value.
  *
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
- */
-__device__ inline void rint(double* out, double const* a) { *out = ::rint(*a); }
-
-/**
- * @brief Rounds to integral value for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
  */
 template <typename T>
 __device__ void rint(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
@@ -324,26 +301,22 @@ __device__ void rint(cuda::std::optional<T>* out, cuda::std::optional<T> const* 
 /**
  * @brief Computes square root.
  *
- * Scalar overloads support float and double inputs, and an optional overload propagates nulls.
- * @param out Destination for the computed value.
+ * @param out Result destination.
  * @param a Input value.
  */
-__device__ inline void sqrt(float* out, float const* a) { *out = ::sqrtf(*a); }
+template <typename T>
+__device__ inline void sqrt(T* out, T const* a)
+  requires(cuda::std::is_floating_point_v<T>)
+{
+  *out = cuda::std::sqrt(*a);
+}
 
 /**
- * @brief Computes square root for double input.
+ * @brief Computes square root.
  *
- * @param out Destination for the computed value.
+ * @tparam T Value type.
+ * @param out Result destination.
  * @param a Input value.
- */
-__device__ inline void sqrt(double* out, double const* a) { *out = ::sqrt(*a); }
-
-/**
- * @brief Computes square root for optional input.
- *
- * @tparam T Input and output type.
- * @param out Destination optional value.
- * @param a Optional input value.
  */
 template <typename T>
 __device__ void sqrt(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)

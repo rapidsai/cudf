@@ -17,9 +17,8 @@ namespace ops {
 /**
  * @brief Casts input values to bool.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -29,11 +28,11 @@ __device__ void cast_to_b8(bool* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional bool.
+ * @brief Casts input values to bool.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_b8(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
@@ -50,9 +49,8 @@ __device__ void cast_to_b8(cuda::std::optional<bool>* out, cuda::std::optional<T
 /**
  * @brief Casts input values to int8_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -62,11 +60,11 @@ __device__ void cast_to_i8(int8_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional int8_t.
+ * @brief Casts input values to int8_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_i8(cuda::std::optional<int8_t>* out, cuda::std::optional<T> const* a)
@@ -83,9 +81,8 @@ __device__ void cast_to_i8(cuda::std::optional<int8_t>* out, cuda::std::optional
 /**
  * @brief Casts input values to int16_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -95,11 +92,11 @@ __device__ void cast_to_i16(int16_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional int16_t.
+ * @brief Casts input values to int16_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_i16(cuda::std::optional<int16_t>* out, cuda::std::optional<T> const* a)
@@ -116,9 +113,8 @@ __device__ void cast_to_i16(cuda::std::optional<int16_t>* out, cuda::std::option
 /**
  * @brief Casts input values to int32_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -128,11 +124,11 @@ __device__ void cast_to_i32(int32_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional int32_t.
+ * @brief Casts input values to int32_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_i32(cuda::std::optional<int32_t>* out, cuda::std::optional<T> const* a)
@@ -149,9 +145,8 @@ __device__ void cast_to_i32(cuda::std::optional<int32_t>* out, cuda::std::option
 /**
  * @brief Casts input values to int64_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -161,11 +156,11 @@ __device__ void cast_to_i64(int64_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional int64_t.
+ * @brief Casts input values to int64_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_i64(cuda::std::optional<int64_t>* out, cuda::std::optional<T> const* a)
@@ -182,9 +177,8 @@ __device__ void cast_to_i64(cuda::std::optional<int64_t>* out, cuda::std::option
 /**
  * @brief Casts input values to uint8_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -194,11 +188,11 @@ __device__ void cast_to_u8(uint8_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional uint8_t.
+ * @brief Casts input values to uint8_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_u8(cuda::std::optional<uint8_t>* out, cuda::std::optional<T> const* a)
@@ -215,9 +209,8 @@ __device__ void cast_to_u8(cuda::std::optional<uint8_t>* out, cuda::std::optiona
 /**
  * @brief Casts input values to uint16_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -227,11 +220,11 @@ __device__ void cast_to_u16(uint16_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional uint16_t.
+ * @brief Casts input values to uint16_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_u16(cuda::std::optional<uint16_t>* out, cuda::std::optional<T> const* a)
@@ -248,9 +241,8 @@ __device__ void cast_to_u16(cuda::std::optional<uint16_t>* out, cuda::std::optio
 /**
  * @brief Casts input values to uint32_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -260,11 +252,11 @@ __device__ void cast_to_u32(uint32_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional uint32_t.
+ * @brief Casts input values to uint32_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_u32(cuda::std::optional<uint32_t>* out, cuda::std::optional<T> const* a)
@@ -281,9 +273,8 @@ __device__ void cast_to_u32(cuda::std::optional<uint32_t>* out, cuda::std::optio
 /**
  * @brief Casts input values to uint64_t.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam T Source type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -293,11 +284,11 @@ __device__ void cast_to_u64(uint64_t* out, T const* a)
 }
 
 /**
- * @brief Casts optional input values to optional uint64_t.
+ * @brief Casts input values to uint64_t.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_u64(cuda::std::optional<uint64_t>* out, cuda::std::optional<T> const* a)
@@ -314,8 +305,8 @@ __device__ void cast_to_u64(cuda::std::optional<uint64_t>* out, cuda::std::optio
 /**
  * @brief Casts input values to float.
  *
- * Overloads support integral, floating-point, fixed-point decimal, and optional inputs.
- * @param out Destination cast value.
+ * @tparam T Source type.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -329,7 +320,7 @@ __device__ void cast_to_f32(float* out, T const* a)
  * @brief Casts fixed-point decimal values to float.
  *
  * @tparam R Source decimal representation type.
- * @param out Destination cast value.
+ * @param out Result destination.
  * @param a Source decimal value.
  */
 template <typename R>
@@ -339,10 +330,10 @@ __device__ void cast_to_f32(float* out, numeric::decimal<R> const* a)
 }
 
 /**
- * @brief Casts optional input values to optional float.
+ * @brief Casts input values to float.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
+ * @param out Result destination.
  * @param a Optional input value.
  */
 template <typename T>
@@ -360,8 +351,8 @@ __device__ void cast_to_f32(cuda::std::optional<float>* out, cuda::std::optional
 /**
  * @brief Casts input values to double.
  *
- * Overloads support integral, floating-point, fixed-point decimal, and optional inputs.
- * @param out Destination cast value.
+ * @tparam T Source type.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -372,11 +363,11 @@ __device__ void cast_to_f64(double* out, T const* a)
 }
 
 /**
- * @brief Casts fixed-point decimal values to double.
+ * @brief Casts input values to double.
  *
  * @tparam R Source decimal representation type.
- * @param out Destination cast value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_f64(double* out, numeric::decimal<R> const* a)
@@ -388,8 +379,8 @@ __device__ void cast_to_f64(double* out, numeric::decimal<R> const* a)
  * @brief Casts optional input values to optional double.
  *
  * @tparam T Source type.
- * @param out Destination optional cast value.
- * @param a Optional input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void cast_to_f64(cuda::std::optional<double>* out, cuda::std::optional<T> const* a)
@@ -410,8 +401,8 @@ namespace detail {
  *
  * @tparam To Destination representation type.
  * @tparam From Source representation type.
- * @param out Destination decimal value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename To, typename From>
 __device__ void decimal_cast(numeric::decimal<To>* out, numeric::decimal<From> const* a)
@@ -422,15 +413,12 @@ __device__ void decimal_cast(numeric::decimal<To>* out, numeric::decimal<From> c
 
 }  // namespace detail
 
-// TODO(lamarrr): CAST_TO_DEC32 for int & float
-
 /**
  * @brief Casts decimal input values to decimal32.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam R Source decimal representation type.
- * @param out Destination decimal32 value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec32(numeric::decimal32* out, numeric::decimal<R> const* a)
@@ -439,11 +427,11 @@ __device__ void cast_to_dec32(numeric::decimal32* out, numeric::decimal<R> const
 }
 
 /**
- * @brief Casts optional decimal input values to optional decimal32.
+ * @brief Casts decimal input values to decimal32.
  *
  * @tparam R Source decimal representation type.
- * @param out Destination optional decimal32 value.
- * @param a Optional decimal input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec32(cuda::std::optional<numeric::decimal32>* out,
@@ -461,10 +449,9 @@ __device__ void cast_to_dec32(cuda::std::optional<numeric::decimal32>* out,
 /**
  * @brief Casts decimal input values to decimal64.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam R Source decimal representation type.
- * @param out Destination decimal64 value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec64(numeric::decimal64* out, numeric::decimal<R> const* a)
@@ -476,8 +463,8 @@ __device__ void cast_to_dec64(numeric::decimal64* out, numeric::decimal<R> const
  * @brief Casts optional decimal input values to optional decimal64.
  *
  * @tparam R Source decimal representation type.
- * @param out Destination optional decimal64 value.
- * @param a Optional decimal input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec64(cuda::std::optional<numeric::decimal64>* out,
@@ -495,10 +482,9 @@ __device__ void cast_to_dec64(cuda::std::optional<numeric::decimal64>* out,
 /**
  * @brief Casts decimal input values to decimal128.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam R Source decimal representation type.
- * @param out Destination decimal128 value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec128(numeric::decimal128* out, numeric::decimal<R> const* a)
@@ -507,11 +493,11 @@ __device__ void cast_to_dec128(numeric::decimal128* out, numeric::decimal<R> con
 }
 
 /**
- * @brief Casts optional decimal input values to optional decimal128.
+ * @brief Casts decimal input values to decimal128.
  *
  * @tparam R Source decimal representation type.
- * @param out Destination optional decimal128 value.
- * @param a Optional decimal input value.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename R>
 __device__ void cast_to_dec128(cuda::std::optional<numeric::decimal128>* out,
@@ -527,12 +513,11 @@ __device__ void cast_to_dec128(cuda::std::optional<numeric::decimal128>* out,
 }
 
 /**
- * @brief Rescales fixed-point decimal values to a target scale.
+ * @brief Rescales decimal input values to a target scale.
  *
- * Scalar and optional overloads are provided; optional overloads propagate nulls.
  * @tparam R Decimal representation type.
- * @param out Destination decimal value.
- * @param a Source decimal value.
+ * @param out Result destination.
+ * @param a Input value.
  * @param new_scale Target decimal scale.
  */
 template <typename R>
@@ -544,12 +529,12 @@ __device__ void rescale(numeric::decimal<R>* out,
 }
 
 /**
- * @brief Rescales optional fixed-point decimal input values.
+ * @brief Rescales decimal input values to a target scale.
  *
  * @tparam R Decimal representation type.
- * @param out Destination optional decimal value.
- * @param a Optional source decimal value.
- * @param new_scale Optional target decimal scale.
+ * @param out Result destination.
+ * @param a Input value.
+ * @param new_scale Target decimal scale.
  */
 template <typename R>
 __device__ void rescale(cuda::std::optional<numeric::decimal<R>>* out,

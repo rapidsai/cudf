@@ -15,7 +15,7 @@ namespace ops {
  * @brief Copies an input value to the output.
  *
  * @tparam T Value type.
- * @param out Destination value.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>

@@ -13,10 +13,10 @@ namespace CUDF_EXPORT cudf {
 namespace ops {
 
 /**
- * @brief Returns false for non-optional inputs.
+ * @brief Tests whether an input value is null.
  *
  * @tparam T Input type.
- * @param out Destination for the null test result.
+ * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
@@ -26,11 +26,11 @@ __device__ void is_null(bool* out, T const* a)
 }
 
 /**
- * @brief Tests whether an optional input is null.
+ * @brief Tests whether an input value is null.
  *
- * @tparam T Input value type.
- * @param out Destination optional boolean result.
- * @param a Optional input value.
+ * @tparam T Value type.
+ * @param out Result destination.
+ * @param a Input value.
  */
 template <typename T>
 __device__ void is_null(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
@@ -42,9 +42,9 @@ __device__ void is_null(cuda::std::optional<bool>* out, cuda::std::optional<T> c
  * @brief Sets the output to null when the condition is true.
  *
  * @tparam T Value type.
- * @param out Destination optional value.
- * @param a Optional input value.
- * @param condition Optional boolean condition.
+ * @param out Result destination.
+ * @param a Input value.
+ * @param condition boolean condition.
  */
 template <typename T>
 __device__ void nullify_if(cuda::std::optional<T>* out,
@@ -63,10 +63,10 @@ __device__ void nullify_if(cuda::std::optional<T>* out,
 }
 
 /**
- * @brief Returns the first non-null input value of two non-nullable values.
+ * @brief Returns the first non-null of two values.
  *
  * @tparam T Value type.
- * @param out Destination value.
+ * @param out Result destination.
  * @param a First value.
  * @param b Second value.
  */
@@ -77,12 +77,12 @@ __device__ void coalesce(T* out, T const* a, T const* b)
 }
 
 /**
- * @brief Returns the first non-null optional value of two optional values, otherwise null.
+ * @brief Returns the first non-null of two values.
  *
  * @tparam T Value type.
- * @param out Destination optional value.
- * @param a First optional value.
- * @param b Second optional value.
+ * @param out Result destination.
+ * @param a First value.
+ * @param b Second value.
  */
 template <typename T>
 __device__ void coalesce(cuda::std::optional<T>* out,
@@ -99,9 +99,9 @@ __device__ void coalesce(cuda::std::optional<T>* out,
 }
 
 /**
- * @brief Returns the input boolean predicate unchanged.
+ * @brief Converts an optional predicate to a non-nullable predicate.
  *
- * @param out Destination boolean predicate.
+ * @param out Result destination.
  * @param a Input boolean predicate.
  */
 __device__ inline void predicate(bool* out, bool const* a) { *out = *a; }
@@ -109,7 +109,7 @@ __device__ inline void predicate(bool* out, bool const* a) { *out = *a; }
 /**
  * @brief Converts an optional predicate to a non-nullable predicate.
  *
- * @param out Destination optional boolean predicate.
+ * @param out Result destination.
  * @param a Optional input boolean predicate.
  */
 __device__ inline void predicate(cuda::std::optional<bool>* out, cuda::std::optional<bool> const* a)
