@@ -50,7 +50,7 @@ available engines, {doc}`options` for the
 
 ## Benchmark
 
-Polars delivers high performance across a wide range of data scales through multiple execution engines. The default CPU engine is highly optimized for interactive and medium-scale analytics on a single node. The Polars GPU engine lets you move seamlessly to GPU nodes, providing meaningful acceleration when your dataset grows to tens or hundreds of gigabytes or more.
+Polars delivers high performance across a wide range of data scales through multiple execution engines. The default CPU engine is highly optimized for interactive and medium-scale analytics on a single node. The Polars GPU engine lets you move seamlessly to GPU nodes, providing meaningful acceleration when your dataset grows to hundreds of gigabytes or more.
 
 We ran the Polars Decision Support (PDS) benchmarks to compare the Polars GPU engine with the CPU engine at larger scale factors to show how the GPU engine delivers meaningful speedups as dataset size grows:
 
@@ -61,15 +61,15 @@ We ran the Polars Decision Support (PDS) benchmarks to compare the Polars GPU en
 
    * - .. figure:: ../_static/polars_pdsh_sf1k.png
           :width: 100%
-          :alt: PDS-H benchmark at scale factor 1k
+          :alt: PDS-H benchmark at scale factor 1K
 
-          PDS-H (SF1k)
+          PDS-H (SF1K)
 
      - .. figure:: ../_static/polars_pdsds_sf1k.png
           :width: 100%
-          :alt: PDS-DS benchmark at scale factor 1k
+          :alt: PDS-DS benchmark at scale factor 1K
 
-          PDS-DS (SF1k)
+          PDS-DS (SF1K)
 ```
 
 On a single GPU, you can run TB-scale workloads with significant speedups compared to running on CPU. You can also scale up to run on multiple GPUs for processing even larger workloads:
@@ -81,15 +81,15 @@ On a single GPU, you can run TB-scale workloads with significant speedups compar
 
    * - .. figure:: ../_static/polars_pdsh_sf3k.png
           :width: 100%
-          :alt: PDS-H benchmark at scale factor 3k
+          :alt: PDS-H benchmark at scale factor 3K
 
-          PDS-H (SF3k)
+          PDS-H (SF3K)
 
      - .. figure:: ../_static/polars_pdsds_sf3k.png
           :width: 100%
-          :alt: PDS-DS benchmark at scale factor 3k
+          :alt: PDS-DS benchmark at scale factor 3K
 
-          PDS-DS (SF3k)
+          PDS-DS (SF3K)
 ```
 
 For more information on the benchmarks being run, see the PDS-DS queries in the [cuDF GitHub repository](https://github.com/rapidsai/cudf/tree/main/python/cudf_polars/cudf_polars/streaming/benchmarks).
