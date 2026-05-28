@@ -35,7 +35,6 @@ Attributes
    Series.empty
    Series.name
    Series.valid_count
-   Series.values_host
 
 Conversion
 ----------
