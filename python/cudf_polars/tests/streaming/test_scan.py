@@ -105,7 +105,7 @@ def test_target_partition_size(
     # Check partitioning (throwaway engine — no cluster/runtime needed)
     _engine = pl.GPUEngine(
         raise_on_fail=True,
-        io_executor="streaming",
+        executor="streaming",
         executor_options={"target_partition_size": blocksize},
     )
     qir = Translator(q._ldf.visit(), _engine).translate_ir()

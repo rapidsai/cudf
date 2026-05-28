@@ -56,13 +56,13 @@ def stats_engine():
 
 
 def test_base_stats_dataframescan(
-    df, stats_engine, executor: concurrent.futures.Executor
+    df, stats_engine, io_executor: concurrent.futures.ThreadPoolExecutor
 ):
     row_count = df.height
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
     stats = collect_statistics(
-        ir, ConfigOptions.from_polars_engine(stats_engine), executor
+        ir, ConfigOptions.from_polars_engine(stats_engine), io_executor
     )
 
     source = stats.scan_stats[ir]
