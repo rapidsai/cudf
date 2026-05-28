@@ -188,11 +188,6 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * structs benchmark
-# --------------------------------------------------------------------------------
-ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
-
-# ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
 ConfigureNVBench(QUANTILES_NVBENCH quantiles/quantiles.cpp)
@@ -283,23 +278,48 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(NULLMASK_NVBENCH bitmask/set_null_mask.cpp)
-
-# ##################################################################################################
 # * bitmask benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cu)
+ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cpp bitmask/set_null_mask.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+  io/parquet/parquet_writer_dict.cpp
 )
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+  io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader chunks benchmark
+# ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_CHUNKS_NVBENCH io/parquet/parquet_reader_chunks.cpp io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader compressed benchmark ------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_COMPRESSED_NVBENCH io/parquet/parquet_reader_compressed.cpp
+  io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader strings benchmark
+# ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_STRINGS_NVBENCH io/parquet/parquet_reader_strings.cpp io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader wide benchmark ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_WIDE_NVBENCH io/parquet/parquet_reader_wide.cpp io/parquet/reader_common.cpp
 )
 
 # ##################################################################################################

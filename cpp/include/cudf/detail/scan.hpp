@@ -1,17 +1,16 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -63,7 +62,6 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @returns Column with scan results.
  */
-CUDF_EXPORT
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        scan_aggregation const& agg,
                                        null_policy null_handling,
@@ -109,4 +107,4 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

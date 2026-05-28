@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,9 +7,10 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
+#include <format>
 #include <numeric>
 #include <set>
 #include <string>
@@ -101,7 +102,7 @@ std::string ptx_parser::register_type_to_cpp_type(std::string const& register_ty
   else if (register_type == ".f16x2")
     return "half2";
   else if (register_type == ".b64" || register_type == ".s64" || register_type == ".u64")
-    return "long int";
+    return "long long int";
   else if (register_type == ".f32")
     return "float";
   else if (register_type == ".f64")
@@ -110,11 +111,29 @@ std::string ptx_parser::register_type_to_cpp_type(std::string const& register_ty
     return "x_cpptype";
 }
 
+int32_t get_register_size(std::string_view register_type)
+{
+  if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8") {
+    return 8;
+  } else if (register_type == ".b16" || register_type == ".s16" || register_type == ".u16" ||
+             register_type == ".f16") {
+    return 16;
+  } else if (register_type == ".b32" || register_type == ".s32" || register_type == ".u32" ||
+             register_type == ".f32" || register_type == ".f16x2") {
+    return 32;
+  } else if (register_type == ".b64" || register_type == ".s64" || register_type == ".u64" ||
+             register_type == ".f64") {
+    return 64;
+  } else {
+    CUDF_FAIL("Unknown register type: " + std::string(register_type));
+  }
+}
+
 std::string ptx_parser::parse_instruction(std::string const& src)
 {
   // I am assuming for an instruction statement the starting phrase is an
   // instruction.
-  size_t const length = src.size();
+  std::size_t const length = src.size();
   std::string output;
   std::string suffix;
 
@@ -122,15 +141,13 @@ std::string ptx_parser::parse_instruction(std::string const& src)
 
   int piece_count = 0;
 
-  size_t start                      = 0;
-  size_t stop                       = 0;
+  std::size_t start                 = 0;
+  std::size_t stop                  = 0;
   bool is_instruction               = true;
   bool is_pragma_instruction        = false;
   bool is_param_loading_instruction = false;
-  std::string constraint;
   std::string register_type;
   bool blank = true;
-  std::string cpp_typename;
   while (stop < length) {
     while (start < length && (is_white(src[start]) || src[start] == ',' || src[start] == '{' ||
                               src[start] == '}')) {  // running to the first non-white character.
@@ -169,8 +186,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
         is_param_loading_instruction = true;
         register_type                = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
-        cpp_typename = register_type_to_cpp_type(register_type);
-        if (cpp_typename == "int" || cpp_typename == "short int" || cpp_typename == "char") {
+        if (get_register_size(register_type) < 64) {
           // The trick to support `ld` statement whose destination reg. wider than
           // the instruction width, e.g.
           //
@@ -186,7 +202,6 @@ std::string ptx_parser::parse_instruction(std::string const& src)
         } else {
           output += " mov" + register_type;
         }
-        constraint = register_type_to_contraint(register_type);
       } else if (piece.find("st.param") != std::string::npos) {
         return "asm volatile (\"" + output +
                "/** *** The way we parse the CUDA PTX assumes the function returns the return "
@@ -207,11 +222,20 @@ std::string ptx_parser::parse_instruction(std::string const& src)
       if (piece_count == 2 && is_param_loading_instruction) {
         // This is the source of the parameter loading instruction
         output += " %0";
-        if (cpp_typename == "char") {
-          suffix = ": : \"" + constraint + "\"( static_cast<short>(" +
-                   remove_nonalphanumeric(piece) + "))";
+
+        auto constraint   = register_type_to_contraint(register_type);
+        auto cpp_typename = register_type_to_cpp_type(register_type);
+
+        // there's no 8-bit register size constraint in PTX, so we widen the argument to 16-bits
+        if (get_register_size(register_type) == 8) {
+          suffix = std::format(
+            ": : \"{}\"( static_cast<short>( {} ) )", constraint, remove_nonalphanumeric(piece));
         } else {
-          suffix = ": : \"" + constraint + "\"(" + remove_nonalphanumeric(piece) + ")";
+          // normal case
+          suffix = std::format(": : \"{}\"( *reinterpret_cast<{} *>(&{}) )",
+                               constraint,
+                               cpp_typename,
+                               remove_nonalphanumeric(piece));
         }
       } else if (is_pragma_instruction) {
         // quote any string
@@ -322,10 +346,10 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   std::vector<std::string> param_decls;
 
-  std::transform(thrust::make_counting_iterator(size_t{0}),
-                 thrust::make_counting_iterator(ptx_params.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator{ptx_params.size()},
                  std::back_inserter(param_decls),
-                 [&](size_t param_index) {
+                 [&](std::size_t param_index) {
                    auto const& param = ptx_params[param_index];
 
                    if (auto const it = param_types.find(param_index); it != param_types.end()) {
@@ -415,9 +439,9 @@ std::string parse_single_function_cuda(std::string const& src, std::string const
 
   // For CUDA device function we just need to find the function
   // name and replace it with the specified one.
-  size_t const length = no_comments.size();
-  size_t start        = 0;
-  size_t stop         = start;
+  std::size_t const length = no_comments.size();
+  std::size_t start        = 0;
+  std::size_t stop         = start;
 
   while (stop < length && no_comments[stop] != '(') {
     stop++;

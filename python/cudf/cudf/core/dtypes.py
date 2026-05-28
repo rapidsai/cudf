@@ -20,7 +20,6 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 import pylibcudf as plc
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.dtype.validators import (
     is_dtype_obj_datetime_tz,
@@ -32,17 +31,12 @@ from cudf.core.dtype.validators import (
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     min_unsigned_type,
 )
-
-if PANDAS_GE_210:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
-else:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -52,6 +46,9 @@ if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
     from cudf.core.column.column import ColumnBase
     from cudf.core.index import Index
+
+
+PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
 
 
 def dtype(arbitrary: Any) -> DtypeObj:
@@ -80,20 +77,22 @@ def dtype(arbitrary: Any) -> DtypeObj:
             "but got the class instead. Try instantiating 'dtype'."
         )
         raise TypeError(msg)
+
+    if arbitrary is str or (isinstance(arbitrary, str) and arbitrary == "str"):
+        # "str" -> pd.StringDtype
+        # str -> pd.StringDtype
+        return pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
+
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
     except TypeError:
         pass
     else:
-        if np_dtype.kind == "O":
-            return CUDF_STRING_DTYPE
-        elif np_dtype.kind == "U":
-            if cudf.get_option("mode.pandas_compatible"):
-                # Like pandas, allow users to pass this object to signal "string"
-                # but the dtype metadata should result in np.dtype(object)
-                return np_dtype
-            return CUDF_STRING_DTYPE
+        if np_dtype.kind == "U":
+            # Like pandas, allow users to pass this object to signal "string"
+            # but the dtype metadata should result in np.dtype(object)
+            return np_dtype
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
@@ -199,7 +198,7 @@ class CategoricalDtype(_BaseDtype):
     2       a
     3    <NA>
     dtype: category
-    Categories (2, object): ['b' < 'a']
+    Categories (2, str): ['b' < 'a']
     """
 
     def __init__(self, categories=None, ordered: bool | None = False) -> None:
@@ -218,10 +217,10 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype.categories
-        Index(['b', 'a'], dtype='object')
+        Index(['b', 'a'], dtype='str')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE)
+            col = cudf.core.column.column_empty(0, dtype=DEFAULT_STRING_DTYPE)
         else:
             col = self._categories
         return cudf.Index._from_column(col)
@@ -259,9 +258,9 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=str)
         >>> dtype.to_pandas()
-        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=str)
         """
         if self._categories is None:
             categories = None
@@ -282,7 +281,7 @@ class CategoricalDtype(_BaseDtype):
             getattr(categories, "dtype", None),
             (IntervalDtype, pd.IntervalDtype),
         ):
-            dtype = CUDF_STRING_DTYPE
+            dtype = getattr(categories, "dtype", DEFAULT_STRING_DTYPE)
         else:
             dtype = None
 
@@ -480,9 +479,10 @@ class ListDtype(_BaseDtype):
         ListDtype(int64)
         """
         # PyArrow infers empty lists as list<null>, but libcudf uses int8 as
-        # the default for empty lists. Use int8 to match the plc structure.
+        # the default for empty lists. cudf uses `np.dtype(object)`
+        # to match pandas.
         if pa.types.is_null(typ.value_type):
-            return cls(np.dtype("int8"))
+            return cls(np.dtype("object"))
         return cls(cudf_dtype_from_pa_type(typ.value_type))
 
     def to_arrow(self) -> pa.ListType:
@@ -655,7 +655,7 @@ class StructDtype(_BaseDtype):
         >>> pa_struct_type
         StructType(struct<x: int32, y: string>)
         >>> cudf.StructDtype.from_arrow(pa_struct_type)
-        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=nan)>})
         """
         return cls(
             {field.name: cudf_dtype_from_pa_type(field.type) for field in typ}
@@ -1223,8 +1223,6 @@ def is_categorical_dtype(obj):
     bool
         Whether or not the array-like or dtype is of a categorical dtype.
     """
-    # Do not remove until pandas 3.0 support is added.
-    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_categorical_dtype is deprecated and will be removed in a future "
         "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",
@@ -1320,7 +1318,10 @@ def _is_interval_dtype(obj):
             ),
         )
         or obj is IntervalDtype
-        or (isinstance(obj, cudf.Index) and obj._is_interval())
+        or (
+            isinstance(obj, cudf.Index)
+            and isinstance(obj.dtype, IntervalDtype)
+        )
         or (isinstance(obj, str) and obj == IntervalDtype.name)
         or (
             isinstance(

@@ -184,6 +184,7 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
  * @param[in] data The row-column data
  * @param[in] column_flags Flags that control individual column parsing
  * @param[in] row_offsets List of row data start positions (offsets)
+ * @param[in] num_active_columns Number of active columns
  * @param[in] stream CUDA stream to use
  *
  * @return stats Histogram of each dtypes' occurrence for each column

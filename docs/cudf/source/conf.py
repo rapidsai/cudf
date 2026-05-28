@@ -82,7 +82,7 @@ extensions = [
     "myst_nb",
 ]
 
-remove_from_toctrees = ["user_guide/api_docs/api/*"]
+remove_from_toctrees = ["cudf/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
@@ -231,7 +231,7 @@ html_theme_options = {
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
-    "navbar_align": "right",
+    "navbar_align": "content",
     "navigation_with_keys": True,
 }
 include_pandas_compat = True
@@ -325,10 +325,11 @@ intersphinx_mapping = {
     "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
     "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest", None),
     "numpy": ("https://numpy.org/doc/stable", None),
-    "pandas": (
-        "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
-        None,
-    ),
+    # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
+    # "pandas": (
+    #     "https://pandas.pydata.org/pandas-docs/stable/",
+    #     None,
+    # ),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "python": ("https://docs.python.org/3", None),
@@ -467,7 +468,7 @@ _intersphinx_cache = {}
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
 _external_intersphinx_aliases = {
-    "pandas": "pd",
+    # "pandas": "pd",
     "pyarrow": "pa",
     "numpy": "np",
     "cupy": "cp",
@@ -624,6 +625,30 @@ nitpick_ignore = [
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
     ("py:class", "ExecutorType"),
+    # cudf-polars: bare rapidsmpf type names appear in autodoc'd signatures
+    # because they are imported under ``if TYPE_CHECKING:`` and rendered as
+    # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
+    # only matches fully qualified targets, so the bare leaf names are listed
+    # explicitly here.
+    ("py:class", "Statistics"),
+    ("py:class", "Communicator"),
+    ("py:class", "Options"),
+    # polars aliases that don't match the public intersphinx targets.
+    ("py:class", "pl.DataFrame"),
+    ("py:class", "polars.LazyFrame"),
+    ("py:class", "polars.DataFrame"),
+    ("py:class", "polars.dataframe.frame.DataFrame"),
+]
+# Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
+nitpick_ignore_regex = [
+    ("py:.*", "pandas.*"),
+    ("py:.*", "pd.*"),
+    ("ref.*", ".*pandas.*"),
+    # External libs without configured intersphinx inventories.
+    ("py:.*", r"rapidsmpf(\..*)?"),
+    ("py:.*", r"ray(\..*)?"),
+    ("py:.*", r"distributed(\..*)?"),
+    ("py:.*", r"dask_cuda(\..*)?"),
 ]
 
 

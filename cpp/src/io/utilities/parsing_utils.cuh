@@ -114,7 +114,6 @@ CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param opts The global parsing behavior options
- * @param error_result Value to return on parse error
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -185,6 +184,21 @@ CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
 }
 
 namespace gpu {
+
+/**
+ * @brief Advances past a run of delimiter characters at the start of a field.
+ */
+__device__ __inline__ char const* skip_leading_delimiter_run(char const* begin,
+                                                             char const* end,
+                                                             parse_options_view const& opts)
+{
+  if (!opts.multi_delimiter) { return begin; }
+  while (begin < end && *begin == opts.delimiter) {
+    ++begin;
+  }
+  return begin;
+}
+
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
@@ -251,7 +265,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
  * @brief Lexicographically compare digits in input against string
  * representing an integer
  *
- * @param raw_data The pointer to beginning of character string
+ * @param data The pointer to beginning of character string
  * @param golden The pointer to beginning of character string representing
  * the value to be compared against
  * @return bool True if integer represented by character string is less
@@ -273,8 +287,9 @@ __device__ __inline__ bool less_equal_than(char const* data, char const (&golden
  * @brief Determine which counter to increment when a sequence of digits
  * and a parity sign is encountered.
  *
- * @param raw_data The pointer to beginning of character string
- * @param digit_count Total number of digits
+ * @param data_begin The pointer to beginning of character string
+ * @param data_end The pointer to end of character string
+ * @param is_negative Whether the number is negative
  * @param stats Reference to structure with counters
  * @return Pointer to appropriate counter that belong to
  * the interpreted data type

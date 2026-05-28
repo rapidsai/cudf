@@ -95,18 +95,12 @@ __device__ auto get_new_value(cudf::size_type idx,
  * specialize this kernel for the different scenario for performance without writing different
  * kernel.
  *
- * @param[in] input_data Device array with the data to be modified
- * @param[in] input_valid Valid mask associated with input_data
- * @param[out] output_data Device array to store the data from input_data
- * @param[out] output_valid Valid mask associated with output_data
- * @param[out] output_valid_count #valid in output column
- * @param[in] nrows # rows in `output_data`
- * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
- * of old values to be replaced
- * @param[in] values_to_replace_end  Device pointer to the end of the sequence
- * of old values to be replaced
- * @param[in] d_replacement_values Device array with the new values
- * @param[in] replacement_valid Valid mask associated with d_replacement_values
+ * @param[in] input Input column to read data from
+ * @param[out] output Output column to store replaced data
+ * @param[out] output_valid_count Number of valid entries in the output column
+ * @param[in] nrows Number of rows in the input/output columns
+ * @param[in] values_to_replace Column containing the old values to search for
+ * @param[in] replacement Column containing the new values to substitute
  */
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
 CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
@@ -178,7 +172,8 @@ struct replace_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
+    cudf::detail::device_scalar<cudf::size_type> valid_counter(
+      0, stream, cudf::get_current_device_resource_ref());
     cudf::size_type* valid_count = valid_counter.data();
 
     auto replace = [&] {
@@ -324,6 +319,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
  * @param[in] input_col column_view of the data to be modified
  * @param[in] values_to_replace column_view of the old values to be replaced
  * @param[in] replacement_values column_view of the new values
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @returns output cudf::column with the modified data
  */

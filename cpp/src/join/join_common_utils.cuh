@@ -14,8 +14,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <memory>
 
 namespace cudf::detail {

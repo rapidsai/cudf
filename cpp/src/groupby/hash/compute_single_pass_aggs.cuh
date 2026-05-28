@@ -14,6 +14,7 @@
 #include "output_utils.hpp"
 
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -22,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 
 namespace cudf::groupby::detail::hash {
@@ -82,10 +84,11 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                                                         stream);
   // Initialize it with a sentinel value, so later we can identify which ones are unused and which
   // ones need to be updated.
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             global_mapping_indices.begin(),
-                             global_mapping_indices.end(),
-                             cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    global_mapping_indices.begin(),
+    global_mapping_indices.end(),
+    cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
   // Compute the cardinality (the number of unique keys) encounter by each thread block.
   rmm::device_uvector<size_type> block_cardinality(grid_size, stream);
 
@@ -109,11 +112,10 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     cuda::std::atomic_flag h_needs_fallback;
     // Cannot use `device_scalar::value` as it requires a copy constructor, which
     // `atomic_flag` doesn't have.
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
-                                  needs_global_memory_fallback.data(),
-                                  sizeof(cuda::std::atomic_flag),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(&h_needs_fallback,
+                                             needs_global_memory_fallback.data(),
+                                             sizeof(cuda::std::atomic_flag),
+                                             stream));
     stream.synchronize();
     return h_needs_fallback.test(cuda::std::memory_order_relaxed);
   }();
@@ -126,8 +128,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     auto key_transform_map = compute_key_transform_map(
       num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
     thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
       grid_size * GROUPBY_BLOCK_SIZE,
       [key_transform_map      = key_transform_map.begin(),
        global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {

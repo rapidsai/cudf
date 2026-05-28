@@ -25,7 +25,6 @@
 #include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -172,9 +171,8 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * It is only used for longer strings.
  *
  * @param d_strings The input strings column
- * @param d_pattern The pattern to match
+ * @param pattern_itr The pattern to match
  * @param d_escape The escape character
- * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
 template <typename PatternIterator>
@@ -216,8 +214,8 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
     return idx;
   };
 
-  auto const itr_zero = thrust::counting_iterator<size_type>(0);
-  auto const itr_size = thrust::counting_iterator<size_type>(d_pattern.size_bytes());
+  auto const itr_zero = cuda::counting_iterator<size_type>{0};
+  auto const itr_size = cuda::counting_iterator<size_type>{d_pattern.size_bytes()};
   auto const wcs_size =
     esc_char == multi_wildcard ? 0 : thrust::count_if(thrust::seq, itr_zero, itr_size, count_wc_fn);
 
@@ -325,9 +323,9 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       results->mutable_view().data<bool>(),
                       like_fn{*d_strings, patterns_itr, d_escape});
   } else {
@@ -372,8 +370,9 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  auto const ptn = string_scalar(pattern, true, stream);
-  auto const esc = string_scalar(escape_character, true, stream);
+  auto const ptn = string_scalar(pattern, true, stream, cudf::get_current_device_resource_ref());
+  auto const esc =
+    string_scalar(escape_character, true, stream, cudf::get_current_device_resource_ref());
   return like(input, ptn, esc, stream, mr);
 }
 

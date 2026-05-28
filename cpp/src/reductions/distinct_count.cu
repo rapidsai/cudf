@@ -23,9 +23,9 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <cmath>
@@ -101,9 +101,9 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    return thrust::any_of(rmm::exec_policy_nosync(stream),
-                          thrust::counting_iterator<cudf::size_type>(0),
-                          thrust::counting_iterator<cudf::size_type>(input.size()),
+    return thrust::any_of(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          cuda::counting_iterator<cudf::size_type>{0},
+                          cuda::counting_iterator<cudf::size_type>{input.size()},
                           check_for_nan<T>(device_view));
   }
 
@@ -153,11 +153,11 @@ cudf::size_type distinct_count(table_view const& keys,
                                     rmm::mr::polymorphic_allocator<char>{},
                                     stream.value()};
 
-    auto const iter = thrust::counting_iterator<cudf::size_type>(0);
+    auto const iter = cuda::counting_iterator<cudf::size_type>{0};
     // when nulls are equal, we skip hashing any row that has a null
     // in every column to improve efficiency.
     if (nulls_equal == null_equality::EQUAL and has_nulls) {
-      thrust::counting_iterator<size_type> stencil(0);
+      cuda::counting_iterator<size_type> stencil(0);
       // We must consider a row if any of its column entries is valid,
       // hence OR together the validities of the columns.
       auto const [row_bitmask, null_count] =

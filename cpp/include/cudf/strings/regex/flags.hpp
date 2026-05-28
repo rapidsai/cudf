@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -25,11 +25,23 @@ namespace strings {
  */
 enum regex_flags : uint32_t {
   DEFAULT     = 0,    ///< default
+  IGNORECASE  = 2,    ///< ignore case on matching all literal characters
   MULTILINE   = 8,    ///< the '^' and '$' honor new-line characters
   DOTALL      = 16,   ///< the '.' matching includes new-line characters
   ASCII       = 256,  ///< use only ASCII when matching built-in character classes
   EXT_NEWLINE = 512   ///< new-line matches extended characters
 };
+
+/**
+ * @brief Returns true if the given flags contain IGNORECASE.
+ *
+ * @param f Regex flags to check
+ * @return true if `f` includes IGNORECASE
+ */
+constexpr bool is_ignorecase(regex_flags const f)
+{
+  return (f & regex_flags::IGNORECASE) == regex_flags::IGNORECASE;
+}
 
 /**
  * @brief Returns true if the given flags contain MULTILINE.

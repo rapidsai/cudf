@@ -189,7 +189,7 @@ __device__ void update_string_offsets_for_pruned_pages(
 }
 
 template <int value>
-inline constexpr int log2_int()
+CUDF_HOST_DEVICE constexpr int log2_int()
 {
   static_assert((value >= 1) && ((value & (value - 1)) == 0), "Only works for powers of 2!");
   return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));
@@ -231,6 +231,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param start The value index to start copying strings for
  * @param end One past the end value index to stop copying strings for
  * @param t The current thread's index
+ * @param str_offsets String offset values
  * @param string_output_offset Starting offset into the output column data for writing
  */
 template <int block_size,

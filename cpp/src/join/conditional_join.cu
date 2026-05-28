@@ -18,10 +18,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -87,7 +89,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = size.value(stream);
   }
 
-  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
@@ -225,7 +228,8 @@ conditional_join(table_view const& left,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -264,9 +268,8 @@ conditional_join(table_view const& left,
   // For full joins, get the indices in the right table that were not joined to
   // by any row in the left table.
   if (join_type == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
-    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    join_indices = detail::finalize_full_join(
+      std::move(join_indices), left.num_rows(), right.num_rows(), stream, mr);
   }
   return join_indices;
 }

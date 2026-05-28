@@ -20,7 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/limits>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -54,7 +55,7 @@ struct char_types_fn {
       if (is_utf8_continuation_char(chr)) { continue; }
       auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
       // using max(int8) here since max(char)=255 on ARM systems
-      if (u8 > std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
+      if (u8 > cuda::std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
 
       // lookup flags in table by codepoint
       auto const code_point = utf8_to_codepoint(u8);
@@ -92,9 +93,9 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
   auto d_flags = detail::get_character_flags_table(stream);
 
   // set the output values by checking the character types for each string
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     results->mutable_view().data<bool>(),
                     char_types_fn{*d_strings, d_flags, types, verify_types});
 

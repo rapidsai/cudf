@@ -1,6 +1,6 @@
 name: Trigger Breaking Change Notifications
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     types:
       - closed
@@ -11,8 +11,11 @@ on:
 jobs:
   trigger-notifier:
     if: contains(github.event.pull_request.labels.*.name, 'breaking')
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@python-3.14
+    permissions:
+      contents: read
+    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@main
+    secrets:
+      NV_SLACK_BREAKING_CHANGE_ALERT: ${{ secrets.NV_SLACK_BREAKING_CHANGE_ALERT }}
     with:
       sender_login: ${{ github.event.sender.login }}
       sender_avatar: ${{ github.event.sender.avatar_url }}

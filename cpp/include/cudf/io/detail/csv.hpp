@@ -1,23 +1,22 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/io/csv.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace io::detail::csv {
 
 /**
  * @brief Reads the entire dataset.
  *
- * @param sources Input `datasource` object to read the dataset from
+ * @param source Input `datasource` object to read the dataset from
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
@@ -45,4 +44,4 @@ void write_csv(data_sink* sink,
                rmm::cuda_stream_view stream);
 
 }  // namespace io::detail::csv
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

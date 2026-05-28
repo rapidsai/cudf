@@ -14,8 +14,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -28,8 +28,8 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 
   auto offset_begin  = offsets.begin<size_type>();
   auto offset_end    = offsets.end<size_type>();
-  auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  auto counting_iter = cuda::counting_iterator<size_type>{0};
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     counting_iter,
                     counting_iter + segment_ids.size(),
                     segment_ids.begin(),

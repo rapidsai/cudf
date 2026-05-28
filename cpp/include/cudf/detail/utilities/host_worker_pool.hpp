@@ -7,6 +7,8 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cuda_runtime.h>
+
 #include <BS_thread_pool.hpp>
 
 #include <cstddef>
@@ -67,9 +69,17 @@ class CUDF_EXPORT hierarchical_thread_pool {
     // This is required because BS::thread_pool stores the lambda and calls
     // it from a const context.
     auto task_ptr = std::make_shared<std::decay_t<F>>(std::forward<F>(task));
-    return pool_.submit_task([task_ptr, level = level_]() {
+
+    // Capture the submitting thread's CUDA device so worker threads operate on
+    // the correct device. Without this, worker threads default to device 0
+    int device_id = 0;
+    cudaGetDevice(&device_id);
+
+    return pool_.submit_task([task_ptr, level = level_, device_id]() {
       // Mark this thread as owned by this pool's level (happens once per thread)
       if (thread_pool_level == THREAD_POOL_LEVEL_NONE) { thread_pool_level = level; }
+
+      cudaSetDevice(device_id);
 
       return (*task_ptr)();
     });

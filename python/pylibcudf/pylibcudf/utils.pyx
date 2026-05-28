@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -18,7 +18,6 @@ from rmm.pylibrmm.memory_resource cimport (
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM, PER_THREAD_DEFAULT_STREAM
 
-from cuda.bindings import runtime
 
 import os
 
@@ -48,30 +47,12 @@ cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
     return c_scalars
 
 
-def _is_concurrent_managed_access_supported():
-    """Check the availability of concurrent managed access (UVM).
-
-    Note that WSL2 does not support managed memory.
-    """
-
-    # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
-    runtime.cudaFree(0)
-
-    device_id = 0
-    err, supports_managed_access = runtime.cudaDeviceGetAttribute(
-        runtime.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
-    )
-    if err != runtime.cudaError_t.cudaSuccess:
-        raise RuntimeError(
-            f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
-        )
-    return supports_managed_access != 0
-
-
-cpdef Stream _get_stream(Stream stream = None):
+cpdef Stream _get_stream(object stream = None):
     if stream is None:
         return CUDF_DEFAULT_STREAM
-    return stream
+    if isinstance(stream, Stream):
+        return <Stream>stream
+    return Stream(stream)  # Handles __cuda_stream__ protocol
 
 
 cdef DeviceMemoryResource _get_memory_resource(DeviceMemoryResource mr = None):

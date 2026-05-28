@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -51,10 +51,16 @@ std::unique_ptr<column> scan_agg_dispatch(column_view const& input,
     case aggregation::PRODUCT:
       // a product scan on a decimal type with non-zero scale would result in each element having
       // a different scale, and because scale is stored once per column, this is not possible
-      if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64/128 cannot support product scan");
+      CUDF_EXPECTS(!is_fixed_point(input.type()), "decimal32/64/128 cannot support product scan");
       return type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<DeviceProduct>(), input, output_mask, stream, mr);
     case aggregation::EWMA: return exponentially_weighted_moving_average(input, agg, stream, mr);
+    case aggregation::COUNT_VALID:
+      return type_dispatcher<dispatch_storage_type>(
+        input.type(), DispatchFn<DeviceCount>(), input, output_mask, stream, mr);
+    case aggregation::COUNT_ALL:
+      return type_dispatcher<dispatch_storage_type>(
+        input.type(), DispatchFn<DeviceCount>(), input, nullptr, stream, mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

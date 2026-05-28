@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/detail/integral_math.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <cmath>
@@ -84,33 +85,21 @@ struct TrueDiv {
 struct FloorDiv {
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
-    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-             std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
+    requires(cuda::std::is_integral_v<cuda::std::common_type_t<TypeLhs, TypeRhs>>)
   {
-    auto const quotient          = x / y;
-    auto const nonzero_remainder = (x % y) != 0;
-    auto const mixed_sign        = (x ^ y) < 0;
-    return quotient - mixed_sign * nonzero_remainder;
-  }
-
-  template <typename TypeLhs, typename TypeRhs>
-  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
-    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-             !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
-  {
-    return x / y;
+    return cudf::detail::integral_floor_div(x, y);
   }
 
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> float
-    requires(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, float>)
+    requires(cuda::std::is_same_v<cuda::std::common_type_t<TypeLhs, TypeRhs>, float>)
   {
     return floorf(x / y);
   }
 
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
-    requires(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)
+    requires(cuda::std::is_same_v<cuda::std::common_type_t<TypeLhs, TypeRhs>, double>)
   {
     return floor(x / y);
   }
@@ -225,26 +214,7 @@ struct IntPow {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
     requires(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)
   {
-    if constexpr (std::is_signed_v<TypeRhs>) {
-      if (y < 0) {
-        // Integer exponentiation with negative exponent is not possible.
-        return 0;
-      }
-    }
-    if (y == 0) { return 1; }
-    if (x == 0) { return 0; }
-    TypeLhs extra = 1;
-    while (y > 1) {
-      if (y & 1) {
-        // The exponent is odd, so multiply by one factor of x.
-        extra *= x;
-        y -= 1;
-      }
-      // The exponent is even, so square x and divide the exponent y by 2.
-      y /= 2;
-      x *= x;
-    }
-    return x * extra;
+    return cudf::detail::integral_pow(x, y);
   }
 };
 

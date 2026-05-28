@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "expression_transform_helpers.hpp"
 #include "parquet_gpu.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
@@ -22,7 +23,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -133,7 +133,7 @@ class reader_impl {
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void prepare_data(read_mode mode);
 
@@ -143,14 +143,14 @@ class reader_impl {
    * Only ever called once. This function reads in rowgroup and associated chunk
    * information and computes the schedule of top level passes (see `pass_intermediate_data`).
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void preprocess_file(read_mode mode);
 
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void handle_chunking(read_mode mode);
 
@@ -160,7 +160,7 @@ class reader_impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void setup_next_pass(read_mode mode);
 
@@ -171,7 +171,7 @@ class reader_impl {
    * decompressed and decoded as a batch. Subpasses may be further subdivided
    * into output chunks.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    *
    */
   void setup_next_subpass(read_mode mode);
@@ -183,7 +183,7 @@ class reader_impl {
    * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
    * be allocated and the pages in the subpass will point into it properly.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param read_info The range of rows to be read in the subpass
    */
   void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
@@ -198,7 +198,7 @@ class reader_impl {
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return The output table along with columns' metadata
    */
   table_with_metadata read_chunk_internal(read_mode mode);
@@ -248,7 +248,7 @@ class reader_impl {
    *
    * For flat schemas, these values are computed during header decoding (see decode_page_headers).
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
@@ -296,7 +296,7 @@ class reader_impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
    * @return The output table along with columns' metadata
@@ -308,7 +308,7 @@ class reader_impl {
   /**
    * @brief Allocate data buffers for the output columns.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Number of rows to read
    */
@@ -324,7 +324,7 @@ class reader_impl {
   /**
    * @brief Converts the page data and outputs to columns.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
    */
@@ -352,7 +352,7 @@ class reader_impl {
   /**
    * @brief Computes all of the passes we will perform over the file
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void compute_input_passes(read_mode mode);
 
@@ -373,7 +373,7 @@ class reader_impl {
   /**
    * @brief Check if the user has specified custom row bounds
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return True if the user has specified custom row bounds
    */
   [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
@@ -403,6 +403,11 @@ class reader_impl {
   [[nodiscard]] bool include_output_num_rows_per_source() const
   {
     return not _expr_conv.get_converted_expr().has_value();
+  }
+
+  [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
+  {
+    return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
   }
 
   /**
@@ -441,17 +446,22 @@ class reader_impl {
     data_type timestamp_type;
     // decimal_width
     type_id decimal_width;
-    // User specified reading rows/stripes selection.
+    // Use specified row selection
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    // Use specified bytes selection
     size_t skip_bytes;
     std::optional<size_t> num_bytes;
+    // User specified row group selection
     std::vector<std::vector<size_type>> row_group_indices;
+    // Whether to use JIT for filtering
     bool use_jit_filter = false;
+    // Whether to use case-sensitive matching for column names
+    bool case_sensitive_names = true;
   } _options;
 
   // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}, true};
 
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;
@@ -475,7 +485,7 @@ class reader_impl {
   thrust::host_vector<bool> _pass_page_mask;
 
   // Page mask for filtering out subpass data pages (Copied to the device)
-  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
+  std::unique_ptr<cudf::detail::hostdevice_vector<bool>> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

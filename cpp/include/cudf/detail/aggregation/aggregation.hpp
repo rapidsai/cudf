@@ -14,11 +14,13 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/type_traits>
+
 #include <functional>
 #include <numeric>
 #include <utility>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -136,7 +138,8 @@ class count_aggregation final
   : public clonable<count_aggregation>::derived_from<rolling_aggregation,
                                                      groupby_aggregation,
                                                      groupby_scan_aggregation,
-                                                     reduce_aggregation> {
+                                                     reduce_aggregation,
+                                                     scan_aggregation> {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 };
@@ -1340,9 +1343,9 @@ data_type target_type(data_type source_type, aggregation::Kind k);
  * @tparam k The aggregation to perform
  */
 template <typename Source, aggregation::Kind k>
-constexpr inline bool is_valid_aggregation()
+CUDF_HOST_DEVICE constexpr inline bool is_valid_aggregation()
 {
-  return (not std::is_void_v<target_type_t<Source, k>>);
+  return (not cuda::std::is_void_v<target_type_t<Source, k>>);
 }
 
 /**
@@ -1374,4 +1377,4 @@ void initialize_with_identity(mutable_table_view const& table,
                               rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

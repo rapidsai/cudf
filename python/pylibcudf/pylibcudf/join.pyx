@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -21,7 +21,8 @@ from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
-from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint
+from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint  # noqa: F401, deprecated
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "conditional_full_join",
@@ -45,9 +46,10 @@ __all__ = [
 ]
 
 cdef Column _column_from_gather_map(
-    cpp_join.gather_map_type gather_map, Stream stream, DeviceMemoryResource mr
+    cpp_join.gather_map_type gather_map, object stream, DeviceMemoryResource mr
 ):
     # helper to convert a gather map to a Column
+    cdef Stream _stream = _get_stream(stream)
     return Column.from_libcudf(
         move(
             make_unique[column](
@@ -55,9 +57,7 @@ cdef Column _column_from_gather_map(
                 device_buffer(),
                 0
             )
-        ),
-        stream,
-        mr
+        ), _stream, mr
     )
 
 
@@ -65,7 +65,7 @@ cpdef tuple inner_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform an inner join between two tables.
@@ -89,16 +89,21 @@ cpdef tuple inner_join(
     """
     cdef cpp_join.gather_map_pair_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_join.inner_join(
-            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+            left_keys.view(),
+            right_keys.view(),
+            nulls_equal,
+            _cs,
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -106,7 +111,7 @@ cpdef tuple left_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a left join between two tables.
@@ -130,16 +135,21 @@ cpdef tuple left_join(
     """
     cdef cpp_join.gather_map_pair_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_join.left_join(
-            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+            left_keys.view(),
+            right_keys.view(),
+            nulls_equal,
+            _cs,
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -147,7 +157,7 @@ cpdef tuple full_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a full join between two tables.
@@ -171,16 +181,21 @@ cpdef tuple full_join(
     """
     cdef cpp_join.gather_map_pair_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_join.full_join(
-            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+            left_keys.view(),
+            right_keys.view(),
+            nulls_equal,
+            _cs,
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -188,7 +203,7 @@ cpdef Column left_semi_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a left semi join between two tables.
@@ -211,7 +226,8 @@ cpdef Column left_semi_join(
     """
     cdef cpp_join.gather_map_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
@@ -221,23 +237,22 @@ cpdef Column left_semi_join(
             new cpp_join.filtered_join(
                 right_keys.view(),
                 nulls_equal,
-                cpp_join.set_as_build_table.RIGHT,
-                stream.view()
+                _cs
             )
         )
         c_result = join_obj.get()[0].semi_join(
             left_keys.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cpdef Column left_anti_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a left anti join between two tables.
@@ -260,7 +275,8 @@ cpdef Column left_anti_join(
     """
     cdef cpp_join.gather_map_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
@@ -270,20 +286,19 @@ cpdef Column left_anti_join(
             new cpp_join.filtered_join(
                 right_keys.view(),
                 nulls_equal,
-                cpp_join.set_as_build_table.RIGHT,
-                stream.view()
+                _cs
             )
         )
         c_result = join_obj.get()[0].anti_join(
             left_keys.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cpdef Table cross_join(
-    Table left, Table right, Stream stream=None, DeviceMemoryResource mr=None
+    Table left, Table right, object stream=None, DeviceMemoryResource mr=None
 ):
     """Perform a cross join on two tables.
 
@@ -307,21 +322,22 @@ cpdef Table cross_join(
     """
     cdef unique_ptr[table] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_join.cross_join(
-            left.view(), right.view(), stream.view(), mr.get_mr()
+            left.view(), right.view(), _cs, mr.get_mr()
         )
-    return Table.from_libcudf(move(result), stream, mr)
+    return Table.from_libcudf(move(result), _stream, mr)
 
 
 cpdef tuple conditional_inner_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a conditional inner join between two tables.
@@ -346,7 +362,8 @@ cpdef tuple conditional_inner_join(
     cdef cpp_join.gather_map_pair_type c_result
     cdef optional[size_t] output_size
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -355,12 +372,12 @@ cpdef tuple conditional_inner_join(
             right.view(),
             dereference(binary_predicate.c_obj.get()),
             output_size,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -368,7 +385,7 @@ cpdef tuple conditional_left_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left join between two tables.
@@ -393,7 +410,8 @@ cpdef tuple conditional_left_join(
     cdef cpp_join.gather_map_pair_type c_result
     cdef optional[size_t] output_size
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -402,12 +420,12 @@ cpdef tuple conditional_left_join(
             right.view(),
             dereference(binary_predicate.c_obj.get()),
             output_size,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -415,7 +433,7 @@ cpdef tuple conditional_full_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a conditional full join between two tables.
@@ -439,7 +457,8 @@ cpdef tuple conditional_full_join(
     """
     cdef cpp_join.gather_map_pair_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -447,12 +466,12 @@ cpdef tuple conditional_full_join(
             left.view(),
             right.view(),
             dereference(binary_predicate.c_obj.get()),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -460,7 +479,7 @@ cpdef Column conditional_left_semi_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left semi join between two tables.
@@ -484,7 +503,8 @@ cpdef Column conditional_left_semi_join(
     cdef cpp_join.gather_map_type c_result
     cdef optional[size_t] output_size
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -493,17 +513,17 @@ cpdef Column conditional_left_semi_join(
             right.view(),
             dereference(binary_predicate.c_obj.get()),
             output_size,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cpdef Column conditional_left_anti_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left anti join between two tables.
@@ -527,7 +547,8 @@ cpdef Column conditional_left_anti_join(
     cdef cpp_join.gather_map_type c_result
     cdef optional[size_t] output_size
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -536,10 +557,10 @@ cpdef Column conditional_left_anti_join(
             right.view(),
             dereference(binary_predicate.c_obj.get()),
             output_size,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cpdef tuple mixed_inner_join(
@@ -549,7 +570,7 @@ cpdef tuple mixed_inner_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a mixed inner join between two tables.
@@ -580,7 +601,8 @@ cpdef tuple mixed_inner_join(
     cdef cpp_join.gather_map_pair_type c_result
     cdef cpp_join.output_size_data_type empty_optional
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -592,12 +614,12 @@ cpdef tuple mixed_inner_join(
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
             empty_optional,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -608,7 +630,7 @@ cpdef tuple mixed_left_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left join between two tables.
@@ -639,7 +661,8 @@ cpdef tuple mixed_left_join(
     cdef cpp_join.gather_map_pair_type c_result
     cdef cpp_join.output_size_data_type empty_optional
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -651,12 +674,12 @@ cpdef tuple mixed_left_join(
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
             empty_optional,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -667,7 +690,7 @@ cpdef tuple mixed_full_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a mixed full join between two tables.
@@ -698,7 +721,8 @@ cpdef tuple mixed_full_join(
     cdef cpp_join.gather_map_pair_type c_result
     cdef cpp_join.output_size_data_type empty_optional
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -710,12 +734,12 @@ cpdef tuple mixed_full_join(
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
             empty_optional,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first), stream, mr),
-        _column_from_gather_map(move(c_result.second), stream, mr),
+        _column_from_gather_map(move(c_result.first), _stream, mr),
+        _column_from_gather_map(move(c_result.second), _stream, mr),
     )
 
 
@@ -726,7 +750,7 @@ cpdef Column mixed_left_semi_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left semi join between two tables.
@@ -755,7 +779,8 @@ cpdef Column mixed_left_semi_join(
     """
     cdef cpp_join.gather_map_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -766,10 +791,10 @@ cpdef Column mixed_left_semi_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cpdef Column mixed_left_anti_join(
@@ -779,7 +804,7 @@ cpdef Column mixed_left_anti_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left anti join between two tables.
@@ -808,7 +833,8 @@ cpdef Column mixed_left_anti_join(
     """
     cdef cpp_join.gather_map_type c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -819,77 +845,76 @@ cpdef Column mixed_left_anti_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result), stream, mr)
+    return _column_from_gather_map(move(c_result), _stream, mr)
 
 
 cdef class FilteredJoin:
     """
-    Filtered hash join that builds hash table on creation and probes
-    results in subsequent join member functions.
+    Filtered hash join that builds a hash table from the right (filter) table
+    on creation and probes results in subsequent join member functions.
+
+    The right table is used as the filter applied to multiple left tables in
+    subsequent ``semi_join`` or ``anti_join`` calls. For use cases where the
+    left table should be reused with multiple right tables, use ``MarkJoin``
+    instead.
 
     For details, see :cpp:class:`cudf::filtered_join`.
     """
 
     def __cinit__(
         self,
-        Table build,
-        null_equality compare_nulls,
-        cpp_join.set_as_build_table reuse_tbl,
+        Table right,
+        null_equality compare_nulls=null_equality.EQUAL,
         double load_factor=0.5,
-        Stream stream=None,
+        object stream=None,
     ):
         """
         Construct a filtered hash join object for subsequent probe calls.
 
         Parameters
         ----------
-        build : Table
-            The build table, from which the hash map is built.
+        right : Table
+            The right (filter) table used to build the hash table.
         compare_nulls : NullEquality
             Controls whether null join-key values should match or not.
-        reuse_tbl : SetAsBuildTable
-            Specifies which table to use as the build table. If LEFT, the build
-            table is considered as the left table and is reused with multiple right
-            (probe) tables. If RIGHT, the build table is considered as the
-            right/filter table and will be applied to multiple left (probe) tables.
         load_factor : float, optional
             The desired ratio of filled slots to total slots in the hash table,
             must be in range (0,1]. Defaults to 0.5.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         """
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
 
         with nogil:
             self.c_obj.reset(
                 new cpp_join.filtered_join(
-                    build.view(),
+                    right.view(),
                     compare_nulls,
-                    reuse_tbl,
                     load_factor,
-                    stream.view()
+                    _cs
                 )
             )
 
     def semi_join(
         self,
-        Table probe,
-        Stream stream=None,
+        Table left,
+        object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """
         Returns a column of row indices corresponding to a semi-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::semi_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
@@ -902,33 +927,34 @@ cdef class FilteredJoin:
         """
         cdef cpp_join.gather_map_type c_result
 
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
 
         with nogil:
             c_result = self.c_obj.get()[0].semi_join(
-                probe.view(),
-                stream.view(),
+                left.view(),
+                _cs,
                 mr.get_mr()
             )
-        return _column_from_gather_map(move(c_result), stream, mr)
+        return _column_from_gather_map(move(c_result), _stream, mr)
 
     def anti_join(
         self,
-        Table probe,
-        Stream stream=None,
+        Table left,
+        object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """
         Returns a column of row indices corresponding to an anti-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::anti_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
@@ -941,13 +967,14 @@ cdef class FilteredJoin:
         """
         cdef cpp_join.gather_map_type c_result
 
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
 
         with nogil:
             c_result = self.c_obj.get()[0].anti_join(
-                probe.view(),
-                stream.view(),
+                left.view(),
+                _cs,
                 mr.get_mr()
             )
-        return _column_from_gather_map(move(c_result), stream, mr)
+        return _column_from_gather_map(move(c_result), _stream, mr)

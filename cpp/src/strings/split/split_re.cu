@@ -21,9 +21,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
@@ -113,7 +114,7 @@ struct token_reader_fn {
  * @param d_strings Strings to split
  * @param d_prog Regex to evaluate against each string
  * @param direction Whether tokens are generated forwards or backwards.
- * @param max_tokens The maximum number of tokens for each split.
+ * @param maxsplit The maximum number of tokens for each split.
  * @param counts The number of tokens in each string
  * @param stream CUDA stream used for kernel launches.
  */
@@ -132,7 +133,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   // convert match counts to token offsets
   auto map_fn = cuda::proclaim_return_type<size_type>(
     [d_strings, d_counts, max_tokens] __device__(auto idx) -> size_type {
-      return d_strings.is_null(idx) ? 0 : std::min(d_counts[idx], max_tokens) + 1;
+      return d_strings.is_null(idx) ? 0 : cuda::std::min(d_counts[idx], max_tokens) + 1;
     });
 
   auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);
@@ -207,9 +208,9 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings_count},
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
@@ -237,8 +238,8 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   };
   // build a vector of columns
   results.resize(columns_count);
-  std::transform(thrust::make_counting_iterator<size_type>(0),
-                 thrust::make_counting_iterator<size_type>(columns_count),
+  std::transform(cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{columns_count},
                  results.begin(),
                  make_strings_lambda);
 

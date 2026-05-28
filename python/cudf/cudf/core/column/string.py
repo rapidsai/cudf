@@ -17,10 +17,10 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
     PylibcudfFunction,
     as_column,
     bool_same_kind_policy,
@@ -66,7 +66,7 @@ if TYPE_CHECKING:
 # this construction will need to be updated with more explicit mapping.
 _FLAG_MAP = {
     getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
-    for flag in ("MULTILINE", "DOTALL")
+    for flag in ("MULTILINE", "DOTALL", "IGNORECASE")
 }
 
 
@@ -83,6 +83,14 @@ def plc_flags_from_re_flags(
     if flags:
         raise ValueError(f"Unsupported re flags: {flags}")
     return plc_flags
+
+
+def _infer_timedelta_format(col: StringColumn) -> str:
+    """Infer strptime format from the first non-null timedelta string."""
+    nonnull = col.dropna()
+    if len(nonnull) == 0 or ":" in nonnull.element_indexing(0):
+        return "%D days %H:%M:%S"
+    return "%D days"
 
 
 class StringColumn(ColumnBase, Scannable):
@@ -136,6 +144,52 @@ class StringColumn(ColumnBase, Scannable):
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if cudf.get_option("mode.pandas_compatible"):
+            # pandas string dtype rejects non-string values (int/float/bool).
+            if is_scalar(value):
+                if (
+                    value is not None
+                    and not is_na_like(value)
+                    and not isinstance(value, (str, np.str_))
+                ):
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
+            elif isinstance(value, ColumnBase):
+                if value.dtype.kind in {"i", "u", "f", "b"}:
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
+            elif getattr(getattr(value, "dtype", None), "kind", None) in {
+                "i",
+                "u",
+                "f",
+                "b",
+            }:
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            else:
+                # Plain Python sequences without a dtype attribute (e.g.
+                # list/tuple): inspect element types.
+                try:
+                    iterator = iter(value)
+                except TypeError:
+                    iterator = None
+                if iterator is not None:
+                    for v in iterator:
+                        if (
+                            v is None
+                            or is_na_like(v)
+                            or isinstance(v, (str, np.str_))
+                        ):
+                            continue
+                        raise TypeError(
+                            f"Invalid value '{value}' for dtype '{self.dtype}'"
+                        )
+        return super()._cast_setitem_value(value)
+
     def sum(
         self,
         skipna: bool = True,
@@ -162,7 +216,10 @@ class StringColumn(ColumnBase, Scannable):
     ) -> ScalarLike:
         """Check if any string value is truthy (non-empty)."""
         if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
+            # pandas 3 treats the NaN null sentinel as truthy, matching
+            # numpy semantics, so any(skipna=False) returns True when nulls
+            # are present.
+            return True
         elif skipna and self.null_count == self.size:
             return False
         raise NotImplementedError("`any` not implemented for `StringColumn`")
@@ -174,7 +231,10 @@ class StringColumn(ColumnBase, Scannable):
         if skipna and self.null_count == self.size:
             return True
         elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
+            # pandas 3 treats the NaN null sentinel as truthy, matching
+            # numpy semantics, so all(skipna=False) returns True when all
+            # values are null.
+            return True
         raise NotImplementedError("`all` not implemented for `StringColumn`")
 
     def _reduce(
@@ -197,26 +257,6 @@ class StringColumn(ColumnBase, Scannable):
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
-
-    def _get_pandas_compatible_dtype(self, target_dtype: np.dtype) -> DtypeObj:
-        """
-        Get the appropriate dtype for pandas-compatible mode.
-
-        For StringDtype with na_value=np.nan, returns get_dtype_of_same_kind(self.dtype, target_dtype).
-        Otherwise, returns get_dtype_of_same_kind(pd.StringDtype() or self.dtype, target_dtype).
-        """
-        if (
-            isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.na_value is np.nan
-        ):
-            return get_dtype_of_same_kind(self.dtype, target_dtype)
-        else:
-            return get_dtype_of_same_kind(
-                pd.StringDtype()
-                if isinstance(self.dtype, pd.StringDtype)
-                else self.dtype,
-                target_dtype,
-            )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
@@ -294,7 +334,8 @@ class StringColumn(ColumnBase, Scannable):
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
-            add_back_nat = False
+            is_nat = self == "NaT"
+            add_back_nat = is_nat.any()
 
         with self.access(mode="read", scope="internal"):
             plc_dtype = dtype_to_pylibcudf_type(dtype)
@@ -323,7 +364,8 @@ class StringColumn(ColumnBase, Scannable):
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
+        format = _infer_timedelta_format(self)
+        return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         with self.access(mode="read", scope="internal"):
@@ -339,7 +381,21 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def as_string_column(self, dtype: DtypeObj) -> Self:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         if dtype != self.dtype:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and self.null_count != 0
+                and isinstance(dtype, np.dtype)
+                and dtype == np.dtype("O")
+                and isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype))
+                and self.dtype.na_value is pd.NA
+            ):
+                raise NotImplementedError(
+                    "Casting nullable string columns with pd.NA to object "
+                    "is not supported."
+                )
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
 
@@ -351,23 +407,45 @@ class StringColumn(ColumnBase, Scannable):
         # dask checks for a TypeError instead of NotImplementedError
         raise TypeError(f"cupy does not support {self.dtype}")
 
+    @property
+    def _should_use_large_string(self) -> bool:
+        """Whether this column's dtype maps to arrow large_string."""
+        dtype = self.dtype
+        if isinstance(dtype, pd.StringDtype):
+            return dtype.storage == "pyarrow"
+        if isinstance(dtype, pd.ArrowDtype):
+            return pa.types.is_large_string(dtype.pyarrow_dtype)
+        return False
+
+    def to_arrow(self) -> pa.Array:
+        result = super().to_arrow()
+        # libcudf produces arrow string (32-bit offsets), but pandas 3.0
+        # uses large_string (64-bit offsets) for pyarrow-backed string
+        # dtypes. Cast to large_string to match pandas arrow output.
+        if pa.types.is_string(result.type) and self._should_use_large_string:
+            result = result.cast(pa.large_string())
+        return result
+
     def to_pandas(
         self,
         *,
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
-            "pyarrow",
-            "python",
-        ]:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if arrow_type:
+            # Use the raw column arrow (without large_string cast)
+            # so that ArrowExtensionArray preserves the original type.
+            pa_array = ColumnBase.to_arrow(self)
+            return pd.Index(
+                pd.arrays.ArrowExtensionArray(pa_array), copy=False
+            )
+        if not nullable and isinstance(self.dtype, pd.StringDtype):
             if self.dtype.storage == "pyarrow":
                 pa_array = self.to_arrow()
-                if PANDAS_GE_220:
-                    # Prior versions only expect pa.string()
-                    pa_array = pa_array.cast(pa.large_string())
-                else:
-                    pa_array = pa_array.cast(pa.string())
                 pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
@@ -697,11 +775,6 @@ class StringColumn(ColumnBase, Scannable):
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
         separator: str,
     ) -> Self:
-        warnings.warn(
-            "byte_pair_encoding is deprecated and will be removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
         with self.access(mode="read", scope="internal"):
             plc_column = plc.nvtext.byte_pair_encode.byte_pair_encoding(
                 self.plc_column,
@@ -1354,20 +1427,19 @@ class StringColumn(ColumnBase, Scannable):
     def concatenate(
         self, others: Iterable[Self], sep: str, na_rep: str | None
     ) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.strings.combine.concatenate(
-                plc.Table(
-                    [col.plc_column for col in itertools.chain([self], others)]
-                ),
+        return cast(
+            Self,
+            PylibcudfFunction(
+                plc.strings.combine.concatenate,
+                same_dtype_policy,
+            ).execute_with_args(
+                ColumnList(*itertools.chain([self], others)),
                 plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
                 plc.Scalar.from_py(
                     na_rep, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
-            )
-            return cast(
-                Self,
-                ColumnBase.create(plc_column, self.dtype),
-            )
+            ),
+        )
 
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         with self.access(mode="read", scope="internal"):
@@ -1394,7 +1466,7 @@ class StringColumn(ColumnBase, Scannable):
                     plc_flags_from_re_flags(flags),
                 ),
             )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_column, dtype))
 
     def str_contains(self, pattern: str | Self) -> Self:
@@ -1557,7 +1629,7 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.char_types.all_characters_of_type(
                 self.plc_column, char_type, case_type
             )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             result = cast(
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(plc_result, dtype),
@@ -1690,7 +1762,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = ColumnBase.create(
                 plc_result,
-                self._get_pandas_compatible_dtype(np.dtype(np.int32)),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
             )
             return cast(cudf.core.column.numerical.NumericalColumn, res)
 
@@ -1775,8 +1847,11 @@ class StringColumn(ColumnBase, Scannable):
                 raise TypeError(
                     f"expected a str or tuple[str, ...], not {type(pat).__name__}"
                 )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
-            return cast(Self, ColumnBase.create(plc_result, dtype))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            result = cast(Self, ColumnBase.create(plc_result, dtype))
+        if self._PANDAS_NA_VALUE in {np.nan, None}:
+            result = result.fillna(False)
+        return result
 
     def find(
         self,
@@ -1799,7 +1874,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc_result,
-                    self._get_pandas_compatible_dtype(np.dtype("int64")),
+                    get_dtype_of_same_kind(self.dtype, np.dtype("int64")),
                 ),
             )
 
@@ -1811,7 +1886,7 @@ class StringColumn(ColumnBase, Scannable):
                     pattern, plc_flags_from_re_flags(flags)
                 ),
             )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_result, dtype))
 
     def code_points(self) -> Self:

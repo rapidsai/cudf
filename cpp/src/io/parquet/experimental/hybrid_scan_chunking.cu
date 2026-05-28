@@ -86,7 +86,7 @@ void hybrid_scan_reader_impl::setup_next_pass(
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
-  _pass_itm_data = std::make_unique<pass_intermediate_data>();
+  _pass_itm_data = std::make_unique<pass_intermediate_data>(_stream);
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty() && _file_itm_data._current_input_pass < num_passes) {

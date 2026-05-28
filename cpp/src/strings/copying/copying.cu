@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
       cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), offsets_offset);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input_offsets,
                       input_offsets + offsets_column->size(),
                       d_offsets,

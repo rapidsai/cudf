@@ -15,8 +15,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/cmath>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -93,7 +94,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   __device__ char* int_to_2digitstr(int8_t value, char* str)
   {
     assert(value >= -99 && value <= 99);
-    value  = std::abs(value);
+    value  = cuda::std::abs(value);
     str[0] = '0' + value / 10;
     str[1] = '0' + value % 10;
     return str + 2;
@@ -124,7 +125,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     auto value = timeparts->nanosecond;
     *ptr       = '.';
     for (int idx = 9; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
+      *(ptr + idx) = '0' + cuda::std::abs(value % 10);
       value /= 10;
     }
     return ptr + 10;
@@ -186,8 +187,8 @@ struct dispatch_from_durations_fn {
     auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
     auto d_chars    = chars_data.data();
 
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator<size_type>(0),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cuda::counting_iterator<size_type>{0},
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});
 

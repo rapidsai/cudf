@@ -6,6 +6,7 @@ python/cudf/udf_cpp/ @rapidsai/cudf-cpp-codeowners
 python/            @rapidsai/cudf-python-codeowners
 notebooks/         @rapidsai/cudf-python-codeowners
 python/dask_cudf/  @rapidsai/cudf-dask-codeowners
+python/cudf_polars/ @rapidsai/cudf-polars-codeowners
 
 #cmake code owners
 CMakeLists.txt @rapidsai/cudf-cmake-codeowners
@@ -18,6 +19,7 @@ java/              @rapidsai/cudf-java-codeowners
 #CI code owners
 /.github/                @rapidsai/ci-codeowners
 /ci/                     @rapidsai/ci-codeowners
+/.coderabbit.yaml        @rapidsai/ci-codeowners
 
 #packaging code owners
 /.pre-commit-config.yaml @rapidsai/packaging-codeowners
@@ -26,3 +28,6 @@ java/              @rapidsai/cudf-java-codeowners
 dependencies.yaml        @rapidsai/packaging-codeowners
 /build.sh                @rapidsai/packaging-codeowners
 pyproject.toml           @rapidsai/packaging-codeowners
+
+# Ops code owners
+/SECURITY.md             @rapidsai/ops-codeowners

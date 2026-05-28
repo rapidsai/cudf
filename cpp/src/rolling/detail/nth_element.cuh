@@ -14,13 +14,12 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
-
-#include <limits>
 
 namespace cudf::detail::rolling {
 
@@ -51,7 +50,7 @@ struct gather_index_calculator {
   rmm::cuda_stream_view stream;
 
   static size_type constexpr NULL_INDEX =
-    std::numeric_limits<size_type>::min();  // For nullifying with gather.
+    cuda::std::numeric_limits<size_type>::min();  // For nullifying with gather.
 
   gather_index_calculator(size_type n,
                           column_view input,
@@ -100,9 +99,9 @@ struct gather_index_calculator {
 
     // Must exclude nulls. Must examine each row in the window.
     auto const window_end = window_start + window_size;
-    return n >= 0 ? index_of_nth_non_null(thrust::make_counting_iterator(window_start), window_size)
+    return n >= 0 ? index_of_nth_non_null(cuda::counting_iterator{window_start}, window_size)
                   : index_of_nth_non_null(
-                      cuda::std::make_reverse_iterator(thrust::make_counting_iterator(window_end)),
+                      cuda::std::make_reverse_iterator(cuda::counting_iterator{window_end}),
                       window_size);
   }
 };
@@ -148,8 +147,10 @@ std::unique_ptr<column> nth_element(size_type n,
       n, input, preceding, following, min_periods, stream});
 
   auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
-  thrust::copy(
-    rmm::exec_policy_nosync(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               gather_iter,
+               gather_iter + input.size(),
+               gather_map.begin());
 
   auto gathered = cudf::detail::gather(table_view{{input}},
                                        gather_map,

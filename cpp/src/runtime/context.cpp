@@ -6,10 +6,10 @@
 #include "runtime/context.hpp"
 
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <memory>
@@ -27,7 +27,7 @@ void context::ensure_nvcomp_loaded() { io::detail::nvcomp::load_nvcomp_library()
 void context::ensure_jit_cache_initialized()
 {
   std::call_once(_program_cache_init_flag,
-                 [&]() { _program_cache = std::make_unique<jit::program_cache>(); });
+                 [&]() { _program_cache = jit::program_cache::create(); });
 }
 
 jit::program_cache& context::program_cache()
@@ -58,8 +58,8 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit      = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool dump_codegen = cudf::detail::get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit      = cudf::detail::get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
@@ -84,6 +84,10 @@ void teardown()
     _context_deinit_flag.emplace();
   });
 }
+
+void enable_jit_cache(bool enable) { get_context().program_cache().enable(enable); }
+
+void clear_jit_cache() { get_context().program_cache().clear(); }
 
 context& get_context()
 {

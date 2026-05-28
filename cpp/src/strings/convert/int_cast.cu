@@ -20,9 +20,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/functional>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
@@ -58,7 +59,7 @@ struct cast_to_integer_fn {
   {
     if (d_strings.is_null(idx)) { return; }
     auto const d_str = d_strings.element<string_view>(idx);
-    auto const size  = std::min(d_str.size_bytes(), output_type_size);
+    auto const size  = cuda::std::min(d_str.size_bytes(), output_type_size);
 
     auto value = uint64_t{0};
     auto data  = reinterpret_cast<u_char const*>(d_str.data());
@@ -94,8 +95,8 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
   auto d_results = mutable_column_device_view::create(*results, stream);
 
   auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      input.size(),
                      cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
 
@@ -212,20 +213,20 @@ std::optional<cudf::data_type> integer_cast_type(strings_column_view const& inpu
   if (input.size() == 0) { return std::nullopt; }
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto bits_size =
-    thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                             thrust::make_counting_iterator<size_type>(0),
-                             thrust::make_counting_iterator<size_type>(input.size()),
-                             cuda::proclaim_return_type<size_type>(
-                               [d_strings = *d_strings] __device__(size_type idx) -> size_type {
-                                 if (d_strings.is_null(idx)) { return 0; }
-                                 auto const d_str  = d_strings.element<string_view>(idx);
-                                 auto const bits   = d_str.size_bytes() * CHAR_BIT;
-                                 u_char first_byte = bits > 0 ? d_str.data()[0] : 0;
-                                 return bits - ((first_byte & 0x80) == 0);
-                               }),
-                             size_type{0},
-                             cuda::maximum<size_type>{});
+  auto bits_size = thrust::transform_reduce(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{input.size()},
+    cuda::proclaim_return_type<size_type>(
+      [d_strings = *d_strings] __device__(size_type idx) -> size_type {
+        if (d_strings.is_null(idx)) { return 0; }
+        auto const d_str  = d_strings.element<string_view>(idx);
+        auto const bits   = d_str.size_bytes() * CHAR_BIT;
+        u_char first_byte = bits > 0 ? d_str.data()[0] : 0;
+        return bits - ((first_byte & 0x80) == 0);
+      }),
+    size_type{0},
+    cuda::maximum<size_type>{});
 
   if (bits_size <= 8) { return data_type{type_id::INT8}; }
   if (bits_size <= 16) {

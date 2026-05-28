@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,5 +34,5 @@ void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enu
 NVBENCH_BENCH_TYPES(nvbench_rank_structs, NVBENCH_TYPE_AXES(methods))
   .set_name("rank_structs")
   .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
-  .add_int64_axis("Depth", {0, 1, 8})
+  .add_int64_axis("Depth", {1, 8})
   .add_int64_axis("Nulls", {0, 1});

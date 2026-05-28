@@ -102,17 +102,18 @@ __device__ constexpr void set_error(kernel_error::value_type error,
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : kernel_error::value_type {
-  DATA_STREAM_OVERRUN      = 0x1,
-  LEVEL_STREAM_OVERRUN     = 0x2,
-  UNSUPPORTED_ENCODING     = 0x4,
-  INVALID_LEVEL_RUN        = 0x8,
-  INVALID_DATA_TYPE        = 0x10,
-  EMPTY_PAGE               = 0x20,
-  INVALID_DICT_WIDTH       = 0x40,
-  DELTA_PARAM_MISMATCH     = 0x80,
-  DELTA_PARAMS_UNSUPPORTED = 0x100,
-  INVALID_PAGE_TYPE        = 0x200,
-  INVALID_PAGE_HEADER      = 0x400,
+  DATA_STREAM_OVERRUN            = 0x1,
+  LEVEL_STREAM_OVERRUN           = 0x2,
+  UNSUPPORTED_ENCODING           = 0x4,
+  INVALID_LEVEL_RUN              = 0x8,
+  INVALID_DATA_TYPE              = 0x10,
+  EMPTY_PAGE                     = 0x20,
+  INVALID_DICT_WIDTH             = 0x40,
+  DELTA_PARAM_MISMATCH           = 0x80,
+  DELTA_PARAMS_UNSUPPORTED       = 0x100,
+  INVALID_PAGE_TYPE              = 0x200,
+  INVALID_PAGE_HEADER            = 0x400,
+  INVALID_BYTE_STREAM_SPLIT_SIZE = 0x800,
 };
 
 /**
@@ -529,8 +530,8 @@ struct PageFragment {
                              //!< non-leaf level
   uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
-  uint16_t num_rows;         //!< Number of rows in fragment
-  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+  size_type num_rows;        //!< Number of rows in fragment
+  size_type num_dict_vals;   //!< Number of unique dictionary entries
   EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 
@@ -578,6 +579,7 @@ struct EncColumnChunk {
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
+  uint32_t num_fragments;   //!< Number of fragments in chunk
   EncPage* pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
@@ -649,6 +651,7 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
   bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
+  uint8_t dict_rle_bits;   //!< RLE bit width for this data page's dict indices
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {
@@ -734,10 +737,12 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Pointer to the error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
                                    int32_t num_chunks,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -767,7 +772,8 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param min_rows crop all rows below min_row
+ * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+ * @param min_row crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
@@ -794,11 +800,13 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] page_mask Boolean vector indicating if a page needs to be decoded or is pruned
- * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
- * @param[in] min_rows crop all rows below min_row
+ * @param[out] page_string_offset_indices Temporary space needed for decoding DELTA_BYTE_ARRAY
+ * strings
+ * @param[in] min_row crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] kernel_mask Mask of kernels to run
  * @param[in] all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
+ * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use
  */
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -1093,14 +1101,16 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
  *
  * @param[in,out] chunks Column chunks [rowgroup][column]
  * @param[out] pages Encode page array (null if just counting pages)
+ * @param[out] page_sizes Page sizes in bytes
+ * @param[in] comp_page_sizes Compressed page sizes in bytes
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
- * @param[in] page_grstats Setup for page-level stats
+ * @param[in] max_page_size_bytes Maximum uncompressed page size in bytes
+ * @param[in] max_page_size_rows Maximum number of rows per page
  * @param[in] page_align Required alignment for uncompressed pages
  * @param[in] write_v2_headers True if V2 page headers should be written
+ * @param[in] page_grstats Setup for page-level stats
  * @param[in] chunk_grstats Setup for chunk-level stats
- * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,

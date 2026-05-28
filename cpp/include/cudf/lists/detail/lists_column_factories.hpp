@@ -10,7 +10,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace lists::detail {
 
 /**
@@ -50,4 +50,4 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
                                                     rmm::device_async_resource_ref mr);
 
 }  // namespace lists::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

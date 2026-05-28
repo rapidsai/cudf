@@ -28,12 +28,13 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -126,6 +127,7 @@ struct replace_multi_parallel_fn {
    *
    * @param idx Index of the row in d_strings to be processed
    * @param d_positions Positions of the targets found in the chars column
+   * @param d_indices Indices into the targets array
    * @param d_targets_offsets Offsets identify which target positions go with the current string
    * @return Number of substrings resulting from the replace operations on this row
    */
@@ -178,6 +180,7 @@ struct replace_multi_parallel_fn {
    * @param idx Index of the row in d_strings
    * @param d_offsets Offsets to identify where to store the results of the replace for this string
    * @param d_positions The target positions found in the chars column
+   * @param d_indices Indices into the targets array
    * @param d_targets_offsets The offsets to identify which target positions go with this string
    * @param d_all_strings The output of all the produced string segments
    * @return The size in bytes of the output string for this row
@@ -327,7 +330,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
-  cudf::detail::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream, cudf::get_current_device_resource_ref());
   auto const num_blocks = util::div_rounding_up_safe(
     util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
   count_targets<<<num_blocks, block_size, 0, stream.value()>>>(fn, chars_bytes, d_count.data());
@@ -338,7 +341,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream);
 
   // cudf::detail::make_counting_transform_iterator hardcodes size_type
-  auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
+  auto const copy_itr = thrust::make_transform_iterator(cuda::counting_iterator<int64_t>{0},
                                                         pair_generator{fn, chars_bytes});
   auto const out_itr  = thrust::make_zip_iterator(
     cuda::std::make_tuple(targets_positions.begin(), targets_indices.begin()));
@@ -360,9 +363,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // compute the number of string segments produced by replace in each string
   auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(strings_count),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     counts.begin(),
                     cuda::proclaim_return_type<size_type>(
                       [fn, d_positions, d_targets_indices, d_targets_offsets] __device__(
@@ -382,8 +385,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     strings_count,
     [fn,
      d_strings_offsets,
