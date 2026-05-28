@@ -29,7 +29,6 @@ struct [[nodiscard]] context_config {
   bool preload_jit_cache     : 1      = false;
   bool disable_jit_cache     : 1      = false;
   bool clear_jit_cache       : 1      = false;
-  bool disable_codegen_cache : 1      = false;
   bool disable_cuda_cache    : 1      = false;
   bool jit_verbose           : 1      = false;
   bool dump_jit_trace        : 1      = false;

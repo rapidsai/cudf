@@ -113,11 +113,11 @@ __device__ void transform_kernel(size_type row_size,
 // retrieve the `CuFunction` for the kernel from the compiled module. This is because we don't want
 // to track the scope-dependent C++ mangled name of the kernel, and can just use a fixed name to
 // retrieve the `CuFunction` of the kernel.
-// A C++-mangled symbol has ambigous and complex resolution rules, and can change based on the scope
-// of the function, the types of the arguments, and other factors that will not be known until after
-// compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid these
-// issues and ensure that we can always retrieve the correct `CuFunction` for the kernel regardless
-// of the context in which it was compiled or used.
+// A C++-mangled symbol has ambiguous and complex resolution rules, and can change based on the
+// scope of the function, the types of the arguments, and other factors that will not be known until
+// after compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid
+// these issues and ensure that we can always retrieve the correct `CuFunction` for the kernel
+// regardless of the context in which it was compiled or used.
 extern "C" __global__ void cudf_kernel_entry(
   cudf::size_type row_size,
   cudf::bitmask_type const* __restrict__ stencil,

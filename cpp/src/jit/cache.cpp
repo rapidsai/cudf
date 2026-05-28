@@ -39,12 +39,13 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
   return ctx.finalize();
 }
 
-void install_file_set(std::string_view target_dir,
-                      std::span<uint8_t const> compressed_binary,
-                      size_t uncompressed_size,
-                      std::span<std::size_t const[2]> file_ranges,
-                      std::span<char const* const> destinations,
-                      std::string_view compression)
+void install_file_set(
+  std::string_view target_dir,
+  std::span<uint8_t const> compressed_binary,
+  size_t uncompressed_size,
+  std::span<std::size_t const[2]> file_ranges,  // NOLINT(modernize-avoid-c-arrays)
+  std::span<char const* const> destinations,
+  std::string_view compression)
 {
   auto decompressed = rtcx::decompress_blob(compressed_binary, uncompressed_size, compression);
   for (size_t i = 0; i < file_ranges.size(); ++i) {
@@ -200,7 +201,7 @@ int32_t get_current_device_compute_capability()
   return props.major * 10 + props.minor;
 }
 
-std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
+std::tuple<rtcx::library, rtcx::blob> compile_library(
   char const* name,
   char const* cuda_code,
   std::span<char const* const> extra_header_include_names,
@@ -243,6 +244,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 
   if (use_pch) {
     options.emplace_back("--pch");
+    options.emplace_back(std::format("--pch-dir={}", pch_dir));
 
     if (cfg.jit_verbose) {
       options.emplace_back("--pch-verbose=true");
@@ -329,8 +331,7 @@ kernel_instance={}
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
     auto source     = read_file_string(source_file.c_str());
-    return compile_library_uncached(
-      name.c_str(), source.c_str(), header_include_names, headers, {});
+    return compile_library(name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
   auto fut =

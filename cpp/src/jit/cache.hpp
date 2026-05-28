@@ -35,7 +35,7 @@ struct [[nodiscard]] kernel {
   rtcx::kernel_ref _kernel;
 
  public:
-  kernel(rtcx::library lib, rtcx::kernel_ref kernel) : _library(std::move(lib)), _kernel(kernel) {};
+  kernel(rtcx::library lib, rtcx::kernel_ref kernel) : _library(std::move(lib)), _kernel(kernel) {}
   kernel(kernel const&)            = default;
   kernel(kernel&&)                 = default;
   kernel& operator=(kernel const&) = default;
