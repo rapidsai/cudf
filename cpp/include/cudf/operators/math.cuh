@@ -73,9 +73,10 @@ __device__ void ceil(numeric::decimal<R>* out, numeric::decimal<R> const* a)
   if (a->scale() >= 0) {
     *out = *a;
   } else {
-    auto factor = detail::ipow10(-static_cast<R>(a->scale()));
-    auto div    = a->value() / factor;
-    auto rem    = a->value() % factor;
+    auto factor =
+      numeric::detail::ipow<R, numeric::Radix::BASE_10>(-static_cast<int32_t>(a->scale()));
+    auto div = a->value() / factor;
+    auto rem = a->value() % factor;
     if (rem == 0) {
       *out = *a;
     } else {
@@ -164,9 +165,10 @@ __device__ void floor(numeric::decimal<R>* out, numeric::decimal<R> const* a)
   if (a->scale() >= 0) {
     *out = *a;
   } else {
-    auto factor = numeric::detail::ipow<R, numeric::Radix::BASE_10>(-static_cast<R>(a->scale()));
-    auto div    = a->value() / factor;
-    auto rem    = a->value() % factor;
+    auto factor =
+      numeric::detail::ipow<R, numeric::Radix::BASE_10>(-static_cast<int32_t>(a->scale()));
+    auto div = a->value() / factor;
+    auto rem = a->value() % factor;
     if (rem == 0) {
       *out = *a;
     } else {

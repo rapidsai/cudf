@@ -598,7 +598,7 @@ __device__ errc ansi_precision_check(numeric::decimal<R>* out,
 
   auto abs_value = value < 0 ? -value : value;
 
-  if (abs_value >= numeric::detail::ipow<R, numeric::Radix::BASE_10>(static_cast<R>(*precision))) {
+  if (abs_value >= numeric::detail::ipow<R, numeric::Radix::BASE_10>(*precision)) {
     return errc::OVERFLOW;
   }
 

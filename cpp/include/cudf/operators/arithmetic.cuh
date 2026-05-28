@@ -194,7 +194,7 @@ __device__ void floor_div(cuda::std::optional<T>* out,
  */
 template <typename T>
 __device__ void mod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>)
+  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>())
 {
   *out = (*a % *b);
 }
@@ -246,7 +246,7 @@ __device__ void mod(cuda::std::optional<T>* out,
  */
 template <typename T>
 __device__ void pymod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>)
+  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>())
 {
   *out = (*a % *b + *b) % *b;
 }
