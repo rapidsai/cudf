@@ -35,6 +35,7 @@ def df():
         ("parquet", pl.scan_parquet),
     ],
 )
+@pytest.mark.timeout(90)
 def test_parallel_scan(tmp_path, df, fmt, scan_fn, streaming_engine):
     make_partitioned_source(df, tmp_path, fmt, n_files=3)
     q = scan_fn(tmp_path)
