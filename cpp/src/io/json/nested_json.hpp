@@ -11,6 +11,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 // Forward declaration of parse_options from parsing_utils.cuh
@@ -159,6 +160,15 @@ struct device_json_column {
   row_offset_t num_rows = 0;
   // Force as string column
   bool forced_as_string_column{false};
+
+  // Top-level output column names that encountered a schema mismatch in any descendant. Stored
+  // only on the root column (empty on every non-root `device_json_column`). When the caller
+  // invokes the diagnostics-aware reader path, this set feeds
+  // `json_reader_diagnostics::top_level_columns_with_schema_mismatch` on the result. When the
+  // caller invokes the plain `read_json` path, this set is computed but discarded. Using a set
+  // (rather than a vector) keeps `add_top_level_schema_mismatch` and the metadata-emit lookup at
+  // O(1) and naturally deduplicates names.
+  std::unordered_set<std::string> schema_mismatch_column_names;
 
   /**
    * @brief Construct a new d json column object
@@ -425,6 +435,32 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Result of `device_parse_nested_json_with_diagnostics`.
+ */
+struct device_parse_nested_json_result {
+  table_with_metadata data;
+  std::vector<std::string> top_level_columns_with_schema_mismatch;
+};
+
+/**
+ * @brief Same as `device_parse_nested_json`, but additionally reports the names of top-level
+ * output columns whose JSON value tree contained at least one schema mismatch against the
+ * user-supplied schema. Empty when no schema is supplied or no mismatches were observed.
+ *
+ * @param input The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return The parsed data plus the list of mismatched top-level column names
+ */
+CUDF_EXPORT
+device_parse_nested_json_result device_parse_nested_json_with_diagnostics(
+  device_span<SymbolT const> input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create empty column of a given nested schema
