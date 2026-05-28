@@ -57,7 +57,7 @@ class context {
   void ensure_jit_cache_initialized();
 
  public:
-  context(context_config const& cfg = {}, init_flags flags = init_flags::DEFAULT);
+  context(context_config cfg = {}, init_flags flags = init_flags::DEFAULT);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;

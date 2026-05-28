@@ -17,7 +17,8 @@
 
 namespace cudf {
 
-context::context(context_config const& cfg, init_flags flags) : _config{cfg}, _jit_cache_init_flag{}
+context::context(context_config cfg, init_flags flags)
+  : _config{std::move(cfg)}, _jit_cache_init_flag{}
 {
   initialize_components(flags);
 }
