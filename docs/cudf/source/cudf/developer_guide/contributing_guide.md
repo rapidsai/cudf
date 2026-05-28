@@ -11,8 +11,7 @@ All Cython code is contained in `python/cudf/cudf/_lib`.
 
 cuDF employs a number of linters through [`pre-commit`](https://pre-commit.com/) to ensure consistent style across the code base.
 These linting checks must all pass when submitting a pull request.
-The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth linting.
-Notable tools includes:
+The `.pre-commit-config.yaml` file at the root of the repo contains configurations for all linting tools, and notable ones includes:
 
 - [`ruff`](https://docs.astral.sh/ruff/) checks for general code formatting compliance.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.
@@ -76,14 +75,14 @@ may support a range of pandas versions, API signatures and behaviors should alwa
 
 Occasionally, cuDF APIs may deviate from pandas behavior. Common reasons include:
 
-- Performance: Match pandas behavior would incurr exorbitant runtime or memory costs. Deviations due to performance should be agreed upon by cuDF developers.
+- Performance: Match pandas behavior would incur exorbitant runtime or memory costs. Deviations due to performance should be agreed upon by cuDF developers.
 - Data type representations: cuDF does not support the full type system of pandas and vice versa, commonly encountered with the `object` or nested types.
 - Exception messages: The exception type raised in cuDF should match pandas, but the error messages do not need to exactly align.
 - Warnings: While cuDF should match pandas warnings from deprecated functionality, cuDF should not necessarily match other user-facing warnings.
 
 Intentional deviations should be documented in the [pandas comparison](./documentation.md#comparing-to-pandas).
 
-If it not possible to match a pandas API, an entire API or a specific component of an API, at all, it should raise a `NotImplementedError`.
+If it is not possible to match a pandas API, an entire API or a specific component of an API, at all, it should raise a `NotImplementedError`.
 
 ## Python vs Cython
 

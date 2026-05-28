@@ -149,7 +149,7 @@ To accommodate these requirements, we take the following approach:
 ## Comparing to pandas
 
 When an API intentionally deviates in signature or behavior from pandas, use the custom `pandas-compat` Sphinx directive
-inside the docstring to describe the difference. For example:
+inside the API docstring to describe the difference. For example:
 
 ```python
 def foo(self):
@@ -163,7 +163,7 @@ def foo(self):
     """
 ```
 
-All API compatibility difference from pandas will be rendered in the [pandas comparison](./PandasCompat.md) page.
+All API compatibility differences from pandas will be rendered in the [pandas comparison](./PandasCompat.md) page.
 
 ## Writing documentation pages
 

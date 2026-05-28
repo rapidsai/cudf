@@ -3,7 +3,7 @@
 cuDF contains 2 main data structures:
 
 1. The Frame: A user-facing object mirroring pandas-like data structures like `DataFrame` and `Series`.
-2. The Column: A object holding a 1-dimensional representation of GPU data that implements methods for a particular data type.
+2. The Column: An object holding a 1-dimensional representation of GPU data that implements methods for a particular data type.
 
 
 ## The Frame layer
@@ -107,7 +107,7 @@ that consolidates logic and implements methods specific to 1 or more related dat
 - `Decimal64Column`: decimal64
 - `Decimal128Column`: decimal128
 
-Each column subclass is restricted to hold a `.dtype` object corresponding to a valid [pandas data type](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) of the same data type designation with the follow exceptions:
+Each column subclass is restricted to hold a `.dtype` object corresponding to a valid [pandas data type](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) of the same data type designation with the following exceptions:
 
 - A `CategoricalColumn` holds a `cudf.CategoricalDtype` instead of a `pandas.CategoricalDtype`
 - A `IntervalColumn` can hold a `cudf.IntervalDtype` instead of a `pandas.IntervalDtype`
