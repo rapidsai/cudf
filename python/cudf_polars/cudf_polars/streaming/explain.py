@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+import contextlib
 import dataclasses
 import datetime
 import functools
@@ -59,6 +61,7 @@ def explain_query(
     engine: pl.GPUEngine,
     *,
     physical: bool = True,
+    executor: concurrent.futures.Executor | None = None,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -72,23 +75,38 @@ def explain_query(
     physical : bool, default True
         If True, show the physical (lowered) plan.
         If False, show the logical (pre-lowering) plan.
+    executor
+        Optional executor to use for IO operations. This function does not start
+        or shutdown the executor. If not provided, a new thread pool executor
+        is created and used.
 
     Returns
     -------
     str
         A string representation of the IR plan.
     """
+    cm: contextlib.AbstractContextManager[concurrent.futures.Executor]
+
+    if executor is None:
+        cm = executor = concurrent.futures.ThreadPoolExecutor()
+    else:
+        # we only shut down the executor if we created it.
+        cm = contextlib.nullcontext(executor)
+
     config = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     if physical:
-        stats = collect_statistics(ir, config)
+        with cm:
+            stats = collect_statistics(ir, config, executor)
         lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
-            return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+            with cm:
+                stats = collect_statistics(ir, config, executor)
+            return _repr_ir_tree(ir, stats=stats)
         else:
             return _repr_ir_tree(ir)
 
@@ -423,7 +441,12 @@ class SerializablePlan:
 
     @classmethod
     def from_ir(
-        cls, ir: IR, *, config_options: ConfigOptions, lowered: bool = False
+        cls,
+        ir: IR,
+        *,
+        config_options: ConfigOptions,
+        lowered: bool = False,
+        executor: concurrent.futures.Executor | None = None,
     ) -> Self:
         """
         Construct a serializable plan from an IR node.
@@ -436,6 +459,10 @@ class SerializablePlan:
             The configuration options.
         lowered
             If True, lower the IR to the physical plan and include partition info.
+        executor
+            Optional executor to use for IO operations. This function does not start
+            or shutdown the executor. If not provided, a new thread pool executor
+            is created and used.
 
         Returns
         -------
@@ -443,8 +470,16 @@ class SerializablePlan:
             A serializable representation of the query plan.
         """
         partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
+        cm: contextlib.AbstractContextManager[concurrent.futures.Executor]
+
+        if executor is None:
+            cm = executor = concurrent.futures.ThreadPoolExecutor()
+        else:
+            cm = contextlib.nullcontext(executor)
+
         if lowered:
-            stats = collect_statistics(ir, config_options)
+            with cm:
+                stats = collect_statistics(ir, config_options, executor)
             ir, partition_info_d = lower_ir_graph(ir, config_options, stats)
             partition_info_dict = {}
 
