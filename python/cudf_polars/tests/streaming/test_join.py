@@ -279,7 +279,7 @@ def test_join_maintain_order_fallback_streaming(
 
 @pytest.mark.parametrize("broadcast_limit", [1, 48, 128, 1024])
 def test_broadcast_limit(
-    left, right, broadcast_limit, executor: concurrent.futures.ThreadPoolExecutor
+    left, right, broadcast_limit, io_executor: concurrent.futures.ThreadPoolExecutor
 ):
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -319,7 +319,7 @@ def test_broadcast_limit(
             collect_statistics(
                 ir,
                 config_options,
-                executor,
+                io_executor,
             ),
         )[1]
         if isinstance(node, Shuffle)
@@ -337,7 +337,7 @@ def test_broadcast_limit(
 
 
 def test_cache_preserves_partitioning_join(
-    executor: concurrent.futures.ThreadPoolExecutor,
+    io_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -365,7 +365,7 @@ def test_cache_preserves_partitioning_join(
     lowered_ir, partition_info = lower_ir_graph(
         ir,
         config_options,
-        collect_statistics(ir, config_options, executor),
+        collect_statistics(ir, config_options, io_executor),
     )
 
     # Cache should preserve partitioning on 'key'

@@ -355,6 +355,6 @@ def pytest_collection_modifyitems(
 
 
 @pytest.fixture(scope="module")
-def stats_executor() -> concurrent.futures.ThreadPoolExecutor:
+def io_executor() -> concurrent.futures.ThreadPoolExecutor:
     """A thread pool to use for cudf-polars IO operations."""
     return concurrent.futures.ThreadPoolExecutor()

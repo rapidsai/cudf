@@ -93,7 +93,7 @@ def test_target_partition_size(
     blocksize,
     n_files,
     streaming_engine_factory,
-    executor: concurrent.futures.ThreadPoolExecutor,
+    io_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=blocksize),
@@ -105,7 +105,7 @@ def test_target_partition_size(
     # Check partitioning (throwaway engine — no cluster/runtime needed)
     _engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="streaming",
+        io_executor="streaming",
         executor_options={"target_partition_size": blocksize},
     )
     qir = Translator(q._ldf.visit(), _engine).translate_ir()
@@ -116,7 +116,7 @@ def test_target_partition_size(
         collect_statistics(
             qir,
             config_options,
-            executor,
+            io_executor,
         ),
     )
     count = info[ir].count
