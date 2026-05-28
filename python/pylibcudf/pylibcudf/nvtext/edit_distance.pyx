@@ -6,7 +6,7 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.nvtext.edit_distance cimport (
-    edit_distance as cpp_edit_distance
+    edit_distance as cpp_edit_distance,
 )
 
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
