@@ -92,7 +92,8 @@ struct one_capture_fn {
       } else {
         d_output[output_idx] = string_index_pair{"", 0};  // empty string
       }
-      itr += (match->second - itr.position());  // increment for next match
+      // increment for next match
+      itr += (match->second - itr.position()) + (match->first == match->second);
       ++output_idx;
     }
   }
