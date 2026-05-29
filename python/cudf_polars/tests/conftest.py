@@ -406,4 +406,5 @@ def pytest_collection_modifyitems(
 @pytest.fixture(scope="module")
 def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:
     """A thread pool to use for cudf-polars status collection."""
-    return concurrent.futures.ThreadPoolExecutor()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        return executor
