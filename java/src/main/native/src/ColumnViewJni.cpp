@@ -2013,25 +2013,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceRegex(JNIEnv* env,
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceMultiRegex(
-  JNIEnv* env, jclass, jlong j_column_view, jobjectArray j_patterns, jlong j_repls)
-{
-  JNI_NULL_CHECK(env, j_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, j_patterns, "patterns is null", 0);
-  JNI_NULL_CHECK(env, j_repls, "repls is null", 0);
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    auto cv = reinterpret_cast<cudf::column_view const*>(j_column_view);
-    cudf::strings_column_view scv(*cv);
-    cudf::jni::native_jstringArray patterns(env, j_patterns);
-    auto repl_cv = reinterpret_cast<cudf::column_view const*>(j_repls);
-    cudf::strings_column_view repl_scv(*repl_cv);
-    return release_as_jlong(cudf::strings::replace_re(scv, patterns.as_cpp_vector(), repl_scv));
-  }
-  JNI_CATCH(env, 0);
-}
-
 JNIEXPORT jlong JNICALL
 Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(JNIEnv* env,
                                                          jclass,
