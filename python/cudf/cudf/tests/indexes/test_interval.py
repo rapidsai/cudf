@@ -393,3 +393,46 @@ def test_from_interval_range_indexing():
     result = cudf.interval_range(start=0, end=1, name="a").repeat(2)
     expected = pd.interval_range(start=0, end=1, name="a").repeat(2)
     assert_eq(result, expected)
+
+
+class TestIntervalColumnEquality:
+    """Tests for IntervalColumn.__eq__ and __ne__."""
+
+    def test_series_eq(self):
+        s = cudf.Series(pd.arrays.IntervalArray.from_breaks([0, 1, 2, 3]))
+        result = s == s
+        expected = cudf.Series([True, True, True])
+        assert_eq(result, expected)
+
+    def test_series_ne(self):
+        s = cudf.Series(pd.arrays.IntervalArray.from_breaks([0, 1, 2, 3]))
+        other = cudf.Series(pd.arrays.IntervalArray.from_breaks([0, 1, 2, 4]))
+        result = s != other
+        expected = cudf.Series([False, False, True])
+        assert_eq(result, expected)
+
+    def test_series_eq_with_nulls(self):
+        pi = pd.arrays.IntervalArray.from_breaks([0.0, 1.0, 2.0, 3.0])
+        ps = pd.array(pi, dtype=pi.dtype)
+        ps[1] = pd.NA
+        s = cudf.Series(ps)
+        result = s == s
+        # cudf uses NULL_EQUALS semantics: null == null is True
+        expected = cudf.Series([True, True, True])
+        assert_eq(result, expected)
+
+    def test_index_eq(self):
+        idx = cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
+        other = cudf.IntervalIndex.from_breaks([0, 1, 5, 3])
+        result = idx == other
+        expected = np.array([True, False, False])
+        np.testing.assert_array_equal(result.get(), expected)
+
+    @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+    def test_eq_respects_closed(self, closed):
+        s = cudf.Series(
+            pd.arrays.IntervalArray.from_breaks([0, 1, 2], closed=closed)
+        )
+        result = s == s
+        expected = cudf.Series([True, True])
+        assert_eq(result, expected)
