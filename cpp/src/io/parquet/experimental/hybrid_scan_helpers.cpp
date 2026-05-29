@@ -138,7 +138,6 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
 std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ranges() const
 {
   std::vector<text::byte_range_info> page_index_byte_ranges;
-  page_index_byte_ranges.reserve(per_file_metadata.size());
   std::transform(per_file_metadata.begin(),
                  per_file_metadata.end(),
                  std::back_inserter(page_index_byte_ranges),
@@ -237,12 +236,13 @@ std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
         row_group_indices[src_idx].end(),
         sum,
         [&](auto sum, auto const row_group_idx) {
-          CUDF_EXPECTS(
-            std::cmp_greater_equal(row_group_idx, size_type{0}) and
-              std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
-            "Encountered out-of-bounds row group index for data source. Row group index: " +
-              std::to_string(row_group_idx) + ", Source index: " + std::to_string(src_idx) +
-              ", Number of row groups: " + std::to_string(file_metadata.row_groups.size()));
+          CUDF_EXPECTS(std::cmp_greater_equal(row_group_idx, 0) and
+                         std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
+                       std::format("Encountered out-of-bounds row group index for data source. Row "
+                                   "group index: {}, Source index: {}, Number of row groups: {}",
+                                   row_group_idx,
+                                   src_idx,
+                                   file_metadata.row_groups.size()));
           return sum + file_metadata.row_groups[row_group_idx].num_rows;
         });
     });
