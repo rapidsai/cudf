@@ -55,7 +55,7 @@ struct findall_fn {
       auto const d_result    = string_from_match(*match, d_str, itr);
       d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      itr += (match->second - itr.position());
+      itr += (match->second - itr.position()) + (match->first == match->second);
     }
   }
 };
