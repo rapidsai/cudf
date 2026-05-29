@@ -63,7 +63,7 @@ Exceptional uses cases include:
   4. Containing/all nan
   5. `INT${PRECISION}_MAX` for a given precision (e.g. `2**32` for `int32`).
 
-Additional exceptional use cases are also dependent on an APIs operation e.g. join.
+Additional exceptional use cases are also dependent on an API's operation e.g. join.
 
 When writing a unit test for an API that mirrors pandas, construct the test body where pandas operations
 are done independently of cuDF operations, and assert equality for both results in the end, performing little to
@@ -182,11 +182,11 @@ the warning as appropriate.
 
 - Warnings that are explicitly thrown in cuDF should be tested using the [`pytest.warns`](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#assertwarnings) context manager.
 - If a warning originates from a package or testing dependency:
-    - If practically addressible, modify the test body or cuDF codebase in a backward compatible way to avoid the warning
-    - If not addressible, use `pytest.mark.filterwarning` if it only impact a small subset of tests or add a warning filter to the appropriate configuration file if it impacts a large amount of the test suite.
+    - If practically addressable, modify the test body or cuDF codebase in a backward compatible way to avoid the warning
+    - If not addressable, use `pytest.mark.filterwarnings` if it only impacts a small subset of tests or add a warning filter to the appropriate configuration file if it impacts a large amount of the test suite.
         - A [warning filter](https://docs.python.org/3/library/warnings.html#the-warnings-filter) should include at minimum a `message` and `category` component.
 
-Periodically revisit any warning filters added in configuration files and with `pytest.mark.filterwarning` as code and
+Periodically revisit any warning filters added in configuration files and with `pytest.mark.filterwarnings` as code and
 dependency updates may have made them obsolete.
 
 ```{warning}
