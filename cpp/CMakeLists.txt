@@ -708,7 +708,6 @@ add_library(
   src/join/join_utils.cu
   src/join/key_remapping.cu
   src/join/mixed_join.cu
-  src/join/streaming_hash_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
@@ -716,6 +715,7 @@ add_library(
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/sort_merge_join.cu
+  src/join/streaming_hash_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
