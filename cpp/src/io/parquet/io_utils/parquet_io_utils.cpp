@@ -26,6 +26,7 @@
 #include <mutex>
 #include <numeric>
 #include <tuple>
+#include <type_traits>
 
 /**
  * @file parquet_io_utils.cpp
@@ -36,8 +37,51 @@ namespace cudf::io::parquet {
 
 namespace detail {
 
-auto constexpr parallel_threshold = 16;
+auto constexpr parallel_threshold = 32;
 
+/**
+ * @brief Dispatches the fetch task for each source index and collects the results
+ *
+ * Dispatches sequentially or using host worker pool depending on the number of sources.
+ *
+ * @tparam Task Callable invocable as `fetch_task(std::size_t source_idx)`
+ * @param num_sources Number of sources to process
+ * @param fetch_task Task to run for each source index
+ * @return Vector of results, one per source, in source order
+ */
+template <typename Task>
+auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
+{
+  using result_type = std::invoke_result_t<Task, std::size_t>;
+
+  std::vector<result_type> results;
+  results.reserve(num_sources);
+
+  if (num_sources < parallel_threshold) {
+    // Run sequentially to avoid task dispatch overhead
+    std::for_each(cuda::counting_iterator<std::size_t>(0),
+                  cuda::counting_iterator<std::size_t>(num_sources),
+                  [&](std::size_t source_idx) { results.emplace_back(fetch_task(source_idx)); });
+  } else {
+    // Dispatch the tasks to the host worker pool
+    std::vector<std::future<result_type>> tasks;
+    tasks.reserve(num_sources);
+    std::for_each(cuda::counting_iterator<std::size_t>(0),
+                  cuda::counting_iterator<std::size_t>(num_sources),
+                  [&](std::size_t source_idx) {
+                    tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+                      [&fetch_task, source_idx]() { return fetch_task(source_idx); }));
+                  });
+    std::transform(tasks.begin(), tasks.end(), std::back_inserter(results), [](auto& task) {
+      return task.get();
+    });
+  }
+  return results;
+}
+
+/**
+ * @copydoc cudf::io::parquet::fetch_footers_to_host
+ */
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
 {
@@ -60,33 +104,14 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     return datasource.host_read(len - ender->footer_len - ender_len, ender->footer_len);
   };
 
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> footer_buffers;
-  footer_buffers.reserve(datasources.size());
-  auto const num_sources = datasources.size();
-
-  if (num_sources < parallel_threshold) {
-    // Read footers sequentially to avoid task dispatch overhead
-    std::transform(datasources.begin(),
-                   datasources.end(),
-                   std::back_inserter(footer_buffers),
-                   [&](auto const& datasource_ref) { return fetch_footer(datasource_ref.get()); });
-  } else {
-    // Read footers in parallel
-    std::vector<std::future<std::unique_ptr<cudf::io::datasource::buffer>>> tasks;
-    tasks.reserve(datasources.size());
-    for (auto const& datasource_ref : datasources) {
-      tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-        [&datasource = datasource_ref.get(), &fetch_footer]() {
-          return fetch_footer(datasource);
-        }));
-    }
-    std::transform(tasks.begin(), tasks.end(), std::back_inserter(footer_buffers), [](auto& task) {
-      return task.get();
-    });
-  }
-  return footer_buffers;
+  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+    return fetch_footer(datasources[source_idx].get());
+  });
 }
 
+/**
+ * @copydoc cudf::io::parquet::fetch_page_indexes_to_host
+ */
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
@@ -100,36 +125,9 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
     return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
   };
 
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> page_index_buffers;
-  page_index_buffers.reserve(datasources.size());
-
-  auto const num_sources = datasources.size();
-  auto iter = cuda::make_zip_iterator(datasources.begin(), page_index_bytes_per_source.begin());
-
-  if (num_sources < parallel_threshold) {
-    // Read page indexes sequentially to avoid task dispatch overhead
-    std::transform(
-      iter, iter + datasources.size(), std::back_inserter(page_index_buffers), [&](auto const& t) {
-        return fetch_page_index(cuda::std::get<0>(t).get(), cuda::std::get<1>(t));
-      });
-  } else {
-    // Read page indexes in parallel
-    std::vector<std::future<std::unique_ptr<cudf::io::datasource::buffer>>> tasks;
-    tasks.reserve(datasources.size());
-    std::for_each(iter, iter + datasources.size(), [&](auto const& tuple) {
-      auto const& datasource       = cuda::std::get<0>(tuple);
-      auto const& page_index_bytes = cuda::std::get<1>(tuple);
-      tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-        [&datasource = datasource.get(), page_index_bytes, &fetch_page_index]() {
-          return fetch_page_index(datasource, page_index_bytes);
-        }));
-    });
-    std::transform(
-      tasks.begin(), tasks.end(), std::back_inserter(page_index_buffers), [](auto& task) {
-        return task.get();
-      });
-  }
-  return page_index_buffers;
+  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+    return fetch_page_index(datasources[source_idx].get(), page_index_bytes_per_source[source_idx]);
+  });
 }
 
 }  // namespace detail
