@@ -1073,6 +1073,13 @@ class parquet_writer_options_base {
   bool _v2_page_headers = false;
   // enable per-page compression decision for V2?
   bool _page_level_compression = false;
+  // EXPERIMENTAL/DNM: Compression-skip threshold for the writer's compress-or-not decision. The
+  // chunk (or page, with page-level compression) is kept compressed only when the compressed size
+  // is at most `compressed_size <= uncompressed_size * _compression_threshold`. The default of 1.0
+  // preserves the historical strict `<` behavior (when combined with the equivalent floating-point
+  // comparison in the kernel). Lower values (e.g. 0.9) skip near-break-even compression. See
+  // issue #17313.
+  double _compression_threshold = 1.0;
   // Which columns in _table are used for sorting
   std::optional<std::vector<sorting_column>> _sorting_columns;
 
@@ -1250,6 +1257,18 @@ class parquet_writer_options_base {
   [[nodiscard]] auto is_enabled_page_level_compression() const { return _page_level_compression; }
 
   /**
+   * @brief Returns the compression-skip threshold (EXPERIMENTAL/DNM, see issue #17313).
+   *
+   * The writer keeps a chunk or page compressed only when the compressed size is at most
+   * `uncompressed_size * threshold`. A value of 1.0 preserves the default behavior. Lower values
+   * (e.g. 0.9) skip compression for near-break-even candidates to reduce read-side decompression
+   * work at the cost of a modest file-size increase.
+   *
+   * @return Compression-skip threshold in [0.0, 1.0]
+   */
+  [[nodiscard]] auto get_compression_threshold() const { return _compression_threshold; }
+
+  /**
    * @brief Returns the sorting_columns.
    *
    * @return Column sort order metadata
@@ -1385,6 +1404,13 @@ class parquet_writer_options_base {
    * @param val Boolean value to enable/disable per-page compression decisions.
    */
   void enable_page_level_compression(bool val);
+
+  /**
+   * @brief Sets the compression-skip threshold (EXPERIMENTAL/DNM, see issue #17313).
+   *
+   * @param threshold A value in [0.0, 1.0]. Default 1.0 preserves historical behavior.
+   */
+  void set_compression_threshold(double threshold);
 
   /**
    * @brief Sets sorting columns.
@@ -1604,6 +1630,19 @@ class parquet_writer_options_builder_base {
    * @return this for chaining
    */
   BuilderT& page_level_compression(bool enabled);
+
+  /**
+   * @brief Sets the compression-skip threshold (EXPERIMENTAL/DNM, see issue #17313).
+   *
+   * The writer keeps a chunk or page compressed only when the compressed size is at most
+   * `uncompressed_size * threshold`. Default 1.0 preserves the historical strict-better
+   * behavior. Lower values (e.g. 0.9) skip near-break-even compression to reduce read-side
+   * decompression work at the cost of a modest file-size increase.
+   *
+   * @param threshold A value in [0.0, 1.0].
+   * @return this for chaining
+   */
+  BuilderT& compression_threshold(double threshold);
 
   /**
    * @brief Sets column sorting metadata.

@@ -1494,6 +1494,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param write_v2_headers True if V2 page headers should be written
  * @param page_level_compression True if V2 pages can make per-page compression decisions
+ * @param compression_threshold EXPERIMENTAL/DNM: compression-skip threshold; see issue #17313
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
@@ -1506,6 +1507,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                   int32_t column_index_truncate_length,
                   bool write_v2_headers,
                   bool page_level_compression,
+                  double compression_threshold,
                   rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -1530,7 +1532,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   // chunk-level
 
   auto d_chunks = chunks.device_view();
-  decide_compression(d_chunks.flat_view(), page_level_compression, stream);
+  decide_compression(d_chunks.flat_view(), page_level_compression, compression_threshold, stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
   GatherPages(d_chunks.flat_view(), stream);
 
@@ -1663,6 +1665,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
                                    bool page_level_compression,
+                                   double compression_threshold,
                                    bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
@@ -2147,6 +2150,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       column_index_truncate_length,
       write_v2_headers,
       page_level_compression,
+      compression_threshold,
       stream);
 
     bool need_sync{false};
@@ -2309,6 +2313,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _page_level_compression(options.is_enabled_page_level_compression()),
+    _compression_threshold(options.get_compression_threshold()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2350,6 +2355,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _page_level_compression(options.is_enabled_page_level_compression()),
+    _compression_threshold(options.get_compression_threshold()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2438,6 +2444,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                   _utc_timestamps,
                                   _write_v2_headers,
                                   _page_level_compression,
+                                  _compression_threshold,
                                   _write_arrow_schema,
                                   _out_sink,
                                   _stream);

@@ -1154,10 +1154,14 @@ void EncodePages(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] page_level_compression If true, V2 pages can independently decide compression
+ * @param[in] compression_threshold EXPERIMENTAL/DNM: keep compression only when
+ *            `compressed_size <= uncompressed_size * compression_threshold`. The default of 1.0
+ *            preserves the historical strict-better behavior. See issue #17313.
  * @param[in] stream CUDA stream to use
  */
 void decide_compression(device_span<EncColumnChunk> chunks,
                         bool page_level_compression,
+                        double compression_threshold,
                         rmm::cuda_stream_view stream);
 
 /**

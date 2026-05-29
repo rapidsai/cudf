@@ -38,7 +38,10 @@
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 
+#include <algorithm>
 #include <bitset>
+#include <cmath>
+#include <cstdint>
 
 namespace cudf::io::parquet::detail {
 
@@ -2498,9 +2501,18 @@ constexpr int decide_compression_warps_in_block = 4;
 constexpr int decide_compression_block_size =
   decide_compression_warps_in_block * cudf::detail::warp_size;
 
+// EXPERIMENTAL/DNM: Fixed-point scale for compression_threshold (issue #17313). The kernel keeps
+// chunks compressed when `comp_size * SCALE < uncomp_size * threshold_scaled`. The case study
+// sweeps thresholds in (0, 1) and does not exercise threshold = 1.0; default behavior remains
+// the unmodified main predicate (`comp < uncomp`), reached when the public knob is left at its
+// default. `uint64_t` arithmetic keeps the multiply from overflowing for any 32-bit page size.
+constexpr uint64_t compression_threshold_scale = 1ull << 16;
+
 // blockDim(decide_compression_block_size, 1, 1)
 CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
-  decide_compression_kernel(device_span<EncColumnChunk> chunks, bool page_level_compression)
+  decide_compression_kernel(device_span<EncColumnChunk> chunks,
+                            bool page_level_compression,
+                            uint64_t compression_threshold_scaled)
 {
   namespace cg = cooperative_groups;
 
@@ -2540,9 +2552,12 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
 
       // For V2 pages, decide compression per-page only if page_level_compression is enabled
       if (curr_page.is_v2() and page_level_compression) {
-        // Per-page decision: each V2 page decides independently
+        // EXPERIMENTAL/DNM #17313: scaled-integer form of `comp_page_size < page_data_size *
+        // threshold` (default threshold = 1.0 reduces to the main predicate).
         auto const compressed_page_preferred =
-          comp_res->status == codec_status::SUCCESS and comp_page_size < page_data_size;
+          comp_res->status == codec_status::SUCCESS and
+          (static_cast<uint64_t>(comp_page_size) * compression_threshold_scale <
+           static_cast<uint64_t>(page_data_size) * compression_threshold_scaled);
         curr_page.is_compressed = compressed_page_preferred;
         plc_actual_size += compressed_page_preferred ? comp_page_size : page_data_size;
         if (compressed_page_preferred) { local_any_plc_compressed = true; }
@@ -2579,9 +2594,14 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, BitwiseOr{});
   warp.sync();
 
-  // Decide whether non-PLC pages should be compressed (only lane 0 has correct reduced values)
-  auto non_plc_compressed = !has_compression_error and non_plc_comp_size < non_plc_uncomp_size;
-  non_plc_compressed      = warp.shfl(non_plc_compressed, 0);
+  // Decide whether non-PLC pages should be compressed (only lane 0 has correct reduced values).
+  // EXPERIMENTAL/DNM #17313: scaled-integer form of `non_plc_comp_size < non_plc_uncomp_size *
+  // threshold` (default threshold = 1.0 reduces to the main predicate).
+  auto non_plc_compressed =
+    !has_compression_error and
+    (static_cast<uint64_t>(non_plc_comp_size) * compression_threshold_scale <
+     static_cast<uint64_t>(non_plc_uncomp_size) * compression_threshold_scaled);
+  non_plc_compressed = warp.shfl(non_plc_compressed, 0);
 
   // Chunk uses compression if any page is compressed (for codec in metadata)
   auto const write_compressed = any_plc_compressed or non_plc_compressed;
@@ -3553,12 +3573,18 @@ void EncodePages(device_span<EncPage> pages,
 
 void decide_compression(device_span<EncColumnChunk> chunks,
                         bool page_level_compression,
+                        double compression_threshold,
                         rmm::cuda_stream_view stream)
 {
+  auto const clamped_threshold = std::min(std::max(compression_threshold, 0.0), 1.0);
+  // Scale the host-side double into the kernel's fixed-point space (see compression_threshold_scale
+  // above). Round-to-nearest is fine since threshold values come from a coarse user-facing knob.
+  auto const compression_threshold_scaled = static_cast<uint64_t>(
+    std::llround(clamped_threshold * static_cast<double>(compression_threshold_scale)));
   auto const num_blocks =
     util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
   decide_compression_kernel<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(
-    chunks, page_level_compression);
+    chunks, page_level_compression, compression_threshold_scaled);
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,

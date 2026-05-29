@@ -310,6 +310,13 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet compression-threshold strings benchmark (EXPERIMENTAL/DNM, issue #17313) ---------------
+ConfigureNVBench(
+  PARQUET_COMPRESSION_THRESHOLD_STRINGS_NVBENCH
+  io/parquet/parquet_compression_threshold_strings.cpp io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
 # * parquet reader strings benchmark
 # ------------------------------------------------------------------
 ConfigureNVBench(

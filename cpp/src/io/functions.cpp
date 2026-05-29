@@ -1040,6 +1040,13 @@ void parquet_writer_options_base::enable_page_level_compression(bool val)
   _page_level_compression = val;
 }
 
+void parquet_writer_options_base::set_compression_threshold(double threshold)
+{
+  CUDF_EXPECTS(threshold >= 0.0 && threshold <= 1.0,
+               "Parquet compression_threshold must be in [0.0, 1.0]");
+  _compression_threshold = threshold;
+}
+
 void parquet_writer_options_base::set_sorting_columns(std::vector<sorting_column> sorting_columns)
 {
   _sorting_columns = std::move(sorting_columns);
@@ -1203,6 +1210,14 @@ BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::page_level_co
   bool enabled)
 {
   _options.enable_page_level_compression(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::compression_threshold(
+  double threshold)
+{
+  _options.set_compression_threshold(threshold);
   return static_cast<BuilderT&>(*this);
 }
 

@@ -2756,3 +2756,55 @@ TEST_F(ParquetWriterTest, DISABLED_SizeTypeOverflow)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({col->view()}), result.tbl->view());
 }
+
+// EXPERIMENTAL/DNM (issue #17313). Verifies that the new public `compression_threshold` builder
+// argument round-trips data unchanged regardless of the threshold value. This is plumbing-only:
+// we only assert correctness, not size or codec choice. The benchmark sweep covers performance.
+TEST_F(ParquetWriterTest, CompressionThresholdRoundTrip)
+{
+  constexpr cudf::size_type num_rows = 4'000;
+
+  std::vector<int32_t> int_data(num_rows);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    int_data[i] = static_cast<int32_t>(i % 1024);
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col(int_data.begin(), int_data.end());
+
+  std::vector<std::string> string_data;
+  string_data.reserve(num_rows);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    string_data.push_back("row_" + std::to_string(i % 64));
+  }
+  cudf::test::strings_column_wrapper str_col(string_data.begin(), string_data.end());
+
+  auto const expected = cudf::table_view{{int_col, str_col}};
+
+  // EXPERIMENTAL/DNM: threshold = 1.00 is omitted (covered by existing PARQUET_TEST cases at the
+  // default-knob value); the values below exercise the new fixed-point integer path through
+  // `decide_compression_kernel` end-to-end.
+  std::array<double, 3> const thresholds{0.10, 0.50, 0.95};
+  std::array<cudf::io::compression_type, 4> const codecs{cudf::io::compression_type::NONE,
+                                                         cudf::io::compression_type::SNAPPY,
+                                                         cudf::io::compression_type::ZSTD,
+                                                         cudf::io::compression_type::LZ4};
+
+  for (auto codec : codecs) {
+    if (not cudf::io::is_supported_write_parquet(codec)) { continue; }
+    for (auto threshold : thresholds) {
+      auto const filepath = temp_env->get_temp_filepath(
+        "CompressionThresholdRoundTrip_" + std::to_string(static_cast<int>(codec)) + "_" +
+        std::to_string(threshold) + ".parquet");
+      cudf::io::parquet_writer_options const out_opts =
+        cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+          .compression(codec)
+          .compression_threshold(threshold);
+      cudf::io::write_parquet(out_opts);
+
+      cudf::io::parquet_reader_options const in_opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+      auto const result = cudf::io::read_parquet(in_opts);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    }
+  }
+}
