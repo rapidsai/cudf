@@ -150,18 +150,11 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     if (overflow_ref.load(cuda::memory_order_relaxed)) { return; }
 
     auto const source_value = source.element<DeviceType>(source_index);
-    auto* const sum_ptr     = &sum_column.element<DeviceType>(target_index);
-    auto const old_sum      = cudf::detail::atomic_add(sum_ptr, source_value);
+    auto const old_sum =
+      cudf::detail::atomic_add(&sum_column.element<DeviceType>(target_index), source_value);
 
     if (cuda::add_overflow<DeviceType>(old_sum, source_value).overflow) {
       cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);
-      // Use cudf::detail::atomic_cas because cuda::atomic_ref doesn't handle sub-word types
-      // properly.
-      DeviceType expected = old_sum + source_value;
-      DeviceType observed;
-      while ((observed = cudf::detail::atomic_cas(sum_ptr, expected, DeviceType{0})) != expected) {
-        expected = observed;
-      }
     }
   }
 };
