@@ -16,7 +16,7 @@ All data types in cuDF are [nullable](missing-data).
 | Floating-point       | `'float32'`, `'float64'`                                                                                                                 |
 | Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64[us]'`, `'datetime64[ns]'`                                                            |
 | Datetime w/ timezone | `pandas.DatetimeTZDtype`                                                                                                                 |
-| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta[us]'`, `'timedelta[ns]'`                                                                |
+| Timedelta (duration) | `'timedelta64[s]'`, `'timedelta64[ms]'`, `'timedelta64[us]'`, `'timedelta64[ns]'`                                                        |
 | Category             | {py:class}`~cudf.CategoricalDtype`                                                                                                       |
 | String               | `pandas.StringDtype`                                                                                                                     |
 | Decimal              | {py:class}`~cudf.Decimal32Dtype`, {py:class}`~cudf.Decimal64Dtype`, {py:class}`~cudf.Decimal128Dtype`                                    |
