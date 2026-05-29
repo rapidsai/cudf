@@ -168,23 +168,15 @@ def _write_partial_stats_parquet(path, *, cols_with_stats):
 def test_read_parquet_partial_stats_filter_col_scoping(
     tmp_path, filter_col, result
 ):
-    """Stats availability is scoped to the *filter* columns (#17864).
-
-    Writes a 2-column file via pyarrow's per-column write_statistics (a shape
-    cuDF's own writer cannot emit) where only ``keep_col`` carries row-group
-    stats. Filtering on the stats-less ``filter_col`` reports None, while
-    filtering on ``keep_col`` reports a concrete count -- proving the sniff in
-    any_row_group_stats_available only considers columns the predicate uses.
-    """
+    # Filtering a stats-less column returns None even when other cols have stats.
     path = tmp_path / "partial_stats.parquet"
     _write_partial_stats_parquet(path, cols_with_stats=["keep_col"])
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([path])
     ).build()
-    # The filter expression must outlive read_parquet: cudf's parquet_reader_options
-    # holds it as a non-owning reference, so bind it to a local instead of passing an
-    # inline temporary (a temporary is collected before the read -> use-after-free).
+
+    # Bind the filter to a local to prevent use-after-free.
     filter_expr = Operation(
         ASTOperator.LESS,
         ColumnNameReference(filter_col),

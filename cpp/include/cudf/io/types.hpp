@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -278,8 +278,11 @@ struct table_metadata {
   size_type num_input_row_groups{0};  //!< Total number of input row groups across all data sources
   std::optional<size_type>
     num_row_groups_after_stats_filter;  //!< Number of remaining row groups after stats filter.
-                                        //!< std::nullopt if no filtering done. Currently only
-                                        //!< reported by Parquet readers
+                                        //!< std::nullopt if the columns participating in the
+                                        //!< filter carry no usable row-group statistics.
+                                        //!< Only columns referenced by the filter are considered;
+                                        //!< statistics on other columns are ignored.
+                                        //!< Currently only reported by Parquet readers.
   std::optional<size_type>
     num_row_groups_after_bloom_filter;  //!< Number of remaining row groups after bloom filter.
                                         //!< std::nullopt if no filtering done. Currently only

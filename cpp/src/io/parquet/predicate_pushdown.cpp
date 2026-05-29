@@ -144,27 +144,28 @@ struct row_group_stats_caster : public stats_caster_base {
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<int const> filter_column_schemas)
 {
-  auto const colchunk_has_stats = [](auto const& colchunk) {
-    auto const& s = colchunk.meta_data.statistics;
-    return s.min_value.has_value() or s.max_value.has_value() or s.min.has_value() or
-           s.max.has_value() or s.null_count.has_value();
+  auto const colchunk_has_stats = [](ColumnChunk const& colchunk) {
+    auto const& stats = colchunk.meta_data.statistics;
+    return stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
+           stats.max.has_value() or stats.null_count.has_value();
   };
-  return std::any_of(
-    cuda::counting_iterator<size_t>{0},
-    cuda::counting_iterator{input_row_group_indices.size()},
-    [&](size_t src_idx) {
-      if (input_row_group_indices[src_idx].empty()) { return false; }
-      auto const& row_group =
-        per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
-      return std::any_of(
-        filter_column_schemas.begin(), filter_column_schemas.end(), [&](int schema_idx) {
-          auto const col = std::find_if(
-            row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& c) {
-              return c.schema_idx == schema_idx;
-            });
-          return col != row_group.columns.end() and colchunk_has_stats(*col);
+
+  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+    if (input_row_group_indices[src_idx].empty()) { continue; }
+
+    auto const rg_idx     = input_row_group_indices[src_idx].front();
+    auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
+
+    for (auto const schema_idx : filter_column_schemas) {
+      auto const col = std::find_if(
+        row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& c) {
+          return c.schema_idx == schema_idx;
         });
-    });
+
+      if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -185,18 +186,14 @@ stats_filter_result aggregate_reader_metadata::apply_stats_filters(
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
-  // Schema indices of the columns referenced by the filter. Stats on non-filter columns
-  // cannot help prune anything, so any_row_group_stats_available only needs to look at these.
+  // Get schema indices of the columns referenced by the filter.
   std::vector<int> filter_column_schemas;
   filter_column_schemas.reserve(stats_columns_mask.size());
   for (size_t i = 0; i < stats_columns_mask.size(); ++i) {
     if (stats_columns_mask[i]) { filter_column_schemas.push_back(output_column_schemas[i]); }
   }
 
-  // If none of the filter columns carry usable row-group statistics, the synthetic stats
-  // table would be entirely null and prune nothing, so skip building it entirely. Returning
-  // has_stats = false also lets the caller report num_row_groups_after_stats_filter as
-  // std::nullopt, distinguishing "no stats available" from "stats present but nothing pruned".
+  // If none of the filter columns carry usable row-group statistics, skip building it entirely.
   auto const has_stats = not filter_column_schemas.empty() and
                          any_row_group_stats_available(
                            per_file_metadata, input_row_group_indices, filter_column_schemas);

@@ -435,8 +435,11 @@ cdef class TableWithMetadata:
     @property
     def num_row_groups_after_stats_filter(self):
         """
-        Returns the number of remaining Parquet row groups
-        after stats filter. None if no filtering done.
+        Returns the number of remaining Parquet row groups after stats filter.
+
+        ``None`` if the columns participating in the filter carry no usable
+        row-group statistics. Only the columns referenced by the filter are 
+        considered; statistics on other columns are ignored.
         """
         if self.metadata.num_row_groups_after_stats_filter.has_value():
             return self.metadata.num_row_groups_after_stats_filter.value()
