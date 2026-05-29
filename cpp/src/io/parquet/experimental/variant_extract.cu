@@ -71,15 +71,14 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   if (version != variant_version_v1) { return cuda::std::nullopt; }
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
-  size_type pos          = 1;
-  auto const dict_size_r = read_uint(meta, pos, offset_size);
-  if (!dict_size_r) { return cuda::std::nullopt; }
-  auto const dict_size = *dict_size_r;
+  size_type pos        = 1;
+  auto const dict_size = read_uint(meta, pos, offset_size);
+  if (!dict_size.has_value()) { return cuda::std::nullopt; }
   pos += offset_size;
 
   // Read dictionary_size + 1 offsets
   size_type const offsets_start = pos;
-  size_type const offsets_bytes = (dict_size + 1) * offset_size;
+  size_type const offsets_bytes = (dict_size.value() + 1) * offset_size;
   if (offsets_start + offsets_bytes > meta_len) { return cuda::std::nullopt; }
 
   size_type const strings_base = offsets_start + offsets_bytes;
@@ -87,20 +86,20 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   auto const strings_extent = meta_len - strings_base;
 
   // Carry forward the previous offset to avoid re-reading it each iteration
-  auto prev_off_r = read_uint(meta, offsets_start, offset_size);
-  if (!prev_off_r) { return cuda::std::nullopt; }
+  auto prev_off = read_uint(meta, offsets_start, offset_size);
+  if (!prev_off.has_value()) { return cuda::std::nullopt; }
 
-  for (size_type i = 0; i < dict_size; ++i) {
-    auto const next_off_r = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
-    if (!next_off_r) { return cuda::std::nullopt; }
-    auto const prev_u = *prev_off_r;
-    auto const next_u = *next_off_r;
-    prev_off_r        = next_off_r;
-    if (next_u < prev_u || next_u > strings_extent) { return cuda::std::nullopt; }
+  for (size_type i = 0; i < dict_size.value(); ++i) {
+    auto const next_off = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
+    if (!next_off.has_value()) { return cuda::std::nullopt; }
+    if (next_off.value() < prev_off.value() || next_off.value() > strings_extent) {
+      return cuda::std::nullopt;
+    }
     cudf::string_view const entry{
-      reinterpret_cast<char const*>(meta.data() + strings_base + prev_u),
-      static_cast<size_type>(next_u - prev_u)};
+      reinterpret_cast<char const*>(meta.data() + strings_base + prev_off.value()),
+      static_cast<size_type>(next_off.value() - prev_off.value())};
     if (entry == key) { return i; }
+    prev_off = next_off;
   }
   return cuda::std::nullopt;
 }
@@ -127,18 +126,17 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   int const field_id_size  = ((value_header >> 2) & 0x03) + 1;
   bool const is_large      = ((value_header >> 4) & 0x01) != 0;
 
-  size_type pos         = 1;
-  auto const num_elts_r = read_uint(val, pos, is_large ? 4 : 1);
-  if (!num_elts_r) { return {}; }
-  auto const n = *num_elts_r;
+  size_type pos       = 1;
+  auto const num_elts = read_uint(val, pos, is_large ? 4 : 1);
+  if (!num_elts.has_value()) { return {}; }
   pos += is_large ? 4 : 1;
 
   size_type const field_ids_start = pos;
-  size_type const field_ids_bytes = n * field_id_size;
+  size_type const field_ids_bytes = num_elts.value() * field_id_size;
   if (field_ids_start + field_ids_bytes > val_len) { return {}; }
 
   size_type const field_offs_start = field_ids_start + field_ids_bytes;
-  size_type const field_offs_bytes = (n + 1) * field_off_size;
+  size_type const field_offs_bytes = (num_elts.value() + 1) * field_off_size;
   if (field_offs_start + field_offs_bytes > val_len) { return {}; }
 
   size_type const values_base = field_offs_start + field_offs_bytes;
@@ -146,34 +144,34 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   auto const values_extent = val_len - values_base;
 
   // Find the matching field ID and its start offset
-  bool found             = false;
-  uint64_t match_start_u = 0;
-  for (size_type i = 0; i < n; ++i) {
-    auto const fid_r = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
-    if (!fid_r) { return {}; }
-    if (cuda::std::cmp_not_equal(*fid_r, dict_idx)) { continue; }
+  bool found           = false;
+  uint64_t match_start = 0;
+  for (size_type i = 0; i < num_elts.value(); ++i) {
+    auto const fid = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
+    if (!fid.has_value()) { return {}; }
+    if (cuda::std::cmp_not_equal(fid.value(), dict_idx)) { continue; }
 
-    auto const o_r = read_uint(val, field_offs_start + i * field_off_size, field_off_size);
-    if (!o_r) { return {}; }
-    if (*o_r > values_extent) { return {}; }
-    match_start_u = *o_r;
-    found         = true;
+    auto const o = read_uint(val, field_offs_start + i * field_off_size, field_off_size);
+    if (!o.has_value()) { return {}; }
+    if (o.value() > values_extent) { return {}; }
+    match_start = o.value();
+    found       = true;
     break;
   }
   if (!found) { return {}; }
 
   // Find the tightest end: the smallest offset strictly greater than match_start
   // among all n+1 offset entries (the sentinel at index n is the total data size)
-  uint64_t match_end_u = values_extent;
-  for (size_type j = 0; j <= n; ++j) {
-    auto const oj_r = read_uint(val, field_offs_start + j * field_off_size, field_off_size);
-    if (!oj_r) { continue; }
-    if (*oj_r > values_extent) { continue; }
-    if (*oj_r > match_start_u && *oj_r < match_end_u) { match_end_u = *oj_r; }
+  uint64_t match_end = values_extent;
+  for (size_type j = 0; j <= num_elts.value(); ++j) {
+    auto const oj = read_uint(val, field_offs_start + j * field_off_size, field_off_size);
+    if (!oj.has_value()) { continue; }
+    if (oj.value() > values_extent) { continue; }
+    if (oj.value() > match_start && oj.value() < match_end) { match_end = oj.value(); }
   }
 
-  if (match_end_u < match_start_u) { return {}; }
-  return val.subspan(values_base + match_start_u, match_end_u - match_start_u);
+  if (match_end < match_start) { return {}; }
+  return val.subspan(values_base + match_start, match_end - match_start);
 }
 
 // Variant primitive ints: basic_type=0, value_header maps INT{8,16,32,64} -> {3,4,5,6}.
