@@ -171,25 +171,33 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   file_metadata.setup_page_index(page_index_bytes, min_offset);
 }
 
-size_type aggregate_reader_metadata::total_rows_in_row_groups(
+std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  std::size_t total_rows = 0;
+  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
+               "Encountered unexpected number of input row group indices",
+               std::invalid_argument);
 
-  std::for_each(cuda::counting_iterator<std::size_t>{0},
-                cuda::counting_iterator{row_group_indices.size()},
-                [&](auto const src_idx) {
-                  auto const& pfm = per_file_metadata[src_idx];
-                  for (auto const row_group_idx : row_group_indices[src_idx]) {
-                    CUDF_EXPECTS(std::cmp_less(row_group_idx, pfm.row_groups.size()),
-                                 "Row group index out of bounds");
-                    total_rows += pfm.row_groups[row_group_idx].num_rows;
-                  }
-                });
-  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
-               "Total number of rows exceeds cudf::size_type's limit");
-
-  return static_cast<size_type>(total_rows);
+  return std::accumulate(
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
+    std::size_t{0},
+    [&](auto sum, auto const src_idx) {
+      auto const& file_metadata = per_file_metadata[src_idx];
+      return std::accumulate(
+        row_group_indices[src_idx].begin(),
+        row_group_indices[src_idx].end(),
+        sum,
+        [&](auto sum, auto const row_group_idx) {
+          CUDF_EXPECTS(
+            std::cmp_greater_equal(row_group_idx, size_type{0}) and
+              std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
+            "Encountered out-of-bounds row group index for data source. Row group index: " +
+              std::to_string(row_group_idx) + ", Source index: " + std::to_string(src_idx) +
+              ", Number of row groups: " + std::to_string(file_metadata.row_groups.size()));
+          return sum + file_metadata.row_groups[row_group_idx].num_rows;
+        });
+    });
 }
 
 std::tuple<std::vector<input_column_info>,

@@ -81,7 +81,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
@@ -522,7 +522,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   [[nodiscard]] bool is_first_output_chunk() const
   {
-    return _file_itm_data._output_chunk_count == 0 and _rows_processed_so_far == 0;
+    return _file_itm_data._output_chunk_count == 0 and not _output_chunk_produced;
   }
 
  private:
@@ -530,7 +530,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 
-  cudf::size_type _rows_processed_so_far{0};
+  cudf::size_type _row_mask_offset{0};
+  bool _output_chunk_produced{false};
 
   bool _use_pandas_metadata{false};
 
