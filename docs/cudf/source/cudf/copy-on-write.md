@@ -2,46 +2,16 @@
 
 # Copy-on-write
 
-Copy-on-write is a memory management strategy that allows multiple cuDF objects containing the same data to refer to the same memory address as long as neither of them modify the underlying data.
-With this approach, any operation that generates an unmodified view of an object (such as copies, slices, or methods like `DataFrame.head`) returns a new object that points to the same memory as the original.
-However, when either the existing or new object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.
-This behavior is best understood by looking at the examples below.
+Copy-on-write is a memory management strategy that allows multiple cuDF objects to share the the same underlying data if they were all derived from
+operations that do not modify the data. For example, making a contiguous slice of a `DataFrame` or `Series` object will share the underlying data
+with the original object.
+However, when either the original or derived object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.
 
-The default behaviour in cuDF is for copy-on-write to be disabled, so to use it, one must explicitly
-opt in by setting a cuDF option. It is recommended to set the copy-on-write at the beginning of the
-script execution, because when this setting is changed in middle of a script execution there will
-be un-intended behavior where the objects created when copy-on-write is enabled will still have the
-copy-on-write behavior whereas the objects created when copy-on-write is disabled will have
-different behavior.
-
-## Enabling copy-on-write
-
-1. Use `cudf.set_option`:
-
-    ```python
-    >>> import cudf
-    >>> cudf.set_option("copy_on_write", True)
-    ```
-
-2. Set the environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
-launch of the Python interpreter:
-
-    ```bash
-    export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
-    ```
-
-## Disabling copy-on-write
-
-
-Copy-on-write can be disabled by setting the ``copy_on_write`` option to ``False``:
-
-```python
->>> cudf.set_option("copy_on_write", False)
-```
+Copy-on-write is the default behavior since 26.08, aligning with [pandas 3.0](https://pandas.pydata.org/docs/user_guide/copy_on_write.html).
 
 ## Making copies
 
-There are no additional changes required in the code to make use of copy-on-write.
+Copy-on-write is an implicit behavior that requires no user API changes.
 
 ```python
 >>> series = cudf.Series([1, 2, 3, 4])
@@ -94,86 +64,5 @@ built-in Python containers like `lists`, rather than indexing `numpy arrays`.
 Modifying a "view" created by cuDF will always trigger a copy and will not
 modify the original object.
 
-Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
-
-```python
-
->>> import pandas as pd
->>> s = pd.Series([1, 2, 3, 4, 5])
->>> s1 = s[0:2]
->>> s1[0] = 10
->>> s1
-0    10
-1     2
-dtype: int64
->>> s
-0    10
-1     2
-2     3
-3     4
-4     5
-dtype: int64
-
->>> import cudf
->>> s = cudf.Series([1, 2, 3, 4, 5])
->>> s1 = s[0:2]
->>> s1[0] = 10
->>> s1
-0    10
-1     2
->>> s
-0    1
-1    2
-2    3
-3    4
-4    5
-dtype: int64
-```
-
-The above inconsistency is solved when copy-on-write is enabled:
-
-```python
->>> import pandas as pd
->>> pd.set_option("mode.copy_on_write", True)
->>> s = pd.Series([1, 2, 3, 4, 5])
->>> s1 = s[0:2]
->>> s1[0] = 10
->>> s1
-0    10
-1     2
-dtype: int64
->>> s
-0    1
-1    2
-2    3
-3    4
-4    5
-dtype: int64
-
-
->>> import cudf
->>> cudf.set_option("copy_on_write", True)
->>> s = cudf.Series([1, 2, 3, 4, 5])
->>> s1 = s[0:2]
->>> s1[0] = 10
->>> s1
-0    10
-1     2
-dtype: int64
->>> s
-0    1
-1    2
-2    3
-3    4
-4    5
-dtype: int64
-```
-
-
-### Explicit deep and shallow copies comparison
-
-
-|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
-| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
+Therefore, you should no longer need to defensively `copy()` a cuDF object after deriving it from another cuDF object as any modifications
+will no longer propagate.
