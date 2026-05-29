@@ -7,12 +7,10 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
-#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cuda/iterator>
@@ -20,16 +18,6 @@
 #include <nvbench/nvbench.cuh>
 
 #include <cstdint>
-
-// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-// Forward declaration of the timer accessor defined in
-// cpp/src/io/parquet/predicate_pushdown.cpp. Used by
-// BM_parquet_apply_stats_filter_isolated to measure the apply_stats_filters body
-// in isolation from the surrounding read_parquet I/O and decode costs.
-namespace cudf::io::parquet::detail {
-std::int64_t last_apply_stats_filters_duration_ns();
-}
-// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
 // Common mixed dtypes used by all benchmarks in this file
 auto const mixed_dtypes = get_type_or_group({static_cast<int32_t>(data_type::STRING),
@@ -136,30 +124,9 @@ auto write_sniff_test_file(cudf::size_type num_cols,
   return source_sink;
 }
 
-// Full-walk sniff: walks every selected row group's every column chunk. This mirrors
-// the un-optimized version of `any_row_group_stats_available` in predicate_pushdown.cpp.
-[[nodiscard]] bool sniff_full_walk(
-  std::vector<cudf::io::parquet::FileMetaData> const& per_file_metadata,
-  std::vector<std::vector<cudf::size_type>> const& input_row_group_indices)
-{
-  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
-    for (auto const rg_idx : input_row_group_indices[src_idx]) {
-      auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-      for (auto const& colchunk : row_group.columns) {
-        auto const& stats = colchunk.meta_data.statistics;
-        if (stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
-            stats.max.has_value() or stats.null_count.has_value()) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 // First-row-group sniff: walks only the first selected row group of each source, but
-// still scans every column chunk within that row group. Mirrors the optimized
-// `any_row_group_stats_available` in predicate_pushdown.cpp.
+// still scans every column chunk within that row group. Mirrors an earlier shape of
+// `any_row_group_stats_available` in predicate_pushdown.cpp (before per-col scoping).
 [[nodiscard]] bool sniff_first_rg_only(
   std::vector<cudf::io::parquet::FileMetaData> const& per_file_metadata,
   std::vector<std::vector<cudf::size_type>> const& input_row_group_indices)
@@ -179,19 +146,55 @@ auto write_sniff_test_file(cudf::size_type num_cols,
   return false;
 }
 
+// Filter-cols-only sniff: walks only the first selected row group of each source, and
+// within that row group only the column chunks whose schema indices appear in
+// `filter_column_schemas`. Mirrors the current shape of `any_row_group_stats_available`
+// in predicate_pushdown.cpp.
+[[nodiscard]] bool sniff_first_rg_filter_cols_only(
+  std::vector<cudf::io::parquet::FileMetaData> const& per_file_metadata,
+  std::vector<std::vector<cudf::size_type>> const& input_row_group_indices,
+  std::vector<int> const& filter_column_schemas)
+{
+  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+    if (input_row_group_indices[src_idx].empty()) { continue; }
+    auto const first_rg_idx = input_row_group_indices[src_idx].front();
+    auto const& row_group   = per_file_metadata[src_idx].row_groups[first_rg_idx];
+    for (auto const schema_idx : filter_column_schemas) {
+      auto const col = std::find_if(row_group.columns.begin(),
+                                    row_group.columns.end(),
+                                    [schema_idx](cudf::io::parquet::ColumnChunk const& c) {
+                                      return c.schema_idx == schema_idx;
+                                    });
+      if (col == row_group.columns.end()) { continue; }
+      auto const& stats = col->meta_data.statistics;
+      if (stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
+          stats.max.has_value() or stats.null_count.has_value()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 // Microbenchmark for the row-group-stats availability sniff used by
 // `apply_stats_filters` in predicate_pushdown.cpp. Compares two variants:
-//   - `full_walk`     : pre-optimization, scales O(num_sources × num_row_groups × num_cols)
-//   - `first_rg_only` : post-optimization, scales O(num_sources × num_cols)
+//   - `first_rg_only`           : walks every column chunk of the first row group of each source
+//                                 (scales O(num_sources × num_cols))
+//   - `first_rg_filter_cols_only`: current, walks only the filter columns' chunks in that row
+//                                 group (scales O(num_sources × num_filter_cols × num_cols) because
+//                                 find_if linearly scans the chunk list unless schema_idx is dense)
+// Both variants only read the first selected row group, so the timed cost is independent of
+// num_row_groups; that axis is pinned to a single small value to keep the file-writing setup cheap.
 // Run with --csv <file> to get plottable output.
 void BM_parquet_stats_availability_sniff(nvbench::state& state)
 {
-  auto const num_cols       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const has_stats      = state.get_int64("has_stats") != 0;
-  auto const variant        = state.get_string("variant");
+  auto const num_cols        = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_row_groups  = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
+  auto const has_stats       = state.get_int64("has_stats") != 0;
+  auto const num_filter_cols = static_cast<cudf::size_type>(state.get_int64("num_filter_cols"));
+  auto const variant         = state.get_string("variant");
 
   auto const stats_level = has_stats ? cudf::io::statistics_freq::STATISTICS_ROWGROUP
                                      : cudf::io::statistics_freq::STATISTICS_NONE;
@@ -214,174 +217,40 @@ void BM_parquet_stats_availability_sniff(nvbench::state& state)
                "Unexpected number of row groups in metadata");
   CUDF_EXPECTS(std::cmp_equal(footers.front().row_groups.front().columns.size(), num_cols),
                "Unexpected number of columns in metadata");
+  CUDF_EXPECTS(num_filter_cols <= num_cols, "num_filter_cols must be <= num_cols");
+
+  // Filter-cols schema indices: take the first num_filter_cols column chunks' schema_idx.
+  std::vector<int> filter_column_schemas;
+  filter_column_schemas.reserve(num_filter_cols);
+  for (cudf::size_type i = 0; i < num_filter_cols; ++i) {
+    filter_column_schemas.push_back(footers.front().row_groups.front().columns[i].schema_idx);
+  }
 
   // Volatile sink so the compiler does not constant-fold the sniff away.
   volatile bool sink = false;
 
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               timer.start();
-               bool result = (variant == "full_walk")
-                               ? sniff_full_walk(footers, input_row_group_indices)
-                               : sniff_first_rg_only(footers, input_row_group_indices);
-               timer.stop();
-               sink = result;
-             });
+  // Host-only sniff: no GPU work, so use the manual timer without the sync tag. Adding
+  // exec_tag::sync would force a GPU stream sync per iteration and dominate the wall time
+  // (the sniff itself is microseconds), making each measurement hit the wall-clock timeout.
+  state.exec(nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+    timer.start();
+    bool result =
+      (variant == "first_rg_only")
+        ? sniff_first_rg_only(footers, input_row_group_indices)
+        : sniff_first_rg_filter_cols_only(footers, input_row_group_indices, filter_column_schemas);
+    timer.stop();
+    sink = result;
+  });
 }
 
 NVBENCH_BENCH(BM_parquet_stats_availability_sniff)
   .set_name("parquet_stats_availability_sniff")
   .set_min_samples(16)
   .add_int64_axis("num_cols", {64, 256, 1024, 4096})
-  .add_int64_axis("num_row_groups", {10, 100, 1000})
+  .add_int64_axis("num_row_groups", {10})
   .add_int64_axis("has_stats", {0, 1})
-  .add_string_axis("variant", {"full_walk", "first_rg_only"});
-
-// Microbenchmark for the cost of applying stats filtering when the filter prunes nothing.
-// Used together with `parquet_stats_availability_sniff` to quantify the benefit of the
-// has_stats fast-path inside `apply_stats_filters` (predicate_pushdown.cpp). The predicate
-// `col0 >= INT32_MIN` is stats-usable (so the stats path is exercised) but matches every
-// possible row group, so the cost reflects "did the filter anyway, pruned nothing".
-//
-// Compare two runs:
-//   - stats_level=NONE     : on the committed branch this short-circuits via has_stats=false
-//                            and skips the synthetic-stats-table build entirely.
-//   - stats_level=ROWGROUP : the filter runs end-to-end (builds device columns, evaluates
-//                            the rewritten stats AST, finds nothing to prune).
-//
-// Capturing the same axes with and without the fast-path (toggled locally) gives the
-// concrete cost the fast-path saves on STATISTICS_NONE files.
-void BM_parquet_apply_stats_filter_no_prune(nvbench::state& state)
-{
-  auto const num_cols       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const stats_level_s  = state.get_string("stats_level");
-
-  auto const stats_level = (stats_level_s == "NONE")
-                             ? cudf::io::statistics_freq::STATISTICS_NONE
-                             : cudf::io::statistics_freq::STATISTICS_ROWGROUP;
-
-  // Use HOST_BUFFER so disk I/O does not dominate the measurement.
-  auto source_sink =
-    write_sniff_test_file(num_cols, num_row_groups, io_type::HOST_BUFFER, stats_level);
-
-  // Stats-usable predicate that prunes nothing: col0 >= INT32_MIN.
-  // Build it once outside the timed loop.
-  cudf::numeric_scalar<int32_t> lit_value{std::numeric_limits<int32_t>::min()};
-  cudf::ast::literal lit{lit_value};
-  cudf::ast::column_reference col_ref{0};
-  cudf::ast::operation filter_expr{cudf::ast::ast_operator::GREATER_EQUAL, col_ref, lit};
-
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      auto const read_opts =
-        cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-          .filter(filter_expr)
-          .build();
-      timer.start();
-      auto const result = cudf::io::read_parquet(read_opts);
-      timer.stop();
-      // Sanity: no row groups were pruned by the stats filter when stats_level=ROWGROUP.
-      // On STATISTICS_NONE files the field is std::nullopt by design (this PR's behavior).
-      if (stats_level == cudf::io::statistics_freq::STATISTICS_ROWGROUP) {
-        CUDF_EXPECTS(result.metadata.num_row_groups_after_stats_filter.value() == num_row_groups,
-                     "stats filter unexpectedly pruned row groups");
-      }
-    });
-}
-
-NVBENCH_BENCH(BM_parquet_apply_stats_filter_no_prune)
-  .set_name("parquet_apply_stats_filter_no_prune")
-  // More samples than the default to push the noise band below the ~1ms filter
-  // savings we expect on STATISTICS_NONE files. The 1024 x 1000 config still
-  // bumps the 30-second timeout on the largest configs; that's accepted and
-  // documented in the PR description.
-  .set_min_samples(16)
-  .set_timeout(30.0)
-  // Mirror the isolated bench: thin tables {1, 4, 16} and wide tables {64, 256, 1024}.
-  .add_int64_axis("num_cols", {1, 4, 16, 64, 256, 1024})
-  .add_int64_axis("num_row_groups", {10, 100, 1000})
-  .add_string_axis("stats_level", {"NONE", "ROWGROUP"});
-
-// BENCHMARK-ONLY (#17864 WIP draft): remove together with the source instrumentation in
-// cpp/src/io/parquet/predicate_pushdown.cpp before merging.
-//
-// Like BM_parquet_apply_stats_filter_no_prune above, but reports the time spent inside
-// apply_stats_filters itself (not the end-to-end read_parquet wall clock). The thread_local
-// timer inside predicate_pushdown.cpp publishes the most recent apply_stats_filters duration
-// in nanoseconds via `last_apply_stats_filters_duration_ns()`; we accumulate it across
-// iterations and expose the mean as the custom NVBench summary
-// `apply_stats_filters/cpu/mean_us`.
-void BM_parquet_apply_stats_filter_isolated(nvbench::state& state)
-{
-  auto const num_cols       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const stats_level_s  = state.get_string("stats_level");
-
-  auto const stats_level = (stats_level_s == "NONE")
-                             ? cudf::io::statistics_freq::STATISTICS_NONE
-                             : cudf::io::statistics_freq::STATISTICS_ROWGROUP;
-
-  auto source_sink =
-    write_sniff_test_file(num_cols, num_row_groups, io_type::HOST_BUFFER, stats_level);
-
-  cudf::numeric_scalar<int32_t> lit_value{std::numeric_limits<int32_t>::min()};
-  cudf::ast::literal lit{lit_value};
-  cudf::ast::column_reference col_ref{0};
-  cudf::ast::operation filter_expr{cudf::ast::ast_operator::GREATER_EQUAL, col_ref, lit};
-
-  std::int64_t total_ns = 0;
-  std::int64_t iters    = 0;
-
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      auto const read_opts =
-        cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-          .filter(filter_expr)
-          .build();
-      timer.start();
-      auto const result = cudf::io::read_parquet(read_opts);
-      timer.stop();
-
-      auto const ns = cudf::io::parquet::detail::last_apply_stats_filters_duration_ns();
-      CUDF_EXPECTS(ns > 0,
-                   "apply_stats_filters timer was not updated; check the BENCHMARK-ONLY "
-                   "instrumentation in predicate_pushdown.cpp");
-      total_ns += ns;
-      ++iters;
-
-      if (stats_level == cudf::io::statistics_freq::STATISTICS_ROWGROUP) {
-        CUDF_EXPECTS(result.metadata.num_row_groups_after_stats_filter.value() == num_row_groups,
-                     "stats filter unexpectedly pruned row groups");
-      }
-    });
-
-  auto& summ = state.add_summary("apply_stats_filters/cpu/mean");
-  summ.set_string("name", "filter");
-  summ.set_string("hint", "duration");
-  summ.set_string("description", "Mean apply_stats_filters CPU time per call (seconds)");
-  // NVBench's "duration" hint formats values as seconds; publish in seconds so the
-  // human-readable table column matches NVBench's other timing columns. The plot
-  // script converts to microseconds where appropriate.
-  summ.set_float64(
-    "value", iters > 0 ? (static_cast<double>(total_ns) / static_cast<double>(iters) / 1e9) : 0.0);
-}
-
-NVBENCH_BENCH(BM_parquet_apply_stats_filter_isolated)
-  .set_name("parquet_apply_stats_filter_isolated")
-  // Keep min samples small and bound the per-axis runtime: per-iteration read_parquet on
-  // 1024 columns x 1000 row groups is multi-second, while the apply_stats_filters body we
-  // actually want to measure is sub-millisecond. A few samples are plenty to characterize
-  // the filter cost itself; the timeout keeps the largest axes from running for hours.
-  .set_min_samples(3)
-  .set_timeout(20.0)
-  // num_cols spans thin (1, 4, 16) to wide (64, 256, 1024) tables on a log-2 grid so
-  // both regimes are represented when plotting on a log-2 X axis.
-  .add_int64_axis("num_cols", {1, 4, 16, 64, 256, 1024})
-  .add_int64_axis("num_row_groups", {10, 100, 1000})
-  .add_string_axis("stats_level", {"NONE", "ROWGROUP"});
+  .add_int64_axis("num_filter_cols", {1, 4, 16, 32})
+  .add_string_axis("variant", {"first_rg_only", "first_rg_filter_cols_only"});
 
 // Benchmark to measure parquet footer read time
 void BM_parquet_read_footer(nvbench::state& state)

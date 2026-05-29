@@ -23,12 +23,6 @@
 #include <cuda/iterator>
 
 #include <algorithm>
-// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-#include <chrono>
-#include <cstdint>
-#include <cstdlib>
-#include <string_view>
-// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -36,25 +30,6 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
-
-// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-// Accumulates the wall-clock duration of the most recent apply_stats_filters call on
-// the calling thread, in nanoseconds. Exposed to the parquet_reader_metadata benchmark
-// via the external accessor declared below, so the benchmark can measure the
-// apply_stats_filters body in isolation without subtracting noisy end-to-end times.
-thread_local std::int64_t g_apply_stats_filters_ns = 0;
-
-struct apply_stats_filters_scope_timer {
-  std::chrono::high_resolution_clock::time_point const start;
-  apply_stats_filters_scope_timer() : start(std::chrono::high_resolution_clock::now()) {}
-  ~apply_stats_filters_scope_timer()
-  {
-    g_apply_stats_filters_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                 std::chrono::high_resolution_clock::now() - start)
-                                 .count();
-  }
-};
-// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
 /**
  * @brief Converts column chunk statistics to 2 device columns - min, max values.
@@ -149,26 +124,25 @@ struct row_group_stats_caster : public stats_caster_base {
 };
 
 /**
- * @brief Checks if any row-group statistics are available for the input row groups.
- *        This is independent of whether the predicate can actually use those stats.
+ * @brief Probe whether the filter columns carry usable row-group stats.
  *
- * Only the first selected row group of each source is inspected. Every major Parquet
- * writer (cuDF, Arrow C++, arrow-rs, parquet-mr) decides stats emission per column at
- * writer setup, so within a single column either all row groups carry stats or none
- * do; different columns within the same file can differ (Arrow-C++/arrow-rs/parquet-mr
- * expose per-column toggles), which is why we still walk every column chunk of that
- * one row group instead of only the first chunk. `null_count` is included alongside
- * min/max because some writers emit only `null_count` and the spec requires readers
- * to treat its absence as "unknown".
+ * Returns true iff at least one column chunk referenced by `filter_column_schemas`
+ * in the first selected row group of any source carries any of `min` / `max` /
+ * `min_value` / `max_value` / `null_count`.
+ *
+ * See https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237
+ * for why inspecting one row group per source is sufficient.
  *
  * @param per_file_metadata The metadata of the file.
  * @param input_row_group_indices The indices of the input row groups.
- * @return True if any column chunk in the first selected row group of any source
- *         carries row-group statistics.
+ * @param filter_column_schemas Schema indices of the columns referenced by the filter.
+ * @return True if any filter column's column chunk in the first selected row group of
+ *         any source carries row-group statistics.
  */
 [[nodiscard]] bool any_row_group_stats_available(
   std::vector<metadata> const& per_file_metadata,
-  host_span<std::vector<size_type> const> input_row_group_indices)
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  host_span<int const> filter_column_schemas)
 {
   auto const colchunk_has_stats = [](auto const& colchunk) {
     auto const& s = colchunk.meta_data.statistics;
@@ -182,7 +156,14 @@ struct row_group_stats_caster : public stats_caster_base {
       if (input_row_group_indices[src_idx].empty()) { return false; }
       auto const& row_group =
         per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
-      return std::any_of(row_group.columns.begin(), row_group.columns.end(), colchunk_has_stats);
+      return std::any_of(
+        filter_column_schemas.begin(), filter_column_schemas.end(), [&](int schema_idx) {
+          auto const col = std::find_if(
+            row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& c) {
+              return c.schema_idx == schema_idx;
+            });
+          return col != row_group.columns.end() and colchunk_has_stats(*col);
+        });
     });
 }
 
@@ -196,43 +177,30 @@ stats_filter_result aggregate_reader_metadata::apply_stats_filters(
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  // BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-  apply_stats_filters_scope_timer const _apply_stats_filters_timer;
-  // END BENCHMARK-ONLY INSTRUMENTATION (#17864).
-
   auto mr = cudf::get_current_device_resource_ref();
 
-  // BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-  // When CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH=1 is set, mimic the exact
-  // pre-PR behavior for benchmarking: skip BOTH the any_row_group_stats_available
-  // sniff AND the early-return fast-path, and pretend has_stats=true so the rest
-  // of the function and the surrounding filter_row_groups treat the metadata as
-  // "stats present, no pruning happened" (i.e. num_row_groups_after_stats_filter
-  // = total_row_groups, the conflated pre-PR behavior). This lets one build
-  // measure "with this PR" and "without this PR" by flipping a single env var.
-  // After this instrumentation is reverted, the line reduces to the original
-  //
-  //     auto const has_stats =
-  //       any_row_group_stats_available(per_file_metadata, input_row_group_indices);
-  //     if (!has_stats) { return {std::nullopt, false}; }
-  static bool const apply_stats_filters_fastpath_enabled = [] {
-    auto const* env = std::getenv("CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH");
-    return env == nullptr or std::string_view{env} == "0";
-  }();
-  auto const has_stats =
-    apply_stats_filters_fastpath_enabled
-      ? any_row_group_stats_available(per_file_metadata, input_row_group_indices)
-      : true;
-  if (apply_stats_filters_fastpath_enabled and not has_stats) { return {std::nullopt, false}; }
-  // END BENCHMARK-ONLY INSTRUMENTATION (#17864).
-
-  // Get a boolean mask indicating which columns can participate in stats based filtering
+  // Get a boolean mask indicating which columns can participate in stats based filtering.
+  // Done first so we can scope the stats-availability sniff to the filter columns only.
   auto const [stats_columns_mask, has_is_null_operator] =
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
-  // Return early if no columns will participate in stats based filtering
-  if (stats_columns_mask.empty()) { return {std::nullopt, has_stats}; }
+  // Schema indices of the columns referenced by the filter. Stats on non-filter columns
+  // cannot help prune anything, so any_row_group_stats_available only needs to look at these.
+  std::vector<int> filter_column_schemas;
+  filter_column_schemas.reserve(stats_columns_mask.size());
+  for (size_t i = 0; i < stats_columns_mask.size(); ++i) {
+    if (stats_columns_mask[i]) { filter_column_schemas.push_back(output_column_schemas[i]); }
+  }
+
+  // If none of the filter columns carry usable row-group statistics, the synthetic stats
+  // table would be entirely null and prune nothing, so skip building it entirely. Returning
+  // has_stats = false also lets the caller report num_row_groups_after_stats_filter as
+  // std::nullopt, distinguishing "no stats available" from "stats present but nothing pruned".
+  auto const has_stats = not filter_column_schemas.empty() and
+                         any_row_group_stats_available(
+                           per_file_metadata, input_row_group_indices, filter_column_schemas);
+  if (not has_stats) { return {std::nullopt, false}; }
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
@@ -410,19 +378,5 @@ aggregate_reader_metadata::filter_row_groups(
     bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : stats_filtered_row_groups,
     {after_stats_filter, std::make_optional(num_bloom_filtered_row_groups)}};
 }
-
-// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge.
-// Returns the wall-clock duration in nanoseconds of the most recent
-// apply_stats_filters call on the calling thread. Used by
-// parquet_reader_metadata.cpp (BM_parquet_apply_stats_filter_isolated) to time
-// the apply_stats_filters body in isolation from the surrounding read_parquet
-// I/O and decode costs. Reset to 0 by every entry into apply_stats_filters.
-// The visibility("default") attribute is required because libcudf is built
-// with -fvisibility=hidden; without it the benchmark cannot resolve the symbol.
-__attribute__((visibility("default"))) std::int64_t last_apply_stats_filters_duration_ns()
-{
-  return g_apply_stats_filters_ns;
-}
-// END BENCHMARK-ONLY INSTRUMENTATION (#17864).
 
 }  // namespace cudf::io::parquet::detail

@@ -29,30 +29,11 @@
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
 #include <array>
-#include <cstdlib>
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <string_view>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
-
-namespace {
-// BENCHMARK-ONLY INSTRUMENTATION (#17864 WIP draft): remove before merge together with the
-// matching env-toggle in cpp/src/io/parquet/predicate_pushdown.cpp.
-//
-// Setting CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH=1 makes apply_stats_filters mimic the
-// pre-PR conflated behavior: the no-stats fast-path is skipped, and
-// num_row_groups_after_stats_filter is reported as total_row_groups instead of std::nullopt.
-// Tests that assert the new "stats absent => std::nullopt" contract must skip those
-// assertions in that mode so the benchmark harness can flip the env var without
-// triggering false negatives.
-[[nodiscard]] inline bool stats_fastpath_disabled_for_benchmark()
-{
-  auto const* env = std::getenv("CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH");
-  return env != nullptr and std::string_view{env} != "0";
-}
-}  // namespace
 
 TEST_F(ParquetReaderTest, UserBounds)
 {
@@ -1622,9 +1603,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // No filter column carries stats-usable predicates, so the stats filter is not run
+    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
   }
 
   // Filter: (col_a < 150) and (col_a < col_b)
@@ -1729,9 +1709,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // Predicate NULL_EQUAL is not stats-usable, so the stats filter is not run
+    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
   }
 
   // Filter: col_a NULL_EQUAL 10
@@ -1747,9 +1726,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // Predicate NULL_EQUAL is not stats-usable, so the stats filter is not run
+    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
   }
 
   // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50)
@@ -1786,9 +1764,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // No filter column carries stats-usable predicates, so the stats filter is not run
+    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
   }
 }
 
@@ -2192,23 +2169,12 @@ TEST_F(ParquetReaderTest, FilterNoStats)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
 
   // No usable row-group stats exist, `num_row_groups_after_stats_filter` must be `std::nullopt`.
-  // BENCHMARK-ONLY INSTRUMENTATION (#17864): skip the new contract assertion when the
-  // fast-path is disabled for benchmarking - in that mode the pre-PR behavior is preserved
-  // intentionally.
-  if (not stats_fastpath_disabled_for_benchmark()) {
-    EXPECT_FALSE(table_with_metadata.metadata.num_row_groups_after_stats_filter.has_value());
-  }
+  EXPECT_FALSE(table_with_metadata.metadata.num_row_groups_after_stats_filter.has_value());
 }
 
 // Null predicates should not prune row groups when the file has no row-group stats.
 TEST_F(ParquetReaderTest, FilterNoStatsNullPredicates)
 {
-  // BENCHMARK-ONLY INSTRUMENTATION (#17864): the test exercises the new "stats absent"
-  // contract end-to-end (correct IS_NULL/NOT handling + nullopt metadata). Both depend on
-  // the fast-path being active, so skip when it is intentionally disabled for benchmarking.
-  if (stats_fastpath_disabled_for_benchmark()) {
-    GTEST_SKIP() << "skipped: CUDF_PARQUET_DISABLE_HAS_STATS_FASTPATH=1 mimics pre-PR behavior";
-  }
   constexpr auto num_rows            = 16000;
   constexpr auto row_group_size_rows = 4000;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
