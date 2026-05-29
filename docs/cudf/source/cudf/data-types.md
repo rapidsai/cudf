@@ -1,8 +1,8 @@
 # Supported Data Types
 
 cuDF largely uses the same [data type objects](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) supported by pandas, including
-numeric, datetime, timedelta, and string data types. cuDF also support
-data types from the `[Arrow type system](https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings)` such as decimals, list,
+numeric, datetime, timedelta, and string data types. cuDF also supports
+data types from the [Arrow type system](https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings) such as decimals, list,
 and struct types.
 
 All data types in cuDF are [nullable](missing-data).
@@ -14,9 +14,9 @@ All data types in cuDF are [nullable](missing-data).
 | Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                                                                |
 | Unsigned integer     | `'uint8'`, `'uint16'`, `'uint32'`, `'uint64'`                                                                                            |
 | Floating-point       | `'float32'`, `'float64'`                                                                                                                 |
-| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64[us]`, `'datetime64[ns]'`                                                             |
+| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64[us]'`, `'datetime64[ns]'`                                                            |
 | Datetime w/ timezone | `pandas.DatetimeTZDtype`                                                                                                                 |
-| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta[us]`, `'timedelta[ns]'`                                                                 |
+| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta[us]'`, `'timedelta[ns]'`                                                                |
 | Category             | {py:class}`~cudf.CategoricalDtype`                                                                                                       |
 | String               | `pandas.StringDtype`                                                                                                                     |
 | Decimal              | {py:class}`~cudf.Decimal32Dtype`, {py:class}`~cudf.Decimal64Dtype`, {py:class}`~cudf.Decimal128Dtype`                                    |

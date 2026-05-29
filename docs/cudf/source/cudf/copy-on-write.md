@@ -2,7 +2,7 @@
 
 # Copy-on-write
 
-Copy-on-write is a memory management strategy that allows multiple cuDF objects to share the the same underlying data if they were all derived from
+Copy-on-write is a memory management strategy that allows multiple cuDF objects to share the same underlying data if they were all derived from
 operations that do not modify the data. For example, making a contiguous slice of a `DataFrame` or `Series` object will share the underlying data
 with the original object.
 However, when either the original or derived object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.

@@ -27,7 +27,7 @@ our [API docs](/cudf/api_docs/index).
 
 ## Data types
 
-cuDF all the data types in pandas except for `pandas.PeriodDtype`, `pandas.SparseDtype`
+cuDF supports all the data types in pandas except for `pandas.PeriodDtype`, `pandas.SparseDtype`
 and third-party `ExtensionDtype`s from other libraries.
 In addition, cuDF supports data types for decimal, list,
 and "struct" values. See the section on [Data Types](data-types) for
