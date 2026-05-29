@@ -616,10 +616,12 @@ TEST_F(GlushkovRegexTests, NonAsciiCharacterClasses)
 // ---------------------------------------------------------------------------
 static void check_findall_parity(cudf::strings_column_view const& sv, std::string const& pattern)
 {
-  auto prog_t = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
-  auto prog_g = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
-  auto r_t    = cudf::strings::findall(sv, *prog_t);
-  auto r_g    = cudf::strings::findall(sv, *prog_g);
+  auto prog_t = cudf::strings::regex_program::create(
+    pattern, cudf::strings::regex_flags::DEFAULT, cudf::strings::capture_groups::NON_CAPTURE);
+  auto prog_g = cudf::strings::regex_program::create(
+    pattern, cudf::strings::regex_flags::GLUSHKOV, cudf::strings::capture_groups::NON_CAPTURE);
+  auto r_t = cudf::strings::findall(sv, *prog_t);
+  auto r_g = cudf::strings::findall(sv, *prog_g);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*r_t, *r_g);
 }
 
