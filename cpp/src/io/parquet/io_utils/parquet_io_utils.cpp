@@ -37,8 +37,6 @@ namespace cudf::io::parquet {
 
 namespace detail {
 
-auto constexpr parallel_threshold = 32;
-
 /**
  * @brief Dispatches the fetch task for each source index and collects the results
  *
@@ -53,6 +51,8 @@ template <typename Task>
 auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
 {
   using result_type = std::invoke_result_t<Task, std::size_t>;
+
+  auto constexpr parallel_threshold = 32;
 
   std::vector<result_type> results;
   results.reserve(num_sources);
@@ -90,12 +90,12 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     constexpr auto header_len = sizeof(file_header_s);
     constexpr auto ender_len  = sizeof(file_ender_s);
     size_t const len          = datasource.size();
+    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
 
     auto header_buffer = datasource.host_read(0, header_len);
     auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
     auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
     auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
     CUDF_EXPECTS(header->magic == parquet_magic, "Corrupted header");
     CUDF_EXPECTS(ender->magic == parquet_magic, "Corrupted footer");
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
