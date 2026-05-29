@@ -329,6 +329,23 @@ def test_reset_keeps_comm_alive(comm: Communicator) -> None:
         assert sorted(result["a"].to_list()) == [1, 2, 3]
 
 
+def test_reset_propagates_new_stats_through_comm(comm: Communicator) -> None:
+    """After ``_reset``, ``Communicator.statistics`` forwards to the swapped instance."""
+    from rapidsmpf.config import Options
+
+    with SPMDEngine(comm=comm) as engine:
+        # Force the post-reset Statistics to be enabled so writes are
+        # observable through ``add_stat`` / ``list_stat_names``.
+        engine._reset(rapidsmpf_options=Options({"statistics": "True"}))
+        assert engine._stats.enabled
+
+        # A stat added directly to ``engine._stats`` is visible through
+        # ``engine.comm.statistics``
+        marker = "foo_marker"
+        engine._stats.add_stat(marker, 1.0)
+        assert marker in engine.comm.statistics.list_stat_names()
+
+
 def test_reset_updates_executor_options(comm: Communicator) -> None:
     """``_reset`` updates the polars-layer config to the new options."""
     from cudf_polars.utils.config import SPMDContext
