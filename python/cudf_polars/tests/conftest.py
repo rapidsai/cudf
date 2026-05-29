@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import concurrent.futures
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -311,6 +312,17 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
+@pytest.fixture
+def timeout_seconds() -> int:
+    """
+    Conservative timeout for APIs that accept a timeout parameter.
+
+    Since pytest-timeout is installed, ensure this value is less than timeout
+    in python/cudf_polars/pyproject.toml.
+    """
+    return 30
+
+
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
@@ -389,3 +401,9 @@ def pytest_collection_modifyitems(
             else marker.kwargs.get("reason", "unsupported on streaming engine")
         )
         item.add_marker(pytest.mark.skip(reason=reason))
+
+
+@pytest.fixture(scope="module")
+def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """A thread pool to use for cudf-polars status collection."""
+    return concurrent.futures.ThreadPoolExecutor()

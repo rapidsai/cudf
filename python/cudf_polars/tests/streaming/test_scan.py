@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -14,6 +16,9 @@ from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +89,12 @@ def test_split_scan_predicate(tmp_path, df, mask, streaming_engine_factory):
 @pytest.mark.parametrize("n_files", [2, 3])
 @pytest.mark.parametrize("blocksize", [1_000, 10_000, 1_000_000])
 def test_target_partition_size(
-    tmp_path, df, blocksize, n_files, streaming_engine_factory
+    tmp_path,
+    df,
+    blocksize,
+    n_files,
+    streaming_engine_factory,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(target_partition_size=blocksize),
@@ -102,7 +112,13 @@ def test_target_partition_size(
     qir = Translator(q._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
     ir, info = lower_ir_graph(
-        qir, config_options, collect_statistics(qir, config_options)
+        qir,
+        config_options,
+        collect_statistics(
+            qir,
+            config_options,
+            parquet_stats_executor,
+        ),
     )
     count = info[ir].count
     if blocksize <= 12_000:
