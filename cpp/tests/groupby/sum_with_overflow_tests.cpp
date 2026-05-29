@@ -205,9 +205,6 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
 
-// Once a group overflows cudf stops accumulating into its sum, so the sum value for
-// any group flagged as overflowed is unspecified. Tests therefore assert only the
-// overflow flag column for that case.
 TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 {
   using K = int32_t;

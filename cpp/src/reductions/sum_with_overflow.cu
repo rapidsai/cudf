@@ -150,7 +150,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
       overflow_sum_op<DeviceType>{});
   }
 
-  // On overflow the sum value is unspecified; consult the boolean flag.
+  // On overflow the sum value is unspecified; the boolean flag is the source of truth.
   return make_sum_overflow_struct_scalar<Source>(
     result.sum, result.wraps != 0, true, col.type(), stream, mr);
 }
