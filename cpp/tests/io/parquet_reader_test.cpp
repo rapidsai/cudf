@@ -29,7 +29,6 @@
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
 #include <array>
-#include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -4263,19 +4262,20 @@ TEST_F(ParquetReaderTest, InvalidFooterMagic)
 {
   auto const expected = create_random_fixed_table<int>(4, 4, false);
 
-  auto const filepath = temp_env->get_temp_filepath("InvalidFooterMagic.parquet");
+  std::vector<char> buffer;
   cudf::io::write_parquet(
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected));
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, *expected));
 
-  std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
-  ASSERT_TRUE(file.is_open());
   constexpr std::array<char, 4> bad_magic{'B', 'A', 'D', '!'};
-  file.seekp(-static_cast<std::streamoff>(bad_magic.size()), std::ios::end);
-  file.write(bad_magic.data(), bad_magic.size());
-  file.close();
+  ASSERT_GE(buffer.size(), bad_magic.size());
+  for (size_t i = 0; i < bad_magic.size(); ++i) {
+    buffer[buffer.size() - bad_magic.size() + i] = bad_magic[i];
+  }
 
-  auto const read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto const read_opts = cudf::io::parquet_reader_options::builder(
+                           cudf::io::source_info{cudf::host_span<std::byte const>{
+                             reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+                           .build();
   EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 }
 
