@@ -212,8 +212,6 @@ Common fix locations:
 | GroupBy operation | `python/cudf/cudf/core/groupby/` |
 | IO operation | `python/cudf/cudf/io/` |
 
-When a fix touches column operations that call into `pylibcudf`, consult `python/CLAUDE.md` for the required buffer access pattern (`column.access(mode="read", scope="internal")`).
-
 Note: `mode.pandas_compatible` is automatically set to `True` when cudf.pandas is active. Account for this in any conditional logic, but do not add new guards for it without explicit user approval.
 
 If the bug is not in cudf core, move to cudf.pandas-specific fixes.
