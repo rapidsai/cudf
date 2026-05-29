@@ -178,6 +178,7 @@ ConfigureTest(
   join/mixed_join_tests.cu
   join/distinct_join_tests.cpp
   join/key_remapping_tests.cpp
+  join/streaming_hash_join_tests.cpp
   GPUS 1
   PERCENT 100
 )
