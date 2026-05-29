@@ -100,8 +100,6 @@ filterwarnings = [
     "error",
     "ignore:::.*xdist.*",
     "ignore:::.*pytest.*",
-    # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
-    "ignore:.*datetime.*utcnow.*scheduled for removal.*:DeprecationWarning:botocore",
     # Deprecation warning from Pyarrow Table.to_pandas() with pandas-2.2+
     "ignore:Passing a BlockManager to DataFrame is deprecated:DeprecationWarning",
     # PerformanceWarning from cupy warming up the JIT cache
@@ -114,7 +112,6 @@ filterwarnings = [
 markers = [
     "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
     "serial: Mark a test as not being parallel-safe.",
-    "no_copy_on_write: A test that is not valid when copy-on-write is enabled.",
 ]
 xfail_strict = true
 
