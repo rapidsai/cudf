@@ -498,6 +498,13 @@ cdef class FileMetaData:
         """
         Get row counts for each row group in this file.
 
+        Returns
+        -------
+        row_counts
+            A list with the row count per row group in this file.
+
+        Notes
+        -----
         Equivalent to, but faster than, checking each row groups' num_rows:
 
         .. code-block:: python
