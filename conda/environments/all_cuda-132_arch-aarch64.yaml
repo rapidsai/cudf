@@ -103,6 +103,7 @@ dependencies:
 - structlog
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
+- xlsxwriter
 - zlib>=1.2.13
 - zstandard
 name: all_cuda-132_arch-aarch64

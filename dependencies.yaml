@@ -1314,6 +1314,7 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
+          - xlsxwriter
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
   # Additional dependencies for running the pandas test suite under cudf.pandas.

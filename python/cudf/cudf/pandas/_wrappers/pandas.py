@@ -5,11 +5,9 @@ import contextlib
 import copyreg
 import datetime
 import functools
-import gc
 import inspect
 import os
 import pickle
-import zipfile
 
 import numpy as np
 import pandas as pd
@@ -285,26 +283,11 @@ def _to_xarray(self):
         return xr.Dataset.from_dataframe(self)
 
 
-def _ExcelWriter__exit__(self, exc_type, exc_value, traceback):
-    try:
-        return self._fsproxy_wrapped.__exit__(exc_type, exc_value, traceback)
-    except IndexError as err:
-        if (
-            exc_type is None
-            and isinstance(self._fsproxy_wrapped, pd_OpenpyxlWriter)
-            and not self._fsproxy_wrapped.book.worksheets
-            and str(err) == "At least one sheet must be visible"
-        ):
-            handle = self._fsproxy_wrapped._handles.handle
-            for obj in gc.get_objects():
-                if isinstance(obj, zipfile.ZipFile) and obj.fp is handle:
-                    obj.fp = None
-            self._fsproxy_wrapped.book._archive = None
-            self._fsproxy_wrapped._handles.close()
-            return None
-        raise
-
-
+# pandas.ExcelWriter uses __new__ to dispatch to the engine-specific subclass
+# (OpenpyxlWriter, XlsxWriter, etc.) based on the `engine` kwarg.  The proxy
+# must replicate this: construct the real writer with the accelerator disabled
+# (so we get the actual pandas writer, not a recursive proxy) then wrap the
+# result.  __init__ is a no-op because construction is fully handled in __new__.
 def _ExcelWriter__new__(cls, *args, **kwargs):
     if cls is not ExcelWriter:
         return object.__new__(cls)
@@ -1377,7 +1360,6 @@ ExcelWriter = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__exit__": _ExcelWriter__exit__,
         "__fspath__": _FastSlowAttribute("__fspath__"),
         "__init__": _ExcelWriter__init__,
         "__new__": _ExcelWriter__new__,
@@ -1393,7 +1375,6 @@ OpenpyxlWriter = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__exit__": _ExcelWriter__exit__,
         "__fspath__": _FastSlowAttribute("__fspath__"),
     },
     bases=(ExcelWriter,),
@@ -1406,7 +1387,6 @@ XlsxWriter = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__exit__": _ExcelWriter__exit__,
         "__fspath__": _FastSlowAttribute("__fspath__"),
     },
     bases=(ExcelWriter,),
