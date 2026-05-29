@@ -97,9 +97,6 @@ marks_for_doctests = {
     "register_series_accessor": pytest.mark.filterwarnings(
         "ignore:Attribute .* will be overridden:UserWarning"
     ),
-    "StringMethods.edit_distance_matrix": pytest.mark.filterwarnings(
-        "ignore:edit_distance_matrix:FutureWarning"
-    ),
 }
 
 
