@@ -46,7 +46,7 @@ from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
-from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
@@ -337,8 +337,6 @@ class PythonScan(IR):
         self.children = ()
         raise NotImplementedError("PythonScan not implemented")
 
-
-_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
 
 _COMPARISON_BINOPS = {
     plc.binaryop.BinaryOperator.EQUAL,
@@ -838,13 +836,11 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():  # pragma: no cover
+                while reader.has_next():
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(  # pragma: no cover
-                        len(concatenated_columns) - 1, -1, -1
-                    ):
+                    for i in reversed(range(len(concatenated_columns))):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
@@ -2022,7 +2018,7 @@ def _add_cast(
     side: expr.ColRef,
     left_casts: dict[str, DataType],
     right_casts: dict[str, DataType],
-) -> None:
+) -> None:  # pragma: no cover
     (col,) = side.children
     assert isinstance(col, expr.Col)
     casts = (
@@ -2044,7 +2040,9 @@ def _align_decimal_binop_types(
     ):
         target = DataType.common_decimal_dtype(left_type, right_type)
 
-        if left_type.id() != target.id() or left_type.scale() != target.scale():
+        if (
+            left_type.id() != target.id() or left_type.scale() != target.scale()
+        ):  # pragma: no cover
             _add_cast(target, left_expr, left_casts, right_casts)
 
         if right_type.id() != target.id() or right_type.scale() != target.scale():
@@ -2056,7 +2054,7 @@ def _align_decimal_binop_types(
     ) or (
         plc.traits.is_fixed_point(right_type.plc_type)
         and plc.traits.is_floating_point(left_type.plc_type)
-    ):
+    ):  # pragma: no cover
         is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
         decimal_expr, float_expr = (
             (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
@@ -2086,7 +2084,9 @@ def _collect_decimal_binop_casts(
     return left_casts, right_casts
 
 
-def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
+def _apply_casts(
+    df: DataFrame, casts: dict[str, DataType]
+) -> DataFrame:  # pragma: no cover
     if not casts:
         return df
 
@@ -3247,19 +3247,21 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ("should_broadcast",)
-    _non_child = ("schema", "should_broadcast")
-    _n_non_child_args = 2
+    __slots__ = ("should_broadcast", "strict")
+    _non_child = ("schema", "should_broadcast", "strict")
+    _n_non_child_args = 3
 
     def __init__(
         self,
         schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
+        strict: bool,  # noqa: FBT001
         *children: IR,
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (schema, should_broadcast)
+        self.strict = strict
+        self._non_child_args = (schema, should_broadcast, strict)
         self.children = children
 
     @staticmethod
@@ -3302,6 +3304,7 @@ class HConcat(IR):
         cls,
         schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
+        strict: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -3319,6 +3322,13 @@ class HConcat(IR):
                 result = DataFrame(ordered, stream=stream)
             else:
                 max_rows = max(df.num_rows for df in dfs)
+                if strict and any(df.num_rows != max_rows for df in dfs):
+                    heights = [df.num_rows for df in dfs]
+                    msg = (
+                        f"cannot concat DataFrames horizontally"
+                        f" with strict=True: height mismatch {heights}"
+                    )
+                    raise pl.exceptions.ShapeError(msg)
                 # Horizontal concatenation extends shorter tables with nulls
                 result = DataFrame(
                     itertools.chain.from_iterable(
