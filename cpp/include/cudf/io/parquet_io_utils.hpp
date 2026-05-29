@@ -42,7 +42,7 @@ using cudf::io::text::byte_range_info;
  * @param datasource Input data source
  * @return Host buffer containing footer bytes
  */
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
+[[nodiscard]] std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
   cudf::io::datasource& datasource);
 
 /**
@@ -53,7 +53,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
  * @param datasources Input data sources
  * @return Vector of host buffers containing footer bytes, one per datasource
  */
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+[[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
 
 /**
@@ -65,7 +65,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
  * @param page_index_bytes Byte range of page index
  * @return Host buffer containing page index bytes
  */
-std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
+[[nodiscard]] std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, byte_range_info const page_index_bytes);
 
 /**
@@ -77,7 +77,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
  * @param page_index_bytes_per_source Byte ranges of page index, one per datasource
  * @return Vector of host buffers containing page index bytes, one per datasource
  */
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+[[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<byte_range_info const> page_index_bytes_per_source);
 
