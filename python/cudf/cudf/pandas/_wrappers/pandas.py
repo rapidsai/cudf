@@ -346,10 +346,7 @@ def _Series_dtype(self):
             cudf.Decimal128Dtype,
         ),
     ):
-        try:
-            dtype = self._fsproxy_slow.dtype
-        except RuntimeError:
-            pass
+        dtype = self._fsproxy_slow.dtype
     return _maybe_wrap_result(dtype, None)
 
 
