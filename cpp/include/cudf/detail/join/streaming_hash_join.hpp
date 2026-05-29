@@ -6,7 +6,6 @@
 
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
-#include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -15,7 +14,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cstddef>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -28,7 +26,8 @@ namespace cudf::detail {
  *
  * For the initial scope this class supports a single `insert()` call and delegates probing to an
  * internally-constructed `cudf::hash_join`. Multi-partition support (n-table row equality
- * dispatch) will be added in a follow-up; calling `insert()` more than once currently throws.
+ * dispatch on probe) will be added in a follow-up; calling `insert()` more than once currently
+ * throws.
  */
 class streaming_hash_join {
  public:
@@ -37,8 +36,7 @@ class streaming_hash_join {
                       size_type total_right_rows,
                       nullable_join has_nulls,
                       null_equality compare_nulls,
-                      double load_factor,
-                      rmm::cuda_stream_view stream);
+                      double load_factor);
 
   ~streaming_hash_join();
   streaming_hash_join(streaming_hash_join const&)            = delete;
@@ -63,8 +61,7 @@ class streaming_hash_join {
   null_equality _compare_nulls;
   double _load_factor;
 
-  // First inserted partition; populated on insert(). Multi-partition support is TODO.
-  std::optional<cudf::table_view> _right_partition;
+  size_type _inserted_rows{0};
   std::unique_ptr<cudf::hash_join> _hash_join;
 };
 
