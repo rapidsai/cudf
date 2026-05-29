@@ -6,7 +6,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
@@ -1294,28 +1293,10 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.to_pandas().values
-
-    def to_flat_index(self):
-        """
-        Convert a MultiIndex to an Index of Tuples containing the level values.
-
-        This is not currently implemented
-        """
-        # TODO: Could implement as Index of ListDtype?
-        raise NotImplementedError("to_flat_index is not currently supported.")
-
-    @property
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the MultiIndex.
 
         Only the values in the MultiIndex will be returned.
-
-        .. deprecated:: 26.04
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
 
         Returns
         -------
@@ -1330,18 +1311,21 @@ class MultiIndex(Index):
         ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
         ...         names=["x", "y"],
         ...     )
-        >>> midx.values_host  # doctest: +SKIP
+        >>> midx.to_numpy()
         array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
-        >>> type(midx.values_host)  # doctest: +SKIP
+        >>> type(midx.to_numpy())
         <class 'numpy.ndarray'>
         """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
         return self.to_pandas().values
+
+    def to_flat_index(self):
+        """
+        Convert a MultiIndex to an Index of Tuples containing the level values.
+
+        This is not currently implemented
+        """
+        # TODO: Could implement as Index of ListDtype?
+        raise NotImplementedError("to_flat_index is not currently supported.")
 
     @property
     @_performance_tracking

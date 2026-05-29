@@ -496,6 +496,7 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
+  src/groupby/common/utils.cpp
   src/groupby/groupby.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
@@ -539,6 +540,16 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/streaming_groupby.cpp
+  src/groupby/streaming_groupby/aggregate.cu
+  src/groupby/streaming_groupby/impl.cu
+  src/groupby/streaming_groupby/insert.cu
+  src/groupby/streaming_groupby/insert_first.cu
+  src/groupby/streaming_groupby/insert_first_nested.cu
+  src/groupby/streaming_groupby/insert_nested.cu
+  src/groupby/streaming_groupby/insert_subsequent.cu
+  src/groupby/streaming_groupby/insert_subsequent_nested.cu
+  src/groupby/streaming_groupby/merge.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -670,6 +681,7 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
+  src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
   src/join/hash_join/full_join_retrieve.cu
   src/join/hash_join/full_join_size.cu
@@ -682,6 +694,14 @@ add_library(
   src/join/hash_join/left_join_retrieve.cu
   src/join/hash_join/left_join_size.cu
   src/join/hash_join/match_context.cu
+  src/join/hash_join/partitioned_count.cu
+  src/join/hash_join/partitioned_count_outer.cu
+  src/join/hash_join/partitioned_full_join.cu
+  src/join/hash_join/partitioned_inner_join.cu
+  src/join/hash_join/partitioned_join_retrieve.cu
+  src/join/hash_join/partitioned_left_join.cu
+  src/join/hash_join/partitioned_retrieve.cu
+  src/join/hash_join/partitioned_retrieve_outer.cu
   src/join/mark_join.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu
@@ -861,7 +881,6 @@ add_library(
   src/strings/replace/backref_re.cu
   src/strings/replace/find_replace.cu
   src/strings/replace/multi.cu
-  src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu

@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -49,7 +49,9 @@ timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10 \
+  -ra
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
