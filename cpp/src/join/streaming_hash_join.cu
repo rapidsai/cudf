@@ -9,6 +9,9 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
 
 #include <stdexcept>
 
@@ -78,7 +81,8 @@ void streaming_hash_join::insert(cudf::table_view const& right_partition,
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+          std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                    std::unique_ptr<rmm::device_uvector<size_type>>>>
 streaming_hash_join::inner_join(cudf::table_view const& left,
                                 std::optional<std::size_t> output_size,
                                 rmm::cuda_stream_view stream,
@@ -86,7 +90,17 @@ streaming_hash_join::inner_join(cudf::table_view const& left,
 {
   CUDF_EXPECTS(
     _hash_join, "streaming_hash_join: inner_join called before any insert().", std::logic_error);
-  return _hash_join->inner_join(left, output_size, stream, mr);
+  auto [left_indices, right_row_indices] = _hash_join->inner_join(left, output_size, stream, mr);
+  // Single-partition scaffold: every match originates from batch 0. The batch index column is
+  // sized to the row-index column and filled with zeros on the caller's stream.
+  auto right_batch_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(right_row_indices->size(), stream, mr);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               right_batch_indices->begin(),
+               right_batch_indices->end(),
+               size_type{0});
+  return std::pair{std::move(left_indices),
+                   std::pair{std::move(right_batch_indices), std::move(right_row_indices)}};
 }
 
 }  // namespace detail
@@ -114,7 +128,8 @@ void streaming_hash_join::insert(cudf::table_view const& right_partition,
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+          std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                    std::unique_ptr<rmm::device_uvector<size_type>>>>
 streaming_hash_join::inner_join(cudf::table_view const& left,
                                 std::optional<std::size_t> output_size,
                                 rmm::cuda_stream_view stream,

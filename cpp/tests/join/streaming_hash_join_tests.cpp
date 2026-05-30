@@ -51,6 +51,13 @@ std::pair<std::vector<size_type>, std::vector<size_type>> to_sorted_host_pairs(
   return {std::move(sorted_left), std::move(sorted_right)};
 }
 
+void expect_all_batch_zero(rmm::device_uvector<size_type> const& batch_indices,
+                           rmm::cuda_stream_view stream)
+{
+  auto const h_batch = cudf::detail::make_host_vector(batch_indices, stream);
+  EXPECT_TRUE(std::all_of(h_batch.begin(), h_batch.end(), [](size_type b) { return b == 0; }));
+}
+
 }  // namespace
 
 struct StreamingHashJoinTest : public cudf::test::BaseFixture {};
@@ -75,13 +82,16 @@ TEST_F(StreamingHashJoinTest, InnerJoinSinglePartitionMatchesHashJoin)
                                              cudf::null_equality::EQUAL};
   streaming_joiner.insert(right_view, stream);
   auto [streaming_left, streaming_right] = streaming_joiner.inner_join(left_view, {}, stream);
+  auto& [streaming_batch, streaming_row] = streaming_right;
 
   cudf::hash_join reference_joiner{
     right_view, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.5, stream};
   auto [reference_left, reference_right] = reference_joiner.inner_join(left_view, {}, stream);
 
+  expect_all_batch_zero(*streaming_batch, stream);
+
   auto const [streaming_l, streaming_r] =
-    to_sorted_host_pairs(*streaming_left, *streaming_right, stream);
+    to_sorted_host_pairs(*streaming_left, *streaming_row, stream);
   auto const [reference_l, reference_r] =
     to_sorted_host_pairs(*reference_left, *reference_right, stream);
   EXPECT_EQ(streaming_l, reference_l);
@@ -107,9 +117,11 @@ TEST_F(StreamingHashJoinTest, EmptyRightPartition)
                                              cudf::nullable_join::NO,
                                              cudf::null_equality::EQUAL};
   streaming_joiner.insert(empty_right_view, stream);
-  auto [l, r] = streaming_joiner.inner_join(left_view, {}, stream);
+  auto [l, right_pair]    = streaming_joiner.inner_join(left_view, {}, stream);
+  auto& [batch_ids, rows] = right_pair;
   EXPECT_EQ(l->size(), 0u);
-  EXPECT_EQ(r->size(), 0u);
+  EXPECT_EQ(batch_ids->size(), 0u);
+  EXPECT_EQ(rows->size(), 0u);
 }
 
 TEST_F(StreamingHashJoinTest, MultiColumnKey)
@@ -134,13 +146,16 @@ TEST_F(StreamingHashJoinTest, MultiColumnKey)
                                              cudf::null_equality::EQUAL};
   streaming_joiner.insert(right_view, stream);
   auto [streaming_left, streaming_right] = streaming_joiner.inner_join(left_view, {}, stream);
+  auto& [streaming_batch, streaming_row] = streaming_right;
 
   cudf::hash_join reference_joiner{
     right_view, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.5, stream};
   auto [reference_left, reference_right] = reference_joiner.inner_join(left_view, {}, stream);
 
+  expect_all_batch_zero(*streaming_batch, stream);
+
   auto const [streaming_l, streaming_r] =
-    to_sorted_host_pairs(*streaming_left, *streaming_right, stream);
+    to_sorted_host_pairs(*streaming_left, *streaming_row, stream);
   auto const [reference_l, reference_r] =
     to_sorted_host_pairs(*reference_left, *reference_right, stream);
   EXPECT_EQ(streaming_l, reference_l);
@@ -195,12 +210,10 @@ TEST_F(StreamingHashJoinTest, SchemaMismatchThrows)
                                              cudf::nullable_join::NO,
                                              cudf::null_equality::EQUAL};
 
-  // Wrong column type.
   column_wrapper<int64_t> wrong_type_keys{1L, 2L, 3L};
   cudf::table_view wrong_type_view{{wrong_type_keys}};
   EXPECT_THROW(streaming_joiner.insert(wrong_type_view, stream), std::invalid_argument);
 
-  // Wrong column count.
   column_wrapper<int32_t> col_a{1, 2, 3};
   column_wrapper<int32_t> col_b{4, 5, 6};
   cudf::table_view wrong_count_view{{col_a, col_b}};
@@ -212,7 +225,6 @@ TEST_F(StreamingHashJoinTest, ConstructorValidatesArguments)
   std::vector<cudf::data_type> const single_schema{cudf::data_type{cudf::type_id::INT32}};
   std::vector<size_type> const single_key{0};
 
-  // Empty schema.
   EXPECT_THROW(cudf::streaming_hash_join(std::vector<cudf::data_type>{},
                                          single_key,
                                          4,
@@ -220,7 +232,6 @@ TEST_F(StreamingHashJoinTest, ConstructorValidatesArguments)
                                          cudf::null_equality::EQUAL),
                std::invalid_argument);
 
-  // Empty key indices.
   EXPECT_THROW(cudf::streaming_hash_join(single_schema,
                                          std::vector<size_type>{},
                                          4,
@@ -228,7 +239,6 @@ TEST_F(StreamingHashJoinTest, ConstructorValidatesArguments)
                                          cudf::null_equality::EQUAL),
                std::invalid_argument);
 
-  // Key index out of range.
   EXPECT_THROW(cudf::streaming_hash_join(single_schema,
                                          std::vector<size_type>{5},
                                          4,
@@ -236,13 +246,11 @@ TEST_F(StreamingHashJoinTest, ConstructorValidatesArguments)
                                          cudf::null_equality::EQUAL),
                std::invalid_argument);
 
-  // Negative total_right_rows.
   EXPECT_THROW(
     cudf::streaming_hash_join(
       single_schema, single_key, -1, cudf::nullable_join::NO, cudf::null_equality::EQUAL),
     std::invalid_argument);
 
-  // load_factor out of range.
   EXPECT_THROW(cudf::streaming_hash_join(single_schema,
                                          single_key,
                                          4,
