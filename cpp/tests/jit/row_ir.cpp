@@ -352,7 +352,7 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(bool tmp_0 = in_0;
-bool tmp_1 = cudf::ast::detail::predicate(tmp_0);
+bool tmp_1 = cudf::ops::predicate(tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -370,7 +370,7 @@ bool tmp_1 = cudf::ast::detail::predicate(tmp_0);
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
-bool tmp_1 = cudf::ast::detail::predicate(tmp_0);
+bool tmp_1 = cudf::ops::predicate(tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
