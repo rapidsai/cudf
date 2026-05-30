@@ -124,10 +124,14 @@ class streaming_hash_join {
    * @param output_size Optional exact output size hint to avoid an extra count pass.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned device memory.
-   * @return Pair of device vectors `[left_indices, right_indices]`.
+   * @return Pair `[left_indices, [right_batch_indices, right_row_indices]]`. For each match the
+   *         right side is identified by `(batch_idx, row_idx)`, where `batch_idx` is the
+   *         insertion order of the partition this row came from and `row_idx` is the local
+   *         row index within that partition.
    */
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                          std::unique_ptr<rmm::device_uvector<size_type>>>
+                          std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                                    std::unique_ptr<rmm::device_uvector<size_type>>>>
   inner_join(cudf::table_view const& left,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),

@@ -47,7 +47,8 @@ class streaming_hash_join {
   void insert(cudf::table_view const& right_partition, rmm::cuda_stream_view stream);
 
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                          std::unique_ptr<rmm::device_uvector<size_type>>>
+                          std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                                    std::unique_ptr<rmm::device_uvector<size_type>>>>
   inner_join(cudf::table_view const& left,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
