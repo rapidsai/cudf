@@ -180,6 +180,8 @@ void BM_parquet_read_filter(nvbench::state& state)
   auto const nullable       = state.get_string("nullable") == "true";
   auto const use_jit        = state.get_string("executor") == "jit";
   auto const num_input_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const rg_size_bytes  = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows   = state.get_int64("row_group_size_rows");
 
   CUDF_EXPECTS(num_input_cols >= 1, "Invalid number of input columns");
   CUDF_EXPECTS(selectivity > 0.0F && selectivity <= 1.0F, "Invalid selectivity");
@@ -227,6 +229,9 @@ void BM_parquet_read_filter(nvbench::state& state)
       .compression(cudf::io::compression_type::AUTO)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .stats_level(cudf::io::statistics_freq::STATISTICS_NONE);
+  // Sentinel 0 == use cuDF default (parquet bytes default is size_t::max).
+  if (rg_size_bytes > 0) write_opts.set_row_group_size_bytes(rg_size_bytes);
+  if (rg_size_rows > 0) write_opts.set_row_group_size_rows(rg_size_rows);
   cudf::io::write_parquet(write_opts);
 
   cudf::io::parquet_reader_options read_opts =
@@ -268,7 +273,9 @@ void BM_parquet_read_filter(nvbench::state& state)
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})           \
     .add_float64_axis("selectivity", {0.5, 0.8})                            \
     .add_string_axis("nullable", {"true"})                                  \
-    .add_string_axis("executor", {"jit", "ast"})
+    .add_string_axis("executor", {"jit", "ast"})                            \
+    .add_int64_axis("row_group_size_bytes", {0})                            \
+    .add_int64_axis("row_group_size_rows", {0})
 
 PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_i32, int32_t);
 

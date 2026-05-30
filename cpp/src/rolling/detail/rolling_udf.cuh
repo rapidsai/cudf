@@ -10,7 +10,7 @@
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 #include "rolling.hpp"
-#include "rolling_jit.hpp"
+#include "rolling_jit.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -28,17 +28,31 @@
 namespace cudf {
 namespace detail {
 
-// Applies a user-defined rolling window function to the values in a column.
-template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
-std::unique_ptr<column> rolling_window_udf(column_view const& input,
-                                           PrecedingWindowIterator preceding_window,
-                                           std::string const& preceding_window_str,
-                                           FollowingWindowIterator following_window,
-                                           std::string const& following_window_str,
-                                           size_type min_periods,
-                                           rolling_aggregation const& agg,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+template <typename T>
+std::string reflect_window_wrapper()
+{
+  if constexpr (std::is_same_v<T, fixed_window_wrapper>) {
+    return "cudf::detail::fixed_window_wrapper";
+  } else if constexpr (std::is_same_v<T, variable_window_wrapper>) {
+    return "cudf::detail::variable_window_wrapper";
+  } else if constexpr (std::is_same_v<T, preceding_window_wrapper>) {
+    return "cudf::detail::preceding_window_wrapper";
+  } else {
+    static_assert(std::is_same_v<T, following_window_wrapper>, "Unsupported window wrapper type");
+    return "cudf::detail::following_window_wrapper";
+  }
+}
+
+inline std::unique_ptr<column> rolling_window_udf_impl(
+  column_view const& input,
+  std::string const& preceding_window_str,
+  cudf::detail::window_wrapper_base const& preceding_window,
+  std::string const& following_window_str,
+  cudf::detail::window_wrapper_base const& following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
@@ -76,12 +90,12 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
     0, stream, cudf::get_current_device_resource_ref()};
 
   std::string kernel_reflection =
-    jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
+    jitify2::reflection::Template("cudf::rolling::jit::rolling_window_kernel")  //
       .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
                    cudf::type_to_name(output->type()),
                    udf_agg._operator_name,
-                   preceding_window_str.c_str(),
-                   following_window_str.c_str());
+                   preceding_window_str,
+                   following_window_str);
 
   cudf::jit::get_udf_kernel(*rolling_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
@@ -101,6 +115,27 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   CUDF_CHECK_CUDA(stream.value());
 
   return output;
+}
+
+// Applies a user-defined rolling window function to the values in a column.
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+std::unique_ptr<column> rolling_window_udf(column_view const& input,
+                                           PrecedingWindowIterator preceding_window,
+                                           FollowingWindowIterator following_window,
+                                           size_type min_periods,
+                                           rolling_aggregation const& agg,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  return rolling_window_udf_impl(input,
+                                 reflect_window_wrapper<PrecedingWindowIterator>(),
+                                 preceding_window,
+                                 reflect_window_wrapper<FollowingWindowIterator>(),
+                                 following_window,
+                                 min_periods,
+                                 agg,
+                                 stream,
+                                 mr);
 }
 
 }  // namespace detail
