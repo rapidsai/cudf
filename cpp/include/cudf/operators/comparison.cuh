@@ -50,7 +50,7 @@ __device__ bool not_equal(T a, T b)
  */
 template <typename T>
 __device__ bool greater(T a, T b)
-  requires(!nullable<T> && cuda::std::totally_ordered<T>)
+  requires(!nullable<T> && ordered<T>)
 {
   return (a > b);
 }
@@ -64,7 +64,7 @@ __device__ bool greater(T a, T b)
  */
 template <typename T>
 __device__ bool greater_equal(T a, T b)
-  requires(!nullable<T> && cuda::std::totally_ordered<T>)
+  requires(!nullable<T> && ordered<T>)
 {
   return (a >= b);
 }
@@ -78,7 +78,7 @@ __device__ bool greater_equal(T a, T b)
  */
 template <typename T>
 __device__ bool less(T a, T b)
-  requires(!nullable<T> && cuda::std::totally_ordered<T>)
+  requires(!nullable<T> && ordered<T>)
 {
   return (a < b);
 }
@@ -92,7 +92,7 @@ __device__ bool less(T a, T b)
  */
 template <typename T>
 __device__ bool less_equal(T a, T b)
-  requires(!nullable<T> && cuda::std::totally_ordered<T>)
+  requires(!nullable<T> && ordered<T>)
 {
   return (a <= b);
 }

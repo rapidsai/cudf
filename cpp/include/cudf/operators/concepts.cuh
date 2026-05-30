@@ -50,5 +50,14 @@ constexpr bool is_nullable<optional<T>> = true;
 template <typename T>
 concept nullable = is_nullable<T>;
 
+// Workaround for pre-CUDA 12.3 CCCL not correctly detecting ordering.
+template <typename T>
+concept ordered = requires(T a, T b) {
+  { a < b } -> cuda::std::convertible_to<bool>;
+  { a > b } -> cuda::std::convertible_to<bool>;
+  { a <= b } -> cuda::std::convertible_to<bool>;
+  { a >= b } -> cuda::std::convertible_to<bool>;
+};
+
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf
