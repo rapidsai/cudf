@@ -30,7 +30,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("in-memory", "spmd"),
         help="Which GPU engine variant to inject globally.",
     )
-    # TODO: We never run with --inject-gpu-engine-blocksize in ci/run_cudf_polars_polars_tests.sh. Remove?
     group.addoption(
         "--inject-gpu-engine-blocksize",
         action="store",
@@ -284,7 +283,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_with_columns.py::test_with_columns_quadratic_19503": "Tests performance bug in CPU engine",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
-    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
     # Remove when polars supports Pydantic V3
@@ -295,9 +293,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/series/test_describe.py::test_series_describe_float": "https://github.com/rapidsai/cudf/issues/19324",
     "tests/unit/series/test_describe.py::test_series_describe_int": "https://github.com/rapidsai/cudf/issues/19324",
     "tests/unit/streaming/test_streaming.py::test_streaming_apply": "https://github.com/pola-rs/polars/issues/22558",
-    # New iceberg release causes this test to fail. We can remove in the next polars version bump: https://github.com/rapidsai/cudf/pull/19912
-    "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values[False]": "https://github.com/pola-rs/polars/pull/24456",
-    "tests/unit/operations/test_rolling.py::test_rolling_agg_bad_input_types[str]": "https://github.com/rapidsai/cudf/issues/20551",
     "tests/unit/operations/test_group_by_dynamic.py::test_group_by_dynamic_agg_bad_input_types[str]": "TODO: Need to investigate why this fails in CI but passes locally. We should fallback to CPU for group_by_dynamic",
     "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
     # TODO: Investigate why these tests fail in CI but pass locally.
@@ -386,7 +381,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",

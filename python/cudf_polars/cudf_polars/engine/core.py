@@ -39,7 +39,7 @@ from cudf_polars.utils.config import get_total_device_memory
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable, MutableMapping
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import Executor, ThreadPoolExecutor
 
     import rapidsmpf.config
     from rapidsmpf.communicator.communicator import Communicator
@@ -393,6 +393,17 @@ class StreamingEngine(pl.GPUEngine):
         raise NotImplementedError
 
 
+def _find_memory_error(exc: BaseException) -> MemoryError | None:
+    """Recursively search for MemoryErrors."""
+    if isinstance(exc, MemoryError):
+        return exc
+    elif isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            if (mem_error := _find_memory_error(sub)) is not None:
+                return mem_error
+    return None
+
+
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
@@ -457,7 +468,21 @@ def execute_ir_on_rank(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(ctx, actors=nodes)
+    try:
+        run_actor_network(ctx, actors=nodes)
+    except (MemoryError, BaseExceptionGroup) as e:
+        if (mem_error := _find_memory_error(e)) is not None:
+            target_partition_size = config_options.executor.target_partition_size
+            hint = (
+                f"Try lowering `target_partition_size` (current {target_partition_size}) "
+                f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
+                f"\nSee https://docs.rapids.ai/api/cudf/stable/cudf_polars/memory_errors/ "
+                f"for troubleshooting guidance."
+                f"\nOriginal error:\n{mem_error}"
+            )
+            raise MemoryError(hint) from e
+        else:
+            raise
 
     messages = output.release()
     chunks = [
@@ -556,12 +581,7 @@ def all_gather_host_data(
     -------
     List of bytes, one element per rank, ordered by rank index.
     """
-    allgather = AllGather(
-        comm=comm,
-        op_id=op_id,
-        br=br,
-        statistics=Statistics(enable=False),
-    )
+    allgather = AllGather(comm=comm, op_id=op_id, br=br)
     # TODO: Make AllGather (bulk) a context manager so this becomes
     # with AllGather(...) as ag:
     #     ag.insert(0, PackedData.from_host_bytes(data, br))
@@ -579,6 +599,7 @@ def allgather_stats(
     br: BufferResource,
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
+    executor: Executor,
 ) -> StatsCollector:
     """
     Collect scan statistics on rank 0 and distribute to all ranks.
@@ -596,16 +617,19 @@ def allgather_stats(
         Root of the pre-lowered IR graph (same object on every rank).
     config_options
         Executor configuration.
+    executor: concurrent.futures.Executor
+        Executor to use for IO operations. This function does not start
+        or shutdown the executor.
 
     Returns
     -------
     A :class:`StatsCollector` valid for the local rank's IR node objects.
     """
     if comm.nranks == 1:
-        return collect_statistics(ir, config_options)
+        return collect_statistics(ir, config_options, executor)
 
     if comm.rank == 0:
-        stats = collect_statistics(ir, config_options)
+        stats = collect_statistics(ir, config_options, executor)
         data = json.dumps(stats.serialize(ir)).encode()
     else:
         data = b""
@@ -660,7 +684,7 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
-    stats = allgather_stats(comm, ctx.br(), ir, config_options)
+    stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     ir, partition_info = lower_ir_graph(ir, config_options, stats)
 
     if comm.rank == 0:

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -21,6 +23,9 @@ from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 @pytest.fixture
@@ -273,7 +278,12 @@ def test_join_maintain_order_fallback_streaming(
 
 
 @pytest.mark.parametrize("broadcast_limit", [1, 48, 128, 1024])
-def test_broadcast_limit(left, right, broadcast_limit):
+def test_broadcast_limit(
+    left,
+    right,
+    broadcast_limit,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -309,7 +319,11 @@ def test_broadcast_limit(left, right, broadcast_limit):
         for node in lower_ir_graph(
             ir,
             config_options,
-            collect_statistics(ir, config_options),
+            collect_statistics(
+                ir,
+                config_options,
+                parquet_stats_executor,
+            ),
         )[1]
         if isinstance(node, Shuffle)
     ]
@@ -325,7 +339,9 @@ def test_broadcast_limit(left, right, broadcast_limit):
         assert len(shuffle_nodes) == 0
 
 
-def test_cache_preserves_partitioning_join():
+def test_cache_preserves_partitioning_join(
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -350,7 +366,9 @@ def test_cache_preserves_partitioning_join():
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     lowered_ir, partition_info = lower_ir_graph(
-        ir, config_options, collect_statistics(ir, config_options)
+        ir,
+        config_options,
+        collect_statistics(ir, config_options, parquet_stats_executor),
     )
 
     # Cache should preserve partitioning on 'key'
@@ -388,3 +406,59 @@ def test_dynamic_planning_skips_compile_time_partition_wise_join():
         right_ir: PartitionInfo(1, partitioned_on=()),
     }
     assert not _use_pwise_join(executor, partition_info, join_ir)
+
+
+def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
+    """Join on a computed key expression."""
+    engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1,
+            max_rows_per_partition=4,
+            broadcast_limit=1,  # Disable broadcast joins
+        ),
+    )
+    if engine.nranks < 2:
+        pytest.skip("bug only manifests on 2+ ranks")
+
+    zip_prefixes = ["10", "20", "30", "40"]
+    full_zips = ["10001", "20001", "30001", "40001"]
+    reps = 4
+
+    # Start with joins on concrete column references
+    # to establish left and right partitioning metadata.
+    left_a = pl.LazyFrame(
+        {
+            "zip_prefix": zip_prefixes * reps,
+            "val_a": list(range(len(zip_prefixes) * reps)),
+        }
+    )
+    left_b = pl.LazyFrame(
+        {
+            "zip_prefix": zip_prefixes * reps,
+            "val_b": list(range(100, 100 + len(zip_prefixes) * reps)),
+        }
+    )
+    left = left_a.join(left_b, on="zip_prefix", how="inner")
+
+    right_a = pl.LazyFrame(
+        {
+            "full_zip": full_zips * reps,
+            "val_c": list(range(200, 200 + len(full_zips) * reps)),
+        }
+    )
+    right_b = pl.LazyFrame(
+        {
+            "full_zip": full_zips * reps,
+            "val_d": list(range(300, 300 + len(full_zips) * reps)),
+        }
+    )
+    right = right_a.join(right_b, on="full_zip", how="inner")
+
+    # Now join on a computed key expression.
+    # This should not silently drop rows across ranks
+    q = left.join(
+        right,
+        left_on="zip_prefix",
+        right_on=pl.col("full_zip").str.slice(0, 2),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

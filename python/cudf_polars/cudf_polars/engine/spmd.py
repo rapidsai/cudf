@@ -141,7 +141,7 @@ def allgather_polars_dataframe(
         Rank-local DataFrame to contribute.
     op_id
         Operation ID for this AllGather collective. Must be identical on every
-        rank. For example, use :func:`reserve_op_id` to obtain a collision-free
+        rank. For example, use :func:`~cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id` to obtain a collision-free
         ID from the same pool used internally by cudf-polars. Avoid passing
         hardcoded integers.
 
@@ -309,7 +309,7 @@ class SPMDEngine(StreamingEngine):
     time, before RMM and communicator initialisation, so that CPU affinity, NUMA
     memory policy, and ``UCX_NET_DEVICES`` are set as early as possible. By default,
     binding is skipped under ``rrun`` (which already performs its own binding),
-    see :attr:`HardwareBindingPolicy.skip_under_rrun`.
+    see ``HardwareBindingPolicy.skip_under_rrun``.
 
     Examples
     --------
@@ -376,7 +376,14 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            self._ctx = Context.from_options(comm.logger, mr, self.rapidsmpf_options)
+            if self.rapidsmpf_options is not None:
+                statistics = Statistics.from_options(self.rapidsmpf_options)
+            else:
+                statistics = None
+
+            self._ctx = Context.from_options(
+                comm.logger, mr, self.rapidsmpf_options, statistics
+            )
             exit_stack.callback(self._cleanup_ctx)
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
@@ -425,7 +432,7 @@ class SPMDEngine(StreamingEngine):
     @classmethod
     def from_options(cls, options: StreamingOptions) -> SPMDEngine:
         """
-        Create an :class:`SPMDEngine` from a :class:`StreamingOptions` object.
+        Create an :class:`SPMDEngine` from a :class:`~cudf_polars.engine.options.StreamingOptions` object.
 
         This is the recommended way to construct an ``SPMDEngine`` for typical
         use. All RapidsMPF, executor, and engine options are read from
@@ -486,7 +493,15 @@ class SPMDEngine(StreamingEngine):
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
-        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+
+        if rapidsmpf_options is not None:
+            statistics = Statistics.from_options(rapidsmpf_options)
+        else:
+            statistics = None
+
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, rapidsmpf_options, statistics
+        )
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
@@ -590,7 +605,7 @@ class SPMDEngine(StreamingEngine):
 
         Returns
         -------
-        List of :class:`ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
         """
         data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
         with reserve_op_id() as op_id:

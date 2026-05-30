@@ -8,6 +8,7 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/detail/utilities/cast_functor.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -170,7 +171,7 @@ void segmented_reduce(InputIterator d_in,
 
   // compute the result value from intermediate value in device
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{num_segments},
     d_out,

@@ -21,6 +21,7 @@ from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_comm
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -44,7 +45,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -240,7 +240,8 @@ def _setup_worker(
         comm = mp_ctx.comm
 
     barrier(comm)
-    ctx = Context.from_options(comm.logger, mr, options)
+    statistics = Statistics.from_options(options)
+    ctx = Context.from_options(comm.logger, mr, options, statistics)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
@@ -329,7 +330,10 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    mp_ctx.ctx = Context.from_options(mp_ctx.comm.logger, mp_ctx.mr, options)
+    statistics = Statistics.from_options(options)
+    mp_ctx.ctx = Context.from_options(
+        mp_ctx.comm.logger, mp_ctx.mr, options, statistics
+    )
     rmm.mr.set_current_device_resource(mp_ctx.ctx.br().device_mr)
 
 
@@ -761,7 +765,7 @@ class DaskEngine(StreamingEngine):
         dask_client: distributed.Client | None = None,
     ) -> DaskEngine:
         """
-        Create a :class:`DaskEngine` from a :class:`StreamingOptions` object.
+        Create a :class:`DaskEngine` from a :class:`~cudf_polars.engine.options.StreamingOptions` object.
 
         This is the recommended way to construct a ``DaskEngine`` for typical
         use. All RapidsMPF, executor, and engine options are read from
@@ -806,7 +810,7 @@ class DaskEngine(StreamingEngine):
 
         Returns
         -------
-        List of :class:`ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
         """
         return list(self._dask_ctx.client.run(ClusterInfo.local).values())
 

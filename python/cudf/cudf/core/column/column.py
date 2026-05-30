@@ -1193,23 +1193,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 copy=False,
             )
 
-    @property
-    def values_host(self) -> np.ndarray:
-        """
-        Return a numpy representation of the Column.
-
-        .. deprecated:: 26.04
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
-        """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return self.to_pandas().to_numpy()
-
     def to_numpy(self) -> np.ndarray:
         """
         Convert the Column to a NumPy array.
