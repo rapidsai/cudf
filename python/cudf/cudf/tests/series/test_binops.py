@@ -3039,7 +3039,6 @@ def test_binop_index_series(arithmetic_op):
     assert_eq(expected, actual)
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize("name1", [None, "name1"])
 @pytest.mark.parametrize("name2", [None, "name2"])
 def test_binop_index_dt_td_series_with_names(name1, name2):
