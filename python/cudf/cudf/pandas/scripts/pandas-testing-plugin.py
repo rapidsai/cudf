@@ -4101,6 +4101,7 @@ NODEIDS_THAT_FAIL = {
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[False]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[True]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[columns]": "AttributeError: _compute. Did you mean: 'compare'?",
+    "tests/io/excel/test_style.py::test_styler_custom_converter": "openpyxl raises IndexError on workbook with no visible sheets; cudf.pandas fallback triggers this openpyxl limitation",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[odf-.ods]": "TODO: Add a reason for failure",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[openpyxl-.xlsm]": "TODO: Add a reason for failure",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[openpyxl-.xlsx]": "TODO: Add a reason for failure",
