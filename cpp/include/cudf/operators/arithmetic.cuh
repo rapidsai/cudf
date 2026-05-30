@@ -6,10 +6,12 @@
 
 #include <cudf/detail/integral_math.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/operators/concepts.cuh>
+#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/cmath>
-#include <cuda/std/optional>
+#include <cuda/std/concepts>
 #include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
@@ -19,429 +21,210 @@ namespace ops {
  * @brief Computes absolute value.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Input value.
  */
 template <typename T>
-__device__ void abs(T* out, T const* a)
-  requires(cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>)
-{
-  *out = cuda::std::abs(*a);
-}
-
-/**
- * @brief Computes absolute value.
- *
- * @tparam R Decimal representation type.
- */
-template <typename R>
-__device__ void abs(numeric::decimal<R>* out, numeric::decimal<R> const* a)
-{
-  auto rep = a->value() < 0 ? -a->value() : a->value();
-  *out     = numeric::decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
-}
-
-/**
- * @brief Computes absolute value.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Input value.
- */
-template <typename T>
-__device__ void abs(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
-{
-  if (a->has_value()) {
-    T r;
-    abs(&r, &a->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes sum of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void add(T* out, T const* a, T const* b)
-{
-  *out = (*a + *b);
-}
-
-/**
- * @brief Computes sum of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left optional operand.
- * @param b Right optional operand.
- */
-template <typename T>
-__device__ void add(cuda::std::optional<T>* out,
-                    cuda::std::optional<T> const* a,
-                    cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    add(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes quotient of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void div(T* out, T const* a, T const* b)
-{
-  *out = (*a / *b);
-}
-
-/**
- * @brief Computes quotient of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void div(cuda::std::optional<T>* out,
-                    cuda::std::optional<T> const* a,
-                    cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    div(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes floor division of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void floor_div(T* out, T const* a, T const* b)
-  requires(cuda::std::is_integral_v<T>)
-{
-  *out = cudf::detail::integral_floor_div(*a, *b);
-}
-
-/**
- * @brief Computes floor division of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ inline void floor_div(T* out, T const* a, T const* b)
-  requires(cuda::std::is_floating_point_v<T>)
-{
-  *out = cuda::std::floor(*a / *b);
-}
-
-/**
- * @brief Computes floor division of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void floor_div(cuda::std::optional<T>* out,
-                          cuda::std::optional<T> const* a,
-                          cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    floor_div(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes remainder of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void mod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>())
-{
-  *out = (*a % *b);
-}
-
-/**
- * @brief Computes remainder of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ inline void mod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_floating_point_v<T>)
-{
-  *out = cuda::std::fmod(*a, *b);
-}
-
-/**
- * @brief Computes remainder of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void mod(cuda::std::optional<T>* out,
-                    cuda::std::optional<T> const* a,
-                    cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    mod(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes Python-style modulus.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void pymod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_integral_v<T> || cudf::is_fixed_point<T>())
-{
-  *out = (*a % *b + *b) % *b;
-}
-
-/**
- * @brief Computes Python-style modulus.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ inline void pymod(T* out, T const* a, T const* b)
-  requires(cuda::std::is_floating_point_v<T>)
-{
-  *out = cuda::std::fmod(cuda::std::fmod(*a, *b) + *b, *b);
-}
-
-/**
- * @brief Computes Python-style modulus.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void pymod(cuda::std::optional<T>* out,
-                      cuda::std::optional<T> const* a,
-                      cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    pymod(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes product of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void mul(T* out, T const* a, T const* b)
-{
-  *out = (*a * *b);
-}
-
-/**
- * @brief Computes product of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void mul(cuda::std::optional<T>* out,
-                    cuda::std::optional<T> const* a,
-                    cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    mul(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
-}
-
-/**
- * @brief Computes unary negation.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Input value.
- */
-template <typename T>
-__device__ void neg(T* out, T const* a)
+__device__ T abs(T a)
   requires(cuda::std::is_signed_v<T>)
 {
-  *out = -(*a);
+  return cuda::std::abs(a);
+}
+
+/**
+ * @brief Computes absolute value.
+ *
+ * @tparam T Value type.
+ * @param a Input value.
+ */
+template <unsigned_integer T>
+__device__ T abs(T a)
+{
+  return a;
+}
+
+/**
+ * @brief Computes absolute value.
+ *
+ * @tparam R Decimal representation type.
+ */
+template <typename R>
+__device__ numeric::decimal<R> abs(numeric::decimal<R> a)
+{
+  auto rep = a.value() < 0 ? -a.value() : a.value();
+  return numeric::decimal<R>{numeric::scaled_integer<R>{rep, a.scale()}};
+}
+
+/**
+ * @brief Computes sum of two values.
+ *
+ * @tparam T Value type.
+ * @param a Left operand.
+ * @param b Right operand.
+ */
+template <arithmetic T>
+__device__ T add(T a, T b)
+{
+  return (a + b);
+}
+
+/**
+ * @brief Computes quotient of two values.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <arithmetic T>
+__device__ T div(T a, T b)
+{
+  return (a / b);
+}
+
+/**
+ * @brief Computes floor division of two values.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <integer T>
+__device__ T floor_div(T a, T b)
+{
+  return cudf::detail::integral_floor_div(a, b);
+}
+
+/**
+ * @brief Computes floor division of two values.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <floating_point T>
+__device__ T floor_div(T a, T b)
+{
+  return cuda::std::floor(a / b);
+}
+
+/**
+ * @brief Computes remainder of two values.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <typename T>
+__device__ T mod(T a, T b)
+  requires(integer<T> || fixed_point<T>)
+{
+  return (a % b);
+}
+
+/**
+ * @brief Computes remainder of two values.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <typename T>
+__device__ T mod(T a, T b)
+  requires(floating_point<T>)
+{
+  return cuda::std::fmod(a, b);
+}
+
+/**
+ * @brief Computes Python-style modulus.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <typename T>
+__device__ T pymod(T a, T b)
+  requires(integer<T> || fixed_point<T>)
+{
+  return (a % b + b) % b;
+}
+
+/**
+ * @brief Computes Python-style modulus.
+ *
+ * @tparam T Value type.
+ * @param a Dividend.
+ * @param b Divisor.
+ */
+template <floating_point T>
+__device__ T pymod(T a, T b)
+{
+  return cuda::std::fmod(cuda::std::fmod(a, b) + b, b);
+}
+
+/**
+ * @brief Computes product of two values.
+ *
+ * @tparam T Value type.
+ * @param a Left operand.
+ * @param b Right operand.
+ */
+template <arithmetic T>
+__device__ T mul(T a, T b)
+{
+  return (a * b);
+}
+
+/**
+ * @brief Computes unary negation.
+ *
+ * @tparam T Value type.
+ * @param a Input value.
+ */
+template <typename T>
+__device__ T neg(T a)
+  requires(signed_integer<T> || floating_point<T>)
+{
+  return -a;
 }
 
 /**
  * @brief Computes unary negation.
  *
  * @tparam R Decimal representation type.
- * @param out Result destination.
  * @param a Input value.
  */
 template <typename R>
-__device__ void neg(numeric::decimal<R>* out, numeric::decimal<R> const* a)
+__device__ numeric::decimal<R> neg(numeric::decimal<R> a)
 {
-  auto rep = -a->value();
-  *out     = numeric::decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
-}
-
-/**
- * @brief Computes unary negation.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Input value.
- */
-template <typename T>
-__device__ void neg(cuda::std::optional<T>* out, cuda::std::optional<T> const* a)
-{
-  if (a->has_value()) {
-    T r;
-    neg(&r, &a->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  auto rep = -a.value();
+  return numeric::decimal<R>{numeric::scaled_integer<R>{rep, a.scale()}};
 }
 
 /**
  * @brief Computes subtraction of two values.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Minuend.
  * @param b Subtrahend.
  */
-template <typename T>
-__device__ void sub(T* out, T const* a, T const* b)
+template <arithmetic T>
+__device__ T sub(T a, T b)
 {
-  *out = *a - *b;
-}
-
-/**
- * @brief Computes subtraction of two values.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Minuend.
- * @param b Subtrahend.
- */
-template <typename T>
-__device__ void sub(cuda::std::optional<T>* out,
-                    cuda::std::optional<T> const* a,
-                    cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    sub(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return a - b;
 }
 
 /**
  * @brief Computes true division and returns a double.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Dividend.
  * @param b Divisor.
  */
 template <typename T>
-__device__ void true_div(double* out, T const* a, T const* b)
-  requires(cuda::std::is_floating_point_v<T> || cuda::std::is_integral_v<T>)
+__device__ double true_div(T a, T b)
+  requires(floating_point<T> || integer<T>)
 {
-  *out = static_cast<double>(*a) / static_cast<double>(*b);
-}
-
-/**
- * @brief Computes true division and returns a double.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ void true_div(cuda::std::optional<double>* out,
-                         cuda::std::optional<T> const* a,
-                         cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    double r;
-    true_div(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return static_cast<double>(a) / static_cast<double>(b);
 }
 
 }  // namespace ops

@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cudf/operators/concepts.cuh>
+#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/optional>
@@ -15,50 +17,46 @@ namespace ops {
 /**
  * @brief Tests whether an input value is null.
  *
- * @tparam T Input type.
- * @param out Result destination.
+ * @tparam T Value type.
  * @param a Input value.
  */
 template <typename T>
-__device__ void is_null(bool* out, T const* a)
+__device__ bool is_null(T a)
+  requires(!nullable<T>)
 {
-  *out = false;
+  return false;
 }
 
 /**
  * @brief Tests whether an input value is null.
  *
  * @tparam T Value type.
- * @param out Result destination.
- * @param a Input value.
  */
 template <typename T>
-__device__ void is_null(cuda::std::optional<bool>* out, cuda::std::optional<T> const* a)
+__device__ bool is_null(T a)
+  requires(nullable<T>)
 {
-  *out = !a->has_value();
+  return !a.has_value();
 }
 
 /**
  * @brief Sets the output to null when the condition is true.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Input value.
  * @param condition boolean condition.
  */
 template <typename T>
-__device__ void nullify_if(cuda::std::optional<T>* out,
-                           cuda::std::optional<T> const* a,
-                           cuda::std::optional<bool> const* condition)
+__device__ optional<T> nullify_if(optional<T> a, optional<bool> condition)
 {
-  if (condition->has_value() && a->has_value()) {
-    if (condition->value()) {
-      *out = cuda::std::nullopt;
+  if (condition.has_value() && a.has_value()) {
+    if (condition.value()) {
+      return {};
     } else {
-      *out = a->value();
+      return a.value();
     }
   } else {
-    *out = cuda::std::nullopt;
+    return {};
   }
 }
 
@@ -66,58 +64,58 @@ __device__ void nullify_if(cuda::std::optional<T>* out,
  * @brief Returns the first non-null of two values.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a First value.
  * @param b Second value.
  */
 template <typename T>
-__device__ void coalesce(T* out, T const* a, T const* b)
+__device__ T coalesce(T a, T b)
+  requires(!nullable<T>)
 {
-  *out = *a;
+  return a;
 }
 
 /**
  * @brief Returns the first non-null of two values.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a First value.
  * @param b Second value.
  */
 template <typename T>
-__device__ void coalesce(cuda::std::optional<T>* out,
-                         cuda::std::optional<T> const* a,
-                         cuda::std::optional<T> const* b)
+__device__ optional<T> coalesce(optional<T> a, optional<T> b)
 {
-  if (a->has_value()) {
-    *out = a->value();
-  } else if (b->has_value()) {
-    *out = b->value();
+  if (a.has_value()) {
+    return a.value();
+  } else if (b.has_value()) {
+    return b.value();
   } else {
-    *out = cuda::std::nullopt;
+    return {};
   }
 }
 
 /**
  * @brief Converts an optional predicate to a non-nullable predicate.
  *
- * @param out Result destination.
  * @param a Input boolean predicate.
  */
-__device__ inline void predicate(bool* out, bool const* a) { *out = *a; }
+template <cuda::std::same_as<bool> T>
+__device__ inline bool predicate(T a)
+{
+  return a;
+}
 
 /**
  * @brief Converts an optional predicate to a non-nullable predicate.
  *
- * @param out Result destination.
  * @param a Optional input boolean predicate.
  */
-__device__ inline void predicate(cuda::std::optional<bool>* out, cuda::std::optional<bool> const* a)
+template <cuda::std::same_as<bool> T>
+__device__ inline bool predicate(optional<T> a)
 {
-  if (a->has_value()) {
-    *out = a->value();
+  if (a.has_value()) {
+    return a.value();
   } else {
-    *out = false;
+    return false;
   }
 }
 

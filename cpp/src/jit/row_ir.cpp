@@ -375,12 +375,11 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
               args_str));
           } else {
             sink.emit(std::format(
-              R"***({} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}, {}>{{}}({});
+              R"***({} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}>{{}}({});
 )***",
               type,
               id_,
               ast::detail::ast_operator_string(as_ast_op(op_)),
-              instance.has_nulls(),
               args_str));
           }
         } break;

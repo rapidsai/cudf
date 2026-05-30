@@ -4,6 +4,8 @@
  */
 #pragma once
 
+#include <cudf/operators/concepts.cuh>
+#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/optional>
@@ -15,253 +17,117 @@ namespace ops {
  * @brief Tests `a == b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void equal(bool* out, T const* a, T const* b)
+__device__ bool equal(T a, T b)
+  requires(!nullable<T> && cuda::std::equality_comparable<T>)
 {
-  *out = (*a == *b);
-}
-
-/**
- * @brief Tests `a == b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void equal(cuda::std::optional<bool>* out,
-                      cuda::std::optional<T> const* a,
-                      cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    equal(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a == b);
 }
 
 /**
  * @brief Tests `a != b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void not_equal(bool* out, T const* a, T const* b)
+__device__ bool not_equal(T a, T b)
+  requires(!nullable<T> && cuda::std::equality_comparable<T>)
 {
-  *out = (*a != *b);
-}
-
-/**
- * @brief Tests `a != b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void not_equal(cuda::std::optional<bool>* out,
-                          cuda::std::optional<T> const* a,
-                          cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    not_equal(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a != b);
 }
 
 /**
  * @brief Tests `a > b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void greater(bool* out, T const* a, T const* b)
+__device__ bool greater(T a, T b)
+  requires(!nullable<T> && cuda::std::totally_ordered<T>)
 {
-  *out = (*a > *b);
-}
-
-/**
- * @brief Tests `a > b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void greater(cuda::std::optional<bool>* out,
-                        cuda::std::optional<T> const* a,
-                        cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    greater(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a > b);
 }
 
 /**
  * @brief Tests `a >= b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void greater_equal(bool* out, T const* a, T const* b)
+__device__ bool greater_equal(T a, T b)
+  requires(!nullable<T> && cuda::std::totally_ordered<T>)
 {
-  *out = (*a >= *b);
-}
-
-/**
- * @brief Tests `a >= b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void greater_equal(cuda::std::optional<bool>* out,
-                              cuda::std::optional<T> const* a,
-                              cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    greater_equal(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a >= b);
 }
 
 /**
  * @brief Tests `a < b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void less(bool* out, T const* a, T const* b)
+__device__ bool less(T a, T b)
+  requires(!nullable<T> && cuda::std::totally_ordered<T>)
 {
-  *out = (*a < *b);
-}
-
-/**
- * @brief Tests `a < b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void less(cuda::std::optional<bool>* out,
-                     cuda::std::optional<T> const* a,
-                     cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    less(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a < b);
 }
 
 /**
  * @brief Tests `a <= b`.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void less_equal(bool* out, T const* a, T const* b)
+__device__ bool less_equal(T a, T b)
+  requires(!nullable<T> && cuda::std::totally_ordered<T>)
 {
-  *out = (*a <= *b);
-}
-
-/**
- * @brief Tests `a <= b`.
- *
- * @tparam T Value type.
- * @param out Result destination.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ void less_equal(cuda::std::optional<bool>* out,
-                           cuda::std::optional<T> const* a,
-                           cuda::std::optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    less_equal(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = cuda::std::nullopt;
-  }
+  return (a <= b);
 }
 
 /**
  * @brief Tests equality between two values for null-aware equality semantics.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void null_equal(bool* out, T const* a, T const* b)
+__device__ bool null_equal(T a, T b)
+  requires(!nullable<T> && cuda::std::equality_comparable<T>)
 {
-  *out = (*a == *b);
+  return (a == b);
 }
 
 /**
  * @brief Tests equality between two values for null-aware equality semantics.
  *
  * @tparam T Value type.
- * @param out Result destination.
  * @param a Left operand.
  * @param b Right operand.
  */
 template <typename T>
-__device__ void null_equal(cuda::std::optional<bool>* out,
-                           cuda::std::optional<T> const* a,
-                           cuda::std::optional<T> const* b)
+__device__ bool null_equal(optional<T> a, optional<T> b)
+  requires(!nullable<T> && cuda::std::equality_comparable<T>)
 {
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    null_equal(&r, &a->value(), &b->value());
-    *out = r;
-  } else if (!a->has_value() && !b->has_value()) {
-    *out = true;
+  if (a.has_value() && b.has_value()) {
+    return null_equal(a.value(), b.value());
+  } else if (!a.has_value() && !b.has_value()) {
+    return true;
   } else {
-    *out = false;
+    return false;
   }
 }
 
