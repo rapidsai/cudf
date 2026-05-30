@@ -629,6 +629,7 @@ DatetimeTZDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
     },
 )
 
