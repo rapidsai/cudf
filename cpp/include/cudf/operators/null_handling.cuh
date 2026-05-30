@@ -27,11 +27,6 @@ __device__ bool is_null(T a)
   return false;
 }
 
-/**
- * @brief Tests whether an input value is null.
- *
- * @tparam T Value type.
- */
 template <typename T>
 __device__ bool is_null(T a)
   requires(nullable<T>)
@@ -74,13 +69,6 @@ __device__ T coalesce(T a, T b)
   return a;
 }
 
-/**
- * @brief Returns the first non-null of two values.
- *
- * @tparam T Value type.
- * @param a First value.
- * @param b Second value.
- */
 template <typename T>
 __device__ optional<T> coalesce(optional<T> a, optional<T> b)
 {
@@ -104,11 +92,6 @@ __device__ inline bool predicate(T a)
   return a;
 }
 
-/**
- * @brief Converts an optional predicate to a non-nullable predicate.
- *
- * @param a Optional input boolean predicate.
- */
 template <cuda::std::same_as<bool> T>
 __device__ inline bool predicate(optional<T> a)
 {

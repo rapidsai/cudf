@@ -16,25 +16,19 @@ namespace ops {
 /**
  * @brief Computes logical AND with null-aware semantics.
  *
- * @tparam T Operand type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral T>
-__device__ bool null_logical_and(T a, T b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ bool null_logical_and(A a, B b)
 {
   return a && b;
 }
 
-/**
- * @brief Computes logical AND with null-aware semantics.
- *
- * @tparam T Value type.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <cuda::std::integral T>
-__device__ optional<bool> null_logical_and(optional<T> a, optional<T> b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ optional<bool> null_logical_and(optional<A> a, optional<B> b)
 {
   if (a.has_value() && b.has_value()) {
     return null_logical_and(a.value(), b.value());
@@ -52,25 +46,19 @@ __device__ optional<bool> null_logical_and(optional<T> a, optional<T> b)
 /**
  * @brief Computes logical OR with null-aware semantics.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral T>
-__device__ bool null_logical_or(T a, T b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ bool null_logical_or(A a, B b)
 {
   return a || b;
 }
 
-/**
- * @brief Computes logical OR with null-aware semantics.
- *
- * @tparam T Value type.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <cuda::std::integral T>
-__device__ optional<bool> null_logical_or(optional<T> a, optional<T> b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ optional<bool> null_logical_or(optional<A> a, optional<B> b)
 {
   if (a.has_value() && b.has_value()) {
     return null_logical_or(a.value(), b.value());
@@ -88,12 +76,13 @@ __device__ optional<bool> null_logical_or(optional<T> a, optional<T> b)
 /**
  * @brief Computes logical AND.
  *
- * @tparam T Operand type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral T>
-__device__ bool logical_and(T a, T b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ bool logical_and(A a, B b)
 {
   return a && b;
 }
@@ -101,12 +90,13 @@ __device__ bool logical_and(T a, T b)
 /**
  * @brief Computes logical OR.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral T>
-__device__ bool logical_or(T a, T b)
+template <cuda::std::integral A, cuda::std::integral B>
+__device__ bool logical_or(A a, B b)
 {
   return a || b;
 }
@@ -137,14 +127,6 @@ __device__ T if_else(T true_value, T false_value, bool pred)
   return pred ? true_value : false_value;
 }
 
-/**
- * @brief Selects one of two values based on a predicate.
- *
- * @tparam T Selected value type.
- * @param true_value Optional value selected when @p pred is true.
- * @param false_value Optional value selected when @p pred is false or null.
- * @param pred Selection predicate.
- */
 template <typename T>
 __device__ optional<T> if_else(optional<T> true_value, optional<T> false_value, optional<bool> pred)
 {

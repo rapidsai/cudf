@@ -35,12 +35,6 @@ __device__ result<T> ansi_add(T a, T b)
   return r;
 }
 
-/**
- * @brief Adds operands with overflow detection.
- *
- * @tparam T Value type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <floating_point T>
 __device__ result<T> ansi_add(T a, T b)
 {
@@ -66,14 +60,6 @@ __device__ result<numeric::decimal<R>> ansi_add(numeric::decimal<R> a, numeric::
     a.rescaled(scale).value() + b.rescaled(scale).value(), numeric::scale_type{scale}}};
 }
 
-/**
- * @brief Subtracts operands with overflow detection.
- *
- * @tparam T Value type.
- * @param a Minuend.
- * @param b Subtrahend.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <integer T>
 __device__ result<T> ansi_sub(T a, T b)
 {
@@ -94,12 +80,6 @@ __device__ result<T> ansi_sub(T a, T b)
   return a - b;
 }
 
-/**
- * @brief Subtracts operands with overflow detection.
- *
- * @tparam R Decimal representation type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_sub(numeric::decimal<R> a, numeric::decimal<R> b)
 {
@@ -129,24 +109,12 @@ __device__ result<T> ansi_mul(T a, T b)
   return r;
 }
 
-/**
- * @brief Multiplies operands with overflow detection.
- *
- * @tparam T Value type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <floating_point T>
 __device__ result<T> ansi_mul(T a, T b)
 {
   return a * b;
 }
 
-/**
- * @brief Multiplies operands with overflow detection.
- *
- * @tparam R Decimal representation type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_mul(numeric::decimal<R> a, numeric::decimal<R> b)
 {
@@ -174,25 +142,12 @@ __device__ result<T> ansi_div(T a, T b)
   return r;
 }
 
-/**
- * @brief Divides operands with ANSI checks.
- *
- * @tparam T Floating-point type.
- * @return errc::SUCCESS.
- */
 template <floating_point T>
 __device__ result<T> ansi_div(T a, T b)
 {
   return a / b;
 }
 
-/**
- * @brief Divides operands with ANSI checks.
- *
- * @tparam R Decimal representation type.
- * @return `errc::DIVISION_BY_ZERO` on zero divisor, `errc::OVERFLOW` on overflow, else
- * `errc::SUCCESS`.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_div(numeric::decimal<R> a, numeric::decimal<R> b)
 {
@@ -223,12 +178,6 @@ __device__ result<T> ansi_mod(T a, T b)
   return a % b;
 }
 
-/**
- * @brief Computes modulus with ANSI checks.
- *
- * @tparam T Value type.
- * @return `errc::DIVISION_BY_ZERO` on zero divisor, else the result.
- */
 template <unsigned_integer T>
 __device__ result<T> ansi_mod(T a, T b)
 {
@@ -236,11 +185,6 @@ __device__ result<T> ansi_mod(T a, T b)
   return a % b;
 }
 
-/**
- * @brief Computes modulus with ANSI checks.
- *
- * @return `errc::DIVISION_BY_ZERO` on zero divisor, else the result.
- */
 template <floating_point T>
 __device__ inline result<T> ansi_mod(T a, T b)
 {
@@ -248,12 +192,6 @@ __device__ inline result<T> ansi_mod(T a, T b)
   return a - b * cuda::std::floor(a / b);
 }
 
-/**
- * @brief Computes modulus with ANSI checks.
- *
- * @tparam R Decimal representation type.
- * @return `errc::DIVISION_BY_ZERO` on zero divisor, else the result.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_mod(numeric::decimal<R> a, numeric::decimal<R> b)
 {
@@ -276,36 +214,18 @@ __device__ result<T> ansi_abs(T a)
   return (a < 0) ? -a : a;
 }
 
-/**
- * @brief Computes absolute value with ANSI overflow checks.
- *
- * @tparam T Value type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <unsigned_integer T>
 __device__ result<T> ansi_abs(T a)
 {
   return a;
 }
 
-/**
- * @brief Computes absolute value with ANSI overflow checks.
- *
- * @tparam T Value type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <floating_point T>
 __device__ result<T> ansi_abs(T a)
 {
   return cuda::std::fabs(a);
 }
 
-/**
- * @brief Computes absolute value with ANSI overflow checks.
- *
- * @tparam R Decimal representation type.
- * @return `errc::OVERFLOW` on overflow, else errc::SUCCESS.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_abs(numeric::decimal<R> a)
 {
@@ -328,25 +248,12 @@ __device__ result<T> ansi_neg(T a)
   return -a;
 }
 
-/**
- * @brief Computes unary negation with ANSI overflow checks.
- *
- * @tparam T Value type.
- * @param a Input value.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <floating_point T>
 __device__ result<T> ansi_neg(T a)
 {
   return -a;
 }
 
-/**
- * @brief Computes unary negation with ANSI overflow checks.
- *
- * @tparam R Decimal representation type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <typename R>
 __device__ result<numeric::decimal<R>> ansi_neg(numeric::decimal<R> a)
 {

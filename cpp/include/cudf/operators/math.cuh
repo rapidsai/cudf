@@ -40,12 +40,6 @@ __device__ T ceil(T a)
   return cuda::std::ceil(a);
 }
 
-/**
- * @brief Computes ceiling.
- *
- * @tparam R Decimal representation type.
- * @param a Input value.
- */
 template <typename R>
 __device__ numeric::decimal<R> ceil(numeric::decimal<R> a)
 {
@@ -89,12 +83,6 @@ __device__ T floor(T a)
   return cuda::std::floor(a);
 }
 
-/**
- * @brief Computes floor of a value.
- *
- * @tparam R Decimal representation type.
- * @param a Input value.
- */
 template <typename R>
 __device__ numeric::decimal<R> floor(numeric::decimal<R> a)
 {
@@ -129,25 +117,19 @@ __device__ T log(T a)
 /**
  * @brief Computes exponentiation.
  *
- * @tparam T Value type.
+ * @tparam A Base value type.
+ * @tparam B Exponent value type.
  * @param a Base value.
  * @param b Exponent value.
  */
-template <floating_point T>
-__device__ T pow(T a, T b)
+template <floating_point A, floating_point B>
+__device__ auto pow(A a, B b) -> decltype(cuda::std::pow(a, b))
 {
   return cuda::std::pow(a, b);
 }
 
-/**
- * @brief Computes exponentiation.
- *
- * @tparam T Value type.
- * @param a Base value.
- * @param b Exponent value.
- */
-template <integer T>
-__device__ T pow(T a, T b)
+template <integer A, integer B>
+__device__ auto pow(A a, B b) -> decltype(cudf::detail::integral_pow(a, b))
 {
   return cudf::detail::integral_pow(a, b);
 }

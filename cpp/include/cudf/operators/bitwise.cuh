@@ -14,14 +14,15 @@ namespace ops {
 /**
  * @brief Computes bitwise AND of two values.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <integer T>
-__device__ T bit_and(T a, T b)
+template <integer A, integer B>
+__device__ auto bit_and(A a, B b) -> decltype(a & b)
 {
-  return (a & b);
+  return a & b;
 }
 
 /**
@@ -31,7 +32,7 @@ __device__ T bit_and(T a, T b)
  * @param a Input value.
  */
 template <integer T>
-__device__ T bit_invert(T a)
+__device__ auto bit_invert(T a) -> decltype(~a)
 {
   return ~a;
 }
@@ -39,53 +40,57 @@ __device__ T bit_invert(T a)
 /**
  * @brief Computes bitwise OR of two values.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <integer T>
-__device__ T bit_or(T a, T b)
+template <integer A, integer B>
+__device__ auto bit_or(A a, B b) -> decltype(a | b)
 {
-  return (a | b);
+  return a | b;
 }
 
 /**
  * @brief Computes bitwise XOR of two values.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <integer T>
-__device__ T bit_xor(T a, T b)
+template <integer A, integer B>
+__device__ auto bit_xor(A a, B b) -> decltype(a ^ b)
 {
-  return (a ^ b);
+  return a ^ b;
 }
 
 /**
  * @brief Shifts a value left by a bit count.
  *
- * @tparam T Value type.
+ * @tparam A Value type.
+ * @tparam B Shift count type.
  * @param a Input value.
  * @param b Shift count.
  */
-template <integer T>
-__device__ T bit_shift_left(T a, T b)
+template <integer A, integer B>
+__device__ auto bit_shift_left(A a, B b) -> decltype(a << b)
 {
-  return (a << b);
+  return a << b;
 }
 
 /**
  * @brief Shifts a value right by a bit count.
  *
- * @tparam T Value type.
+ * @tparam A Value type.
+ * @tparam B Shift count type.
  * @param a Input value.
  * @param b Shift count.
  */
-template <integer T>
-__device__ T bit_shift_right(T a, T b)
+template <integer A, integer B>
+__device__ auto bit_shift_right(A a, B b) -> decltype(a >> b)
 {
-  return (a >> b);
+  return a >> b;
 }
 
 }  // namespace ops

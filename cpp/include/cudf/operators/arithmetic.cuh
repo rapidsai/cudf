@@ -30,23 +30,12 @@ __device__ T abs(T a)
   return cuda::std::abs(a);
 }
 
-/**
- * @brief Computes absolute value.
- *
- * @tparam T Value type.
- * @param a Input value.
- */
 template <unsigned_integer T>
 __device__ T abs(T a)
 {
   return a;
 }
 
-/**
- * @brief Computes absolute value.
- *
- * @tparam R Decimal representation type.
- */
 template <typename R>
 __device__ numeric::decimal<R> abs(numeric::decimal<R> a)
 {
@@ -57,51 +46,47 @@ __device__ numeric::decimal<R> abs(numeric::decimal<R> a)
 /**
  * @brief Computes sum of two values.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <arithmetic T>
-__device__ T add(T a, T b)
+template <typename A, typename B>
+__device__ auto add(A a, B b) -> decltype(a + b)
 {
-  return (a + b);
+  return a + b;
 }
 
 /**
  * @brief Computes quotient of two values.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  */
-template <arithmetic T>
-__device__ T div(T a, T b)
+template <typename A, typename B>
+__device__ auto div(A a, B b) -> decltype(a / b)
 {
-  return (a / b);
+  return a / b;
 }
 
 /**
  * @brief Computes floor division of two values.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  */
-template <integer T>
-__device__ T floor_div(T a, T b)
+template <integer A, integer B>
+__device__ auto floor_div(A a, B b) -> decltype(cudf::detail::integral_floor_div(a, b))
 {
   return cudf::detail::integral_floor_div(a, b);
 }
 
-/**
- * @brief Computes floor division of two values.
- *
- * @tparam T Value type.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <floating_point T>
-__device__ T floor_div(T a, T b)
+template <floating_point A, floating_point B>
+__device__ auto floor_div(A a, B b) -> decltype(cuda::std::floor(a / b))
 {
   return cuda::std::floor(a / b);
 }
@@ -109,27 +94,19 @@ __device__ T floor_div(T a, T b)
 /**
  * @brief Computes remainder of two values.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  */
-template <typename T>
-__device__ T mod(T a, T b)
-  requires(integer<T> || fixed_point<T>)
+template <typename A, typename B>
+__device__ auto mod(A a, B b) -> decltype(a % b)
 {
-  return (a % b);
+  return a % b;
 }
 
-/**
- * @brief Computes remainder of two values.
- *
- * @tparam T Value type.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <typename T>
-__device__ T mod(T a, T b)
-  requires(floating_point<T>)
+template <floating_point A, floating_point B>
+__device__ auto mod(A a, B b) -> decltype(cuda::std::fmod(a, b))
 {
   return cuda::std::fmod(a, b);
 }
@@ -137,26 +114,19 @@ __device__ T mod(T a, T b)
 /**
  * @brief Computes Python-style modulus.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  */
-template <typename T>
-__device__ T pymod(T a, T b)
-  requires(integer<T> || fixed_point<T>)
+template <typename A, typename B>
+__device__ auto pymod(A a, B b) -> decltype((a % b + b) % b)
 {
   return (a % b + b) % b;
 }
 
-/**
- * @brief Computes Python-style modulus.
- *
- * @tparam T Value type.
- * @param a Dividend.
- * @param b Divisor.
- */
-template <floating_point T>
-__device__ T pymod(T a, T b)
+template <floating_point A, floating_point B>
+__device__ auto pymod(A a, B b) -> decltype(cuda::std::fmod(cuda::std::fmod(a, b) + b, b))
 {
   return cuda::std::fmod(cuda::std::fmod(a, b) + b, b);
 }
@@ -164,14 +134,15 @@ __device__ T pymod(T a, T b)
 /**
  * @brief Computes product of two values.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <arithmetic T>
-__device__ T mul(T a, T b)
+template <typename A, typename B>
+__device__ auto mul(A a, B b) -> decltype(a * b)
 {
-  return (a * b);
+  return a * b;
 }
 
 /**
@@ -181,18 +152,11 @@ __device__ T mul(T a, T b)
  * @param a Input value.
  */
 template <typename T>
-__device__ T neg(T a)
-  requires(signed_integer<T> || floating_point<T>)
+__device__ auto neg(T a) -> decltype(-a)
 {
   return -a;
 }
 
-/**
- * @brief Computes unary negation.
- *
- * @tparam R Decimal representation type.
- * @param a Input value.
- */
 template <typename R>
 __device__ numeric::decimal<R> neg(numeric::decimal<R> a)
 {
@@ -203,12 +167,13 @@ __device__ numeric::decimal<R> neg(numeric::decimal<R> a)
 /**
  * @brief Computes subtraction of two values.
  *
- * @tparam T Value type.
+ * @tparam A Minuend type.
+ * @tparam B Subtrahend type.
  * @param a Minuend.
  * @param b Subtrahend.
  */
-template <arithmetic T>
-__device__ T sub(T a, T b)
+template <typename A, typename B>
+__device__ auto sub(A a, B b) -> decltype(a - b)
 {
   return a - b;
 }
@@ -216,13 +181,13 @@ __device__ T sub(T a, T b)
 /**
  * @brief Computes true division and returns a double.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  */
-template <typename T>
-__device__ double true_div(T a, T b)
-  requires(floating_point<T> || integer<T>)
+template <typename A, typename B>
+__device__ auto true_div(A a, B b) -> decltype(static_cast<double>(a) / static_cast<double>(b))
 {
   return static_cast<double>(a) / static_cast<double>(b);
 }

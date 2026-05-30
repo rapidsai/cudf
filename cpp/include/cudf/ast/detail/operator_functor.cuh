@@ -19,15 +19,15 @@ namespace ast::detail {
 template <ast_operator op>
 struct operator_invoker;
 
-#define CUDF_AST_OPERATOR_MAP(OP, func_name, num_args)   \
-  template <>                                            \
-  struct operator_invoker<ast_operator::OP> {            \
-    static constexpr auto arity = num_args;              \
-    __device__ static inline auto eval(auto... a)        \
-      requires(requires { cudf::ops::func_name(a...); }) \
-    {                                                    \
-      return cudf::ops::func_name(a...);                 \
-    }                                                    \
+#define CUDF_AST_OPERATOR_MAP(OP, func_name, num_args)                                    \
+  template <>                                                                             \
+  struct operator_invoker<ast_operator::OP> {                                             \
+    static constexpr auto arity = num_args;                                               \
+    template <typename... Args>                                                           \
+    __device__ static inline auto eval(Args... a) -> decltype(cudf::ops::func_name(a...)) \
+    {                                                                                     \
+      return cudf::ops::func_name(a...);                                                  \
+    }                                                                                     \
   };
 
 CUDF_AST_OPERATOR_MAP(ADD, add, 2)

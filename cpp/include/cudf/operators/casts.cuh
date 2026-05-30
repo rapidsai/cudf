@@ -145,12 +145,6 @@ __device__ float cast_to_f32(T a)
   return static_cast<float>(a);
 }
 
-/**
- * @brief Casts fixed-point decimal values to float.
- *
- * @tparam R Source decimal representation type.
- * @param a Source decimal value.
- */
 template <typename R>
 __device__ float cast_to_f32(numeric::decimal<R> a)
 {
@@ -170,12 +164,6 @@ __device__ double cast_to_f64(T a)
   return static_cast<double>(a);
 }
 
-/**
- * @brief Casts input values to double.
- *
- * @tparam R Source decimal representation type.
- * @param a Input value.
- */
 template <typename R>
 __device__ double cast_to_f64(numeric::decimal<R> a)
 {

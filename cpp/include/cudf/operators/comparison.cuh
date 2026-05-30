@@ -16,111 +16,111 @@ namespace ops {
 /**
  * @brief Tests `a == b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool equal(T a, T b)
-  requires(!nullable<T> && cuda::std::equality_comparable<T>)
+template <typename A, typename B>
+__device__ bool equal(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a == b; })
 {
-  return (a == b);
+  return a == b;
 }
 
 /**
  * @brief Tests `a != b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool not_equal(T a, T b)
-  requires(!nullable<T> && cuda::std::equality_comparable<T>)
+template <typename A, typename B>
+__device__ bool not_equal(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a != b; })
 {
-  return (a != b);
+  return a != b;
 }
 
 /**
  * @brief Tests `a > b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool greater(T a, T b)
-  requires(!nullable<T> && ordered<T>)
+template <typename A, typename B>
+__device__ bool greater(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a > b; })
 {
-  return (a > b);
+  return a > b;
 }
 
 /**
  * @brief Tests `a >= b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool greater_equal(T a, T b)
-  requires(!nullable<T> && ordered<T>)
+template <typename A, typename B>
+__device__ bool greater_equal(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a >= b; })
 {
-  return (a >= b);
+  return a >= b;
 }
 
 /**
  * @brief Tests `a < b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool less(T a, T b)
-  requires(!nullable<T> && ordered<T>)
+template <typename A, typename B>
+__device__ bool less(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a < b; })
 {
-  return (a < b);
+  return a < b;
 }
 
 /**
  * @brief Tests `a <= b`.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool less_equal(T a, T b)
-  requires(!nullable<T> && ordered<T>)
+template <typename A, typename B>
+__device__ bool less_equal(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a <= b; })
 {
-  return (a <= b);
+  return a <= b;
 }
 
 /**
  * @brief Tests equality between two values for null-aware equality semantics.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  */
-template <typename T>
-__device__ bool null_equal(T a, T b)
-  requires(!nullable<T> && cuda::std::equality_comparable<T>)
+template <typename A, typename B>
+__device__ bool null_equal(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a == b; })
 {
-  return (a == b);
+  return a == b;
 }
 
-/**
- * @brief Tests equality between two values for null-aware equality semantics.
- *
- * @tparam T Value type.
- * @param a Left operand.
- * @param b Right operand.
- */
-template <typename T>
-__device__ bool null_equal(optional<T> a, optional<T> b)
-  requires(!nullable<T> && cuda::std::equality_comparable<T>)
+template <typename A, typename B>
+__device__ bool null_equal(optional<A> a, optional<B> b)
+  requires(!nullable<A> && !nullable<B> && requires { a == b; })
 {
   if (a.has_value() && b.has_value()) {
     return null_equal(a.value(), b.value());

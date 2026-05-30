@@ -16,16 +16,6 @@ namespace CUDF_EXPORT cudf {
 namespace ops {
 
 template <typename T>
-concept arithmetic =
-  (cuda::std::is_arithmetic_v<T> && !cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>) ||
-  cudf::is_fixed_point<T>();
-
-template <typename T>
-concept integral_or_floating_point_not_bool =
-  (cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>) &&
-  !cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>;
-
-template <typename T>
 concept integer =
   cuda::std::is_integral_v<T> && !cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>;
 
@@ -49,15 +39,6 @@ constexpr bool is_nullable<optional<T>> = true;
 
 template <typename T>
 concept nullable = is_nullable<T>;
-
-// Workaround for pre-CUDA 12.3 CCCL not correctly detecting ordering.
-template <typename T>
-concept ordered = requires(T a, T b) {
-  { a < b } -> cuda::std::convertible_to<bool>;
-  { a > b } -> cuda::std::convertible_to<bool>;
-  { a <= b } -> cuda::std::convertible_to<bool>;
-  { a >= b } -> cuda::std::convertible_to<bool>;
-};
 
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf
