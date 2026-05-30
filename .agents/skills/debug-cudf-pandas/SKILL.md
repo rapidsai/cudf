@@ -210,7 +210,7 @@ If the test **also fails under vanilla pandas**, the issue is NOT a cudf bug. Co
 - **Version mismatch**: the installed version of a third-party library differs from what pandas CI uses.
 - **Pandas test bug**: the test itself is broken (e.g. relies on side effects of other packages being present).
 
-Resolution for dependency gaps: add the missing package to `dependencies.yaml` under the `test_python_cudf_pandas` section, then run `rapids-dependency-file-generator` to propagate to pyproject.toml and other generated files. See Step 4c.
+Resolution for dependency gaps: add the missing package to `dependencies.yaml` under the `test_cudf_pandas_pandas_tests` section (for conda environments that don't use pip extras), then run `rapids-dependency-file-generator` to propagate. See Step 4c.
 
 Resolution for pandas bugs: xfail the test with an explanation string that describes why it's a pandas/upstream issue, and optionally write up a bug report for upstream.
 
@@ -267,14 +267,16 @@ Only reach this step if Step 3d confirmed the test also fails under vanilla pand
 
 1. **Identify the missing dependency.** Check what pandas CI installs by examining their CI config files (available in `pandas-testing/pandas/ci/deps/`). Common culprits: `xlsxwriter`, `lxml`, `odfpy`, `python-calamine`, `pyxlsb`.
 
-2. **Add to `dependencies.yaml`** under the `test_python_cudf_pandas` section:
+2. **Add to `dependencies.yaml`** under the `test_cudf_pandas_pandas_tests` section. This group provides packages that pandas CI has installed (via pip extras like `pandas[excel]`) but conda environments need listed explicitly:
 
 ```yaml
-  test_python_cudf_pandas:
+  # Additional dependencies for running the pandas test suite under cudf.pandas.
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[excel]),
+  # conda environments need these listed explicitly.
+  test_cudf_pandas_pandas_tests:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
-          ...
           - <new-package>
 ```
 
@@ -379,6 +381,6 @@ For intentional divergence: stop and ask the user. In most cases, the goal is to
 - Never fix the testing APIs (like `assert_frame_equal`, `assert_series_equal`) — fix the actual APIs that produce wrong results.
 - First see if the problem is in cudf classic and fix it there; if not, then move over to cudf.pandas.
 - Tests run with `xfail_strict = true` — a test listed in `NODEIDS_THAT_FAIL` that unexpectedly passes is reported as `XPASS` (also a failure). Remove from the list before testing.
-- When a fix requires adding a test dependency, update `dependencies.yaml` (under `test_python_cudf_pandas`) and run `rapids-dependency-file-generator` to propagate. Never manually edit the generated `pyproject.toml` entries marked as auto-generated.
+- When a fix requires adding a test dependency, update `dependencies.yaml` (under `test_cudf_pandas_pandas_tests` for conda environments) and run `rapids-dependency-file-generator` to propagate. Never manually edit the generated `pyproject.toml` entries marked as auto-generated.
 - Always verify vanilla pandas behavior before implementing proxy-layer fixes. If the test also fails without cudf.pandas, the problem is upstream or environmental, not a cudf bug.
 - xfail explanation strings should describe the root cause ("openpyxl limitation", "pandas test assumes xlsxwriter is installed"), not just the error type ("AssertionError", "IndexError").
