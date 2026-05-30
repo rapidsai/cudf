@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
 import json
-import os
 import sys
 import traceback
 from collections import defaultdict
@@ -24,17 +22,8 @@ def replace_kwargs(new_kwargs):
     return wrapper
 
 
-@contextlib.contextmanager
-def null_assert_warnings(*args, **kwargs):
-    try:
-        yield []
-    finally:
-        pass
-
-
 @pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
-    tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
@@ -319,28 +308,6 @@ NODEIDS_THAT_FAIL = {
     "tests/arrays/masked/test_arithmetic.py::test_series[boolean-__rfloordiv__]": "TODO: Add a reason for failure",
     "tests/arrays/masked/test_arithmetic.py::test_series[boolean-__rpow__]": "TODO: Add a reason for failure",
     "tests/arrays/masked/test_arithmetic.py::test_series[boolean-__rtruediv__]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Float32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Float64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Int16]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Int32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Int64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[Int8]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[UInt16]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[UInt32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[UInt64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[UInt8]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_arrow_array[boolean]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Float32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Float64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Int16]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Int32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Int64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[Int8]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt16]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt32]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt64]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt8]": "TODO: Add a reason for failure",
-    "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[boolean]": "TODO: Add a reason for failure",
     "tests/arrays/masked/test_indexing.py::TestSetitemValidation::test_setitem_validation_scalar_int[Int64-invalid5]": "Failed: DID NOT RAISE <class 'TypeError'>",
     "tests/arrays/masked/test_indexing.py::TestSetitemValidation::test_setitem_validation_scalar_int[Int64-invalid6]": "Failed: DID NOT RAISE <class 'TypeError'>",
     "tests/arrays/numpy_/test_numpy.py::test_asarray_readonly[None]": "assert not True",
@@ -7916,6 +7883,7 @@ NODEIDS_TO_SKIP: dict[str, str] = {
 }
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
     for item in items:
         if (reason := NODEIDS_TO_SKIP.get(item.nodeid, None)) is not None:
@@ -7933,6 +7901,3 @@ def pytest_collection_modifyitems(session, config, items):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (reason := NODEIDS_THAT_FAIL.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.xfail(reason=reason))
-
-
-sys.path.append(os.path.dirname(__file__))

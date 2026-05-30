@@ -37,12 +37,10 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::dat
   constexpr auto ender_len  = sizeof(file_ender_s);
   size_t const len          = datasource.size();
 
-  auto header_buffer = datasource.host_read(0, header_len);
-  auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
-  auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
+
+  auto ender_buffer = datasource.host_read(len - ender_len, ender_len);
+  auto const ender  = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
@@ -123,22 +121,47 @@ fetch_byte_ranges_to_device_async(
   device_read_tasks.reserve(io_offsets.size());
   host_read_tasks.reserve(io_offsets.size());
 
-  // Vectors to store intermediate host read buffers and relevant pointers
+  // Vectors to store intermediate host buffers and relevant pointers
+  std::vector<host_read_buffer> host_buffers{};
+  std::vector<void const*> copy_srcs{};
   std::vector<void*> copy_dsts{};
   std::vector<size_t> copy_sizes{};
   copy_dsts.reserve(io_offsets.size());
   copy_sizes.reserve(io_offsets.size());
 
-  // Vector to store intermediate host buffers
-  std::vector<host_read_buffer> host_buffers{};
+  auto iter = cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
+
+  // Schedule host reads in parallel
+  std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
+    auto const io_offset = cuda::std::get<0>(tuple);
+    auto const io_size   = cuda::std::get<1>(tuple);
+    auto const dest      = cuda::std::get<2>(tuple);
+
+    if (not datasource.is_device_read_preferred(io_size)) {
+      // Asynchronously read column chunk data to a host buffer
+      host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
+      copy_dsts.push_back(static_cast<void*>(dest));
+      copy_sizes.push_back(io_size);
+    }
+  });
+
+  // Complete host reads
+  if (not host_read_tasks.empty()) {
+    copy_srcs.reserve(host_read_tasks.size());
+    host_buffers.reserve(host_read_tasks.size());
+
+    for (auto& task : host_read_tasks) {
+      host_buffers.emplace_back(task.get());
+      copy_srcs.push_back(host_buffers.back().get()->data());
+    }
+  }
 
   // `device_read_async` is not guaranteed to follow stream-ordering (see datasource API docs)
   stream.synchronize();
 
+  // Ensure all device reads for this thread are scheduled together
   {
-    auto iter = cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
-
-    std::lock_guard<std::mutex> lock(mutex);
+    std::scoped_lock<std::mutex> lock(mutex);
 
     std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
       auto const io_offset = cuda::std::get<0>(tuple);
@@ -146,44 +169,30 @@ fetch_byte_ranges_to_device_async(
       auto const dest      = cuda::std::get<2>(tuple);
 
       // Directly read the column chunk data to the device buffer if supported
-      if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
+      if (datasource.is_device_read_preferred(io_size)) {
         device_read_tasks.emplace_back(
           datasource.device_read_async(io_offset, io_size, dest, stream));
-      } else {
-        // Asynchronously read column chunk data to a host buffer
-        host_read_tasks.emplace_back(datasource.host_read_async(io_offset, io_size));
-        copy_dsts.push_back(static_cast<void*>(dest));
-        copy_sizes.push_back(io_size);
       }
     });
 
-    // If there are host reads, schedule a batched memcpy to device
-    if (not host_read_tasks.empty()) {
-      std::vector<void const*> copy_srcs{};
-      copy_srcs.reserve(host_read_tasks.size());
-      host_buffers.reserve(host_read_tasks.size());
-
-      for (auto& task : host_read_tasks) {
-        host_buffers.emplace_back(task.get());
-        copy_srcs.push_back(host_buffers.back().get()->data());
-      }
+    // Schedule a batched memcpy from host buffers to device
+    if (not host_buffers.empty()) {
       CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
         copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
     }
-
-    // Synchronize the stream if `memcpy_batch_async` was scheduled to safely discard the host
-    // buffers
-    if (not host_buffers.empty()) { stream.synchronize(); }
-
-    auto sync_function = [](decltype(device_read_tasks) device_read_tasks) {
-      for (auto& task : device_read_tasks) {
-        task.get();
-      }
-    };
-    return {std::move(column_chunk_buffers),
-            std::move(column_chunk_data),
-            std::async(std::launch::deferred, sync_function, std::move(device_read_tasks))};
   }
+
+  // Synchronize stream if `memcpy_batch_async` was called to safely discard the host buffers
+  if (not host_buffers.empty()) { stream.synchronize(); }
+
+  auto sync_function = [](decltype(device_read_tasks) device_read_tasks) {
+    for (auto& task : device_read_tasks) {
+      task.get();
+    }
+  };
+  return {std::move(column_chunk_buffers),
+          std::move(column_chunk_data),
+          std::async(std::launch::deferred, sync_function, std::move(device_read_tasks))};
 }
 
 }  // namespace cudf::io::parquet
