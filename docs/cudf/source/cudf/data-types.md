@@ -17,12 +17,12 @@ All data types in cuDF are [nullable](missing-data).
 | Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64[us]'`, `'datetime64[ns]'`                                                            |
 | Datetime w/ timezone | `pandas.DatetimeTZDtype`                                                                                                                 |
 | Timedelta (duration) | `'timedelta64[s]'`, `'timedelta64[ms]'`, `'timedelta64[us]'`, `'timedelta64[ns]'`                                                        |
-| Category             | {py:class}`~cudf.CategoricalDtype`                                                                                                       |
+| Category             | {py:class}`~cudf.core.dtypes.CategoricalDtype`                                                                                           |
 | String               | `pandas.StringDtype`                                                                                                                     |
-| Decimal              | {py:class}`~cudf.Decimal32Dtype`, {py:class}`~cudf.Decimal64Dtype`, {py:class}`~cudf.Decimal128Dtype`                                    |
-| List                 | {py:class}`~cudf.ListDtype`                                                                                                              |
-| Struct               | {py:class}`~cudf.StructDtype`                                                                                                            |
-| Interval             | {py:class}`~cudf.IntervalDtype`                                                                                                          |
+| Decimal              | {py:class}`~cudf.core.dtypes.Decimal32Dtype`, {py:class}`~cudf.core.dtypes.Decimal64Dtype`, {py:class}`~cudf.core.dtypes.Decimal128Dtype`|
+| List                 | {py:class}`~cudf.core.dtypes.ListDtype`                                                                                                  |
+| Struct               | {py:class}`~cudf.core.dtypes.StructDtype`                                                                                                |
+| Interval             | {py:class}`~cudf.core.dtypes.IntervalDtype`                                                                                              |
 
 </div>
 
@@ -97,9 +97,9 @@ dtype("object")
 
 ## Decimal data types
 
-{py:class}`~cudf.Decimal32Dtype`,
-{py:class}`~cudf.Decimal64Dtype`, and
-{py:class}`~cudf.Decimal128Dtype` are data types for decimal data useful when you
+{py:class}`~cudf.core.dtypes.Decimal32Dtype`,
+{py:class}`~cudf.core.dtypes.Decimal64Dtype`, and
+{py:class}`~cudf.core.dtypes.Decimal128Dtype` are data types for decimal data useful when you
 need to store values with greater precision than allowed by floating-point
 representation.
 
@@ -149,8 +149,8 @@ type:
 
 ## Nested data types (`List` and `Struct`)
 
-{py:class}`~cudf.ListDtype` and
-{py:class}`~cudf.StructDtype` are data types in cuDF for
+{py:class}`~cudf.core.dtypes.ListDtype` and
+{py:class}`~cudf.core.dtypes.StructDtype` are data types in cuDF for
 working with list-like and dictionary-like data. These are referred to as
 "nested" data types because they are specified by a "child" type of the elements
 which also might be a list or struct type.
