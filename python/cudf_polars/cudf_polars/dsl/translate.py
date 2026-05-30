@@ -35,14 +35,40 @@ from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
+
+
+def _align_decimal_float_for_comparison(
+    *operands: expr.Expr,
+) -> tuple[expr.Expr, ...]:
+    """
+    Cast Decimal operands to Float64 when mixed with Float operands.
+
+    libcudf does not produce correct results for Decimal vs Float
+    comparisons. This matches Polars' supertype resolution where
+    Decimal + Float yields Float64.
+    """
+    has_decimal = any(plc.traits.is_fixed_point(op.dtype.plc_type) for op in operands)
+    has_float = any(plc.traits.is_floating_point(op.dtype.plc_type) for op in operands)
+    if has_decimal and has_float:
+        f64 = DataType(pl.Float64())
+        return tuple(
+            expr.Cast(f64, False, op)  # noqa: FBT003
+            if plc.traits.is_fixed_point(op.dtype.plc_type)
+            else op
+            for op in operands
+        )
+    return operands
 
 
 def _check_compression(data: bytes) -> str | None:
@@ -90,6 +116,7 @@ class Translator:
         self.errors: list[Exception] = []
         self._cache_nodes: dict[int, ir.Cache] = {}
         self._expr_context: ExecutionContext = ExecutionContext.FRAME
+        self._internal_name_gen: Generator[str, None, None] | None = None
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -125,7 +152,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (12, 1):
+        if (version := self.visitor.version()) >= (12, 2):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -247,6 +274,35 @@ class set_expr_context(AbstractContextManager[None]):
         self.translator._expr_context = self._prev
 
 
+def _is_dynamic_pred(visitor: Any, expr_ir: Any) -> bool:
+    try:
+        visitor.view_expression(expr_ir.node)
+    except Exception as e:
+        if str(e) == "dynamic_pred":
+            return True
+        raise  # pragma: no cover
+    else:
+        return False
+
+
+class set_internal_name_gen(AbstractContextManager[None]):
+    """Share one internal-name generator across sibling expression translations."""
+
+    __slots__ = ("_prev", "schema", "translator")
+
+    def __init__(self, translator: Translator, schema: Schema) -> None:
+        self.translator = translator
+        self.schema = schema
+        self._prev: Generator[str, None, None] | None = None
+
+    def __enter__(self) -> None:
+        self._prev = self.translator._internal_name_gen
+        self.translator._internal_name_gen = unique_names(self.schema)
+
+    def __exit__(self, *args: Any) -> None:
+        self.translator._internal_name_gen = self._prev
+
+
 @singledispatch
 def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
     raise NotImplementedError(
@@ -307,7 +363,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     if typ in ("csv", "ndjson"):
         for p in paths:
             if plc.io.SourceInfo._is_remote_uri(p):
-                continue
+                continue  # pragma: no cover
             data = _read_file_bytes(Path(p))
             compression = _check_compression(data)
             if compression is not None:
@@ -326,9 +382,12 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         n_rows,
         row_index,
         include_file_paths,
-        translate_named_expr(translator, n=node.predicate, schema=schema)
-        if node.predicate is not None
-        else None,
+        (
+            None
+            if node.predicate is None
+            or _is_dynamic_pred(translator.visitor, node.predicate)
+            else translate_named_expr(translator, n=node.predicate, schema=schema)
+        ),
         parquet_options,
     )
 
@@ -362,9 +421,11 @@ def _(
 def _(node: plrs._ir_nodes.Select, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.expr
-        ]
+        with set_internal_name_gen(translator, inp.schema):
+            exprs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.expr
+            ]
     return ir.Select(schema, exprs, node.should_broadcast, inp)
 
 
@@ -478,9 +539,11 @@ def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.I
 def _(node: plrs._ir_nodes.HStack, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.exprs
-        ]
+        with set_internal_name_gen(translator, inp.schema):
+            exprs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.exprs
+            ]
     return ir.HStack(schema, exprs, node.should_broadcast, inp)
 
 
@@ -537,6 +600,8 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
+        if _is_dynamic_pred(translator.visitor, node.predicate):
+            return inp
         mask = translate_named_expr(translator, n=node.predicate, schema=inp.schema)
     return ir.Filter(schema, mask, inp)
 
@@ -585,9 +650,14 @@ def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> ir.IR:
+    if POLARS_VERSION_LT_139:
+        strict = False  # pragma: no cover
+    else:
+        _, strict, _ = node.options
     return ir.HConcat(
         schema,
         False,  # noqa: FBT003
+        strict,
         *(translator.translate_ir(n=n) for n in node.inputs),
     )
 
@@ -625,7 +695,7 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
             if k in {"mkdir", "maintain_order", "sync_on_close"}:
                 options[k] = v
 
-    if sink_kind in ("Csv", "NDJson"):
+    if sink_kind in ("Csv", "NDJson", "Json"):
         compression = format_options.get("compression")
         if compression and compression != "Uncompressed":
             raise NotImplementedError(
@@ -748,6 +818,10 @@ def _(
             )
             (closed,) = options
             lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            if not POLARS_VERSION_LT_139:
+                # IsBetween type coercion does not
+                # insert casts for Decimal/Float comparisons.
+                column, lo, hi = _align_decimal_float_for_comparison(column, lo, hi)
             return expr.BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.LOGICAL_AND,
@@ -820,17 +894,12 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if isinstance(
+    if hasattr(plrs._expr_nodes, "RollingGroupOptions") and isinstance(
         node.options, plrs._expr_nodes.RollingGroupOptions
-    ):  # pragma: no cover; polars gives Aexpr::Rolling node now
-        # TODO: As of polars 1.36.0, rolling is represented as a Rolling expression node
-        # but is currently not implemented in the python node visitor. Once we support it,
-        # we should move this branch to separate translator dispatch function for the new node.
-
-        # pl.col("a").rolling(...)
+    ):  # pragma: no cover; polars >=1.36 uses AExpr::Rolling now
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)
-        name_generator = unique_names(schema)
+        name_generator = translator._internal_name_gen or unique_names(schema)
         aggs, named_post_agg = decompose_single_agg(
             expr.NamedExpr(next(name_generator), agg),
             name_generator,
@@ -875,7 +944,7 @@ def _(
         # not exposed until polars 1.39.
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
-        name_gen = unique_names(schema)
+        name_gen = translator._internal_name_gen or unique_names(schema)
         aggs, post = decompose_single_agg(
             expr.NamedExpr(next(name_gen), agg),
             name_gen,
@@ -926,6 +995,61 @@ def _(
             *children,
         )
     assert_never(node.options)
+
+
+def _translate_rolling(
+    node: plrs._expr_nodes.Rolling,
+    translator: Translator,
+    dtype: DataType,
+    schema: Schema,
+) -> expr.Expr:
+    # pl.col("a").rolling(...)
+    with set_expr_context(translator, ExecutionContext.ROLLING):
+        agg_expr = translator.translate_expr(n=node.function, schema=schema)
+    orderby = translator.visitor.view_expression(node.index_column).name
+    orderby_dtype = schema[orderby].plc_type
+    if plc.traits.is_integral(orderby_dtype):
+        orderby_dtype = plc.DataType(plc.TypeId.INT64)
+    name_generator = unique_names(schema)
+    aggs, named_post_agg = decompose_single_agg(
+        expr.NamedExpr(next(name_generator), agg_expr),
+        name_generator,
+        is_top=True,
+        context=ExecutionContext.ROLLING,
+    )
+    named_aggs = [a for a, _ in aggs]
+    closed_window = node.closed_window
+    if isinstance(named_post_agg.value, expr.Col):
+        (named_agg,) = named_aggs
+        return expr.RollingWindow(
+            named_agg.value.dtype,
+            orderby_dtype,
+            node.offset,
+            node.period,
+            closed_window,
+            orderby,
+            named_agg.value,
+        )
+    replacements: dict[expr.Expr, expr.Expr] = {
+        expr.Col(a.value.dtype, a.name): expr.RollingWindow(
+            a.value.dtype,
+            orderby_dtype,
+            node.offset,
+            node.period,
+            closed_window,
+            orderby,
+            a.value,
+        )
+        for a in named_aggs
+    }
+    return replace([named_post_agg.value], replacements)[0]
+
+
+# Rolling was added in polars 1.39. Use explicit registration (not annotation-based)
+# so that Python 3.14's stricter get_type_hints() resolution does not fail when
+# running on older polars versions that lack this node type.
+if hasattr(plrs._expr_nodes, "Rolling"):
+    _translate_expr.register(plrs._expr_nodes.Rolling)(_translate_rolling)
 
 
 @_translate_expr.register

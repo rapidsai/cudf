@@ -28,9 +28,7 @@ from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ColumnMetadata",
-    "from_arrow",
     "from_dlpack",
-    "to_arrow",
     "to_dlpack",
 ]
 

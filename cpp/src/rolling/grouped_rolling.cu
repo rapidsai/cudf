@@ -98,15 +98,16 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     cudf::detail::following_window_wrapper grouped_following_window{
       group_offsets.data(), group_labels.data(), following_window};
 
-    return cudf::detail::rolling_window_udf(input,
-                                            grouped_preceding_window,
-                                            "cudf::detail::preceding_window_wrapper",
-                                            grouped_following_window,
-                                            "cudf::detail::following_window_wrapper",
-                                            min_periods,
-                                            aggr,
-                                            stream,
-                                            mr);
+    return cudf::detail::rolling_window_udf(
+      input,
+      cudf::detail::preceding_window_wrapper{
+        group_offsets.data(), group_labels.data(), preceding_window},
+      cudf::detail::following_window_wrapper{
+        group_offsets.data(), group_labels.data(), following_window},
+      min_periods,
+      aggr,
+      stream,
+      mr);
   } else {
     namespace utils = cudf::detail::rolling;
     auto groups     = utils::grouped{group_labels.data(), group_offsets.data()};

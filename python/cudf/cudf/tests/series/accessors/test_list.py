@@ -57,12 +57,12 @@ def test_leaves(data):
 )
 def test_len(data):
     gsr = cudf.Series(data)
-    psr = gsr.to_pandas()
-
-    expect = psr.map(lambda x: len(x) if x is not None else None)
-    got = gsr.list.len()
-
-    assert_eq(expect, got, check_dtype=False)
+    psr = gsr.to_pandas(arrow_type=True)
+    if pa.types.is_null(psr.dtype.pyarrow_dtype):
+        psr = psr.astype(pd.ArrowDtype(gsr.dtype.to_arrow()))
+    expect = psr.list.len()
+    got = gsr.list.len().to_pandas(arrow_type=True)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -193,7 +193,7 @@ def test_get(data, index, expect):
     expect = cudf.Series(expect)
     got = sr.list.get(index)
 
-    assert_eq(expect, got, check_dtype=not expect.isnull().all())
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
