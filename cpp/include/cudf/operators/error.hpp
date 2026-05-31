@@ -35,21 +35,21 @@ struct result {
    *
    * @param value The value of the result.
    */
-  __device__ constexpr result(T value) : error_(errc::SUCCESS), value_(value) {}
+  __device__ __host__ constexpr result(T value) : error_(errc::SUCCESS), value_(value) {}
 
   /**
    * @brief Constructs a result with an error.
    *
    * @param error The error code of the result.
    */
-  __device__ constexpr result(errc error) : error_(error), value_() {}
+  __device__ __host__ constexpr result(errc error) : error_(error), value_() {}
 
   /**
    * @brief Checks if the result has an error.
    *
    * @return true if the result has an error, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr bool has_error() const noexcept
+  [[nodiscard]] __device__ __host__ constexpr bool has_error() const
   {
     return error_ != errc::SUCCESS;
   }
@@ -59,10 +59,7 @@ struct result {
    *
    * @return true if the result has a value, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr bool has_value() const noexcept
-  {
-    return !has_error();
-  }
+  [[nodiscard]] __device__ __host__ constexpr bool has_value() const { return !has_error(); }
 
   /**
    * @brief Returns true if the result has a value, false otherwise. This operator allows the result
@@ -70,10 +67,7 @@ struct result {
    *
    * @return true if the result has a value, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr explicit operator bool() const noexcept
-  {
-    return has_value();
-  }
+  [[nodiscard]] __device__ __host__ constexpr explicit operator bool() const { return has_value(); }
 
   /**
    * @brief Returns the value of the result. Behaviour is undefined if the result has an error (i.e.
