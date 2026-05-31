@@ -6,7 +6,7 @@
 #include <cudf/jit/transform_operator.cuh>
 
 template <>
-__device__ void cudf::lto::unary_operator<float, float>(float* __restrict__ out, float a)
+__device__ void cudf::lto::transform<float*, float>(float* out, float a)
 {
   *out = 1.0F / sqrtf(a);
 }

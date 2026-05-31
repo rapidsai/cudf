@@ -64,17 +64,7 @@ __device__ void transform_kernel(size_type row_size,
 
     auto operation = [&]<typename Args>(Args const& args) {
       static_assert(!has_user_data);
-      static_assert(OutputAccessors::size == 1);
-      static_assert(InputAccessors::size == 2 || InputAccessors::size == 1);
-      cuda::std::apply(
-        [&](auto... a) {
-          if constexpr (InputAccessors::size == 1) {
-            cudf::lto::unary_operator(a...);
-          } else if constexpr (InputAccessors::size == 2) {
-            cudf::lto::binary_operator(a...);
-          }
-        },
-        args);
+      cuda::std::apply([&](auto... a) { cudf::lto::transform(a...); }, args);
     };
 
 #endif

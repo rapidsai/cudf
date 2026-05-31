@@ -7,22 +7,22 @@
 #include <cudf/jit/transform_operator.cuh>
 
 template <>
-__device__ void cudf::lto::unary_operator<numeric::decimal32, numeric::decimal32>(
-  numeric::decimal32* __restrict__ out, numeric::decimal32 a)
+__device__ void cudf::lto::transform<numeric::decimal32*, numeric::decimal32>(
+  numeric::decimal32* out, numeric::decimal32 a)
 {
   *out = a * a;
 }
 
 template <>
-__device__ void cudf::lto::unary_operator<numeric::decimal64, numeric::decimal64>(
-  numeric::decimal64* __restrict__ out, numeric::decimal64 a)
+__device__ void cudf::lto::transform<numeric::decimal64*, numeric::decimal64>(
+  numeric::decimal64* out, numeric::decimal64 a)
 {
   *out = a * a;
 }
 
 template <>
-__device__ void cudf::lto::unary_operator<numeric::decimal128, numeric::decimal128>(
-  numeric::decimal128* __restrict__ out, numeric::decimal128 a)
+__device__ void cudf::lto::transform<numeric::decimal128*, numeric::decimal128>(
+  numeric::decimal128* out, numeric::decimal128 a)
 {
   *out = a * a;
 }

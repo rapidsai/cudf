@@ -9,10 +9,10 @@
 #include <cuda/std/optional>
 
 template <>
-__device__ void cudf::lto::binary_operator<cuda::std::optional<numeric::decimal32>,
-                                           cuda::std::optional<numeric::decimal32>,
-                                           cuda::std::optional<numeric::decimal32>>(
-  cuda::std::optional<numeric::decimal32>* __restrict__ out,
+__device__ void cudf::lto::transform<cuda::std::optional<numeric::decimal32>*,
+                                     cuda::std::optional<numeric::decimal32>,
+                                     cuda::std::optional<numeric::decimal32>>(
+  cuda::std::optional<numeric::decimal32>* out,
   cuda::std::optional<numeric::decimal32> a,
   cuda::std::optional<numeric::decimal32> b)
 {

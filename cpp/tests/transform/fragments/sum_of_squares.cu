@@ -6,9 +6,7 @@
 #include <cudf/jit/transform_operator.cuh>
 
 template <>
-__device__ void cudf::lto::binary_operator<float, float, float>(float* __restrict__ out,
-                                                                float a,
-                                                                float b)
+__device__ void cudf::lto::transform<float*, float, float>(float* out, float a, float b)
 {
   *out = a * a + b * b;
 }
