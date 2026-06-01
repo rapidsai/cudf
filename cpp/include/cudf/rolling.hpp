@@ -148,37 +148,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Constructs preceding and following columns given window range specifications and one or
- * more order-by columns.
- *
- * This overload is equivalent to the single-column overload when `orderby` contains one column.
- * When `orderby` contains multiple columns, bounded scalar RANGE endpoints are not supported
- * because a scalar distance is only well-defined for one order-by column. Multi-column order-by
- * windows support peer-frame endpoints: `unbounded` and `current_row`.
- *
- * @param group_keys Possibly empty table of sorted keys defining groups.
- * @param orderby Table defining sorted order-by keys. If `group_keys` is non-empty, must be sorted
- * groupwise.
- * @param orders Sort order for each order-by column.
- * @param null_orders Null sort order for each order-by column.
- * @param preceding Type of the preceding window.
- * @param following Type of the following window.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return pair of preceding and following columns that define the window bounds for each row,
- * suitable for passing to `rolling_window`.
- */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
-  table_view const& group_keys,
-  table_view const& orderby,
-  host_span<order const> orders,
-  host_span<null_order const> null_orders,
-  range_window_type preceding,
-  range_window_type following,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
  *
  * This function aggregates values in a window around each element i of the input column, and

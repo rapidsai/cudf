@@ -12,6 +12,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
@@ -257,8 +258,8 @@ std::unique_ptr<table> grouped_range_rolling_window_impl(table_view const& group
   }
   // OK, need to do the more complicated thing
   auto [preceding_column, following_column] = make_windows();
-  auto const& preceding_view = preceding_column->view();
-  auto const& following_view = following_column->view();
+  auto const& preceding_view                = preceding_column->view();
+  auto const& following_view                = following_column->view();
   std::transform(
     requests.begin(), requests.end(), std::back_inserter(results), [&](rolling_request const& req) {
       if (can_optimize_unbounded_window(std::holds_alternative<unbounded>(preceding),
@@ -344,14 +345,14 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     following,
     orderby.num_rows(),
     [&] {
-      return make_range_windows(group_keys,
-                                orderby,
-                                orders,
-                                null_orders,
-                                preceding,
-                                following,
-                                stream,
-                                cudf::get_current_device_resource_ref());
+      return detail::make_range_windows(group_keys,
+                                        orderby,
+                                        orders,
+                                        null_orders,
+                                        preceding,
+                                        following,
+                                        stream,
+                                        cudf::get_current_device_resource_ref());
     },
     stream,
     mr);

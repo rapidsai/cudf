@@ -246,19 +246,4 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     group_keys, orderby, order, null_order, preceding, following, stream, mr);
 }
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
-  table_view const& group_keys,
-  table_view const& orderby,
-  host_span<order const> orders,
-  host_span<null_order const> null_orders,
-  range_window_type preceding,
-  range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::make_range_windows(
-    group_keys, orderby, orders, null_orders, preceding, following, stream, mr);
-}
-
 }  // namespace CUDF_EXPORT cudf
