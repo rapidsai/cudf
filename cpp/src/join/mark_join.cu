@@ -810,27 +810,10 @@ mark_join::~mark_join() = default;
 
 mark_join::mark_join(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
-                     rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<detail::mark_join>(
-      build, compare_nulls, detail::CUCO_DESIRED_LOAD_FACTOR, join_prefilter::NO, stream)}
-{
-}
-
-mark_join::mark_join(cudf::table_view const& build,
-                     cudf::null_equality compare_nulls,
                      cudf::join_prefilter prefilter,
                      rmm::cuda_stream_view stream)
   : _impl{std::make_unique<detail::mark_join>(
       build, compare_nulls, detail::CUCO_DESIRED_LOAD_FACTOR, prefilter, stream)}
-{
-}
-
-mark_join::mark_join(cudf::table_view const& build,
-                     cudf::null_equality compare_nulls,
-                     double load_factor,
-                     rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<detail::mark_join>(
-      build, compare_nulls, load_factor, join_prefilter::NO, stream)}
 {
 }
 
