@@ -3578,7 +3578,8 @@ class DatetimeIndex(Index):
                 if self.is_monotonic_decreasing:
                     mask = (self._column >= start) & (self._column <= end)
                     return mask.values
-                return self.find_label_range(slice(start, end))
+                result = self.find_label_range(slice(start, end))
+                return slice(result.start, result.stop, None)
         return super().get_loc(key)
 
     def find_label_range(self, loc: slice) -> slice:
