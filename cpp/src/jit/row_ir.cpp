@@ -146,13 +146,14 @@ int32_t instance_context::add_input(input in)
   auto id     = static_cast<int32_t>(inputs_.size());
   auto id_str = std::format("in_{}", id);
 
-  data_type type{type_id::EMPTY, 0};
-  if (auto* col = std::get_if<column_input>(&in)) {
-    type = col->column.type();
-  } else {
-    auto& scalar = std::get<scalar_input>(in);
-    type         = scalar.scalar_column->type();
-  }
+  data_type const type = [&in] {
+    if (auto* col = std::get_if<column_input>(&in)) {
+      return col->column.type();
+    } else {
+      auto& scalar = std::get<scalar_input>(in);
+      return scalar.scalar_column->type();
+    }
+  }();
   inputs_.emplace_back(std::move(in));
   input_vars_.emplace_back(std::move(id_str), type);
   return id;
@@ -309,7 +310,7 @@ void node::instantiate(instance_context& ctx)
       CUDF_EXPECTS(args_[0]->get_type().id() == type_id::BOOL8,
                    "Predicate operator requires a boolean argument.",
                    std::runtime_error);
-      type_ = data_type{type_id::BOOL8, 0};
+      type_ = data_type{type_id::BOOL8};
     } break;
     default: {
       std::vector<data_type> arg_types;
