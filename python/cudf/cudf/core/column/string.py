@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import itertools
 import re
-import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -748,25 +747,6 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(
                     result,
                     get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-                ),
-            )
-
-    def edit_distance_matrix(self) -> ListColumn:
-        warnings.warn(
-            "edit_distance_matrix is deprecated. Use edit_distance instead.",
-            FutureWarning,
-        )
-        with self.access(mode="read", scope="internal"):
-            result = plc.nvtext.edit_distance.edit_distance_matrix(
-                self.plc_column
-            )
-            return cast(
-                cudf.core.column.lists.ListColumn,
-                ColumnBase.create(
-                    result,
-                    cudf.ListDtype(
-                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
-                    ),
                 ),
             )
 
@@ -1523,34 +1503,22 @@ class StringColumn(ColumnBase, Scannable):
 
     def replace_re(
         self,
-        pattern: list[str] | str,
-        replacement: Self | str,
+        pattern: str,
+        replacement: str,
         max_replace_count: int = -1,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            if isinstance(pattern, list) and isinstance(
-                replacement, type(self)
-            ):
-                plc_column = plc.strings.replace_re.replace_re(
-                    self.plc_column,
+            plc_column = plc.strings.replace_re.replace_re(
+                self.plc_column,
+                plc.strings.regex_program.RegexProgram.create(
                     pattern,
-                    replacement.plc_column,
-                    max_replace_count,
-                )
-            elif isinstance(pattern, str) and isinstance(replacement, str):
-                plc_column = plc.strings.replace_re.replace_re(
-                    self.plc_column,
-                    plc.strings.regex_program.RegexProgram.create(
-                        pattern,
-                        plc.strings.regex_flags.RegexFlags.DEFAULT,
-                    ),
-                    plc.Scalar.from_py(
-                        replacement, dtype=plc.DataType(plc.TypeId.STRING)
-                    ),
-                    max_replace_count,
-                )
-            else:
-                raise ValueError("Invalid pattern and replacement types")
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                plc.Scalar.from_py(
+                    replacement, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                max_replace_count,
+            )
             return cast(
                 Self,
                 ColumnBase.create(plc_column, self.dtype),

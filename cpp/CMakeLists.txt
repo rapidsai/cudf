@@ -885,7 +885,6 @@ add_library(
   src/strings/replace/backref_re.cu
   src/strings/replace/find_replace.cu
   src/strings/replace/multi.cu
-  src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu

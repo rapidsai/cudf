@@ -82,7 +82,6 @@ def gdf_writer_types(request):
     return test_pdf
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("index", [True, False])
 # tests limited to compressions formats supported by pandas and cudf: bz2, gzip, zip, zstd
