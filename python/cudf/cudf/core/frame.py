@@ -684,10 +684,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 col.has_nulls()
                 and dtype is not None
                 and is_string_dtype(dtype)
-                and (
-                    not is_numpy_object_dtype(dtype)
-                    or na_value is not no_default
-                )
+                and not is_numpy_object_dtype(dtype)
             ):
                 casted_array[col.isnull().to_numpy()] = (
                     cudf.NA if na_value is no_default else na_value
