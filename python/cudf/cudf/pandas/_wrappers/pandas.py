@@ -335,9 +335,19 @@ if ipython_shell:
 
 
 def _Series_dtype(self):
-    # Fast-path to extract dtype from the current
-    # object without round-tripping through the slow<->fast
-    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
+    dtype = self._fsproxy_wrapped.dtype
+    if isinstance(
+        dtype,
+        (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.Decimal32Dtype,
+            cudf.Decimal64Dtype,
+            cudf.Decimal128Dtype,
+        ),
+    ):
+        dtype = self._fsproxy_slow.dtype
+    return _maybe_wrap_result(dtype, None)
 
 
 _SeriesAtIndexer = make_intermediate_proxy_type(
@@ -1234,6 +1244,12 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     "ExponentialMovingWindowGroupby",
     _Unusable,
     pd.core.window.ewm.ExponentialMovingWindowGroupby,
+)
+
+OnlineExponentialMovingWindow = make_intermediate_proxy_type(
+    "OnlineExponentialMovingWindow",
+    _Unusable,
+    pd.core.window.ewm.OnlineExponentialMovingWindow,
 )
 
 EWMMeanState = make_intermediate_proxy_type(
