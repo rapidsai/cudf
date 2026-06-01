@@ -13,6 +13,9 @@
 
 #include <filesystem>
 
+auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
+  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
+
 struct FilepathSourceTest : public cudf::test::BaseFixture {};
 
 TEST_F(FilepathSourceTest, StringConstructorsPopulateFilepathSources)
@@ -48,8 +51,7 @@ TEST_F(FilepathSourceTest, FilepathSourceConstructorPreservesSize)
 
 TEST_F(FilepathSourceTest, KnownSizePlumbsThroughMakeDatasources)
 {
-  auto const filepath =
-    (std::filesystem::temp_directory_path() / "filepath_source_test.parquet").string();
+  auto const filepath = temp_env->get_temp_filepath("KnownSize.parquet");
 
   auto col = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
   cudf::table_view const table{{col}};
