@@ -649,15 +649,12 @@ class CategoricalColumn(ColumnBase):
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(dtype, np.dtype)
+            and dtype.kind in "iu"
             and self.null_count > 0
         ):
-            # pandas represents NaN in a Categorical via a float-promoted
-            # categories array, so astype to a non-nullable numpy int/bool
-            # raises. Mirror that behavior here.
-            if dtype.kind in "iu":
-                raise ValueError("Cannot convert float NaN to integer")
-            elif dtype.kind == "b":
-                raise ValueError("Cannot convert float NaN to bool")
+            # pandas promotes a null-containing Categorical's categories to
+            # float, so converting to a non-nullable integer dtype raises.
+            raise ValueError("Cannot convert float NaN to integer")
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
