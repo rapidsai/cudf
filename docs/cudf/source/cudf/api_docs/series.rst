@@ -354,7 +354,6 @@ String handling
    count
    detokenize
    edit_distance
-   edit_distance_matrix
    endswith
    extract
    filter_alphanum

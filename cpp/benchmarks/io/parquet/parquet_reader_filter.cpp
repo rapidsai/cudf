@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -252,6 +253,8 @@ void BM_parquet_read_filter(nvbench::state& state)
   }
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       drop_page_cache_if_enabled(read_opts.get_source().filepaths());
@@ -262,6 +265,9 @@ void BM_parquet_read_filter(nvbench::state& state)
 
       CUDF_EXPECTS(result.tbl->num_columns() == num_input_cols, "Unexpected number of columns");
     });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 #define PARQUET_READER_FILTER_BENCHMARK_DEFINE(name, type)                  \
