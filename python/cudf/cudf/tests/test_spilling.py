@@ -386,25 +386,6 @@ def test_spilling_df_views(manager):
     assert single_column_df_data(df).owner.spillable
 
 
-# This behavior is not compatible with copy-on-write
-@pytest.mark.no_copy_on_write
-def test_modify_spilled_views(manager):
-    df = single_column_df()
-    df_view = df.iloc[1:]
-    buf = single_column_df_data(df)
-    buf.owner.spill(target="cpu")
-
-    # modify the spilled df and check that the changes are reflected
-    # in the view
-    df.iloc[1:] = 0
-    assert_eq(df_view, df.iloc[1:])
-
-    # now, modify the view and check that the changes are reflected in
-    # the df
-    df_view.iloc[:] = -1
-    assert_eq(df_view, df.iloc[1:])
-
-
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
 def test_get_ptr(manager: SpillManager, target):
     if target == "gpu":
@@ -650,67 +631,66 @@ def test_spill_on_demand(manager: SpillManager):
 
 
 def test_spilling_and_copy_on_write(manager: SpillManager):
-    with cudf.option_context("copy_on_write", True):
-        a: SpillableBuffer = as_buffer(data=rmm.DeviceBuffer(size=10))
+    a: SpillableBuffer = as_buffer(data=rmm.DeviceBuffer(size=10))
 
-        b = a.copy(deep=False)
-        assert a.owner == b.owner
-        a.owner.spill(target="cpu")
-        assert a.owner.is_spilled
-        assert b.owner.is_spilled
+    b = a.copy(deep=False)
+    assert a.owner == b.owner
+    a.owner.spill(target="cpu")
+    assert a.owner.is_spilled
+    assert b.owner.is_spilled
 
-        # Write access trigger copy of `a` into `b` but since `a` is spilled
-        # the copy is done in host memory and `a` remains spilled.
-        with b.access(mode="write"):
-            b.ptr
-        assert a.owner.is_spilled
-        assert not b.owner.is_spilled
+    # Write access trigger copy of `a` into `b` but since `a` is spilled
+    # the copy is done in host memory and `a` remains spilled.
+    with b.access(mode="write"):
+        b.ptr
+    assert a.owner.is_spilled
+    assert not b.owner.is_spilled
 
-        # Deep copy of the spilled buffer `a`
-        b = a.copy(deep=True)
-        assert a.owner != b.owner
-        assert a.owner.is_spilled
-        assert b.owner.is_spilled
-        a.owner.spill(target="gpu")
-        assert not a.owner.is_spilled
-        assert b.owner.is_spilled
+    # Deep copy of the spilled buffer `a`
+    b = a.copy(deep=True)
+    assert a.owner != b.owner
+    assert a.owner.is_spilled
+    assert b.owner.is_spilled
+    a.owner.spill(target="gpu")
+    assert not a.owner.is_spilled
+    assert b.owner.is_spilled
 
-        # Deep copy of the unspilled buffer `a`
-        b = a.copy(deep=True)
-        assert a.owner.spillable
-        assert not a.owner.is_spilled
-        assert not b.owner.is_spilled
+    # Deep copy of the unspilled buffer `a`
+    b = a.copy(deep=True)
+    assert a.owner.spillable
+    assert not a.owner.is_spilled
+    assert not b.owner.is_spilled
 
-        b = a.copy(deep=False)
-        assert a.owner == b.owner
-        # Write access trigger copy of `a` into `b` in device memory
-        with b.access(mode="write"):
-            b.ptr
-        assert a.owner != b.owner
-        assert not a.owner.is_spilled
-        assert not b.owner.is_spilled
-        # And `a` and `b` is now separated with there one spilling status
-        a.owner.spill(target="cpu")
-        assert a.owner.is_spilled
-        assert not b.owner.is_spilled
-        b.owner.spill(target="cpu")
-        assert a.owner.is_spilled
-        assert b.owner.is_spilled
+    b = a.copy(deep=False)
+    assert a.owner == b.owner
+    # Write access trigger copy of `a` into `b` in device memory
+    with b.access(mode="write"):
+        b.ptr
+    assert a.owner != b.owner
+    assert not a.owner.is_spilled
+    assert not b.owner.is_spilled
+    # And `a` and `b` is now separated with there one spilling status
+    a.owner.spill(target="cpu")
+    assert a.owner.is_spilled
+    assert not b.owner.is_spilled
+    b.owner.spill(target="cpu")
+    assert a.owner.is_spilled
+    assert b.owner.is_spilled
 
-        # Read access with a spill lock unspill `a` and allows copy-on-write
-        with a.access(mode="read", scope="internal"):
-            a.ptr
-        b = a.copy(deep=False)
-        assert a.owner == b.owner
-        assert not a.owner.is_spilled
-
-        # Read access without a spill lock exposes `a` and forces a deep copy
+    # Read access with a spill lock unspill `a` and allows copy-on-write
+    with a.access(mode="read", scope="internal"):
         a.ptr
-        b = a.copy(deep=False)
-        assert a.owner != b.owner
-        assert not a.owner.is_spilled
-        assert a.owner.exposed
-        assert not b.owner.exposed
+    b = a.copy(deep=False)
+    assert a.owner == b.owner
+    assert not a.owner.is_spilled
+
+    # Read access without a spill lock exposes `a` and forces a deep copy
+    a.ptr
+    b = a.copy(deep=False)
+    assert a.owner != b.owner
+    assert not a.owner.is_spilled
+    assert a.owner.exposed
+    assert not b.owner.exposed
 
 
 def test_scatter_by_map():
