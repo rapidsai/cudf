@@ -72,6 +72,6 @@ def test_fill_null_with_strategy_bool(engine: pl.GPUEngine, strategy):
 def test_fill_null_with_limit(engine: pl.GPUEngine, null_data, strategy, limit):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy, limit=limit))
     if limit != 0:
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
         assert_gpu_result_equal(q, engine=engine)

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import concurrent.futures
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -20,15 +21,41 @@ from cudf_polars.testing.engine_utils import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.dask import DaskEngine
+    from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.ray import RayEngine
+    from cudf_polars.engine.spmd import SPMDEngine
 
 
-# Number of ranks for multi-rank streaming engines that share one GPU
-# (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
-# ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
-NUM_RANKS = 2
+@pytest.fixture(scope="session")
+def ray_num_ranks() -> int:
+    """
+    Number of ranks for multi-rank streaming engines that share one GPU
+    (currently ``RayEngine``). Single-GPU dev hosts and CI runners require
+    ``allow_gpu_sharing=True`` to oversubscribe one device across actors.
+    """
+    return 2
+
+
+@pytest.fixture(scope="session")
+def ray_init_options(ray_num_ranks: int) -> dict[str, Any]:
+    """
+    Keyword arguments forwarded to ``ray.init`` for the test Ray cluster.
+
+    When using this fixture, a ``RayEngine`` must be constructed with:
+    - ``num_ranks`` set
+    - ``engine_options={"allow_gpu_sharing": True}``
+
+    This is required because the cluster is configured with ``num_gpus=0``,
+    so Ray does not autodetect or track GPU resources.
+    """
+    return {
+        "num_cpus": ray_num_ranks,
+        "num_gpus": 0,
+        "include_dashboard": False,
+        "object_store_memory": 256 * 1024 * 1024,  # 256 MB
+    }
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -65,6 +92,8 @@ def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
 @pytest.fixture(scope="session")
 def _unconfigured_engine(
     _engine_param: EngineFixtureParam,
+    ray_num_ranks: int,
+    ray_init_options: dict[str, Any],
 ) -> Generator[tuple[pl.GPUEngine, StreamingOptions | None], None, None]:
     """
     Fixture generating an engine resource and options to apply before use.
@@ -95,24 +124,24 @@ def _unconfigured_engine(
         engine: StreamingEngine
         match _engine_param.engine_name:
             case "spmd":
-                from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+                from cudf_polars.engine.spmd import SPMDEngine
 
                 engine = SPMDEngine()
             case "dask":  # pragma: no cover
-                from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+                from cudf_polars.engine.dask import DaskEngine
 
                 engine = DaskEngine(engine_options={"allow_gpu_sharing": True})
             case "ray":  # pragma: no cover
-                from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+                from cudf_polars.engine.ray import RayEngine
 
                 # Always specify num_ranks so the engine has a fixed size
                 # regardless of how many GPUs the host happens to have;
                 # otherwise ``RayEngine`` defaults to
                 # ``get_num_gpus_in_ray_cluster()``
                 engine = RayEngine(
-                    num_ranks=NUM_RANKS,
+                    num_ranks=ray_num_ranks,
                     engine_options={"allow_gpu_sharing": True},
-                    ray_init_options={"include_dashboard": False},
+                    ray_init_options=ray_init_options,
                 )
             case _:  # pragma: no cover
                 raise ValueError(
@@ -162,6 +191,24 @@ def spmd_engine_factory(
         )
 
     return factory
+
+
+@pytest.fixture
+def ray_engine(
+    _unconfigured_engine: tuple[RayEngine, StreamingOptions],
+) -> RayEngine:
+    """Return the shared configured :class:`RayEngine`."""
+    engine, options = _unconfigured_engine
+    return configure_streaming_engine(engine, options)
+
+
+@pytest.fixture
+def dask_engine(
+    _unconfigured_engine: tuple[DaskEngine, StreamingOptions],
+) -> DaskEngine:
+    """Return the shared configured :class:`DaskEngine`."""
+    engine, options = _unconfigured_engine
+    return configure_streaming_engine(engine, options)
 
 
 @pytest.fixture
@@ -240,7 +287,7 @@ def engine(
     engine, options = _unconfigured_engine
     if options is None:
         return engine
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+    from cudf_polars.engine.core import StreamingEngine
 
     assert isinstance(engine, StreamingEngine)
     return configure_streaming_engine(engine, options)
@@ -265,6 +312,17 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
+@pytest.fixture
+def timeout_seconds() -> int:
+    """
+    Conservative timeout for APIs that accept a timeout parameter.
+
+    Since pytest-timeout is installed, ensure this value is less than timeout
+    in python/cudf_polars/pyproject.toml.
+    """
+    return 30
+
+
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
@@ -282,6 +340,8 @@ def pytest_configure(config: pytest.Config):
     # test that shares a worker with a ray/dask test, so the suppression must
     # apply globally rather than per-module.
     config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
+    # https://github.com/open-telemetry/opentelemetry-python/issues/5231 (used by Ray)
+    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -292,6 +352,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
     if "spmd_engine" in fixtures or "spmd_engine_factory" in fixtures:
         engines = ["spmd"]
+    elif "ray_engine" in fixtures:
+        engines = ["ray"]
+    elif "dask_engine" in fixtures:
+        engines = ["dask"]
     elif "streaming_engine" in fixtures or "streaming_engine_factory" in fixtures:
         engines = STREAMING_ENGINE_FIXTURE_PARAMS
     elif "engine" in fixtures:
@@ -337,3 +401,10 @@ def pytest_collection_modifyitems(
             else marker.kwargs.get("reason", "unsupported on streaming engine")
         )
         item.add_marker(pytest.mark.skip(reason=reason))
+
+
+@pytest.fixture(scope="module")
+def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:  # type: ignore[misc]
+    """A thread pool to use for cudf-polars status collection."""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        yield executor
