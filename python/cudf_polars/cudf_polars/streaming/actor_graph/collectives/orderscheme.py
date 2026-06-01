@@ -189,7 +189,8 @@ async def adjust_orderscheme(
     -----
     This utility is intentionally narrow and only adjusts data messages. The
     caller is responsible for receiving input metadata and sending output
-    metadata.
+    metadata. Input rows are assumed to be globally ordered by ``input_scheme``;
+    sortedness is not checked here.
     """
     _validate_schemes(input_scheme, output_scheme)
     npartitions = output_scheme.num_boundaries + 1

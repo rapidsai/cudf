@@ -74,10 +74,6 @@ def _make_scheme(
     )
 
 
-def _ref_ir() -> Empty:
-    return Empty(_SCHEMA)
-
-
 def _frame(values: list[int]) -> pl.DataFrame:
     return pl.DataFrame(
         {
@@ -99,31 +95,34 @@ def _chunk_to_polars(chunk: TableChunk) -> pl.DataFrame:
 async def _adjust_and_collect(
     context,
     comm,
-    input_df: pl.DataFrame,
+    input_df: pl.DataFrame | list[pl.DataFrame],
     input_scheme: OrderScheme,
     output_scheme: OrderScheme,
     *,
     collective_id: int | None = None,
 ) -> dict[int, pl.DataFrame]:
+    """Run adjustment and collect output chunks by partition ID."""
     ch_in = context.create_channel()
     ch_out = context.create_channel()
     stream = context.get_stream_from_pool()
     output: dict[int, pl.DataFrame] = {}
 
     async def _produce() -> None:
-        df = DataFrame.from_polars(input_df, stream)
-        await ch_in.send(
-            context,
-            Message(
-                comm.rank,
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    stream,
-                    exclusive_view=True,
-                    br=context.br(),
+        input_dfs = input_df if isinstance(input_df, list) else [input_df]
+        for sequence_number, df in enumerate(input_dfs):
+            cudf_df = DataFrame.from_polars(df, stream)
+            await ch_in.send(
+                context,
+                Message(
+                    sequence_number,
+                    TableChunk.from_pylibcudf_table(
+                        cudf_df.table,
+                        stream,
+                        exclusive_view=True,
+                        br=context.br(),
+                    ),
                 ),
-            ),
-        )
+            )
         await ch_in.drain(context)
 
     async def _consume() -> None:
@@ -141,7 +140,7 @@ async def _adjust_and_collect(
             adjust_orderscheme(
                 context,
                 comm,
-                _ref_ir(),
+                Empty(_SCHEMA),
                 ir_context,
                 ch_out,
                 ch_in,
@@ -153,6 +152,16 @@ async def _adjust_and_collect(
         )
 
     return output
+
+
+def _assert_partition_output(
+    output: dict[int, pl.DataFrame], expected: dict[int, list[int]]
+) -> None:
+    """Assert output partition IDs and per-partition row order."""
+    assert set(output) == set(expected)
+    for pid, keys in expected.items():
+        assert output[pid]["key"].to_list() == keys
+        assert output[pid]["val"].to_list() == keys
 
 
 async def _adjust_direct(
@@ -172,7 +181,7 @@ async def _adjust_direct(
         await adjust_orderscheme(
             context,
             comm,
-            _ref_ir(),
+            Empty(_SCHEMA),
             ir_context,
             ch_out,
             ch_in,
@@ -229,8 +238,8 @@ def test_adjust_orderscheme_requires_collective_id(spmd_engine) -> None:
 @pytest.mark.parametrize(
     "target_boundary,expected",
     [
-        (3, {0: [0, 1, 2], 1: [3, 4, 5, 6, 7]}),
-        (5, {0: [0, 1, 2, 3, 4], 1: [5, 6, 7]}),
+        (3, {0: {0: [0, 1, 2]}, 1: {1: [3, 4, 5, 6, 7]}}),
+        (5, {0: {0: [0, 1, 2, 3, 4]}, 1: {1: [5, 6, 7]}}),
     ],
 )
 def test_adjust_orderscheme_sparse_boundary_shift(
@@ -259,9 +268,7 @@ def test_adjust_orderscheme_sparse_boundary_shift(
             )
         )
 
-    result = pl.concat(output.values())
-    assert result["key"].to_list() == expected[comm.rank]
-    assert result["val"].to_list() == expected[comm.rank]
+    _assert_partition_output(output, expected[comm.rank])
 
 
 @pytest.mark.spmd
@@ -292,10 +299,46 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(spmd_engine) -> None:
         0: {0: [0, 1, 2], 1: []},
         1: {2: [5], 3: [8]},
     }[comm.rank]
-    assert set(output) == set(expected)
-    for pid, keys in expected.items():
-        assert output[pid]["key"].to_list() == keys
-        assert output[pid]["val"].to_list() == keys
+    _assert_partition_output(output, expected)
+
+
+@pytest.mark.spmd
+def test_adjust_orderscheme_all_empty_input(spmd_engine) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    stream = context.get_stream_from_pool()
+    input_scheme = _make_scheme(context, 5, stream=stream)
+    output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
+    expected = {
+        pid: []
+        for pid in range(output_scheme.num_boundaries + 1)
+        if pid * comm.nranks // (output_scheme.num_boundaries + 1) == comm.rank
+    }
+
+    if comm.nranks == 1:
+        output = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame([]),
+                input_scheme,
+                output_scheme,
+            )
+        )
+    else:
+        with reserve_op_id() as op_id:
+            output = asyncio.run(
+                _adjust_and_collect(
+                    context,
+                    comm,
+                    _frame([]),
+                    input_scheme,
+                    output_scheme,
+                    collective_id=op_id,
+                )
+            )
+
+    _assert_partition_output(output, expected)
 
 
 @pytest.mark.spmd
@@ -327,7 +370,27 @@ def test_adjust_orderscheme_single_rank_no_collective(
         )
     )
 
-    assert set(output_by_pid) == set(expected)
-    for pid, keys in expected.items():
-        assert output_by_pid[pid]["key"].to_list() == keys
-        assert output_by_pid[pid]["val"].to_list() == keys
+    _assert_partition_output(output_by_pid, expected)
+
+
+@pytest.mark.spmd
+def test_adjust_orderscheme_multi_chunk_input(spmd_engine) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    if comm.nranks != 1:
+        pytest.skip("This test covers local chunk accumulation.")
+
+    stream = context.get_stream_from_pool()
+    input_scheme = _make_scheme(context, 4, stream=stream)
+    output_scheme = _make_scheme(context, 4, stream=stream)
+    output = asyncio.run(
+        _adjust_and_collect(
+            context,
+            comm,
+            [_frame([0, 1]), _frame([2, 3, 4, 5]), _frame([6, 7])],
+            input_scheme,
+            output_scheme,
+        )
+    )
+
+    _assert_partition_output(output, {0: [0, 1, 2, 3], 1: [4, 5, 6, 7]})
