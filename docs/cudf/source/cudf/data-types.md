@@ -1,7 +1,7 @@
 # Supported Data Types
 
 cuDF largely uses the same [data type objects](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) supported by pandas, including
-numeric, datetime, timedelta, and string data types. cuDF also supports
+numeric, datetime, timedelta, and string data types and their nullable variants. cuDF also supports
 data types from the [Arrow type system](https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings) such as decimals, list,
 and struct types.
 
