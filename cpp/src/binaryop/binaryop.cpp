@@ -306,7 +306,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_saf
   auto out_view                  = out->mutable_view();
   mutable_column_view overflow_mv = overflow_col->mutable_view();
   cudf::binops::compiled::binary_operation_safe(
-    out_view, lhs, rhs, op, overflow_mv.head<bool>(), stream);
+    out_view, lhs, rhs, op, overflow_mv.head<bool>(), stream, mr);
   out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return {std::move(out), std::move(overflow_col)};
 }

@@ -388,29 +388,32 @@ void binary_operation_safe(mutable_column_view& out,
                            column_view const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
-  apply_binary_op_safe(out, lhs, rhs, false, false, op, d_overflow_per_row, stream);
+  apply_binary_op_safe(out, lhs, rhs, false, false, op, d_overflow_per_row, stream, mr);
 }
 void binary_operation_safe(mutable_column_view& out,
                            scalar const& lhs,
                            column_view const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
   auto [lhsv, aux] = scalar_to_column_view(lhs, stream);
-  apply_binary_op_safe(out, lhsv, rhs, true, false, op, d_overflow_per_row, stream);
+  apply_binary_op_safe(out, lhsv, rhs, true, false, op, d_overflow_per_row, stream, mr);
 }
 void binary_operation_safe(mutable_column_view& out,
                            column_view const& lhs,
                            scalar const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
   auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
-  apply_binary_op_safe(out, lhs, rhsv, false, true, op, d_overflow_per_row, stream);
+  apply_binary_op_safe(out, lhs, rhsv, false, true, op, d_overflow_per_row, stream, mr);
 }
 
 namespace detail {

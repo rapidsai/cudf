@@ -127,13 +127,14 @@ void launch_decimal_safe_kernel(mutable_column_device_view& outd,
                                 bool is_rhs_scalar,
                                 size_type n,
                                 bool* d_overflow_per_row,
-                                rmm::cuda_stream_view stream)
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
 {
   auto const out_scale = numeric::scale_type{outd.type().scale()};
   decimal_safe_op_kernel<Decimal, SafeOp> kern{
     outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, out_scale, d_overflow_per_row};
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream), cuda::counting_iterator<size_type>{0}, n, kern);
+    rmm::exec_policy_nosync(stream, mr), cuda::counting_iterator<size_type>{0}, n, kern);
 }
 
 template <typename Decimal>
@@ -145,36 +146,37 @@ void dispatch_op_and_run(mutable_column_device_view& outd,
                          size_type n,
                          bool* d_overflow_per_row,
                          binary_operator op,
-                         rmm::cuda_stream_view stream)
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
 {
   switch (op) {
     case binary_operator::ADD:
       launch_decimal_safe_kernel<Decimal, SafeAdd>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::SUB:
       launch_decimal_safe_kernel<Decimal, SafeSub>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::MUL:
       launch_decimal_safe_kernel<Decimal, SafeMul>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::DIV:
       launch_decimal_safe_kernel<Decimal, SafeDiv>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::MOD:
       launch_decimal_safe_kernel<Decimal, SafeMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::PMOD:
       launch_decimal_safe_kernel<Decimal, SafePMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     case binary_operator::PYMOD:
       launch_decimal_safe_kernel<Decimal, SafePyMod>(
-        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream);
+        outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, n, d_overflow_per_row, stream, mr);
       break;
     default:
       CUDF_FAIL("binary_operation_safe only supports ADD, SUB, MUL, DIV, MOD, PMOD, and PYMOD.");
@@ -190,7 +192,8 @@ void apply_binary_op_safe(mutable_column_view& out,
                           bool is_rhs_scalar,
                           binary_operator op,
                           bool* d_overflow_per_row,
-                          rmm::cuda_stream_view stream)
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(d_overflow_per_row != nullptr,
                "binary_operation_safe requires a non-null device per-row overflow buffer.");
@@ -213,7 +216,8 @@ void apply_binary_op_safe(mutable_column_view& out,
                                               out.size(),
                                               d_overflow_per_row,
                                               op,
-                                              stream);
+                                              stream,
+                                              mr);
       break;
     case type_id::DECIMAL64:
       dispatch_op_and_run<numeric::decimal64>(*outd,
@@ -224,7 +228,8 @@ void apply_binary_op_safe(mutable_column_view& out,
                                               out.size(),
                                               d_overflow_per_row,
                                               op,
-                                              stream);
+                                              stream,
+                                              mr);
       break;
     case type_id::DECIMAL128:
       dispatch_op_and_run<numeric::decimal128>(*outd,
@@ -235,7 +240,8 @@ void apply_binary_op_safe(mutable_column_view& out,
                                                out.size(),
                                                d_overflow_per_row,
                                                op,
-                                               stream);
+                                               stream,
+                                               mr);
       break;
     default: CUDF_FAIL("binary_operation_safe requires a base-10 decimal output type.");
   }

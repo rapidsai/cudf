@@ -153,19 +153,22 @@ void binary_operation_safe(mutable_column_view& out,
                            column_view const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr);
 void binary_operation_safe(mutable_column_view& out,
                            column_view const& lhs,
                            scalar const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr);
 void binary_operation_safe(mutable_column_view& out,
                            column_view const& lhs,
                            column_view const& rhs,
                            binary_operator op,
                            bool* d_overflow_per_row,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr);
 
 /**
  * @brief Core decimal-safe column-column kernel.
@@ -180,7 +183,8 @@ void apply_binary_op_safe(mutable_column_view& out,
                           bool is_rhs_scalar,
                           binary_operator op,
                           bool* d_overflow_per_row,
-                          rmm::cuda_stream_view stream);
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
 
 // Defined in util.cpp
 /**
