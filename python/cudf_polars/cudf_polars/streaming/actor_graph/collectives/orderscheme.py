@@ -23,8 +23,6 @@ from cudf_polars.streaming.actor_graph.utils import concat_batch, empty_table_ch
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -105,15 +103,6 @@ def _append_partition_id(table: plc.Table, pid: int, stream: Stream) -> plc.Tabl
     return plc.Table([*table.columns(), pid_col])
 
 
-def _pack_table(table: plc.Table, stream: Stream, br: BufferResource) -> PackedData:
-    """Pack a pylibcudf table as a RapidsMPF PackedData payload."""
-    return PackedData.from_cudf_packed_columns(
-        pack(table, stream, mr=br.device_mr),
-        stream,
-        br,
-    )
-
-
 def _unpack_remote_piece(
     packed: PackedData,
     stream: Stream,
@@ -145,23 +134,18 @@ def _unpack_remote_piece(
     )
 
 
-def _materialize_packed_pieces(
-    pieces: Iterable[PackedData],
-    context: Context,
+def _copy_to_owned_chunk(
+    table: plc.Table,
     stream: Stream,
-) -> TableChunk | None:
-    """Materialize packed pieces into a uniquely-owned chunk."""
-    pieces = list(pieces)
-    if not pieces:
-        return None
-    table = unpack_and_concat(pieces, stream=stream, br=context.br())
-    if table.num_rows() == 0:
-        return None
+    br: BufferResource,
+) -> TableChunk:
+    """Copy a table view into a uniquely-owned chunk."""
+    table = plc.concatenate.concatenate([table], stream=stream, mr=br.device_mr)
     return TableChunk.from_pylibcudf_table(
         table,
         stream,
         exclusive_view=True,
-        br=context.br(),
+        br=br,
     )
 
 
@@ -223,7 +207,7 @@ async def adjust_orderscheme(
     )
     boundary_chunk = output_scheme.get_boundaries(context.br())
     boundary_table = boundary_chunk.table_view()
-    local_pieces: dict[int, list[PackedData]] = defaultdict(list)
+    local_chunks: dict[int, list[TableChunk]] = defaultdict(list)
 
     while (msg := await ch_in.recv(context)) is not None:
         chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
@@ -244,13 +228,19 @@ async def adjust_orderscheme(
                     continue
                 owner = _contiguous_owner(pid, comm.nranks, npartitions)
                 if owner == comm.rank:
-                    local_pieces[pid].append(_pack_table(piece, stream, context.br()))
+                    local_chunks[pid].append(
+                        _copy_to_owned_chunk(piece, stream, context.br())
+                    )
                 else:
                     assert exchange is not None
                     exchange.insert(
                         owner,
-                        _pack_table(
-                            _append_partition_id(piece, pid, stream),
+                        PackedData.from_cudf_packed_columns(
+                            pack(
+                                _append_partition_id(piece, pid, stream),
+                                stream,
+                                mr=context.br().device_mr,
+                            ),
                             stream,
                             context.br(),
                         ),
@@ -262,12 +252,8 @@ async def adjust_orderscheme(
     output_chunks: dict[int, list[TableChunk]] = defaultdict(list)
     for source_rank in range(comm.nranks):
         if source_rank == comm.rank:
-            for pid, pieces in local_pieces.items():
-                chunk = _materialize_packed_pieces(
-                    pieces, context, context.get_stream_from_pool()
-                )
-                if chunk is not None:
-                    output_chunks[pid].append(chunk)
+            for pid, chunks in local_chunks.items():
+                output_chunks[pid].extend(chunks)
             continue
         assert exchange is not None
         stream = context.get_stream_from_pool()

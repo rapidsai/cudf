@@ -9,10 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
-    ChannelMetadata,
     OrderKey,
     OrderScheme,
-    Partitioning,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -26,11 +24,7 @@ from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.collectives.orderscheme import (
     adjust_orderscheme,
 )
-from cudf_polars.streaming.actor_graph.utils import (
-    gather_in_task_group,
-    recv_metadata,
-    send_metadata,
-)
+from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 
 _SCHEMA = {"key": DataType(pl.Int32()), "val": DataType(pl.Int32())}
 _NAMES = list(_SCHEMA)
@@ -84,13 +78,6 @@ def _ref_ir() -> Empty:
     return Empty(_SCHEMA)
 
 
-def _local_count(comm, scheme: OrderScheme) -> int:
-    npartitions = scheme.num_boundaries + 1
-    return sum(
-        pid * comm.nranks // npartitions == comm.rank for pid in range(npartitions)
-    )
-
-
 def _frame(values: list[int]) -> pl.DataFrame:
     return pl.DataFrame(
         {
@@ -125,14 +112,6 @@ async def _adjust_and_collect(
 
     async def _produce() -> None:
         df = DataFrame.from_polars(input_df, stream)
-        await send_metadata(
-            ch_out,
-            context,
-            ChannelMetadata(
-                local_count=_local_count(comm, output_scheme),
-                partitioning=Partitioning(output_scheme, "inherit"),
-            ),
-        )
         await ch_in.send(
             context,
             Message(
@@ -148,7 +127,6 @@ async def _adjust_and_collect(
         await ch_in.drain(context)
 
     async def _consume() -> None:
-        await recv_metadata(ch_out, context)
         while (msg := await ch_out.recv(context)) is not None:
             output[msg.sequence_number] = _chunk_to_polars(
                 TableChunk.from_message(msg, br=context.br())
