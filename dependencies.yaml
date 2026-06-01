@@ -25,7 +25,6 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
-      - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
       - develop
@@ -49,6 +48,7 @@ files:
       - test_python_cudf_common
       - test_python_pylibcudf
       - test_python_cudf_pandas
+      - test_cudf_pandas_pandas_tests
       - test_python_cudf_polars
       - test_python_s3
   test_static_build:
@@ -1316,6 +1316,14 @@ dependencies:
           - openpyxl
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
+  # Additional dependencies for running the pandas test suite under cudf.pandas.
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[performance]),
+  # conda environments need these listed explicitly.
+  test_cudf_pandas_pandas_tests:
+    common:
+      - output_types: [conda]
+        packages:
+          - numexpr
   depends_on_dask_cuda:
     common:
       - output_types: conda
