@@ -605,12 +605,7 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * See `parquet_reader_options::set_row_groups()` for the semantics of the outer/inner
-   * vector layout and for the guaranteed output ordering across sources and row groups.
-   *
-   * @param row_groups Vector of row groups to read
+   * @copydoc parquet_reader_options::set_row_groups
    * @return this for chaining
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
@@ -833,17 +828,8 @@ class parquet_reader_options_builder {
  *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
- * @note Row group output ordering
- *
- * When reading from multiple sources, all rows from `sources[i]` are emitted before any rows
- * from `sources[j]` for `j > i`. Within each source, row groups are emitted in the order
- * passed to `parquet_reader_options::row_groups()`; the reader does not sort or deduplicate
- * the indices, and repeated indices are emitted multiple times. An empty inner vector means
- * that source contributes no rows but does not affect the order of the remaining sources.
- * When `row_groups` is not set, all row groups are emitted in source order and in on-disk
- * order within each source. Row groups removed by predicate pushdown (statistics, dictionary,
- * or bloom filter pruning) are simply dropped; the remaining row groups keep their relative
- * order.
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
  *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -869,8 +855,8 @@ table_with_metadata read_parquet(
  *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
  *
- * Output ordering across `sources` and across the row groups selected per source is the same
- * as for the `parquet_reader_options`-only overload above.
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
  *
  * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty

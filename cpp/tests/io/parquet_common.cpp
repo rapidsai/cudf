@@ -719,8 +719,7 @@ ordered_rg_source make_ordered_rg_source(int file_id,
   columns.push_back(col.release());
   auto in_memory = std::make_unique<cudf::table>(std::move(columns));
 
-  auto const filename =
-    std::format("ordered_rg_source_f{}_rg{}.parquet", file_id, num_row_groups);
+  auto const filename = std::format("ordered_rg_source_f{}_rg{}.parquet", file_id, num_row_groups);
   auto const filepath = temp_env->get_temp_filepath(filename);
 
   // The writer can only break row groups at fragment boundaries. Setting

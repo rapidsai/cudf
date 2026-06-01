@@ -4117,15 +4117,12 @@ TEST_F(ParquetReaderTest, DeviceWriteAsyncThrows)
 //////////////////////////////////////////
 // row group output ordering tests
 //
-// These tests pin down the source-major, user-given row-group output order
-// of read_parquet across single- and multi-source reads, repeated and
-// non-ascending indices, empty inner vectors, the no-selection default, and
-// stats-based predicate pushdown. See the @note on read_parquet in
+// See the @note on read_parquet in
 // cpp/include/cudf/io/parquet.hpp for the documented behavior.
 
 TEST_F(ParquetReaderTest, RowGroupOrderAscending)
 {
-  auto const f0        = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/4);
+  auto const f0        = make_ordered_rg_source(0, 4);
   auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 1, 3}};
   auto const expected  = build_expected_ordered_table({&f0}, selection);
 
@@ -4138,7 +4135,7 @@ TEST_F(ParquetReaderTest, RowGroupOrderAscending)
 
 TEST_F(ParquetReaderTest, RowGroupOrderNonAscending)
 {
-  auto const f0        = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/4);
+  auto const f0        = make_ordered_rg_source(0, 4);
   auto const selection = std::vector<std::vector<cudf::size_type>>{{3, 0, 2}};
   auto const expected  = build_expected_ordered_table({&f0}, selection);
 
@@ -4151,7 +4148,7 @@ TEST_F(ParquetReaderTest, RowGroupOrderNonAscending)
 
 TEST_F(ParquetReaderTest, RowGroupOrderRepeatedIndices)
 {
-  auto const f0        = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/3);
+  auto const f0        = make_ordered_rg_source(0, 3);
   auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 2, 0, 1, 0}};
   auto const expected  = build_expected_ordered_table({&f0}, selection);
 
@@ -4164,27 +4161,27 @@ TEST_F(ParquetReaderTest, RowGroupOrderRepeatedIndices)
 
 TEST_F(ParquetReaderTest, RowGroupOrderEmptySourceVector)
 {
-  auto const f0 = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/2);
-  auto const f1 = make_ordered_rg_source(/*file_id=*/1, /*num_row_groups=*/2);
-  auto const f2 = make_ordered_rg_source(/*file_id=*/2, /*num_row_groups=*/2);
+  auto const f0 = make_ordered_rg_source(0, 2);
+  auto const f1 = make_ordered_rg_source(1, 2);
+  auto const f2 = make_ordered_rg_source(2, 2);
 
   // Middle source contributes nothing; outer source order must be preserved.
   auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 1}, {}, {0}};
   auto const expected  = build_expected_ordered_table({&f0, &f1, &f2}, selection);
 
-  auto const opts = cudf::io::parquet_reader_options::builder(
-                      cudf::io::source_info{
-                        std::vector<std::string>{f0.filepath, f1.filepath, f2.filepath}})
-                      .row_groups(selection)
-                      .build();
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath, f2.filepath}})
+      .row_groups(selection)
+      .build();
   auto const got = cudf::io::read_parquet(opts).tbl;
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
 }
 
 TEST_F(ParquetReaderTest, RowGroupOrderMultiSourceMix)
 {
-  auto const f0 = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/4);
-  auto const f1 = make_ordered_rg_source(/*file_id=*/1, /*num_row_groups=*/4);
+  auto const f0 = make_ordered_rg_source(0, 4);
+  auto const f1 = make_ordered_rg_source(1, 4);
 
   // Within each source, user-given order is preserved (non-ascending for f0).
   auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 3}, {0, 1}};
@@ -4200,12 +4197,11 @@ TEST_F(ParquetReaderTest, RowGroupOrderMultiSourceMix)
 
 TEST_F(ParquetReaderTest, RowGroupOrderUnsetMultiSource)
 {
-  auto const f0 = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/3);
-  auto const f1 = make_ordered_rg_source(/*file_id=*/1, /*num_row_groups=*/2);
+  auto const f0 = make_ordered_rg_source(0, 3);
+  auto const f1 = make_ordered_rg_source(1, 2);
 
   // Without .row_groups(...): all RGs in source order, then on-disk order.
-  auto const expected =
-    build_expected_ordered_table({&f0, &f1}, {{0, 1, 2}, {0, 1}});
+  auto const expected = build_expected_ordered_table({&f0, &f1}, {{0, 1, 2}, {0, 1}});
 
   auto const opts = cudf::io::parquet_reader_options::builder(
                       cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath}})
@@ -4222,14 +4218,13 @@ TEST_F(ParquetReaderTest, RowGroupOrderStatsPushdown)
   // and all of f1 at the row-group statistics level. Because every surviving
   // row passes the predicate, the row-level result equals the whole-RG slices,
   // letting the test focus purely on ordering of survivors.
-  auto const f0 = make_ordered_rg_source(/*file_id=*/0, /*num_row_groups=*/4);
-  auto const f1 = make_ordered_rg_source(/*file_id=*/1, /*num_row_groups=*/3);
+  auto const f0 = make_ordered_rg_source(0, 4);
+  auto const f1 = make_ordered_rg_source(1, 3);
 
-  auto literal_value = cudf::numeric_scalar<int32_t>(300);
-  auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref       = cudf::ast::column_reference(0);
-  auto filter_expression =
-    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+  auto literal_value     = cudf::numeric_scalar<int32_t>(300);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref           = cudf::ast::column_reference(0);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
 
   // Survivors must keep relative order: f0 RG0, f0 RG1, f0 RG2.
   auto const expected = build_expected_ordered_table({&f0, &f1}, {{0, 1, 2}, {}});
