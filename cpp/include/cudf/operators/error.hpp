@@ -4,9 +4,11 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/cstdint>
+#include <cuda/std/optional>
 #include <cuda/std/variant>
 
 namespace CUDF_EXPORT cudf {
@@ -35,21 +37,21 @@ struct result {
    *
    * @param value The value of the result.
    */
-  __device__ __host__ constexpr result(T value) : error_(errc::SUCCESS), value_(value) {}
+  CUDF_HOST_DEVICE constexpr result(T value) : error_(errc::SUCCESS), value_(value) {}
 
   /**
    * @brief Constructs a result with an error.
    *
    * @param error The error code of the result.
    */
-  __device__ __host__ constexpr result(errc error) : error_(error), value_() {}
+  CUDF_HOST_DEVICE constexpr result(errc error) : error_(error), value_() {}
 
   /**
    * @brief Checks if the result has an error.
    *
    * @return true if the result has an error, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr bool has_error() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool has_error() const
   {
     return error_ != errc::SUCCESS;
   }
@@ -59,7 +61,7 @@ struct result {
    *
    * @return true if the result has a value, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr bool has_value() const { return !has_error(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool has_value() const { return !has_error(); }
 
   /**
    * @brief Returns true if the result has a value, false otherwise. This operator allows the result
@@ -67,7 +69,7 @@ struct result {
    *
    * @return true if the result has a value, false otherwise.
    */
-  [[nodiscard]] __device__ __host__ constexpr explicit operator bool() const { return has_value(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr explicit operator bool() const { return has_value(); }
 
   /**
    * @brief Returns the value of the result. Behaviour is undefined if the result has an error (i.e.
@@ -75,7 +77,18 @@ struct result {
    *
    * @return The value of the result.
    */
-  __device__ __host__ constexpr T const& value() const { return value_; }
+  CUDF_HOST_DEVICE constexpr T const& value() const { return value_; }
+
+  /**
+   * @brief Returns the value of the result (if successful) or null (if it has an error value).
+   *
+   * @return The value of the result or null.
+   */
+  CUDF_HOST_DEVICE constexpr cuda::std::optional<T> value_or_null() const
+  {
+    if (error_ != errc::SUCCESS) { return {}; }
+    return value_;
+  }
 
   /**
    * @brief Returns the error code of the result. Behaviour is undefined if the result has a value
@@ -83,7 +96,7 @@ struct result {
    *
    * @return The error code of the result.
    */
-  [[nodiscard]] __device__ __host__ constexpr errc error() const { return error_; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr errc error() const { return error_; }
 };
 
 // Helper variable template to detect if a type is a result type
