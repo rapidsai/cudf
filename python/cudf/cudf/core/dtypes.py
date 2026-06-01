@@ -996,6 +996,16 @@ class IntervalDtype(_BaseDtype):
     closed: {'right', 'left', 'both', 'neither'}, default 'right'
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
+
+    Attributes
+    ----------
+    fields
+    type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
     """
 
     name = "interval"
