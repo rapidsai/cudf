@@ -280,49 +280,53 @@ void metadata::sanitize_schema()
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
       if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
-          schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
+          schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
-        // This is a list of structs, so we need to mark this as a list, but also
-        // add a struct child and move this element's children to the struct
+        // Parquet backward-compatibility rule: when the repeated field is a group,
+        // the element type is the group itself, regardless of its field count. Rewrite
+        // as `list<struct<...>>` for any number of children >= 1.
+        // Spec:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
+        auto const struct_node_idx = static_cast<size_type>(schema.size());
+
+        SchemaElement struct_elem;
+        struct_elem.name                 = "struct_node";
+        struct_elem.repetition_type      = FieldRepetitionType::REQUIRED;
+        struct_elem.num_children         = schema_elem.num_children;
+        struct_elem.type                 = Type::UNDEFINED;
+        struct_elem.converted_type       = std::nullopt;
+        struct_elem.parent_idx           = schema_idx;
+        struct_elem.max_definition_level = schema_elem.max_definition_level;
+        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        struct_elem.children_idx         = std::move(schema_elem.children_idx);
+        for (auto const child_idx : struct_elem.children_idx) {
+          schema[child_idx].parent_idx = struct_node_idx;
+        }
+
         schema_elem.converted_type  = ConvertedType::LIST;
         schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
-        auto const struct_node_idx  = static_cast<size_type>(schema.size());
-
-        SchemaElement struct_elem;
-        struct_elem.name            = "struct_node";
-        struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
-        struct_elem.num_children    = schema_elem.num_children;
-        struct_elem.type            = Type::UNDEFINED;
-        struct_elem.converted_type  = std::nullopt;
-
-        // swap children
-        struct_elem.children_idx = std::move(schema_elem.children_idx);
-        schema_elem.children_idx = {struct_node_idx};
-        schema_elem.num_children = 1;
-
-        struct_elem.max_definition_level = schema_elem.max_definition_level;
-        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
         schema_elem.max_definition_level--;
         schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
 
-        // change parent index on new node and on children
-        struct_elem.parent_idx = schema_idx;
-        for (auto& child_idx : struct_elem.children_idx) {
-          schema[child_idx].parent_idx = struct_node_idx;
-        }
-        // add our struct
-        schema.push_back(struct_elem);
+        // push_back may reallocate; do not use `schema_elem` past this point.
+        schema.push_back(std::move(struct_elem));
+        schema[schema_idx].children_idx = {struct_node_idx};
+        schema[schema_idx].num_children = 1;
       }
     }
 
     // convert ConvertedType to LogicalType for older files
-    if (schema_elem.converted_type.has_value() and not schema_elem.logical_type.has_value()) {
-      schema_elem.logical_type = converted_to_logical_type(schema_elem);
+    if (schema[schema_idx].converted_type.has_value() and
+        not schema[schema_idx].logical_type.has_value()) {
+      schema[schema_idx].logical_type = converted_to_logical_type(schema[schema_idx]);
     }
 
-    for (auto& child_idx : schema_elem.children_idx) {
-      process(child_idx);
+    // Recursive `process` may append to `schema`; index into it each iteration
+    // instead of holding a reference.
+    auto const num_children = schema[schema_idx].num_children;
+    for (size_type i = 0; i < num_children; ++i) {
+      process(schema[schema_idx].children_idx[i]);
     }
   };
 

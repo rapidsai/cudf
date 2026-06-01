@@ -17,6 +17,7 @@ from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_comm
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -41,7 +42,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
 
@@ -186,6 +186,7 @@ class RankActor:
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
+        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
@@ -242,7 +243,10 @@ class RankActor:
             )
         barrier(self._comm)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger,
+            self._mr,
+            self._rapidsmpf_options,
+            self._rapidsmpf_statistics,
         )
         # Set the current RMM device resource so all temporary allocations
         # in libcudf also use the same memory resource.
@@ -269,8 +273,12 @@ class RankActor:
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
+        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger,
+            self._mr,
+            self._rapidsmpf_options,
+            self._rapidsmpf_statistics,
         )
 
     def shutdown(self) -> None:
