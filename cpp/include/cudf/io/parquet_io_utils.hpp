@@ -52,6 +52,9 @@ using cudf::io::text::byte_range_info;
  *
  * @param datasources Input data sources
  * @return Vector of host buffers containing footer bytes, one per datasource
+ *
+ * @throw cudf::logic_error if any datasource contains a corrupted Parquet magic number, header or
+ * footer, or has an invalid footer length.
  */
 [[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
@@ -76,6 +79,10 @@ using cudf::io::text::byte_range_info;
  * @param datasources Input datasources
  * @param page_index_bytes_per_source Byte ranges of page index, one per datasource
  * @return Vector of host buffers containing page index bytes, one per datasource
+ *
+ * @throw cudf::logic_error if the number of datasources does not match the number of page index
+ * byte ranges
+ * @throw std::out_of_range if any page index byte range is out of range for its datasource
  */
 [[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
