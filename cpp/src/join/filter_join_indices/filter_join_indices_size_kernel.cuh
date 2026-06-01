@@ -86,7 +86,7 @@ CUDF_KERNEL __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) void filter_join_indices_
 
     switch (join_kind) {
       case cudf::join_kind::INNER_JOIN:
-        if (predicate_pass && both_valid) { ++thread_local_count; }
+        if (predicate_pass) { ++thread_local_count; }
         break;
       case cudf::join_kind::LEFT_JOIN:
         if (predicate_pass) {

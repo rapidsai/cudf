@@ -363,8 +363,7 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
                                      cudf::device_span<size_type const> right_indices,
                                      ast::expression const& predicate,
                                      join_kind join_kind,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     rmm::cuda_stream_view stream)
 {
   // Validate inputs (same constraints as filter_join_indices)
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
@@ -395,7 +394,8 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
   auto const shmem_per_block = parser.shmem_per_thread * DEFAULT_JOIN_BLOCK_SIZE;
 
   // The count kernel uses a single atomic counter. Allocate device_scalar zero-initialized.
-  cudf::detail::device_scalar<std::size_t> d_count(std::size_t{0}, stream, mr);
+  cudf::detail::device_scalar<std::size_t> d_count(
+    std::size_t{0}, stream, cudf::get_current_device_resource_ref());
 
   // For LEFT_JOIN, allocate per-left-row mark buffer; for others, pass nullptr.
   rmm::device_uvector<bool> left_passing_marks(
@@ -500,12 +500,11 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
                                      cudf::device_span<size_type const> right_indices,
                                      ast::expression const& predicate,
                                      cudf::join_kind join_kind,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_join_indices_size(
-    left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
+    left, right, left_indices, right_indices, predicate, join_kind, stream);
 }
 
 }  // namespace cudf

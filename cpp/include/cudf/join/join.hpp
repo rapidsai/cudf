@@ -371,19 +371,17 @@ filter_join_indices(cudf::table_view const& left,
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @param stream CUDA stream used for kernel launches and memory operations.
- * @param mr Device memory resource used to allocate intermediate device memory.
  *
  * @return The exact number of pairs that `filter_join_indices` would produce.
  */
-std::size_t filter_join_indices_size(
+[[nodiscard]] std::size_t filter_join_indices_size(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
   cudf::device_span<size_type const> right_indices,
   cudf::ast::expression const& predicate,
   cudf::join_kind join_kind,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief JIT-based filtering of join result indices using string predicate.
