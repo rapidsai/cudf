@@ -25,6 +25,7 @@
 #include <functional>
 #include <mutex>
 #include <numeric>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 
@@ -122,6 +123,14 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
   // Helper to fetch page index bytes from a datasource
   auto const fetch_page_index = [](cudf::io::datasource& datasource,
                                    cudf::io::text::byte_range_info const& page_index_bytes) {
+    CUDF_EXPECTS(
+      page_index_bytes.offset() >= 0 and
+        std::cmp_less_equal(page_index_bytes.offset() + page_index_bytes.size(), datasource.size()),
+      std::format("Invalid page index byte range: offset={}, size={}, datasource_size={}",
+                  page_index_bytes.offset(),
+                  page_index_bytes.size(),
+                  datasource.size()),
+      std::out_of_range);
     return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
   };
 

@@ -166,17 +166,24 @@ TEST_F(HybridScanFiltersTest, MultiSourceMetadata)
   srand(0xdede);
   using T = uint32_t;
 
+  // Helper to test multi-source metadata
   auto const test_multisource_metadata = [&](auto num_sources) {
     auto const file_buffer = std::get<1>(create_parquet_with_stats<T, 1>());
 
-    auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
-      reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
-    std::vector<std::reference_wrapper<cudf::io::datasource>> datasources(num_sources,
-                                                                          std::ref(*datasource));
+    std::vector<std::unique_ptr<cudf::io::datasource>> datasources(num_sources);
+    std::vector<std::reference_wrapper<cudf::io::datasource>> datasource_refs{};
+    std::transform(datasources.begin(),
+                   datasources.end(),
+                   std::back_inserter(datasource_refs),
+                   [&](auto& datasource) {
+                     datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+                       reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+                     return std::ref(*datasource);
+                   });
 
     // Fetch all footers at once
     auto const footer_buffers =
-      cudf::io::parquet::fetch_footers_to_host({datasources.data(), datasources.size()});
+      cudf::io::parquet::fetch_footers_to_host({datasource_refs.data(), datasource_refs.size()});
     ASSERT_EQ(footer_buffers.size(), num_sources);
 
     // Fetch all page indexes at once
@@ -187,14 +194,14 @@ TEST_F(HybridScanFiltersTest, MultiSourceMetadata)
     std::vector<cudf::io::parquet::byte_range_info> page_index_byte_ranges(
       num_sources, reader->page_index_byte_range());
     auto const page_index_buffers = cudf::io::parquet::fetch_page_indexes_to_host(
-      {datasources.data(), datasources.size()},
+      {datasource_refs.data(), datasource_refs.size()},
       {page_index_byte_ranges.data(), page_index_byte_ranges.size()});
     ASSERT_EQ(page_index_buffers.size(), num_sources);
 
     // Footer and page index from multi-source and single-source APIs should match
-    auto const single_footer = cudf::io::parquet::fetch_footer_to_host(*datasource);
-    auto const single_page_index =
-      cudf::io::parquet::fetch_page_index_to_host(*datasource, reader->page_index_byte_range());
+    auto const single_footer     = cudf::io::parquet::fetch_footer_to_host(datasource_refs.front());
+    auto const single_page_index = cudf::io::parquet::fetch_page_index_to_host(
+      datasource_refs.front(), reader->page_index_byte_range());
 
     auto const iter = cuda::make_zip_iterator(footer_buffers.begin(), page_index_buffers.begin());
     std::for_each(iter, iter + num_sources, [&](auto const& pair) {
@@ -209,8 +216,10 @@ TEST_F(HybridScanFiltersTest, MultiSourceMetadata)
     });
   };
 
-  test_multisource_metadata(3);
-  test_multisource_metadata(32);
+  auto num_sources = 4;
+  test_multisource_metadata(num_sources);
+  num_sources = 32;
+  test_multisource_metadata(num_sources);
 }
 
 TEST_F(HybridScanFiltersTest, ExternalMetadata)
