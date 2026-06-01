@@ -8,7 +8,10 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/limits>
+
+#ifndef __CUDACC_RTC__
 #include <cuda_runtime.h>
+#endif
 
 /**
  * @file

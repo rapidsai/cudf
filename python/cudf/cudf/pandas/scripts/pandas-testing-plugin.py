@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
 import json
-import os
 import sys
 import traceback
 from collections import defaultdict
@@ -24,17 +22,8 @@ def replace_kwargs(new_kwargs):
     return wrapper
 
 
-@contextlib.contextmanager
-def null_assert_warnings(*args, **kwargs):
-    try:
-        yield []
-    finally:
-        pass
-
-
 @pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
-    tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
@@ -135,7 +124,7 @@ NODEIDS_THAT_FAIL = {
     "tests/arithmetic/test_numeric.py::TestAdditionSubtraction::test_series_operators_arithmetic[python-pow-slice]": "AssertionError: Series are different",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[numexpr]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[python]": "TODO: Add a reason for failure",
-    "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_ser_div_ser[numexpr-float32-int64]": "TODO: Add a reason for failure",
+    "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_ser_div_ser[numexpr-float32-int64]": "cudf promotes float32/int64 division to float64",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[numexpr]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[python]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[numexpr-idx0-2-expected0]": "TODO: Add a reason for failure",
@@ -150,82 +139,6 @@ NODEIDS_THAT_FAIL = {
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[python-idx5-3-expected5]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[python-idx6-4-expected6]": "TODO: Add a reason for failure",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[python-idx7-2-expected7]": "TODO: Add a reason for failure",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index1-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-Index2-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[numexpr-RangeIndex-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index1-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-Index2-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.datetime64('2021-01-01T00:00:00.000000')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.datetime64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.timedelta64('NaT','D')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.timedelta64('NaT','ns')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.timedelta64(111600000000,'us')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_add_sub_datetimedeltalike_invalid[python-RangeIndex-array-np.timedelta64(31,'h')]": "Failed: DID NOT RAISE <class 'TypeError'>",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index0-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index0-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index0-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index1-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index1-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index1-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index2-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index2-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-Index2-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-RangeIndex-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-RangeIndex-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[numexpr-RangeIndex-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index0-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index0-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index0-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index1-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index1-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index1-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index2-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index2-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-Index2-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-RangeIndex-array-timedelta64_0]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-RangeIndex-array-timedelta64_1]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_mul_tdscalar[python-RangeIndex-array-timedelta64_2]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_0-Index0-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_0-Index1-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_0-Index2-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_0-RangeIndex-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_1-Index0-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_1-Index1-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_1-Index2-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[numexpr-timedelta64_1-RangeIndex-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_0-Index0-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_0-Index1-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_0-Index2-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_0-RangeIndex-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_1-Index0-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_1-Index1-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_1-Index2-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
-    "tests/arithmetic/test_numeric.py::TestNumericArraylikeArithmeticWithDatetimeLike::test_numeric_arr_rdiv_tdscalar[python-timedelta64_1-RangeIndex-array]": "NotImplementedError: Fast implementation not available. Falling back to the slow implementation",
     "tests/arithmetic/test_numeric.py::test_integer_array_add_list_like[numexpr-to_array-Index-data0-expected_data0]": "AssertionError: numpy array are different",
     "tests/arithmetic/test_numeric.py::test_integer_array_add_list_like[python-to_array-Index-data0-expected_data0]": "AssertionError: numpy array are different",
     "tests/arithmetic/test_object.py::TestObjectComparisons::test_more_na_comparisons[None]": "AssertionError: Attributes of Series are different",
@@ -270,20 +183,6 @@ NODEIDS_THAT_FAIL = {
     "tests/arrays/categorical/test_sorting.py::TestCategoricalSort::test_sort_values": "TODO: Add a reason for failure",
     "tests/arrays/categorical/test_sorting.py::TestCategoricalSort::test_sort_values_na_position": "TODO: Add a reason for failure",
     "tests/arrays/datetimes/test_constructors.py::TestDatetimeArrayConstructor::test_copy": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_empty[ms-Europe/Berlin]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_empty[ns-Asia/Kolkata]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_empty[ns-UTC]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_empty[s-UTC]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_empty[us-US/Eastern]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_from_integers": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[ms-ms-UTC-Europe/Berlin-data1]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[ms-us-US/Eastern-UTC-data6]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[ns-ns-US/Central-Asia/Kolkata-data3]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[ns-s-UTC-UTC-data4]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[s-ns-US/Central-Asia/Kolkata-data7]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[s-s-UTC-UTC-data0]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[us-ms-UTC-Europe/Berlin-data5]": "TODO: Add a reason for failure",
-    "tests/arrays/datetimes/test_constructors.py::test_from_arrow_with_different_units_and_timezones_with[us-us-US/Eastern-UTC-data2]": "TODO: Add a reason for failure",
     "tests/arrays/floating/test_astype.py::test_astype_copy": "TODO: Add a reason for failure",
     "tests/arrays/floating/test_comparison.py::TestComparisonOps::test_ufunc_with_out[Float32Dtype]": "TODO: Add a reason for failure",
     "tests/arrays/floating/test_comparison.py::TestComparisonOps::test_ufunc_with_out[Float64Dtype]": "TODO: Add a reason for failure",
@@ -338,13 +237,8 @@ NODEIDS_THAT_FAIL = {
     "tests/arrays/numpy_/test_numpy.py::test_asarray_readonly[None]": "assert not True",
     "tests/arrays/numpy_/test_numpy.py::test_asarray_readonly[int64]": "assert not True",
     "tests/arrays/numpy_/test_numpy.py::test_np_max_nested_tuples": "TODO: Add a reason for failure",
-    "tests/arrays/numpy_/test_numpy.py::test_np_reduce_2d": "TODO: Add a reason for failure",
     "tests/arrays/numpy_/test_numpy.py::test_setitem_preserves_views": "TODO: Add a reason for failure",
     "tests/arrays/numpy_/test_numpy.py::test_to_numpy": "TODO: Add a reason for failure",
-    "tests/arrays/numpy_/test_numpy.py::test_ufunc": "TODO: Add a reason for failure",
-    "tests/arrays/numpy_/test_numpy.py::test_ufunc_unary[absolute]": "TODO: Add a reason for failure",
-    "tests/arrays/numpy_/test_numpy.py::test_ufunc_unary[negative]": "TODO: Add a reason for failure",
-    "tests/arrays/numpy_/test_numpy.py::test_ufunc_unary[positive]": "TODO: Add a reason for failure",
     "tests/arrays/period/test_arrow_compat.py::test_arrow_array[data0-D]": "pyarrow.lib.ArrowTypeError: Did not pass numpy.dtype object",
     "tests/arrays/period/test_arrow_compat.py::test_arrow_array[data1-Y-DEC]": "pyarrow.lib.ArrowTypeError: Did not pass numpy.dtype object",
     "tests/arrays/period/test_arrow_compat.py::test_arrow_array_missing": "TODO: Add a reason for failure",
@@ -1164,8 +1058,6 @@ NODEIDS_THAT_FAIL = {
     "tests/extension/test_interval.py::TestIntervalArray::test_EA_types[c]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_EA_types[python]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_astype_own_type[False]": "TODO: Add a reason for failure",
-    "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[eq]": "TODO: Add a reason for failure",
-    "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[ne]": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_grouping_grouper": "AssertionError: ndarray Expected type <class 'numpy.ndarray'>, found <class 'pandas.arrays.ArrowStringArray'> instead",
     "tests/extension/test_interval.py::TestIntervalArray::test_in_numeric_groupby": "TODO: Add a reason for failure",
     "tests/extension/test_interval.py::TestIntervalArray::test_is_extension_array_dtype": "TODO: Add a reason for failure",
@@ -1394,16 +1286,7 @@ NODEIDS_THAT_FAIL = {
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_set_frame_overwrite_object[float]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_set_frame_overwrite_object[object]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_2d_values[object]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_stack[object-False-columns0]": "AssertionError",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_stack[object-True-columns0]": "AssertionError",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_take_series[object]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_to_numpy[object]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[float-absolute]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[float-negative]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[float-positive]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[object-absolute]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[object-negative]": "TODO: Add a reason for failure",
-    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unary_ufunc_dunder_equivalence[object-positive]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unique[float-<lambda>-Series]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unique[float-unique-Series]": "TODO: Add a reason for failure",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_unique[object-<lambda>-<lambda>]": "TODO: Add a reason for failure",
@@ -3786,7 +3669,7 @@ NODEIDS_THAT_FAIL = {
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-exp]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-expm1]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log10]": "TODO: Add a reason for failure",
-    "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log1p]": "TODO: Add a reason for failure",
+    "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log1p]": "GPU complex64 precision differs from CPU",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log2]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-log]": "TODO: Add a reason for failure",
     "tests/indexes/test_numpy_compat.py::test_numpy_ufuncs_basic[complex64-sin]": "TODO: Add a reason for failure",
@@ -4214,9 +4097,11 @@ NODEIDS_THAT_FAIL = {
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_blank_with_header[(None, '.xlsm')]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='col_1') are different",
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_blank_with_header[(None, '.xlsx')]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='col_1') are different",
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_ods_nested_xml[('odf', '.ods')-gh-36122-expected1]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='got 2nd sa') are different",
+    "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only": "openpyxl data_only=True reads cached formula results; freshly-written files have no cache, which is an openpyxl/Excel limitation rather than a cudf bug",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[False]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[True]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[columns]": "AttributeError: _compute. Did you mean: 'compare'?",
+    "tests/io/excel/test_style.py::test_styler_custom_converter": "openpyxl raises IndexError on workbook with no visible sheets; cudf.pandas fallback triggers this openpyxl limitation",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[odf-.ods]": "TODO: Add a reason for failure",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[openpyxl-.xlsm]": "TODO: Add a reason for failure",
     "tests/io/excel/test_writers.py::TestExcelWriter::test_excel_date_datetime_format[openpyxl-.xlsx]": "TODO: Add a reason for failure",
@@ -6685,6 +6570,17 @@ NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/groupby/test_groupby_dropna.py::test_null_is_null_for_dtype[False-float0-NoneType-None-False]": "Flaky/version-sensitive cudf.pandas dispatch",
     "tests/groupby/test_groupby_dropna.py::test_null_is_null_for_dtype[False-float1-NoneType-None-False]": "Flaky/version-sensitive cudf.pandas dispatch",
     "tests/groupby/test_grouping.py::TestGrouping::test_groupby_level_index_value_all_na": "Flaky/version-sensitive cudf.pandas dispatch",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[max]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[max-min_count]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[mean]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[min]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[min-min_count]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[std_0]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[std_1]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[sum]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[sum-min_count]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[var_0]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
+    "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[var_1]": "cuDF computes reductions on GPU without numba; pandas-specific limitation does not apply",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[float-IntervalIndex]": "Asserts private APIs",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[float-Interval]": "Asserts private APIs",
@@ -7908,6 +7804,7 @@ NODEIDS_TO_SKIP: dict[str, str] = {
 }
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
     for item in items:
         if (reason := NODEIDS_TO_SKIP.get(item.nodeid, None)) is not None:
@@ -7925,6 +7822,3 @@ def pytest_collection_modifyitems(session, config, items):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (reason := NODEIDS_THAT_FAIL.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.xfail(reason=reason))
-
-
-sys.path.append(os.path.dirname(__file__))
