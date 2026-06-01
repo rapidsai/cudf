@@ -975,6 +975,7 @@ class StringMethods(BaseAccessor):
             Number of replacements to make from the start.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
+            Raises ValueError if pat is not a string.
             If False, treats the pattern as a literal string.
 
         Returns
@@ -1033,14 +1034,8 @@ class StringMethods(BaseAccessor):
                 )
 
             if regex:
-                warnings.warn(
-                    "regex support for multiple replace patterns  "
-                    "will be removed in a future version.",
-                    FutureWarning,
-                )
-                result = self._column.replace_re(
-                    list(pat),
-                    as_column(repl, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
+                raise ValueError(
+                    "multiple pattern replace with regex=True is not supported"
                 )
             else:
                 result = self._column.replace_multiple(
@@ -5370,45 +5365,6 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.edit_distance(targets_column)  # type: ignore[arg-type]
         )
-
-    def edit_distance_matrix(self) -> Series | Index:
-        """Computes the edit distance between strings in the series.
-
-        The series to compute the matrix should have more than 2 strings and
-        should not contain nulls.
-
-        Edit distance is measured based on the `Levenshtein edit distance
-        algorithm <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
-
-        Returns
-        -------
-        Series of ListDtype(int64)
-            Assume ``N`` is the length of this series. The return series
-            contains ``N`` lists of size ``N``, where the ``j`` th number in
-            the ``i`` th row of the series tells the edit distance between the
-            ``i`` th string and the ``j`` th string of this series.  The matrix
-            is symmetric. Diagonal elements are 0.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['abc', 'bc', 'cba'])
-        >>> s.str.edit_distance_matrix()
-        0    [0, 1, 2]
-        1    [1, 0, 2]
-        2    [2, 2, 0]
-        dtype: list
-        """
-        if self._column.size < 2:
-            raise ValueError(
-                "Require size >= 2 to compute edit distance matrix."
-            )
-        if self._column.has_nulls():
-            raise ValueError(
-                "Cannot compute edit distance between null strings. "
-                "Consider removing them using `dropna` or fill with `fillna`."
-            )
-        return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
         self, seed: int, a: ColumnLike, b: ColumnLike, width: int
