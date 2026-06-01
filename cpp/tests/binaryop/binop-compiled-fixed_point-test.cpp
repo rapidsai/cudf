@@ -9,6 +9,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -17,7 +18,9 @@
 
 #include <cuda/iterator>
 
+#include <cstddef>
 #include <limits>
+#include <vector>
 
 template <typename T>
 struct FixedPointCompiledTest : public cudf::test::BaseFixture {};
@@ -894,7 +897,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointWithFloating)
 TEST(BinaryOperationSafeDecimal, mulNoOverflowFlagZero)
 {
   using namespace numeric;
-  using Rep = cudf::device_storage_type_t<numeric::decimal64>;
+  using Rep                    = cudf::device_storage_type_t<numeric::decimal64>;
   auto const lhs               = fp_wrapper<Rep>{{11, 22}, scale_type{-1}};
   auto const rhs               = fp_wrapper<Rep>{{10, 10}, scale_type{0}};
   auto const expected          = fp_wrapper<Rep>{{110, 220}, scale_type{-1}};
@@ -919,8 +922,8 @@ TEST(BinaryOperationSafeDecimal, mulOverflowSetsGlobalFlag)
   using namespace numeric;
   using Rep = cudf::device_storage_type_t<numeric::decimal64>;
   // Product of scaled integers overflows int64; sticky overflow path should mark the row.
-  Rep const a = (std::numeric_limits<int64_t>::max() / 2) + 1;
-  Rep const b = 3;
+  Rep const a                  = (std::numeric_limits<int64_t>::max() / 2) + 1;
+  Rep const b                  = 3;
   auto const lhs               = fp_wrapper<Rep>{{a}, scale_type{0}};
   auto const rhs               = fp_wrapper<Rep>{{b}, scale_type{0}};
   auto const expected_overflow = wrapper<bool>{{true}};
@@ -936,5 +939,146 @@ TEST(BinaryOperationSafeDecimal, mulOverflowSetsGlobalFlag)
     cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, stream, mr);
 
   EXPECT_EQ(1, result->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_overflow, overflow->view());
+}
+
+TEST(BinaryOperationSafeDecimal, mulEmptyInput)
+{
+  using namespace numeric;
+  using Rep      = cudf::device_storage_type_t<numeric::decimal64>;
+  auto const lhs = fp_wrapper<Rep>{{}, scale_type{0}};
+  auto const rhs = fp_wrapper<Rep>{{}, scale_type{0}};
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const [result, overflow] =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, stream, mr);
+
+  EXPECT_EQ(0, result->size());
+  EXPECT_EQ(0, overflow->size());
+  EXPECT_EQ(cudf::type_id::BOOL8, overflow->type().id());
+}
+
+TEST(BinaryOperationSafeDecimal, mulNullRowsKeepOverflowFalse)
+{
+  using namespace numeric;
+  using Rep     = cudf::device_storage_type_t<numeric::decimal64>;
+  Rep const big = (std::numeric_limits<int64_t>::max() / 2) + 1;
+  // Row 0: valid + valid, overflowing  (big * 3 wraps int64)  -> overflow=true
+  // Row 1: lhs null, rhs valid, would have overflowed         -> overflow=false
+  // Row 2: valid + valid, overflowing                          -> overflow=true
+  // Row 3: lhs valid, rhs null, would have overflowed          -> overflow=false
+  auto const lhs               = fp_wrapper<Rep>{{big, big, big, big}, {1, 0, 1, 1}, scale_type{0}};
+  auto const rhs               = fp_wrapper<Rep>{{3, 3, 3, 3}, {1, 1, 1, 0}, scale_type{0}};
+  auto const expected_overflow = wrapper<bool>{{true, false, true, false}};
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const [result, overflow] =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, stream, mr);
+
+  EXPECT_EQ(4, result->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_overflow, overflow->view());
+}
+
+TEST(BinaryOperationSafeDecimal, mulSlicedColumns)
+{
+  using namespace numeric;
+  using Rep     = cudf::device_storage_type_t<numeric::decimal64>;
+  Rep const big = (std::numeric_limits<int64_t>::max() / 2) + 1;
+  // Build 6-row columns and slice [1, 4) so that only the slice is fed to the kernel.
+  // Row layout (full):  [1*1, big*3, 2*2, big*3, 3*3, big*3]
+  // Slice rows 1..3:    [    big*3, 2*2, big*3            ]  -> overflow=[true,false,true]
+  auto const full_lhs = fp_wrapper<Rep>{{Rep{1}, big, Rep{2}, big, Rep{3}, big}, scale_type{0}};
+  auto const full_rhs =
+    fp_wrapper<Rep>{{Rep{1}, Rep{3}, Rep{2}, Rep{3}, Rep{3}, Rep{3}}, scale_type{0}};
+  auto const lhs_slice =
+    cudf::slice(static_cast<cudf::column_view>(full_lhs), std::vector<cudf::size_type>{1, 4})[0];
+  auto const rhs_slice =
+    cudf::slice(static_cast<cudf::column_view>(full_rhs), std::vector<cudf::size_type>{1, 4})[0];
+
+  auto const expected_overflow = wrapper<bool>{{true, false, true}};
+  auto const type              = cudf::binary_operation_fixed_point_output_type(
+    cudf::binary_operator::MUL, lhs_slice.type(), rhs_slice.type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const [result, overflow] =
+    cudf::binary_operation_safe(lhs_slice, rhs_slice, cudf::binary_operator::MUL, type, stream, mr);
+
+  EXPECT_EQ(3, result->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_overflow, overflow->view());
+}
+
+TEST(BinaryOperationSafeDecimal, mulMultiBlockSize)
+{
+  using namespace numeric;
+  using Rep         = cudf::device_storage_type_t<numeric::decimal64>;
+  Rep const big     = (std::numeric_limits<int64_t>::max() / 2) + 1;
+  auto const sz     = std::size_t{10'000};  // spans many CUDA blocks
+  auto const stride = std::size_t{137};     // sparse overflow pattern
+
+  std::vector<Rep> lhs_data(sz, Rep{1});
+  std::vector<Rep> rhs_data(sz, Rep{1});
+  std::vector<bool> expected_overflow_data(sz, false);
+  for (std::size_t i = 0; i < sz; i += stride) {
+    lhs_data[i]               = big;
+    rhs_data[i]               = Rep{3};
+    expected_overflow_data[i] = true;
+  }
+
+  auto const lhs = fp_wrapper<Rep>(lhs_data.begin(), lhs_data.end(), scale_type{0});
+  auto const rhs = fp_wrapper<Rep>(rhs_data.begin(), rhs_data.end(), scale_type{0});
+  auto const expected_overflow =
+    wrapper<bool>(expected_overflow_data.begin(), expected_overflow_data.end());
+
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MUL,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const [result, overflow] =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::MUL, type, stream, mr);
+
+  EXPECT_EQ(static_cast<cudf::size_type>(sz), result->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_overflow, overflow->view());
+}
+
+TEST(BinaryOperationSafeDecimal, divByZeroSetsOverflowAndAvoidsUB)
+{
+  using namespace numeric;
+  using Rep = cudf::device_storage_type_t<numeric::decimal64>;
+  // Mix in a zero divisor; CodeRabbit's critical finding requires we never
+  // execute `/ 0` and that the row is flagged.
+  auto const lhs               = fp_wrapper<Rep>{{Rep{10}, Rep{20}, Rep{30}}, scale_type{0}};
+  auto const rhs               = fp_wrapper<Rep>{{Rep{2}, Rep{0}, Rep{5}}, scale_type{0}};
+  auto const expected_overflow = wrapper<bool>{{false, true, false}};
+
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::DIV,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const [result, overflow] =
+    cudf::binary_operation_safe(lhs, rhs, cudf::binary_operator::DIV, type, stream, mr);
+
+  EXPECT_EQ(3, result->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_overflow, overflow->view());
 }

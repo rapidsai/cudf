@@ -525,6 +525,11 @@ CUDF_HOST_DEVICE inline cuda::std::pair<IntegerType, bool> checked_left_shift(In
                                                                               int bit_shift)
 {
   if constexpr (!CheckOverflow) {
+    // Mirror the negative-shift guard used in the `CheckOverflow` branch so we
+    // never forward `value << bit_shift` with a negative shift count
+    // (undefined behavior). A negative shift is not expected from any current
+    // caller; return zero in line with `guarded_right_shift`'s underflow case.
+    if (bit_shift < 0) { return {IntegerType{0}, false}; }
     return {guarded_left_shift(value, bit_shift), false};
   } else {
     constexpr int digits             = cuda::std::numeric_limits<IntegerType>::digits;
@@ -1039,7 +1044,7 @@ CUDF_HOST_DEVICE inline auto convert_floating_to_integral(FloatingType const& fl
   // Reapply the sign. Negative range has one extra representable value for two's
   // complement: magnitude == max+1 maps to min, and we can't get there by casting
   // then negating (that would invoke signed overflow / undefined behavior).
-  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+  using UnsignedRep   = cuda::std::make_unsigned_t<Rep>;
   auto const umax     = static_cast<UnsignedRep>(cuda::std::numeric_limits<Rep>::max());
   auto const umin_mag = umax + UnsignedRep{1};
 

@@ -224,20 +224,37 @@ std::unique_ptr<column> binary_operation(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Decimal fixed-point binary operation with a per-row overflow column.
+ * @brief Decimal fixed-point binary operation between a scalar and a column,
+ *        with a per-row overflow column.
  *
- * Like `binary_operation` for two base-10 decimal operands, but additionally returns a
- * `BOOL8` column of the same length as the result. Element `i` of that column is `true`
- * iff row `i` is an **active** (non-null on both sides) row whose arithmetic or rescale
- * to @p output_type overflowed. Rows that are null on either side, or rows whose
- * arithmetic completed without overflow, hold `false`. The overflow column has no null
- * mask.
+ * The result column contains `op(lhs, rhs[i])` for all `0 <= i < rhs.size()`,
+ * matching the semantics of `binary_operation` for the seven supported decimal
+ * arithmetic operators (ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD).
  *
- * Supported operators: ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD.
+ * Additionally returns a `BOOL8` column of the same length as the result.
+ * Element `i` is `true` iff row `i` is an active (non-null on both sides) row
+ * whose arithmetic or rescale to @p output_type overflowed (or, for DIV / MOD
+ * / PMOD / PYMOD, divided by zero). Null rows and clean rows hold `false`.
+ * The overflow column has no null mask.
  *
- * @return A pair `{result, overflow}` where `result` is the arithmetic result column
- *         (same semantics as `binary_operation`) and `overflow` is the per-row BOOL8
- *         overflow column described above.
+ * @p lhs, @p rhs, and @p output_type must share the same decimal storage type
+ * (e.g. all `DECIMAL64`); mixing decimal widths or pairing decimal with a
+ * non-decimal operand is not supported on this path.
+ *
+ * @param lhs         The left operand decimal scalar
+ * @param rhs         The right operand decimal column
+ * @param op          The binary operator
+ * @param output_type The desired data type of the result column (must be a base-10 decimal)
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ * @param mr          Device memory resource used to allocate the returned columns' device memory
+ * @return A pair `{result, overflow}` where `result` is the arithmetic result column and
+ *         `overflow` is the per-row `BOOL8` overflow column described above.
+ * @throw cudf::logic_error if @p lhs or @p rhs is not a fixed-point type
+ * @throw cudf::logic_error if @p op is not one of ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD
+ * @throw cudf::logic_error if @p lhs, @p rhs, and @p output_type do not share the same
+ *        decimal storage type
+ * @throw cudf::data_type_error if the operation is not supported for the types of
+ *        @p lhs and @p rhs
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   scalar const& lhs,
@@ -247,6 +264,39 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_saf
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Decimal fixed-point binary operation between a column and a scalar,
+ *        with a per-row overflow column.
+ *
+ * The result column contains `op(lhs[i], rhs)` for all `0 <= i < lhs.size()`,
+ * matching the semantics of `binary_operation` for the seven supported decimal
+ * arithmetic operators (ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD).
+ *
+ * Additionally returns a `BOOL8` column of the same length as the result.
+ * Element `i` is `true` iff row `i` is an active (non-null on both sides) row
+ * whose arithmetic or rescale to @p output_type overflowed (or, for DIV / MOD
+ * / PMOD / PYMOD, divided by zero). Null rows and clean rows hold `false`.
+ * The overflow column has no null mask.
+ *
+ * @p lhs, @p rhs, and @p output_type must share the same decimal storage type
+ * (e.g. all `DECIMAL64`); mixing decimal widths or pairing decimal with a
+ * non-decimal operand is not supported on this path.
+ *
+ * @param lhs         The left operand decimal column
+ * @param rhs         The right operand decimal scalar
+ * @param op          The binary operator
+ * @param output_type The desired data type of the result column (must be a base-10 decimal)
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ * @param mr          Device memory resource used to allocate the returned columns' device memory
+ * @return A pair `{result, overflow}` where `result` is the arithmetic result column and
+ *         `overflow` is the per-row `BOOL8` overflow column described above.
+ * @throw cudf::logic_error if @p lhs or @p rhs is not a fixed-point type
+ * @throw cudf::logic_error if @p op is not one of ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD
+ * @throw cudf::logic_error if @p lhs, @p rhs, and @p output_type do not share the same
+ *        decimal storage type
+ * @throw cudf::data_type_error if the operation is not supported for the types of
+ *        @p lhs and @p rhs
+ */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   column_view const& lhs,
   scalar const& rhs,
@@ -255,6 +305,40 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_saf
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Decimal fixed-point binary operation between two columns,
+ *        with a per-row overflow column.
+ *
+ * The result column contains `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`,
+ * matching the semantics of `binary_operation` for the seven supported decimal
+ * arithmetic operators (ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD).
+ *
+ * Additionally returns a `BOOL8` column of the same length as the result.
+ * Element `i` is `true` iff row `i` is an active (non-null on both sides) row
+ * whose arithmetic or rescale to @p output_type overflowed (or, for DIV / MOD
+ * / PMOD / PYMOD, divided by zero). Null rows and clean rows hold `false`.
+ * The overflow column has no null mask.
+ *
+ * @p lhs, @p rhs, and @p output_type must share the same decimal storage type
+ * (e.g. all `DECIMAL64`); mixing decimal widths or pairing decimal with a
+ * non-decimal operand is not supported on this path.
+ *
+ * @param lhs         The left operand decimal column
+ * @param rhs         The right operand decimal column
+ * @param op          The binary operator
+ * @param output_type The desired data type of the result column (must be a base-10 decimal)
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ * @param mr          Device memory resource used to allocate the returned columns' device memory
+ * @return A pair `{result, overflow}` where `result` is the arithmetic result column and
+ *         `overflow` is the per-row `BOOL8` overflow column described above.
+ * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p lhs or @p rhs is not a fixed-point type
+ * @throw cudf::logic_error if @p op is not one of ADD, SUB, MUL, DIV, MOD, PMOD, PYMOD
+ * @throw cudf::logic_error if @p lhs, @p rhs, and @p output_type do not share the same
+ *        decimal storage type
+ * @throw cudf::data_type_error if the operation is not supported for the types of
+ *        @p lhs and @p rhs
+ */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_safe(
   column_view const& lhs,
   column_view const& rhs,

@@ -100,9 +100,17 @@ struct decimal_safe_op_kernel {
 
   __device__ __forceinline__ void operator()(size_type i) const
   {
-    auto const li         = is_lhs_scalar ? 0 : i;
-    auto const ri         = is_rhs_scalar ? 0 : i;
-    bool const row_active = lhs.is_valid(li) && rhs.is_valid(ri);
+    auto const li = is_lhs_scalar ? 0 : i;
+    auto const ri = is_rhs_scalar ? 0 : i;
+    // Per cuDF convention, null payloads of fixed-width columns are unspecified
+    // and must not be read. Short-circuit so we never call `element<Rep>` on a
+    // null row, and write defined neutral values into the output's null slots
+    // (the result column's null mask, set by the caller, is what makes them null).
+    if (!(lhs.is_valid(li) && rhs.is_valid(ri))) {
+      d_overflow_per_row[i] = false;
+      out.data<Rep>()[i]    = Rep{};
+      return;
+    }
 
     auto const lscale = numeric::scale_type{lhs.type().scale()};
     auto const rscale = numeric::scale_type{rhs.type().scale()};
@@ -112,9 +120,8 @@ struct decimal_safe_op_kernel {
 
     auto const op_res       = SafeOp{}(x, y);
     auto const rescaled_res = numeric::detail::safe_rescaled(op_res.value, out_scale);
-    bool const bad          = op_res.overflow || rescaled_res.overflow;
 
-    d_overflow_per_row[i] = row_active && bad;
+    d_overflow_per_row[i] = op_res.overflow || rescaled_res.overflow;
     out.data<Rep>()[i]    = rescaled_res.value.value();
   }
 };
@@ -197,8 +204,9 @@ void apply_binary_op_safe(mutable_column_view& out,
 {
   CUDF_EXPECTS(d_overflow_per_row != nullptr,
                "binary_operation_safe requires a non-null device per-row overflow buffer.");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id() && lhs.type().id() == out.type().id(),
-               "binary_operation_safe requires lhs/rhs/out to share the same decimal storage type.");
+  CUDF_EXPECTS(
+    lhs.type().id() == rhs.type().id() && lhs.type().id() == out.type().id(),
+    "binary_operation_safe requires lhs/rhs/out to share the same decimal storage type.");
 
   if (out.size() == 0) { return; }
 

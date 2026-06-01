@@ -113,9 +113,8 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_add(fixed_point<Rep, Rad> lhs
   Rep const rv            = rhs_r.value.value();
   bool const op_overflow  = addition_overflow<Rep>(lv, rv);
   Rep const sum           = lv + rv;
-  return safe_result<Rep, Rad>{
-    fixed_point<Rep, Rad>{scaled_integer<Rep>{sum, common_scale}},
-    op_overflow || lhs_r.overflow || rhs_r.overflow};
+  return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{sum, common_scale}},
+                               op_overflow || lhs_r.overflow || rhs_r.overflow};
 }
 
 /**
@@ -132,9 +131,8 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_sub(fixed_point<Rep, Rad> lhs
   Rep const rv            = rhs_r.value.value();
   bool const op_overflow  = subtraction_overflow<Rep>(lv, rv);
   Rep const diff          = lv - rv;
-  return safe_result<Rep, Rad>{
-    fixed_point<Rep, Rad>{scaled_integer<Rep>{diff, common_scale}},
-    op_overflow || lhs_r.overflow || rhs_r.overflow};
+  return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{diff, common_scale}},
+                               op_overflow || lhs_r.overflow || rhs_r.overflow};
 }
 
 /**
@@ -158,18 +156,24 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_mul(fixed_point<Rep, Rad> lhs
 /**
  * @brief Overflow-checked division of two `fixed_point` values
  *
- * Only `INT_MIN / -1` is a signed-integer division overflow; that's exactly what
- * `division_overflow` catches.
+ * Two failure modes are reported as overflow: `INT_MIN / -1` (caught by
+ * `division_overflow`) and division by zero (caught here before the divide).
+ * In the divide-by-zero case we return a zero-valued result rather than
+ * invoking signed integer divide-by-zero UB.
  */
 template <typename Rep, Radix Rad>
 CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_div(fixed_point<Rep, Rad> lhs,
                                                        fixed_point<Rep, Rad> rhs)
 {
-  Rep const lv           = lhs.value();
-  Rep const rv           = rhs.value();
+  Rep const lv = lhs.value();
+  Rep const rv = rhs.value();
+  scale_type const out_scale{lhs.scale() - rhs.scale()};
+  if (rv == Rep{0}) {
+    return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{Rep{0}, out_scale}},
+                                 true};
+  }
   bool const op_overflow = division_overflow<Rep>(lv, rv);
   Rep const quot         = lv / rv;
-  scale_type const out_scale{lhs.scale() - rhs.scale()};
   return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{quot, out_scale}},
                                op_overflow};
 }
@@ -178,7 +182,9 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_div(fixed_point<Rep, Rad> lhs
  * @brief Overflow-checked modulo of two `fixed_point` values
  *
  * Integer `%` itself cannot overflow when both operands are representable, so
- * the only overflow source is the rescale to the common scale.
+ * the only op-level failure mode is divide-by-zero. The rescale to the common
+ * scale can also overflow and is OR'd into the returned flag. On `rhs == 0`
+ * we return a zero-valued result instead of invoking `%`-by-zero UB.
  */
 template <typename Rep, Radix Rad>
 CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_mod(fixed_point<Rep, Rad> lhs,
@@ -187,10 +193,14 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_mod(fixed_point<Rep, Rad> lhs
   auto const common_scale = cuda::std::min(lhs.scale(), rhs.scale());
   auto const lhs_r        = safe_rescaled(lhs, common_scale);
   auto const rhs_r        = safe_rescaled(rhs, common_scale);
-  Rep const remainder     = lhs_r.value.value() % rhs_r.value.value();
-  return safe_result<Rep, Rad>{
-    fixed_point<Rep, Rad>{scaled_integer<Rep>{remainder, common_scale}},
-    lhs_r.overflow || rhs_r.overflow};
+  Rep const rv            = rhs_r.value.value();
+  if (rv == Rep{0}) {
+    return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{Rep{0}, common_scale}},
+                                 true};
+  }
+  Rep const remainder = lhs_r.value.value() % rv;
+  return safe_result<Rep, Rad>{fixed_point<Rep, Rad>{scaled_integer<Rep>{remainder, common_scale}},
+                               lhs_r.overflow || rhs_r.overflow};
 }
 
 /**
@@ -207,11 +217,11 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pmod(fixed_point<Rep, Rad> lh
   auto const m = safe_mod(lhs, rhs);
   if (!(m.value.value() < Rep{0})) { return m; }
 
-  auto const rhs_r       = safe_rescaled(rhs, m.value.scale());
-  Rep const mv           = m.value.value();
-  Rep const rv           = rhs_r.value.value();
+  auto const rhs_r        = safe_rescaled(rhs, m.value.scale());
+  Rep const mv            = m.value.value();
+  Rep const rv            = rhs_r.value.value();
   bool const add_overflow = addition_overflow<Rep>(mv, rv);
-  Rep const corrected    = (mv + rv) % rv;
+  Rep const corrected     = (mv + rv) % rv;
   return safe_result<Rep, Rad>{
     fixed_point<Rep, Rad>{scaled_integer<Rep>{corrected, m.value.scale()}},
     m.overflow || rhs_r.overflow || add_overflow};
@@ -220,7 +230,8 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pmod(fixed_point<Rep, Rad> lh
 /**
  * @brief Overflow-checked Python-style modulo: `((x % y) + y) % y`.
  *
- * The intermediate add can overflow; the final `%` cannot.
+ * The intermediate add can overflow; the final `%` cannot. When `rhs == 0`
+ * we short-circuit with overflow flagged so we never invoke `%`-by-zero UB.
  */
 template <typename Rep, Radix Rad>
 CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pymod(fixed_point<Rep, Rad> lhs,
@@ -228,11 +239,16 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pymod(fixed_point<Rep, Rad> l
 {
   auto const m = safe_mod(lhs, rhs);
 
-  auto const rhs_r       = safe_rescaled(rhs, m.value.scale());
-  Rep const mv           = m.value.value();
-  Rep const rv           = rhs_r.value.value();
+  auto const rhs_r = safe_rescaled(rhs, m.value.scale());
+  Rep const mv     = m.value.value();
+  Rep const rv     = rhs_r.value.value();
+  if (rv == Rep{0}) {
+    return safe_result<Rep, Rad>{
+      fixed_point<Rep, Rad>{scaled_integer<Rep>{Rep{0}, m.value.scale()}},
+      m.overflow || rhs_r.overflow};
+  }
   bool const add_overflow = addition_overflow<Rep>(mv, rv);
-  Rep const corrected    = (mv + rv) % rv;
+  Rep const corrected     = (mv + rv) % rv;
   return safe_result<Rep, Rad>{
     fixed_point<Rep, Rad>{scaled_integer<Rep>{corrected, m.value.scale()}},
     m.overflow || rhs_r.overflow || add_overflow};
@@ -254,10 +270,9 @@ CUDF_HOST_DEVICE inline safe_result<Rep, Rad> safe_pymod(fixed_point<Rep, Rad> l
  */
 template <typename Fixed,
           typename Floating,
-          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating> &&
-                         cudf::is_fixed_point<Fixed>())>
-CUDF_HOST_DEVICE inline safe_result<typename Fixed::rep, Fixed::rad>
-safe_convert_floating_to_fixed(Floating floating, scale_type scale)
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating>&& cudf::is_fixed_point<Fixed>())>
+CUDF_HOST_DEVICE inline safe_result<typename Fixed::rep, Fixed::rad> safe_convert_floating_to_fixed(
+  Floating floating, scale_type scale)
 {
   using Rep = typename Fixed::rep;
   if constexpr (Fixed::rad == Radix::BASE_10) {
