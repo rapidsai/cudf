@@ -9,7 +9,6 @@
 
 #include <cuda/std/cstdint>
 #include <cuda/std/optional>
-#include <cuda/std/variant>
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
