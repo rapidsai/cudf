@@ -93,7 +93,7 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
 
         # Generate requirements for this pandas compat version.
         # Each entry pins numpy<2 + the specific pandas minor line + the CUDA-appropriate cupy<14.
-        # cupy>=14 dropped support for numpy<2 (see https://github.com/cupy/cupy/issues/9709).
+        # cupy>=14 dropped support for numpy<2 (see https://github.com/cupy/cupy/pull/9406).
         pandas_requirements_txt="pandas-compat-${version}-requirements.txt"
         rapids-dependency-file-generator \
             --config dependencies.yaml \
