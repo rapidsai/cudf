@@ -189,6 +189,13 @@ test_pandas_object_series \
 # test_contains_case_insensitive[pandas], test_contains_series_case_insensitive[pandas]: String contains with case_insensitive returns False instead of None for nulls
 # test_fill_null_pandas_downcast: asserts dtype is 'object' after fill_null on [True, None]; cudf.pandas reports 'bool'
 #   because cudf represents nullable bool natively (not as object) — fundamental design difference, not fixable in cudf
+# test_self_equal[pandas]: Under cudf.pandas, narwhals identifies proxy DataFrames as Implementation.PANDAS
+#   but it detects cudf list/struct/decimal dtypes via str(series.dtype).startswith(("list","struct","decimal"))
+#   in _pandas_like/utils.py (CUDF_BASE_DTYPE_PREFIX), and cudf.pandas' _Series_dtype now correctly returns
+#   pandas-compatible 'object' for these types, so narwhals maps the column to its generic Object dtype
+#   instead of List, skipping the specialized _check_list_like path in assert_series_equal. The fallback
+#   `left != right` comparison then fails because element-wise != on nested lists containing NaN is undefined.
+#   narwhals needs to a different mechanism for detecting which path to follow.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes or \
 test_explode_multiple_cols or \
@@ -209,7 +216,8 @@ test_check_row_order_nested_only[pandas] or \
 test_cast_string or \
 (test_contains_case_insensitive and pandas) or \
 (test_contains_series_case_insensitive and pandas) or \
-test_fill_null_pandas_downcast \
+test_fill_null_pandas_downcast or \
+test_self_equal[pandas] \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
