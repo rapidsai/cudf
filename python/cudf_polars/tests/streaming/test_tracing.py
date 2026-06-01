@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from typing import TYPE_CHECKING
 
 import pytest
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -18,8 +19,12 @@ import polars as pl
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 
+if TYPE_CHECKING:
+    from cudf_polars.engine.spmd import SPMDEngine
 
-def _table_chunk(spmd_engine) -> TableChunk:
+
+@pytest.fixture
+def chunk(spmd_engine: SPMDEngine) -> TableChunk:
     context = spmd_engine.context
     stream = context.get_stream_from_pool()
     df = DataFrame.from_polars(pl.DataFrame({"x": [1, 2, 3]}), stream)
@@ -29,26 +34,26 @@ def _table_chunk(spmd_engine) -> TableChunk:
 
 
 @pytest.mark.spmd
-def test_actor_tracer_counts_table_chunk_without_table_view(spmd_engine):
+def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -> None:
     tracer = ActorTracer()
-    chunk = _table_chunk(spmd_engine)
-
     tracer.add_chunk(chunk=chunk)
-
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
 
 
 @pytest.mark.spmd
-def test_send_chunk_traces_and_sends_message(spmd_engine):
+def test_send_chunk_traces_and_sends_message(
+    spmd_engine: SPMDEngine, chunk: TableChunk
+) -> None:
     context = spmd_engine.context
     ch_out = context.create_channel()
     tracer = ActorTracer()
-    chunk = _table_chunk(spmd_engine)
 
     async def send_and_recv():
-        await send_chunk(context, ch_out, chunk, 11, tracer=tracer)
-        return await ch_out.recv(context)
+        async with asyncio.TaskGroup() as tg:
+            recv_task = tg.create_task(ch_out.recv(context))
+            tg.create_task(send_chunk(context, ch_out, chunk, 11, tracer=tracer))
+        return recv_task.result()
 
     msg = asyncio.run(send_and_recv())
 
