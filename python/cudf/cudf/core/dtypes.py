@@ -5,6 +5,7 @@ from __future__ import annotations
 import decimal
 import inspect
 import operator
+import re
 import textwrap
 import warnings
 from functools import cached_property
@@ -1000,34 +1001,99 @@ class IntervalDtype(_BaseDtype):
 
     name = "interval"
 
+    # Pandas-compatible regex for parsing string forms of IntervalDtype:
+    # "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
+    # (subtype itself may contain "[...]" e.g. "datetime64[ns]").
+    _match = re.compile(
+        r"^(I|i)nterval"
+        r"(\[(?P<subtype>[^,]+?)(,\s*(?P<closed>left|right|both|neither))?\])?$"
+    )
+
     def __init__(
         self,
         subtype: None | Dtype = None,
-        closed: Literal["left", "right", "neither", "both", None] = "right",
+        closed: Literal["left", "right", "neither", "both", None] = None,
     ) -> None:
-        if closed in {"left", "right", "neither", "both"}:
-            self.closed = closed
-        elif closed is None:
-            self.closed = "right"
-        else:
+        if closed not in {"left", "right", "neither", "both", None}:
             raise ValueError(f"{closed=} is not valid")
+
+        # If subtype is already an IntervalDtype (cudf or pandas), unwrap it,
+        # validating any closed conflict.
+        if isinstance(subtype, (IntervalDtype, pd.IntervalDtype)):
+            inner_closed = subtype.closed
+            if (
+                closed is not None
+                and inner_closed is not None
+                and closed != inner_closed
+            ):
+                raise ValueError(
+                    "dtype.closed and 'closed' do not match. "
+                    "Try IntervalDtype(dtype.subtype, closed) instead."
+                )
+            closed = closed if closed is not None else inner_closed
+            subtype = subtype.subtype
+
+        # If subtype is a string, attempt to parse it as a full IntervalDtype
+        # spec ("interval", "interval[int64]", "interval[int64, right]") or
+        # treat it as a plain subtype name.
+        if isinstance(subtype, str):
+            match = self._match.match(subtype)
+            if match is not None:
+                parsed_subtype = match.group("subtype")
+                parsed_closed = match.group("closed")
+                if parsed_closed is not None:
+                    if closed is not None and parsed_closed != closed:
+                        raise ValueError(
+                            "'closed' keyword does not match value "
+                            "specified in dtype string"
+                        )
+                    closed = parsed_closed
+                subtype = parsed_subtype  # may be None for bare "interval"
+
         if subtype is None:
             self._subtype = None
             self._fields = {}
         else:
-            self._subtype = dtype(subtype)
-            # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
+            try:
+                resolved = dtype(subtype)
+            except TypeError as err:
+                raise TypeError(
+                    f"could not construct IntervalDtype from {subtype!r}"
+                ) from err
+            # TODO: Remove resolved.kind == "U" once cudf.dtype no longer accepts
             # numpy string types
             if (
-                isinstance(self._subtype, CategoricalDtype)
-                or is_dtype_obj_string(self._subtype)
-                or self._subtype.kind == "U"
+                isinstance(resolved, CategoricalDtype)
+                or is_dtype_obj_string(resolved)
+                or getattr(resolved, "kind", None) == "U"
             ):
                 raise TypeError(
                     "category, object, and string subtypes are not supported "
                     "for IntervalDtype"
                 )
-            self._fields = {"left": self._subtype, "right": self._subtype}
+            self._subtype = resolved
+            self._fields = {"left": resolved, "right": resolved}
+
+        self.closed = closed
+
+    @property
+    def _closed(self) -> str | None:
+        """Alias for ``closed`` matching pandas' private attribute."""
+        return self.closed
+
+    @classmethod
+    def construct_from_string(cls, string: str) -> Self:
+        if not isinstance(string, str):
+            raise TypeError(
+                f"'construct_from_string' expects a string, got {type(string)}"
+            )
+        if cls._match.match(string) is None:
+            raise TypeError(
+                "Incorrectly formatted string passed to constructor. "
+                "Valid formats include Interval or Interval[dtype] "
+                "where dtype is numeric, datetime, or timedelta"
+            )
+        return cls(string)
 
     @property
     def subtype(self) -> DtypeObj | None:
@@ -1057,6 +1123,8 @@ class IntervalDtype(_BaseDtype):
     def __repr__(self) -> str:
         if self.subtype is None:
             return "interval"
+        if self.closed is None:
+            return f"interval[{self.subtype}]"
         return f"interval[{self.subtype}, {self.closed}]"
 
     def __str__(self) -> str:
@@ -1068,7 +1136,8 @@ class IntervalDtype(_BaseDtype):
 
     def to_arrow(self) -> ArrowIntervalType:
         return ArrowIntervalType(
-            cudf_dtype_to_pa_type(self.subtype), self.closed
+            cudf_dtype_to_pa_type(self.subtype),
+            self.closed if self.closed is not None else "right",
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
@@ -1322,7 +1391,10 @@ def _is_interval_dtype(obj):
             isinstance(obj, cudf.Index)
             and isinstance(obj.dtype, IntervalDtype)
         )
-        or (isinstance(obj, str) and obj == IntervalDtype.name)
+        or (
+            isinstance(obj, str)
+            and IntervalDtype._match.match(obj) is not None
+        )
         or (
             isinstance(
                 getattr(obj, "dtype", None),

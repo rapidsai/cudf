@@ -1062,6 +1062,7 @@ IntervalDtype = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "_closed": _FastSlowAttribute("_closed"),
     },
 )
 
