@@ -104,7 +104,7 @@ fetch_byte_ranges_to_device_async(
   std::vector<device_spans_per_source_type> column_chunk_data_per_source(num_sources);
 
   std::for_each(
-    cuda::counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>(0),
     cuda::counting_iterator<cudf::size_type>(num_sources),
     [&](auto const source_idx) {
       auto const& byte_ranges = byte_ranges_per_source[source_idx];
