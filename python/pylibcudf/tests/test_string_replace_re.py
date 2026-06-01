@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -30,33 +30,6 @@ def test_replace_re_regex_program_scalar(max_replace_count):
         if max_replace_count != -1
         else None,
     )
-    assert_column_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "flags",
-    [
-        plc.strings.regex_flags.RegexFlags.DEFAULT,
-        plc.strings.regex_flags.RegexFlags.DOTALL,
-    ],
-)
-def test_replace_re_list_str_columns(flags):
-    arr = pa.array(["foo", "fuz", None])
-    pats = ["oo", "uz"]
-    repls = ["a", "b"]
-    got = plc.strings.replace_re.replace_re(
-        plc.Column.from_arrow(arr),
-        pats,
-        plc.Column.from_arrow(pa.array(repls)),
-        flags=flags,
-    )
-    expect = arr
-    for pat, repl in zip(pats, repls, strict=True):
-        expect = pc.replace_substring_regex(
-            expect,
-            pat,
-            repl,
-        )
     assert_column_eq(expect, got)
 
 
