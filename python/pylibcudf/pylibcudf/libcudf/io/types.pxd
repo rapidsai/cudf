@@ -142,7 +142,7 @@ cdef extern from "cudf/io/types.hpp" \
             const vector[string] &filepaths
         ) except +libcudf_exception_handler
         source_info(
-            const vector[filepath_source] &sources
+            vector[filepath_source] sources
         ) except +libcudf_exception_handler
         source_info(
             cudf_io_datasource.datasource *source
