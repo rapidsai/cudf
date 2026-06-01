@@ -1317,13 +1317,14 @@ dependencies:
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
   # Additional dependencies for running the pandas test suite under cudf.pandas.
-  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[performance]),
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[excel]),
   # conda environments need these listed explicitly.
   test_cudf_pandas_pandas_tests:
     common:
       - output_types: [conda]
         packages:
           - numexpr
+          - xlsxwriter
   depends_on_dask_cuda:
     common:
       - output_types: conda
