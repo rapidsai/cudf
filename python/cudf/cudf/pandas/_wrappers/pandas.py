@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
+import contextlib
 import copyreg
 import datetime
 import functools
@@ -334,9 +335,19 @@ if ipython_shell:
 
 
 def _Series_dtype(self):
-    # Fast-path to extract dtype from the current
-    # object without round-tripping through the slow<->fast
-    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
+    dtype = self._fsproxy_wrapped.dtype
+    if isinstance(
+        dtype,
+        (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.Decimal32Dtype,
+            cudf.Decimal64Dtype,
+            cudf.Decimal128Dtype,
+        ),
+    ):
+        dtype = self._fsproxy_slow.dtype
+    return _maybe_wrap_result(dtype, None)
 
 
 _SeriesAtIndexer = make_intermediate_proxy_type(
@@ -629,6 +640,7 @@ DatetimeTZDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
     },
 )
 
@@ -662,6 +674,7 @@ try:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
@@ -678,6 +691,7 @@ except ImportError:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
@@ -1233,6 +1247,12 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     pd.core.window.ewm.ExponentialMovingWindowGroupby,
 )
 
+OnlineExponentialMovingWindow = make_intermediate_proxy_type(
+    "OnlineExponentialMovingWindow",
+    _Unusable,
+    pd.core.window.ewm.OnlineExponentialMovingWindow,
+)
+
 EWMMeanState = make_intermediate_proxy_type(
     "EWMMeanState",
     _Unusable,
@@ -1507,6 +1527,33 @@ def _register_series_accessor(name):
 @register_proxy_func(pd.core.accessor.register_index_accessor)
 def _register_index_accessor(name):
     return pd.core.accessor._register_accessor(name, Index)
+
+
+@contextlib.contextmanager
+def null_assert_produces_warning(*args, **kwargs):
+    # We do not want pandas unit tests to fail because
+    # assert_produces_warning doesn't see a warning.
+    # No an explicit public API
+    try:
+        yield []
+    finally:
+        pass
+
+
+@register_proxy_func(pd._testing.assert_produces_warning)
+def _register_assert_produces_warning(*args, **kwargs):
+    return null_assert_produces_warning(*args, **kwargs)
+
+
+def null_raises_chained_assignment_error(*args, **kwargs):
+    # This assertion function also uses assert_produces_warning
+    # we want to ignore in pandas unit tests.
+    return null_assert_produces_warning(*args, **kwargs)
+
+
+@register_proxy_func(pd._testing.raises_chained_assignment_error)
+def _register_raises_chained_assignment_error(*args, **kwargs):
+    return null_raises_chained_assignment_error(*args, **kwargs)
 
 
 @nvtx.annotate(

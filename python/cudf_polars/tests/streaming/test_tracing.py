@@ -12,7 +12,7 @@ import textwrap
 import pytest
 
 
-def test_structlog_streaming_node_events():
+def test_structlog_streaming_node_events(timeout_seconds: int):
     """Test that structlog emits 'Streaming Actor' events when tracing is enabled."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
@@ -37,7 +37,7 @@ def test_structlog_streaming_node_events():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ) as proc:
-        result, _ = proc.communicate(timeout=120)
+        result, _ = proc.communicate(timeout=timeout_seconds)
 
     assert b"Streaming Actor" in result
     assert b"scope=actor" in result or b"'scope': 'actor'" in result
@@ -46,7 +46,7 @@ def test_structlog_streaming_node_events():
     assert b"chunk_count=" in result
 
 
-def test_structlog_contains_expected_ir_types():
+def test_structlog_contains_expected_ir_types(timeout_seconds: int):
     """Test that structlog output contains expected IR types for a query."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
@@ -71,14 +71,14 @@ def test_structlog_contains_expected_ir_types():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ) as proc:
-        result, _ = proc.communicate(timeout=120)
+        result, _ = proc.communicate(timeout=timeout_seconds)
 
     assert b"ir_type=DataFrameScan" in result
     assert b"ir_type=Filter" in result
     assert b"ir_type=GroupBy" in result
 
 
-def test_structlog_disabled_by_default():
+def test_structlog_disabled_by_default(timeout_seconds: int):
     """Test that structlog does NOT emit events when CUDF_POLARS_LOG_TRACES is not set."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
@@ -103,6 +103,6 @@ def test_structlog_disabled_by_default():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ) as proc:
-        result, _ = proc.communicate(timeout=120)
+        result, _ = proc.communicate(timeout=timeout_seconds)
 
     assert b"Streaming Actor" not in result
