@@ -85,11 +85,15 @@ def _make_scheme(
     )
 
 
+def _payload_value(key: int) -> int:
+    return key * 10 + 1
+
+
 def _frame(values: list[int]) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "key": pl.Series(values, dtype=pl.Int32()),
-            "val": pl.Series(values, dtype=pl.Int32()),
+            "val": pl.Series([_payload_value(v) for v in values], dtype=pl.Int32()),
         }
     )
 
@@ -172,7 +176,7 @@ def _assert_partition_output(
     assert set(output) == set(expected)
     for pid, keys in expected.items():
         assert output[pid]["key"].to_list() == keys
-        assert output[pid]["val"].to_list() == keys
+        assert output[pid]["val"].to_list() == [_payload_value(key) for key in keys]
 
 
 async def _adjust_direct(
