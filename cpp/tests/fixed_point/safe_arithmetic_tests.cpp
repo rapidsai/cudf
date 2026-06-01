@@ -119,8 +119,7 @@ TEST_F(SafeArithmeticTest, DivNoOverflow)
 TEST_F(SafeArithmeticTest, DivIntMinByNegativeOneOverflows)
 {
   // INT64_MIN / -1 is the canonical signed-integer division overflow.
-  decimal64 const a{
-    scaled_integer<int64_t>{std::numeric_limits<int64_t>::min(), scale_type{0}}};
+  decimal64 const a{scaled_integer<int64_t>{std::numeric_limits<int64_t>::min(), scale_type{0}}};
   decimal64 const b{scaled_integer<int64_t>{-1, scale_type{0}}};
   auto const r = detail::safe_div(a, b);
   EXPECT_TRUE(r.overflow);
@@ -350,8 +349,7 @@ TEST_F(SafeArithmeticTest, Sub32OverflowSetsFlag)
 
 TEST_F(SafeArithmeticTest, Div32IntMinByNegativeOneOverflows)
 {
-  decimal32 const a{
-    scaled_integer<int32_t>{std::numeric_limits<int32_t>::min(), scale_type{0}}};
+  decimal32 const a{scaled_integer<int32_t>{std::numeric_limits<int32_t>::min(), scale_type{0}}};
   decimal32 const b{scaled_integer<int32_t>{-1, scale_type{0}}};
   auto const r = detail::safe_div(a, b);
   EXPECT_TRUE(r.overflow);
@@ -413,8 +411,8 @@ TEST_F(SafeArithmeticTest, CallerComposesOverflowAcrossChain)
   decimal64 const b{scaled_integer<int64_t>{1'000'000'000'000LL, scale_type{0}}};
   decimal64 const c{scaled_integer<int64_t>{0, scale_type{0}}};
 
-  auto const m1 = detail::safe_mul(a, b);  // overflow here
-  auto const m2 = detail::safe_add(m1.value, c);  // add itself doesn't overflow
+  auto const m1                = detail::safe_mul(a, b);         // overflow here
+  auto const m2                = detail::safe_add(m1.value, c);  // add itself doesn't overflow
   bool const composed_overflow = m1.overflow || m2.overflow;
   EXPECT_TRUE(composed_overflow);
 }
@@ -530,8 +528,7 @@ TEST_F(FloatingConversionOverflowTest, MultiplyPower10AtBoundaryDoesNotOverflow)
 TEST_F(FloatingConversionOverflowTest, MultiplyPower10JustOverBoundarySaturates)
 {
   uint32_t const just_over = (std::numeric_limits<uint32_t>::max() / 1000u) + 1u;
-  auto const [v, ovf] =
-    numeric::detail::multiply_power10_saturating<uint32_t, true>(just_over, 3);
+  auto const [v, ovf] = numeric::detail::multiply_power10_saturating<uint32_t, true>(just_over, 3);
   EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
   EXPECT_TRUE(ovf);
 }
@@ -563,8 +560,7 @@ TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastFits)
 
 TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastAtBoundaryDoesNotOverflow)
 {
-  auto const at_max =
-    static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
+  auto const at_max   = static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
   auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t, true>(at_max);
   EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
   EXPECT_FALSE(ovf);
@@ -572,9 +568,8 @@ TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastAtBoundaryDoesNotOverflo
 
 TEST_F(FloatingConversionOverflowTest, CheckedNarrowCastOverflowSaturates)
 {
-  auto const just_over =
-    static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1u;
-  auto const [v, ovf] = numeric::detail::checked_narrow_cast<uint32_t, true>(just_over);
+  auto const just_over = static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1u;
+  auto const [v, ovf]  = numeric::detail::checked_narrow_cast<uint32_t, true>(just_over);
   EXPECT_EQ(v, std::numeric_limits<uint32_t>::max());
   EXPECT_TRUE(ovf);
 }
@@ -664,11 +659,10 @@ TEST_F(FloatingConversionOverflowTest, ConvertIntegralUncheckedSameValueAsChecke
   // The unchecked path must produce the same Rep value as the checked path's
   // first element for inputs that don't overflow (no regression in the
   // unchecked code path after the refactor).
-  double const x        = 123.456;
-  auto const checked    = numeric::detail::convert_floating_to_integral<int64_t, true>(
-    x, scale_type{-3});
-  auto const unchecked  = numeric::detail::convert_floating_to_integral<int64_t>(
-    x, scale_type{-3});
+  double const x = 123.456;
+  auto const checked =
+    numeric::detail::convert_floating_to_integral<int64_t, true>(x, scale_type{-3});
+  auto const unchecked = numeric::detail::convert_floating_to_integral<int64_t>(x, scale_type{-3});
   EXPECT_EQ(checked.first, unchecked);
 }
 

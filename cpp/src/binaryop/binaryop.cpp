@@ -43,11 +43,10 @@
 
 #include <cuda/std/optional>
 
-#include <utility>
-
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 #include <string>
+#include <utility>
 
 namespace cudf {
 namespace binops {
@@ -294,7 +293,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_saf
     "binary_operation_safe requires lhs, rhs, and their common intermediate type to share the "
     "same decimal storage type (e.g. DECIMAL64 operands with DECIMAL64 output).");
 
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+  auto out          = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   auto overflow_col = make_fixed_width_column(
     data_type{type_id::BOOL8}, out->size(), mask_state::UNALLOCATED, stream, mr);
 
@@ -303,7 +302,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> binary_operation_saf
   if constexpr (std::is_same_v<RhsType, column_view>)
     if (rhs.is_empty()) return {std::move(out), std::move(overflow_col)};
 
-  auto out_view                  = out->mutable_view();
+  auto out_view                   = out->mutable_view();
   mutable_column_view overflow_mv = overflow_col->mutable_view();
   cudf::binops::compiled::binary_operation_safe(
     out_view, lhs, rhs, op, overflow_mv.head<bool>(), stream, mr);
