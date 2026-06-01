@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 
 import pytest
 from rapidsmpf.streaming.core.message import Message
@@ -26,10 +27,20 @@ from cudf_polars.streaming.actor_graph.collectives.orderscheme import (
 )
 from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 
+if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
+
+    from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.engine.spmd import SPMDEngine
+
 _SCHEMA = {"key": DataType(pl.Int32()), "val": DataType(pl.Int32())}
 _NAMES = list(_SCHEMA)
 _DTYPES = list(_SCHEMA.values())
 _Boundary = int | tuple[int, ...]
+_ExpectedPartitions = dict[int, list[int]]
+_ExpectedByRank = dict[int, _ExpectedPartitions]
 
 
 def _boundary_value(boundary: _Boundary, index: int) -> int:
@@ -37,12 +48,12 @@ def _boundary_value(boundary: _Boundary, index: int) -> int:
 
 
 def _make_scheme(
-    context,
+    context: Context,
     boundary: _Boundary | list[_Boundary],
     *,
     key_indices: tuple[int, ...] = (0,),
     strict: bool = True,
-    stream,
+    stream: Stream,
 ) -> OrderScheme:
     boundary_rows: list[_Boundary] = (
         boundary if isinstance(boundary, list) else [boundary]
@@ -93,8 +104,8 @@ def _chunk_to_polars(chunk: TableChunk) -> pl.DataFrame:
 
 
 async def _adjust_and_collect(
-    context,
-    comm,
+    context: Context,
+    comm: Communicator,
     input_df: pl.DataFrame | list[pl.DataFrame],
     input_scheme: OrderScheme,
     output_scheme: OrderScheme,
@@ -165,8 +176,8 @@ def _assert_partition_output(
 
 
 async def _adjust_direct(
-    context,
-    comm,
+    context: Context,
+    comm: Communicator,
     input_scheme: OrderScheme,
     output_scheme: OrderScheme,
     *,
@@ -193,14 +204,19 @@ async def _adjust_direct(
 
 @pytest.mark.spmd
 @pytest.mark.parametrize(
-    "input_keys,output_keys,strict,error,match",
+    "input_keys,output_keys,strict,err,match",
     [
         ((1,), (0,), True, NotImplementedError, "prefix"),
         ((0,), (0,), False, ValueError, "strict output"),
     ],
 )
 def test_adjust_orderscheme_rejects_invalid_schemes(
-    spmd_engine, input_keys, output_keys, strict, error, match
+    spmd_engine: SPMDEngine,
+    input_keys: tuple[int, ...],
+    output_keys: tuple[int, ...],
+    strict: bool,  # noqa: FBT001
+    err: type[Exception],
+    match: str,
 ) -> None:
     context = spmd_engine.context
     stream = context.get_stream_from_pool()
@@ -213,14 +229,16 @@ def test_adjust_orderscheme_rejects_invalid_schemes(
         stream=stream,
     )
 
-    with pytest.raises(error, match=match):
+    with pytest.raises(err, match=match):
         asyncio.run(
             _adjust_direct(context, spmd_engine.comm, input_scheme, output_scheme)
         )
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_requires_collective_id(spmd_engine) -> None:
+def test_adjust_orderscheme_requires_collective_id(
+    spmd_engine: SPMDEngine,
+) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     if comm.nranks == 1:
@@ -243,7 +261,9 @@ def test_adjust_orderscheme_requires_collective_id(spmd_engine) -> None:
     ],
 )
 def test_adjust_orderscheme_sparse_boundary_shift(
-    spmd_engine, target_boundary, expected
+    spmd_engine: SPMDEngine,
+    target_boundary: int,
+    expected: _ExpectedByRank,
 ) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -272,7 +292,9 @@ def test_adjust_orderscheme_sparse_boundary_shift(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_emits_empty_owned_partitions(spmd_engine) -> None:
+def test_adjust_orderscheme_emits_empty_owned_partitions(
+    spmd_engine: SPMDEngine,
+) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     if comm.nranks != 2:
@@ -303,13 +325,13 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_all_empty_input(spmd_engine) -> None:
+def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     stream = context.get_stream_from_pool()
     input_scheme = _make_scheme(context, 5, stream=stream)
     output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
-    expected = {
+    expected: _ExpectedPartitions = {
         pid: []
         for pid in range(output_scheme.num_boundaries + 1)
         if pid * comm.nranks // (output_scheme.num_boundaries + 1) == comm.rank
@@ -350,7 +372,9 @@ def test_adjust_orderscheme_all_empty_input(spmd_engine) -> None:
     ],
 )
 def test_adjust_orderscheme_single_rank_no_collective(
-    spmd_engine, target_boundary, expected
+    spmd_engine: SPMDEngine,
+    target_boundary: int,
+    expected: _ExpectedPartitions,
 ) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -374,7 +398,7 @@ def test_adjust_orderscheme_single_rank_no_collective(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_multi_chunk_input(spmd_engine) -> None:
+def test_adjust_orderscheme_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     if comm.nranks != 1:
