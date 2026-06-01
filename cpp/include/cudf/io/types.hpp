@@ -313,12 +313,12 @@ constexpr inline auto is_byte_like_type()
 /**
  * @brief A file path with an optional known size in bytes.
  *
- * When `size` is set for a remote URL, libcudf passes it to KvikIO at open time so the remote
- * server is not queried for file size.
+ * When `size` is set for a remote URL, the IO backend may skip querying the remote server for file
+ * size at open time.
  */
 struct filepath_source {
   std::string path;                   ///< Path or URL of the input file
-  std::optional<std::size_t> size{};  ///< Known file size; omit to query via KvikIO
+  std::optional<std::size_t> size{};  ///< Known file size; omit to query size at open time
 };
 
 /**

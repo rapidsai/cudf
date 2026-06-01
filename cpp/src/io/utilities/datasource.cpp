@@ -380,9 +380,7 @@ kvikio::RemoteHandle open_remote_handle(char const* filepath, std::optional<std:
   }
   return kvikio::RemoteHandle::open(filepath);
 }
-#endif
 
-#ifdef CUDF_KVIKIO_REMOTE_IO
 /**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */

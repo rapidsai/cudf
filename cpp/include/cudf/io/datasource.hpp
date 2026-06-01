@@ -98,8 +98,8 @@ class datasource {
    * @param[in] offset Starting byte offset from which data will be read (the default is zero)
    * @param[in] max_size_estimate Upper estimate of the data range that will be read (the default is
    * zero, which means the whole file after `offset`)
-   * @param[in] known_size Optional known file size in bytes. When set for remote URLs, KvikIO skips
-   * the size query HEAD request at open time.
+   * @param[in] known_size Optional known file size in bytes. When set for remote URLs, the IO
+   * backend may skip querying the remote server for file size at open time.
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(std::string const& filepath,
