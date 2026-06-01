@@ -25,7 +25,6 @@ files:
       - depends_on_libnvcomp
       - depends_on_numba_cuda
       - depends_on_rapids_logger
-      - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
       - develop
@@ -49,6 +48,7 @@ files:
       - test_python_cudf_common
       - test_python_pylibcudf
       - test_python_cudf_pandas
+      - test_cudf_pandas_pandas_tests
       - test_python_cudf_polars
       - test_python_s3
   test_static_build:
@@ -948,11 +948,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x!=14.0.0
+              - cupy-cuda12x!=14.0.0,!=14.1.0
           - matrix:
               cuda: "13.*"
             packages:
-              - cupy-cuda13x!=14.0.0
+              - cupy-cuda13x!=14.0.0,!=14.1.0
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -1173,7 +1173,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=13.6.0,!=14.0.0
+          - cupy>=13.6.0,!=14.0.0,!=14.1.0
     # NOTE: This is intentionally not broken into groups by a 'cuda_suffixed' selector like
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
@@ -1183,11 +1183,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=13.6.0,!=14.0.0
+              - cupy-cuda12x>=13.6.0,!=14.0.0,!=14.1.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=13.6.0,!=14.0.0
+              - cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1329,6 +1329,15 @@ dependencies:
           - openpyxl
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
+  # Additional dependencies for running the pandas test suite under cudf.pandas.
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[excel]),
+  # conda environments need these listed explicitly.
+  test_cudf_pandas_pandas_tests:
+    common:
+      - output_types: [conda]
+        packages:
+          - numexpr
+          - xlsxwriter
   depends_on_dask_cuda:
     common:
       - output_types: conda
