@@ -27,6 +27,7 @@
 #include <vector>
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
+#include <kvikio/hdfs.hpp>
 #include <kvikio/remote_handle.hpp>
 #endif
 
@@ -355,12 +356,41 @@ class user_datasource_wrapper : public datasource {
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
 /**
+ * @brief Infer the KvikIO remote endpoint type from a URL (no network I/O).
+ *
+ * Mirrors the order used by `kvikio::RemoteHandle::open()` in AUTO mode.
+ */
+kvikio::RemoteEndpointType infer_remote_endpoint_type(std::string const& url)
+{
+  if (kvikio::S3Endpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::S3; }
+  if (kvikio::S3PublicEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::S3_PUBLIC; }
+  if (kvikio::S3EndpointWithPresignedUrl::is_url_valid(url)) {
+    return kvikio::RemoteEndpointType::S3_PRESIGNED_URL;
+  }
+  if (kvikio::WebHdfsEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::WEBHDFS; }
+  if (kvikio::HttpEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::HTTP; }
+  return kvikio::RemoteEndpointType::HTTP;
+}
+
+kvikio::RemoteHandle open_remote_handle(char const* filepath, std::optional<std::size_t> known_size)
+{
+  if (known_size.has_value()) {
+    auto const endpoint_type = infer_remote_endpoint_type(filepath);
+    return kvikio::RemoteHandle::open(filepath, endpoint_type, std::nullopt, *known_size);
+  }
+  return kvikio::RemoteHandle::open(filepath);
+}
+#endif
+
+#ifdef CUDF_KVIKIO_REMOTE_IO
+/**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
  public:
-  explicit remote_file_source(char const* filepath)
-    : kvikio_source{kvikio::RemoteHandle::open(filepath)}
+  explicit remote_file_source(char const* filepath,
+                              std::optional<std::size_t> known_size = std::nullopt)
+    : kvikio_source{open_remote_handle(filepath, known_size)}
   {
   }
 
@@ -397,7 +427,8 @@ class remote_file_source : public file_source {
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
-                                               size_t max_size_estimate)
+                                               size_t max_size_estimate,
+                                               std::optional<std::size_t> known_size)
 {
   auto const use_memory_mapping = [] {
     auto const policy = cudf::detail::getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"OFF"});
@@ -410,7 +441,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 
   if (remote_file_source::could_be_remote_url(filepath)) {
     try {
-      return std::make_unique<remote_file_source>(filepath.c_str());
+      return std::make_unique<remote_file_source>(filepath.c_str(), known_size);
     } catch (std::exception const& ex) {
       std::string redacted_msg;
       try {
@@ -450,7 +481,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
       // Create a remote file resource only when the pattern is found and replaced; otherwise, still
       // create a local file resource
       if (filepath != remote_file_path) {
-        return std::make_unique<remote_file_source>(remote_file_path.c_str());
+        return std::make_unique<remote_file_source>(remote_file_path.c_str(), known_size);
       }
     }
 

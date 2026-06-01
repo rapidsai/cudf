@@ -13,7 +13,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <future>
-#include <memory>
+#include <optional>
 
 namespace CUDF_EXPORT cudf {
 //! IO interfaces
@@ -98,11 +98,14 @@ class datasource {
    * @param[in] offset Starting byte offset from which data will be read (the default is zero)
    * @param[in] max_size_estimate Upper estimate of the data range that will be read (the default is
    * zero, which means the whole file after `offset`)
+   * @param[in] known_size Optional known file size in bytes. When set for remote URLs, KvikIO skips
+   * the size query HEAD request at open time.
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(std::string const& filepath,
-                                            size_t offset            = 0,
-                                            size_t max_size_estimate = 0);
+                                            size_t offset                         = 0,
+                                            size_t max_size_estimate              = 0,
+                                            std::optional<std::size_t> known_size = std::nullopt);
 
   /**
    * @brief Creates a source from a host memory buffer.
