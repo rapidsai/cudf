@@ -487,6 +487,7 @@ files:
       - build_cpp
       - depends_on_libcudf
       - depends_on_librmm
+      - depends_on_librapidsmpf
   py_run_libcudf_streaming:
     output: pyproject
     pyproject_dir: python/libcudf_streaming
