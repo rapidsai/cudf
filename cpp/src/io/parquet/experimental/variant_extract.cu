@@ -60,12 +60,79 @@ __device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t co
   return v;
 }
 
-// Parse metadata header, walk dictionary entries, return the index of `key` or -1
+__device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
+{
+  if (enc.size() < 1) { return cuda::std::nullopt; }
+  uint8_t const vm       = enc[0];
+  int const basic_type   = vm & 0x03;
+  int const value_header = (vm >> 2) & 0x3F;
+
+  if (basic_type == 0) {
+    // Primitive: 1-byte header + a payload whose size is fixed by the physical type id, except
+    // binary (15) and long string (16) which carry a 4-byte little-endian length prefix.
+    switch (value_header) {
+      case 0:                                // null
+      case 1:                                // true
+      case 2: return uint64_t{1};            // false
+      case 3: return uint64_t{1 + 1};        // int8
+      case 4: return uint64_t{1 + 2};        // int16
+      case 5: return uint64_t{1 + 4};        // int32
+      case 6: return uint64_t{1 + 8};        // int64
+      case 7: return uint64_t{1 + 8};        // double
+      case 8: return uint64_t{1 + 1 + 4};    // decimal4  (scale + int32)
+      case 9: return uint64_t{1 + 1 + 8};    // decimal8  (scale + int64)
+      case 10: return uint64_t{1 + 1 + 16};  // decimal16 (scale + int128)
+      case 11: return uint64_t{1 + 4};       // date
+      case 12: return uint64_t{1 + 8};       // timestamp micros
+      case 13: return uint64_t{1 + 8};       // timestamp ntz micros
+      case 14: return uint64_t{1 + 4};       // float
+      case 15:                               // binary
+      case 16: {                             // long string
+        auto const len = read_uint(enc, 1, 4);
+        if (!len.has_value()) { return cuda::std::nullopt; }
+        return uint64_t{1 + 4} + len.value();
+      }
+      case 17: return uint64_t{1 + 8};   // time ntz micros
+      case 18: return uint64_t{1 + 8};   // timestamp nanos
+      case 19: return uint64_t{1 + 8};   // timestamp ntz nanos
+      case 20: return uint64_t{1 + 16};  // uuid
+      default: return cuda::std::nullopt;
+    }
+  }
+
+  if (basic_type == 1) {
+    // Short string: header encodes the length directly in value_header.
+    return uint64_t{1} + static_cast<uint64_t>(value_header);
+  }
+
+  // Object (2) / array (3): the total payload size is the sentinel (last) offset entry; add the
+  // bytes consumed by the header, num_elements, optional field-id list, and the offset list.
+  bool const is_object     = basic_type == 2;
+  int const field_off_size = (value_header & 0x03) + 1;
+  int const field_id_size  = is_object ? (((value_header >> 2) & 0x03) + 1) : 0;
+  bool const is_large =
+    is_object ? (((value_header >> 4) & 0x01) != 0) : (((value_header >> 2) & 0x01) != 0);
+  int const num_elts_size = is_large ? 4 : 1;
+
+  auto const num_elts = read_uint(enc, 1, num_elts_size);
+  if (!num_elts.has_value()) { return cuda::std::nullopt; }
+  auto const n = num_elts.value();
+
+  auto const offs_start  = uint64_t{1} + num_elts_size + n * field_id_size;
+  auto const values_base = offs_start + (n + 1) * field_off_size;
+  // Sentinel offset (entry n) holds the total size of the values region.
+  auto const sentinel =
+    read_uint(enc, static_cast<size_type>(offs_start + n * field_off_size), field_off_size);
+  if (!sentinel.has_value()) { return cuda::std::nullopt; }
+  return values_base + sentinel.value();
+}
+
 __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   device_span<uint8_t const> meta, cudf::string_view key)
 {
   auto const meta_len = static_cast<size_type>(meta.size());
   if (meta_len < 1) { return cuda::std::nullopt; }
+
   uint8_t const header = meta[0];
   int const version    = header & 0x0F;
   if (version != variant_version_v1) { return cuda::std::nullopt; }
@@ -76,30 +143,27 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   if (!dict_size.has_value()) { return cuda::std::nullopt; }
   pos += offset_size;
 
-  // Read dictionary_size + 1 offsets
+  // Locate the offsets array
   size_type const offsets_start = pos;
   size_type const offsets_bytes = (dict_size.value() + 1) * offset_size;
   if (offsets_start + offsets_bytes > meta_len) { return cuda::std::nullopt; }
 
-  size_type const strings_base = offsets_start + offsets_bytes;
+  auto start_off = read_uint(meta, offsets_start, offset_size);
+  if (!start_off.has_value()) { return cuda::std::nullopt; }
+  auto const strings_base = offsets_start + offsets_bytes;
   // Bytes available for dictionary string payloads
   auto const strings_extent = meta_len - strings_base;
-
-  // Carry forward the previous offset to avoid re-reading it each iteration
-  auto prev_off = read_uint(meta, offsets_start, offset_size);
-  if (!prev_off.has_value()) { return cuda::std::nullopt; }
-
   for (size_type i = 0; i < dict_size.value(); ++i) {
-    auto const next_off = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
-    if (!next_off.has_value()) { return cuda::std::nullopt; }
-    if (next_off.value() < prev_off.value() || next_off.value() > strings_extent) {
+    auto const end_off = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
+    if (!end_off.has_value()) { return cuda::std::nullopt; }
+    if (end_off.value() < start_off.value() || end_off.value() > strings_extent) {
       return cuda::std::nullopt;
     }
     cudf::string_view const entry{
-      reinterpret_cast<char const*>(meta.data() + strings_base + prev_off.value()),
-      static_cast<size_type>(next_off.value() - prev_off.value())};
+      reinterpret_cast<char const*>(meta.data() + strings_base + start_off.value()),
+      static_cast<size_type>(end_off.value() - start_off.value())};
     if (entry == key) { return i; }
-    prev_off = next_off;
+    start_off = end_off;
   }
   return cuda::std::nullopt;
 }
@@ -160,18 +224,14 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   }
   if (!found) { return {}; }
 
-  // Find the tightest end: the smallest offset strictly greater than match_start
-  // among all n+1 offset entries (the sentinel at index n is the total data size)
-  uint64_t match_end = values_extent;
-  for (size_type j = 0; j <= num_elts.value(); ++j) {
-    auto const oj = read_uint(val, field_offs_start + j * field_off_size, field_off_size);
-    if (!oj.has_value()) { continue; }
-    if (oj.value() > values_extent) { continue; }
-    if (oj.value() > match_start && oj.value() < match_end) { match_end = oj.value(); }
-  }
-
-  if (match_end < match_start) { return {}; }
-  return val.subspan(values_base + match_start, match_end - match_start);
+  // The field's value is self-delimiting: derive its byte length from its own header rather than
+  // scanning sibling offsets (which are not ordered). The value occupies [match_start, match_end).
+  auto const field_value = val.subspan(values_base + match_start);
+  auto const value_len   = variant_value_length(field_value);
+  if (!value_len.has_value()) { return {}; }
+  auto const match_end = match_start + value_len.value();
+  if (match_end > values_extent) { return {}; }
+  return val.subspan(values_base + match_start, value_len.value());
 }
 
 // Variant primitive ints: basic_type=0, value_header maps INT{8,16,32,64} -> {3,4,5,6}.
