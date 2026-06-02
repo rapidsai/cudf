@@ -36,6 +36,8 @@ python -m auditwheel repair \
     --exclude librapidsmpf.so \
     --exclude librapids_logger.so \
     --exclude librmm.so \
+    --exclude libucxx.so \
+    --exclude libucp.so.0 \
     -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
     ${package_dir}/dist/*
 
