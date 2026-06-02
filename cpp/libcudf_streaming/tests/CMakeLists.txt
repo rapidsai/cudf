@@ -10,6 +10,9 @@
 # ##################################################################################################
 enable_testing()
 
+include(rapids-test)
+rapids_test_init()
+
 file(WRITE "${CUDF_STREAMING_BINARY_DIR}/CTestTestfile.cmake" "subdirs(\"tests\")\n")
 
 set(_cudf_streaming_gtests_link "${CMAKE_CURRENT_BINARY_DIR}/gtests")
@@ -49,12 +52,12 @@ add_executable(cudf_streaming_single_tests main/single.cpp)
 set_target_properties(
   cudf_streaming_single_tests
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/gtests"
+             INSTALL_RPATH "\$ORIGIN/../../../lib"
              CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS ON
              CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
-             COMPONENT testing
 )
 target_include_directories(
   cudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -65,4 +68,14 @@ target_link_libraries(
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf GTest::gmock GTest::gtest
           $<TARGET_NAME_IF_EXISTS:conda_env> cudf_streaming_test_sources
 )
-add_test(NAME cudf_streaming_single_tests COMMAND "gtests/cudf_streaming_single_tests")
+rapids_test_add(
+  NAME cudf_streaming_single_tests
+  COMMAND cudf_streaming_single_tests
+  GPUS 1
+  PERCENT 25
+  INSTALL_COMPONENT_SET testing
+)
+
+rapids_test_install_relocatable(
+  INSTALL_COMPONENT_SET testing DESTINATION bin/gtests/libcudf_streaming
+)
