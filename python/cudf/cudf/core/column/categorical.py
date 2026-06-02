@@ -647,8 +647,7 @@ class CategoricalColumn(ColumnBase):
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
+            isinstance(dtype, np.dtype)
             and dtype.kind in "iu"
             and self.null_count > 0
         ):

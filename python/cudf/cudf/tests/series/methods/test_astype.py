@@ -1144,27 +1144,20 @@ def test_series_astype_null_cases():
 
 
 def test_series_astype_null_categorical():
-    sr = cudf.Series([None, None, None], dtype="category")
-    expect = cudf.Series([None, None, None], dtype="int32")
-    got = sr.astype("int32")
-    assert_eq(expect, got)
+    # A null-containing categorical cannot be cast to a non-nullable integer
+    # dtype, matching pandas (the categories are promoted to float).
+    psr = pd.Series([None, None, None], dtype="category")
+    gsr = cudf.Series([None, None, None], dtype="category")
+    assert_exceptions_equal(
+        psr.astype,
+        gsr.astype,
+        (["int32"],),
+        (["int32"],),
+    )
 
 
 # Converting a categorical with nulls to a non-nullable numpy integer dtype
 # raises under pandas-compatible mode, matching pandas.
-_CATEGORICAL_NAN_INT_DTYPES = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-]
-
-
-@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1173,28 +1166,31 @@ _CATEGORICAL_NAN_INT_DTYPES = [
         [None, None, None],
     ],
 )
-def test_categorical_astype_nan_to_int_pandas_compat(data, dtype):
+def test_categorical_astype_nan_to_int_pandas_compat(
+    data, integer_types_as_str
+):
     psr = pd.Series(data, dtype="category")
     gsr = cudf.Series(data, dtype="category")
     with cudf.option_context("mode.pandas_compatible", True):
         assert_exceptions_equal(
             psr.astype,
             gsr.astype,
-            ([dtype],),
-            ([dtype],),
+            ([integer_types_as_str],),
+            ([integer_types_as_str],),
         )
 
 
-@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
-def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(dtype):
+def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(
+    integer_types_as_str,
+):
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
     with cudf.option_context("mode.pandas_compatible", True):
         assert_exceptions_equal(
             psr.astype,
             gsr.astype,
-            ([np.dtype(dtype)],),
-            ([np.dtype(dtype)],),
+            ([np.dtype(integer_types_as_str)],),
+            ([np.dtype(integer_types_as_str)],),
         )
 
 
@@ -1224,18 +1220,34 @@ def test_categorical_astype_nan_to_float_pandas_compat(dtype):
         assert_eq(psr.astype(dtype), gsr.astype(dtype))
 
 
-@pytest.mark.parametrize("dtype", [*_CATEGORICAL_NAN_INT_DTYPES, "bool"])
-def test_categorical_astype_no_nulls_pandas_compat(dtype):
+def test_categorical_astype_no_nulls_int_pandas_compat(integer_types_as_str):
     psr = pd.Series([1, 2, 3], dtype="category")
     gsr = cudf.Series([1, 2, 3], dtype="category")
     with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(psr.astype(dtype), gsr.astype(dtype))
+        assert_eq(
+            psr.astype(integer_types_as_str),
+            gsr.astype(integer_types_as_str),
+        )
 
 
-@pytest.mark.parametrize("dtype", _CATEGORICAL_NAN_INT_DTYPES)
-def test_categorical_astype_nan_to_int_default_mode(dtype):
+def test_categorical_astype_no_nulls_bool_pandas_compat():
+    psr = pd.Series([1, 2, 3], dtype="category")
+    gsr = cudf.Series([1, 2, 3], dtype="category")
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(psr.astype("bool"), gsr.astype("bool"))
+
+
+def test_categorical_astype_nan_to_int_default_mode(integer_types_as_str):
+    # Casting a null-containing categorical to a non-nullable integer dtype
+    # raises like pandas regardless of ``mode.pandas_compatible``.
+    psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    assert_eq(gsr.astype(dtype), cudf.Series([1, 2, None], dtype=dtype))
+    assert_exceptions_equal(
+        psr.astype,
+        gsr.astype,
+        ([integer_types_as_str],),
+        ([integer_types_as_str],),
+    )
 
 
 def test_categorical_astype_nan_to_bool_default_mode():
