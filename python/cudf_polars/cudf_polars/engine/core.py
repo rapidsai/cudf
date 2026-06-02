@@ -692,6 +692,13 @@ def evaluate_on_rank(
         # so we only log it once.
         log_query_plan(ir, config_options)
 
+    from cudf_polars.streaming.actor_graph.io import io_lower_ir_graph
+
+    ir, partition_info = io_lower_ir_graph(
+        ir, partition_info, comm, config_options.parquet_options
+    )
+    # TODO: log this query plan too?
+
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
             ctx,

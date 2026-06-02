@@ -291,6 +291,34 @@ def _(
         return ir, {ir: PartitionInfo(count=1, io_plan=plan)}
 
 
+class StreamingScan(IR):
+    """A streaming scan node."""
+
+    __slots__ = (
+        "scans",
+        "schema",
+    )
+    _non_child = (
+        "scans",
+        "schema",
+    )
+    _n_non_child_args = 2  # TODO: verify this
+    scans: list[Scan | SplitScan]
+    schema: Schema
+
+    def __init__(self, scans: list[Scan | SplitScan], schema: Schema):
+        self.scans = scans
+        self.schema = schema
+        self._non_child_args = (scans,)
+        self.children = ()
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        # We don't need to include schema, since it's in all the base scan nodes.
+        # TODO: Why do we have it in the first place?
+        return (type(self), *tuple(x.get_hashable() for x in self.scans))
+
+
 class StreamingSink(IR):
     """Sink a dataframe in streaming mode."""
 

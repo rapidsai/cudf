@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import math
+from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
@@ -49,6 +50,7 @@ from cudf_polars.streaming.base import (
 )
 from cudf_polars.streaming.io import (
     SplitScan,
+    StreamingScan,
     StreamingSink,
     _prepare_sink_directory,
     _sink_to_file,
@@ -56,6 +58,8 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -68,7 +72,173 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.utils.config import ParquetOptions
+    from cudf_polars.utils.config import (
+        ParquetOptions,
+    )
+
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
+
+from cudf_polars.dsl.traversal import CachingVisitor
+from cudf_polars.typing import GenericTransformer
+
+
+class IOLowerIRState(TypedDict):
+    """State used for lowering IR nodes."""
+
+    partition_info: MutableMapping[IR, PartitionInfo]
+    rank: int
+    nranks: int
+    parquet_options: ParquetOptions
+
+    # config_options: ConfigOptions[StreamingExecutor]
+    # stats: StatsCollector
+
+
+IOLowerIRTransformer: TypeAlias = GenericTransformer[
+    "IR", "tuple[IR, MutableMapping[IR, PartitionInfo]]", IOLowerIRState
+]
+
+
+def io_lower_ir_graph(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    comm: Communicator,
+    parquet_options: ParquetOptions,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Rewrite an IR graph and extract partitioning information.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    partition_info
+        Partition information for the graph. Mutate this in place for new IR nodes.
+    comm
+        Communicator for the graph. The output IR graph will contain nodes unique
+        to this rank.
+    parquet_options
+        Parquet reader options.
+
+    Returns
+    -------
+    new_ir, partition_info
+        The rewritten graph and a mapping from unique nodes
+        in the new graph to associated partitioning information.
+
+    Notes
+    -----
+    This function traverses the unique nodes of the graph with
+    root `ir`, and applies :func:`lower_ir_node` to each node.
+
+    See Also
+    --------
+    lower_ir_node
+    """
+    state: IOLowerIRState = {
+        "partition_info": partition_info,
+        "rank": comm.rank,
+        "nranks": comm.nranks,
+        "parquet_options": parquet_options,
+    }
+    mapper: IOLowerIRTransformer = CachingVisitor(io_lower_ir_node, state=state)
+    return mapper(ir)
+
+
+@singledispatch
+def io_lower_ir_node(
+    ir: IR, rec: IOLowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower the IR nodes for a given IR node."""
+    return ir, rec.state["partition_info"]
+
+
+@io_lower_ir_node.register(Scan)
+def _(
+    ir: Scan, rec: IOLowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Lower the Scan node.
+
+    This expands SplitScan nodes into multiple Scan nodes.
+    """
+    plan = rec.state["partition_info"][ir].io_plan
+    assert plan is not None  # not great...
+
+    rank = rec.state["rank"]
+    nranks = rec.state["nranks"]
+    parquet_options = rec.state["parquet_options"]
+
+    scans: list[Scan | SplitScan] = []
+    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
+        count = plan.factor * len(ir.paths)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        path_offset = local_offset // plan.factor
+        path_end = math.ceil((local_offset + local_count) / plan.factor)
+        path_count = path_end - path_offset
+        local_paths = ir.paths[path_offset : path_offset + path_count]
+        sindex = local_offset % plan.factor
+        splits_created = 0
+        for path in local_paths:
+            base_scan = Scan(
+                ir.schema,
+                ir.typ,
+                ir.reader_options,
+                ir.cloud_options,
+                [path],
+                ir.with_columns,
+                ir.skip_rows,
+                ir.n_rows,
+                ir.row_index,
+                ir.include_file_paths,
+                ir.predicate,
+                parquet_options,
+            )
+            while sindex < plan.factor and splits_created < local_count:
+                scans.append(
+                    SplitScan(
+                        ir.schema,
+                        base_scan,
+                        sindex,
+                        plan.factor,
+                        parquet_options,
+                    )
+                )
+                sindex += 1
+                splits_created += 1
+            sindex = 0
+
+    else:
+        count = math.ceil(len(ir.paths) / plan.factor)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        paths_offset_start = local_offset * plan.factor
+        paths_offset_end = paths_offset_start + plan.factor * local_count
+        for offset in range(paths_offset_start, paths_offset_end, plan.factor):
+            local_paths = ir.paths[offset : offset + plan.factor]
+            if len(local_paths) > 0:  # Only add scan if there are paths
+                scans.append(
+                    Scan(
+                        ir.schema,
+                        ir.typ,
+                        ir.reader_options,
+                        ir.cloud_options,
+                        local_paths,
+                        ir.with_columns,
+                        ir.skip_rows,
+                        ir.n_rows,
+                        ir.row_index,
+                        ir.include_file_paths,
+                        ir.predicate,
+                        parquet_options,
+                    )
+                )
+
+    # I have no idea if this is correct
+    new_ir = StreamingScan(scans, ir.schema)
+    rec.state["partition_info"][new_ir] = rec.state["partition_info"][ir]
+    return new_ir, rec.state["partition_info"]
 
 
 class Lineariser:
@@ -356,14 +526,11 @@ async def read_chunk(
 @define_actor()
 async def scan_node(
     context: Context,
-    comm: Communicator,
-    ir: Scan,
+    ir: StreamingScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     *,
     num_producers: int,
-    plan: IOPartitionPlan,
-    parquet_options: ParquetOptions,
     estimated_chunk_bytes: int,
 ) -> None:
     """
@@ -373,8 +540,6 @@ async def scan_node(
     ----------
     context
         The rapidsmpf context.
-    comm
-        The communicator.
     ir
         The Scan node.
     ir_context
@@ -383,84 +548,15 @@ async def scan_node(
         The output Channel[TableChunk].
     num_producers
         The number of producers to use for the scan node.
-    plan
-        The partitioning plan.
-    parquet_options
-        The Parquet options.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
+    scans = ir.scans
+
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
-        # Build a list of local Scan operations
-        scans: list[Scan | SplitScan] = []
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            count = plan.factor * len(ir.paths)
-            local_count = math.ceil(count / comm.nranks)
-            local_offset = local_count * comm.rank
-            path_offset = local_offset // plan.factor
-            path_end = math.ceil((local_offset + local_count) / plan.factor)
-            path_count = path_end - path_offset
-            local_paths = ir.paths[path_offset : path_offset + path_count]
-            sindex = local_offset % plan.factor
-            splits_created = 0
-            for path in local_paths:
-                base_scan = Scan(
-                    ir.schema,
-                    ir.typ,
-                    ir.reader_options,
-                    ir.cloud_options,
-                    [path],
-                    ir.with_columns,
-                    ir.skip_rows,
-                    ir.n_rows,
-                    ir.row_index,
-                    ir.include_file_paths,
-                    ir.predicate,
-                    parquet_options,
-                )
-                while sindex < plan.factor and splits_created < local_count:
-                    scans.append(
-                        SplitScan(
-                            ir.schema,
-                            base_scan,
-                            sindex,
-                            plan.factor,
-                            parquet_options,
-                        )
-                    )
-                    sindex += 1
-                    splits_created += 1
-                sindex = 0
-
-        else:
-            count = math.ceil(len(ir.paths) / plan.factor)
-            local_count = math.ceil(count / comm.nranks)
-            local_offset = local_count * comm.rank
-            paths_offset_start = local_offset * plan.factor
-            paths_offset_end = paths_offset_start + plan.factor * local_count
-            for offset in range(paths_offset_start, paths_offset_end, plan.factor):
-                local_paths = ir.paths[offset : offset + plan.factor]
-                if len(local_paths) > 0:  # Only add scan if there are paths
-                    scans.append(
-                        Scan(
-                            ir.schema,
-                            ir.typ,
-                            ir.reader_options,
-                            ir.cloud_options,
-                            local_paths,
-                            ir.with_columns,
-                            ir.skip_rows,
-                            ir.n_rows,
-                            ir.row_index,
-                            ir.include_file_paths,
-                            ir.predicate,
-                            parquet_options,
-                        )
-                    )
-
         # Send basic metadata
         await send_metadata(
             ch_out,
@@ -628,7 +724,8 @@ def make_rapidsmpf_read_parquet_node(
         ) from e
 
 
-@generate_ir_sub_network.register(Scan)
+@generate_ir_sub_network.register(Scan)  # TODO: see if this even is hit?
+@generate_ir_sub_network.register(StreamingScan)
 def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
@@ -697,13 +794,10 @@ def _(
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
-                rec.state["comm"],
                 ir,
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
-                plan=plan,
-                parquet_options=parquet_options,
                 estimated_chunk_bytes=executor.target_partition_size,
             )
         ]
