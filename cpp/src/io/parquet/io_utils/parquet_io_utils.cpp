@@ -36,7 +36,7 @@
 
 namespace cudf::io::parquet {
 
-namespace detail {
+namespace {
 
 /**
  * @brief Dispatches the fetch task for each source index and collects the results
@@ -83,7 +83,7 @@ auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
 /**
  * @copydoc cudf::io::parquet::fetch_footers_to_host
  */
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host_impl(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
 {
   // Helper to fetch footer from a datasource
@@ -97,8 +97,8 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
     auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
     auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-    CUDF_EXPECTS(header->magic == parquet_magic, "Corrupted header");
-    CUDF_EXPECTS(ender->magic == parquet_magic, "Corrupted footer");
+    CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
+    CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
 
@@ -113,7 +113,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
 /**
  * @copydoc cudf::io::parquet::fetch_page_indexes_to_host
  */
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host_impl(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
 {
@@ -139,56 +139,12 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
   });
 }
 
-}  // namespace detail
-
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
-{
-  CUDF_FUNC_RANGE();
-
-  // Wrap the input into an array and delegate to the detail multi-source API
-  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
-  auto footer_buffers = detail::fetch_footers_to_host({datasources.data(), datasources.size()});
-  return std::move(footer_buffers.front());
-}
-
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
-{
-  CUDF_FUNC_RANGE();
-  return detail::fetch_footers_to_host(datasources);
-}
-
-std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
-  cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  CUDF_FUNC_RANGE();
-
-  // Wrap the inputs into arrays and delegate to the detail multi-source API
-  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
-  std::array<cudf::io::text::byte_range_info, 1> page_index_bytes_per_source{page_index_bytes};
-
-  auto page_index_buffers = detail::fetch_page_indexes_to_host(
-    {datasources.data(), datasources.size()},
-    {page_index_bytes_per_source.data(), page_index_bytes_per_source.size()});
-  return std::move(page_index_buffers.front());
-}
-
-std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
-{
-  CUDF_FUNC_RANGE();
-  return detail::fetch_page_indexes_to_host(datasources, page_index_bytes_per_source);
-}
-
-namespace detail {
-
 using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const>>;
 
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<device_spans_per_source_type>,
            std::future<void>>
-fetch_byte_ranges_to_device_async(
+fetch_byte_ranges_to_device_async_impl(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
     byte_ranges_per_source,
@@ -377,7 +333,47 @@ fetch_byte_ranges_to_device_async(
           std::async(std::launch::deferred, sync_function, std::move(device_read_tasks))};
 }
 
-}  // namespace detail
+}  // namespace
+
+std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
+{
+  CUDF_FUNC_RANGE();
+
+  // Wrap the input into an array and delegate to the multi-source implementation
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  auto footer_buffers = fetch_footers_to_host_impl({datasources.data(), datasources.size()});
+  return std::move(footer_buffers.front());
+}
+
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+{
+  CUDF_FUNC_RANGE();
+  return fetch_footers_to_host_impl(datasources);
+}
+
+std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
+  cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes)
+{
+  CUDF_FUNC_RANGE();
+
+  // Wrap the inputs into arrays and delegate to the multi-source implementation
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  std::array<cudf::io::text::byte_range_info, 1> page_index_bytes_per_source{page_index_bytes};
+
+  auto page_index_buffers = fetch_page_indexes_to_host_impl(
+    {datasources.data(), datasources.size()},
+    {page_index_bytes_per_source.data(), page_index_bytes_per_source.size()});
+  return std::move(page_index_buffers.front());
+}
+
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
+{
+  CUDF_FUNC_RANGE();
+  return fetch_page_indexes_to_host_impl(datasources, page_index_bytes_per_source);
+}
 
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
@@ -390,12 +386,12 @@ fetch_byte_ranges_to_device_async(
 {
   CUDF_FUNC_RANGE();
 
-  // Wrap the inputs into arrays and delegate to the detail multi-source API
+  // Wrap the inputs into arrays and delegate to the multi-source implementation
   std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
   std::array<cudf::host_span<cudf::io::text::byte_range_info const>, 1> byte_ranges_per_source{
     byte_ranges};
 
-  auto [buffers, fetched_byte_ranges, fut] = detail::fetch_byte_ranges_to_device_async(
+  auto [buffers, fetched_byte_ranges, fut] = fetch_byte_ranges_to_device_async_impl(
     {datasources.data(), datasources.size()},
     {byte_ranges_per_source.data(), byte_ranges_per_source.size()},
     stream,
@@ -415,13 +411,13 @@ fetch_byte_ranges_to_device_async(
 {
   CUDF_FUNC_RANGE();
 
-  // Convert input vectors into host spans for detail API
+  // Convert input vectors into host spans for the implementation
   std::vector<cudf::host_span<cudf::io::text::byte_range_info const>> byte_range_spans_per_source;
   byte_range_spans_per_source.reserve(byte_ranges_per_source.size());
   for (auto const& ranges : byte_ranges_per_source) {
     byte_range_spans_per_source.emplace_back(ranges);
   }
-  return detail::fetch_byte_ranges_to_device_async(
+  return fetch_byte_ranges_to_device_async_impl(
     datasources,
     {byte_range_spans_per_source.data(), byte_range_spans_per_source.size()},
     stream,
