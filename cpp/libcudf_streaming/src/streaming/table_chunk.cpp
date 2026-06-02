@@ -14,6 +14,7 @@
 #include <rapidsmpf/stream_ordered_timing.hpp>
 #include <rapidsmpf/streaming/core/lineariser.hpp>
 
+#include <cassert>
 #include <memory>
 
 namespace cudf_streaming::streaming {
@@ -258,6 +259,7 @@ std::pair<cudf::size_type, cudf::size_type> TableChunk::shape() const noexcept
     auto view = cudf::packed_metadata_view(*packed_data_->metadata);
     return {view.num_rows(), view.num_columns()};
   }
+  assert(table_view_.has_value() && "shape() called on moved-from TableChunk");
   return {table_view_->num_rows(), table_view_->num_columns()};
 }
 

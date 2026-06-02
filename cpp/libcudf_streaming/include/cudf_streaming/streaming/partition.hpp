@@ -65,7 +65,7 @@ rapidsmpf::streaming::Actor partition_and_pack(
  * @param ctx The actor context to use.
  * @param ch_in Input channel providing packed partitions as PartitionMapChunk or
  * PartitionVectorChunk.
- * @param ch_out Output channel to which unpacked and concatenated tables table are sent.
+ * @param ch_out Output channel to which unpacked and concatenated tables are sent.
  *
  * @return Streaming actor representing the asynchronous unpacking and concatenation
  * operation.

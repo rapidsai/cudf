@@ -6,12 +6,12 @@
 #include "../utils.hpp"
 #include "base_streaming_fixture.hpp"
 
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf_streaming/streaming/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <rapidsmpf/communicator/single.hpp>
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/shuffler/chunk.hpp>

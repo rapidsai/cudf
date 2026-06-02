@@ -5,7 +5,8 @@
 
 #include "../environment.hpp"
 
-#include <gtest/gtest.h>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <rapidsmpf/communicator/single.hpp>
 #include <rapidsmpf/progress_thread.hpp>
 

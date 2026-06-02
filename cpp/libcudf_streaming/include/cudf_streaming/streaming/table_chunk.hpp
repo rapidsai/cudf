@@ -223,7 +223,7 @@ class TableChunk {
   [[nodiscard]] cudf::table_view table_view() const;
 
   /**
-   * @brief Indicates whether this table chunk can be spilled to device memory.
+   * @brief Indicates whether this table chunk can be spilled from device to host memory.
    *
    * A table chunk is considered spillable if it owns its underlying memory. This is
    * true when it was created from one of the following:

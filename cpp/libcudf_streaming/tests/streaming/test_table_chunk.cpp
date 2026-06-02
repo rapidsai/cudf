@@ -7,6 +7,7 @@
 #include "base_streaming_fixture.hpp"
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/contiguous_split.hpp>
@@ -17,7 +18,6 @@
 #include <rmm/mr/per_device_resource.hpp>
 
 #include <cudf_streaming/streaming/table_chunk.hpp>
-#include <gtest/gtest.h>
 #include <rapidsmpf/owning_wrapper.hpp>
 #include <rapidsmpf/streaming/core/channel.hpp>
 

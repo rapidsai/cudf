@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -15,7 +16,6 @@
 
 #include <cuda/memory_resource>
 
-#include <gtest/gtest.h>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
@@ -24,6 +24,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <numeric>

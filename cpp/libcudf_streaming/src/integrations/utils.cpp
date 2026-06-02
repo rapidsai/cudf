@@ -36,6 +36,7 @@ struct str_cudf_column_scalar_fn {
                          rmm::device_async_resource_ref mr)
   {
     std::unique_ptr<cudf::scalar> scalar = cudf::get_element(col, index, stream, mr);
+    if (!scalar->is_valid(stream)) { return "null"; }
     auto typed_scalar = static_cast<cudf::numeric_scalar<T> const*>(scalar.get());
     T val             = typed_scalar->value(stream);
     return std::to_string(val);

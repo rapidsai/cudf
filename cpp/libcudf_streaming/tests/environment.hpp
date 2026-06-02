@@ -4,7 +4,8 @@
  */
 #pragma once
 
-#include <gtest/gtest.h>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <rapidsmpf/communicator/communicator.hpp>
 
 enum class TestEnvironmentType : int {

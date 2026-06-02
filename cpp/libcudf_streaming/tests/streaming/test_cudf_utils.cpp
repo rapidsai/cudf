@@ -5,9 +5,9 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf_streaming/integrations/utils.hpp>
-#include <gtest/gtest.h>
 
 using namespace cudf_streaming::integrations;
 

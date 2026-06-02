@@ -6,12 +6,13 @@
 #pragma once
 #include "../environment.hpp"
 
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/cuda_memory_resource.hpp>
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <rapidsmpf/communicator/single.hpp>
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/pinned_memory_resource.hpp>

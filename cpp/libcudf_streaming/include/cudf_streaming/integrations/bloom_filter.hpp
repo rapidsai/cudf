@@ -8,9 +8,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 
 namespace cudf_streaming::integrations {
 

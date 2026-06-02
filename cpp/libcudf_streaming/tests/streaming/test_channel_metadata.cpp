@@ -3,6 +3,8 @@
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -12,7 +14,6 @@
 
 #include <cudf_streaming/streaming/channel_metadata.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
-#include <gtest/gtest.h>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 
 #include <memory>
