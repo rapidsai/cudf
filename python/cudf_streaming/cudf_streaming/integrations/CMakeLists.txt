@@ -1,6 +1,14 @@
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 
-# Placeholder for integrations Cython extensions.
+set(cython_sources partition.pyx)
+set(linked_libraries cudf_streaming::cudf_streaming rapidsmpf::rapidsmpf)
+
+rapids_cython_create_modules(
+  CXX ASSOCIATED_TARGETS cudf_streaming rapidsmpf
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}"
+  MODULE_PREFIX cudf_streaming_integrations_
+)
