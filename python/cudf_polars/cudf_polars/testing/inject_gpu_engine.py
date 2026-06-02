@@ -263,11 +263,68 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_window_functions.py::test_window_multiple_named_windows": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    # Surfaced when bumping the polars test suite to 1.41.2.
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs0-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs0-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs1-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs1-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs10-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs10-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs11-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs11-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs4-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs4-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs5-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs5-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs6-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs6-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs7-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs7-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs8-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs8-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs9-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[first-rhs9-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs0-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs0-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs1-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs1-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs10-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs10-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs11-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs11-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs4-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs4-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs5-lhs0]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs5-lhs2]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs6-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs6-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs7-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs7-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs8-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs8-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs9-lhs1]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/operations/test_group_by.py::test_group_by_filter_parametric[sum-rhs9-lhs4]": "group_by with a filtered aggregation raises libcudf 'Column size mismatch' (apply_boolean_mask)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE a == 1 OR a != 1]": "incorrect output height for SELECT with an always-true WHERE",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE a == 1 OR a != 1]": "incorrect output height for SELECT with an always-true WHERE",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-WHERE a == 1 OR a != 1]": "incorrect output height for SELECT with an always-true WHERE",
+    "tests/unit/operations/namespaces/array/test_array.py::test_array_idx_size_limit_eval": "polars-internal IdxSize chunking debug assertion does not apply with the GPU engine",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_implode_and_agg": "implode + agg returns a mismatched dtype",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_duration_aggs": "Unsupported libcudf reduction operator for Duration dtype",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "boolean-agg mean floating-point precision mismatch",
+    "tests/unit/lazyframe/test_projections.py::test_select_len_20337": "len() over a column-less input returns 0 (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
+    "tests/unit/io/test_parquet.py::test_read_parquet_legacy_nested_maps_27159": "legacy nested-map parquet read produces a mismatched result",
+    "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
 }
 
 
 TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
+    # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
+    # result may or may not match CPU. Skip rather than xfail to avoid a flaky
+    # XPASS/FAIL (these pass on some runs and fail on others).
+    "tests/unit/lazyframe/test_cse.py::test_cse_as_struct_value_counts_20927": "non-deterministic value_counts ordering",
+    "tests/unit/lazyframe/test_cse.py::test_eager_cse_during_struct_expansion_18411": "non-deterministic struct-expansion ordering",
     # On Ubuntu 20.04, the tzdata package contains a bunch of symlinks
     # for obsolete timezone names. However, the chrono_tz package that
     # polars uses doesn't read /usr/share/zoneinfo, instead packaging
@@ -317,6 +374,10 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 # 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
+    # No deterministic key sort (https://github.com/rapidsai/cudf/issues/21641):
+    # passes on some streaming runs and fails on others, so skip rather than
+    # xfail to avoid a flaky XPASS/FAIL.
+    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -385,7 +446,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
-    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
@@ -442,6 +502,25 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    # Surfaced when the spmd polars test-suite run first executed on 1.41.2.
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[True-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[True-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/lazyframe/test_lazyframe.py::test_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_select_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/operations/test_scalar.py::test_scalar_len_20046": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/sql/test_group_by.py::test_group_by_empty_or_scalar_key_exprs_23397": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "SQL join on nested function expressions fails under the streaming engine",
+    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "SQL join on nested function expressions fails under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE 1 = 1]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE 1 = 1]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-WHERE 1 = 1]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-]": "wrong output height / RapidsMPF 'packed data cannot be empty' under the streaming engine",
 }
 
 
