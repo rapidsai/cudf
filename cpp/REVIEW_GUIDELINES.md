@@ -132,6 +132,18 @@ Before commenting, ask:
 - Do not output any retracted findings
 ## Examples to Follow
 
+**CRITICAL** (unchecked CUDA error):
+```
+CRITICAL: Unchecked kernel launch
+
+Issue: Kernel launch error not checked
+Why: Subsequent operations assume success, causing silent corruption
+
+Suggested fix:
+myKernel<<<grid, block, 0, stream.value()>>>(args);
+CUDF_CUDA_TRY(cudaGetLastError());
+```
+
 **CRITICAL** (null handling):
 ```
 CRITICAL: Reading null values of fixed-width column

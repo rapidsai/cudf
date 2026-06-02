@@ -130,6 +130,7 @@ void launch_mixed_join_count(
       hash_indices,
       device_expression_data,
       matches_per_row);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::detail

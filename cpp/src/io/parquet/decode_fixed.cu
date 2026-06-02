@@ -1296,6 +1296,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
@@ -1306,6 +1307,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 

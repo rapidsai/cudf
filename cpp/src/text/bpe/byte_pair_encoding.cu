@@ -413,12 +413,14 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const pair_map = get_bpe_merge_pairs_impl(merge_pairs)->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
       *d_tmp_strings, d_input_chars, pair_map, d_spaces.data(), d_ranks.data(), d_rerank.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // compute the output sizes
   auto output_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
     *d_strings, d_input_chars, d_spaces.data(), output_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // convert sizes to offsets in-place
   auto [offsets, bytes] = cudf::strings::detail::make_offsets_child_column(
