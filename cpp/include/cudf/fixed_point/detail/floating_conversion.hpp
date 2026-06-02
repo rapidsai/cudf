@@ -932,6 +932,16 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
   return final_shifts_low10s();
 }
 
+template <bool CheckOverflow, typename T>
+CUDF_HOST_DEVICE inline auto maybe_with_overflow(T value, bool overflow)
+{
+  if constexpr (CheckOverflow) {
+    return cuda::std::make_pair(value, overflow);
+  } else {
+    return value;
+  }
+}
+
 /**
  * @brief Perform base-2 -> base-10 fixed-point conversion
  *
@@ -941,14 +951,15 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
  * @param base2_value The base-2 fixed-point value we are converting from
  * @param pow2 The number of powers of 2 to apply to convert from base-2
  * @param pow10 The number of powers of 10 to apply to reach the desired scale factor
- * @return `{magnitude, overflow}` for the converted-to decimal integer
+ * @return `{magnitude, overflow}` for the converted-to decimal integer when `CheckOverflow` is
+ * true, otherwise just the magnitude (legacy unchecked behavior, preserved for downstream callers
+ * such as spark-rapids-jni).
  */
 template <typename Rep,
           typename FloatingType,
           bool CheckOverflow = false,
           CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
-CUDF_HOST_DEVICE inline cuda::std::pair<cuda::std::make_unsigned_t<Rep>, bool>
-convert_floating_to_integral_shifting(
+CUDF_HOST_DEVICE inline auto convert_floating_to_integral_shifting(
   typename floating_converter<FloatingType>::IntegralType base2_value, int pow10, int pow2)
 {
   // Apply the powers of 2 and 10 to convert to decimal.
@@ -966,9 +977,11 @@ convert_floating_to_integral_shifting(
       auto const [narrowed, narrow_overflow] =
         checked_narrow_cast<UnsignedRep, CheckOverflow>(base2_value);
       auto const [shifted, shift_overflow] = checked_left_shift<CheckOverflow>(narrowed, pow2);
-      return {shifted, narrow_overflow || shift_overflow};
+      return maybe_with_overflow<CheckOverflow>(shifted, narrow_overflow || shift_overflow);
     }
-    return checked_narrow_cast<UnsignedRep, CheckOverflow>(guarded_right_shift(base2_value, -pow2));
+    auto const [v, o] =
+      checked_narrow_cast<UnsignedRep, CheckOverflow>(guarded_right_shift(base2_value, -pow2));
+    return maybe_with_overflow<CheckOverflow>(v, o);
   }
 
   if (pow10 > 0) {
@@ -976,9 +989,12 @@ convert_floating_to_integral_shifting(
       // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
       auto const shifted = guarded_right_shift(base2_value, -pow2);
       auto const divided = divide_power10<decltype(shifted)>(shifted, pow10);
-      return checked_narrow_cast<UnsignedRep, CheckOverflow>(divided);
+      auto const [v, o]  = checked_narrow_cast<UnsignedRep, CheckOverflow>(divided);
+      return maybe_with_overflow<CheckOverflow>(v, o);
     }
-    return shift_to_decimal_pospow<Rep, FloatingType, CheckOverflow>(base2_value, pow2, pow10);
+    auto const [v, o] =
+      shift_to_decimal_pospow<Rep, FloatingType, CheckOverflow>(base2_value, pow2, pow10);
+    return maybe_with_overflow<CheckOverflow>(v, o);
   }
 
   // pow10 < 0
@@ -989,19 +1005,12 @@ convert_floating_to_integral_shifting(
     auto const [shifted, shift_overflow] = checked_left_shift<CheckOverflow>(narrowed, pow2);
     auto const [scaled, multiply_overflow] =
       multiply_power10_saturating<UnsignedRep, CheckOverflow>(shifted, -pow10);
-    return {scaled, narrow_overflow || shift_overflow || multiply_overflow};
+    return maybe_with_overflow<CheckOverflow>(
+      scaled, narrow_overflow || shift_overflow || multiply_overflow);
   }
-  return shift_to_decimal_negpow<Rep, FloatingType, CheckOverflow>(base2_value, pow2, pow10);
-}
-
-template <bool CheckOverflow, typename T>
-CUDF_HOST_DEVICE inline auto maybe_with_overflow(T value, bool overflow)
-{
-  if constexpr (CheckOverflow) {
-    return cuda::std::make_pair(value, overflow);
-  } else {
-    return value;
-  }
+  auto const [v, o] =
+    shift_to_decimal_negpow<Rep, FloatingType, CheckOverflow>(base2_value, pow2, pow10);
+  return maybe_with_overflow<CheckOverflow>(v, o);
 }
 
 /**
@@ -1037,9 +1046,16 @@ CUDF_HOST_DEVICE inline auto convert_floating_to_integral(FloatingType const& fl
     add_half_if_truncates(floating, significand, floating_pow2, pow10);
 
   // Apply the powers of 2 and 10 to convert to decimal.
-  auto const [magnitude_u, overflow] =
-    convert_floating_to_integral_shifting<Rep, FloatingType, CheckOverflow>(
-      base2_value, pow10, pow2);
+  auto const [magnitude_u, overflow] = [&] {
+    if constexpr (CheckOverflow) {
+      return convert_floating_to_integral_shifting<Rep, FloatingType, true>(
+        base2_value, pow10, pow2);
+    } else {
+      auto const v =
+        convert_floating_to_integral_shifting<Rep, FloatingType, false>(base2_value, pow10, pow2);
+      return cuda::std::pair{v, false};
+    }
+  }();
 
   // Reapply the sign. Negative range has one extra representable value for two's
   // complement: magnitude == max+1 maps to min, and we can't get there by casting
