@@ -233,13 +233,21 @@ TEST_F(HybridScanMultifileFiltersTest, ErrorFilterRowGroupsWithByteRanges)
 
   auto inputs = build_multifile_inputs(file_buffers);
 
-  auto const options = cudf::io::parquet_reader_options::builder().skip_bytes(1000).build();
-  auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+  auto options      = cudf::io::parquet_reader_options::builder().build();
+  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
     inputs.footer_byte_spans, options);
 
   auto const row_group_indices = reader->all_row_groups(options);
   ASSERT_EQ(row_group_indices.size(), num_sources);
 
+  // Setting `skip_bytes` or `num_bytes` is ambiguous when reading multiple sources. The reader is
+  // expected to throw an exception if row groups are filtered using byte range in this case.
+  options.set_skip_bytes(1000);
+  EXPECT_THROW(std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
+               std::invalid_argument);
+
+  options.set_skip_bytes(0);
+  options.set_num_bytes(1000);
   EXPECT_THROW(std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
                std::invalid_argument);
 }
@@ -260,7 +268,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
 
   auto inputs = build_multifile_inputs(file_buffers);
 
-  // Filter - col0 < 50 and col2 < "000010000"
+  // Filter - col0 < 50 and col2 > "000010000"
   auto literal_value0 = cudf::duration_scalar<T>(T::rep(50), true, cudf::get_default_stream());
   auto literal0       = cudf::ast::literal(literal_value0);
   auto col_ref0       = cudf::ast::column_reference(0);
@@ -288,8 +296,9 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
   auto stats_filtered = reader->filter_row_groups_with_stats(
     input_row_group_indices, options, cudf::get_default_stream());
   ASSERT_EQ(stats_filtered.size(), num_sources);
-  EXPECT_TRUE(std::all_of(
-    stats_filtered.begin(), stats_filtered.end(), [](auto const& rgs) { return rgs.size() == 1; }));
+  for (std::size_t i = 0; i < stats_filtered.size(); ++i) {
+    EXPECT_EQ(stats_filtered[i].size(), 1) << "Source index: " << i;
+  }
   EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), num_sources * rows_per_row_group);
 
   // Custom per-source indices that prune all row groups via stats, including an empty source

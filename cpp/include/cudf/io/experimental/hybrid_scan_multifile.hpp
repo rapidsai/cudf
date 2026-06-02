@@ -115,11 +115,7 @@ class hybrid_scan_multifile {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Resets the current column selection
-   *
-   * Resets the current column selection state forcing column re-selection in subsequent filter,
-   * byte range, setup chunking and materialization APIs. This is useful if the filter expression
-   * has been cascaded (and-ed) to include new columns.
+   * @copydoc cudf::io::experimental::hybrid_scan::reset_column_selection
    */
   void reset_column_selection() const;
 
@@ -130,9 +126,9 @@ class hybrid_scan_multifile {
    * Filters the row groups such that only the row groups that start within the byte range are
    * selected. Note that the last selected row group may end beyond the byte range.
    *
-   * @param row_group_indices Input row groups indices
+   * @param row_group_indices Input row group indices, one per source
    * @param options Parquet reader options
-   * @return Filtered row group indices
+   * @return Filtered per-source row group indices (one inner vector per source)
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_byte_range(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -141,10 +137,10 @@ class hybrid_scan_multifile {
   /**
    * @brief Filter the input row groups using column chunk statistics
    *
-   * @param row_group_indices Input row groups indices
+   * @param row_group_indices Input row group indices, one per source
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered row group indices
+   * @return Filtered  row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -158,7 +154,7 @@ class hybrid_scan_multifile {
    * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
    *       aligned memory resource
    *
-   * @param row_group_indices Input row groups indices
+   * @param row_group_indices Input row group indices, one per source
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
    *         pages subject to filter predicate
