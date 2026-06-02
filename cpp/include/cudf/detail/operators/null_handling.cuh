@@ -5,13 +5,13 @@
 
 #pragma once
 
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -42,7 +42,8 @@ __device__ bool is_null(T a)
  * @param condition boolean condition.
  */
 template <typename T>
-__device__ optional<T> nullify_if(optional<T> a, optional<bool> condition)
+__device__ cuda::std::optional<T> nullify_if(cuda::std::optional<T> a,
+                                             cuda::std::optional<bool> condition)
 {
   if (condition.has_value() && a.has_value()) {
     if (condition.value()) {
@@ -70,7 +71,7 @@ __device__ T coalesce(T a, T b)
 }
 
 template <typename T>
-__device__ optional<T> coalesce(optional<T> a, optional<T> b)
+__device__ cuda::std::optional<T> coalesce(cuda::std::optional<T> a, cuda::std::optional<T> b)
 {
   if (a.has_value()) {
     return a.value();
@@ -93,14 +94,11 @@ __device__ inline bool predicate(T a)
 }
 
 template <cuda::std::same_as<bool> T>
-__device__ inline bool predicate(optional<T> a)
+__device__ inline bool predicate(cuda::std::optional<T> a)
 {
-  if (a.has_value()) {
-    return a.value();
-  } else {
-    return false;
-  }
+  return a.value_or(false);
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

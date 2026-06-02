@@ -6,13 +6,17 @@
 
 #include <cudf/utilities/export.hpp>
 
-#include <cuda/std/optional>
+#include <cuda/std/cstdint>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
-template <typename T>
-using optional = cuda::std::optional<T>;
+/**
+ * @brief An enumeration of error codes that can occur during operations.
+ */
+enum class errc : cuda::std::int8_t { SUCCESS = 0, OVERFLOW = 1, DIVISION_BY_ZERO = 2 };
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

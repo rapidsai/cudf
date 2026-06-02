@@ -5,15 +5,15 @@
 #pragma once
 
 #include <cudf/detail/integral_math.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/cmath>
 #include <cuda/std/concepts>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -40,8 +40,16 @@ __device__ T ceil(T a)
   return cuda::std::ceil(a);
 }
 
-template <typename R>
-__device__ numeric::decimal<R> ceil(numeric::decimal<R> a)
+namespace detail {
+
+/**
+ * @brief Rounds a decimal value to an integral value.
+ *
+ * @tparam R Rep type of the decimal.
+ * @tparam ceil If true `ceil`s the value, otherwise `floor`s the value.
+ */
+template <typename R, bool ceil>
+__device__ numeric::decimal<R> decimal_round(numeric::decimal<R> a)
 {
   if (a.scale() >= 0) {
     return a;
@@ -53,10 +61,18 @@ __device__ numeric::decimal<R> ceil(numeric::decimal<R> a)
     if (rem == 0) {
       return a;
     } else {
-      auto val = a.value() > 0 ? (div + 1) : div;
+      auto val = ceil ? (a.value() > 0 ? (div + 1) : div) : (a.value() > 0 ? div : (div - 1));
       return numeric::decimal<R>{numeric::scaled_integer<R>{val * factor, a.scale()}};
     }
   }
+}
+
+}  // namespace detail
+
+template <typename R>
+__device__ numeric::decimal<R> ceil(numeric::decimal<R> a)
+{
+  return detail::decimal_round<R, true>(a);
 }
 
 /**
@@ -86,20 +102,7 @@ __device__ T floor(T a)
 template <typename R>
 __device__ numeric::decimal<R> floor(numeric::decimal<R> a)
 {
-  if (a.scale() >= 0) {
-    return a;
-  } else {
-    auto factor =
-      numeric::detail::ipow<R, numeric::Radix::BASE_10>(-static_cast<int32_t>(a.scale()));
-    auto div = a.value() / factor;
-    auto rem = a.value() % factor;
-    if (rem == 0) {
-      return a;
-    } else {
-      auto val = a.value() > 0 ? div : (div - 1);
-      return numeric::decimal<R>{numeric::scaled_integer<R>{val * factor, a.scale()}};
-    }
-  }
+  return detail::decimal_round<R, false>(a);
 }
 
 /**
@@ -158,4 +161,5 @@ __device__ T sqrt(T a)
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

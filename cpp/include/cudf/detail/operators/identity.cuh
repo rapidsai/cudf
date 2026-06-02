@@ -7,6 +7,7 @@
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -22,4 +23,5 @@ __device__ T identity(T a)
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

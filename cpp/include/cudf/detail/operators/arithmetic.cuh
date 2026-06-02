@@ -5,9 +5,8 @@
 #pragma once
 
 #include <cudf/detail/integral_math.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/cmath>
@@ -15,6 +14,7 @@
 #include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -193,4 +193,5 @@ __device__ auto true_div(A a, B b) -> decltype(static_cast<double>(a) / static_c
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

@@ -4,14 +4,14 @@
  */
 #pragma once
 
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/cmath>
 #include <cuda/std/concepts>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -159,4 +159,5 @@ __device__ T tanh(T a)
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

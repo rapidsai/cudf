@@ -370,7 +370,7 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
 
           if (op_ == opcode::PREDICATE) {
             sink.emit(std::format(
-              R"***(bool {} = cudf::ops::predicate({});
+              R"***(bool {} = cudf::detail::ops::predicate({});
 )***",
               id_,
               args_str));

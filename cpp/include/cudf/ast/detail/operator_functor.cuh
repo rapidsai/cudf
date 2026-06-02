@@ -5,7 +5,7 @@
 #pragma once
 
 #include <cudf/ast/ast_operator.hpp>
-#include <cudf/operators/all.cuh>
+#include <cudf/detail/operators/operators.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -19,15 +19,15 @@ namespace ast::detail {
 template <ast_operator op>
 struct operator_invoker;
 
-#define CUDF_AST_OPERATOR_MAP(OP, func_name, num_args)                                    \
-  template <>                                                                             \
-  struct operator_invoker<ast_operator::OP> {                                             \
-    static constexpr auto arity = num_args;                                               \
-    template <typename... Args>                                                           \
-    __device__ static inline auto eval(Args... a) -> decltype(cudf::ops::func_name(a...)) \
-    {                                                                                     \
-      return cudf::ops::func_name(a...);                                                  \
-    }                                                                                     \
+#define CUDF_AST_OPERATOR_MAP(OP, func_name, num_args)                                            \
+  template <>                                                                                     \
+  struct operator_invoker<ast_operator::OP> {                                                     \
+    static constexpr auto arity = num_args;                                                       \
+    template <typename... Args>                                                                   \
+    __device__ static inline auto eval(Args... a) -> decltype(cudf::detail::ops::func_name(a...)) \
+    {                                                                                             \
+      return cudf::detail::ops::func_name(a...);                                                  \
+    }                                                                                             \
   };
 
 CUDF_AST_OPERATOR_MAP(ADD, add, 2)
@@ -103,7 +103,7 @@ struct operator_functor {
 
   template <typename T>
   __device__ inline auto operator()(T a)
-    requires(!cudf::ops::nullable<T> && requires { operator_invoker<op>::eval(a); })
+    requires(!cudf::detail::ops::nullable<T> && requires { operator_invoker<op>::eval(a); })
   {
     return operator_invoker<op>::eval(a);
   }
@@ -111,7 +111,7 @@ struct operator_functor {
   template <typename T>
   __device__ inline auto operator()(T a)
     requires(
-    cudf::ops::nullable<T>  && (requires { operator_invoker<op>::eval(a); } ||
+    cudf::detail::ops::nullable<T>  && (requires { operator_invoker<op>::eval(a); } ||
     requires { operator_invoker<op>::eval(a.value()); })
     )
   {
@@ -120,7 +120,7 @@ struct operator_functor {
     if constexpr (requires { operator_invoker<op>::eval(a); }) {
       return operator_invoker<op>::eval(a);
     } else {
-      using result_t = cudf::ops::optional<decltype(operator_invoker<op>::eval(a.value()))>;
+      using result_t = cuda::std::optional<decltype(operator_invoker<op>::eval(a.value()))>;
       if (a.has_value()) {
         return result_t{operator_invoker<op>::eval(a.value())};
       } else {
@@ -131,7 +131,7 @@ struct operator_functor {
 
   template <typename T>
   __device__ inline auto operator()(T a, T b)
-    requires(!cudf::ops::nullable<T> && requires { operator_invoker<op>::eval(a, b); })
+    requires(!cudf::detail::ops::nullable<T> && requires { operator_invoker<op>::eval(a, b); })
   {
     return operator_invoker<op>::eval(a, b);
   }
@@ -139,7 +139,7 @@ struct operator_functor {
   template <typename T>
   __device__ inline auto operator()(T a, T b)
     requires(
-      cudf::ops::nullable<T> &&
+      cudf::detail::ops::nullable<T> &&
       (requires { operator_invoker<op>::eval(a, b); } ||
       requires { operator_invoker<op>::eval(a.value(), b.value()); }))
   {
@@ -149,7 +149,7 @@ struct operator_functor {
       return operator_invoker<op>::eval(a, b);
     } else {
       using result_t =
-        cudf::ops::optional<decltype(operator_invoker<op>::eval(a.value(), b.value()))>;
+        cuda::std::optional<decltype(operator_invoker<op>::eval(a.value(), b.value()))>;
       if (a.has_value() && b.has_value()) {
         return result_t{operator_invoker<op>::eval(a.value(), b.value())};
       } else {

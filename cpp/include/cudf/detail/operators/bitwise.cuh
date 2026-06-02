@@ -4,11 +4,11 @@
  */
 #pragma once
 
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -94,4 +94,5 @@ __device__ auto bit_shift_right(A a, B b) -> decltype(a >> b)
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

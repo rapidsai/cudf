@@ -4,15 +4,15 @@
  */
 #pragma once
 
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -238,4 +238,5 @@ __device__ numeric::decimal<R> rescale(numeric::decimal<R> a, int32_t new_scale)
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

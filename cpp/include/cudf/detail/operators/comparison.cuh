@@ -4,13 +4,13 @@
  */
 #pragma once
 
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/types.cuh>
+#include <cudf/detail/operators/concepts.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/optional>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -119,17 +119,12 @@ __device__ bool null_equal(A a, B b)
 }
 
 template <typename A, typename B>
-__device__ bool null_equal(optional<A> a, optional<B> b)
+__device__ bool null_equal(cuda::std::optional<A> a, cuda::std::optional<B> b)
   requires(!nullable<A> && !nullable<B> && requires { a == b; })
 {
-  if (a.has_value() && b.has_value()) {
-    return null_equal(a.value(), b.value());
-  } else if (!a.has_value() && !b.has_value()) {
-    return true;
-  } else {
-    return false;
-  }
+  return a == b;
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

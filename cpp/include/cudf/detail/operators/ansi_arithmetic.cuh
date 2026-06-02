@@ -4,19 +4,20 @@
  */
 #pragma once
 
+#include <cudf/detail/operators/concepts.cuh>
+#include <cudf/detail/operators/error.hpp>
+#include <cudf/detail/operators/math.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/operators/concepts.cuh>
-#include <cudf/operators/error.hpp>
-#include <cudf/operators/math.cuh>
-#include <cudf/operators/types.cuh>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/numeric>
 #include <cuda/std/concepts>
+#include <cuda/std/expected>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 namespace ops {
 
 /**
@@ -28,15 +29,15 @@ namespace ops {
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <integer T>
-__device__ result<T> ansi_add(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_add(T a, T b)
 {
   T r;
-  if (cuda::add_overflow(r, a, b).overflow) { return errc::OVERFLOW; }
+  if (cuda::add_overflow(r, a, b).overflow) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return r;
 }
 
 template <floating_point T>
-__device__ result<T> ansi_add(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_add(T a, T b)
 {
   return a + b;
 }
@@ -48,12 +49,13 @@ __device__ result<T> ansi_add(T a, T b)
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_add(numeric::decimal<R> a, numeric::decimal<R> b)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_add(numeric::decimal<R> a,
+                                                                   numeric::decimal<R> b)
 {
   auto scale = cuda::std::min(a.scale(), b.scale());
 
   if (numeric::addition_overflow<R>(a.rescaled(scale).value(), b.rescaled(scale).value())) {
-    return errc::OVERFLOW;
+    return cuda::std::unexpected{errc::OVERFLOW};
   }
 
   return numeric::decimal<R>{numeric::scaled_integer<R>{
@@ -61,10 +63,10 @@ __device__ result<numeric::decimal<R>> ansi_add(numeric::decimal<R> a, numeric::
 }
 
 template <integer T>
-__device__ result<T> ansi_sub(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_sub(T a, T b)
 {
   T r;
-  if (cuda::sub_overflow(r, a, b).overflow) { return errc::OVERFLOW; }
+  if (cuda::sub_overflow(r, a, b).overflow) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return r;
 }
 
@@ -75,18 +77,19 @@ __device__ result<T> ansi_sub(T a, T b)
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <floating_point T>
-__device__ result<T> ansi_sub(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_sub(T a, T b)
 {
   return a - b;
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_sub(numeric::decimal<R> a, numeric::decimal<R> b)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_sub(numeric::decimal<R> a,
+                                                                   numeric::decimal<R> b)
 {
   auto scale = cuda::std::min(a.scale(), b.scale());
 
   if (numeric::subtraction_overflow<R>(a.rescaled(scale).value(), b.rescaled(scale).value())) {
-    return errc::OVERFLOW;
+    return cuda::std::unexpected{errc::OVERFLOW};
   }
 
   return numeric::decimal<R>{numeric::scaled_integer<R>{
@@ -102,23 +105,26 @@ __device__ result<numeric::decimal<R>> ansi_sub(numeric::decimal<R> a, numeric::
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <integer T>
-__device__ result<T> ansi_mul(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_mul(T a, T b)
 {
   T r;
-  if (cuda::mul_overflow(r, a, b).overflow) { return errc::OVERFLOW; }
+  if (cuda::mul_overflow(r, a, b).overflow) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return r;
 }
 
 template <floating_point T>
-__device__ result<T> ansi_mul(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_mul(T a, T b)
 {
   return a * b;
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_mul(numeric::decimal<R> a, numeric::decimal<R> b)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_mul(numeric::decimal<R> a,
+                                                                   numeric::decimal<R> b)
 {
-  if (numeric::multiplication_overflow<R>(a.value(), b.value())) { return errc::OVERFLOW; }
+  if (numeric::multiplication_overflow<R>(a.value(), b.value())) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
 
   return numeric::decimal<R>{
     numeric::scaled_integer<R>{a.value() * b.value(), numeric::scale_type{a.scale() + b.scale()}}};
@@ -134,26 +140,29 @@ __device__ result<numeric::decimal<R>> ansi_mul(numeric::decimal<R> a, numeric::
  * `errc::SUCCESS`.
  */
 template <integer T>
-__device__ result<T> ansi_div(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_div(T a, T b)
 {
-  if (b == 0) { return errc::DIVISION_BY_ZERO; }
+  if (b == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
   T r;
-  if (cuda::div_overflow(r, a, b).overflow) { return errc::OVERFLOW; }
+  if (cuda::div_overflow(r, a, b).overflow) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return r;
 }
 
 template <floating_point T>
-__device__ result<T> ansi_div(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_div(T a, T b)
 {
   return a / b;
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_div(numeric::decimal<R> a, numeric::decimal<R> b)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_div(numeric::decimal<R> a,
+                                                                   numeric::decimal<R> b)
 {
-  if (b.value() == 0) { return errc::DIVISION_BY_ZERO; }
+  if (b.value() == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
 
-  if (numeric::division_overflow<R>(a.value(), b.value())) { return errc::OVERFLOW; }
+  if (numeric::division_overflow<R>(a.value(), b.value())) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
 
   return numeric::decimal<R>{
     numeric::scaled_integer<R>{a.value() / b.value(), numeric::scale_type{a.scale() - b.scale()}}};
@@ -168,9 +177,9 @@ __device__ result<numeric::decimal<R>> ansi_div(numeric::decimal<R> a, numeric::
  * @return `errc::DIVISION_BY_ZERO` on zero divisor, else the result.
  */
 template <signed_integer T>
-__device__ result<T> ansi_mod(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_mod(T a, T b)
 {
-  if (b == 0) { return errc::DIVISION_BY_ZERO; }
+  if (b == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
 
   // avoid signed overflow UB / trap for minimum value divided by -1.
   if (a == cuda::std::numeric_limits<T>::min() && b == T{-1}) { return T{0}; }
@@ -179,21 +188,22 @@ __device__ result<T> ansi_mod(T a, T b)
 }
 
 template <unsigned_integer T>
-__device__ result<T> ansi_mod(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_mod(T a, T b)
 {
-  if (b == 0) { return errc::DIVISION_BY_ZERO; }
+  if (b == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
   return a % b;
 }
 
 template <floating_point T>
-__device__ inline result<T> ansi_mod(T a, T b)
+__device__ cuda::std::expected<T, errc> ansi_mod(T a, T b)
 {
-  if (b == 0) { return errc::DIVISION_BY_ZERO; }
+  if (b == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
   return a - b * cuda::std::floor(a / b);
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_mod(numeric::decimal<R> a, numeric::decimal<R> b)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_mod(numeric::decimal<R> a,
+                                                                   numeric::decimal<R> b)
 {
   auto r = ansi_div(a, b);
   if (r.has_error()) { return r.error(); }
@@ -208,28 +218,30 @@ __device__ result<numeric::decimal<R>> ansi_mod(numeric::decimal<R> a, numeric::
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <signed_integer T>
-__device__ result<T> ansi_abs(T a)
+__device__ cuda::std::expected<T, errc> ansi_abs(T a)
 {
-  if (a == cuda::std::numeric_limits<T>::min()) { return errc::OVERFLOW; }
+  if (a == cuda::std::numeric_limits<T>::min()) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return (a < 0) ? -a : a;
 }
 
 template <unsigned_integer T>
-__device__ result<T> ansi_abs(T a)
+__device__ cuda::std::expected<T, errc> ansi_abs(T a)
 {
   return a;
 }
 
 template <floating_point T>
-__device__ result<T> ansi_abs(T a)
+__device__ cuda::std::expected<T, errc> ansi_abs(T a)
 {
   return cuda::std::fabs(a);
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_abs(numeric::decimal<R> a)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_abs(numeric::decimal<R> a)
 {
-  if (a.value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
+  if (a.value() == cuda::std::numeric_limits<R>::min()) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
   auto rep = a.value() < 0 ? -a.value() : a.value();
   return numeric::decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a.scale()}}};
 }
@@ -242,22 +254,24 @@ __device__ result<numeric::decimal<R>> ansi_abs(numeric::decimal<R> a)
  * @return `errc::OVERFLOW` on overflow, else the result.
  */
 template <signed_integer T>
-__device__ result<T> ansi_neg(T a)
+__device__ cuda::std::expected<T, errc> ansi_neg(T a)
 {
-  if (a == cuda::std::numeric_limits<T>::min()) { return errc::OVERFLOW; }
+  if (a == cuda::std::numeric_limits<T>::min()) { return cuda::std::unexpected{errc::OVERFLOW}; }
   return -a;
 }
 
 template <floating_point T>
-__device__ result<T> ansi_neg(T a)
+__device__ cuda::std::expected<T, errc> ansi_neg(T a)
 {
   return -a;
 }
 
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_neg(numeric::decimal<R> a)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_neg(numeric::decimal<R> a)
 {
-  if (a.value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
+  if (a.value() == cuda::std::numeric_limits<R>::min()) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
   auto rep = -a.value();
   return numeric::decimal<R>{numeric::scaled_integer<R>{rep, numeric::scale_type{a.scale()}}};
 }
@@ -271,22 +285,25 @@ __device__ result<numeric::decimal<R>> ansi_neg(numeric::decimal<R> a)
  * @return `errc::OVERFLOW` when precision is invalid or exceeded, else the result.
  */
 template <typename R>
-__device__ result<numeric::decimal<R>> ansi_precision_check(numeric::decimal<R> a,
-                                                            int32_t precision)
+__device__ cuda::std::expected<numeric::decimal<R>, errc> ansi_precision_check(
+  numeric::decimal<R> a, int32_t precision)
 {
-  if (precision <= 0) { return errc::OVERFLOW; }
+  if (precision <= 0) { return cuda::std::unexpected{errc::OVERFLOW}; }
 
   auto value = a.value();
-  if (value == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
+  if (value == cuda::std::numeric_limits<R>::min()) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
 
   auto abs_value = value < 0 ? -value : value;
 
   if (abs_value >= numeric::detail::ipow<R, numeric::Radix::BASE_10>(precision)) {
-    return errc::OVERFLOW;
+    return cuda::std::unexpected{errc::OVERFLOW};
   }
 
   return a;
 }
 
 }  // namespace ops
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf
