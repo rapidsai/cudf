@@ -78,7 +78,7 @@ def _make_scheme(
         TableChunk.from_pylibcudf_table(
             boundary_df.table,
             stream,
-            exclusive_view=False,
+            exclusive_view=True,
             br=context.br(),
         ),
         strict_boundaries=strict,
