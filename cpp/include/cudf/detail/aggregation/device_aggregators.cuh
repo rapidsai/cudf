@@ -144,14 +144,14 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     auto sum_column      = target.child(0);
     auto overflow_column = target.child(1);
 
+    auto overflow_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
+      *(overflow_column.data<bool>() + target_index)};
+
+    if (overflow_ref.load(cuda::memory_order_relaxed)) { return; }
+
     auto const source_value = source.element<DeviceType>(source_index);
     auto const old_sum =
       cudf::detail::atomic_add(&sum_column.element<DeviceType>(target_index), source_value);
-
-    // Early exit if overflow is already set
-    auto bool_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
-      *(overflow_column.data<bool>() + target_index)};
-    if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
 
     if (cuda::add_overflow<DeviceType>(old_sum, source_value).overflow) {
       cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);
