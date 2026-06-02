@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,
+        DtypeObj,
         MultiColumnAggType,
         ScalarLike,
     )
@@ -2876,7 +2877,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self._align_quantile_dtypes(result, interpolation)
 
     @staticmethod
-    def _quantile_result_dtype(orig_dtype, exact):
+    def _quantile_result_dtype(
+        orig_dtype: DtypeObj | None, exact: bool
+    ) -> DtypeObj | None:
         """Return the dtype pandas produces for a quantile of ``orig_dtype``.
 
         libcudf's quantile aggregation always yields ``float64``. pandas,
@@ -2905,14 +2908,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             return None
         # numpy and pyarrow-backed columns do not preserve their dtype; the
         # result is always numpy-backed.
-        kind = getattr(orig_dtype, "kind", None)
-        if kind == "f":
+        if orig_dtype.kind == "f":
             return np.dtype(np.float64)
-        if kind in "iu":
+        if orig_dtype.kind in "iu":
             return np.dtype(np.int64) if exact else np.dtype(np.float64)
         return None
 
-    def _align_quantile_dtypes(self, result, interpolation):
+    def _align_quantile_dtypes(
+        self, result: DataFrameOrSeries, interpolation: str
+    ) -> DataFrameOrSeries:
         """Cast quantile result columns to the dtype pandas would produce."""
         exact = interpolation in {"lower", "higher", "nearest"}
         orig_dtypes = dict(self.grouping.values._dtypes)
