@@ -83,7 +83,7 @@ cache:
       - ${{ stdlib("c") }}
     host:
       - librmm =${{ minor_version }}
-      - librapidsmpf
+      - librapidsmpf =${{ minor_version }}
       - libkvikio =${{ minor_version }}
       - cuda-cudart-dev
       - cuda-nvrtc-dev
@@ -233,13 +233,13 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - librmm =${{ minor_version }}
-        - librapidsmpf
+        - librapidsmpf =${{ minor_version }}
         - cuda-version =${{ cuda_version }}
         - cuda-cudart-dev
       run:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - librmm =${{ minor_version }}
-        - librapidsmpf
+        - librapidsmpf =${{ minor_version }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
       ignore_run_exports:
         by_name:
