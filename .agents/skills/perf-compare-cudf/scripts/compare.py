@@ -127,7 +127,7 @@ def config_key(row: dict):
     axes = sorted(
         c for c in row if c not in NON_AXIS and not looks_like_metric(c)
     )
-    return (row[COL_BENCHMARK],) + tuple((axis, row[axis]) for axis in axes)
+    return (row[COL_BENCHMARK], *((axis, row[axis]) for axis in axes))
 
 
 def compare_suite(
@@ -247,7 +247,8 @@ def render_suite(suite: SuiteResult, threshold: float) -> str:
 
     for bench, rows in by_bench.items():
         axis_keys = sorted({axis for r in rows for axis in r.axes})
-        headers = axis_keys + [
+        headers = [
+            *axis_keys,
             "main (ms)",
             "PR (ms)",
             "Δ",

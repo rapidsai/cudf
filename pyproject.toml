@@ -162,3 +162,4 @@ extend-unsafe-fixes = [
 "ci/*" = ["T201"]
 "docs/*" = ["T201"]
 "cpp/*" = ["T201"]
+".agents/*" = ["T201"]
