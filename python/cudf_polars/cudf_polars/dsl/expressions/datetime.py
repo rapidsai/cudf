@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pylibcudf as plc
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.dsl.expressions.literal import Literal
 
 __all__ = ["TemporalFunction"]
 
@@ -138,11 +139,17 @@ class TemporalFunction(Expr):
         self.is_pointwise = True
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
-
         if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
             self.children[0].dtype.plc_type
         ):
             raise NotImplementedError("ToString is not supported on duration types")
+        elif self.name is TemporalFunction.Name.Truncate:
+            every = cast("Literal", self.children[1]).value
+            match = re.fullmatch(r"(\d+)(ns|us|ms|s|m|h|d)", every)
+            if match is None or int(match.group(1)) != 1:
+                # https://github.com/rapidsai/cudf/issues/18654 to support non-1 buckets
+                raise NotImplementedError(f"Unsupported truncate bucket: {every!r}")
+            self.options = (self._TRUNCATE_FREQ_MAP[match.group(2)],)
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -150,27 +157,22 @@ class TemporalFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name is TemporalFunction.Name.Truncate:
-            (column, bucket) = columns
-            every = bucket.obj.to_scalar(stream=df.stream).to_py(stream=df.stream)
-            assert isinstance(every, str)
-            match = re.fullmatch(r"(\d+)(ns|us|ms|s|m|h|d)", every)
-            if match is None or int(match.group(1)) != 1:
-                raise NotImplementedError(f"Unsupported truncate bucket: {every!r}")
+            (column, _) = columns
             return Column(
                 plc.datetime.floor_datetimes(
                     column.obj,
-                    self._TRUNCATE_FREQ_MAP[match.group(2)],
+                    self.options[0],
                     stream=df.stream,
                 ),
                 dtype=self.dtype,
             )
-        if self.name is TemporalFunction.Name.CastTimeUnit:
+        elif self.name is TemporalFunction.Name.CastTimeUnit:
             (column,) = columns
             return Column(
                 plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
                 dtype=self.dtype,
             )
-        if self.name == TemporalFunction.Name.ToString:
+        elif self.name == TemporalFunction.Name.ToString:
             (column,) = columns
             (format_string,) = self.options
             if format_string == "":
@@ -195,7 +197,7 @@ class TemporalFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
-        if self.name is TemporalFunction.Name.Week:
+        elif self.name is TemporalFunction.Name.Week:
             (column,) = columns
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -210,7 +212,7 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(result, dtype=self.dtype)
-        if self.name is TemporalFunction.Name.IsoYear:
+        elif self.name is TemporalFunction.Name.IsoYear:
             (column,) = columns
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -225,7 +227,7 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(result, dtype=self.dtype)
-        if self.name is TemporalFunction.Name.MonthStart:
+        elif self.name is TemporalFunction.Name.MonthStart:
             (column,) = columns
             ends = plc.datetime.last_day_of_month(column.obj, stream=df.stream)
             days_to_subtract = plc.datetime.days_in_month(column.obj, stream=df.stream)
@@ -246,7 +248,7 @@ class TemporalFunction(Expr):
             )
 
             return Column(result, dtype=self.dtype)
-        if self.name is TemporalFunction.Name.MonthEnd:
+        elif self.name is TemporalFunction.Name.MonthEnd:
             (column,) = columns
             return Column(
                 plc.unary.cast(
@@ -256,18 +258,18 @@ class TemporalFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
-        if self.name is TemporalFunction.Name.IsLeapYear:
+        elif self.name is TemporalFunction.Name.IsLeapYear:
             (column,) = columns
             return Column(
                 plc.datetime.is_leap_year(column.obj, stream=df.stream),
                 dtype=self.dtype,
             )
-        if self.name is TemporalFunction.Name.OrdinalDay:
+        elif self.name is TemporalFunction.Name.OrdinalDay:
             (column,) = columns
             return Column(
                 plc.datetime.day_of_year(column.obj, stream=df.stream), dtype=self.dtype
             )
-        if self.name is TemporalFunction.Name.Microsecond:
+        elif self.name is TemporalFunction.Name.Microsecond:
             (column,) = columns
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND, stream=df.stream
@@ -336,12 +338,13 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(total_nanos, dtype=self.dtype)
-        (column,) = columns
-        return Column(
-            plc.datetime.extract_datetime_component(
-                column.obj,
-                self._COMPONENT_MAP[self.name],
-                stream=df.stream,
-            ),
-            dtype=self.dtype,
-        )
+        else:
+            (column,) = columns
+            return Column(
+                plc.datetime.extract_datetime_component(
+                    column.obj,
+                    self._COMPONENT_MAP[self.name],
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )

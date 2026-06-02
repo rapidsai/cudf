@@ -14,7 +14,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
 @pytest.mark.parametrize(
@@ -421,12 +420,7 @@ def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
     )
 
     q = ldf.select(pl.col("datetimes").dt.truncate(every))
-    if is_streaming_engine(engine):
-        raises_ctx = pytest.RaisesGroup(NotImplementedError)
-    else:
-        raises_ctx = pytest.raises(NotImplementedError)  # type: ignore[assignment]
-    with raises_ctx:
-        q.collect(engine=engine)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
