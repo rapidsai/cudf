@@ -72,23 +72,34 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
   sanitize_schema();
 }
 
-aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet_metadata,
-                                                     bool use_arrow_schema,
-                                                     bool has_cols_from_mismatched_srcs)
+aggregate_reader_metadata::aggregate_reader_metadata(
+  cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
+  bool use_arrow_schema,
+  bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
-  // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata.emplace_back(metadata{parquet_metadata});
+  CUDF_EXPECTS(not footer_bytes.empty(), "At least one source must be provided");
+  per_file_metadata.reserve(footer_bytes.size());
+  std::transform(footer_bytes.begin(),
+                 footer_bytes.end(),
+                 std::back_inserter(per_file_metadata),
+                 [](auto const& fb) { return metadata{fb}; });
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
-aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
-                                                     bool use_arrow_schema,
-                                                     bool has_cols_from_mismatched_srcs)
+aggregate_reader_metadata::aggregate_reader_metadata(
+  cudf::host_span<FileMetaData const> parquet_metadatas,
+  bool use_arrow_schema,
+  bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
-  // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata.emplace_back(metadata{footer_bytes});
+  CUDF_EXPECTS(not parquet_metadatas.empty(), "At least one source must be provided");
+  per_file_metadata.reserve(parquet_metadatas.size());
+  // Just copy over the FileMetaData structs to the internal metadata structs
+  std::transform(parquet_metadatas.begin(),
+                 parquet_metadatas.end(),
+                 std::back_inserter(per_file_metadata),
+                 [](auto const& parquet_metadata) { return metadata{parquet_metadata}; });
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -102,13 +113,15 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
 
   // Force all non-nullable (REQUIRED) columns to be nullable without modifying REPEATED columns to
   // preserve list structures
-  auto& schema = per_file_metadata.front().schema;
-  std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
-    // TODO: Store information of whichever column schema we modified here and restore it to
-    // `REQUIRED` if we end up not pruning any pages out of it
-    if (col.repetition_type == FieldRepetitionType::REQUIRED) {
-      col.repetition_type = FieldRepetitionType::OPTIONAL;
-    }
+  std::for_each(per_file_metadata.begin(), per_file_metadata.end(), [](auto& pfm) {
+    auto& schema = pfm.schema;
+    std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
+      // TODO: Store information of whichever column schema we modified here and restore it to
+      // `REQUIRED` if we end up not pruning any pages out of it
+      if (col.repetition_type == FieldRepetitionType::REQUIRED) {
+        col.repetition_type = FieldRepetitionType::OPTIONAL;
+      }
+    });
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -122,53 +135,87 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
   }
 }
 
-text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
+std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ranges() const
 {
-  auto& schema     = per_file_metadata.front();
-  auto& row_groups = schema.row_groups;
+  std::vector<text::byte_range_info> page_index_byte_ranges;
+  std::transform(per_file_metadata.begin(),
+                 per_file_metadata.end(),
+                 std::back_inserter(page_index_byte_ranges),
+                 [](auto const& file_metadata) -> text::byte_range_info {
+                   auto const& row_groups = file_metadata.row_groups;
+                   if (row_groups.empty() or row_groups.front().columns.empty()) { return {}; }
 
-  if (row_groups.size() and row_groups.front().columns.size()) {
-    auto const min_offset = schema.row_groups.front().columns.front().column_index_offset;
-    auto const& last_col  = schema.row_groups.back().columns.back();
-    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
-    return {min_offset, (max_offset - min_offset)};
-  }
+                   auto const min_offset = row_groups.front().columns.front().column_index_offset;
+                   auto const& last_col  = row_groups.back().columns.back();
+                   auto const max_offset =
+                     last_col.offset_index_offset + last_col.offset_index_length;
 
-  return {};
+                   if (max_offset <= min_offset) { return {}; }
+                   return {min_offset, max_offset - min_offset};
+                 });
+
+  return page_index_byte_ranges;
 }
 
-FileMetaData aggregate_reader_metadata::parquet_metadata() const
+std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadatas() const
 {
-  return per_file_metadata.front();
+  return {per_file_metadata.begin(), per_file_metadata.end()};
 }
 
-void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
+void aggregate_reader_metadata::setup_page_indexes(
+  cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes)
 {
-  // Return early if empty page index buffer span
-  if (page_index_bytes.empty()) {
-    CUDF_LOG_WARN("Hybrid scan reader encountered empty page index buffer");
-    return;
+  CUDF_EXPECTS(page_index_bytes.size() == per_file_metadata.size(),
+               "Page index byte span count must equal the number of sources");
+
+  auto iter = cuda::zip_iterator(page_index_bytes.begin(), per_file_metadata.begin());
+  std::for_each(iter, iter + page_index_bytes.size(), [&](auto const& pair) {
+    // Get the page index bytes and file metadata
+    auto const& [pgidx_bytes, file_metadata] = pair;
+    auto const& row_groups                   = file_metadata.row_groups;
+
+    // Return early if empty page index buffer span
+    if (pgidx_bytes.empty()) { return; }
+
+    // Check for empty parquet file
+    CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
+                 "No column chunks in Parquet schema to read page index for");
+
+    // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
+    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+
+    // Check if the page index buffer is valid
+    {
+      auto const& last_col  = row_groups.back().columns.back();
+      auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+      CUDF_EXPECTS(max_offset > min_offset, "Encountered an invalid page index buffer");
+    }
+
+    file_metadata.setup_page_index(pgidx_bytes, min_offset);
+  });
+}
+
+std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
+  parquet_reader_options const& options) const
+{
+  auto const& opts_row_groups = options.get_row_groups();
+  if (not opts_row_groups.empty()) {
+    CUDF_EXPECTS(opts_row_groups.size() == per_file_metadata.size(),
+                 "Row groups in parquet reader options must specify one vector per data source");
+    return opts_row_groups;
   }
 
-  // Get the file metadata and setup the page index
-  auto& file_metadata    = per_file_metadata.front();
-  auto const& row_groups = file_metadata.row_groups;
-
-  // Check for empty parquet file
-  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
-               "No column chunks in Parquet schema to read page index for");
-
-  // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-  int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-
-  // Check if the page index buffer is valid
-  {
-    auto const& last_col  = row_groups.back().columns.back();
-    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
-    CUDF_EXPECTS(max_offset > min_offset, "Encountered an invalid page index buffer");
-  }
-
-  file_metadata.setup_page_index(page_index_bytes, min_offset);
+  std::vector<std::vector<size_type>> row_groups;
+  row_groups.reserve(per_file_metadata.size());
+  std::transform(per_file_metadata.begin(),
+                 per_file_metadata.end(),
+                 std::back_inserter(row_groups),
+                 [](auto const& pfm) {
+                   std::vector<size_type> indices(pfm.row_groups.size());
+                   std::iota(indices.begin(), indices.end(), size_type{0});
+                   return indices;
+                 });
+  return row_groups;
 }
 
 std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
@@ -189,12 +236,13 @@ std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
         row_group_indices[src_idx].end(),
         sum,
         [&](auto sum, auto const row_group_idx) {
-          CUDF_EXPECTS(
-            std::cmp_greater_equal(row_group_idx, size_type{0}) and
-              std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
-            "Encountered out-of-bounds row group index for data source. Row group index: " +
-              std::to_string(row_group_idx) + ", Source index: " + std::to_string(src_idx) +
-              ", Number of row groups: " + std::to_string(file_metadata.row_groups.size()));
+          CUDF_EXPECTS(std::cmp_greater_equal(row_group_idx, 0) and
+                         std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
+                       std::format("Encountered out-of-bounds row group index for data source. Row "
+                                   "group index: {}, Source index: {}, Number of row groups: {}",
+                                   row_group_idx,
+                                   src_idx,
+                                   file_metadata.row_groups.size()));
           return sum + file_metadata.row_groups[row_group_idx].num_rows;
         });
     });
@@ -239,8 +287,8 @@ aggregate_reader_metadata::select_payload_columns(
     return filter_columns_set;
   };
 
-  // If payload columns are specified, only select payload columns that do not appear in the filter
-  // expression
+  // If payload columns are specified, only select payload columns that do not appear in the
+  // filter expression
   if (payload_column_names.has_value()) {
     valid_payload_columns = *payload_column_names;
     // Remove filter columns from the provided payload column names
@@ -642,12 +690,12 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 {
   // Map the column index to its name
   auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
-  CUDF_EXPECTS(
-    col_name_iter != _column_indices_to_names.end(),
-    "Column index in the filter expression not found in the column indices to names map. Note that "
-    "only top-level columns except structs and lists are supported in "
-    "Parquet filter expression",
-    std::invalid_argument);
+  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
+               "Column index in the filter expression not found in the column indices to names "
+               "map. Note that "
+               "only top-level columns except structs and lists are supported in "
+               "Parquet filter expression",
+               std::invalid_argument);
   auto const col_name = col_name_iter->second;
   auto col_index_it   = _column_name_to_index.find(col_name);
   CUDF_EXPECTS(col_index_it != _column_name_to_index.end(),
