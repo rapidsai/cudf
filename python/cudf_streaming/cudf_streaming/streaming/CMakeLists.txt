@@ -4,11 +4,14 @@
 # cmake-format: on
 
 set(cython_sources bloom_filter.pyx channel_metadata.pyx parquet.pyx partition.pyx table_chunk.pyx)
-set(linked_libraries cudf_streaming::cudf_streaming rapidsmpf::rapidsmpf)
+set(linked_libraries cudf_streaming::cudf_streaming)
 
 rapids_cython_create_modules(
   CXX ASSOCIATED_TARGETS cudf_streaming
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}"
-  MODULE_PREFIX cudf_streaming_streaming_
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX cudf_streaming_streaming_
 )
+
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  set_target_properties(${target} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+endforeach()

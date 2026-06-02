@@ -21,9 +21,6 @@ project(
   LANGUAGES CXX CUDA
 )
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
@@ -34,7 +31,6 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
 
 find_package(cudf_streaming "${RAPIDS_VERSION}" REQUIRED)
-find_package(rapidsmpf REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 include(rapids-cython-core)

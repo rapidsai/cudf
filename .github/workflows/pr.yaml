@@ -27,6 +27,7 @@ jobs:
       - docs-build
       - wheel-build-libcudf
       - wheel-build-libcudf-streaming
+      - wheel-build-cudf-streaming
       - wheel-build-pylibcudf
       - wheel-build-cudf
       - wheel-tests-cudf
@@ -542,6 +543,24 @@ jobs:
       script: "ci/build_wheel_libcudf_streaming.sh"
       package-name: libcudf_streaming
       package-type: cpp
+  wheel-build-cudf-streaming:
+    needs: [checks, wheel-build-libcudf-streaming, wheel-build-pylibcudf]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build a wheel for each CUDA x ARCH x minimum supported Python version
+      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
+      build_type: pull-request
+      node_type: cpu16
+      script: "ci/build_wheel_cudf_streaming.sh"
+      package-name: cudf_streaming
+      package-type: python
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
     permissions:
