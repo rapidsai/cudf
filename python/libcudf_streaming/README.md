@@ -1,0 +1,21 @@
+# libcudf_streaming
+
+libcudf_streaming is the C++ shared library wheel for cuDF Streaming, providing GPU-accelerated streaming data processing capabilities built on top of libcudf and librapidsmpf.
+
+This package provides `libcudf_streaming.so` and a Python `load_library()` helper to ensure the shared library and its dependencies are properly loaded at runtime.
+
+## Installation
+
+```bash
+pip install libcudf_streaming-cu12  # For CUDA 12
+pip install libcudf_streaming-cu13  # For CUDA 13
+```
+
+## Usage
+
+```python
+import libcudf_streaming
+
+# Load the shared library and all dependencies
+libcudf_streaming.load_library()
+```

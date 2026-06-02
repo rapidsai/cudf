@@ -138,11 +138,13 @@ fi
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
+echo "${NEXT_FULL_TAG}" > python/libcudf_streaming/libcudf_streaming/VERSION
 echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 
 DEPENDENCIES=(
   cudf
   cudf_kafka
+  libcudf_streaming
   cudf-polars
   cugraph
   cuml
