@@ -331,7 +331,10 @@ rapidsmpf::streaming::Actor read_parquet(std::shared_ptr<rapidsmpf::streaming::C
   std::size_t files_per_chunk = 1;
   if (num_files > 1) {
     auto nrows = cudf::io::read_parquet_metadata(cudf::io::source_info(local_files[0])).num_rows();
-    files_per_chunk = rapidsmpf::safe_cast<std::size_t>(std::max(num_rows_per_chunk / nrows, 1l));
+    files_per_chunk =
+      nrows > 0
+        ? rapidsmpf::safe_cast<std::size_t>(std::max<std::int64_t>(num_rows_per_chunk / nrows, 1))
+        : 1;
   }
   auto to_skip = options.get_skip_rows();
   auto to_read = options.get_num_rows().value_or(std::numeric_limits<std::int64_t>::max());

@@ -111,9 +111,10 @@ std::string str(cudf::column_view col,
   std::stringstream ss;
   ss << "Column([";
   for (cudf::size_type i = 0; i < col.size(); ++i) {
-    ss << str(col, i, stream, mr) << ", ";
+    if (i != 0) { ss << ", "; }
+    ss << str(col, i, stream, mr);
   }
-  ss << (col.size() == 0 ? "])" : "\b\b])");
+  ss << "])";
   return ss.str();
 }
 
@@ -123,10 +124,13 @@ std::string str(cudf::table_view tbl,
 {
   std::stringstream ss;
   ss << "Table([";
+  bool first = true;
   for (auto col : tbl) {
-    ss << str(col, stream, mr) << ", ";
+    if (!first) { ss << ", "; }
+    first = false;
+    ss << str(col, stream, mr);
   }
-  ss << (tbl.num_columns() == 0 ? "])" : "\b\b])");
+  ss << "])";
   return ss.str();
 }
 

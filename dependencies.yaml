@@ -496,6 +496,7 @@ files:
     includes:
       - depends_on_libcudf
       - depends_on_librmm
+      - depends_on_librapidsmpf
   test_python_narwhals:
     output: none
     includes:

@@ -42,11 +42,14 @@ TableChunk::TableChunk(cudf::table_view table_view,
 }
 
 TableChunk::TableChunk(std::unique_ptr<rapidsmpf::PackedData> packed_data)
-  : packed_data_{std::move(packed_data)}, stream_{packed_data_->data->stream()}, is_spillable_{true}
+  : packed_data_{std::move(packed_data)}, is_spillable_{true}
 {
   RAPIDSMPF_EXPECTS(
     packed_data_ != nullptr, "packed data pointer cannot be null", std::invalid_argument);
   RAPIDSMPF_EXPECTS(!packed_data_->empty(), "packed data cannot be empty", std::invalid_argument);
+  // Initialize stream_ here rather than in the member-initializer list to avoid
+  // dereferencing packed_data_ before the null check above.
+  stream_ = packed_data_->data->stream();
   data_alloc_size_[static_cast<std::size_t>(packed_data_->data->mem_type())] =
     packed_data_->data->size;
   if (packed_data_->data->mem_type() != rapidsmpf::MemoryType::DEVICE) {

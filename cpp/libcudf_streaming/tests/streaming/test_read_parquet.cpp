@@ -101,7 +101,7 @@ class StreamingReadParquet : public BaseStreamingFixture {
   {
     if (truncate_file_list) {
       std::vector<std::string> files(source_files.begin(), source_files.begin() + 2);
-      return cudf::io::source_info(source_files);
+      return cudf::io::source_info(files);
     } else {
       return cudf::io::source_info(source_files);
     }
