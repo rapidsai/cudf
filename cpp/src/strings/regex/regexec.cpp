@@ -78,9 +78,12 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   off += sizeof(glushkov_program_device);
 
   // _positions: 4-byte aligned (int32_t / char32_t fields)
-  off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
+  // off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
+  // std::size_t const pos_off = off;
+  // off += num_states * sizeof(glushkov_position);
+  off                       = cudf::util::round_up_unsafe(off, alignof(reinst));
   std::size_t const pos_off = off;
-  off += num_states * sizeof(glushkov_position);
+  off += num_states * sizeof(reinst);
 
   // _shift_masks: 8-byte aligned
   off                          = cudf::util::round_up_unsafe(off, alignof(g_state_t));
@@ -129,16 +132,22 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   h_gp_dev->accept_mask    = h_gp.accept_mask;
   h_gp_dev->exception_mask = h_gp.exception_mask;
   // h_gp_dev->nullable         = h_gp.nullable;
-  h_gp_dev->has_startchar    = h_gp.has_startchar;
+  // h_gp_dev->has_startchar    = h_gp.has_startchar;
   h_gp_dev->startchar        = h_gp.startchar;
   h_gp_dev->_codepoint_flags = d_codepoint_flags;
   h_gp_dev->_prog_size       = total;
 
   // ---- _positions ---------------------------------------------------------
-  h_gp_dev->_positions = reinterpret_cast<glushkov_position const*>(d_base + pos_off);
-  auto* pos_arr        = reinterpret_cast<glushkov_position*>(h_base + pos_off);
-  for (uint32_t i = 0; i < num_states; ++i) {
-    pos_arr[i] = {h_gp.pos_inst_type[i], h_gp.pos_ch[i], h_gp.pos_cls_idx[i]};
+  // h_gp_dev->_positions = reinterpret_cast<glushkov_position const*>(d_base + pos_off);
+  // auto* pos_arr        = reinterpret_cast<glushkov_position*>(h_base + pos_off);
+  h_gp_dev->_positions = reinterpret_cast<reinst const*>(d_base + pos_off);
+  auto* pos_arr        = reinterpret_cast<reinst*>(h_base + pos_off);
+  for (uint32_t i = 0; i < num_states; ++i) {  // memcpy could replace this now
+    // auto t     = h_gp.pos_inst_type[i];
+    // pos_arr[i] = t == CCLASS || t == NCCLASS
+    //                ? reinst{.type = t, .u1 = {.cls_id = h_gp.pos_cls_idx[i]}}
+    //                : reinst{.type = t, .u1 = {.c = h_gp.pos_ch[i]}};
+    pos_arr[i] = h_gp.pos_insts[i];
   }
 
   // ---- _shift_masks --------------------------------------------------------

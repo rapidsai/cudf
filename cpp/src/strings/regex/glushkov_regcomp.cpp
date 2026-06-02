@@ -210,14 +210,14 @@ void ordered_eps_frontier(int32_t const inst_id,
  */
 bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, uint8_t const c)
 {
-  switch (gp.pos_inst_type[p]) {
-    case CHAR: return gp.pos_ch[p] == static_cast<char32_t>(c);
-    case ANY: return (gp.pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
+  switch (gp.pos_insts[p].type) {
+    case CHAR: return gp.pos_insts[p].u1.c == static_cast<char32_t>(c);
+    case ANY: return (gp.pos_insts[p].u1.c == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
     case ANYNL: return true;
     case CCLASS:
     case NCCLASS: {
-      bool const m = host_reclass_match_ascii(gp.classes[gp.pos_cls_idx[p]], c);
-      return (gp.pos_inst_type[p] == CCLASS) ? m : !m;
+      bool const m = host_reclass_match_ascii(gp.classes[gp.pos_insts[p].u1.cls_id], c);
+      return (gp.pos_insts[p].type == CCLASS) ? m : !m;
     }
     default: return false;
   }
@@ -239,12 +239,16 @@ bool positions_chars_overlap(glushkov_host_program const& gp, uint32_t const p, 
     }
   }
   // Non-ASCII: conservative overlap if both positions are non-CHAR types
-  bool const p_nonascii = (gp.pos_inst_type[p] != CHAR) || (gp.pos_ch[p] >= 128);
-  bool const q_nonascii = (gp.pos_inst_type[q] != CHAR) || (gp.pos_ch[q] >= 128);
+  bool const p_nonascii = (gp.pos_insts[p].type != CHAR) || (gp.pos_insts[p].u1.c >= 128);
+  bool const q_nonascii = (gp.pos_insts[q].type != CHAR) || (gp.pos_insts[q].u1.c >= 128);
   if (p_nonascii && q_nonascii) { return true; }
   // One side is a non-ASCII CHAR literal; if the other is a wildcard it might match
-  if (gp.pos_inst_type[p] == CHAR && gp.pos_ch[p] >= 128) { return (gp.pos_inst_type[q] != CHAR); }
-  if (gp.pos_inst_type[q] == CHAR && gp.pos_ch[q] >= 128) { return (gp.pos_inst_type[p] != CHAR); }
+  if (gp.pos_insts[p].type == CHAR && gp.pos_insts[p].u1.c >= 128) {
+    return (gp.pos_insts[q].type != CHAR);
+  }
+  if (gp.pos_insts[q].type == CHAR && gp.pos_insts[q].u1.c >= 128) {
+    return (gp.pos_insts[p].type != CHAR);
+  }
   return false;
 }
 
@@ -407,19 +411,20 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
 
   // ---- Step 3: Per-position character-matching descriptors ----------------
   for (uint32_t idx = 0; idx < gp->num_states; ++idx) {
-    int32_t const inst_id  = char_insts[idx];
-    auto const& inst       = prog.insts_data()[inst_id];
-    gp->pos_inst_type[idx] = inst.type;
-    if (inst.type == CHAR) {
-      gp->pos_ch[idx] = inst.u1.c;
-    } else if (inst.type == ANY) {
-      // Store the newline-mode flag from the Thompson instruction:
-      //   'N' = EXT_NEWLINE (reject all is_newline chars)
-      //   anything else = default (reject only '\n')
-      gp->pos_ch[idx] = inst.u1.c;
-    } else if (inst.type == CCLASS || inst.type == NCCLASS) {
-      gp->pos_cls_idx[idx] = inst.u1.cls_id;
-    }
+    int32_t const inst_id = char_insts[idx];
+    auto const& inst      = prog.insts_data()[inst_id];
+    gp->pos_insts[idx]    = inst;
+    // gp->pos_inst_type[idx] = inst.type;
+    // if (inst.type == CHAR) {
+    //   gp->pos_ch[idx] = inst.u1.c;
+    // } else if (inst.type == ANY) {
+    //   // Store the newline-mode flag from the Thompson instruction:
+    //   //   'N' = EXT_NEWLINE (reject all is_newline chars)
+    //   //   anything else = default (reject only '\n')
+    //   gp->pos_ch[idx] = inst.u1.c;
+    // } else if (inst.type == CCLASS || inst.type == NCCLASS) {
+    //   gp->pos_cls_idx[idx] = inst.u1.cls_id;
+    // }
   }
 
   // Copy character class definitions (referenced by CCLASS/NCCLASS positions)
@@ -501,20 +506,20 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   for (int32_t c = 0; c < GLUSHKOV_ASCII_TABLE_SIZE; ++c) {
     for (uint32_t p = 0; p < gp->num_states; ++p) {
       bool matches = false;
-      switch (gp->pos_inst_type[p]) {
-        case CHAR: matches = (gp->pos_ch[p] == static_cast<char32_t>(c)); break;
+      switch (gp->pos_insts[p].type) {
+        case CHAR: matches = (gp->pos_insts[p].u1.c == static_cast<char32_t>(c)); break;
         case ANY: {
           // 'N' = EXT_NEWLINE: reject all ASCII newlines (\n, \r)
           // default: reject only \n (matches Thompson NFA behaviour)
-          matches = (gp->pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
+          matches = (gp->pos_insts[p].u1.c == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
           break;
         }
         case ANYNL: matches = true; break;
         case CCLASS:
         case NCCLASS: {
-          bool const m =
-            host_reclass_match_ascii(gp->classes[gp->pos_cls_idx[p]], static_cast<uint8_t>(c));
-          matches = (gp->pos_inst_type[p] == CCLASS) ? m : !m;
+          bool const m = host_reclass_match_ascii(gp->classes[gp->pos_insts[p].u1.cls_id],
+                                                  static_cast<uint8_t>(c));
+          matches      = (gp->pos_insts[p].type == CCLASS) ? m : !m;
           break;
         }
         default: break;
@@ -536,21 +541,21 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
       uint32_t const p =
         static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(fs)));
       fs &= fs - 1;
-      if (gp->pos_inst_type[p] != CHAR) {
+      if (gp->pos_insts[p].type != CHAR) {
         all_char = false;
         break;
       }
       if (!seen_first) {
-        common     = gp->pos_ch[p];
+        common     = gp->pos_insts[p].u1.c;
         seen_first = true;
-      } else if (gp->pos_ch[p] != common) {
+      } else if (gp->pos_insts[p].u1.c != common) {
         all_char = false;
         break;
       }
     }
     if (all_char) {
-      gp->has_startchar = true;
-      gp->startchar     = common;
+      // gp->has_startchar = true;
+      gp->startchar = common;
     }
   }
 

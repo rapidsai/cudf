@@ -5,11 +5,7 @@
 #pragma once
 
 /**
- * @file glushkov.cuh
  * @brief Device-side Glushkov NFA program data structure.
- *
- * This header is included INSIDE the cudf::strings::detail namespace block
- * in regex.cuh, so it assumes that reclass_device is already defined.
  *
  * The device program is a compact representation of the Glushkov NFA:
  *  - State is a 64-bit bitmask (one bit per position, no working memory needed).
@@ -18,6 +14,8 @@
  */
 
 #include "reclass.hpp"
+
+#include <cuda/std/optional>
 
 #include <cstddef>
 #include <cstdint>
@@ -30,11 +28,11 @@ namespace cudf::strings::detail {
 
 /// Stores enough data to check whether a GPU thread's current character
 /// matches a given Glushkov position.
-struct glushkov_position {
-  int32_t inst_type;  ///< CHAR / ANY / ANYNL / CCLASS / NCCLASS
-  char32_t ch{};      ///< Literal character (CHAR only)
-  int32_t cls_idx{};  ///< Class index into _classes array (CCLASS/NCCLASS only)
-};
+// struct glushkov_position {
+//   int32_t inst_type;  ///< CHAR / ANY / ANYNL / CCLASS / NCCLASS
+//   char32_t ch{};      ///< Literal character (CHAR only)
+//   int32_t cls_idx{};  ///< Class index into _classes array (CCLASS/NCCLASS only)
+// };
 
 // ---------------------------------------------------------------------------
 // Device program
@@ -62,15 +60,17 @@ struct glushkov_program_device {
   // bool nullable{};  ///< Always false when reached (nullable patterns fall back to Thompson)
   /// When true every first_set position is CHAR(startchar): enables a tight
   /// first-character byte-scan skip (mirrors Thompson NFA's find_char).
-  bool has_startchar{};
-  char32_t startchar{};  ///< The common literal (valid only when has_startchar)
+  // bool has_startchar{};
+  cuda::std::optional<char32_t>
+    startchar{};  ///< The common literal (valid only when has_startchar)
 
   // ---- device-memory array pointers (set during device program creation) ---
-  uint8_t const* _codepoint_flags{};      ///< Character-type lookup table (shared with Thompson)
-  reclass_device const* _classes{};       ///< Character class data
-  glushkov_position const* _positions{};  ///< [num_states] per-position descriptors
-  g_state_t const* _shift_masks{};        ///< [shift_count] shift-and source masks
-  uint8_t const* _shift_amounts{};        ///< [shift_count] shift amounts
+  uint8_t const* _codepoint_flags{};  ///< Character-type lookup table (shared with Thompson)
+  reclass_device const* _classes{};   ///< Character class data
+  // glushkov_position const* _positions{};         ///< [num_states] per-position descriptors
+  reinst const* _positions{};       ///< [num_states] per-position descriptors
+  g_state_t const* _shift_masks{};  ///< [shift_count] shift-and source masks
+  uint8_t const* _shift_amounts{};  ///< [shift_count] shift amounts
   g_state_t const*
     _reach_ascii{};  ///< [GLUSHKOV_ASCII_TABLE_SIZE] precomputed reach bitmasks for ASCII chars
   g_state_t const* _exception_succs{};  ///< [num_states] exception successor masks

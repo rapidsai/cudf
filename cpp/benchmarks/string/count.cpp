@@ -30,7 +30,6 @@ static void bench_count(nvbench::state& state)
   auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const min_width     = static_cast<cudf::size_type>(state.get_int64("min_width"));
   auto const max_width     = static_cast<cudf::size_type>(state.get_int64("max_width"));
-  auto const engine        = state.get_string("engine");
   auto const pattern_index = state.get_int64("pattern");
 
   if (pattern_index < 0 || std::cmp_greater_equal(pattern_index, patterns.size())) {
@@ -45,8 +44,7 @@ static void bench_count(nvbench::state& state)
   cudf::strings_column_view input(table->view().column(0));
 
   auto const pattern = patterns[pattern_index];
-  auto const flags   = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
-                                              : cudf::strings::regex_flags::DEFAULT;
+  auto flags         = cudf::strings::regex_flags::GLUSHKOV;  // DEFAULT
   auto prog          = cudf::strings::regex_program::create(pattern, flags);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
@@ -67,5 +65,5 @@ NVBENCH_BENCH(bench_count)
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
-  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6})
-  .add_string_axis("engine", {"thompson", "glushkov"});
+  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6});
+//.add_string_axis("engine", {"thompson", "glushkov"});

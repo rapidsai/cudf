@@ -40,14 +40,14 @@ static void bench_contains(nvbench::state& state)
   auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
   auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
-  auto const engine        = state.get_string("engine");
   auto const pattern_index = state.get_int64("pattern");
+  // auto const engine        = state.get_string("engine");
 
   // Patterns 0-1 contain anchors (^ $) which Glushkov doesn't support
-  if (engine == "glushkov" && pattern_index <= 1) {
-    state.skip("anchor pattern — Glushkov falls back to Thompson");
-    return;
-  }
+  // if (engine == "glushkov" && pattern_index <= 1) {
+  //  state.skip("anchor pattern — Glushkov falls back to Thompson");
+  //  return;
+  //}
   if (pattern_index < 0 || std::cmp_greater_equal(pattern_index, patterns.size())) {
     state.skip("invalid pattern index");
     return;
@@ -56,8 +56,7 @@ static void bench_contains(nvbench::state& state)
   auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
-  auto flags   = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
-                                        : cudf::strings::regex_flags::DEFAULT;
+  auto flags   = cudf::strings::regex_flags::GLUSHKOV;  // DEFAULT
   auto program = cudf::strings::regex_program::create(patterns[pattern_index], flags);
 
   state.add_global_memory_reads<nvbench::int8_t>(col->alloc_size());
@@ -74,6 +73,6 @@ NVBENCH_BENCH(bench_contains)
   .set_name("contains")
   .add_int64_axis("row_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
-  .add_int64_axis("hit_rate", {50, 100})  // percentage
-  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-  .add_string_axis("engine", {"thompson", "glushkov"});
+  .add_int64_axis("hit_rate", {50, 100})                     // percentage
+  .add_int64_axis("pattern", {2, 3, 4, 5, 6, 7, 8, 9, 10});  // 0,1 skipped
+//.add_string_axis("engine", {"thompson", "glushkov"});

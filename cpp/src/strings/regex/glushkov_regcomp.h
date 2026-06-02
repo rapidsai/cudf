@@ -26,6 +26,8 @@
 #include "reclass.hpp"
 #include "regcomp.h"
 
+#include <cuda/std/optional>
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -55,9 +57,10 @@ struct glushkov_host_program {
   // ---- Per-position character-matching descriptors ----
   // Using struct-of-arrays to avoid a separate shared struct that would need
   // to be visible in the CUDA device header.
-  std::array<int32_t, GLUSHKOV_MAX_STATES> pos_inst_type{};  ///< CHAR/ANY/ANYNL/CCLASS/NCCLASS
-  std::array<char32_t, GLUSHKOV_MAX_STATES> pos_ch{};        ///< Literal char (CHAR only)
-  std::array<int32_t, GLUSHKOV_MAX_STATES> pos_cls_idx{};    ///< Class index (CCLASS/NCCLASS)
+  // std::array<int32_t, GLUSHKOV_MAX_STATES> pos_inst_type{};  ///< CHAR/ANY/ANYNL/CCLASS/NCCLASS
+  // std::array<char32_t, GLUSHKOV_MAX_STATES> pos_ch{};        ///< Literal char (CHAR only)
+  // std::array<int32_t, GLUSHKOV_MAX_STATES> pos_cls_idx{};    ///< Class index (CCLASS/NCCLASS)
+  std::array<reinst, GLUSHKOV_MAX_STATES> pos_insts{};
 
   // ---- Shift-and transition optimisation (Hyperscan-style) ----
   //
@@ -79,8 +82,8 @@ struct glushkov_host_program {
   /// When true, every position in first_set is a CHAR instruction for the
   /// same literal character.  Enables a tight first-character skip in
   /// glushkov_find (mirrors Thompson NFA's find_char optimisation).
-  bool has_startchar{};
-  char32_t startchar{};
+  // bool has_startchar{};
+  cuda::std::optional<char32_t> startchar{};
 
   /// Bitmask of positions with at least one "exception" (non-shift) transition.
   g_state_t exception_mask{};

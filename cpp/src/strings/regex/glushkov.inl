@@ -88,21 +88,22 @@ __device__ __forceinline__ g_state_t glushkov_priority_kill(g_state_t const stat
  *
  * Mirrors the character-dispatch logic in the Thompson NFA regexec loop.
  */
-__device__ __forceinline__ bool glushkov_position_matches(glushkov_position const& pos,
+//__device__ __forceinline__ bool glushkov_position_matches(glushkov_position const& pos,
+__device__ __forceinline__ bool glushkov_position_matches(reinst const& pos,
                                                           char32_t const c,
                                                           reclass_device const* classes,
                                                           uint8_t const* codepoint_flags)
 {
-  switch (pos.inst_type) {
-    case CHAR: return c == pos.ch;
+  switch (pos.type) {
+    case CHAR: return c == pos.u1.c;
     case ANY: {
       // pos.ch == 'N' → EXT_NEWLINE: reject all is_newline() characters
       // otherwise     → default: reject only '\n' (matches Thompson NFA)
-      return (pos.ch == 'N') ? !is_newline(c) : (c != '\n');
+      return (pos.u1.c == 'N') ? !is_newline(c) : (c != '\n');
     }
     case ANYNL: return true;
-    case CCLASS: return classes[pos.cls_idx].is_match(c, codepoint_flags);
-    case NCCLASS: return !classes[pos.cls_idx].is_match(c, codepoint_flags);
+    case CCLASS: return classes[pos.u1.cls_id].is_match(c, codepoint_flags);
+    case NCCLASS: return !classes[pos.u1.cls_id].is_match(c, codepoint_flags);
     default: return false;
   }
 }
@@ -260,8 +261,8 @@ __device__ __forceinline__ match_result glushkov_find_impl(glushkov_program_devi
       if (start >= end) { break; }
       if (outer_itr.byte_offset() >= size_bytes) { break; }
 
-      if (prog.has_startchar) {
-        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
+      if (prog.startchar.has_value()) {
+        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar.value()) {
           ++outer_itr;
           ++start;
         }
@@ -326,9 +327,9 @@ __device__ __forceinline__ match_result glushkov_find_impl(glushkov_program_devi
   for (int32_t pos = start_pos; itr.byte_offset() < size_bytes; ++pos, ++itr) {
     // Fast skip when no active states and no match found yet.
     if (state == 0 && !cur_match) {
-      if (prog.has_startchar) {
+      if (prog.startchar.has_value()) {
         // Tight byte scan for the literal start character.
-        while (itr.byte_offset() < size_bytes && *itr != prog.startchar) {
+        while (itr.byte_offset() < size_bytes && *itr != prog.startchar.value()) {
           ++itr;
           ++pos;
         }
