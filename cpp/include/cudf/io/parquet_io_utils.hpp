@@ -12,6 +12,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <functional>
 #include <future>
 #include <span>
 #include <tuple>
@@ -42,8 +43,22 @@ using cudf::io::text::byte_range_info;
  * @param datasource Input data source
  * @return Host buffer containing footer bytes
  */
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
+[[nodiscard]] std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
   cudf::io::datasource& datasource);
+
+/**
+ * @brief Fetches host buffers of Parquet footer bytes from multiple input data sources
+ *
+ * @ingroup io_utils
+ *
+ * @param datasources Input data sources
+ * @return Vector of host buffers containing footer bytes, one per datasource
+ *
+ * @throw cudf::logic_error if any datasource contains a corrupted Parquet magic number, header or
+ * footer, or has an invalid footer length.
+ */
+[[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
 
 /**
  * @brief Fetches a host buffer of Parquet page index from the input data source
@@ -54,8 +69,25 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
  * @param page_index_bytes Byte range of page index
  * @return Host buffer containing page index bytes
  */
-std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
+[[nodiscard]] std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, byte_range_info const page_index_bytes);
+
+/**
+ * @brief Fetches host buffers of Parquet page index bytes from multiple input data sources
+ *
+ * @ingroup io_utils
+ *
+ * @param datasources Input datasources
+ * @param page_index_bytes_per_source Byte ranges of page index, one per datasource
+ * @return Vector of host buffers containing page index bytes, one per datasource
+ *
+ * @throw cudf::logic_error if the number of datasources does not match the number of page index
+ * byte ranges
+ * @throw std::out_of_range if any page index byte range is out of range for its datasource
+ */
+[[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<byte_range_info const> page_index_bytes_per_source);
 
 /**
  * @brief Fetches a list of byte ranges from a datasource into device buffers

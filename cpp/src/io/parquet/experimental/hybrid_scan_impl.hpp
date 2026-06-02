@@ -40,49 +40,50 @@ using text::byte_range_info;
 class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
  public:
   /**
-   * @brief Constructor for the experimental parquet reader implementation to optimally read
-   * Parquet files subject to highly selective filters
+   * @brief Constructor for the experimental parquet reader implementation
    *
-   * @param footer_bytes Host span of parquet file footer bytes
+   * @param footer_bytes Span of parquet file footer byte spans, one per source
    * @param options Parquet reader options
    */
-  explicit hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
+  explicit hybrid_scan_reader_impl(
+    cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
+    parquet_reader_options const& options);
+
+  /**
+   * @brief Constructor for the experimental parquet reader implementation
+   *
+   * @param parquet_metadatas Span of pre-populated Parquet file metadata, one per source
+   * @param options Parquet reader options
+   */
+  explicit hybrid_scan_reader_impl(cudf::host_span<FileMetaData const> parquet_metadatas,
                                    parquet_reader_options const& options);
 
   /**
-   * @brief Constructor for the experimental parquet reader implementation to optimally read
-   * Parquet files subject to highly selective filters
-   *
-   * @param parquet_metadata Pre-populated Parquet file metadata
-   * @param options Parquet reader options
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::parquet_metadatas
    */
-  explicit hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
-                                   parquet_reader_options const& options);
+  [[nodiscard]] std::vector<FileMetaData> parquet_metadatas() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::parquet_metadata
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::page_index_byte_ranges
    */
-  [[nodiscard]] FileMetaData parquet_metadata() const;
+  [[nodiscard]] std::vector<byte_range_info> page_index_byte_ranges() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::page_index_byte_range
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_page_indexes
    */
-  [[nodiscard]] byte_range_info page_index_byte_range() const;
+  void setup_page_indexes(
+    cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::setup_page_index
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::all_row_groups
    */
-  void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const;
-
-  /**
-   * @copydoc cudf::io::experimental::hybrid_scan::all_row_groups
-   */
-  [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
+  [[nodiscard]] std::vector<std::vector<size_type>> all_row_groups(
+    parquet_reader_options const& options) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     std::span<std::vector<size_type> const> row_group_indices) const;
 
   /**
