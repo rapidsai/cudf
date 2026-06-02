@@ -663,11 +663,9 @@ named_to_reference_converter::named_to_reference_converter(
   // Map column names to their indices
   _column_name_to_index =
     cudf::io::parquet::detail::make_column_path_map<cudf::size_type>(case_sensitive_names);
-  std::transform(metadata.schema_info.cbegin(),
-                 metadata.schema_info.cend(),
-                 cuda::counting_iterator<std::size_t>{0},
-                 std::inserter(_column_name_to_index, _column_name_to_index.end()),
-                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
+  for (cudf::size_type index = 0; auto const& sch : metadata.schema_info) {
+    _column_name_to_index.insert({sch.name, index++});
+  }
 
   expr.value().get().accept(*this);
 }

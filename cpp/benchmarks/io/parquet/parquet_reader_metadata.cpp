@@ -324,6 +324,7 @@ void BM_parquet_filter_name_resolution(nvbench::state& state)
   read_opts.set_filter(filter_expr);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       auto const source_info = source_sink.make_source_info();
@@ -344,6 +345,8 @@ void BM_parquet_filter_name_resolution(nvbench::state& state)
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_cols) / time, "cols_per_sec");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(BM_parquet_read_footer)
