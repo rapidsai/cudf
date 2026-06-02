@@ -143,9 +143,8 @@ echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 
 DEPENDENCIES=(
   cudf
-  cudf_kafka
-  libcudf_streaming
   cudf-polars
+  cudf_kafka
   cugraph
   cuml
   custreamz
@@ -154,8 +153,9 @@ DEPENDENCIES=(
   kvikio
   libcudf
   libcudf-example
-  libcudf_kafka
   libcudf-tests
+  libcudf_kafka
+  libcudf_streaming
   libkvikio
   librmm
   pylibcudf
