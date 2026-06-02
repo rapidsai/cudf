@@ -6,16 +6,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rapidsmpf.shuffler import PartitionAssignment
-from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
+from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from cudf_streaming.streaming.table_chunk import TableChunk
+from rapidsmpf.shuffler import PartitionAssignment
+from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.message import Message
 
 import polars as pl
 

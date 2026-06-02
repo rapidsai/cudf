@@ -41,8 +41,8 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
 
     from cudf_polars.dsl.ir import IR

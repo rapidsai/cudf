@@ -6,16 +6,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+from cudf_streaming.integrations.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
+    from cudf_streaming.streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream

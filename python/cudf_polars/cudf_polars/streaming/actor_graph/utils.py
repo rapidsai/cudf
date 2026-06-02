@@ -16,21 +16,21 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
-from rapidsmpf.memory.memory_reservation import opaque_memory_usage
-from rapidsmpf.memory.packed_data import PackedData
-from rapidsmpf.streaming.coll.allgather import AllGather
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
+from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import (
+from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
+from rapidsmpf.streaming.core.message import Message
 
 import pylibcudf as plc
 import rmm.mr
