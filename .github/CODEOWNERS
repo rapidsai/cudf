@@ -2,6 +2,9 @@
 cpp/                 @rapidsai/cudf-cpp-codeowners
 python/cudf/udf_cpp/ @rapidsai/cudf-cpp-codeowners
 
+#libcudf_streaming code owners (order matters, this supersedes cpp/ for files in this directory)
+cpp/libcudf_streaming/  @rapidsai/rapidsmpf-cpp-codeowners
+
 #python code owners
 python/            @rapidsai/cudf-python-codeowners
 notebooks/         @rapidsai/cudf-python-codeowners
