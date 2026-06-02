@@ -1823,8 +1823,13 @@ class Index(SingleColumnFrame):
                 # split the categories into data and categories
                 # and generate the repr separately and
                 # merge them.
+                # Decategorize while preserving nulls (a plain ``astype`` to
+                # the category dtype raises for null-containing integer
+                # categories, matching pandas).
                 pd_cats = pd.Categorical(
-                    preprocess.astype(preprocess.categories.dtype).to_pandas()
+                    cudf.Index._from_column(
+                        preprocess._column._get_decategorized_column()
+                    ).to_pandas()
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")
