@@ -919,7 +919,10 @@ class Scan(IR):
             )
             df = DataFrame([index_col, *df.columns], stream=df.stream)
             if next(iter(schema)) != name:
-                df = df.select(schema)
+                # polars >= 1.41 keeps the row-index column first in the scan
+                # schema, so this reorder is unreachable on the latest polars
+                # used for coverage.
+                df = df.select(schema)  # pragma: no cover
         assert all(
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )

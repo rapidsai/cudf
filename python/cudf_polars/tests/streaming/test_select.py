@@ -21,7 +21,8 @@ from cudf_polars.streaming.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.testing.engine_utils import warns_on_spmd
+from cudf_polars.testing.engine_utils import is_streaming_engine, warns_on_spmd
+from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 
 @pytest.fixture
@@ -118,8 +119,23 @@ def test_select_fill_null_with_strategy(df, streaming_engine_factory):
         (pl.col("a").min(), pl.col("b"), pl.col("c").max()),
     ],
 )
-def test_select_aggs(df, engine, aggs):
+def test_select_aggs(df, engine, aggs, request):
     # Test supported aggs (e.g. "min", "max", "mean", "n_unique")
+    if (
+        not POLARS_VERSION_LT_141
+        and is_streaming_engine(engine)
+        and len(aggs) == 1
+        and "len()" in str(aggs[0])
+    ):
+        # polars >= 1.41 lowers ``col.len()`` to a column-less ``Len`` node.
+        # Its input projects to zero columns, and a zero-column streaming chunk
+        # loses its row count when serialized through pylibcudf, so the count
+        # comes back as zero. See https://github.com/rapidsai/cudf/issues/21428.
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="col.len() row count lost in zero-column streaming chunks"
+            )
+        )
     query = df.select(*aggs)
     assert_gpu_result_equal(query, engine=engine)
 
@@ -180,6 +196,14 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.xfail(
+    condition=not POLARS_VERSION_LT_141,
+    reason=(
+        "polars >= 1.41 lowers len() to a column-less Len whose row count is "
+        "lost in zero-column streaming chunks "
+        "(https://github.com/rapidsai/cudf/issues/21428)"
+    ),
+)
 def test_select_with_len(streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),

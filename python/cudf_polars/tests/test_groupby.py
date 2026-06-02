@@ -11,6 +11,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import Translator
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -18,6 +19,8 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_140,
+    POLARS_VERSION_LT_141,
 )
 
 
@@ -247,6 +250,10 @@ def test_groupby_nan_minmax_raises(engine: pl.GPUEngine, op):
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
+                # polars < 1.40 emits the list literal directly in the agg;
+                # 1.40+ wraps element-wise aggs in an implode that we unwrap,
+                # which avoids the issue.
+                condition=POLARS_VERSION_LT_140,
                 reason="https://github.com/rapidsai/cudf/issues/19610",
             ),
         ),
@@ -254,10 +261,21 @@ def test_groupby_nan_minmax_raises(engine: pl.GPUEngine, op):
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],
 )
-def test_groupby_literal_in_agg(engine: pl.GPUEngine, df, key, expr):
+def test_groupby_literal_in_agg(engine: pl.GPUEngine, df, key, expr, request):
     # check_row_order=False doesn't work for list aggregations
     # so just sort by the group key
     q = df.group_by(key).agg(expr).sort(key, maintain_order=True)
+    if not POLARS_VERSION_LT_140 and isinstance(key, int):
+        # polars >= 1.40 rewrites group_by(<literal>) into a Select that wraps
+        # element-wise aggregations in an `implode` (collect-to-list), which we
+        # do not support. The translation error is executor-independent, so
+        # probe with a default engine.
+        translator = Translator(q._ldf.visit(), pl.GPUEngine())
+        translator.translate_ir()
+        if any("implode" in str(e) for e in translator.errors):
+            request.applymarker(
+                pytest.mark.xfail(reason="implode aggregation is not supported")
+            )
     assert_gpu_result_equal(q, engine=engine)
 
 
@@ -473,7 +491,9 @@ def test_groupby_rank_raises(engine: pl.GPUEngine, df: pl.LazyFrame) -> None:
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_groupby_sum_decimal_null_group(engine: pl.GPUEngine) -> None:
+def test_groupby_sum_decimal_null_group(
+    engine: pl.GPUEngine, xfail_decimal_sum_precision_polars_140
+) -> None:
     df = pl.LazyFrame(
         {"key1": [1, 1, 2, 3], "foo": [None, None, Decimal("1.00"), Decimal("2.00")]},
         schema={"key1": pl.Int32, "foo": pl.Decimal(9, 2)},
@@ -492,7 +512,22 @@ def test_groupby_literal_agg(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_empty_keys_raises(engine: pl.GPUEngine):
+def test_groupby_empty_keys_raises(engine: pl.GPUEngine, request):
     df = pl.LazyFrame({"x": [1, 2, 3]})
     q = df.group_by([]).agg(pl.len())
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+    if POLARS_VERSION_LT_140:
+        assert_ir_translation_raises(q, engine, NotImplementedError)
+    else:
+        # polars >= 1.40 rewrites an empty-key group_by into a Select(len)
+        # (whole-frame aggregation). On polars >= 1.41 that len() lowers to a
+        # column-less Len whose row count is lost in zero-column streaming
+        # chunks, so the streaming engines return zero
+        # (https://github.com/rapidsai/cudf/issues/21428). polars 1.40 keeps a
+        # column, so it works there.
+        if not POLARS_VERSION_LT_141 and is_streaming_engine(engine):
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason="len() row count lost in zero-column streaming chunks"
+                )
+            )
+        assert_gpu_result_equal(q, engine=engine)
