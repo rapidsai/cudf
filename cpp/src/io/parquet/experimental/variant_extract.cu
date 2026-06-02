@@ -168,16 +168,8 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   return cuda::std::nullopt;
 }
 
-// Parse an object value header, find the field with the given dictionary index,
-// return the sub-span {offset_from_value_start, length} of the field's encoded value
-// Returns {0, 0} on failure
-//
-// Per the Variant spec, field IDs are sorted lexicographically by name but field VALUES
-// may be stored in any order, so field_offsets are NOT necessarily monotonically increasing
-// To find a field's byte range we locate the smallest offset strictly greater than the
-// field's start offset among all entries (including the sentinel), giving the tightest bound
 __device__ inline device_span<uint8_t const> locate_object_field(device_span<uint8_t const> val,
-                                                                 int dict_idx)
+                                                                 int field_id)
 {
   auto const val_len = static_cast<size_type>(val.size());
   if (val_len < 1) { return {}; }
@@ -213,7 +205,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   for (size_type i = 0; i < num_elts.value(); ++i) {
     auto const fid = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
     if (!fid.has_value()) { return {}; }
-    if (cuda::std::cmp_not_equal(fid.value(), dict_idx)) { continue; }
+    if (cuda::std::cmp_not_equal(fid.value(), field_id)) { continue; }
 
     auto const o = read_uint(val, field_offs_start + i * field_off_size, field_off_size);
     if (!o.has_value()) { return {}; }
@@ -224,8 +216,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   }
   if (!found) { return {}; }
 
-  // The field's value is self-delimiting: derive its byte length from its own header rather than
-  // scanning sibling offsets (which are not ordered). The value occupies [match_start, match_end).
+  // Derive field's value length from its header
   auto const field_value = val.subspan(values_base + match_start);
   auto const value_len   = variant_value_length(field_value);
   if (!value_len.has_value()) { return {}; }
@@ -266,10 +257,10 @@ __device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t con
   for (size_type i = 0; i < path.size(); ++i) {
     auto const name = path.element<cudf::string_view>(i);
 
-    auto const dict_idx = find_key_in_metadata(meta, name);
-    if (!dict_idx.has_value()) { return {}; }
+    auto const field_id = find_key_in_metadata(meta, name);
+    if (!field_id.has_value()) { return {}; }
 
-    sub_val = locate_object_field(sub_val, dict_idx.value());
+    sub_val = locate_object_field(sub_val, field_id.value());
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
@@ -321,7 +312,7 @@ metadata_and_value_at(cudf::detail::lists_column_device_view const& metadata,
 
 constexpr int block_size = 256;
 
-CUDF_KERNEL __launch_bounds__(block_size) void get_variant_field_sizes_kernel(
+CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
   cudf::detail::lists_column_device_view metadata,
   cudf::detail::lists_column_device_view values,
   column_device_view path,
@@ -565,7 +556,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
 
   // Parse the path per row and compute the output sizes
   auto grid = cudf::detail::grid_1d{num_rows, block_size};
-  get_variant_field_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+  locate_variant_fields_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     meta_lists_device_view,
     val_lists_device_view,
     *path_device_view,
