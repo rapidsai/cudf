@@ -13,6 +13,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
 #include <string_view>
 
 namespace CUDF_EXPORT cudf {
@@ -71,6 +72,9 @@ namespace io::parquet::experimental {
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
+ *
+ * @throws std::invalid_argument if `values` is not a `list<uint8>` column, or if `desired_type`
+ *         is not one of the supported types (`STRING` or `INT8`/`INT16`/`INT32`/`INT64`)
  */
 [[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& values,
@@ -81,7 +85,8 @@ namespace io::parquet::experimental {
 /**
  * @brief Convenience wrapper: extract a nested object value by path and decode into a typed column.
  *
- * Equivalent to `cast_variant(get_variant_field(variant_column, path), desired_type)`.
+ * Semantically equivalent to extracting the field with `get_variant_field` and then decoding
+ * the extracted `list<uint8>` values with `cast_variant`.
  *
  * @param variant_column Struct column (VARIANT materialization)
  * @param path JSONPath-like path string (see `get_variant_field` for syntax)
