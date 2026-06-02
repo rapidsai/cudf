@@ -51,16 +51,6 @@ include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
 include(../cmake/thirdparty/get_cucollections.cmake)
 
-# # GTests if enabled
-if(BUILD_TESTS)
-  # GoogleTest
-  include(../cmake/thirdparty/get_gtest.cmake)
-
-  # include CTest module -- automatically calls enable_testing()
-  include(CTest)
-  add_subdirectory(tests)
-endif()
-
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
 add_library(
@@ -114,6 +104,16 @@ if(TARGET conda_env)
 endif()
 
 add_library(cudf_streaming::cudf_streaming ALIAS cudf_streaming)
+
+# # GTests if enabled
+if(BUILD_TESTS)
+  # GoogleTest
+  include(../cmake/thirdparty/get_gtest.cmake)
+
+  # include CTest module -- automatically calls enable_testing()
+  include(CTest)
+  add_subdirectory(tests)
+endif()
 
 # ##################################################################################################
 # * cudf_streaming Install -------------------------------------------------------------------------
