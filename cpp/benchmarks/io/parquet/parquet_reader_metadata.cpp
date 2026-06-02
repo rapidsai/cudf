@@ -84,6 +84,27 @@ auto write_file_data(cudf::size_type num_cols,
   return source_sink;
 }
 
+// Combines `operands` into a balanced AST tree using `op`: pairing adjacent operands gives a tree
+// of depth ceil(log2(n)) rather than the n-deep chain a left fold would produce.
+[[nodiscard]] cudf::ast::expression const* reduce_balanced(
+  cudf::ast::tree& tree,
+  cudf::ast::ast_operator op,
+  std::vector<cudf::ast::expression const*> operands)
+{
+  CUDF_EXPECTS(not operands.empty(), "Cannot reduce an empty set of operands");
+  while (operands.size() > 1) {
+    std::vector<cudf::ast::expression const*> next;
+    next.reserve((operands.size() + 1) / 2);
+    for (std::size_t i = 0; i + 1 < operands.size(); i += 2) {
+      next.push_back(&tree.push(cudf::ast::operation(op, *operands[i], *operands[i + 1])));
+    }
+    // Carry an odd trailing operand up to the next level unchanged.
+    if (operands.size() % 2 == 1) { next.push_back(operands.back()); }
+    operands = std::move(next);
+  }
+  return operands.front();
+}
+
 }  // namespace
 
 // Benchmark to measure parquet footer read time
@@ -291,28 +312,16 @@ void BM_parquet_filter_name_resolution(nvbench::state& state)
       cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, lit_expr));
   };
 
-  cudf::ast::expression const* filter_root = nullptr;
-  if (not heavy_filter) {
-    filter_root = &make_predicate(0);
-  } else {
-    std::vector<cudf::ast::expression const*> level;
-    level.reserve(num_cols);
-    for (cudf::size_type i = 0; i < num_cols; i++) {
-      level.push_back(&make_predicate(i));
-    }
-    while (level.size() > 1) {
-      std::vector<cudf::ast::expression const*> next;
-      next.reserve((level.size() + 1) / 2);
-      for (std::size_t i = 0; i + 1 < level.size(); i += 2) {
-        next.push_back(&expr.push(
-          cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, *level[i], *level[i + 1])));
-      }
-      if (level.size() % 2 == 1) { next.push_back(level.back()); }
-      level = std::move(next);
-    }
-    filter_root = level.front();
+  auto const num_predicates = heavy_filter ? num_cols : cudf::size_type{1};
+  std::vector<cudf::ast::expression const*> predicates;
+  predicates.reserve(num_predicates);
+  for (cudf::size_type col = 0; col < num_predicates; col++) {
+    predicates.push_back(&make_predicate(col));
   }
-  auto const& filter_expr = *filter_root;
+  // Reduce the per-column predicates into a single balanced OR tree so the AST depth stays
+  // logarithmic in the column count (see reduce_balanced).
+  auto const& filter_expr =
+    *reduce_balanced(expr, cudf::ast::ast_operator::LOGICAL_OR, std::move(predicates));
 
   auto constexpr chunk_read_limit = 0;
   auto constexpr pass_read_limit  = 0;
