@@ -6,6 +6,10 @@
 
 #include "regcomp.h"
 
+#include <cudf/types.hpp>
+
+#include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
 
 namespace cudf::strings::detail {
@@ -35,5 +39,26 @@ struct alignas(16) reclass_device {
 
   __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };
+
+/**
+ * @brief Check for supported new-line characters
+ *
+ * '\n, \r, \u0085, \u2028, or \u2029'
+ */
+__host__ __device__ __forceinline__ constexpr bool is_newline(char32_t const ch)
+{
+  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
+}
+
+/**
+ * @brief Template type used on `find` to specify desired position values in returned match_result
+ */
+enum class positional : int8_t {
+  BEGIN_END = 0,  /// both begin and end positions are returned
+  END_ONLY  = 1,  /// only the end position is returned
+};
+
+using match_pair   = cuda::std::pair<cudf::size_type, cudf::size_type>;
+using match_result = cuda::std::optional<match_pair>;
 
 }  // namespace cudf::strings::detail

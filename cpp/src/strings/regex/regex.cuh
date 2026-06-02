@@ -14,8 +14,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/std/optional>
-#include <cuda/std/utility>
 #include <cuda_runtime.h>
 
 #include <functional>
@@ -30,19 +28,8 @@ namespace detail {
 struct glushkov_host_program;
 struct glushkov_program_device;
 
-/**
- * @brief Template type used on `find` to specify desired position values in returned match_result
- */
-enum class positional : int8_t {
-  BEGIN_END = 0,  /// both begin and end positions are returned
-  END_ONLY  = 1,  /// only the end position is returned
-};
-
 template <positional P>
 struct reljunk;
-
-using match_pair   = cuda::std::pair<cudf::size_type, cudf::size_type>;
-using match_result = cuda::std::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
 constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
@@ -350,19 +337,9 @@ __device__ __forceinline__ string_view string_from_match(match_pair const result
   return {d_str.data() + begin, end - begin};
 }
 
-/**
- * @brief Check for supported new-line characters
- *
- * '\n, \r, \u0085, \u2028, or \u2029'
- */
-__host__ __device__ __forceinline__ constexpr bool is_newline(char32_t const ch)
-{
-  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
-}
-
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
 
-#include "./glushkov.inl"
+// #include "./glushkov.inl"
 #include "./regex.inl"
