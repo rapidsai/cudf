@@ -27,9 +27,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <ranges>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace cudf_streaming::streaming::actor {
 

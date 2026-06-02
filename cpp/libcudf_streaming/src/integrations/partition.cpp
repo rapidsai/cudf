@@ -24,6 +24,7 @@
 #include <rapidsmpf/shuffler/shuffler.hpp>
 #include <rapidsmpf/utils/misc.hpp>
 
+#include <ranges>
 #include <utility>
 
 namespace cudf_streaming::integrations {

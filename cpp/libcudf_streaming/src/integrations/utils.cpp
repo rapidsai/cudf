@@ -22,6 +22,7 @@
 #include <rapidsmpf/utils/misc.hpp>
 
 #include <numeric>
+#include <sstream>
 #include <type_traits>
 
 namespace cudf_streaming::integrations {
