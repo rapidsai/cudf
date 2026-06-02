@@ -15,6 +15,9 @@ python/cudf_polars/ @rapidsai/cudf-polars-codeowners
 CMakeLists.txt @rapidsai/cudf-cmake-codeowners
 **/cmake/      @rapidsai/cudf-cmake-codeowners
 *.cmake        @rapidsai/cudf-cmake-codeowners
+cpp/libcudf_streaming/CMakeLists.txt @rapidsai/rapidsmpf-cmake-codeowners
+cpp/libcudf_streaming/**/cmake/      @rapidsai/rapidsmpf-cmake-codeowners
+cpp/libcudf_streaming/*.cmake        @rapidsai/rapidsmpf-cmake-codeowners
 
 #java code owners
 java/              @rapidsai/cudf-java-codeowners
