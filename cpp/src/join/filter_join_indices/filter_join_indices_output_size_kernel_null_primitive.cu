@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "join/filter_join_indices/filter_join_indices_size_kernel.cuh"
-#include "join/filter_join_indices/filter_join_indices_size_kernel.hpp"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.cuh"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.hpp"
 
 namespace cudf::detail {
-template void launch_filter_size_kernel<false, false>(
+template void launch_filter_output_size_kernel<true, false>(
   cudf::table_device_view const& left_table,
   cudf::table_device_view const& right_table,
   cudf::device_span<cudf::size_type const> left_indices,

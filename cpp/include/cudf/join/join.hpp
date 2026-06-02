@@ -374,7 +374,7 @@ filter_join_indices(cudf::table_view const& left,
  *
  * @return The exact number of pairs that `filter_join_indices` would produce.
  */
-[[nodiscard]] std::size_t filter_join_indices_size(
+[[nodiscard]] std::size_t filter_join_indices_output_size(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,

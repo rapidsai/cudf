@@ -681,10 +681,10 @@ add_library(
   src/join/filter_join_indices/filter_join_indices_kernel_null_complex.cu
   src/join/filter_join_indices/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices/filter_join_indices_kernel_primitive.cu
-  src/join/filter_join_indices/filter_join_indices_size_kernel_complex.cu
-  src/join/filter_join_indices/filter_join_indices_size_kernel_null_complex.cu
-  src/join/filter_join_indices/filter_join_indices_size_kernel_null_primitive.cu
-  src/join/filter_join_indices/filter_join_indices_size_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp

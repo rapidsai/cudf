@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include "join/filter_join_indices/filter_join_indices_size_kernel.hpp"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.hpp"
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
@@ -37,7 +37,7 @@ namespace cudf::detail {
  * entries.
  */
 template <bool has_nulls, bool has_complex_type>
-CUDF_KERNEL __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) void filter_join_indices_size_kernel(
+CUDF_KERNEL __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) void filter_join_indices_output_size_kernel(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
   cudf::device_span<cudf::size_type const> left_indices,
@@ -117,19 +117,20 @@ CUDF_KERNEL __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) void filter_join_indices_
 }
 
 template <bool has_nulls, bool has_complex_type>
-void launch_filter_size_kernel(cudf::table_device_view const& left_table,
-                               cudf::table_device_view const& right_table,
-                               cudf::device_span<cudf::size_type const> left_indices,
-                               cudf::device_span<cudf::size_type const> right_indices,
-                               cudf::ast::detail::expression_device_view device_expression_data,
-                               cudf::detail::grid_1d const& config,
-                               std::size_t shmem_per_block,
-                               cudf::join_kind join_kind,
-                               std::size_t* count_out,
-                               bool* left_passing_marks,
-                               rmm::cuda_stream_view stream)
+void launch_filter_output_size_kernel(
+  cudf::table_device_view const& left_table,
+  cudf::table_device_view const& right_table,
+  cudf::device_span<cudf::size_type const> left_indices,
+  cudf::device_span<cudf::size_type const> right_indices,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  cudf::detail::grid_1d const& config,
+  std::size_t shmem_per_block,
+  cudf::join_kind join_kind,
+  std::size_t* count_out,
+  bool* left_passing_marks,
+  rmm::cuda_stream_view stream)
 {
-  filter_join_indices_size_kernel<has_nulls, has_complex_type>
+  filter_join_indices_output_size_kernel<has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
       left_table,
       right_table,
@@ -139,6 +140,7 @@ void launch_filter_size_kernel(cudf::table_device_view const& left_table,
       join_kind,
       count_out,
       left_passing_marks);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::detail

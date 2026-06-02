@@ -102,6 +102,7 @@ void launch_filter_gather_map_kernel(
       right_indices,
       device_expression_data,
       predicate_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::detail

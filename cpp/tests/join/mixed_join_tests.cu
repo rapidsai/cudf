@@ -433,8 +433,8 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
         cudf::join_kind::INNER_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify filter_join_indices_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_size(
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -1101,8 +1101,8 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
         cudf::join_kind::LEFT_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify filter_join_indices_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_size(
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -1389,8 +1389,8 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
         cudf::join_kind::FULL_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify filter_join_indices_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_size(
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),

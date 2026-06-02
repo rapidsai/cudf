@@ -4,7 +4,7 @@
  */
 
 #include "join/filter_join_indices/filter_join_indices_kernel.cuh"
-#include "join/filter_join_indices/filter_join_indices_size_kernel.hpp"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.hpp"
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -357,22 +357,23 @@ filter_join_indices(cudf::table_view const& left,
   }
 }
 
-std::size_t filter_join_indices_size(cudf::table_view const& left,
-                                     cudf::table_view const& right,
-                                     cudf::device_span<size_type const> left_indices,
-                                     cudf::device_span<size_type const> right_indices,
-                                     ast::expression const& predicate,
-                                     join_kind join_kind,
-                                     rmm::cuda_stream_view stream)
+std::size_t filter_join_indices_output_size(cudf::table_view const& left,
+                                            cudf::table_view const& right,
+                                            cudf::device_span<size_type const> left_indices,
+                                            cudf::device_span<size_type const> right_indices,
+                                            ast::expression const& predicate,
+                                            join_kind join_kind,
+                                            rmm::cuda_stream_view stream)
 {
   // Validate inputs (same constraints as filter_join_indices)
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
                "Left and right index arrays must have the same size",
                std::invalid_argument);
-  CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
-                 join_kind == join_kind::FULL_JOIN,
-               "filter_join_indices_size only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
-               std::invalid_argument);
+  CUDF_EXPECTS(
+    join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
+      join_kind == join_kind::FULL_JOIN,
+    "filter_join_indices_output_size only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+    std::invalid_argument);
 
   if (left_indices.empty()) { return 0; }
   if (join_kind == join_kind::LEFT_JOIN && left.num_rows() == 0) { return 0; }
@@ -407,53 +408,53 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
   auto* const marks_ptr = join_kind == join_kind::LEFT_JOIN ? left_passing_marks.data() : nullptr;
 
   if (has_nulls && has_complex_type) {
-    launch_filter_size_kernel<true, true>(*left_table,
-                                          *right_table,
-                                          left_indices,
-                                          right_indices,
-                                          parser.device_expression_data,
-                                          config,
-                                          shmem_per_block,
-                                          join_kind,
-                                          d_count.data(),
-                                          marks_ptr,
-                                          stream);
+    launch_filter_output_size_kernel<true, true>(*left_table,
+                                                 *right_table,
+                                                 left_indices,
+                                                 right_indices,
+                                                 parser.device_expression_data,
+                                                 config,
+                                                 shmem_per_block,
+                                                 join_kind,
+                                                 d_count.data(),
+                                                 marks_ptr,
+                                                 stream);
   } else if (has_nulls && !has_complex_type) {
-    launch_filter_size_kernel<true, false>(*left_table,
-                                           *right_table,
-                                           left_indices,
-                                           right_indices,
-                                           parser.device_expression_data,
-                                           config,
-                                           shmem_per_block,
-                                           join_kind,
-                                           d_count.data(),
-                                           marks_ptr,
-                                           stream);
+    launch_filter_output_size_kernel<true, false>(*left_table,
+                                                  *right_table,
+                                                  left_indices,
+                                                  right_indices,
+                                                  parser.device_expression_data,
+                                                  config,
+                                                  shmem_per_block,
+                                                  join_kind,
+                                                  d_count.data(),
+                                                  marks_ptr,
+                                                  stream);
   } else if (!has_nulls && has_complex_type) {
-    launch_filter_size_kernel<false, true>(*left_table,
-                                           *right_table,
-                                           left_indices,
-                                           right_indices,
-                                           parser.device_expression_data,
-                                           config,
-                                           shmem_per_block,
-                                           join_kind,
-                                           d_count.data(),
-                                           marks_ptr,
-                                           stream);
+    launch_filter_output_size_kernel<false, true>(*left_table,
+                                                  *right_table,
+                                                  left_indices,
+                                                  right_indices,
+                                                  parser.device_expression_data,
+                                                  config,
+                                                  shmem_per_block,
+                                                  join_kind,
+                                                  d_count.data(),
+                                                  marks_ptr,
+                                                  stream);
   } else {
-    launch_filter_size_kernel<false, false>(*left_table,
-                                            *right_table,
-                                            left_indices,
-                                            right_indices,
-                                            parser.device_expression_data,
-                                            config,
-                                            shmem_per_block,
-                                            join_kind,
-                                            d_count.data(),
-                                            marks_ptr,
-                                            stream);
+    launch_filter_output_size_kernel<false, false>(*left_table,
+                                                   *right_table,
+                                                   left_indices,
+                                                   right_indices,
+                                                   parser.device_expression_data,
+                                                   config,
+                                                   shmem_per_block,
+                                                   join_kind,
+                                                   d_count.data(),
+                                                   marks_ptr,
+                                                   stream);
   }
 
   auto const num_predicate_passing = d_count.value(stream);
@@ -471,7 +472,7 @@ std::size_t filter_join_indices_size(cudf::table_view const& left,
         static_cast<std::size_t>(left.num_rows()) - static_cast<std::size_t>(num_filter_passing);
       return num_predicate_passing + num_invalid;
     }
-    default: CUDF_FAIL("Unsupported join kind for filter_join_indices_size");
+    default: CUDF_FAIL("Unsupported join kind for filter_join_indices_output_size");
   }
 }
 
@@ -494,16 +495,16 @@ filter_join_indices(cudf::table_view const& left,
     left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
 }
 
-std::size_t filter_join_indices_size(cudf::table_view const& left,
-                                     cudf::table_view const& right,
-                                     cudf::device_span<size_type const> left_indices,
-                                     cudf::device_span<size_type const> right_indices,
-                                     ast::expression const& predicate,
-                                     cudf::join_kind join_kind,
-                                     rmm::cuda_stream_view stream)
+std::size_t filter_join_indices_output_size(cudf::table_view const& left,
+                                            cudf::table_view const& right,
+                                            cudf::device_span<size_type const> left_indices,
+                                            cudf::device_span<size_type const> right_indices,
+                                            ast::expression const& predicate,
+                                            cudf::join_kind join_kind,
+                                            rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_join_indices_size(
+  return detail::filter_join_indices_output_size(
     left, right, left_indices, right_indices, predicate, join_kind, stream);
 }
 

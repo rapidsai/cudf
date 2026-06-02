@@ -52,16 +52,17 @@ namespace cudf::detail {
  * @param[in] stream CUDA stream on which to launch the kernel
  */
 template <bool has_nulls, bool has_complex_type>
-void launch_filter_size_kernel(cudf::table_device_view const& left_table,
-                               cudf::table_device_view const& right_table,
-                               cudf::device_span<cudf::size_type const> left_indices,
-                               cudf::device_span<cudf::size_type const> right_indices,
-                               cudf::ast::detail::expression_device_view device_expression_data,
-                               cudf::detail::grid_1d const& config,
-                               std::size_t shmem_per_block,
-                               cudf::join_kind join_kind,
-                               std::size_t* count_out,
-                               bool* left_passing_marks,
-                               rmm::cuda_stream_view stream);
+void launch_filter_output_size_kernel(
+  cudf::table_device_view const& left_table,
+  cudf::table_device_view const& right_table,
+  cudf::device_span<cudf::size_type const> left_indices,
+  cudf::device_span<cudf::size_type const> right_indices,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  cudf::detail::grid_1d const& config,
+  std::size_t shmem_per_block,
+  cudf::join_kind join_kind,
+  std::size_t* count_out,
+  bool* left_passing_marks,
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
