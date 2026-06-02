@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 
+#include "io/parquet/column_path_helpers.hpp"
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"

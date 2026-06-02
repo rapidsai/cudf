@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "reader_impl_helpers.hpp"
+#include "column_path_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
