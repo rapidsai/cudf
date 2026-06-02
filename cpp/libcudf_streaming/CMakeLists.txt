@@ -49,6 +49,7 @@ message(VERBOSE "CUDF_STREAMING: Build gtests: ${BUILD_TESTS}")
 rapids_cpm_init()
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
+include(../cmake/thirdparty/get_cucollections.cmake)
 
 # # GTests if enabled
 if(BUILD_TESTS)
