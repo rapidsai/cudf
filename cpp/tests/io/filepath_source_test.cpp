@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
@@ -68,8 +69,7 @@ TEST_F(FilepathSourceTest, KnownSizePlumbsThroughMakeDatasources)
   ASSERT_EQ(datasources.size(), 1);
   EXPECT_EQ(datasources.front()->size(), file_size);
 
-  auto const read_opts =
-    cudf::io::parquet_reader_options::builder(source_info).column_names({"0"}).build();
-  auto const result = cudf::io::read_parquet(read_opts);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, result.tbl->get_column(0).view());
+  auto const read_opts = cudf::io::parquet_reader_options::builder(source_info).build();
+  auto const result    = cudf::io::read_parquet(read_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, result.tbl->view());
 }
