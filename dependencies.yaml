@@ -332,6 +332,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_librapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
@@ -1288,6 +1289,31 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_rapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &rapidsmpf_unsuffixed rapidsmpf==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *rapidsmpf_unsuffixed
   depends_on_librapidsmpf:
     common:
       - output_types: conda
