@@ -27,7 +27,6 @@ files:
       - depends_on_rapids_logger
       - depends_on_ray
       - depends_on_rmm
-      - depends_on_libcudf_streaming
       - develop
       - docs
       - iwyu
@@ -1314,29 +1313,6 @@ dependencies:
           - matrix:
             packages:
               - *librapidsmpf_unsuffixed
-  depends_on_libcudf_streaming:
-    common:
-      - output_types: conda
-        packages:
-          - &libcudf_streaming_unsuffixed libcudf_streaming==26.8.*,>=0.0.0a0
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - libcudf_streaming-cu12==26.8.*,>=0.0.0a0
-          - matrix:
-              cuda: "13.*"
-              cuda_suffixed: "true"
-            packages:
-              - libcudf_streaming-cu13==26.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*libcudf_streaming_unsuffixed]}
   depends_on_ray:
     common:
       - output_types: conda
