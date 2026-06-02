@@ -495,8 +495,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullEqualsSimple)
 // (scalar_as_column_view in binary_ops.cu). Prior to fixing that wrapper, null-aware
 // kernels read scalar validity via bit_is_set and compute-sanitizer memcheck reports
 // a 4-byte OOB read from the scalar's 1-byte device bool allocation.
-// Repro: compute-sanitizer --tool memcheck ./FIXED_POINT_COMPILED_TEST \
-//   --gtest_filter='*NullMaxColumnScalar*'
+// Repro: compute-sanitizer --tool memcheck ./FIXED_POINT_COMPILED_TEST --gtest_filter='*NullMaxColumnScalar*'
 TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullMaxColumnScalar)
 {
   using namespace numeric;
