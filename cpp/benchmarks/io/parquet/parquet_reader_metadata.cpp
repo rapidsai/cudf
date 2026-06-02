@@ -239,24 +239,6 @@ void BM_parquet_column_selection(nvbench::state& state)
 }
 
 // Benchmark Parquet filter column-name resolution during reader construction.
-//
-// This isolates `named_to_reference_converter`:
-// - builds a name -> column index map for all schema columns: O(num_cols)
-// - resolves column names used by the filter: O(num_filter_refs)
-//
-// `heavy_filter` controls filter size:
-// - false: filter references only `col0`
-// - true: filter references every column: `col0 OR col1 OR ...`
-//
-// No `column_names` are set, so the reader takes the cheap "read all columns" path.
-// This avoids measuring `select_columns` name scanning and keeps the benchmark focused
-// on filter name resolution.
-//
-// `case_sensitive` toggles matching mode. In case-insensitive mode, query names are
-// upper-cased to force lookup-time normalization.
-//
-// Uses only public APIs so the same benchmark can run on main and feature branches.
-
 void BM_parquet_filter_name_resolution(nvbench::state& state)
 {
   auto const num_cols       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
@@ -326,6 +308,8 @@ void BM_parquet_filter_name_resolution(nvbench::state& state)
   auto constexpr chunk_read_limit = 0;
   auto constexpr pass_read_limit  = 0;
 
+  // No column projection is requested, so the reader reads all columns; this isolates filter name
+  // resolution (named_to_reference_converter) from select_columns name scanning.
   auto read_opts = cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
                      .use_arrow_schema(false)
                      .build();
@@ -354,6 +338,7 @@ void BM_parquet_filter_name_resolution(nvbench::state& state)
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_cols) / time, "cols_per_sec");
+  // Should be 0, but adding for completeness
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
