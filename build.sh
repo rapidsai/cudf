@@ -201,7 +201,7 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf || hasArg pylibcudf || hasArg cudf ; then
+if buildAll || hasArg libcudf || hasArg libcudf_streaming || hasArg pylibcudf || hasArg cudf ; then
     if (( BUILD_ALL_GPU_ARCH == 0 )); then
         CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
         if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then
