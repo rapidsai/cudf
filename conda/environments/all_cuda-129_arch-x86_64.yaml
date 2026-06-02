@@ -39,6 +39,7 @@ dependencies:
 - ipykernel
 - ipython
 - jupyter_client
+- libcudf_streaming==26.8.*,>=0.0.0a0
 - libcufile-dev
 - libcurand-dev
 - libkvikio==26.8.*,>=0.0.0a0
