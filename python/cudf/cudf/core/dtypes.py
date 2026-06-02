@@ -1002,7 +1002,8 @@ class IntervalDtype(_BaseDtype):
     name = "interval"
     closed: Literal["left", "right", "neither", "both"] | None
 
-    # Pandas-compatible regex for parsing string forms of IntervalDtype:
+    # Regex used only to detect whether a string names an IntervalDtype (see
+    # ``_is_interval_dtype``); actual parsing is delegated to pandas. Matches
     # "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
     # (subtype itself may contain "[...]" e.g. "datetime64[ns]").
     _match = re.compile(
@@ -1037,25 +1038,19 @@ class IntervalDtype(_BaseDtype):
             closed = closed if closed is not None else inner_closed
             subtype = subtype.subtype
 
-        # If subtype is a string, attempt to parse it as a full IntervalDtype
-        # spec ("interval", "interval[int64]", "interval[int64, right]") or
-        # treat it as a plain subtype name.
-        if isinstance(subtype, str):
-            match = self._match.match(subtype)
-            if match is not None:
-                parsed_subtype = match.group("subtype")
-                parsed_closed = match.group("closed")
-                if parsed_closed is not None:
-                    if closed is not None and parsed_closed != closed:
-                        raise ValueError(
-                            "'closed' keyword does not match value "
-                            "specified in dtype string"
-                        )
-                    closed = cast(
-                        "Literal['left', 'right', 'neither', 'both']",
-                        parsed_closed,
-                    )
-                subtype = parsed_subtype  # may be None for bare "interval"
+        # If subtype is an "interval[...]" spec string, let pandas parse it
+        # ("interval", "interval[int64]", "interval[int64, right]"),
+        # reconciling any explicitly-passed ``closed`` (pandas raises on a
+        # closed-keyword conflict or an unsupported subtype). This avoids
+        # re-implementing pandas' parsing logic. A bare subtype string (e.g.
+        # "int64") falls through to ``dtype(subtype)`` below.
+        if isinstance(subtype, str) and subtype.lower().startswith("interval"):
+            parsed = pd.IntervalDtype(subtype, closed)
+            closed = cast(
+                "Literal['left', 'right', 'neither', 'both'] | None",
+                parsed.closed,
+            )
+            subtype = parsed.subtype  # may be None for bare "interval"
 
         if subtype is None:
             self._subtype = None
@@ -1083,24 +1078,10 @@ class IntervalDtype(_BaseDtype):
 
         self.closed = closed
 
-    @property
-    def _closed(self) -> str | None:
-        """Alias for ``closed`` matching pandas' private attribute."""
-        return self.closed
-
     @classmethod
     def construct_from_string(cls, string: str) -> Self:
-        if not isinstance(string, str):
-            raise TypeError(
-                f"'construct_from_string' expects a string, got {type(string)}"
-            )
-        if cls._match.match(string) is None:
-            raise TypeError(
-                "Incorrectly formatted string passed to constructor. "
-                "Valid formats include Interval or Interval[dtype] "
-                "where dtype is numeric, datetime, or timedelta"
-            )
-        return cls(string)
+        # Defer string validation/parsing to pandas, then wrap the result.
+        return cls(pd.IntervalDtype.construct_from_string(string))
 
     @property
     def subtype(self) -> DtypeObj | None:
