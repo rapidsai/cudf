@@ -6,7 +6,10 @@
       "CUDA": "13.2",
       "PYTHON_PACKAGE_MANAGER": "pip",
       "BASE": "rapidsai/devcontainers:26.08-cpp-cuda13.2-ucx1.19.0-openmpi5.0.10"
-    }
+    },
+    "cacheFrom": [
+      "ghcr.io/rapidsai/cudf/devcontainer:26.08-cuda13.2-pip"
+    ]
   },
   "runArgs": [
     "--rm",

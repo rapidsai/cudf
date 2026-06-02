@@ -46,7 +46,7 @@ from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
-from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
@@ -337,8 +337,6 @@ class PythonScan(IR):
         self.children = ()
         raise NotImplementedError("PythonScan not implemented")
 
-
-_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
 
 _COMPARISON_BINOPS = {
     plc.binaryop.BinaryOperator.EQUAL,
@@ -648,17 +646,6 @@ class Scan(IR):
         return df.with_columns(
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
-
-    @nvtx_annotate_cudf_polars(message="Scan.fast_count")
-    def fast_count(self) -> int:  # pragma: no cover
-        """Get the number of rows in a Parquet Scan."""
-        meta = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(self.paths)
-        )
-        total_rows = meta.num_rows() - self.skip_rows
-        if self.n_rows != -1:
-            total_rows = min(total_rows, self.n_rows)
-        return max(total_rows, 0)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
@@ -1546,7 +1533,9 @@ class Select(IR):
         ):  # pragma: no cover
             stream = context.get_cuda_stream()
             scan = self.children[0]
-            effective_rows = scan.fast_count()
+            effective_rows = Scan._get_parquet_row_count_from_metadata(
+                scan.paths, scan.skip_rows, scan.n_rows
+            )
             dtype = DataType(pl.UInt32())
             col = Column(
                 plc.Column.from_scalar(
@@ -2020,7 +2009,7 @@ def _add_cast(
     side: expr.ColRef,
     left_casts: dict[str, DataType],
     right_casts: dict[str, DataType],
-) -> None:
+) -> None:  # pragma: no cover
     (col,) = side.children
     assert isinstance(col, expr.Col)
     casts = (
@@ -2042,7 +2031,9 @@ def _align_decimal_binop_types(
     ):
         target = DataType.common_decimal_dtype(left_type, right_type)
 
-        if left_type.id() != target.id() or left_type.scale() != target.scale():
+        if (
+            left_type.id() != target.id() or left_type.scale() != target.scale()
+        ):  # pragma: no cover
             _add_cast(target, left_expr, left_casts, right_casts)
 
         if right_type.id() != target.id() or right_type.scale() != target.scale():
@@ -2054,7 +2045,7 @@ def _align_decimal_binop_types(
     ) or (
         plc.traits.is_fixed_point(right_type.plc_type)
         and plc.traits.is_floating_point(left_type.plc_type)
-    ):
+    ):  # pragma: no cover
         is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
         decimal_expr, float_expr = (
             (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
@@ -2084,7 +2075,9 @@ def _collect_decimal_binop_casts(
     return left_casts, right_casts
 
 
-def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
+def _apply_casts(
+    df: DataFrame, casts: dict[str, DataType]
+) -> DataFrame:  # pragma: no cover
     if not casts:
         return df
 
