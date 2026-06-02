@@ -9,7 +9,7 @@ import re
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -1000,6 +1000,7 @@ class IntervalDtype(_BaseDtype):
     """
 
     name = "interval"
+    closed: Literal["left", "right", "neither", "both"] | None
 
     # Pandas-compatible regex for parsing string forms of IntervalDtype:
     # "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
@@ -1020,7 +1021,10 @@ class IntervalDtype(_BaseDtype):
         # If subtype is already an IntervalDtype (cudf or pandas), unwrap it,
         # validating any closed conflict.
         if isinstance(subtype, (IntervalDtype, pd.IntervalDtype)):
-            inner_closed = subtype.closed
+            inner_closed = cast(
+                "Literal['left', 'right', 'neither', 'both'] | None",
+                subtype.closed,
+            )
             if (
                 closed is not None
                 and inner_closed is not None
@@ -1047,7 +1051,10 @@ class IntervalDtype(_BaseDtype):
                             "'closed' keyword does not match value "
                             "specified in dtype string"
                         )
-                    closed = parsed_closed
+                    closed = cast(
+                        "Literal['left', 'right', 'neither', 'both']",
+                        parsed_closed,
+                    )
                 subtype = parsed_subtype  # may be None for bare "interval"
 
         if subtype is None:
