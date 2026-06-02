@@ -217,7 +217,7 @@ class SplitScan(IR):
 
             row_group_num_rows = [
                 num_rows
-                for metadata in parquet_metadatas
+                for metadata in parquet_metadatas.metadata
                 for num_rows in metadata.row_group_num_rows
             ]
 
