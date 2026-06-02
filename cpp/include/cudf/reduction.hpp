@@ -34,7 +34,8 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  *
  * The `SUM_WITH_OVERFLOW` aggregation is a special case that detects integer
  * overflow during summation of signed integer or decimal values and returns a struct
- * containing both the sum result and an overflow flag.
+ * containing both the sum result and an overflow flag. On overflow the sum value
+ * is unspecified; the boolean flag is the source of truth.
  *
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (e.g. timestamp or string).
