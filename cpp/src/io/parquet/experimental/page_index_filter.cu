@@ -994,9 +994,6 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Input row bitmask should be of type BOOL8");
 
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
-  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<cudf::size_type>::max()),
-               "Total rows in row groups exceed the cudf column size limit",
-               std::overflow_error);
 
   CUDF_EXPECTS(
     std::cmp_less_equal(static_cast<std::size_t>(row_mask_offset) + total_rows, row_mask.size()),
