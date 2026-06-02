@@ -529,8 +529,6 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("file://") for p in self.paths):
-            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths

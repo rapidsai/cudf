@@ -7,6 +7,7 @@ import gzip
 import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import numpy as np
 import pytest
@@ -523,13 +524,16 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path) -> None:
-    tmp_path.mkdir(exist_ok=True)
-    path = tmp_path / "out.parquet"
+@pytest.mark.parametrize("subdir", ["foo", "foo=bar"])
+def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path, subdir: str) -> None:
+    target_dir = tmp_path / subdir
+    target_dir.mkdir()
+    path = target_dir / "out.parquet"
     df = pl.DataFrame({"a": 1})
     df.write_parquet(path)
-    q = pl.scan_parquet(f"file://{path}")
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+    encoded = quote(str(path), safe="/")
+    q = pl.scan_parquet(f"file://{encoded}")
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("chunked", [False, True])

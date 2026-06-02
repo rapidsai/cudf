@@ -11,6 +11,7 @@ from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
+from urllib.parse import unquote, urlparse
 
 import polars as pl
 
@@ -69,6 +70,16 @@ def _align_decimal_float_for_comparison(
             for op in operands
         )
     return operands
+
+
+def _strip_file_uri(path: str) -> str:
+    # file:///foo/path is treated as a local path. Polars
+    # rejects file:// URIs with any non-empty host, so
+    # we don't need to handle file://host/foo/path paths
+    parsed = urlparse(path)
+    if parsed.scheme != "file":
+        return path
+    return unquote(parsed.path)
 
 
 def _check_compression(data: bytes) -> str | None:
@@ -325,7 +336,7 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
-    paths = node.paths
+    paths = [_strip_file_uri(p) for p in node.paths]
     # Polars can produce a Scan with an empty ``node.paths`` (eg. the native
     # Iceberg reader on a table with no data files yet). In this case, polars returns an
     # empty DataFrame with the declared schema. Mirror that here by
