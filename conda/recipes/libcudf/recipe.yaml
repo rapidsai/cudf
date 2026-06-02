@@ -83,6 +83,7 @@ cache:
       - ${{ stdlib("c") }}
     host:
       - librmm =${{ minor_version }}
+      - librapidsmpf
       - libkvikio =${{ minor_version }}
       - cuda-cudart-dev
       - cuda-nvrtc-dev
