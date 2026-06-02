@@ -32,6 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
@@ -58,6 +59,16 @@ __device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t co
   uint64_t v = 0;
   memcpy(&v, data.data() + pos, width);
   return v;
+}
+
+// Safely narrow a decoded value to size_type
+__device__ inline cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64_t> value)
+{
+  if (!value.has_value() ||
+      value.value() > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
+    return cuda::std::nullopt;
+  }
+  return static_cast<size_type>(value.value());
 }
 
 __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
@@ -121,8 +132,9 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   auto const offs_start  = uint64_t{1} + num_elts_size + n * field_id_size;
   auto const values_base = offs_start + (n + 1) * field_off_size;
   // Sentinel offset (entry n) holds the total size of the values region.
-  auto const sentinel =
-    read_uint(enc, static_cast<size_type>(offs_start + n * field_off_size), field_off_size);
+  auto const sentinel_pos = narrow_cast(offs_start + n * field_off_size);
+  if (!sentinel_pos.has_value()) { return cuda::std::nullopt; }
+  auto const sentinel = read_uint(enc, sentinel_pos.value(), field_off_size);
   if (!sentinel.has_value()) { return cuda::std::nullopt; }
   return values_base + sentinel.value();
 }
@@ -138,22 +150,23 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   if (version != variant_version_v1) { return cuda::std::nullopt; }
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
-  size_type pos        = 1;
-  auto const dict_size = read_uint(meta, pos, offset_size);
-  if (!dict_size.has_value()) { return cuda::std::nullopt; }
+  size_type pos          = 1;
+  auto const num_entries = narrow_cast(read_uint(meta, pos, offset_size));
+  if (!num_entries.has_value()) { return cuda::std::nullopt; }
   pos += offset_size;
 
-  // Locate the offsets array
   size_type const offsets_start = pos;
-  size_type const offsets_bytes = (dict_size.value() + 1) * offset_size;
-  if (offsets_start + offsets_bytes > meta_len) { return cuda::std::nullopt; }
+  auto const offsets_bytes      = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
+  if (offsets_bytes > static_cast<uint64_t>(meta_len - offsets_start)) {
+    return cuda::std::nullopt;
+  }
 
   auto start_off = read_uint(meta, offsets_start, offset_size);
   if (!start_off.has_value()) { return cuda::std::nullopt; }
-  auto const strings_base = offsets_start + offsets_bytes;
+  auto const strings_base = offsets_start + static_cast<size_type>(offsets_bytes);
   // Bytes available for dictionary string payloads
   auto const strings_extent = meta_len - strings_base;
-  for (size_type i = 0; i < dict_size.value(); ++i) {
+  for (size_type i = 0; i < num_entries.value(); ++i) {
     auto const end_off = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
     if (!end_off.has_value()) { return cuda::std::nullopt; }
     if (end_off.value() < start_off.value() || end_off.value() > strings_extent) {
@@ -180,29 +193,29 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   int const value_header   = (vm >> 2) & 0x3F;
   int const field_off_size = (value_header & 0x03) + 1;
   int const field_id_size  = ((value_header >> 2) & 0x03) + 1;
-  bool const is_large      = ((value_header >> 4) & 0x01) != 0;
+  int const num_elts_size  = ((value_header >> 4) & 0x01) != 0 ? 4 : 1;
 
-  size_type pos       = 1;
-  auto const num_elts = read_uint(val, pos, is_large ? 4 : 1);
-  if (!num_elts.has_value()) { return {}; }
-  pos += is_large ? 4 : 1;
+  size_type pos         = 1;
+  auto const num_fields = narrow_cast(read_uint(val, pos, num_elts_size));
+  if (!num_fields.has_value()) { return {}; }
+  pos += num_elts_size;
 
   size_type const field_ids_start = pos;
-  size_type const field_ids_bytes = num_elts.value() * field_id_size;
-  if (field_ids_start + field_ids_bytes > val_len) { return {}; }
+  auto const field_ids_bytes      = static_cast<uint64_t>(num_fields.value()) * field_id_size;
+  if (field_ids_bytes > val_len - field_ids_start) { return {}; }
 
-  size_type const field_offs_start = field_ids_start + field_ids_bytes;
-  size_type const field_offs_bytes = (num_elts.value() + 1) * field_off_size;
-  if (field_offs_start + field_offs_bytes > val_len) { return {}; }
+  size_type const field_offs_start = field_ids_start + static_cast<size_type>(field_ids_bytes);
+  auto const field_offs_bytes = (static_cast<uint64_t>(num_fields.value()) + 1) * field_off_size;
+  if (field_offs_bytes > val_len - field_offs_start) { return {}; }
 
-  size_type const values_base = field_offs_start + field_offs_bytes;
+  size_type const values_base = field_offs_start + static_cast<size_type>(field_offs_bytes);
   // Maximum legitimate field-offset value: bytes available after values_base
   auto const values_extent = val_len - values_base;
 
   // Find the matching field ID and its start offset
   bool found           = false;
   uint64_t match_start = 0;
-  for (size_type i = 0; i < num_elts.value(); ++i) {
+  for (size_type i = 0; i < num_fields.value(); ++i) {
     auto const fid = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
     if (!fid.has_value()) { return {}; }
     if (cuda::std::cmp_not_equal(fid.value(), field_id)) { continue; }
