@@ -1002,15 +1002,6 @@ class IntervalDtype(_BaseDtype):
     name = "interval"
     closed: Literal["left", "right", "neither", "both"] | None
 
-    # Regex used only to detect whether a string names an IntervalDtype (see
-    # ``_is_interval_dtype``); actual parsing is delegated to pandas. Matches
-    # "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
-    # (subtype itself may contain "[...]" e.g. "datetime64[ns]").
-    _match = re.compile(
-        r"^(I|i)nterval"
-        r"(\[(?P<subtype>[^,]+?)(,\s*(?P<closed>left|right|both|neither))?\])?$"
-    )
-
     def __init__(
         self,
         subtype: None | Dtype = None,
@@ -1365,6 +1356,16 @@ def is_decimal_dtype(obj):
     )
 
 
+# Regex used only to detect whether a string names an IntervalDtype; actual
+# parsing of such strings is delegated to pandas in ``IntervalDtype``. Matches
+# "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
+# (subtype itself may contain "[...]" e.g. "datetime64[ns]").
+_INTERVAL_DTYPE_STRING_MATCH = re.compile(
+    r"^(I|i)nterval"
+    r"(\[(?P<subtype>[^,]+?)(,\s*(?P<closed>left|right|both|neither))?\])?$"
+)
+
+
 def _is_interval_dtype(obj):
     return (
         isinstance(
@@ -1381,7 +1382,7 @@ def _is_interval_dtype(obj):
         )
         or (
             isinstance(obj, str)
-            and IntervalDtype._match.match(obj) is not None
+            and _INTERVAL_DTYPE_STRING_MATCH.match(obj) is not None
         )
         or (
             isinstance(
