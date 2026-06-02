@@ -145,8 +145,18 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        row_groups : list
-            List of row groups to read
+        row_groups : list[list[int]]
+            Row groups to read, one inner list per input source.
+
+        Notes
+        -----
+        Rows from source ``i`` are emitted before rows from source ``j`` for
+        ``j > i``. Within each source, row groups appear in the given order;
+        the reader does not sort or deduplicate them, and repeated indices are
+        emitted multiple times. An empty inner list means that source
+        contributes no rows. When unset, all row groups are read in source
+        order, then on-disk order within each source. Row groups removed by
+        predicate pushdown keep their relative order.
 
         Returns
         -------

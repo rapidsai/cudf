@@ -698,8 +698,7 @@ TYPED_WITH_STATS(numeric::decimal32);
 TYPED_WITH_STATS(numeric::decimal64);
 TYPED_WITH_STATS(numeric::decimal128);
 
-// =============================================================================
-// Helpers for row-group output ordering tests.
+// helpers for row-group output ordering tests
 
 ordered_rg_source make_ordered_rg_source(int file_id,
                                          cudf::size_type num_row_groups,

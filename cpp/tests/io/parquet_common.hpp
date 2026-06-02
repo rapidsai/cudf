@@ -155,38 +155,29 @@ std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
 template <typename T>
 std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string const& filename);
 
-// =============================================================================
-// Helpers for row-group output ordering tests.
-//
-// A single source written with one int32 column whose values follow
-// `value(file_id, rg_idx, row) = file_id * 10000 + rg_idx * rows_per_row_group + row`.
-// Each row group occupies a disjoint value range, so any reorder by the reader
-// is detectable via table equality on the concatenated output.
-
+// A source for row-group output ordering tests: a parquet file plus the in-memory ground-truth
+// table used for slicing. The single int32 column is laid out so each row group holds a disjoint
+// value range (value = file_id * 10000 + rg_idx * rows_per_row_group + row), so any reorder by the
+// reader is detectable via table equality on the concatenated output.
 struct ordered_rg_source {
-  std::unique_ptr<cudf::table> table;  // in-memory ground truth used for slicing
+  std::unique_ptr<cudf::table> table;
   std::string filepath;
   cudf::size_type num_row_groups;
   cudf::size_type rows_per_row_group;
 };
 
-// Writes a parquet file with `num_row_groups` row groups, each containing
-// `rows_per_row_group` rows of a single int32 column laid out as described above.
-// Stats are emitted at row-group granularity so predicate pushdown can prune.
+// write a parquet file with num_row_groups row groups of rows_per_row_group int32 rows each,
+// emitting row-group-level statistics so predicate pushdown can prune.
 ordered_rg_source make_ordered_rg_source(int file_id,
                                          cudf::size_type num_row_groups,
                                          cudf::size_type rows_per_row_group = 100);
 
-// Returns a table_view over the rows that belong to row group `rg_idx`
-// of `src.table`. Valid for `0 <= rg_idx < src.num_row_groups`.
+// return a view over the rows of row group rg_idx in src.table.
 cudf::table_view get_row_group_slice(ordered_rg_source const& src, cudf::size_type rg_idx);
 
-// Builds the expected reader output for a given per-source row-group selection,
-// in source-major order with row groups within each source in the order given.
-// Repeated indices in an inner vector are repeated in the output. An empty inner
-// vector contributes nothing for that source.
-//
-// `sources[i]` corresponds to `rg_selection[i]`. Pointers must be non-null.
+// build the expected reader output for a per-source row-group selection: source-major, and in the
+// given order within each source (repeated indices kept, an empty inner vector contributes
+// nothing). sources[i] pairs with rg_selection[i]; pointers must be non-null.
 std::unique_ptr<cudf::table> build_expected_ordered_table(
   std::vector<ordered_rg_source const*> const& sources,
   std::vector<std::vector<cudf::size_type>> const& rg_selection);
