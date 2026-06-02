@@ -1692,8 +1692,17 @@ class Index(SingleColumnFrame):
 
         if not len(self):
             return self._return_get_indexer_result(result.values)
+
+        # Match the target against the index's values. For a categorical
+        # index, match against the decategorized values so that the targets
+        # are compared to actual category values. This also avoids casting a
+        # null-containing categorical to its (possibly non-nullable integer)
+        # category dtype, which is rejected under ``mode.pandas_compatible``.
+        haystack = self._column
+        if isinstance(haystack.dtype, CategoricalDtype):
+            haystack = haystack._get_decategorized_column()
         try:
-            lcol, rcol = _match_join_keys(needle, self._column, "inner")
+            lcol, rcol = _match_join_keys(needle, haystack, "inner")
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
