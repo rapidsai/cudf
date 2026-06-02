@@ -6,7 +6,6 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -50,10 +49,7 @@ struct column_path_hash {
 
   bool case_sensitive_names{true};
 
-  std::size_t operator()(std::string_view path) const
-  {
-    return std::hash<std::string>{}(normalize_column_path(path, case_sensitive_names));
-  }
+  std::size_t operator()(std::string_view path) const;
 };
 
 /**
@@ -66,10 +62,7 @@ struct column_path_equal {
 
   bool case_sensitive_names{true};
 
-  bool operator()(std::string_view lhs, std::string_view rhs) const
-  {
-    return are_column_paths_equal(lhs, rhs, case_sensitive_names);
-  }
+  bool operator()(std::string_view lhs, std::string_view rhs) const;
 };
 
 /**
@@ -90,12 +83,8 @@ using column_path_map = std::unordered_map<std::string, Value, column_path_hash,
  * @param bucket_hint Optional initial bucket count
  * @return An empty `column_path_set` using the requested policy
  */
-[[nodiscard]] inline column_path_set make_column_path_set(bool case_sensitive_names,
-                                                          std::size_t bucket_hint = 0)
-{
-  return column_path_set(
-    bucket_hint, column_path_hash{case_sensitive_names}, column_path_equal{case_sensitive_names});
-}
+[[nodiscard]] column_path_set make_column_path_set(bool case_sensitive_names,
+                                                   std::size_t bucket_hint = 0);
 
 /**
  * @brief Constructs an empty `column_path_map` whose hash/equality use the given policy.
