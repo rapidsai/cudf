@@ -138,7 +138,6 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
 std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ranges() const
 {
   std::vector<text::byte_range_info> page_index_byte_ranges;
-  page_index_byte_ranges.reserve(per_file_metadata.size());
   std::transform(per_file_metadata.begin(),
                  per_file_metadata.end(),
                  std::back_inserter(page_index_byte_ranges),
@@ -222,25 +221,31 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
 std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  std::size_t total_rows = 0;
+  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
+               "Encountered unexpected number of input row group indices",
+               std::invalid_argument);
 
-  std::for_each(
+  return std::accumulate(
     cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{row_group_indices.size()},
-    [&](auto const src_idx) {
-      auto const& pfm = per_file_metadata[src_idx];
-      for (auto const row_group_idx : row_group_indices[src_idx]) {
-        CUDF_EXPECTS(
-          std::cmp_greater_equal(row_group_idx, size_type{0}) and
-            std::cmp_less(row_group_idx, pfm.row_groups.size()),
-          "Encountered out-of-bounds row group index for data source. Row group index: " +
-            std::to_string(row_group_idx) + ", Source index: " + std::to_string(src_idx) +
-            ", Number of row groups: " + std::to_string(pfm.row_groups.size()));
-        total_rows += pfm.row_groups[row_group_idx].num_rows;
-      }
+    std::size_t{0},
+    [&](auto sum, auto const src_idx) {
+      auto const& file_metadata = per_file_metadata[src_idx];
+      return std::accumulate(
+        row_group_indices[src_idx].begin(),
+        row_group_indices[src_idx].end(),
+        sum,
+        [&](auto sum, auto const row_group_idx) {
+          CUDF_EXPECTS(std::cmp_greater_equal(row_group_idx, 0) and
+                         std::cmp_less(row_group_idx, file_metadata.row_groups.size()),
+                       std::format("Encountered out-of-bounds row group index for data source. Row "
+                                   "group index: {}, Source index: {}, Number of row groups: {}",
+                                   row_group_idx,
+                                   src_idx,
+                                   file_metadata.row_groups.size()));
+          return sum + file_metadata.row_groups[row_group_idx].num_rows;
+        });
     });
-
-  return total_rows;
 }
 
 std::tuple<std::vector<input_column_info>,

@@ -998,9 +998,10 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Total rows in row groups exceed the cudf column size limit",
                std::overflow_error);
 
-  CUDF_EXPECTS(std::cmp_less_equal(row_mask_offset + total_rows, row_mask.size()),
-               "Mismatch in total rows in input row mask and row groups",
-               std::invalid_argument);
+  CUDF_EXPECTS(
+    std::cmp_less_equal(static_cast<std::size_t>(row_mask_offset) + total_rows, row_mask.size()),
+    "Encountered a mismatch in number of rows in the row group pass and the row mask size",
+    std::invalid_argument);
 
   // Return an empty vector if all rows are invalid or all rows are required
   if (std::cmp_equal(row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream),

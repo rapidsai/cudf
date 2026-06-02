@@ -6,6 +6,7 @@
 #include "io/comp/common.hpp"
 #include "io/parquet/parquet_common.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -21,8 +22,12 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 
+#include <functional>
+#include <mutex>
 #include <numeric>
+#include <stdexcept>
 #include <tuple>
+#include <type_traits>
 
 /**
  * @file parquet_io_utils.cpp
@@ -31,29 +36,149 @@
 
 namespace cudf::io::parquet {
 
+namespace detail {
+
+/**
+ * @brief Dispatches the fetch task for each source index and collects the results
+ *
+ * Dispatches sequentially or using host worker pool depending on the number of sources.
+ *
+ * @tparam Task Callable invocable as `fetch_task(std::size_t source_idx)`
+ * @param num_sources Number of sources to process
+ * @param fetch_task Task to run for each source index
+ * @return Vector of results, one per source, in source order
+ */
+template <typename Task>
+auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
+{
+  using result_type = std::invoke_result_t<Task, std::size_t>;
+
+  auto constexpr parallel_threshold = 32;
+
+  std::vector<result_type> results;
+  results.reserve(num_sources);
+
+  if (num_sources < parallel_threshold) {
+    // Run sequentially to avoid task dispatch overhead
+    std::for_each(cuda::counting_iterator<std::size_t>(0),
+                  cuda::counting_iterator<std::size_t>(num_sources),
+                  [&](std::size_t source_idx) { results.emplace_back(fetch_task(source_idx)); });
+  } else {
+    // Dispatch the tasks to the host worker pool
+    std::vector<std::future<result_type>> tasks;
+    tasks.reserve(num_sources);
+    std::for_each(cuda::counting_iterator<std::size_t>(0),
+                  cuda::counting_iterator<std::size_t>(num_sources),
+                  [&](std::size_t source_idx) {
+                    tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+                      [&fetch_task, source_idx]() { return fetch_task(source_idx); }));
+                  });
+    std::transform(tasks.begin(), tasks.end(), std::back_inserter(results), [](auto& task) {
+      return task.get();
+    });
+  }
+  return results;
+}
+
+/**
+ * @copydoc cudf::io::parquet::fetch_footers_to_host
+ */
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+{
+  // Helper to fetch footer from a datasource
+  auto const fetch_footer = [](cudf::io::datasource& datasource) {
+    constexpr auto header_len = sizeof(file_header_s);
+    constexpr auto ender_len  = sizeof(file_ender_s);
+    size_t const len          = datasource.size();
+    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+
+    auto header_buffer = datasource.host_read(0, header_len);
+    auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
+    auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
+    auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
+    CUDF_EXPECTS(header->magic == parquet_magic, "Corrupted header");
+    CUDF_EXPECTS(ender->magic == parquet_magic, "Corrupted footer");
+    CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
+                 "Incorrect footer length");
+
+    return datasource.host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  };
+
+  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+    return fetch_footer(datasources[source_idx].get());
+  });
+}
+
+/**
+ * @copydoc cudf::io::parquet::fetch_page_indexes_to_host
+ */
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
+{
+  CUDF_EXPECTS(datasources.size() == page_index_bytes_per_source.size(),
+               "Encountered mismatch in number of datasources and page index byte ranges");
+
+  // Helper to fetch page index bytes from a datasource
+  auto const fetch_page_index = [](cudf::io::datasource& datasource,
+                                   cudf::io::text::byte_range_info const& page_index_bytes) {
+    CUDF_EXPECTS(
+      page_index_bytes.offset() >= 0 and
+        std::cmp_less_equal(page_index_bytes.offset() + page_index_bytes.size(), datasource.size()),
+      std::format("Invalid page index byte range: offset={}, size={}, datasource_size={}",
+                  page_index_bytes.offset(),
+                  page_index_bytes.size(),
+                  datasource.size()),
+      std::out_of_range);
+    return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
+  };
+
+  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+    return fetch_page_index(datasources[source_idx].get(), page_index_bytes_per_source[source_idx]);
+  });
+}
+
+}  // namespace detail
+
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = datasource.size();
+  CUDF_FUNC_RANGE();
 
-  auto header_buffer = datasource.host_read(0, header_len);
-  auto const header  = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
-  auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
-  CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
+  // Wrap the input into an array and delegate to the detail multi-source API
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  auto footer_buffers = detail::fetch_footers_to_host({datasources.data(), datasources.size()});
+  return std::move(footer_buffers.front());
+}
 
-  return datasource.host_read(len - ender->footer_len - ender_len, ender->footer_len);
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+{
+  CUDF_FUNC_RANGE();
+  return detail::fetch_footers_to_host(datasources);
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes)
 {
-  return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
+  CUDF_FUNC_RANGE();
+
+  // Wrap the inputs into arrays and delegate to the detail multi-source API
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  std::array<cudf::io::text::byte_range_info, 1> page_index_bytes_per_source{page_index_bytes};
+
+  auto page_index_buffers = detail::fetch_page_indexes_to_host(
+    {datasources.data(), datasources.size()},
+    {page_index_bytes_per_source.data(), page_index_bytes_per_source.size()});
+  return std::move(page_index_buffers.front());
+}
+
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
+{
+  CUDF_FUNC_RANGE();
+  return detail::fetch_page_indexes_to_host(datasources, page_index_bytes_per_source);
 }
 
 std::tuple<std::vector<rmm::device_buffer>,
