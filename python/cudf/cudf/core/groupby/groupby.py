@@ -1937,7 +1937,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
-            index_names=self.obj._index_names,  # type: ignore[arg-type]
+            index_names=self.obj.index.names,
         )
         if not include_groups and isinstance(grouped_values, DataFrame):
             selection = getattr(self, "_selection", None)

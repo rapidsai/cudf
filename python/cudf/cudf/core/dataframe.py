@@ -3448,7 +3448,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self._data._from_columns_like_self(
                     itertools.repeat(cond._column, self._num_columns),
                     verify=False,
-                )
+                ),
+                index=cond.index,
             )
         elif hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
