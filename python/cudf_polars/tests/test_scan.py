@@ -524,7 +524,19 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("subdir", ["foo", "foo=bar"])
+@pytest.mark.parametrize(
+    "subdir",
+    [
+        "foo",
+        pytest.param(
+            "foo=bar",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pola-rs/polars/issues/27840",
+                strict=True,
+            ),
+        ),
+    ],
+)
 def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path, subdir: str) -> None:
     target_dir = tmp_path / subdir
     target_dir.mkdir()
