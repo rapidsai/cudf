@@ -37,7 +37,7 @@ namespace io::parquet::experimental {
  * Path grammar:
  *   path  := "$"? first_step ("." name)*
  *   first := name | "." name
- *   name  := [A-Za-z_][A-Za-z0-9_]*
+ *   name  := [^.\[]+   // any byte except '.' (step separator) and '[' (reserved)
  *
  * Examples:
  *   "x"          -> top-level field "x" (leading $ optional)

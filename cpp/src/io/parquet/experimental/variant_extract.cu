@@ -451,6 +451,7 @@ struct cast_variant_launcher {
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
     cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     auto const null_count =
       num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
@@ -576,6 +577,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     d_sizes,
     d_src_offsets,
     d_null_mask);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // Convert sizes to offsets
   auto [offsets_column, total_bytes] =
@@ -622,6 +624,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
 {
   validate_variant_child(values);
   size_type const num_rows = values.size();
+  if (num_rows == 0) { return make_empty_column(desired_type); }
 
   auto val_device_view = column_device_view::create(values, stream);
   cudf::detail::lists_column_device_view val_lists_device_view(*val_device_view);

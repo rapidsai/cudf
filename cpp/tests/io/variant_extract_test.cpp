@@ -566,6 +566,18 @@ TEST_F(ExtractVariantFieldTest, NullsAtDifferentDepths)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*got, expected);
 }
 
+TEST_F(ExtractVariantFieldTest, EmptyInput)
+{
+  auto const stream  = cudf::test::get_default_stream();
+  auto const variant = cudf::empty_like(make_xyz_three_row_variant());
+
+  auto got = cudf::io::parquet::experimental::extract_variant_field(
+    *variant, "x", cudf::data_type{cudf::type_id::INT32}, stream);
+  EXPECT_EQ(got->type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(got->size(), 0);
+  EXPECT_EQ(got->null_count(), 0);
+}
+
 struct GetVariantFieldTest : public cudf::test::BaseFixture {};
 
 TEST_F(GetVariantFieldTest, ApacheObjectPrimitive)
@@ -609,6 +621,18 @@ TEST_F(GetVariantFieldTest, GetAndCastMatchesExtract)
     intermediate->view(), cudf::data_type{cudf::type_id::INT32}, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_x, *two_step_x);
+}
+
+TEST_F(GetVariantFieldTest, EmptyInput)
+{
+  auto const stream  = cudf::test::get_default_stream();
+  auto const variant = cudf::empty_like(make_xyz_three_row_variant());
+
+  auto got = cudf::io::parquet::experimental::get_variant_field(*variant, "x", stream);
+  EXPECT_EQ(got->type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(got->size(), 0);
+  EXPECT_EQ(got->null_count(), 0);
+  EXPECT_EQ(cudf::lists_column_view{got->view()}.child().type().id(), cudf::type_id::UINT8);
 }
 
 struct CastVariantTest : public cudf::test::BaseFixture {};
@@ -676,4 +700,18 @@ TEST_F(CastVariantTest, MismatchedTypeYieldsNull)
     value, cudf::data_type{cudf::type_id::INT32}, stream);
   ASSERT_EQ(got->size(), 1);
   EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(CastVariantTest, EmptyInput)
+{
+  auto const stream = cudf::test::get_default_stream();
+  auto const values =
+    cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
+
+  for (auto const id : {cudf::type_id::INT32, cudf::type_id::STRING}) {
+    auto got = cudf::io::parquet::experimental::cast_variant(*values, cudf::data_type{id}, stream);
+    EXPECT_EQ(got->type().id(), id);
+    EXPECT_EQ(got->size(), 0);
+    EXPECT_EQ(got->null_count(), 0);
+  }
 }
