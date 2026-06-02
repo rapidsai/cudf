@@ -354,6 +354,7 @@ fi
 if hasArg libcudf_streaming; then
     cmake -S "$REPODIR/cpp/libcudf_streaming" -B "${STREAMING_LIB_BUILD_DIR}" \
           -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+          -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           "${EXTRA_CMAKE_ARGS[@]}"
