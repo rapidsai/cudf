@@ -14,7 +14,7 @@
 
 Environment* GlobalEnvironment = nullptr;
 
-Environment::Environment(int argc, char** argv) : argc_(argc), argv_(argv) {}
+Environment::Environment(int, char**) {}
 
 TestEnvironmentType Environment::type() const { return TestEnvironmentType::SINGLE; }
 

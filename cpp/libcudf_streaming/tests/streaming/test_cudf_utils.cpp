@@ -62,6 +62,7 @@ TEST_F(BaseEstimatedMemoryUsageTest, StringType)
     {},                                                                   // Empty column
     {"hello"},                                                            // Single string
     {"hello", "world", "test"},                                           // Multiple strings
+    {"café", "こんにちは", "gpu"},                                        // Multi-byte UTF-8
     {"", "a", "very long string that should take more memory", "short"},  // Mixed lengths
     std::vector<std::string>(100, "repeated string")                      // Many repeated strings
   };
