@@ -52,6 +52,7 @@ from cudf_polars.dsl.tracing import (
     log_do_evaluate,
     nvtx_annotate_cudf_polars,
 )
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -130,6 +131,10 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
+    parquet_file_metadata
+        A cache of parquet file metadata. The keys are the ``paths`` of Scan nodes
+        with a ``parquet`` type. The values are a list of ``FileMetaData`` objects
+        associated with those ``paths``.
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
@@ -191,17 +196,36 @@ class IRExecutionContext:
             yield result_stream
 
 
-@nvtx_annotate_cudf_polars(message="PrefetchParquetFootersForPaths")
-def _fetch_parquet_footers_for_paths(
+@nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
+def _prefetch_parquet_footers_for_paths(
     paths: tuple[str, ...],
 ) -> tuple[tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]]:
+    """
+    Prefetch parquet footers for a list of paths.
+
+    This is typically executed concurrently with prefetch operations for other
+    groups of ``paths`` for other ``Scan`` nodes.
+
+    Parameters
+    ----------
+    paths
+        The tuple of paths to prefetch. These correspond to ``paths`` in a ``Scan`` node.
+
+    Returns
+    -------
+    paths
+        The original input ``paths``. Useful for associating the result with the metadata
+        when executing out of order concurrently.
+    metadata
+        The list of ``FileMetaData`` objects for the ``paths``.
+    """
     metadata = plc.io.parquet_metadata.read_parquet_footers(
         plc.io.SourceInfo(list(paths))
     )
     return paths, metadata
 
 
-@nvtx_annotate_cudf_polars(message="PrefetchParquetFileMetadataForIR")
+@nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
 def prefetch_parquet_file_metadata_for_ir(
     root: IR,
     context: IRExecutionContext,
@@ -218,8 +242,6 @@ def prefetch_parquet_file_metadata_for_ir(
         metadata concurrently, its ``parquet_file_metadata`` is mutated
         to cache the newly read parquet metadata.
     """
-    from cudf_polars.dsl.traversal import traversal
-
     groups = {
         tuple(node.paths)
         for node in traversal([root])
@@ -228,13 +250,9 @@ def prefetch_parquet_file_metadata_for_ir(
     if not groups:
         return
 
-    missing_files = {
-        (path,)
-        for group in groups
-        for path in group
-        if (path,) not in context.parquet_file_metadata
+    missing_paths = {
+        paths for paths in groups if paths not in context.parquet_file_metadata
     }
-
     cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
 
     if context.py_executor is None:
@@ -244,26 +262,16 @@ def prefetch_parquet_file_metadata_for_ir(
         cm = contextlib.nullcontext()
         executor = context.py_executor
 
-    if len(missing_files) > 0:
+    if missing_paths:
         with cm:
             futures = [
-                executor.submit(_fetch_parquet_footers_for_paths, missing_file)
-                for missing_file in missing_files
+                executor.submit(_prefetch_parquet_footers_for_paths, paths)
+                for paths in missing_paths
             ]
 
             for future in concurrent.futures.as_completed(futures):
                 paths, metadata = future.result()
                 context.parquet_file_metadata.setdefault(paths, metadata)
-
-    for group in groups:
-        context.parquet_file_metadata.setdefault(
-            group,
-            list(
-                itertools.chain.from_iterable(
-                    context.parquet_file_metadata[(path,)] for path in group
-                )
-            ),
-        )
 
 
 _BINOPS = {
