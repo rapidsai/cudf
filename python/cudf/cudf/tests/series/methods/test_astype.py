@@ -1199,11 +1199,20 @@ def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(dtype):
 
 
 @pytest.mark.parametrize("dtype", ["bool", np.dtype("bool")])
-def test_categorical_astype_nan_to_bool_pandas_compat(dtype):
-    # pandas returns object dtype here; cudf keeps a nullable bool column.
+def test_categorical_astype_nan_to_bool_pandas_compat_deviation(dtype):
+    # cuDF intentionally deviates from pandas here. Casting a null-containing
+    # categorical to ``bool`` under ``mode.pandas_compatible``:
+    #   * pandas promotes to ``object`` dtype, e.g. ``[True, True, nan]``
+    #   * cuDF has no object-backed bool, so it keeps a nullable ``bool``
+    #     column, e.g. ``[True, True, <NA>]``
+    psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
     with cudf.option_context("mode.pandas_compatible", True):
         got = gsr.astype(dtype)
+    # Confirm pandas' (divergent) object-dtype behavior so this test fails if
+    # pandas ever changes and the deviation needs revisiting.
+    assert psr.astype(dtype).dtype == object
+    # cuDF's intentional nullable-bool result.
     assert_eq(got, cudf.Series([True, True, None], dtype="bool"))
 
 
