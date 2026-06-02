@@ -124,8 +124,8 @@ class hybrid_scan_multifile {
   void reset_column_selection() const;
 
   /**
-   * @brief Filter the row groups using the byte range specified by [`bytes_to_skip`, `bytes_to_skip
-   * + bytes_to_read`)
+   * @brief Filter the row groups using the byte range specified by [`bytes_to_skip`,
+   * `bytes_to_skip + bytes_to_read`)
    *
    * Filters the row groups such that only the row groups that start within the byte range are
    * selected. Note that the last selected row group may end beyond the byte range.
