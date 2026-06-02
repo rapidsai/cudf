@@ -97,7 +97,7 @@ def test_source_info_invalid():
 
 def test_filepath_source_local_parquet(tmp_path):
     path = tmp_path / "data.parquet"
-    table = plc.Table({"a": plc.Column([1, 2, 3])})
+    table = plc.Table([plc.Column.from_iterable_of_py([1, 2, 3])])
     plc.io.parquet.write_parquet(
         plc.io.parquet.ParquetWriterOptions.builder(
             plc.io.SinkInfo([str(path)]), table
