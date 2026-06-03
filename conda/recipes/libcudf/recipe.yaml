@@ -218,7 +218,7 @@ outputs:
       summary: libcudf_kafka library
 
   - package:
-      name: libcudf_streaming
+      name: libcudf-streaming
       version: ${{ version }}
     build:
       script:
@@ -262,7 +262,7 @@ outputs:
     about:
       homepage: https://rapids.ai/
       license: Apache-2.0
-      summary: libcudf_streaming library
+      summary: libcudf-streaming library
 
   - package:
       name: libcudf-example
@@ -362,7 +362,7 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
-        - ${{ pin_subpackage("libcudf_streaming", exact=True) }}
+        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
@@ -371,7 +371,7 @@ outputs:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
-        - ${{ pin_subpackage("libcudf_streaming", exact=True) }}
+        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
         - libcurand
         - cuda-sanitizer-api
       ignore_run_exports:
