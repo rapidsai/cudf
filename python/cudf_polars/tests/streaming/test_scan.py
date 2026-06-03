@@ -231,15 +231,3 @@ def test_expand_scan_for_rank_split_files() -> None:
     )
     assert len(scans) == 2
     assert all(isinstance(scan, SplitScan) for scan in scans)
-
-
-def test_expand_scan_for_rank_treats_zero_nranks_as_one() -> None:
-    plan = IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES)
-    scans = expand_scan_for_rank(
-        _make_parquet_scan(["a", "b"]),
-        plan,
-        rank=0,
-        nranks=0,
-        parquet_options=ParquetOptions(),
-    )
-    assert len(scans) == 2

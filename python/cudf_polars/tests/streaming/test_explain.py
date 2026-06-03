@@ -521,6 +521,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
         "prefix": f"{root}/",
         "typ": "parquet",
         "predicate": None,
+        "scan_count": 1,
     }
     if predicate is not None:
         q = q.filter(predicate)
@@ -537,7 +538,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     dag = serialize_query(q, engine)
 
     node = dag.nodes[dag.roots[0]]
-    assert node.type == "Scan"
+    assert node.type == "StreamingScan"
     assert node.properties == expected_properties
 
 
