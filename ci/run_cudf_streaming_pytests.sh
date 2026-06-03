@@ -5,6 +5,6 @@
 set -euo pipefail
 
 # Support invoking run_cudf_streaming_pytests.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_streaming/cudf_streaming
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_streaming/cudf_streaming/tests
 
-pytest --cache-clear "$@" tests
+pytest --cache-clear "$@" .

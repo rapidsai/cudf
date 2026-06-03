@@ -29,10 +29,17 @@ rapids-pip-retry install \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 rapids-logger "pytest cudf_streaming"
-pushd python/cudf_streaming/cudf_streaming
+pushd python/cudf_streaming/cudf_streaming/tests
+EXITCODE=0
 timeout 30m python -m pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=worksteal \
-  tests
+  . || EXITCODE=$?
+
+# Exit code 5 means no tests were collected (all skipped); acceptable when
+# communicator support (MPI/UCXX) is unavailable in the wheel test environment.
+if [ ${EXITCODE} -ne 0 ] && [ ${EXITCODE} -ne 5 ]; then
+  exit ${EXITCODE}
+fi
 popd

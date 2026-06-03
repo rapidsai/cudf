@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import importlib.util
 from typing import TYPE_CHECKING
 
 import pytest
@@ -14,12 +13,18 @@ from rapidsmpf.memory.buffer_resource import BufferResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 
-sys.path.insert(0, str(Path(__file__).parents[2]))
-
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from rapidsmpf.communicator.communicator import Communicator
+
+# Import fixtures (comm, device_mr, etc.) from rapidsmpf's test conftest
+# if available (conda installs include tests; wheel installs may not).
+_HAS_RAPIDSMPF_TEST_FIXTURES = (
+    importlib.util.find_spec("rapidsmpf.tests.conftest") is not None
+)
+if _HAS_RAPIDSMPF_TEST_FIXTURES:
+    pytest_plugins = ["rapidsmpf.tests.conftest"]
 
 
 @pytest.fixture
@@ -33,3 +38,16 @@ def context(comm: Communicator) -> Generator[Context, None, None]:
 
     with Context(comm.logger, br, options) as ctx:
         yield ctx
+
+
+if not _HAS_RAPIDSMPF_TEST_FIXTURES:
+
+    @pytest.fixture(params=["mpi", "ucxx"])
+    def comm(request):
+        """Fallback comm fixture that skips when rapidsmpf test infra is unavailable."""
+        pytest.skip("rapidsmpf test fixtures not installed")
+
+    @pytest.fixture
+    def stream():
+        """Fallback stream fixture that skips when rapidsmpf test infra is unavailable."""
+        pytest.skip("rapidsmpf test fixtures not installed")
