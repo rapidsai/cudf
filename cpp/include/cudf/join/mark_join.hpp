@@ -32,18 +32,18 @@ class mark_join;
 /**
  * @brief Mark-based hash join for semi/anti join with left table reuse.
  *
- * Builds a hash table from the left table using a multiset that allows
+ * Builds a hash table from the left (build) table using a multiset that allows
  * duplicate keys. The probe kernel atomically marks matching left entries via
  * CAS on the hash MSB, then a retrieve kernel collects marked (semi) or unmarked
  * (anti) entries.
  *
  * This class enables building the hash table once and probing multiple times
- * with different right tables, amortizing the build cost. Probe-side
+ * with different right (probe) tables, amortizing the build cost. Probe-side
  * prefiltering can be enabled at construction time via `join_prefilter`.
  *
  * @note This class is designed for the case where the **left table is reused**
  * across multiple semi/anti join operations. It should only be used when:
- * - The left table is **smaller** than the right table.
+ * - The left (build) table is **smaller** than the right (probe) table.
  *   Building a hash table from the larger table is memory-inefficient and
  *   leads to poor probe performance due to longer collision chains.
  * - The left table is **reasonably small** (e.g. ≤1M rows). The mark-based
@@ -70,7 +70,7 @@ class mark_join {
   /**
    * @brief Constructs a mark join object with explicit prefilter selection.
    *
-   * @param left The left table
+   * @param left The left table; the hash table is built from this table
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param prefilter Controls whether an optional probe-side prefilter is enabled
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -83,7 +83,7 @@ class mark_join {
   /**
    * @brief Constructs a mark join object with explicit prefilter selection.
    *
-   * @param left The left table
+   * @param left The left table; the hash table is built from this table
    * @param load_factor Hash table load factor in range (0,1]
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param prefilter Controls whether an optional probe-side prefilter is enabled
@@ -98,7 +98,7 @@ class mark_join {
   /**
    * @brief Returns left row indices that have at least one match in the right table.
    *
-   * @param right The right table
+   * @param right The right table; probed against the hash table built from the left table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned device memory
    * @return Device vector of left row indices
@@ -111,7 +111,7 @@ class mark_join {
   /**
    * @brief Returns left row indices that have no match in the right table.
    *
-   * @param right The right table
+   * @param right The right table; probed against the hash table built from the left table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned device memory
    * @return Device vector of left row indices
