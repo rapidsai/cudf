@@ -176,11 +176,10 @@ row_groups : int, or list, or a list of lists default None
     for each input. Rows are returned in input order, and in the given
     row-group order within each input; row groups are not sorted or
     deduplicated, so repeated indices are read multiple times.
-    When ``filters`` are also provided and handled by Python dataset
-    preprocessing, the requested row groups are intersected with row groups
-    selected by PyArrow's dataset filtering. In that case, the filtered row
-    groups follow the dataset row-group order, and repeated or non-ascending
-    entries from ``row_groups`` may not be preserved.
+
+    .. note::
+       When ``filters`` are also provided, the given order and any repeated
+       indices may not be preserved.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.
