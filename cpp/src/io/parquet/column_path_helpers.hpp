@@ -46,7 +46,6 @@ namespace cudf::io::parquet::detail {
  */
 struct column_path_hash {
   using is_transparent = void;
-
   bool case_sensitive_names{true};
 
   std::size_t operator()(std::string_view path) const;
@@ -59,7 +58,6 @@ struct column_path_hash {
  */
 struct column_path_equal {
   using is_transparent = void;
-
   bool case_sensitive_names{true};
 
   bool operator()(std::string_view lhs, std::string_view rhs) const;
@@ -71,12 +69,6 @@ struct column_path_equal {
 using column_path_set = std::unordered_set<std::string, column_path_hash, column_path_equal>;
 
 /**
- * @brief A map keyed by column path matched with a configurable case-sensitivity policy.
- */
-template <typename Value>
-using column_path_map = std::unordered_map<std::string, Value, column_path_hash, column_path_equal>;
-
-/**
  * @brief Constructs an empty `column_path_set` whose hash/equality use the given policy.
  *
  * @param case_sensitive_names Whether column-path matching is case-sensitive
@@ -85,6 +77,12 @@ using column_path_map = std::unordered_map<std::string, Value, column_path_hash,
  */
 [[nodiscard]] column_path_set make_column_path_set(bool case_sensitive_names,
                                                    std::size_t bucket_hint = 0);
+
+/**
+ * @brief A map keyed by column path matched with a configurable case-sensitivity policy.
+ */
+template <typename Value>
+using column_path_map = std::unordered_map<std::string, Value, column_path_hash, column_path_equal>;
 
 /**
  * @brief Constructs an empty `column_path_map` whose hash/equality use the given policy.
