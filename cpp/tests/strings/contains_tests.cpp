@@ -1036,3 +1036,31 @@ TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
       cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1}));
   }
 }
+
+TEST_F(StringsContainsTests, CrlfDefaultLfOnlyNoExtNewline)
+{
+  // Regression guard for the default (non-EXT_NEWLINE) path: WITHOUT EXT_NEWLINE only \n is a
+  // line terminator -- \r, \r\n, and NEL are ordinary characters. The CRLF-coupling change must
+  // NOT touch this path. Oracle here is cuDF's own "only \n" rule, NOT the JDK (which treats all
+  // terminators); so e.g. ^abc$ matches "abc\n"/"abc" but not "abc\r\n"/"abc\r"/"abc"+NEL.
+  auto input = cudf::test::strings_column_wrapper({"abc\r\n",
+                                                   "abc\n",
+                                                   "abc\r",
+                                                   "abc",
+                                                   "a\r\nb",
+                                                   "abc\r\n\r\n",
+                                                   "",
+                                                   "abc" NEXT_LINE,
+                                                   "a\nb\r\nc",
+                                                   "\r\n",
+                                                   "\r\nabc",
+                                                   "x\n\r",
+                                                   "a\r\rb",
+                                                   "a\n\nb"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto prog = cudf::strings::regex_program::create("^abc$");  // default flags: no EXT_NEWLINE
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *prog), expected);
+}
