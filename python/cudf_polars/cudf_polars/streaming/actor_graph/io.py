@@ -265,7 +265,7 @@ def _(
                 )
 
     # I have no idea if this is correct
-    new_ir = StreamingScan(scans, ir.schema)
+    new_ir = StreamingScan(scans, ir)
     rec.state["partition_info"][new_ir] = rec.state["partition_info"][ir]
     return new_ir, rec.state["partition_info"]
 
@@ -753,10 +753,9 @@ def make_rapidsmpf_read_parquet_node(
         ) from e
 
 
-# @generate_ir_sub_network.register(Scan)  # TODO: see if this even is hit?
 @generate_ir_sub_network.register(StreamingScan)
 def _(
-    ir: Scan, rec: SubNetGenerator
+    ir: StreamingScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     executor = config_options.executor
@@ -781,11 +780,11 @@ def _(
     if (
         parquet_options.use_rapidsmpf_native
         and (partition_info.count > 1 or _dynamic_planning_on(config_options))
-        and ir.typ == "parquet"
-        and ir.row_index is None
-        and ir.include_file_paths is None
-        and ir.n_rows == -1
-        and ir.skip_rows == 0
+        and ir.base_scan.typ == "parquet"
+        and ir.base_scan.row_index is None
+        and ir.base_scan.include_file_paths is None
+        and ir.base_scan.n_rows == -1
+        and ir.base_scan.skip_rows == 0
         and not distributed_split_files
     ):
         # Create new channel to so ch_out can be used to add metadata
@@ -793,7 +792,7 @@ def _(
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
             rec.state["comm"],
-            ir,
+            ir.base_scan,  # TODO: verify this...
             num_producers,
             ch_in,
             rec.state["stats"],
