@@ -221,14 +221,18 @@ TEST_F(StringsFindallTests, OneCaptureGroup)
 
 TEST_F(StringsFindallTests, EmptyMatch)
 {
-  auto input = cudf::test::strings_column_wrapper({"3-A", "4-May 5-Day 6-Hay", "x\r\ny"});
+  auto input = cudf::test::strings_column_wrapper({" ", "hello world", "x\r\ny"});
   auto sv    = cudf::strings_column_view(input);
+  using LCW  = cudf::test::lists_column_wrapper<cudf::string_view>;
 
-  auto pattern = std::string("^$");
-  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
-  LCW expected({LCW{}, LCW{}, LCW{}});
-  auto prog    = cudf::strings::regex_program::create(pattern);
-  auto results = cudf::strings::findall(sv, *prog);
+  auto expected = LCW({LCW{}, LCW{}, LCW{}});
+  auto prog     = cudf::strings::regex_program::create("^$", cudf::strings::regex_flags::MULTILINE);
+  auto results  = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  expected = LCW({LCW{}, LCW{"", "", "", ""}, LCW{"", "", "", ""}});
+  prog     = cudf::strings::regex_program::create("\\b");
+  results  = cudf::strings::findall(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
