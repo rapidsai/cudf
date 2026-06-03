@@ -327,9 +327,6 @@ rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 set(_rapids_logger_args)
-if(NOT BUILD_SHARED_LIBS OR CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
-  list(APPEND _rapids_logger_args BUILD_EXPORT_SET cudf-exports)
-endif()
 if(NOT CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
   list(APPEND _rapids_logger_args ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG} CPM_ARGS OPTIONS
        "BUILD_SHARED_LIBS OFF"
@@ -341,6 +338,10 @@ rapids_cpm_rapids_logger(${_rapids_logger_args})
 # must be in the installed config when CUDF_INSTALL_LIBRARY_DEPS is OFF. If it's ON then we always
 # export
 get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
+if(NOT BUILD_SHARED_LIBS OR NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
+  include("${rapids-cmake-dir}/export/package.cmake")
+  rapids_export_package(BUILD rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
+endif()
 if(CUDF_INSTALL_LIBRARY_DEPS OR NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
   include("${rapids-cmake-dir}/export/package.cmake")
   rapids_export_package(INSTALL rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
@@ -1116,14 +1117,13 @@ target_link_libraries(
 
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
 # their symbols are available to downstream users linking to libcudf.so without needing to link
-# against them directly. In this scenario, its public transitive dependencies must be promoted into
-# cudf's installed interface (consumers still need them at link time), and its export set metadata
-# (find_dependency calls, global targets) is merged into cudf-exports.
+# against them directly. Public absorbed dependencies still promote their public transitive
+# dependencies and export set metadata into cudf's interface.
 set(_absorbed_deps rmm rapids_logger)
+set(_private_absorbed_deps ${_absorbed_deps})
 foreach(_dep IN LISTS _absorbed_deps)
   set(_${_dep}_link ${_dep}::${_dep})
 endforeach()
-set(_rapids_logger_private_link)
 if(BUILD_SHARED_LIBS)
   # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
   # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
@@ -1145,13 +1145,23 @@ if(BUILD_SHARED_LIBS)
       continue()
     endif()
 
-    # Wrap with WHOLE_ARCHIVE so the static lib is absorbed into libcudf.so.
-    if(_dep STREQUAL "rapids_logger")
+    # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
+    # hidden from the installed interface.
+    set(_whole_archive_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
+    if(_dep IN_LIST _private_absorbed_deps)
       set(_${_dep}_link)
-      set(_rapids_logger_private_link $<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>)
-    else()
-      set(_${_dep}_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
+      target_link_libraries(cudf PRIVATE ${_whole_archive_link})
+      get_target_property(
+        _private_absorbed_include_dirs
+        ${_dep}::${_dep}
+        INTERFACE_INCLUDE_DIRECTORIES
+      )
+      if(_private_absorbed_include_dirs)
+        target_include_directories(cudf PUBLIC "$<BUILD_INTERFACE:${_private_absorbed_include_dirs}>")
+      endif()
+      continue()
     endif()
+    set(_${_dep}_link ${_whole_archive_link})
 
     # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
     # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
@@ -1183,7 +1193,7 @@ if(BUILD_SHARED_LIBS)
         PROPERTY "GLOBAL_TARGETS"
       )
       foreach(_pkg IN LISTS _pkg_names)
-        if(_dep STREQUAL "rapids_logger")
+        if(_pkg IN_LIST _private_absorbed_deps)
           continue()
         endif()
         # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
@@ -1197,7 +1207,6 @@ if(BUILD_SHARED_LIBS)
   endforeach()
 endif()
 target_link_libraries(cudf PUBLIC ${_rapids_logger_link} ${_rmm_link})
-target_link_libraries(cudf PRIVATE ${_rapids_logger_private_link})
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
