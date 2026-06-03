@@ -14,7 +14,7 @@ context:
   py_runtime_latest: "3.14"
 
 package:
-  name: cudf_streaming
+  name: cudf-streaming
   version: ${{ version }}
 
 source:
@@ -75,7 +75,7 @@ requirements:
     - python-abi3 ${{ py_abi_min }}.*
     - cuda-version =${{ cuda_version }}
     - pylibcudf =${{ version }}
-    - libcudf_streaming =${{ minor_version }}
+    - libcudf-streaming =${{ minor_version }}
     - rapidsmpf =${{ minor_version }}
     - rapids-build-backend >=0.4.0,<0.5.0
     - scikit-build-core>=0.11.0
@@ -83,7 +83,7 @@ requirements:
   run:
     - python
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
-    - libcudf_streaming =${{ minor_version }}
+    - libcudf-streaming =${{ minor_version }}
     - pylibcudf =${{ version }}
     - rapidsmpf =${{ minor_version }}
     - cuda-cudart

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import importlib.util
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,11 +19,13 @@ if TYPE_CHECKING:
 
 # Import fixtures (comm, device_mr, etc.) from rapidsmpf's test conftest
 # if available (conda installs include tests; wheel installs may not).
-_HAS_RAPIDSMPF_TEST_FIXTURES = (
-    importlib.util.find_spec("rapidsmpf.tests.conftest") is not None
-)
-if _HAS_RAPIDSMPF_TEST_FIXTURES:
+try:
+    import rapidsmpf.tests.conftest  # noqa: F401
+
+    _HAS_RAPIDSMPF_TEST_FIXTURES = True
     pytest_plugins = ["rapidsmpf.tests.conftest"]
+except (ImportError, ModuleNotFoundError):
+    _HAS_RAPIDSMPF_TEST_FIXTURES = False
 
 
 @pytest.fixture
