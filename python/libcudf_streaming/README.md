@@ -7,8 +7,8 @@ This package provides `libcudf_streaming.so` and a Python `load_library()` helpe
 ## Installation
 
 ```bash
-pip install libcudf_streaming-cu12  # For CUDA 12
-pip install libcudf_streaming-cu13  # For CUDA 13
+pip install libcudf-streaming-cu12  # For CUDA 12
+pip install libcudf-streaming-cu13  # For CUDA 13
 ```
 
 ## Usage
