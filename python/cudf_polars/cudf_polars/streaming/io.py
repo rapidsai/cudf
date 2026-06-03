@@ -132,7 +132,6 @@ def expand_scan_for_rank(
     list[Scan | SplitScan]
         Rank-local scan operations.
     """
-    nranks = max(nranks, 1)
     scans: list[Scan | SplitScan] = []
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         count = plan.factor * len(ir.paths)
