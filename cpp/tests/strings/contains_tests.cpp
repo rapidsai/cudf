@@ -929,8 +929,9 @@ TEST_F(StringsContainsTests, CrlfLineAnchorExtNewline)
     {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE});
   auto view = cudf::strings_column_view(input);
 
-  auto prog = cudf::strings::regex_program::create("^abc$", cudf::strings::regex_flags::EXT_NEWLINE);
-  auto both = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+  auto prog =
+    cudf::strings::regex_program::create("^abc$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto both    = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
                                                       cudf::strings::regex_flags::MULTILINE);
   auto prog_ml = cudf::strings::regex_program::create("^abc$", both);
 
@@ -954,7 +955,7 @@ TEST_F(StringsContainsTests, CrlfBolAnchorExtNewline)
   auto view  = cudf::strings_column_view(input);
   auto both  = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
                                                       cudf::strings::regex_flags::MULTILINE);
-  auto prog = cudf::strings::regex_program::create("^\n", both);
+  auto prog  = cudf::strings::regex_program::create("^\n", both);
 
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0});
   auto results  = cudf::strings::contains_re(view, *prog);
@@ -967,13 +968,24 @@ TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
   // both EXT_NEWLINE and EXT_NEWLINE|MULTILINE. All expecteds verified vs OpenJDK 17.
   // Column: CRLF, lone CR, lone LF, no-term, mid-CRLF, double-CRLF, empty, NEL,
   //         mixed, CRLF-only, leading-CRLF, reversed \n\r, \r\r, \n\n.
-  auto input = cudf::test::strings_column_wrapper(
-    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE,
-     "a\nb\r\nc", "\r\n", "\r\nabc", "x\n\r", "a\r\rb", "a\n\nb"});
+  auto input     = cudf::test::strings_column_wrapper({"abc\r\n",
+                                                       "abc\n",
+                                                       "abc\r",
+                                                       "abc",
+                                                       "a\r\nb",
+                                                       "abc\r\n\r\n",
+                                                       "",
+                                                       "abc" NEXT_LINE,
+                                                       "a\nb\r\nc",
+                                                       "\r\n",
+                                                       "\r\nabc",
+                                                       "x\n\r",
+                                                       "a\r\rb",
+                                                       "a\n\nb"});
   auto view      = cudf::strings_column_view(input);
   auto const EXT = cudf::strings::regex_flags::EXT_NEWLINE;
-  auto const MLX = static_cast<cudf::strings::regex_flags>(
-    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto const MLX = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                           cudf::strings::regex_flags::MULTILINE);
 
   {  // contains ^abc$  (non-multiline / multiline)
     auto p  = cudf::strings::regex_program::create("^abc$", EXT);
