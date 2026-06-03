@@ -75,9 +75,9 @@ def _strip_file_uri(path: str) -> str:
     # file:///foo/path is treated as a local path. Polars
     # rejects file:// URIs with any non-empty host, so
     # we don't need to handle file://host/foo/path paths
-    for prefix in ("file://", "file:"):
-        if path.startswith(prefix):
-            return path[len(prefix) :]
+    prefix = "file://"
+    if path.startswith(prefix):
+        return path[len(prefix) :]
     return path
 
 
