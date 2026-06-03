@@ -453,9 +453,10 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
         )
     else:
         # TODO: Investigate whether polars can raise ahead of time
-        if not keys:
-            # polars >= 1.40 rewrites an empty-key group_by into a Select, so
-            # this is unreachable on the latest polars used for coverage.
+        # polars >= 1.40 rewrites an empty-key group_by into a Select, so an
+        # empty-key group_by only reaches here on older polars; the raise is
+        # dead on the latest polars used for coverage.
+        if POLARS_VERSION_LT_140 and not keys:
             raise NotImplementedError(  # pragma: no cover
                 "at least one key is required in a group_by operation"
             )
