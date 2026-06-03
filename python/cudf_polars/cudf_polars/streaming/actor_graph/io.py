@@ -142,10 +142,14 @@ def io_lower_ir_graph(
     return mapper(ir)
 
 
-def _io_lower_pwise(
+@singledispatch
+def io_lower_ir_node(
     ir: IR, rec: IOLowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Lower children and preserve partitioning from a single child."""
+    """Lower the IR nodes for a given IR node."""
+    if not ir.children:
+        return ir, rec.state["partition_info"]
+
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
@@ -157,16 +161,6 @@ def _io_lower_pwise(
     new_node = ir.reconstruct(children)
     partition_info[new_node] = partition
     return new_node, partition_info
-
-
-@singledispatch
-def io_lower_ir_node(
-    ir: IR, rec: IOLowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Lower the IR nodes for a given IR node."""
-    if not ir.children:
-        return ir, rec.state["partition_info"]
-    return _io_lower_pwise(ir, rec)
 
 
 @io_lower_ir_node.register(Union)
@@ -268,7 +262,7 @@ def _(
                     )
                 )
 
-    # I have no idea if this is correct
+    # The PartitionInfo for the derived StreamingScan node is the same as the original Scan node.
     new_ir = StreamingScan(scans, ir)
     rec.state["partition_info"][new_ir] = rec.state["partition_info"][ir]
     return new_ir, rec.state["partition_info"]

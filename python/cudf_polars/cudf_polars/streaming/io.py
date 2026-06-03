@@ -306,8 +306,6 @@ class StreamingScan(IR):
     )
     _n_non_child_args = 2
     scans: list[Scan | SplitScan]
-    # These are essentially the base scan properties, shared by all the scans
-    # schema: Schema
     base_scan: Scan
 
     def __init__(self, scans: list[Scan | SplitScan], base_scan: Scan):
@@ -320,7 +318,6 @@ class StreamingScan(IR):
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
         # We don't need to include base_scan / schema, since it's in all the scan nodes.
-        # TODO: Why do we have it in the first place?
         return (type(self), *tuple(x.get_hashable() for x in self.scans))
 
 
