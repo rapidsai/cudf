@@ -140,7 +140,7 @@ class hybrid_scan_multifile {
    * @param row_group_indices Input row group indices, one per source
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered  row group indices, one per source
+   * @return Filtered row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,

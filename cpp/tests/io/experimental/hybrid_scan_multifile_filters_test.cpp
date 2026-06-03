@@ -233,23 +233,28 @@ TEST_F(HybridScanMultifileFiltersTest, ErrorFilterRowGroupsWithByteRanges)
 
   auto inputs = build_multifile_inputs(file_buffers);
 
-  auto options      = cudf::io::parquet_reader_options::builder().build();
-  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
-    inputs.footer_byte_spans, options);
-
-  auto const row_group_indices = reader->all_row_groups(options);
-  ASSERT_EQ(row_group_indices.size(), num_sources);
-
   // Setting `skip_bytes` or `num_bytes` is ambiguous when reading multiple sources. The reader is
   // expected to throw an exception if row groups are filtered using byte range in this case.
-  options.set_skip_bytes(1000);
-  EXPECT_THROW(std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
-               std::invalid_argument);
-
-  options.set_skip_bytes(0);
-  options.set_num_bytes(1000);
-  EXPECT_THROW(std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
-               std::invalid_argument);
+  {
+    auto const options = cudf::io::parquet_reader_options::builder().skip_bytes(1000).build();
+    auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+    auto const row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(row_group_indices.size(), num_sources);
+    EXPECT_THROW(
+      std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
+      std::invalid_argument);
+  }
+  {
+    auto const options = cudf::io::parquet_reader_options::builder().num_bytes(1000).build();
+    auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+    auto const row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(row_group_indices.size(), num_sources);
+    EXPECT_THROW(
+      std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
+      std::invalid_argument);
+  }
 }
 
 TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
