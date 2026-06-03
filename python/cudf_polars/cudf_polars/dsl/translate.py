@@ -646,12 +646,9 @@ def _(
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.IR:
-    if POLARS_VERSION_LT_141:
-        zlice = node.options  # pragma: no cover
-    else:
-        # polars >= 1.41 exposes the optional slice directly on the node
-        # instead of bundling it in an ``options`` attribute.
-        zlice = node.slice
+    # polars < 1.41 bundled the optional slice in an ``options`` attribute;
+    # 1.41+ exposes it directly on the node as ``slice``.
+    zlice = node.options if POLARS_VERSION_LT_141 else node.slice
     return ir.Union(schema, zlice, *(translator.translate_ir(n=n) for n in node.inputs))
 
 

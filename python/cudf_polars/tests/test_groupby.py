@@ -527,7 +527,8 @@ def test_groupby_empty_keys_raises(engine: pl.GPUEngine, request):
         if not POLARS_VERSION_LT_141 and is_streaming_engine(engine):
             request.applymarker(
                 pytest.mark.xfail(
-                    reason="len() row count lost in zero-column streaming chunks"
+                    reason="len() row count lost in zero-column streaming chunks "
+                    "(https://github.com/rapidsai/cudf/issues/21428)"
                 )
             )
         assert_gpu_result_equal(q, engine=engine)

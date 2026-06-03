@@ -103,9 +103,9 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsClose,
             BooleanFunction.Name.IsEmpty,
-            BooleanFunction.Name.HasNulls,
         }:
             raise NotImplementedError(
                 f"Boolean function {self.name}"

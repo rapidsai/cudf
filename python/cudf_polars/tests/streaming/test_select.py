@@ -133,7 +133,8 @@ def test_select_aggs(df, engine, aggs, request):
         # comes back as zero. See https://github.com/rapidsai/cudf/issues/21428.
         request.applymarker(
             pytest.mark.xfail(
-                reason="col.len() row count lost in zero-column streaming chunks"
+                reason="len() row count lost in zero-column streaming chunks "
+                "(https://github.com/rapidsai/cudf/issues/21428)"
             )
         )
     query = df.select(*aggs)
@@ -199,8 +200,7 @@ def test_select_mean_with_decimals(engine):
 @pytest.mark.xfail(
     condition=not POLARS_VERSION_LT_141,
     reason=(
-        "polars >= 1.41 lowers len() to a column-less Len whose row count is "
-        "lost in zero-column streaming chunks "
+        "len() row count lost in zero-column streaming chunks "
         "(https://github.com/rapidsai/cudf/issues/21428)"
     ),
 )
