@@ -11,6 +11,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/parquet_metadata.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
 
@@ -721,8 +723,7 @@ ordered_rg_source make_ordered_rg_source(int file_id,
   auto const filename = std::format("ordered_rg_source_f{}_rg{}.parquet", file_id, num_row_groups);
   auto const filepath = temp_env->get_temp_filepath(filename);
 
-  // The writer can only break row groups at fragment boundaries. Setting
-  // max_page_fragment_size equal to rows_per_row_group makes the rg_size_rows
+  // Setting `max_page_fragment_size` equal to `rows_per_row_group` makes the `row_group_size_rows`
   // limit actually honored at the requested granularity.
   cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, in_memory->view())
@@ -731,6 +732,10 @@ ordered_rg_source make_ordered_rg_source(int file_id,
       .max_page_fragment_size(rows_per_row_group)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
+
+  auto const written_meta = cudf::io::read_parquet_metadata(cudf::io::source_info{filepath});
+  CUDF_EXPECTS(written_meta.num_rowgroups() == num_row_groups,
+               "Parquet writer produced an unexpected number of row groups");
 
   return ordered_rg_source{std::move(in_memory), filepath, num_row_groups, rows_per_row_group};
 }
@@ -743,8 +748,8 @@ cudf::table_view get_row_group_slice(ordered_rg_source const& src, cudf::size_ty
 }
 
 std::unique_ptr<cudf::table> build_expected_ordered_table(
-  std::vector<ordered_rg_source const*> const& sources,
-  std::vector<std::vector<cudf::size_type>> const& rg_selection)
+  cudf::host_span<ordered_rg_source const* const> sources,
+  cudf::host_span<std::vector<cudf::size_type> const> rg_selection)
 {
   std::vector<cudf::table_view> slices;
   for (size_t src_idx = 0; src_idx < rg_selection.size(); ++src_idx) {

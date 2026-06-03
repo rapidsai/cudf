@@ -398,8 +398,8 @@ class parquet_reader_options {
    * emitted multiple times. An empty inner vector means that source contributes no rows but
    * does not affect the order of the remaining sources. When this setter is not called, all
    * row groups are read in source order, then in on-disk order within each source. Row groups
-   * removed by predicate pushdown (statistics, dictionary, or bloom filter pruning) are
-   * dropped in place; the remaining row groups keep their relative order.
+   * removed by standard `read_parquet` predicate pushdown (statistics or bloom filter pruning)
+   * are dropped in place; the remaining row groups keep their relative order.
    *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.

@@ -156,7 +156,8 @@ cdef class ParquetReaderOptions:
         emitted multiple times. An empty inner list means that source
         contributes no rows. When unset, all row groups are read in source
         order, then on-disk order within each source. Row groups removed by
-        predicate pushdown keep their relative order.
+        standard predicate pushdown (statistics or bloom filter pruning) are
+        dropped in place; the remaining row groups keep their relative order.
 
         Returns
         -------
