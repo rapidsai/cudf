@@ -458,3 +458,47 @@ TEST_F(StringsReplaceRegexTest, LargeReplaceRegex)
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
+
+TEST_F(StringsReplaceRegexTest, CrlfLineAnchorExtNewline)
+{
+  // \r\n is a single terminator: regexp_replace("abc\r\n","abc$","[X]") -> "[X]\r\n".
+  // Expected values verified against OpenJDK 17 java.util.regex replaceAll (default flags).
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE});
+  auto view = cudf::strings_column_view(input);
+  auto prog = cudf::strings::regex_program::create("abc$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto repl = cudf::string_scalar("[X]");
+
+  auto results  = cudf::strings::replace_re(view, *prog, repl);
+  auto expected = cudf::test::strings_column_wrapper(
+    {"[X]\r\n", "[X]\n", "[X]\r", "[X]", "a\r\nb", "abc\r\n\r\n", "", "[X]" NEXT_LINE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
+{
+  // Full edge column; expecteds verified vs OpenJDK 17 replaceAll (default flags).
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE,
+     "a\nb\r\nc", "\r\n", "\r\nabc", "x\n\r", "a\r\rb", "a\n\nb"});
+  auto view      = cudf::strings_column_view(input);
+  auto const EXT = cudf::strings::regex_flags::EXT_NEWLINE;
+
+  {  // replace_re  abc$ -> [X]   (\r\n preserved as a unit)
+    auto p = cudf::strings::regex_program::create("abc$", EXT);
+    auto r = cudf::string_scalar("[X]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::replace_re(view, *p, r),
+      cudf::test::strings_column_wrapper(
+        {"[X]\r\n", "[X]\n", "[X]\r", "[X]", "a\r\nb", "abc\r\n\r\n", "", "[X]" NEXT_LINE,
+         "a\nb\r\nc", "\r\n", "\r\n[X]", "x\n\r", "a\r\rb", "a\n\nb"}));
+  }
+  {  // replace_with_backrefs  (abc)$ -> [\1]   (the spark-rapids scenario, native pattern)
+    auto p = cudf::strings::regex_program::create("(abc)$", EXT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::replace_with_backrefs(view, *p, "[\\1]"),
+      cudf::test::strings_column_wrapper(
+        {"[abc]\r\n", "[abc]\n", "[abc]\r", "[abc]", "a\r\nb", "abc\r\n\r\n", "", "[abc]" NEXT_LINE,
+         "a\nb\r\nc", "\r\n", "\r\n[abc]", "x\n\r", "a\r\rb", "a\n\nb"}));
+  }
+}

@@ -919,3 +919,108 @@ TEST_F(StringsContainsTests, ExtraLargeRegex)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
+
+TEST_F(StringsContainsTests, CrlfLineAnchorExtNewline)
+{
+  // JDK/Spark treat \r\n as a SINGLE line terminator: '$' matches before the \r and
+  // never between the \r and \n. Expected values verified against OpenJDK 17
+  // java.util.regex (default == EXT non-multiline; Pattern.MULTILINE == EXT|MULTILINE).
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE});
+  auto view = cudf::strings_column_view(input);
+
+  auto prog = cudf::strings::regex_program::create("^abc$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto both = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                      cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^abc$", both);
+
+  // Java: ^abc$ EXT(non-ml) = {1,1,1,1,0,0,0,1}
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 0, 0, 1});
+  auto results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  // Java: ^abc$ EXT|MULTILINE = {1,1,1,1,0,1,0,1}
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 1, 0, 1});
+  results  = cudf::strings::contains_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsContainsTests, CrlfBolAnchorExtNewline)
+{
+  // Symmetric ^ side: with \r\n as one terminator, multiline ^ matches AFTER the \n,
+  // never between the \r and \n. So "^\n" must never match (a \n is never a line start).
+  // Verified against OpenJDK 17: contains "(?m)^\n" = false for all of these.
+  auto input = cudf::test::strings_column_wrapper({"abc\r\nDEF", "a\r\nb", "ab\rc", "x\ny"});
+  auto view  = cudf::strings_column_view(input);
+  auto both  = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                      cudf::strings::regex_flags::MULTILINE);
+  auto prog = cudf::strings::regex_program::create("^\n", both);
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0});
+  auto results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
+{
+  // Comprehensive \r\n / mixed-terminator coverage across contains/matches/count,
+  // both EXT_NEWLINE and EXT_NEWLINE|MULTILINE. All expecteds verified vs OpenJDK 17.
+  // Column: CRLF, lone CR, lone LF, no-term, mid-CRLF, double-CRLF, empty, NEL,
+  //         mixed, CRLF-only, leading-CRLF, reversed \n\r, \r\r, \n\n.
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE,
+     "a\nb\r\nc", "\r\n", "\r\nabc", "x\n\r", "a\r\rb", "a\n\nb"});
+  auto view      = cudf::strings_column_view(input);
+  auto const EXT = cudf::strings::regex_flags::EXT_NEWLINE;
+  auto const MLX = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+
+  {  // contains ^abc$  (non-multiline / multiline)
+    auto p  = cudf::strings::regex_program::create("^abc$", EXT);
+    auto pm = cudf::strings::regex_program::create("^abc$", MLX);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::contains_re(view, *p),
+      cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::contains_re(view, *pm),
+      cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0}));
+  }
+  {  // matches_re abc$  (match at start of string)
+    auto p = cudf::strings::regex_program::create("abc$", EXT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::matches_re(view, *p),
+      cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}));
+  }
+  {  // count_re [a-z]+$  (non-multiline / multiline)
+    auto p  = cudf::strings::regex_program::create("[a-z]+$", EXT);
+    auto pm = cudf::strings::regex_program::create("[a-z]+$", MLX);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::count_re(view, *p),
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::count_re(view, *pm),
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 1, 1, 1, 2, 1, 0, 1, 3, 0, 1, 1, 2, 2}));
+  }
+  {  // count_re ^[a-z]+  (multiline line-starts)
+    auto pm = cudf::strings::regex_program::create("^[a-z]+", MLX);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::count_re(view, *pm),
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 1, 1, 1, 2, 1, 0, 1, 3, 0, 1, 1, 2, 2}));
+  }
+  {  // CRLF-coupling discriminators: \r$ never matches inside \r\n; ^\n likewise
+    auto pe = cudf::strings::regex_program::create("\\r$", MLX);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::contains_re(view, *pe),
+      cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0}));
+    auto pb = cudf::strings::regex_program::create("^\n", MLX);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::contains_re(view, *pb),
+      cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}));
+  }
+  {  // alternation containing $ (the #14856 construct) works natively, no transpiler
+    auto p = cudf::strings::regex_program::create("(a$|b)", EXT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *cudf::strings::contains_re(view, *p),
+      cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1}));
+  }
+}
