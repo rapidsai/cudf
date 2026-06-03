@@ -20,7 +20,7 @@
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <numeric>
@@ -124,23 +124,21 @@ struct row_group_stats_caster : public stats_caster_base {
 };
 
 /**
- * @brief Probe whether the filter columns carry usable row-group stats.
+ * @brief Probe whether the filter columns carry usable row-group statistics.
  *
- * Returns true iff at least one column chunk referenced by `filter_column_schemas`
- * in the first selected row group of any source carries any of `min` / `max` /
- * `min_value` / `max_value` / `null_count`.
+ * Returns true iff at least one column chunk referenced by `filter_column_schemas` in the first
+ * selected row group of any source carries any of `min` / `max` / `min_value` / `max_value` /
+ * `null_count`. Inspecting a single row group per source is sufficient because mainstream Parquet
+ * writers decide statistics emission per column at writer setup, so within a column either all
+ * row groups carry statistics or none do.
  *
- * See https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237
- * for why inspecting one row group per source is sufficient.
- *
- * @param per_file_metadata The metadata of the file.
- * @param input_row_group_indices The indices of the input row groups.
- * @param filter_column_schemas Schema indices of the columns referenced by the filter.
- * @return True if any filter column's column chunk in the first selected row group of
- *         any source carries row-group statistics.
+ * @param per_file_metadata Metadata for each input source
+ * @param input_row_group_indices Selected row group indices, one vector per source
+ * @param filter_column_schemas Schema indices of the columns referenced by the filter
+ * @return True if any filter column carries row-group statistics
  */
 [[nodiscard]] bool any_row_group_stats_available(
-  std::vector<metadata> const& per_file_metadata,
+  host_span<metadata const> per_file_metadata,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<int const> filter_column_schemas)
 {
@@ -161,7 +159,6 @@ struct row_group_stats_caster : public stats_caster_base {
         row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& c) {
           return c.schema_idx == schema_idx;
         });
-
       if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
     }
   }
@@ -170,7 +167,7 @@ struct row_group_stats_caster : public stats_caster_base {
 
 }  // namespace
 
-stats_filter_result aggregate_reader_metadata::apply_stats_filters(
+std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
   host_span<std::vector<size_type> const> input_row_group_indices,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
@@ -180,24 +177,28 @@ stats_filter_result aggregate_reader_metadata::apply_stats_filters(
 {
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Get a boolean mask indicating which columns can participate in stats based filtering.
-  // Done first so we can scope the stats-availability sniff to the filter columns only.
+  // Get a boolean mask indicating which columns can participate in stats based filtering
   auto const [stats_columns_mask, has_is_null_operator] =
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
-  // Get schema indices of the columns referenced by the filter.
-  std::vector<int> filter_column_schemas;
-  filter_column_schemas.reserve(stats_columns_mask.size());
-  for (size_t i = 0; i < stats_columns_mask.size(); ++i) {
-    if (stats_columns_mask[i]) { filter_column_schemas.push_back(output_column_schemas[i]); }
-  }
+  // Return early if no columns will participate in stats based filtering
+  if (stats_columns_mask.empty()) { return std::nullopt; }
 
-  // If none of the filter columns carry usable row-group statistics, skip building it entirely.
-  auto const has_stats = not filter_column_schemas.empty() and
-                         any_row_group_stats_available(
-                           per_file_metadata, input_row_group_indices, filter_column_schemas);
-  if (not has_stats) { return {std::nullopt, false}; }
+  // Scope the stats-availability check to the columns referenced by the filter.
+  std::vector<int> filter_column_schemas;
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  stats_columns_mask.begin(),
+                  std::back_inserter(filter_column_schemas),
+                  [](auto mask) { return mask; });
+
+  // Skip building the stats table if no filter column carries usable row-group statistics.
+  if (not any_row_group_stats_available(
+        per_file_metadata, input_row_group_indices, filter_column_schemas)) {
+    return std::nullopt;
+  }
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
@@ -254,9 +255,8 @@ stats_filter_result aggregate_reader_metadata::apply_stats_filters(
     filter.get(), static_cast<size_type>(output_dtypes.size()), has_is_null_operator, stream};
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  return {collect_filtered_row_group_indices(
-            stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream),
-          has_stats};
+  return collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
 }
 
 std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
@@ -270,13 +270,12 @@ aggregate_reader_metadata::filter_row_groups(
   rmm::cuda_stream_view stream) const
 {
   // Apply stats filtering on input row groups
-  auto const stats_result               = apply_stats_filters(input_row_group_indices,
-                                                total_row_groups,
-                                                output_dtypes,
-                                                output_column_schemas,
-                                                filter,
-                                                stream);
-  auto const& stats_filtered_row_groups = stats_result.row_groups;
+  auto const stats_filtered_row_groups = apply_stats_filters(input_row_group_indices,
+                                                             total_row_groups,
+                                                             output_dtypes,
+                                                             output_column_schemas,
+                                                             filter,
+                                                             stream);
 
   // Number of surviving row groups after applying stats filter
   auto const num_stats_filtered_row_groups =
@@ -288,11 +287,6 @@ aggregate_reader_metadata::filter_row_groups(
                           return sum + per_file_row_groups.size();
                         })
       : total_row_groups;
-
-  // Report nullopt when no usable row-group stats were observed
-  auto const after_stats_filter = stats_result.has_stats
-                                    ? std::make_optional(num_stats_filtered_row_groups)
-                                    : std::optional<size_type>{std::nullopt};
 
   // Span of row groups to apply bloom filtering on.
   auto const bloom_filter_input_row_groups =
@@ -317,7 +311,8 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) {
-    return {stats_filtered_row_groups, {after_stats_filter, std::nullopt}};
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
   // Aligned resource adaptor to allocate bloom filter buffers with
@@ -335,7 +330,8 @@ aggregate_reader_metadata::filter_row_groups(
 
   // No bloom filter buffers, return early
   if (bloom_filter_buffers.empty()) {
-    return {stats_filtered_row_groups, {after_stats_filter, std::nullopt}};
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
   // Create spans from bloom filter buffers
@@ -373,7 +369,8 @@ aggregate_reader_metadata::filter_row_groups(
   // Return bloom filtered row group indices iff collected
   return {
     bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : stats_filtered_row_groups,
-    {after_stats_filter, std::make_optional(num_bloom_filtered_row_groups)}};
+    {std::make_optional(num_stats_filtered_row_groups),
+     std::make_optional(num_bloom_filtered_row_groups)}};
 }
 
 }  // namespace cudf::io::parquet::detail

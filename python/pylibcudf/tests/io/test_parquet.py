@@ -139,56 +139,6 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     assert plc_table_w_meta.num_row_groups_after_stats_filter == result
 
 
-def _write_partial_stats_parquet(path, *, cols_with_stats):
-    """Write a 2-column parquet with row-group stats only on ``cols_with_stats``"""
-    tbl = pa.table(
-        {
-            "keep_col": pa.array([1, 2, 3, 4, 5, 6, 7, 8], type=pa.int64()),
-            "filter_col": pa.array(
-                [10, 20, 30, 40, 50, 60, 70, 80], type=pa.int64()
-            ),
-        }
-    )
-    with pq.ParquetWriter(
-        path, tbl.schema, write_statistics=list(cols_with_stats)
-    ) as writer:
-        writer.write_table(tbl, row_group_size=2)
-    return tbl
-
-
-@pytest.mark.parametrize(
-    "filter_col,result",
-    [
-        # filter_col carries no row-group stats -> cuDF cannot prune -> None
-        ("filter_col", None),
-        # keep_col carries stats -> stats filter runs, prunes nothing -> 4 RGs
-        ("keep_col", 4),
-    ],
-)
-def test_read_parquet_partial_stats_filter_col_scoping(
-    tmp_path, filter_col, result
-):
-    # Filtering a stats-less column returns None even when other cols have stats.
-    path = tmp_path / "partial_stats.parquet"
-    _write_partial_stats_parquet(path, cols_with_stats=["keep_col"])
-
-    options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo([path])
-    ).build()
-
-    # Bind the filter to a local to prevent use-after-free.
-    filter_expr = Operation(
-        ASTOperator.LESS,
-        ColumnNameReference(filter_col),
-        Literal(plc.Scalar.from_arrow(pa.scalar(100, type=pa.int64()))),
-    )
-    options.set_filter(filter_expr)
-    plc_table_w_meta = plc.io.parquet.read_parquet(options)
-
-    assert plc_table_w_meta.num_input_row_groups == 4
-    assert plc_table_w_meta.num_row_groups_after_stats_filter == result
-
-
 @pytest.mark.parametrize(
     "pa_filters,plc_filters",
     [

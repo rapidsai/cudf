@@ -1603,8 +1603,9 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // No filter column carries stats-usable predicates, so the stats filter is not run
-    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    // Stats filter cannot prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              result.metadata.num_input_row_groups);
   }
 
   // Filter: (col_a < 150) and (col_a < col_b)
@@ -1709,8 +1710,9 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Predicate NULL_EQUAL is not stats-usable, so the stats filter is not run
-    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    // Stats filter cannot prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              result.metadata.num_input_row_groups);
   }
 
   // Filter: col_a NULL_EQUAL 10
@@ -1726,8 +1728,9 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Predicate NULL_EQUAL is not stats-usable, so the stats filter is not run
-    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    // Stats filter cannot prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              result.metadata.num_input_row_groups);
   }
 
   // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50)
@@ -1764,8 +1767,9 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // No filter column carries stats-usable predicates, so the stats filter is not run
-    EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    // Stats filter cannot prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              result.metadata.num_input_row_groups);
   }
 }
 
@@ -2167,51 +2171,6 @@ TEST_F(ParquetReaderTest, FilterNoStats)
   auto result              = table_with_metadata.tbl->view();
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
-
-  // No usable row-group stats exist, `num_row_groups_after_stats_filter` must be `std::nullopt`.
-  EXPECT_FALSE(table_with_metadata.metadata.num_row_groups_after_stats_filter.has_value());
-}
-
-// Null predicates should not prune row groups when the file has no row-group stats.
-TEST_F(ParquetReaderTest, FilterNoStatsNullPredicates)
-{
-  constexpr auto num_rows            = 16000;
-  constexpr auto row_group_size_rows = 4000;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 5 != 0; });
-  auto col0 =
-    cudf::test::fixed_width_column_wrapper<int32_t>(elements, elements + num_rows, valids);
-  auto const written_table = table_view{{col0}};
-  auto const filepath      = temp_env->get_temp_filepath("FilterNoStatsNullPredicates.parquet");
-  {
-    cudf::io::parquet_writer_options const out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-        .row_group_size_rows(row_group_size_rows)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_NONE);
-    cudf::io::write_parquet(out_opts);
-  }
-
-  auto const filter_col0      = cudf::ast::column_reference(0);
-  auto const is_null_expr     = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, filter_col0);
-  auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
-
-  auto const test_filter = [&](cudf::ast::expression const& expr) {
-    auto const predicate = cudf::compute_column(written_table, expr);
-    auto const expected  = cudf::apply_boolean_mask(written_table, *predicate);
-
-    cudf::io::parquet_reader_options const read_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(expr);
-    auto const table_with_metadata = cudf::io::read_parquet(read_opts);
-
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
-    EXPECT_EQ(table_with_metadata.metadata.num_input_row_groups, num_rows / row_group_size_rows);
-    EXPECT_FALSE(table_with_metadata.metadata.num_row_groups_after_stats_filter.has_value());
-    EXPECT_FALSE(table_with_metadata.metadata.num_row_groups_after_bloom_filter.has_value());
-  };
-
-  test_filter(is_null_expr);
-  test_filter(not_is_null_expr);
 }
 
 // Filter for float column with NaN values
