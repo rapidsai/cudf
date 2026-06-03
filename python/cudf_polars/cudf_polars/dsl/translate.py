@@ -885,7 +885,7 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
-        elif name == "quantile":
+        elif not POLARS_VERSION_LT_141 and name == "quantile":
             # polars >= 1.41 emits quantile as a string-named Function
             # expression (function_data=("quantile", interpolation)) with the
             # column and quantile value as inputs; earlier versions used a
