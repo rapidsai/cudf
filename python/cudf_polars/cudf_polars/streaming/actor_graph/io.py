@@ -592,7 +592,7 @@ def _(
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
             rec.state["comm"],
-            ir.base_scan,  # TODO: verify this...
+            ir.base_scan,
             num_producers,
             ch_in,
             rec.state["stats"],
