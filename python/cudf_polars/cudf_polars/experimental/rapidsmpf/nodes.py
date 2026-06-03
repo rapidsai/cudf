@@ -212,7 +212,7 @@ async def default_node_multi(
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
             with opaque_memory_usage(extra):
-                df = await asyncio.to_thread(
+                df = await ir_context.to_thread(
                     ir.do_evaluate,
                     *ir._non_child_args,
                     *dfs,
@@ -732,20 +732,10 @@ async def metadata_drain_node(
     ):
         # Drain metadata channel (we don't need it after this point)
         metadata = await recv_metadata(ch_in, context)
-        send_empty = metadata.duplicated and comm.rank != 0
         if metadata_collector is not None:
             metadata_collector.append(metadata)
 
-        # Forward non-duplicated data messages
         while (msg := await ch_in.recv(context)) is not None:
-            if not send_empty:
-                await ch_out.send(context, msg)
-
-        # Send empty data if needed
-        if send_empty:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.send(
-                context, Message(0, empty_table_chunk(ir, context, stream))
-            )
+            await ch_out.send(context, msg)
 
         await ch_out.drain(context)

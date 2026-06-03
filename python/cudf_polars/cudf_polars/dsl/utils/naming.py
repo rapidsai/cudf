@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Name generation utilities."""
@@ -7,11 +7,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl.expr import Col, NamedExpr
+
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
+    from cudf_polars.typing import Schema
 
-__all__ = ["unique_names"]
+
+__all__ = ["names_to_indices", "unique_names"]
 
 
 def unique_names(names: Iterable[str]) -> Generator[str, None, None]:
@@ -32,3 +36,33 @@ def unique_names(names: Iterable[str]) -> Generator[str, None, None]:
     while True:
         yield f"{prefix}{i}"
         i += 1
+
+
+def names_to_indices(
+    names: tuple[str | NamedExpr, ...], schema: Schema
+) -> tuple[int, ...]:
+    """
+    Return column indices for the given names in schema order.
+
+    Accepts either column names (str) or NamedExpr, so it can be used with
+    e.g. ir.left_on, ir.right_on as well as plain name tuples.
+
+    Parameters
+    ----------
+    names
+        The names to get indices for.
+    schema
+        The schema to get indices from.
+
+    Returns
+    -------
+    The column indices for each name in schema order.
+    """
+    keys = list(schema.keys())
+    str_names = [
+        (n.value.name if isinstance(n.value, Col) else n.name)
+        if isinstance(n, NamedExpr)
+        else n
+        for n in names
+    ]
+    return tuple(keys.index(n) for n in str_names)

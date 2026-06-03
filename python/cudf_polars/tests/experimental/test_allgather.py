@@ -6,12 +6,15 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
-import numpy as np
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.utils import allgather_reduce
 
@@ -24,7 +27,13 @@ async def _test_allgather(engine) -> None:
 
     # Create simple test tables with different sizes
     tables = [
-        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])
+        plc.Table(
+            [
+                plc.Column.from_arrow(
+                    pl.Series([i] * num_elements, dtype=pl.Int32()), stream=stream
+                )
+            ]
+        )
         for i, num_elements in enumerate([100, 200, 300])
     ]
 
@@ -39,8 +48,12 @@ async def _test_allgather(engine) -> None:
                 ),
             )
 
-    # Extract concatenated result
-    result = await allgather.extract_concatenated(stream, ordered=True)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        ir_context = IRExecutionContext(executor)
+        # Extract concatenated result
+        result = await allgather.extract_concatenated(
+            stream, ordered=True, ir_context=ir_context
+        )
 
     # Verify the concatenated table has the expected shape
     assert result.num_rows() == 600  # 100 + 200 + 300
@@ -52,8 +65,8 @@ async def _test_allgather(engine) -> None:
     assert col.type().id().value == plc.types.TypeId.INT32.value
 
 
-def test_allgather(streaming_engine) -> None:
-    asyncio.run(_test_allgather(streaming_engine))
+def test_allgather(spmd_engine) -> None:
+    asyncio.run(_test_allgather(spmd_engine))
 
 
 async def _test_allgather_reduce(engine) -> None:
@@ -70,5 +83,5 @@ async def _test_allgather_reduce(engine) -> None:
     assert results == (10, 20, 30)  # Single rank, so sums are just the local values
 
 
-def test_allgather_reduce(streaming_engine) -> None:
-    asyncio.run(_test_allgather_reduce(streaming_engine))
+def test_allgather_reduce(spmd_engine) -> None:
+    asyncio.run(_test_allgather_reduce(spmd_engine))

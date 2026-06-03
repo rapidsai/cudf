@@ -185,7 +185,7 @@ async def dataframescan_node(
     distributed_scan
         If ``True``, the DataFrame is treated as a shared object and divided
         across workers so each rank reads a disjoint subset. This is normally
-        used in ``Cluster.DISTRIBUTED`` mode.
+        used in ``Cluster.RAY`` and ``Cluster.DASK`` modes.
 
         If ``False``, the DataFrame is treated as rank-local and each rank
         scans its local DataFrame in full. This is normally used in
@@ -383,7 +383,7 @@ async def read_chunk(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
-        df = await asyncio.to_thread(
+        df = await ir_context.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
@@ -828,7 +828,7 @@ async def sink_node(
                 ).make_available_and_spill(context.br(), allow_overbooking=True)
                 df = chunk_to_frame(chunk, child_ir)
                 part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
-                await asyncio.to_thread(
+                await ir_context.to_thread(
                     Sink.do_evaluate,
                     ir.sink.schema,
                     ir.sink.kind,
@@ -848,7 +848,7 @@ async def sink_node(
                 ).make_available_and_spill(context.br(), allow_overbooking=True)
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
-                writer_state = await asyncio.to_thread(
+                writer_state = await ir_context.to_thread(
                     _sink_to_file,
                     ir.sink.kind,
                     ir.sink.path,
@@ -861,7 +861,7 @@ async def sink_node(
             if writer_state and ir.sink.kind == "Parquet":
                 # We know that with ir.sink.kind == "Parquet", writer_state being truthy
                 # means that it's a ChunkedParquetWriter.
-                await asyncio.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
+                await ir_context.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
 
         # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()
