@@ -21,8 +21,7 @@ struct arity_functor {
   template <ast_operator op>
   void operator()(cudf::size_type& result)
   {
-    // Arity is not dependent on null handling, so just use the false implementation here.
-    result = operator_functor<op, false>::arity;
+    result = operator_functor<op>::arity;
   }
 };
 
@@ -156,7 +155,7 @@ struct type_dispatch_binary_op {
     type_dispatcher(
       lhs_type,
       // Always dispatch to the non-null operator for the purpose of type determination.
-      detail::single_dispatch_binary_operator_types<operator_functor<op, false>>{},
+      detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
   }
@@ -225,7 +224,7 @@ struct type_dispatch_unary_op {
     type_dispatcher(
       input_type,
       // Always dispatch to the non-null operator for the purpose of type determination.
-      detail::dispatch_unary_operator_types<operator_functor<op, false>>{},
+      detail::dispatch_unary_operator_types<operator_functor<op>>{},
       std::forward<F>(f),
       std::forward<Ts>(args)...);
   }
