@@ -11,7 +11,6 @@ from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
-from urllib.parse import unquote, urlparse
 
 import polars as pl
 
@@ -76,10 +75,10 @@ def _strip_file_uri(path: str) -> str:
     # file:///foo/path is treated as a local path. Polars
     # rejects file:// URIs with any non-empty host, so
     # we don't need to handle file://host/foo/path paths
-    parsed = urlparse(path)
-    if parsed.scheme != "file":
-        return path
-    return unquote(parsed.path)
+    for prefix in ("file://", "file:"):
+        if path.startswith(prefix):
+            return path[len(prefix) :]
+    return path
 
 
 def _check_compression(data: bytes) -> str | None:
