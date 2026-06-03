@@ -10,7 +10,6 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -40,22 +39,15 @@ struct scalar_as_column_view {
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
   return_type operator()(scalar const& s,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         rmm::device_async_resource_ref)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
-    auto const is_valid      = s.is_valid(stream);
-    auto const null_count    = static_cast<size_type>(!is_valid);
-    auto null_mask           = cudf::detail::create_null_mask(
-      1, is_valid ? cudf::mask_state::ALL_VALID : cudf::mask_state::ALL_NULL, stream, mr);
-    auto const* null_mask_ptr = static_cast<bitmask_type const*>(null_mask.data());
-    auto aux_col              = std::make_unique<column>(data_type{type_id::INT8},
-                                            0,
-                                            rmm::device_buffer{},
-                                            std::move(null_mask),
-                                            null_count);
-    auto col_v = column_view(
-      s.type(), 1, h_scalar_type_view.data(), null_mask_ptr, null_count);
-    return std::pair{col_v, std::move(aux_col)};
+    auto col_v               = column_view(s.type(),
+                             1,
+                             h_scalar_type_view.data(),
+                             reinterpret_cast<bitmask_type const*>(s.validity_data()),
+                             !s.is_valid(stream));
+    return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
@@ -78,28 +70,15 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
 
   auto chars_column_v = column_view(
     data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data(), nullptr, 0);
-  auto const is_valid   = s.is_valid(stream);
-  auto const null_count = static_cast<size_type>(!is_valid);
-  auto null_mask        = cudf::detail::create_null_mask(
-    1, is_valid ? cudf::mask_state::ALL_VALID : cudf::mask_state::ALL_NULL, stream, mr);
   // Construct string column_view
   auto col_v = column_view(s.type(),
                            1,
                            h_scalar_type_view.data(),
-                           static_cast<bitmask_type const*>(null_mask.data()),
-                           null_count,
+                           reinterpret_cast<bitmask_type const*>(s.validity_data()),
+                           static_cast<size_type>(!s.is_valid(stream)),
                            0,
                            {offsets_column->view()});
-  // Keep the null mask and offsets alive for the lifetime of the column_view
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(offsets_column));
-  auto aux_col = std::make_unique<column>(data_type{type_id::INT8},
-                                          0,
-                                          rmm::device_buffer{},
-                                          std::move(null_mask),
-                                          null_count,
-                                          std::move(children));
-  return std::pair{col_v, std::move(aux_col)};
+  return std::pair{col_v, std::move(offsets_column)};
 }
 
 // specializing for struct column
