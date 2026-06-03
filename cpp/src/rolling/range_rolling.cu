@@ -110,9 +110,9 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
+  auto const mr = cudf::get_current_device_resource_ref();
   if (group_keys.num_columns() > 0) {
     using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
     sort_helper helper{group_keys, null_policy::INCLUDE, sorted::YES, {}};
@@ -176,8 +176,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
                                       null_orders.front(),
                                       preceding,
                                       following,
-                                      stream,
-                                      cudf::get_current_device_resource_ref());
+                                      stream);
   }
 
   auto const is_peer_bound = [](range_window_type const& w) {
@@ -237,15 +236,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.size(),
     "If a grouping table is provided, it must have same number of rows as the orderby column.");
   return detail::make_range_windows(
-    group_keys, orderby, order, null_order, preceding, following, stream, mr);
+    group_keys, orderby, order, null_order, preceding, following, stream);
 }
 
 }  // namespace CUDF_EXPORT cudf

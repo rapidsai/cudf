@@ -299,14 +299,8 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     following,
     orderby.size(),
     [&] {
-      return make_range_windows(group_keys,
-                                orderby,
-                                order,
-                                null_order,
-                                preceding,
-                                following,
-                                stream,
-                                cudf::get_current_device_resource_ref());
+      return make_range_windows(
+        group_keys, orderby, order, null_order, preceding, following, stream);
     },
     stream,
     mr);
@@ -505,8 +499,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                 null_order,
                                 get_window_type(preceding),
                                 get_window_type(following),
-                                stream,
-                                cudf::get_current_device_resource_ref());
+                                stream);
     }
   }();
 
