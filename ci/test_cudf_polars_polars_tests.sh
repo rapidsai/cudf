@@ -39,31 +39,6 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 rapids-logger "Install polars test requirements"
 # We don't need to pick up dependencies from polars-cloud, so we remove it.
 sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
-# Deltalake release 1.2.0 contains breaking changes for Polars.
-# Tracking issue: https://github.com/pola-rs/polars/issues/24872
-sed -i 's/^deltalake>=1.1.4/deltalake>=1.1.4,<1.2.0/' polars/py-polars/requirements-dev.txt
-
-# Regression in Pydantic 2.12.0 so we use a lower-bound of 2.12.1 to avoid that
-# and also to provide a new enough version to support Python 3.14
-sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.12.1/' polars/py-polars/requirements-dev.txt
-
-# https://github.com/pola-rs/polars/issues/25772
-# Remove upper bound on aiosqlite once we support polars >1.36.1
-sed -i 's/^aiosqlite/aiosqlite>=0.21.0,<0.22.0/' polars/py-polars/requirements-dev.txt
-
-# Remove upper bound on pandas once we support 3.0.0+
-sed -i 's/^pandas$/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
-
-# Remove upper bound on pandas-stubs once we support 3.0.0+
-sed -i 's/^pandas-stubs/pandas-stubs<3/' polars/py-polars/requirements-dev.txt
-
-# Pyparsing release 3.3.0 deprecates the enablePackrat method, which is used by the
-# version of pyiceberg that polars is currently pinned to. We can remove this skip
-# when we move to a newer version of polars using a pyiceberg where this issue is fixed
-# Currently pyparsing is only a transitive dependency via pyiceberg, so we just
-# tack on the constrained dependency at the end of the file since there is no
-# existing dependency to rewrite.
-echo "pyparsing>=3.0.0,<3.3.0" >> polars/py-polars/requirements-dev.txt
 
 # notes:
 #
@@ -87,7 +62,7 @@ trap set_exitcode ERR
 set +e
 
 rapids-logger "Run polars tests"
-timeout 50m ./ci/run_cudf_polars_polars_tests.sh
+./ci/run_cudf_polars_polars_tests.sh
 
 trap ERR
 set -e

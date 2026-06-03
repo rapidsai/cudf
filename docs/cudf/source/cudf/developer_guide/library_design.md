@@ -272,8 +272,6 @@ However, for performance reasons they frequently access internal attributes and 
 ## Copy-on-write
 
 This section describes the internal implementation details of the copy-on-write feature.
-It is recommended that developers familiarize themselves with [the user-facing documentation](copy-on-write-user-doc) of this functionality before reading through the internals
-below.
 
 The core copy-on-write implementation relies on `ExposureTrackedBuffer` and the tracking features of `BufferOwner`.
 
@@ -294,8 +292,7 @@ someone accesses data through the `__cuda_array_interface__`, we eagerly trigger
 
 A read-only object can be quite useful for operations that will not
 mutate the data. To achieve this, we create simple wrapper classes around the `ExposureTrackedBuffer` that will construct an equivalent CAI except it will get the pointer by calling `.get_ptr(mode="read")`, avoiding marking the pointer as exposed as would occur with a writeable ptr access.
-This will not trigger a deep copy even if multiple `ExposureTrackedBuffer`s point to the same `ExposureTrackedBufferOwner`. This approach should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
-copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
+This will not trigger a deep copy even if multiple `ExposureTrackedBuffer`s point to the same `ExposureTrackedBufferOwner`. This approach should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior.
 
 
 ### Internal access to raw data pointers

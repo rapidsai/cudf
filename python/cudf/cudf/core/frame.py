@@ -599,32 +599,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self.to_cupy()
 
-    @property
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
-        """
-        Return a NumPy representation of the data.
-
-        Only the values in the DataFrame will be returned, the axes labels will
-        be removed.
-
-        .. deprecated:: 26.04
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
-
-        Returns
-        -------
-        numpy.ndarray
-            A host representation of the underlying data.
-        """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return self.to_numpy()
-
     @_performance_tracking
     def __array__(self, dtype=None, copy=None):
         raise TypeError(
@@ -652,6 +626,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
     ) -> cupy.ndarray | np.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
+
+        def is_numpy_object_dtype(dtype: Dtype | None) -> bool:
+            try:
+                return np.dtype(dtype) == np.dtype("O")
+            except TypeError:
+                return False
 
         def to_array(
             col: ColumnBase, to_dtype: Dtype | None
@@ -704,6 +684,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 col.has_nulls()
                 and dtype is not None
                 and is_string_dtype(dtype)
+                and not is_numpy_object_dtype(dtype)
             ):
                 casted_array[col.isnull().to_numpy()] = (
                     cudf.NA if na_value is no_default else na_value

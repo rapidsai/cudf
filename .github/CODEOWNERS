@@ -28,3 +28,6 @@ java/              @rapidsai/cudf-java-codeowners
 dependencies.yaml        @rapidsai/packaging-codeowners
 /build.sh                @rapidsai/packaging-codeowners
 pyproject.toml           @rapidsai/packaging-codeowners
+
+# Ops code owners
+/SECURITY.md             @rapidsai/ops-codeowners

@@ -172,17 +172,16 @@ def test_set_flags_no_change_when_none(frame_or_series):
     _assert_flags_eq(cu_new, pd_new)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The copy keyword is deprecated:pandas.errors.Pandas4Warning"
+)
 def test_set_flags_copy_true_makes_deep_copy():
     # Match pandas' observable behaviour: mutating the copy does not
     # alter the original. ``copy=True`` is deprecated in pandas 3; we
     # still accept it for API parity.
-    import warnings
-
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     gdf = cudf.DataFrame({"a": [1, 2, 3]})
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        p_new = pdf.set_flags(copy=True, allows_duplicate_labels=False)
+    p_new = pdf.set_flags(copy=True, allows_duplicate_labels=False)
     g_new = gdf.set_flags(copy=True, allows_duplicate_labels=False)
     p_new.loc[0, "a"] = 99
     g_new.loc[0, "a"] = 99

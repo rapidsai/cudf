@@ -128,8 +128,13 @@ template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  __device__ __forceinline__ bool operator()(pair_type const& left_row,
-                                             pair_type const& right_row) const noexcept
+#ifndef NDEBUG
+  __attribute__((noinline))
+#else
+  __forceinline__
+#endif
+  __device__ bool
+  operator()(pair_type const& left_row, pair_type const& right_row) const noexcept
   {
     using cudf::detail::row::lhs_index_type;
     using cudf::detail::row::rhs_index_type;

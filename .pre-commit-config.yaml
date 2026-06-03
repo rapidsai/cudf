@@ -10,6 +10,9 @@ ci:
   skip: ["mypy", "verify-alpha-spec"]
   submodules: false
 
+# Agent skill artifacts are validated and signed by the NVIDIA skills pipeline.
+exclude: ^skills/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
