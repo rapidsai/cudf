@@ -19,6 +19,7 @@ from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -125,3 +126,29 @@ def test_target_partition_size(
         assert count > n_files
     else:
         assert count < n_files
+
+
+def test_scan_join(engine: pl.GPUEngine, tmp_path: Path) -> None:
+    # This test exercises some logic on nodes with multiple children (join)
+    # where one or more of the children are Scan nodes.
+    left = pl.DataFrame({"a": ["a", "b", "c", "d"], "b": [1, 2, 3, 4]})
+    right = pl.DataFrame({"a": ["a", "b", "c", "d"], "c": [10, 20, 30, 40]})
+
+    left.write_parquet(tmp_path / "left.parquet")
+    right.write_parquet(tmp_path / "right.parquet")
+
+    left_q = pl.scan_parquet(tmp_path / "left.parquet")
+    right_q = pl.scan_parquet(tmp_path / "right.parquet")
+    q = left_q.join(right_q, on="a", how="inner")
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
+    # This test exercises some logic on nodes with a Union[Scan, ...]
+    df = pl.DataFrame({"a": ["a", "b", "c", "d"], "b": [1, 2, 3, 4]})
+    df.write_parquet(tmp_path / "data.parquet")
+
+    df_q = pl.scan_parquet(tmp_path / "data.parquet")
+
+    q = pl.concat([df_q, df_q])
+    assert_gpu_result_equal(q, engine=engine)
