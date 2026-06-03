@@ -97,9 +97,12 @@ when writing a unit test. Note that fixture results are constructed lazily when 
 whereas parametrizations are constructed eagerly at test collection time.
 
 ```{warning}
-When specifying parameters for `@pytest.mark.parametrize`, avoid APIs that make a GPU memory allocation
-as they persist for the entire test execution. Find opportunities to avoid or defer this allocation to
-the test body, like using a `lambda`.
+Parameters for `@pytest.mark.parametrize` should have a minimal memory footprint, ideally no GPU memory footprint,
+and runtime as these parameters are executed during test collection and objects persist during the entire test duration.
+Generally, as much work should be deferred to the test body as possible.
+
+- Avoid constructing fully materialized test data objects if possible. Specify input parameters that eventually construct these objects in the test body instead.
+- Avoid calling APIs that would require a long runtime. Defer these calls to the test body with a `lambda` instead.
 ```
 
 Test parameterization using fixtures or `@pytest.mark.parametrize` should require little to no additional test body logic
@@ -124,7 +127,7 @@ that has the potential to be fixed, use the
 [`pytest.mark.xfail`](https://docs.pytest.org/en/stable/reference/reference.html#pytest.mark.xfail)
 fixture on the test to note that test is expected to fail.
 
-```{note}
+```{warning}
 Do not use [`pytest.xfail`](https://docs.pytest.org/en/stable/reference/reference.html#pytest-xfail)
 as it ceases test execution where used. Expected failing test should have an opportunity to
 continually execute to see if changes cause the test to pass.

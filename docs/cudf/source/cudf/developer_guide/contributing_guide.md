@@ -10,14 +10,8 @@ All Cython code is contained in `python/cudf/cudf/_lib`.
 ## Code style
 
 cuDF employs a number of linters through [`pre-commit`](https://pre-commit.com/) to ensure consistent style across the code base.
-These linting checks must all pass when submitting a pull request.
-The `.pre-commit-config.yaml` file at the root of the repo contains configurations for all linting tools, and notable ones includes:
-
-- [`ruff`](https://docs.astral.sh/ruff/) checks for general code formatting compliance.
-- [`mypy`](http://mypy-lang.org/) performs static type checking.
-  In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
-  `mypy` can help catch various bugs that are otherwise difficult to find.
-- [`codespell`](https://github.com/codespell-project/codespell) finds spelling errors.
+These linting checks must all pass when submitting a pull request, and the
+`.pre-commit-config.yaml` file at the root of the repo contains configurations for all linting tools.
 
 Linter configurations are primarily stored in `pyproject.toml`, shared among other Python projects, and extended with cudf specific configurations in `python/cudf/pyproject.toml`
 
@@ -78,17 +72,11 @@ Occasionally, cuDF APIs may deviate from pandas behavior. Common reasons include
 - Performance: Match pandas behavior would incur exorbitant runtime or memory costs. Deviations due to performance should be agreed upon by cuDF developers.
 - Data type representations: cuDF does not support the full type system of pandas and vice versa, commonly encountered with the `object` or nested types.
 - Exception messages: The exception type raised in cuDF should match pandas, but the error messages do not need to exactly align.
-- Warnings: While cuDF should match pandas warnings from deprecated functionality, cuDF should not necessarily match other user-facing warnings.
+- Warnings: cuDF should generally match warnings raised in APIs that mirror pandas, but some warnings might not be applicable due to intentional differences between both libraries.
 
 Intentional deviations should be documented in the [pandas comparison](./documentation.md#comparing-to-pandas).
 
 If it is not possible to match a pandas API, an entire API or a specific component of an API, at all, it should raise a `NotImplementedError`.
-
-## Python vs Cython
-
-cuDF has minimal direct use of [Cython](https://cython.org/) and used indirectly though using [`pylibcudf`](#pylibcudf-developer-docs).
-Functionality should be implemented using Python with `pylibcudf` where possible. Adding additional Cython to `python/cudf/cudf/_lib`
-may be accepted if justified with benchmarks.
 
 ### Catching warnings from dependencies
 

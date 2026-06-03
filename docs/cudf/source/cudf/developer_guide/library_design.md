@@ -58,7 +58,7 @@ that are applicable across the public `Series`, `DataFrame` and `Index` objects:
 
 - `Frame` implements base methods that are common across `Series`, `DataFrame`, and `Index`.
 - `SingleColumnFrame` implements methods that can be shared across `Series` and `Index` which are only represented by 1 column.
-- `IndexedFrame` implements methods that can be shared across `DataFrame` and `Series` which operates on the `.index`
+- `IndexedFrame` implements methods that can be shared across `DataFrame` and `Series` which both contain and `Index`
 
 Generally, a public `Series`, `DataFrame` or `Index` method should only implement class specific logic and eventually dispatch to a `super()` method to
 leverage a shared implementation. Likewise `SingleColumnFrame` and `IndexedFrame` methods should only implement single column and index related logic respectively
@@ -103,9 +103,7 @@ that consolidates logic and implements methods specific to 1 or more related dat
 - `IntervalColumn`: interval
 - `ListColumn`: list
 - `StructColumn`: struct
-- `Decimal32Column`: decimal32
-- `Decimal64Column`: decimal64
-- `Decimal128Column`: decimal128
+- `DecimalColumn`: decimal32, decimal64, decimal128
 
 Each column subclass is restricted to hold a `.dtype` object corresponding to a valid [pandas data type](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) of the same data type designation with the following exceptions:
 
@@ -113,7 +111,7 @@ Each column subclass is restricted to hold a `.dtype` object corresponding to a 
 - A `IntervalColumn` can hold a `cudf.IntervalDtype` instead of a `pandas.IntervalDtype`
 - A `ListColumn` can hold a `cudf.ListDtype`
 - A `StructColumn` can hold a `cudf.StructDtype`
-- A `Decimal32Column`, `Decimal64Column` and `Decimal128Column` can hold a `cudf.Decimal32Dtype`, `cudf.Decimal64Dtype`, `cudf.Decimal128Dtype` respectively
+- A `DecimalColumn` can hold a `cudf.Decimal32Dtype`, `cudf.Decimal64Dtype`, `cudf.Decimal128Dtype` respectively
 
 ```{note}
 - There is no representation for the `pandas.PeriodDtype` or `pandas.SparseDtype`
