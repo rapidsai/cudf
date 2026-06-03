@@ -854,6 +854,24 @@ def test_groupby_apply_series_args(func, args):
     assert_groupby_results_equal(expect, got)
 
 
+def test_groupby_apply_series_preserves_multiindex_names():
+    pdf = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0, 4.0]},
+        index=pd.MultiIndex.from_product([range(2), range(2)]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    by = np.array([0, 0, 1, 1])
+
+    expect = pdf.groupby(by=by, group_keys=False)["value"].apply(
+        lambda x: x.cumprod()
+    )
+    got = gdf.groupby(by=by, group_keys=False)["value"].apply(
+        lambda x: x.cumprod()
+    )
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("group_keys", [None, True, False])
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
 def test_groupby_group_keys(group_keys, by):

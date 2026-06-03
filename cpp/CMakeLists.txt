@@ -617,6 +617,7 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/bloom_filter_reader.cu
+  src/io/parquet/column_path_helpers.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -627,6 +628,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_multifile.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
