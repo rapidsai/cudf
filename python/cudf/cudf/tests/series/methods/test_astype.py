@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.decimal import DecimalColumn
 from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
@@ -1346,7 +1346,7 @@ def test_typecast_from_float_to_decimal(
     pa_arr = got.to_arrow().cast(
         pa.decimal64(to_dtype.precision, to_dtype.scale)
     )
-    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(DecimalColumn.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -1378,7 +1378,7 @@ def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
         .cast("float64")
         .cast(pa.decimal64(to_dtype.precision, to_dtype.scale))
     )
-    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(DecimalColumn.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -1433,12 +1433,12 @@ def test_typecast_to_from_decimal(from_dtype, to_dtype):
         pa_arr = s.to_arrow().cast(
             pa.decimal32(to_dtype.precision, to_dtype.scale), safe=False
         )
-        expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(DecimalColumn.from_arrow(pa_arr))
     elif isinstance(to_dtype, cudf.Decimal64Dtype):
         pa_arr = s.to_arrow().cast(
             pa.decimal64(to_dtype.precision, to_dtype.scale), safe=False
         )
-        expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(DecimalColumn.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
         got = s.astype(to_dtype)

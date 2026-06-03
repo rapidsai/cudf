@@ -5226,9 +5226,6 @@ class IntervalIndex(Index):
             "Getting a scalar from an IntervalIndex is not yet supported"
         )
 
-    def _is_interval(self) -> bool:
-        return True
-
     def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         return self
 
