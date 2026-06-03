@@ -537,6 +537,7 @@ files:
       key: test
     includes:
       - test_python_common
+      - depends_on_cupy
   test_python_narwhals:
     output: none
     includes:
