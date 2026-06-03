@@ -1,25 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for the numba_cuda_mlir UDF backend scaffolding (PR 1).
 
-This PR introduces a shell of the future MLIR backend without any code
-that depends on ``numba_cuda_mlir``. Tests here cover only the
-infrastructure pieces:
-
-* the ``cudf.core.udf.mlir_backend`` package is importable as an empty
-  scaffold,
-* ``cudf.utils._numba`` defaults ``numba.cuda.config.CUDA_ENABLE_NRT`` to
-  ``False`` at import time,
-* the existing ``nrt_enabled()`` and ``CaptureNRTUsage`` helpers in
-  ``cudf.core.udf.nrt_utils`` behave as documented.
-
-Subsequent PRs will add real typing/lowering tests under this directory
-(e.g. ``test_strings_typing.py``, ``test_masked_lowering.py``).
-"""
 
 from __future__ import annotations
-
-import importlib
 
 import pytest
 from numba.cuda import config as numba_config
@@ -29,15 +12,6 @@ from cudf.core.udf.nrt_utils import (
     _current_nrt_context,
     nrt_enabled,
 )
-
-
-def test_mlir_backend_package_importable():
-    """The empty mlir_backend package can be imported without side effects."""
-    mod = importlib.import_module("cudf.core.udf.mlir_backend")
-    assert mod.__doc__ and "MLIR" in mod.__doc__
-    assert not hasattr(mod, "MaskedType"), (
-        "PR 1 should ship an empty mlir_backend; later PRs add types here."
-    )
 
 
 def test_cuda_enable_nrt_default_false():
