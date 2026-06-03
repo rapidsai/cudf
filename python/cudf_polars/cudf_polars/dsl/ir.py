@@ -529,8 +529,6 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("file://") for p in self.paths):
-            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
@@ -646,17 +644,6 @@ class Scan(IR):
         return df.with_columns(
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
-
-    @nvtx_annotate_cudf_polars(message="Scan.fast_count")
-    def fast_count(self) -> int:  # pragma: no cover
-        """Get the number of rows in a Parquet Scan."""
-        meta = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(self.paths)
-        )
-        total_rows = meta.num_rows() - self.skip_rows
-        if self.n_rows != -1:
-            total_rows = min(total_rows, self.n_rows)
-        return max(total_rows, 0)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
@@ -1544,7 +1531,9 @@ class Select(IR):
         ):  # pragma: no cover
             stream = context.get_cuda_stream()
             scan = self.children[0]
-            effective_rows = scan.fast_count()
+            effective_rows = Scan._get_parquet_row_count_from_metadata(
+                scan.paths, scan.skip_rows, scan.n_rows
+            )
             dtype = DataType(pl.UInt32())
             col = Column(
                 plc.Column.from_scalar(

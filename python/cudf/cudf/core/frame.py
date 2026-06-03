@@ -627,6 +627,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
+        def is_numpy_object_dtype(dtype: Dtype | None) -> bool:
+            try:
+                return np.dtype(dtype) == np.dtype("O")
+            except TypeError:
+                return False
+
         def to_array(
             col: ColumnBase, to_dtype: Dtype | None
         ) -> cupy.ndarray | np.ndarray:
@@ -678,6 +684,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 col.has_nulls()
                 and dtype is not None
                 and is_string_dtype(dtype)
+                and not is_numpy_object_dtype(dtype)
             ):
                 casted_array[col.isnull().to_numpy()] = (
                     cudf.NA if na_value is no_default else na_value
