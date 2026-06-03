@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import itertools
 import math
@@ -31,6 +32,7 @@ from cudf_polars.streaming.base import (
     SerializedDataSourceInfo,
 )
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.utils import _dynamic_planning_on
 from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
@@ -358,6 +360,67 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
+def determine_non_native_fallback(
+    ir: Scan,
+    *,
+    plan: IOPartitionPlan,
+    count: int,
+    nranks: int,
+    parquet_options: ParquetOptions,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> bool:
+    """
+    Determine whether we will use the cudf-polars (non-native) parquet reader.
+
+    Parameters
+    ----------
+    ir
+        The Scan node that might need to fall back.
+    plan
+        The IO partitioning plan.
+    count
+        The number of partitions associated with this Scan node.
+    nranks
+        The number of ranks.
+    parquet_options
+        The parquet options.
+    config_options
+        The configuration options.
+
+    Returns
+    -------
+    bool
+        Whether to use the cudf-polars (non-native) parquet reader.
+
+    Notes
+    -----
+    cudf-polars current falls back under the following conditions:
+
+    - Our plan indicates we should split the file into multiple partitions
+    - We have more than one rank
+    - There's more than one partition or dynamic planning is enabled
+    - The file type is parquet
+    - The row index is not set
+    - File paths are not included
+    - The number of rows is not set
+    - The skip rows is not set
+    """
+    distributed_split_files = (
+        plan.flavor == IOPartitionFlavor.SPLIT_FILES and nranks > 1
+    )
+
+    return not (
+        parquet_options.use_rapidsmpf_native
+        and (count > 1 or _dynamic_planning_on(config_options))
+        and ir.typ == "parquet"
+        and ir.row_index is None
+        and ir.include_file_paths is None
+        and ir.n_rows == -1
+        and ir.skip_rows == 0
+        and not distributed_split_files
+    )
+
+
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
@@ -386,6 +449,22 @@ def _(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )
         count = 1
+
+    # In `generate_ir_sub_network` for `StreamingScan`, we have this big condition
+    # for whether we're going to actually use rapidsmpf's native parquet reader
+    # or fall back to a Scan node. When we do fall back, we use the non-chunked
+    # reader.
+    # This
+
+    if determine_non_native_fallback(
+        ir,
+        plan=plan,
+        count=count,
+        nranks=rec.state["nranks"],
+        parquet_options=parquet_options,
+        config_options=config_options,
+    ):
+        parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
     scans = expand_scan_for_rank(
         ir,

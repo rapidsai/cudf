@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -43,16 +42,13 @@ from cudf_polars.streaming.actor_graph.utils import (
     recv_metadata,
     send_metadata,
 )
-from cudf_polars.streaming.base import (
-    IOPartitionFlavor,
-)
 from cudf_polars.streaming.io import (
     StreamingScan,
     StreamingSink,
     _prepare_sink_directory,
     _sink_to_file,
+    determine_non_native_fallback,
 )
-from cudf_polars.streaming.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -567,25 +563,19 @@ def _(
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
     plan: IOPartitionPlan = partition_info.io_plan
 
-    # Native node cannot split large files in distributed mode yet
-    distributed_split_files = (
-        plan.flavor == IOPartitionFlavor.SPLIT_FILES and rec.state["comm"].nranks > 1
-    )
-
     # Use rapidsmpf native read_parquet node if possible
     ch_in: Channel[TableChunk] | None = None
     ch_out = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
-    if (
-        parquet_options.use_rapidsmpf_native
-        and (partition_info.count > 1 or _dynamic_planning_on(config_options))
-        and ir.base_scan.typ == "parquet"
-        and ir.base_scan.row_index is None
-        and ir.base_scan.include_file_paths is None
-        and ir.base_scan.n_rows == -1
-        and ir.base_scan.skip_rows == 0
-        and not distributed_split_files
+
+    if determine_non_native_fallback(
+        ir.base_scan,
+        plan=plan,
+        count=partition_info.count,
+        nranks=rec.state["comm"].nranks,
+        parquet_options=parquet_options,
+        config_options=config_options,
     ):
         # Create new channel to so ch_out can be used to add metadata
         ch_in = rec.state["context"].create_channel()
@@ -599,7 +589,6 @@ def _(
             partition_info,
         )
 
-    if native_node is not None and ch_in is not None:
         # Need metadata node, because the native read_parquet
         # node does not send metadata.
         metadata_node = metadata_feeder_node(
@@ -616,9 +605,6 @@ def _(
         )
         nodes[ir] = [native_node, metadata_node]
     else:
-        # Fall back to scan_node (predicate not convertible, or other constraint)
-        parquet_options = dataclasses.replace(parquet_options, chunked=False)
-
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
