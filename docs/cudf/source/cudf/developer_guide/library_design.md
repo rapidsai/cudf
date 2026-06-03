@@ -105,7 +105,7 @@ that consolidates logic and implements methods specific to 1 or more related dat
 - `StructColumn`: struct
 - `DecimalColumn`: decimal32, decimal64, decimal128
 
-Each column subclass is restricted to hold a `.dtype` object corresponding to a valid [pandas data type](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes) of the same data type designation with the following exceptions:
+Each column subclass is restricted to hold a `.dtype` object corresponding to a valid [pandas data type](https://pandas.pydata.org/docs/user_guide/basics.html#dtypes), including pandas nullable extension types, of the same data type designation with the following exceptions:
 
 - A `CategoricalColumn` holds a `cudf.CategoricalDtype` instead of a `pandas.CategoricalDtype`
 - A `IntervalColumn` can hold a `cudf.IntervalDtype` instead of a `pandas.IntervalDtype`
