@@ -3245,20 +3245,19 @@ def test_decimal_arrow_backed_comparisons_pandas_compat(comparison_op):
         assert_eq(expect, got)
 
 
-def test_arrow_backed_unsigned_subtract_python_int_pandas_compat():
+def test_arrow_backed_unsigned_subtract_python_int():
     # An unsigned ArrowDtype minus a Python int is promoted to signed
     # int64[pyarrow] by pandas, so it must not raise a spurious unsigned
     # overflow even when elements are smaller than the subtrahend.
     s = pd.Series(
         pd.arrays.ArrowExtensionArray(pa.array([0, 1, 2, 5], type=pa.uint8()))
     )
-    with cudf.option_context("mode.pandas_compatible", True):
-        gs = cudf.from_pandas(s)
-        assert_eq(s - 3, gs - 3)
-        assert_eq(3 - s, 3 - gs)
+    gs = cudf.from_pandas(s)
+    assert_eq(s - 3, gs - 3)
+    assert_eq(3 - s, 3 - gs)
 
 
-def test_arrow_backed_unsigned_subtract_overflow_pandas_compat():
+def test_arrow_backed_unsigned_subtract_overflow():
     # Subtraction of two unsigned ArrowDtype operands that underflows raises,
     # mirroring pyarrow.compute.subtract_checked.
     s = pd.Series(
@@ -3267,8 +3266,7 @@ def test_arrow_backed_unsigned_subtract_overflow_pandas_compat():
     other = pd.Series(
         pd.arrays.ArrowExtensionArray(pa.array([1, 0], type=pa.uint8()))
     )
-    with cudf.option_context("mode.pandas_compatible", True):
-        gs = cudf.from_pandas(s)
-        gother = cudf.from_pandas(other)
-        with pytest.raises(pa.ArrowInvalid):
-            gs - gother
+    gs = cudf.from_pandas(s)
+    gother = cudf.from_pandas(other)
+    with pytest.raises(pa.ArrowInvalid):
+        gs - gother
