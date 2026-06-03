@@ -43,7 +43,7 @@ NO_CHUNK_ENGINE = pl.GPUEngine(
     params=[(None, None), ("row-index", 0), ("index", 10)],
     ids=["no_row_index", "zero_offset_row_index", "offset_row_index"],
 )
-def row_index(request):
+def row_index(request) -> tuple[str | None, int | None]:
     return request.param
 
 
@@ -474,13 +474,14 @@ def test_select_arbitrary_order_with_row_index_column(engine: pl.GPUEngine, tmp_
 )
 def test_scan_csv_with_and_without_header(
     engine: pl.GPUEngine,
-    df,
-    tmp_path,
-    has_header,
-    new_columns,
-    row_index,
-    columns,
-    zlice,
+    df: pl.DataFrame,
+    tmp_path: Path,
+    *,
+    has_header: bool,
+    new_columns: list[str] | None,
+    row_index: tuple[str | None, int | None],
+    columns: list[str] | None,
+    zlice: tuple[int, int] | None,
 ):
     path = tmp_path / "test.csv"
     make_partitioned_source(
@@ -489,12 +490,14 @@ def test_scan_csv_with_and_without_header(
 
     name, offset = row_index
 
+    # offset is only used if name is used, but that's not an overload
+    # in the type signature.
     q = pl.scan_csv(
         path,
         has_header=has_header,
         new_columns=new_columns,
         row_index_name=name,
-        row_index_offset=offset,
+        row_index_offset=offset,  # type: ignore[arg-type]
     )
 
     if zlice is not None:

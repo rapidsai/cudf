@@ -7,8 +7,9 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import math
-from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+import operator
+from functools import reduce, singledispatch
+from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -25,6 +26,7 @@ from cudf_polars.dsl.ir import (
     DataFrameScan,
     Scan,
     Sink,
+    Union,
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
@@ -47,6 +49,7 @@ from cudf_polars.streaming.actor_graph.utils import (
 )
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
+    PartitionInfo,
 )
 from cudf_polars.streaming.io import (
     SplitScan,
@@ -69,14 +72,11 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import (
         IOPartitionPlan,
-        PartitionInfo,
         StatsCollector,
     )
     from cudf_polars.utils.config import (
         ParquetOptions,
     )
-
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 from cudf_polars.dsl.traversal import CachingVisitor
 from cudf_polars.typing import GenericTransformer
@@ -89,9 +89,6 @@ class IOLowerIRState(TypedDict):
     rank: int
     nranks: int
     parquet_options: ParquetOptions
-
-    # config_options: ConfigOptions[StreamingExecutor]
-    # stats: StatsCollector
 
 
 IOLowerIRTransformer: TypeAlias = GenericTransformer[
@@ -145,18 +142,50 @@ def io_lower_ir_graph(
     return mapper(ir)
 
 
+def _io_lower_pwise(
+    ir: IR, rec: IOLowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Lower children and preserve partitioning from a single child."""
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    if len(children) == 1:
+        partition = partition_info[children[0]]
+    else:
+        partition = PartitionInfo(count=max(partition_info[c].count for c in children))
+
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
+
+
 @singledispatch
 def io_lower_ir_node(
     ir: IR, rec: IOLowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Lower the IR nodes for a given IR node."""
-    return ir, rec.state["partition_info"]
+    if not ir.children:
+        return ir, rec.state["partition_info"]
+    return _io_lower_pwise(ir, rec)
+
+
+@io_lower_ir_node.register(Union)
+def _(
+    ir: Union, rec: IOLowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # TODO: Determine if we really need this. The only difference is `sum` instead of `max` for getting count.
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+    count = sum(partition_info[c].count for c in children)
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = PartitionInfo(count=count)
+    return new_node, partition_info
 
 
 @io_lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: IOLowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
     """
     Lower the Scan node.
 
@@ -724,7 +753,7 @@ def make_rapidsmpf_read_parquet_node(
         ) from e
 
 
-@generate_ir_sub_network.register(Scan)  # TODO: see if this even is hit?
+# @generate_ir_sub_network.register(Scan)  # TODO: see if this even is hit?
 @generate_ir_sub_network.register(StreamingScan)
 def _(
     ir: Scan, rec: SubNetGenerator
