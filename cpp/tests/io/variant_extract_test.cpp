@@ -91,7 +91,8 @@ struct ExtractVariantFieldTest : public cudf::test::BaseFixture {};
 TEST_F(ExtractVariantFieldTest, NullStructRow)
 {
   std::vector<uint8_t> const m = {0x01, 0x01, 0x00, 0x01, 'x'};
-  std::vector<uint8_t> const v = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
+  // Row 0 object also exercises a mismatched field_id_size (2 bytes) vs field_offset_size (1 byte)
+  std::vector<uint8_t> const v = {0x12, 0x01, 0x00, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
   cudf::test::lists_column_wrapper<uint8_t> meta{{m.begin(), m.end()}, {0x00}};
   cudf::test::lists_column_wrapper<uint8_t> val{{v.begin(), v.end()}, {0x00}};
   // Use the validity vector to mask the second row null.

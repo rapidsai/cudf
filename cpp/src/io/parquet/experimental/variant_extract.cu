@@ -108,6 +108,20 @@ __device__ inline basic_type variant_basic_type(uint8_t vm)
 }
 __device__ inline int variant_value_header(uint8_t vm) { return (vm >> 2) & 0x3F; }
 
+struct object_array_header {
+  int field_offset_size;  // bytes per field_offset entry
+  int field_id_size;      // bytes per field_id (0 for arrays)
+  int num_elements_size;  // bytes holding num_elements
+};
+
+__device__ inline object_array_header decode_object_array_header(int value_header, bool is_object)
+{
+  int const large_bit = is_object ? 4 : 2;
+  return {(value_header & 0x03) + 1,
+          is_object ? ((value_header >> 2) & 0x03) + 1 : 0,
+          ((value_header >> large_bit) & 0x01) ? 4 : 1};
+}
+
 __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
 {
   if (enc.size() < 1) { return cuda::std::nullopt; }
@@ -116,8 +130,7 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   int const value_header = variant_value_header(vm);
 
   if (btype == basic_type::primitive) {
-    // Primitive: the leading header byte plus a payload keyed by the physical type id. Binary and
-    // long string carry a 4-byte little-endian length prefix instead of a fixed-size payload.
+    // The leading header byte plus a payload keyed by the physical type id
     uint64_t payload = 0;
     switch (static_cast<primitive_type>(value_header)) {
       case primitive_type::null:
@@ -153,30 +166,26 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   }
 
   if (btype == basic_type::short_string) {
-    // Short string: the value header is the payload length, following the header byte.
+    // The value header is the payload length, following the header byte.
     return variant_header_bytes + static_cast<uint64_t>(value_header);
   }
 
   // Object / array: the encoded size is the header bytes (metadata byte, element count, optional
-  // field-id list, and offset list) plus the sentinel (last) offset, which holds the total size of
-  // the trailing values region.
-  bool const is_object     = btype == basic_type::object;
-  int const field_off_size = (value_header & 0x03) + 1;
-  int const field_id_size  = is_object ? ((value_header >> 2) & 0x03) + 1 : 0;
-  // A header bit selects a 4- vs 1-byte element count; its position differs between the two types.
-  int const large_bit     = is_object ? 4 : 2;
-  int const num_elts_size = ((value_header >> large_bit) & 0x01) ? 4 : 1;
+  // field-id list, and offset list)
+  bool const is_object = btype == basic_type::object;
+  auto const [offset_size, id_size, num_elements_size] =
+    decode_object_array_header(value_header, is_object);
 
-  auto const num_elts = read_uint(enc, variant_header_bytes, num_elts_size);
+  auto const num_elts = read_uint(enc, variant_header_bytes, num_elements_size);
   if (!num_elts.has_value()) { return cuda::std::nullopt; }
   auto const n = num_elts.value();
 
-  auto const offs_start  = variant_header_bytes + num_elts_size + n * field_id_size;
-  auto const values_base = offs_start + (n + 1) * field_off_size;
+  auto const offs_start  = variant_header_bytes + num_elements_size + n * id_size;
+  auto const values_base = offs_start + (n + 1) * offset_size;
   // Sentinel offset (entry n) holds the total size of the values region.
-  auto const sentinel_pos = narrow_cast(offs_start + n * field_off_size);
+  auto const sentinel_pos = narrow_cast(offs_start + n * offset_size);
   if (!sentinel_pos.has_value()) { return cuda::std::nullopt; }
-  auto const sentinel = read_uint(enc, sentinel_pos.value(), field_off_size);
+  auto const sentinel = read_uint(enc, sentinel_pos.value(), offset_size);
   if (!sentinel.has_value()) { return cuda::std::nullopt; }
   return values_base + sentinel.value();
 }
@@ -231,22 +240,21 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   uint8_t const vm = val[0];
   if (variant_basic_type(vm) != basic_type::object) { return {}; }
 
-  int const value_header   = variant_value_header(vm);
-  int const field_off_size = (value_header & 0x03) + 1;
-  int const field_id_size  = ((value_header >> 2) & 0x03) + 1;
-  int const num_elts_size  = ((value_header >> 4) & 0x01) != 0 ? 4 : 1;
+  int const value_header = variant_value_header(vm);
+  auto const [offset_size, id_size, num_elements_size] =
+    decode_object_array_header(value_header, true);
 
   size_type pos         = 1;
-  auto const num_fields = narrow_cast(read_uint(val, pos, num_elts_size));
+  auto const num_fields = narrow_cast(read_uint(val, pos, num_elements_size));
   if (!num_fields.has_value()) { return {}; }
-  pos += num_elts_size;
+  pos += num_elements_size;
 
   size_type const field_ids_start = pos;
-  auto const field_ids_bytes      = static_cast<uint64_t>(num_fields.value()) * field_id_size;
+  auto const field_ids_bytes      = static_cast<uint64_t>(num_fields.value()) * id_size;
   if (field_ids_bytes > val_len - field_ids_start) { return {}; }
 
   size_type const field_offs_start = field_ids_start + static_cast<size_type>(field_ids_bytes);
-  auto const field_offs_bytes = (static_cast<uint64_t>(num_fields.value()) + 1) * field_off_size;
+  auto const field_offs_bytes      = (static_cast<uint64_t>(num_fields.value()) + 1) * offset_size;
   if (field_offs_bytes > val_len - field_offs_start) { return {}; }
 
   size_type const values_base = field_offs_start + static_cast<size_type>(field_offs_bytes);
@@ -257,11 +265,11 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   bool found           = false;
   uint64_t match_start = 0;
   for (size_type i = 0; i < num_fields.value(); ++i) {
-    auto const fid = read_uint(val, field_ids_start + i * field_id_size, field_id_size);
+    auto const fid = read_uint(val, field_ids_start + i * id_size, id_size);
     if (!fid.has_value()) { return {}; }
     if (cuda::std::cmp_not_equal(fid.value(), field_id)) { continue; }
 
-    auto const o = read_uint(val, field_offs_start + i * field_off_size, field_off_size);
+    auto const o = read_uint(val, field_offs_start + i * offset_size, offset_size);
     if (!o.has_value()) { return {}; }
     if (o.value() > values_extent) { return {}; }
     match_start = o.value();
