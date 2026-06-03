@@ -10,7 +10,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/thirdparty/get_cudf.cmake")
 set(CUDF_KAFKA_MIN_VERSION
     "${CUDF_KAFKA_VERSION_MAJOR}.${CUDF_KAFKA_VERSION_MINOR}.${CUDF_KAFKA_VERSION_PATCH}"
 )
-find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION} cudf_kafka-exports CUDF_KAFKA)
+find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION} cudf_kafka-exports)
 
 if(cudf_REQUIRES_CUDA)
   rapids_cuda_init_architectures(CUDF_KAFKA)
