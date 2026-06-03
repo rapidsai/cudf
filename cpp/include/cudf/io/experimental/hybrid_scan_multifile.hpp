@@ -115,7 +115,11 @@ class hybrid_scan_multifile {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::reset_column_selection
+   * @brief Resets the current column selection
+   *
+   * Resets the current column selection state forcing column re-selection in subsequent filter,
+   * byte range, setup chunking and materialization APIs. This is useful if the filter expression
+   * has been cascaded (and-ed) to include new columns.
    */
   void reset_column_selection() const;
 
