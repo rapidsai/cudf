@@ -9,7 +9,6 @@ ci:
   autoupdate_schedule: quarterly
   skip: ["mypy", "verify-alpha-spec"]
   submodules: false
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -34,24 +33,9 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [
-          "polars>=1.35,<1.39",
-          "numpy",
-          pyarrow-stubs,
-          "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
-          pytest,
-          types-cachetools,
-          "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'",
-          "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
-        ]
-        args: ["--config-file=pyproject.toml",
-               "python/cudf/cudf",
-               "python/pylibcudf/pylibcudf",
-               "python/custreamz/custreamz",
-               "python/cudf_kafka/cudf_kafka",
-               "python/cudf_polars/cudf_polars",
-               "python/cudf_polars/tests",
-               "python/dask_cudf/dask_cudf"]
+        additional_dependencies: ["polars>=1.35,<1.39", "numpy", pyarrow-stubs, "pyarrow<24.0.0", # https://github.com/rapidsai/cudf/issues/22229
+          pytest, types-cachetools, "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'", "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"]
+        args: ["--config-file=pyproject.toml", "python/cudf/cudf", "python/pylibcudf/pylibcudf", "python/custreamz/custreamz", "python/cudf_kafka/cudf_kafka", "python/cudf_polars/cudf_polars", "python/cudf_polars/tests", "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v20.1.8
@@ -285,6 +269,10 @@ repos:
             cpp/include/cudf_test/cxxopts[.]hpp$
           )
       - id: verify-alpha-spec
+        args:
+          - --fix
+          - --mode
+          - release
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
       - id: verify-hardcoded-version
@@ -320,6 +308,5 @@ repos:
     rev: v1.24.1
     hooks:
       - id: zizmor
-
 default_language_version:
-      python: python3
+  python: python3
