@@ -39,7 +39,8 @@ class IntervalColumn(ColumnBase):
     @functools.cached_property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         if isinstance(self.dtype, IntervalDtype):
-            return self.dtype.closed
+            closed = self.dtype.closed
+            return "right" if closed is None else closed
         else:
             return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
