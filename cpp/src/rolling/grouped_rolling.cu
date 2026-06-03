@@ -345,14 +345,8 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     following,
     orderby.num_rows(),
     [&] {
-      return detail::make_range_windows(group_keys,
-                                        orderby,
-                                        orders,
-                                        null_orders,
-                                        preceding,
-                                        following,
-                                        stream,
-                                        cudf::get_current_device_resource_ref());
+      return detail::make_range_windows(
+        group_keys, orderby, orders, null_orders, preceding, following, stream);
     },
     stream,
     mr);

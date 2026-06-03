@@ -159,8 +159,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   host_span<null_order const> null_orders,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(orderby.num_columns() > 0, "orderby must be non-empty");
   CUDF_EXPECTS(group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.num_rows(),
@@ -178,7 +177,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
                                       preceding,
                                       following,
                                       stream,
-                                      mr);
+                                      cudf::get_current_device_resource_ref());
   }
 
   auto const is_peer_bound = [](range_window_type const& w) {
@@ -203,8 +202,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 
   auto const num_rows = orderby.num_rows();
   auto make_offsets   = [&](range_window_type const& window, rolling::direction direction) {
-    auto result = make_numeric_column(
-      data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+    auto result        = make_numeric_column(data_type{type_to_id<size_type>()},
+                                      num_rows,
+                                      mask_state::UNALLOCATED,
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
     auto write_offsets = [&](auto grouping) {
       thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cudf::detail::make_counting_transform_iterator(
