@@ -1127,6 +1127,66 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   } while (reader.has_next());
 }
 
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadDerivesPassLimitWhenUnset)
+{
+  // Use a file large enough that the pass (decompression) limit drives subpass splitting, so a 1.5x
+  // derived limit produces different chunking than an unlimited pass limit.
+  auto constexpr num_rows = 1'000'000;
+  auto const value_iter   = cuda::counting_iterator<int64_t>{0};
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
+  auto const [expected, filepath] = write_file(
+    input_columns, "chunked_read_derive_pass_limit", false /*nullable*/, false /*delta*/);
+
+  auto constexpr chunk_read_limit    = std::size_t{500'000};
+  auto const derived_pass_read_limit = chunk_read_limit + chunk_read_limit / 2;  // 1.5x
+
+  // Read using the constructor overload that does NOT take a pass_read_limit (which derives 1.5x).
+  auto const read_without_pass_limit = [&]() {
+    auto const read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    auto reader     = cudf::io::chunked_parquet_reader(chunk_read_limit, read_opts);
+    auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+    auto num_chunks = 0;
+    do {
+      auto chunk = reader.read_chunk();
+      ++num_chunks;
+      out_tables.emplace_back(std::move(chunk.tbl));
+    } while (reader.has_next());
+    auto out_tviews = std::vector<cudf::table_view>{};
+    for (auto const& tbl : out_tables) {
+      out_tviews.emplace_back(tbl->view());
+    }
+    return std::pair{cudf::concatenate(out_tviews), num_chunks};
+  };
+
+  auto const [derived_table, derived_num_chunks] = read_without_pass_limit();
+  // Explicitly passing 1.5x chunk_read_limit must match the derived (no-pass-limit) behavior
+  auto const [explicit_table, explicit_num_chunks] =
+    chunked_read(filepath, chunk_read_limit, derived_pass_read_limit);
+  // Explicit pass_read_limit == 0 keeps its original meaning (unlimited)
+  auto const [unlimited_table, unlimited_num_chunks] =
+    chunked_read(filepath, chunk_read_limit, std::size_t{0});
+  auto const [big_pass_table, big_pass_num_chunks] =
+    chunked_read(filepath, chunk_read_limit, std::size_t{1} << 40);
+
+  // All paths must return the complete, correct table.
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *derived_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *explicit_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *unlimited_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *big_pass_table);
+
+  // The no-pass-limit overload derives exactly 1.5x chunk_read_limit (this also guards the
+  // multiplier: a different factor would change the subpass-driven chunk count for this file).
+  EXPECT_GT(derived_num_chunks, 1);
+  EXPECT_EQ(derived_num_chunks, explicit_num_chunks);
+
+  // Explicit pass_read_limit == 0 still means unlimited (unchanged), and therefore differs from the
+  // bounded 1.5x derivation.
+  EXPECT_EQ(unlimited_num_chunks, big_pass_num_chunks);
+  EXPECT_NE(derived_num_chunks, unlimited_num_chunks);
+}
+
 namespace {
 constexpr std::size_t input_limit_expected_file_count = 4;
 

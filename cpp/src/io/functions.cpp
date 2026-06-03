@@ -734,6 +734,33 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
 chunked_parquet_reader::chunked_parquet_reader() = default;
 
+namespace {
+
+// Derive a `pass_read_limit` from a `chunk_read_limit` when a `chunk_read_limit` is provided
+// without a `pass_read_limit`.
+[[nodiscard]] std::size_t derive_pass_limit(std::size_t chunk_read_limit)
+{
+  if (chunk_read_limit == 0) { return 0; }
+
+  auto const half_chunk_read_limit = chunk_read_limit / 2;
+  auto const pass_read_limit =
+    chunk_read_limit > std::numeric_limits<std::size_t>::max() - half_chunk_read_limit
+      ? std::numeric_limits<std::size_t>::max()
+      : chunk_read_limit + half_chunk_read_limit;  // 1.5x chunk_read_limit, overflow-guarded
+
+  CUDF_LOG_WARN(
+    "Chunked Parquet reader: a chunk_read_limit (%zu bytes) was provided without a "
+    "pass_read_limit; defaulting pass_read_limit to %zu bytes (1.5x chunk_read_limit) to bound "
+    "input and decompression memory and reduce the risk of out-of-memory errors on large files. "
+    "Use a constructor overload that accepts pass_read_limit to control this explicitly.",
+    chunk_read_limit,
+    pass_read_limit);
+
+  return pass_read_limit;
+}
+
+}  // namespace
+
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
@@ -742,7 +769,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            0,
+                                                            derive_pass_limit(chunk_read_limit),
                                                             make_datasources(options.get_source()),
                                                             std::vector<parquet::FileMetaData>{},
                                                             options,
@@ -762,7 +789,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            0,
+                                                            derive_pass_limit(chunk_read_limit),
                                                             std::move(datasources),
                                                             std::move(parquet_metadatas),
                                                             options,
