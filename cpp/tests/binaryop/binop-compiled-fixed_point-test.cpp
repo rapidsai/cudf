@@ -505,7 +505,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullMaxColumnScalar)
   // DECIMAL scale -2: column {1.00, 5.00, 3.00}, scalar 5.00 -> greatest is 5.00
   auto const col      = fp_wrapper<RepType>{{100, 500, 300}, scale_type{-2}};
   auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(500, scale_type{-2});
-  auto const expected = fp_wrapper<RepType>{{500, 500, 500}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{500, 500, 500}, {true, true, true}, scale_type{-2}};
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::NULL_MAX, static_cast<cudf::column_view>(col).type(), scalar->type());
@@ -522,7 +522,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullMinColumnScalar)
 
   auto const col      = fp_wrapper<RepType>{{100, 500, 300}, scale_type{-2}};
   auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(500, scale_type{-2});
-  auto const expected = fp_wrapper<RepType>{{100, 500, 300}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{100, 500, 300}, {true, true, true}, scale_type{-2}};
 
   auto const type = cudf::binary_operation_fixed_point_output_type(
     cudf::binary_operator::NULL_MIN, static_cast<cudf::column_view>(col).type(), scalar->type());
