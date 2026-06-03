@@ -304,7 +304,7 @@ class StreamingScan(IR):
         "base_scan",
         "schema",
     )
-    _n_non_child_args = 2  # TODO: verify this
+    _n_non_child_args = 2
     scans: list[Scan | SplitScan]
     # These are essentially the base scan properties, shared by all the scans
     # schema: Schema
