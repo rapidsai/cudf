@@ -128,9 +128,8 @@ struct row_group_stats_caster : public stats_caster_base {
  *
  * Returns true iff at least one column chunk referenced by `filter_column_schemas` in the first
  * selected row group of any source carries any of `min` / `max` / `min_value` / `max_value` /
- * `null_count`. Inspecting a single row group per source is sufficient because mainstream Parquet
- * writers decide statistics emission per column at writer setup, so within a column either all
- * row groups carry statistics or none do.
+ * `null_count`. See https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237
+ * for why inspecting one row group per source is sufficient.
  *
  * @param per_file_metadata Metadata for each input source
  * @param input_row_group_indices Selected row group indices, one vector per source
