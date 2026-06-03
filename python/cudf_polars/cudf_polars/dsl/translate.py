@@ -36,6 +36,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
+    POLARS_VERSION_LT_140,
     POLARS_VERSION_LT_141,
 )
 
@@ -885,7 +886,7 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
-        elif name == "quantile":
+        elif not POLARS_VERSION_LT_141 and name == "quantile":
             # polars >= 1.41 emits quantile as a string-named Function
             # expression (function_data=("quantile", interpolation)) with the
             # column and quantile value as inputs; earlier versions used a
@@ -1204,9 +1205,11 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
-    if agg_name == "implode" and translator._expr_context in (
-        ExecutionContext.GROUPBY,
-        ExecutionContext.ROLLING,
+    if (
+        not POLARS_VERSION_LT_140
+        and agg_name == "implode"
+        and translator._expr_context
+        in (ExecutionContext.GROUPBY, ExecutionContext.ROLLING)
     ):
         # polars >= 1.40 wraps element-wise expressions in a groupby/rolling
         # aggregation in an implicit ``implode`` (collect-to-list per group).
