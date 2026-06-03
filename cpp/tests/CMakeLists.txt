@@ -349,6 +349,7 @@ ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_filters_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
