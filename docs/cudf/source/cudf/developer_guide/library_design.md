@@ -212,8 +212,6 @@ To have each worker in dask print spill statistics, do something like:
 ## Copy-on-write
 
 This section describes the internal implementation details of the copy-on-write feature.
-It is recommended that developers familiarize themselves with [the user-facing documentation](copy-on-write-user-doc) of this functionality before reading through the internals
-below.
 
 The core copy-on-write implementation relies on `ExposureTrackedBuffer` and the tracking features of `BufferOwner`.
 

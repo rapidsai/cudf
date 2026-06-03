@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/hashing.hpp>
 #include <cudf/table/table.hpp>
@@ -34,6 +35,8 @@ static void bench_hash(nvbench::state& state)
 
   state.add_global_memory_reads<nvbench::int8_t>(data->alloc_size());
   // memory written depends on used hash
+
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   if (hash_name == "murmurhash3_x86_32") {
     state.add_global_memory_writes<nvbench::uint32_t>(num_rows);
@@ -79,7 +82,11 @@ static void bench_hash(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha512(data->view()); });
   } else {
     state.skip(hash_name + ": unknown hash name");
+    return;
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_hash)
