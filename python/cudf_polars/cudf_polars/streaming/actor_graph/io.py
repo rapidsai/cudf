@@ -192,7 +192,11 @@ def _(
     This expands SplitScan nodes into multiple Scan nodes.
     """
     plan = rec.state["partition_info"][ir].io_plan
-    assert plan is not None  # not great...
+    # rec.state["partition_info"] is just a mapping from IR nodes to PartitionInfo.
+    # We promise that PartitionInfo.io_plan is not None for Scan nodes,
+    # but don't currently enforce that promise in the type system.
+    if plan is None:
+        raise RuntimeError(f"Scan node must have a partition plan. node={ir}")
 
     rank = rec.state["rank"]
     nranks = rec.state["nranks"]
