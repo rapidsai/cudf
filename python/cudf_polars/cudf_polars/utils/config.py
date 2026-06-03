@@ -352,12 +352,14 @@ class MemoryResourceConfig:
     Examples
     --------
     Create a memory resource config for a single memory resource:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.CudaAsyncMemoryResource",
     ...     options={"initial_pool_size": 100},
     ... )
 
     Create a memory resource config for a nested memory resource configuration:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.PrefetchResourceAdaptor",
     ...     options={
