@@ -28,7 +28,6 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
-from cudf_polars.streaming.actor_graph.io import io_lower_ir_graph
 from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
@@ -686,16 +685,14 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+    ir, partition_info = lower_ir_graph(
+        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
+    )
 
     if comm.rank == 0:
         # At least for now, the query plan is identical on all ranks,
         # so we only log it once.
         log_query_plan(ir, config_options)
-
-    ir, partition_info = io_lower_ir_graph(
-        ir, partition_info, comm, config_options.parquet_options
-    )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

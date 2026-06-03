@@ -10,12 +10,16 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import Scan
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
+from cudf_polars.streaming.io import SplitScan, expand_scan_for_rank
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
@@ -152,3 +156,90 @@ def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
 
     q = pl.concat([df_q, df_q])
     assert_gpu_result_equal(q, engine=engine)
+
+
+def _make_parquet_scan(paths: list[str]) -> Scan:
+    return Scan(
+        {"x": DataType(pl.Int64())},
+        "parquet",
+        {},
+        None,
+        paths,
+        None,
+        0,
+        -1,
+        None,
+        None,
+        None,
+        ParquetOptions(),
+    )
+
+
+@pytest.mark.parametrize(
+    "plan,paths,rank,nranks,expected_len",
+    [
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            0,
+            1,
+            3,
+        ),
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            0,
+            2,
+            2,
+        ),
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            1,
+            2,
+            1,
+        ),
+        (IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ), ["a", "b", "c"], 1, 2, 0),
+    ],
+)
+def test_expand_scan_for_rank_fused_and_single_read(
+    plan: IOPartitionPlan,
+    paths: list[str],
+    rank: int,
+    nranks: int,
+    expected_len: int,
+) -> None:
+    scans = expand_scan_for_rank(
+        _make_parquet_scan(paths),
+        plan,
+        rank=rank,
+        nranks=nranks,
+        parquet_options=ParquetOptions(),
+    )
+    assert len(scans) == expected_len
+    assert all(not isinstance(scan, SplitScan) for scan in scans)
+
+
+def test_expand_scan_for_rank_split_files() -> None:
+    plan = IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES)
+    scans = expand_scan_for_rank(
+        _make_parquet_scan(["file.parquet"]),
+        plan,
+        rank=0,
+        nranks=2,
+        parquet_options=ParquetOptions(),
+    )
+    assert len(scans) == 2
+    assert all(isinstance(scan, SplitScan) for scan in scans)
+
+
+def test_expand_scan_for_rank_treats_zero_nranks_as_one() -> None:
+    plan = IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES)
+    scans = expand_scan_for_rank(
+        _make_parquet_scan(["a", "b"]),
+        plan,
+        rank=0,
+        nranks=0,
+        parquet_options=ParquetOptions(),
+    )
+    assert len(scans) == 2

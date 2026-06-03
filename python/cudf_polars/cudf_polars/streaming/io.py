@@ -103,6 +103,105 @@ def scan_partition_plan(
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
 
 
+def expand_scan_for_rank(
+    ir: Scan,
+    plan: IOPartitionPlan,
+    *,
+    rank: int,
+    nranks: int,
+    parquet_options: ParquetOptions,
+) -> list[Scan | SplitScan]:
+    """
+    Expand a Scan node into rank-local Scan and SplitScan operations.
+
+    Parameters
+    ----------
+    ir
+        The Scan node to expand.
+    plan
+        The IO partitioning plan for the scan.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers. Values less than 1 are treated as 1.
+    parquet_options
+        Parquet reader options.
+
+    Returns
+    -------
+    list[Scan | SplitScan]
+        Rank-local scan operations.
+    """
+    nranks = max(nranks, 1)
+    scans: list[Scan | SplitScan] = []
+    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
+        count = plan.factor * len(ir.paths)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        path_offset = local_offset // plan.factor
+        path_end = math.ceil((local_offset + local_count) / plan.factor)
+        path_count = path_end - path_offset
+        local_paths = ir.paths[path_offset : path_offset + path_count]
+        sindex = local_offset % plan.factor
+        splits_created = 0
+        for path in local_paths:
+            base_scan = Scan(
+                ir.schema,
+                ir.typ,
+                ir.reader_options,
+                ir.cloud_options,
+                [path],
+                ir.with_columns,
+                ir.skip_rows,
+                ir.n_rows,
+                ir.row_index,
+                ir.include_file_paths,
+                ir.predicate,
+                parquet_options,
+            )
+            while sindex < plan.factor and splits_created < local_count:
+                scans.append(
+                    SplitScan(
+                        ir.schema,
+                        base_scan,
+                        sindex,
+                        plan.factor,
+                        parquet_options,
+                    )
+                )
+                sindex += 1
+                splits_created += 1
+            sindex = 0
+
+    else:
+        count = math.ceil(len(ir.paths) / plan.factor)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        paths_offset_start = local_offset * plan.factor
+        paths_offset_end = paths_offset_start + plan.factor * local_count
+        for offset in range(paths_offset_start, paths_offset_end, plan.factor):
+            local_paths = ir.paths[offset : offset + plan.factor]
+            if len(local_paths) > 0:  # Only add scan if there are paths
+                scans.append(
+                    Scan(
+                        ir.schema,
+                        ir.typ,
+                        ir.reader_options,
+                        ir.cloud_options,
+                        local_paths,
+                        ir.with_columns,
+                        ir.skip_rows,
+                        ir.n_rows,
+                        ir.row_index,
+                        ir.include_file_paths,
+                        ir.predicate,
+                        parquet_options,
+                    )
+                )
+
+    return scans
+
+
 class SplitScan(IR):
     """
     Input from a split file.
@@ -265,6 +364,7 @@ def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
+    parquet_options = config_options.parquet_options
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -282,13 +382,21 @@ def _(
             count = plan.factor * len(paths)
         else:
             count = math.ceil(len(paths) / plan.factor)
-
-        return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
     else:
         plan = IOPartitionPlan(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )
-        return ir, {ir: PartitionInfo(count=1, io_plan=plan)}
+        count = 1
+
+    scans = expand_scan_for_rank(
+        ir,
+        plan,
+        rank=rec.state["rank"],
+        nranks=rec.state["nranks"],
+        parquet_options=parquet_options,
+    )
+    new_ir = StreamingScan(scans, ir)
+    return new_ir, {new_ir: PartitionInfo(count=count, io_plan=plan)}
 
 
 class StreamingScan(IR):

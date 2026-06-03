@@ -7,9 +7,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import math
-import operator
-from functools import reduce, singledispatch
-from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -24,9 +22,7 @@ import pylibcudf as plc
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
-    Scan,
     Sink,
-    Union,
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
@@ -49,10 +45,8 @@ from cudf_polars.streaming.actor_graph.utils import (
 )
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
-    PartitionInfo,
 )
 from cudf_polars.streaming.io import (
-    SplitScan,
     StreamingScan,
     StreamingSink,
     _prepare_sink_directory,
@@ -61,211 +55,19 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import (
         IOPartitionPlan,
+        PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.utils.config import (
-        ParquetOptions,
-    )
-
-from cudf_polars.dsl.traversal import CachingVisitor
-from cudf_polars.typing import GenericTransformer
-
-
-class IOLowerIRState(TypedDict):
-    """State used for lowering IR nodes."""
-
-    partition_info: MutableMapping[IR, PartitionInfo]
-    rank: int
-    nranks: int
-    parquet_options: ParquetOptions
-
-
-IOLowerIRTransformer: TypeAlias = GenericTransformer[
-    "IR", "tuple[IR, MutableMapping[IR, PartitionInfo]]", IOLowerIRState
-]
-
-
-def io_lower_ir_graph(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    comm: Communicator,
-    parquet_options: ParquetOptions,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR graph and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        Root of the graph to rewrite.
-    partition_info
-        Partition information for the graph. Mutate this in place for new IR nodes.
-    comm
-        Communicator for the graph. The output IR graph will contain nodes unique
-        to this rank.
-    parquet_options
-        Parquet reader options.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten graph and a mapping from unique nodes
-        in the new graph to associated partitioning information.
-
-    Notes
-    -----
-    This function traverses the unique nodes of the graph with
-    root `ir`, and applies :func:`lower_ir_node` to each node.
-
-    See Also
-    --------
-    lower_ir_node
-    """
-    state: IOLowerIRState = {
-        "partition_info": partition_info,
-        "rank": comm.rank,
-        "nranks": comm.nranks,
-        "parquet_options": parquet_options,
-    }
-    mapper: IOLowerIRTransformer = CachingVisitor(io_lower_ir_node, state=state)
-    return mapper(ir)
-
-
-@singledispatch
-def io_lower_ir_node(
-    ir: IR, rec: IOLowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Lower the IR nodes for a given IR node."""
-    if not ir.children:
-        return ir, rec.state["partition_info"]
-
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    if len(children) == 1:
-        partition = partition_info[children[0]]
-    else:
-        partition = PartitionInfo(count=max(partition_info[c].count for c in children))
-
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
-
-
-@io_lower_ir_node.register(Union)
-def _(
-    ir: Union, rec: IOLowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # TODO: Determine if we really need this. The only difference is `sum` instead of `max` for getting count.
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-    count = sum(partition_info[c].count for c in children)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=count)
-    return new_node, partition_info
-
-
-@io_lower_ir_node.register(Scan)
-def _(
-    ir: Scan, rec: IOLowerIRTransformer
-) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
-    """
-    Lower the Scan node.
-
-    This expands SplitScan nodes into multiple Scan nodes.
-    """
-    plan = rec.state["partition_info"][ir].io_plan
-    # rec.state["partition_info"] is just a mapping from IR nodes to PartitionInfo.
-    # We promise that PartitionInfo.io_plan is not None for Scan nodes,
-    # but don't currently enforce that promise in the type system.
-    if plan is None:
-        raise RuntimeError(f"Scan node must have a partition plan. node={ir}")
-
-    rank = rec.state["rank"]
-    nranks = rec.state["nranks"]
-    parquet_options = rec.state["parquet_options"]
-
-    scans: list[Scan | SplitScan] = []
-    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-        count = plan.factor * len(ir.paths)
-        local_count = math.ceil(count / nranks)
-        local_offset = local_count * rank
-        path_offset = local_offset // plan.factor
-        path_end = math.ceil((local_offset + local_count) / plan.factor)
-        path_count = path_end - path_offset
-        local_paths = ir.paths[path_offset : path_offset + path_count]
-        sindex = local_offset % plan.factor
-        splits_created = 0
-        for path in local_paths:
-            base_scan = Scan(
-                ir.schema,
-                ir.typ,
-                ir.reader_options,
-                ir.cloud_options,
-                [path],
-                ir.with_columns,
-                ir.skip_rows,
-                ir.n_rows,
-                ir.row_index,
-                ir.include_file_paths,
-                ir.predicate,
-                parquet_options,
-            )
-            while sindex < plan.factor and splits_created < local_count:
-                scans.append(
-                    SplitScan(
-                        ir.schema,
-                        base_scan,
-                        sindex,
-                        plan.factor,
-                        parquet_options,
-                    )
-                )
-                sindex += 1
-                splits_created += 1
-            sindex = 0
-
-    else:
-        count = math.ceil(len(ir.paths) / plan.factor)
-        local_count = math.ceil(count / nranks)
-        local_offset = local_count * rank
-        paths_offset_start = local_offset * plan.factor
-        paths_offset_end = paths_offset_start + plan.factor * local_count
-        for offset in range(paths_offset_start, paths_offset_end, plan.factor):
-            local_paths = ir.paths[offset : offset + plan.factor]
-            if len(local_paths) > 0:  # Only add scan if there are paths
-                scans.append(
-                    Scan(
-                        ir.schema,
-                        ir.typ,
-                        ir.reader_options,
-                        ir.cloud_options,
-                        local_paths,
-                        ir.with_columns,
-                        ir.skip_rows,
-                        ir.n_rows,
-                        ir.row_index,
-                        ir.include_file_paths,
-                        ir.predicate,
-                        parquet_options,
-                    )
-                )
-
-    # The PartitionInfo for the derived StreamingScan node is the same as the original Scan node.
-    new_ir = StreamingScan(scans, ir)
-    rec.state["partition_info"][new_ir] = rec.state["partition_info"][ir]
-    return new_ir, rec.state["partition_info"]
+    from cudf_polars.streaming.io import SplitScan
 
 
 class Lineariser:
