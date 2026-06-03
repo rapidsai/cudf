@@ -109,7 +109,7 @@ struct BloomFilter {
   [[nodiscard]] void* data() noexcept;
 
   /**
-   * @brief @return Cnst Pointer to the underlying storage.
+   * @brief @return Const Pointer to the underlying storage.
    */
   [[nodiscard]] void const* data() const noexcept;
 

@@ -72,7 +72,7 @@ rapids_test_add(
   NAME cudf_streaming_single_tests
   COMMAND cudf_streaming_single_tests
   GPUS 1
-  PERCENT 25
+  PERCENT 100
   INSTALL_COMPONENT_SET testing
 )
 

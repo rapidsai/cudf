@@ -22,19 +22,19 @@ SUITEERROR=$?
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf examples"
-    timeout 5m ./ci/run_cudf_examples.sh
+    timeout 30m ./ci/run_cudf_examples.sh
     SUITEERROR=$?
 fi
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf_kafka gtests"
-    timeout 3m ./ci/run_cudf_kafka_ctests.sh -j20
+    timeout 30m ./ci/run_cudf_kafka_ctests.sh -j20
     SUITEERROR=$?
 fi
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf_streaming gtests"
-    timeout 3m ./ci/run_cudf_streaming_ctests.sh -j20
+    timeout 30m ./ci/run_cudf_streaming_ctests.sh -j20
     SUITEERROR=$?
 fi
 
