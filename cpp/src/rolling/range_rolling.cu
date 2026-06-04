@@ -110,9 +110,9 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
+  auto const mr = cudf::get_current_device_resource_ref();
   if (group_keys.num_columns() > 0) {
     using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
     sort_helper helper{group_keys, null_policy::INCLUDE, sorted::YES, {}};
@@ -159,9 +159,9 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   host_span<null_order const> null_orders,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(orderby.num_columns() > 0, "orderby must be non-empty");
   CUDF_EXPECTS(group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.num_rows(),
                "Size mismatch between group_keys and orderby table.");
@@ -177,8 +177,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
                                       null_orders.front(),
                                       preceding,
                                       following,
-                                      stream,
-                                      mr);
+                                      stream);
   }
 
   auto const is_peer_bound = [](range_window_type const& w) {
@@ -203,8 +202,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 
   auto const num_rows = orderby.num_rows();
   auto make_offsets   = [&](range_window_type const& window, rolling::direction direction) {
-    auto result = make_numeric_column(
-      data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+    auto result        = make_numeric_column(data_type{type_to_id<size_type>()},
+                                      num_rows,
+                                      mask_state::UNALLOCATED,
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
     auto write_offsets = [&](auto grouping) {
       thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cudf::detail::make_counting_transform_iterator(
@@ -235,15 +237,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.size(),
     "If a grouping table is provided, it must have same number of rows as the orderby column.");
   return detail::make_range_windows(
-    group_keys, orderby, order, null_order, preceding, following, stream, mr);
+    group_keys, orderby, order, null_order, preceding, following, stream);
 }
 
 }  // namespace CUDF_EXPORT cudf

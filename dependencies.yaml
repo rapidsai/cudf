@@ -480,6 +480,19 @@ files:
       - depends_on_cudf
       - depends_on_cudf_polars
       - depends_on_narwhals
+  test_cudf_pandas_compat:
+    output: none
+    matrix:
+      cuda: ["12.9", "13.1"]
+      pandas_compat_version: ["3.0"]
+    includes:
+      - test_cudf_pandas_compat
+  test_cudf_polars_compat:
+    output: none
+    matrix:
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39"]
+    includes:
+      - test_cudf_polars_compat
 channels:
   - rapidsai-nightly
   - rapidsai
@@ -903,7 +916,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==3.0.*
-              - numba-cuda==0.22.2,<0.29.0
+              - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==3.0.3
@@ -1064,7 +1077,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2,<0.29.0
+        - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1072,12 +1085,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2,<0.29.0
+              - numba-cuda[cu12]>=0.22.2
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu13]>=0.22.2,<0.29.0
+              - numba-cuda[cu13]>=0.22.2
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
             packages:
@@ -1317,13 +1330,14 @@ dependencies:
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
   # Additional dependencies for running the pandas test suite under cudf.pandas.
-  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[performance]),
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[excel]),
   # conda environments need these listed explicitly.
   test_cudf_pandas_pandas_tests:
     common:
       - output_types: [conda]
         packages:
           - numexpr
+          - xlsxwriter
   depends_on_dask_cuda:
     common:
       - output_types: conda
@@ -1374,3 +1388,52 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - structlog
+  test_cudf_pandas_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              pandas_compat_version: "3.0"
+            packages:
+              - numpy>=1.26,<2.0a0
+              - pandas==3.0.*
+          - matrix:
+            packages:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x<14
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - cupy-cuda13x<14
+          - matrix:
+            packages:
+  test_cudf_polars_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              polars_compat_version: "1.35"
+            packages:
+              - polars==1.35.*
+          - matrix:
+              polars_compat_version: "1.36"
+            packages:
+              - polars==1.36.*
+          - matrix:
+              polars_compat_version: "1.37"
+            packages:
+              - polars==1.37.*
+          - matrix:
+              polars_compat_version: "1.38"
+            packages:
+              - polars==1.38.*
+          - matrix:
+              polars_compat_version: "1.39"
+            packages:
+              - polars==1.39.*
+          - matrix:
+            packages:
