@@ -360,7 +360,7 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
-def determine_non_native_fallback(
+def should_use_native_parquet_node(
     ir: Scan,
     *,
     plan: IOPartitionPlan,
@@ -370,7 +370,7 @@ def determine_non_native_fallback(
     config_options: ConfigOptions[StreamingExecutor],
 ) -> bool:
     """
-    Determine whether we will use the cudf-polars (non-native) parquet reader.
+    Determine whether we should use rapidsmpf's native parquet node.
 
     Parameters
     ----------
@@ -390,11 +390,11 @@ def determine_non_native_fallback(
     Returns
     -------
     bool
-        Whether to use the cudf-polars (non-native) parquet reader.
+        Whether to use rapidsmpf's native parquet node.
 
     Notes
     -----
-    cudf-polars current falls back under the following conditions:
+    Native parquet node is used under the following conditions:
 
     - Our plan indicates we should split the file into multiple partitions
     - We have more than one rank
@@ -409,7 +409,7 @@ def determine_non_native_fallback(
         plan.flavor == IOPartitionFlavor.SPLIT_FILES and nranks > 1
     )
 
-    return not (
+    return (
         parquet_options.use_rapidsmpf_native
         and (count > 1 or _dynamic_planning_on(config_options))
         and ir.typ == "parquet"
@@ -450,13 +450,7 @@ def _(
         )
         count = 1
 
-    # In `generate_ir_sub_network` for `StreamingScan`, we have this big condition
-    # for whether we're going to actually use rapidsmpf's native parquet reader
-    # or fall back to a Scan node. When we do fall back, we use the non-chunked
-    # reader.
-    # This
-
-    if determine_non_native_fallback(
+    if not should_use_native_parquet_node(
         ir,
         plan=plan,
         count=count,

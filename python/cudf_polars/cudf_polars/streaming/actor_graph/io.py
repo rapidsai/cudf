@@ -47,7 +47,7 @@ from cudf_polars.streaming.io import (
     StreamingSink,
     _prepare_sink_directory,
     _sink_to_file,
-    determine_non_native_fallback,
+    should_use_native_parquet_node,
 )
 
 if TYPE_CHECKING:
@@ -569,14 +569,15 @@ def _(
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
 
-    if determine_non_native_fallback(
+    use_native = should_use_native_parquet_node(
         ir.base_scan,
         plan=plan,
         count=partition_info.count,
         nranks=rec.state["comm"].nranks,
         parquet_options=parquet_options,
         config_options=config_options,
-    ):
+    )
+    if use_native:
         # Create new channel to so ch_out can be used to add metadata
         ch_in = rec.state["context"].create_channel()
         native_node = make_rapidsmpf_read_parquet_node(
