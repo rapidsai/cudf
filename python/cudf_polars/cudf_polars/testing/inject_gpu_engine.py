@@ -474,7 +474,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
-    # Surfaced when the spmd polars test-suite run first executed on 1.41.2.
     "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[False-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
