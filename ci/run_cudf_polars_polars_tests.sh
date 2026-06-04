@@ -61,6 +61,7 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # shellcheck disable=SC2086
 echo "Run polars tests with injected in-memory GPU engine"
 python -m pytest \
+       -vv \
        --import-mode=importlib \
        --cache-clear \
        -m "" \

@@ -540,15 +540,6 @@ def get_registered_functions():
     return dict()
 
 
-def _raise_attribute_error(obj, name):
-    """
-    Raise an AttributeError with a message that is consistent with
-    the error raised by Python for a non-existent attribute on a
-    proxy object.
-    """
-    raise AttributeError(f"'{obj}' object has no attribute '{name}'")
-
-
 class _FastSlowProxyMeta(type):
     """
     Metaclass used to dynamically find class attributes and
