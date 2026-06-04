@@ -176,30 +176,30 @@ def _make_parquet_scan(paths: list[str]) -> Scan:
 
 
 @pytest.mark.parametrize(
-    "plan,paths,rank,nranks,expected_len",
+    "plan,paths,rank,nranks,expected_path_groups",
     [
         (
             IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
             [f"f{i}" for i in range(6)],
             0,
             1,
-            3,
+            [["f0", "f1"], ["f2", "f3"], ["f4", "f5"]],
         ),
         (
             IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
             [f"f{i}" for i in range(6)],
             0,
             2,
-            2,
+            [["f0", "f1"], ["f2", "f3"]],
         ),
         (
             IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
             [f"f{i}" for i in range(6)],
             1,
             2,
-            1,
+            [["f4", "f5"]],
         ),
-        (IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ), ["a", "b", "c"], 1, 2, 0),
+        (IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ), ["a", "b", "c"], 1, 2, []),
     ],
 )
 def test_expand_scan_for_rank_fused_and_single_read(
@@ -207,7 +207,7 @@ def test_expand_scan_for_rank_fused_and_single_read(
     paths: list[str],
     rank: int,
     nranks: int,
-    expected_len: int,
+    expected_path_groups: list[list[str]],
 ) -> None:
     scans = expand_scan_for_rank(
         _make_parquet_scan(paths),
@@ -216,21 +216,36 @@ def test_expand_scan_for_rank_fused_and_single_read(
         nranks=nranks,
         parquet_options=ParquetOptions(),
     )
-    assert len(scans) == expected_len
-    assert all(not isinstance(scan, SplitScan) for scan in scans)
+    for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
+        assert isinstance(scan, Scan)
+        assert scan.paths == expected_paths
 
 
-def test_expand_scan_for_rank_split_files() -> None:
+@pytest.mark.parametrize(
+    "rank,expected_splits",
+    [
+        (0, [(0, 4), (1, 4)]),
+        (1, [(2, 4), (3, 4)]),
+    ],
+)
+def test_expand_scan_for_rank_split_files(
+    rank: int,
+    expected_splits: list[tuple[int, int]],
+) -> None:
     plan = IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES)
     scans = expand_scan_for_rank(
         _make_parquet_scan(["file.parquet"]),
         plan,
-        rank=0,
+        rank=rank,
         nranks=2,
         parquet_options=ParquetOptions(),
     )
-    assert len(scans) == 2
-    assert all(isinstance(scan, SplitScan) for scan in scans)
+    assert len(scans) == len(expected_splits)
+    for scan, (split_index, total_splits) in zip(scans, expected_splits, strict=True):
+        assert isinstance(scan, SplitScan)
+        assert scan.split_index == split_index
+        assert scan.total_splits == total_splits
+        assert scan.base_scan.paths == ["file.parquet"]
 
 
 def test_streaming_scan_raises():
