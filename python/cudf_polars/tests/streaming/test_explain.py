@@ -21,6 +21,7 @@ from cudf_polars.streaming.explain import (
 )
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
+from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -459,9 +460,22 @@ def test_serialize_query():
     # We don't know the exact node IDs, but we can check the structure.
     assert len(dag.roots) == 1
     node_types = sorted({x.type for x in dag.nodes.values()})
-    assert node_types == ["DataFrameScan", "GroupBy", "Join", "Projection", "Select"]
-    assert len(dag.nodes) == 6
-    assert len(dag.partition_info) == 6
+    if POLARS_VERSION_LT_141:
+        assert node_types == [
+            "DataFrameScan",
+            "GroupBy",
+            "Join",
+            "Projection",
+            "Select",
+        ]
+        assert len(dag.nodes) == 6
+        assert len(dag.partition_info) == 6
+    else:
+        # polars >= 1.41 elides the post-aggregation SimpleProjection, so there
+        # is no Projection node and one fewer node overall.
+        assert node_types == ["DataFrameScan", "GroupBy", "Join", "Select"]
+        assert len(dag.nodes) == 5
+        assert len(dag.partition_info) == 5
     node_ids = set(dag.nodes)
 
     for node_id, node in dag.nodes.items():
@@ -674,9 +688,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, sum needs a REPARTITION to collapse
-    # partitions for global aggregation. Sort does not.
+    # With dynamic planning enabled, sum needs a REPARTITION for global
+    # aggregation, while sort does not.
     if op == "sort":
-        assert "SORT" in plan
+        assert "REPARTITION" not in plan
     else:
         assert "REPARTITION" in plan
