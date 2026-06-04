@@ -21,7 +21,7 @@ from cudf_polars.streaming.explain import (
 )
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_140, POLARS_VERSION_LT_141
+from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -688,14 +688,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, sum needs a REPARTITION to collapse
-    # partitions for global aggregation. Sort does not.
+    # With dynamic planning enabled, sum needs a REPARTITION for global
+    # aggregation, while sort does not.
     if op == "sort":
-        if POLARS_VERSION_LT_140:
-            assert "SORT" in plan
-        else:
-            # polars >= 1.40 elides the sort because "x" is already sorted in
-            # the input; the key point is that no REPARTITION is introduced.
-            assert "REPARTITION" not in plan
+        assert "REPARTITION" not in plan
     else:
         assert "REPARTITION" in plan
