@@ -499,6 +499,19 @@ class StreamingScan(IR):
         # We don't need to include base_scan / schema, since it's in all the scan nodes.
         return (type(self), *tuple(x.get_hashable() for x in self.scans))
 
+    @classmethod
+    def do_evaluate(
+        cls,
+        scans: list[Scan | SplitScan],
+        base_scan: Scan,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Raises NotImplementedError for StreamingScan nodes."""
+        raise NotImplementedError(
+            "StreamingScan.do_evaluate should not be called directly. Call Scan.do_evaluate on each scan node instead."
+        )
+
 
 class StreamingSink(IR):
     """Sink a dataframe in streaming mode."""
