@@ -890,8 +890,7 @@ def _(
             # polars >= 1.41 emits quantile as a string-named Function
             # expression (function_data=("quantile", interpolation)) with the
             # column and quantile value as inputs; earlier versions used a
-            # dedicated Agg node. Route to Agg so the existing quantile
-            # aggregation logic handles it in every execution context.
+            # dedicated Agg node.
             (interp,) = options
             return expr.Agg(
                 dtype, "quantile", interp, translator._expr_context, *children

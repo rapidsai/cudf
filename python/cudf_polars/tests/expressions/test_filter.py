@@ -41,9 +41,9 @@ def test_filter_expression(engine: pl.GPUEngine, expr, predicate_pushdown):
 @pytest.mark.parametrize(
     "values",
     [
-        pl.col("a"),  # length-N values
-        pl.lit(2),  # scalar values, polars type-puns as length-1
-        pl.col("a").first(),  # scalar values via a reduction
+        pl.col("a"),  # length-N value
+        pl.lit(2),  # scalar value
+        pl.col("a").first(),  # scalar value
     ],
 )
 @pytest.mark.parametrize(
@@ -55,10 +55,6 @@ def test_filter_expression(engine: pl.GPUEngine, expr, predicate_pushdown):
     ],
 )
 def test_filter_broadcasts_scalar_operands(engine: pl.GPUEngine, values, mask):
-    # Regression test: a scalar ``values`` or scalar ``mask`` must be broadcast
-    # to a common length before ``apply_boolean_mask``, matching polars. Without
-    # broadcasting libcudf raised "Column size mismatch". This combination is
-    # exercised by polars' ``test_group_by_filter_parametric``.
     ldf = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 1, 2, 1]})
     query = ldf.select(a=values.filter(mask))
     assert_gpu_result_equal(query, engine=engine)

@@ -138,8 +138,6 @@ def test_multiply_with_decimals(engine: pl.GPUEngine):
 
 def test_sum_decimal_widens_precision(request) -> None:
     if POLARS_VERSION_LT_140:
-        # polars < 1.40 does not widen precision for sum of decimals; this was
-        # fixed in 1.40.
         request.applymarker(
             pytest.mark.xfail(
                 reason="Polars does not widen precision for sum of decimals."

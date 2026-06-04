@@ -127,10 +127,6 @@ def test_select_aggs(df, engine, aggs, request):
         and len(aggs) == 1
         and "len()" in str(aggs[0])
     ):
-        # polars >= 1.41 lowers ``col.len()`` to a column-less ``Len`` node.
-        # Its input projects to zero columns, and a zero-column streaming chunk
-        # loses its row count when serialized through pylibcudf, so the count
-        # comes back as zero. See https://github.com/rapidsai/cudf/issues/21428.
         request.applymarker(
             pytest.mark.xfail(
                 reason="len() row count lost in zero-column streaming chunks "
