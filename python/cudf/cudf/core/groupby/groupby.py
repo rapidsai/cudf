@@ -591,7 +591,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, Index):
             group_names = group_names.to_pandas()
-        for i, name in enumerate(group_names):
+        if self._sort or len(offsets) <= 2:
+            order: Iterable[int] = range(len(offsets) - 1)
+        else:
+            # libcudf returns groups sorted by key, but with ``sort=False``
+            # pandas iterates groups in order of first appearance. Reorder by
+            # the earliest original row position in each group (group order
+            # matches between the two ``_groups`` calls since the grouping is
+            # identical).
+            pos_offsets, _, (positions,) = self._groups(
+                [self._range_column_from_obj]
+            )
+            first_pos = positions.to_numpy()[np.asarray(pos_offsets[:-1])]
+            order = np.argsort(first_pos, kind="stable")
+        for i in order:
+            name = group_names[i]
             yield (
                 (name,)
                 if isinstance(self._by, list) and len(self._by) == 1
