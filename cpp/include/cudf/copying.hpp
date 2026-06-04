@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,14 +29,18 @@ namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Policy to account for possible out-of-bounds indices
- *
- * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values.
- * `DONT_CHECK` means do not check whether the indices are out-of-bounds, for better performance.
  */
-
 enum class out_of_bounds_policy : bool {
   NULLIFY,    ///< Output values corresponding to out-of-bounds indices are null
   DONT_CHECK  ///< No bounds checking is performed, better performance
+};
+
+/**
+ * @brief Policy to recognize negative indices as relative to the end of the source
+ */
+enum class negative_index_policy : bool {
+  ALLOWED,     ///< Negative indices are allowed and result in wrapping behavior
+  NOT_ALLOWED  ///< Negative indices are not allowed and result in undefined behavior
 };
 
 /**
@@ -76,6 +80,44 @@ std::unique_ptr<table> gather(
   out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream       = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Gathers the specified rows of a set of columns according to a gather map.
+ *
+ * @ingroup copy_gather
+ *
+ * Gathers the rows of the source columns according to `gather_map` such that row `i`
+ * in the resulting table's columns will contain row `gather_map[i]` from the
+ * `source_table` columns.
+ *
+ * The number of rows in the result table will be equal to the number of elements in
+ * `gather_map`.
+ *
+ * If `neg_indices == ALLOWED` then a negative value `i` in the `gather_map` is interpreted
+ * as `i+n`, where `n` is the number of rows in the `source_table`.
+ * For better performance, use `DONT_CHECK` when the `gather_map` is known to contain only
+ * valid indices.
+ *
+ * The output of row `i` results in null if `bounds_policy == NULLIFY` and an index exists
+ * in `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in the
+ * `source table`.
+ *
+ * @param source_table The input columns whose rows will be gathered
+ * @param gather_map View into a non-nullable column of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param bounds_policy Interpretation of out-of-bounds indices
+ * @param neg_indices Interpretation of a negative index `i` in the `gather_map`
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return Result of the gather
+ */
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  column_view const& gather_map,
+  out_of_bounds_policy bounds_policy,
+  negative_index_policy neg_indices,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the rows within a table.

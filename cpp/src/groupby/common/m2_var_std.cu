@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/cmath>
+#include <cuda/std/functional>
 #include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail {
@@ -22,14 +24,14 @@ namespace cudf::groupby::detail {
 namespace {
 
 template <typename Source>
-__device__ constexpr bool is_m2_supported()
+constexpr bool is_m2_supported()
 {
   return is_numeric<Source>() && !is_fixed_point<Source>();
 }
 
 struct m2_functor {
   template <typename Source, typename... Args>
-  void operator()(Args...)  //
+  void operator()(Args&&...)  //
     requires(!is_m2_supported<Source>())
   {
     CUDF_FAIL("Invalid source type for M2 aggregation.");
@@ -43,7 +45,7 @@ struct m2_functor {
                 size_type size,
                 rmm::cuda_stream_view stream) const noexcept
   {
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      target,
                      target + size,
                      [sum_sqr, sum, count] __device__(size_type const idx) {
@@ -132,7 +134,10 @@ std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
 
   auto const out_it =
     thrust::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.begin());
-  thrust::tabulate(rmm::exec_policy_nosync(stream), out_it, out_it + size, transform_fn);
+  thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   out_it,
+                   out_it + size,
+                   transform_fn);
 
   auto [null_mask, null_count] =
     cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);

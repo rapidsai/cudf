@@ -25,7 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -152,7 +152,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   // Pass to simple_segmented_reduction, get indices to gather, perform gather here.
   auto device_col = cudf::column_device_view::create(col, stream);
 
-  auto it                 = thrust::make_counting_iterator(0);
+  auto it                 = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;
@@ -171,7 +171,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto result = std::move(cudf::detail::gather(table_view{{col}},
                                                *gather_map,
                                                cudf::out_of_bounds_policy::NULLIFY,
-                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               cudf::negative_index_policy::NOT_ALLOWED,
                                                stream,
                                                mr)
                             ->release()[0]);
@@ -235,17 +235,18 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                   stream,
                                                   cudf::get_current_device_resource_ref());
 
-      auto const max_count = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                            counts.begin(),
-                                            counts.end(),
-                                            size_type{0},
-                                            cuda::maximum<size_type>{});
+      auto const max_count =
+        thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       counts.begin(),
+                       counts.end(),
+                       size_type{0},
+                       cuda::maximum<size_type>{});
 
       auto const new_scale = numeric::scale_type{col.type().scale() * max_count};
 
       // adjust values in each segment to match the new scale
       auto const d_col = column_device_view::create(col, stream);
-      thrust::transform(rmm::exec_policy_nosync(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         d_col->begin<InputType>(),
                         d_col->end<InputType>(),
                         d_col->begin<InputType>(),

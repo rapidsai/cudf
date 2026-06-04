@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -37,7 +38,8 @@ class mark_join;
  * (anti) entries.
  *
  * This class enables building the hash table once and probing multiple times
- * with different right (probe) tables, amortizing the build cost.
+ * with different right (probe) tables, amortizing the build cost. Probe-side
+ * prefiltering can be enabled at construction time via `join_prefilter`.
  *
  * @note This class is designed for the case where the **left table is reused**
  * across multiple semi/anti join operations. It should only be used when:
@@ -66,28 +68,32 @@ class mark_join {
   mark_join& operator=(mark_join&&)      = delete;
 
   /**
-   * @brief Constructs a mark join object by building a hash table from the build table.
+   * @brief Constructs a mark join object with explicit prefilter selection.
    *
    * @param build The build table (typically the left table)
    * @param compare_nulls Controls whether null join-key values should match or not
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  mark_join(cudf::table_view const& build,
-            cudf::null_equality compare_nulls = null_equality::EQUAL,
-            rmm::cuda_stream_view stream      = cudf::get_default_stream());
-
-  /**
-   * @brief Constructs a mark join object with a specified load factor.
-   *
-   * @param build The build table (typically the left table)
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param load_factor Hash table load factor in range (0,1]
+   * @param prefilter Controls whether an optional probe-side prefilter is enabled
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
-            double load_factor,
+            cudf::join_prefilter prefilter,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Constructs a mark join object with explicit prefilter selection.
+   *
+   * @param build The build table (typically the left table)
+   * @param load_factor Hash table load factor in range (0,1]
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param prefilter Controls whether an optional probe-side prefilter is enabled
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  mark_join(cudf::table_view const& build,
+            double load_factor,
+            cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+            cudf::join_prefilter prefilter    = cudf::join_prefilter::NO,
+            rmm::cuda_stream_view stream      = cudf::get_default_stream());
 
   /**
    * @brief Returns build row indices that have at least one match in the probe table.

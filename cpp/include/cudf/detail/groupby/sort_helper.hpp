@@ -14,7 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace groupby::detail::sort {
 /**
  * @brief Helper class for computing sort-based groupby
@@ -220,4 +220,4 @@ struct sort_groupby_helper {
 };
 
 }  // namespace groupby::detail::sort
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

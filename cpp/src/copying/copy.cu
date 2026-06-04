@@ -22,8 +22,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
 
@@ -157,8 +157,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
-                                                    thrust::counting_iterator(size_type{size}),
+  auto const gather_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                                                    cuda::counting_iterator<size_type>{size},
                                                     gather_map.begin(),
                                                     is_left,
                                                     stream);
@@ -191,8 +191,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      rmm::device_async_resource_ref mr)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
-                                                     thrust::counting_iterator(size_type{size}),
+  auto const scatter_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                                                     cuda::counting_iterator<size_type>{size},
                                                      scatter_map.begin(),
                                                      is_left,
                                                      stream);

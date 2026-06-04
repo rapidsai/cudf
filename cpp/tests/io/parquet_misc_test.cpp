@@ -10,7 +10,11 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <cuda/iterator>
+
+#include <algorithm>
 #include <array>
+#include <vector>
 
 ////////////////////////////////
 // delta encoding writer tests
@@ -77,7 +81,7 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
   std::bernoulli_distribution bn(0.7f);
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator<int64_t>{0};
 
   // list<T>
   constexpr int vals_per_row = 4;
@@ -168,9 +172,18 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   EXPECT_TRUE(used_dict);
 
   // and check that the correct number of bits was used
-  auto const oi    = read_offset_index(source, fmd.row_groups.front().columns.front());
-  auto const nbits = read_dict_bits(source, oi.page_locations.front());
-  EXPECT_EQ(nbits, GetParam());
+  auto const oi = read_offset_index(source, fmd.row_groups.front().columns.front());
+  std::vector<int> page_dict_bits;
+  page_dict_bits.reserve(oi.page_locations.size());
+  std::transform(
+    oi.page_locations.begin(),
+    oi.page_locations.end(),
+    std::back_inserter(page_dict_bits),
+    [&source](auto const& page_location) { return read_dict_bits(source, page_location); });
+
+  auto const max_bits = std::max_element(page_dict_bits.begin(), page_dict_bits.end());
+  ASSERT_NE(max_bits, page_dict_bits.end());
+  EXPECT_EQ(*max_bits, GetParam());
 }
 
 ///////////////////////

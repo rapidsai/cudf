@@ -161,13 +161,14 @@ TEST_F(FilterTest, ScalarFilter)
   std::string cuda = R"***(
 __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) == 0); }
   )***";
+  auto expected    = cudf::test::fixed_width_column_wrapper<int32_t>{{2, 4, 6, 8, 10}};
 
   cudf::filter_input inputs[] = {a, cudf::scalar_column_view(b)};
 
-  EXPECT_THROW(
-    cudf::filter_extended(
-      inputs, cuda, {a, b}, cudf::udf_source_type::CUDA, std::nullopt, cudf::null_aware::NO),
-    std::invalid_argument);
+  auto result = cudf::filter_extended(
+    inputs, cuda, {a}, cudf::udf_source_type::CUDA, std::nullopt, cudf::null_aware::NO);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result[0]->view());
 }
 
 TEST_F(FilterTest, MixedTypes)

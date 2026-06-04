@@ -17,6 +17,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <functional>
 #include <sstream>
 
@@ -64,7 +66,8 @@ void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes
 namespace {
 
 /**
- * @brief Recursively copy `name` and `user_data` fields of one buffer to another.
+ * @brief Recursively copy `name`, `user_data`, and `string_as_binary` fields of one buffer to
+ * another.
  *
  * @param buff The old output buffer
  * @param new_buff The new output buffer
@@ -72,8 +75,9 @@ namespace {
 template <class string_policy>
 void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 {
-  new_buff.name      = buff.name;
-  new_buff.user_data = buff.user_data;
+  new_buff.name             = buff.name;
+  new_buff.user_data        = buff.user_data;
+  new_buff.string_as_binary = buff.string_as_binary;
   for (auto const& child : buff.children) {
     auto& new_child = new_buff.children.emplace_back(string_policy(child.type, child.is_nullable));
     copy_buffer_data(child, new_child);
@@ -153,7 +157,7 @@ std::string type_to_name(column_buffer_base<string_policy> const& buffer)
     std::ostringstream out;
 
     out << "Struct<";
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(
       iter,
       iter + buffer.children.size(),
@@ -185,8 +189,9 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       schema_info->is_nullable = buffer.is_nullable;
     }
     switch (buffer.type.id()) {
-      case type_id::STRING:
-        if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+      case type_id::STRING: {
+        if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings() and
+            not buffer.string_as_binary) {
           if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
           // make_strings_column allocates new memory, it does not simply move
@@ -229,6 +234,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             null_count,
             std::move(*col_content.null_mask));
         }
+      }
 
       case type_id::LIST: {
         // make offsets column
@@ -314,6 +320,23 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
   switch (buffer.type.id()) {
+    case type_id::STRING: {
+      if (buffer.string_as_binary) {
+        auto offsets = cudf::make_empty_column(type_id::INT32);
+        auto child   = cudf::make_empty_column(type_id::UINT8);
+        if (schema_info != nullptr) {
+          // Mirror the binary path in `make_column` so that the schema_info for an empty
+          // list<uint8> column matches the shape produced for a non-empty one.
+          schema_info->children.emplace_back("offsets");
+          schema_info->children.emplace_back("binary");
+          schema_info->is_binary = true;
+        }
+        return make_lists_column(
+          0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr});
+      }
+      return cudf::make_empty_column(buffer.type);
+    }
+
     case type_id::LIST: {
       // make offsets column
       auto offsets = cudf::make_empty_column(type_id::INT32);

@@ -23,7 +23,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -447,17 +446,22 @@ class reader_impl {
     data_type timestamp_type;
     // decimal_width
     type_id decimal_width;
-    // User specified reading rows/stripes selection.
+    // Use specified row selection
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    // Use specified bytes selection
     size_t skip_bytes;
     std::optional<size_t> num_bytes;
+    // User specified row group selection
     std::vector<std::vector<size_type>> row_group_indices;
+    // Whether to use JIT for filtering
     bool use_jit_filter = false;
+    // Whether to use case-sensitive matching for column names
+    bool case_sensitive_names = true;
   } _options;
 
   // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}, true};
 
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;

@@ -18,8 +18,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -37,8 +37,8 @@ struct dispatch_nan_to_null {
                  input_device_view.is_null(idx));
     };
 
-    auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
-                                 thrust::make_counting_iterator<cudf::size_type>(input.size()),
+    auto mask = detail::valid_if(cuda::counting_iterator<cudf::size_type>{0},
+                                 cuda::counting_iterator<cudf::size_type>{input.size()},
                                  pred,
                                  stream,
                                  mr);

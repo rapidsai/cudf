@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/functional>
 
 namespace cudf {
@@ -97,15 +98,16 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     cudf::detail::following_window_wrapper grouped_following_window{
       group_offsets.data(), group_labels.data(), following_window};
 
-    return cudf::detail::rolling_window_udf(input,
-                                            grouped_preceding_window,
-                                            "cudf::detail::preceding_window_wrapper",
-                                            grouped_following_window,
-                                            "cudf::detail::following_window_wrapper",
-                                            min_periods,
-                                            aggr,
-                                            stream,
-                                            mr);
+    return cudf::detail::rolling_window_udf(
+      input,
+      cudf::detail::preceding_window_wrapper{
+        group_offsets.data(), group_labels.data(), preceding_window},
+      cudf::detail::following_window_wrapper{
+        group_offsets.data(), group_labels.data(), following_window},
+      min_periods,
+      aggr,
+      stream,
+      mr);
   } else {
     namespace utils = cudf::detail::rolling;
     auto groups     = utils::grouped{group_labels.data(), group_offsets.data()};
@@ -306,11 +308,12 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i]);
         }));
-    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                    it,
-                                    it + offsets.size() - 1,
-                                    false,
-                                    cuda::std::logical_or<>{});
+    auto is_before =
+      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     it,
+                     it + offsets.size() - 1,
+                     false,
+                     cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   } else {
     // Sort order is DESCENDING
@@ -327,11 +330,12 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
         }));
-    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                    it,
-                                    it + offsets.size() - 1,
-                                    false,
-                                    cuda::std::logical_or<>{});
+    auto is_before =
+      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     it,
+                     it + offsets.size() - 1,
+                     false,
+                     cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   }
 }

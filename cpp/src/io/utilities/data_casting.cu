@@ -25,6 +25,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/copy.h>
@@ -799,7 +800,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   //  CUDF_FUNC_RANGE();
 
   auto const max_length = thrust::transform_reduce(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
@@ -812,15 +813,16 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      col_size,
                      single_thread_fn);
 
   constexpr auto warps_per_block  = 8;
   constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
   auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
-  auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
+  auto str_counter =
+    cudf::numeric_scalar(size_type{0}, true, stream, cudf::get_current_device_resource_ref());
 
   // TODO run these independent kernels in parallel streams.
   if (max_length > SINGLE_THREAD_THRESHOLD) {
@@ -864,8 +866,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_chars   = d_chars;
   single_thread_fn.d_offsets = d_offsets;
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      col_size,
                      single_thread_fn);
 
@@ -921,7 +923,8 @@ std::unique_ptr<column> parse_data(
   CUDF_FUNC_RANGE();
 
   if (col_size == 0) { return make_empty_column(col_type); }
-  auto d_null_count    = cudf::detail::device_scalar<size_type>(null_count, stream);
+  auto d_null_count = cudf::detail::device_scalar<size_type>(
+    null_count, stream, cudf::get_current_device_resource_ref());
   auto null_count_data = d_null_count.data();
   if (null_mask.is_empty()) {
     null_mask = cudf::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);
@@ -941,8 +944,8 @@ std::unique_ptr<column> parse_data(
 
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(
       size_type row) {

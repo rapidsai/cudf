@@ -15,7 +15,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -81,22 +80,22 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Constructor for aggregate_reader_metadata
    *
-   * @param footer_bytes Host span of Parquet file footer buffer bytes
+   * @param footer_bytes Host span of Parquet file footer buffer bytes, one per source
    * @param use_arrow_schema Whether to use Arrow schema
    * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
    */
-  aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
+  aggregate_reader_metadata(cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
   /**
    * @brief Constructor for aggregate_reader_metadata
    *
-   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param parquet_metadatas Host span of pre-populated Parquet file metadata, one per source
    * @param use_arrow_schema Whether to use Arrow schema
    * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
    */
-  aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+  aggregate_reader_metadata(cudf::host_span<FileMetaData const> parquet_metadatas,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
@@ -111,21 +110,38 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
 
   /**
-   * @brief Fetch the byte range of the page index in the Parquet file
-   */
-  [[nodiscard]] text::byte_range_info page_index_byte_range() const;
-
-  /**
-   * @brief Get the Parquet file metadata
-   */
-  [[nodiscard]] FileMetaData parquet_metadata() const;
-
-  /**
-   * @brief Setup and populate the page index structs in `FileMetaData`
+   * @brief Fetch the byte range of the page index in each Parquet file
    *
-   * @param page_index_bytes Host span of Parquet page index buffer bytes
+   * @return Vector of byte ranges of the page index, one per source
    */
-  void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
+  [[nodiscard]] std::vector<text::byte_range_info> page_index_byte_ranges() const;
+
+  /**
+   * @brief Get the Parquet file metadata for every source
+   *
+   * @return Vector of file metadata, one per source
+   */
+  [[nodiscard]] std::vector<FileMetaData> parquet_metadatas() const;
+
+  /**
+   * @brief Setup and populate the page index structs in every source's `FileMetaData`
+   *
+   * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
+   */
+  void setup_page_indexes(cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes);
+
+  /**
+   * @brief Get all available row group indices, one inner vector per source
+   *
+   * If `options.get_row_groups()` is non-empty, validates that its size equals the number of
+   * sources and returns it as-is. Otherwise returns `[0 .. per_source_num_row_groups[i])` for
+   * each source.
+   *
+   * @param options Parquet reader options
+   * @return Vector of row group indices, one inner vector per source
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> all_row_groups(
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Get the total number of top-level rows in the row groups
@@ -133,7 +149,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @return Total number of top-level rows in the row groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
@@ -146,6 +162,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
+   * @param case_sensitive_names Boolean indicating if column names are case sensitive
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -158,7 +175,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool strings_to_categorical,
                            bool ignore_missing_columns,
                            type_id timestamp_type_id,
-                           type_id decimal_type_id);
+                           type_id decimal_type_id,
+                           bool case_sensitive_names);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -334,7 +352,8 @@ class dictionary_literals_collector : public equality_literals_collector {
  public:
   dictionary_literals_collector() = default;
 
-  dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+  dictionary_literals_collector(ast::expression const& expr,
+                                cudf::host_span<cudf::data_type const> output_dtypes);
 
   // Bring all overloads of `visit` from equality_literals_collector into scope
   using equality_literals_collector::visit;
@@ -369,7 +388,8 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
                                std::vector<SchemaElement> const& schema_tree,
-                               cudf::io::parquet_reader_options const& options);
+                               cudf::io::parquet_reader_options const& options,
+                               bool case_sensitive_names);
 
   using parquet::detail::named_to_reference_converter::visit;
 

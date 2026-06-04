@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "utilities/time_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -16,8 +18,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -214,11 +218,11 @@ struct from_durations_fn {
     int digits_idx          = 0;
     while (value != 0) {
       assert(digits_idx < MAX_DIGITS);
-      digits[digits_idx++] = '0' + std::abs(value % 10);
+      digits[digits_idx++] = '0' + cuda::std::abs(value % 10);
       // next digit
       value = value / 10;
     }
-    digits_idx = std::max(digits_idx, min_digits);
+    digits_idx = cuda::std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0)
       *str++ = digits[digits_idx];
@@ -228,7 +232,7 @@ struct from_durations_fn {
   __device__ char* int_to_2digitstr(char* str, int8_t value)
   {
     assert(value >= -99 && value <= 99);
-    value  = std::abs(value);
+    value  = cuda::std::abs(value);
     str[0] = '0' + value / 10;
     str[1] = '0' + value % 10;
     return str + 2;
@@ -269,7 +273,7 @@ struct from_durations_fn {
     *ptr             = '.';
     auto value       = timeparts->subsecond;
     for (int idx = digits; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
+      *(ptr + idx) = '0' + cuda::std::abs(value % 10);
       value /= 10;
     }
     return ptr + digits + 1;
@@ -423,9 +427,6 @@ struct dispatch_from_durations_fn {
   }
 };
 
-static const __device__ __constant__ int32_t powers_of_ten[10] = {
-  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-
 // this parses duration string into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
@@ -469,7 +470,8 @@ struct parse_duration {
     }
     auto parsed_length = ptr - str;
     // compensate for missing trailing zeros
-    if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
+    if (parsed_length < fixed_width)
+      value *= cudf::detail::powers_of_ten[fixed_width - parsed_length];
     actual_length += parsed_length;
     return value;
   }
@@ -649,9 +651,9 @@ struct dispatch_to_durations_fn {
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       d_results,
                       pfn);
   }
@@ -688,7 +690,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream);
+    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");

@@ -189,7 +189,7 @@ __device__ void update_string_offsets_for_pruned_pages(
 }
 
 template <int value>
-inline constexpr int log2_int()
+CUDF_HOST_DEVICE constexpr int log2_int()
 {
   static_assert((value >= 1) && ((value & (value - 1)) == 0), "Only works for powers of 2!");
   return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));

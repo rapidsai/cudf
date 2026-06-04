@@ -23,7 +23,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform_reduce.h>
 
@@ -72,13 +71,15 @@ auto reduce_device(InputIterator d_in,
                    rmm::cuda_stream_view stream)
 {
   OutputType identity{};
-  cudf::detail::device_scalar<OutputType> result{identity, stream};
+  cudf::detail::device_scalar<OutputType> result{
+    identity, stream, cudf::get_current_device_resource_ref()};
 
   // Allocate temporary storage
   size_t storage_bytes = 0;
   cub::DeviceReduce::Reduce(
     nullptr, storage_bytes, d_in, result.data(), num_items, binary_op, identity, stream.value());
-  auto temp_storage = rmm::device_buffer{storage_bytes, stream};
+  auto temp_storage =
+    rmm::device_buffer{storage_bytes, stream, cudf::get_current_device_resource_ref()};
 
   // Run reduction
   cub::DeviceReduce::Reduce(temp_storage.data(),

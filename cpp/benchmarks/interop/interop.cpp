@@ -1,16 +1,17 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf_test/nanoarrow_utils.hpp>
 
 #include <cudf/interop.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
@@ -36,9 +37,14 @@ void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::to_arrow_device(table->view(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -57,9 +63,14 @@ void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::to_arrow_host(table->view(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -81,8 +92,8 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_columns),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};
@@ -98,10 +109,15 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::from_arrow_device_column(
       schema.get(), input.get(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -123,8 +139,8 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_columns),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};
@@ -140,10 +156,15 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::from_arrow_host_column(
       schema.get(), input.get(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 using data_types = nvbench::enum_type_list<cudf::type_id::INT8,

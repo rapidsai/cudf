@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -14,6 +15,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 #include <nvbench/types.cuh>
@@ -69,8 +72,8 @@ void BM_filter_min_max(nvbench::state& state)
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
   std::vector<std::unique_ptr<cudf::column>> filter_columns;
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_filter_columns),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator{num_filter_columns},
                  std::back_inserter(filter_columns),
                  [&](auto) {
                    return create_random_column(
@@ -114,9 +117,10 @@ void BM_filter_min_max(nvbench::state& state)
     create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows));
+  state.add_global_memory_reads<key_type>(static_cast<std::size_t>(num_rows));
   state.add_global_memory_writes<key_type>(num_rows);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto stream = launch.get_stream().get_stream();
     auto mr     = cudf::get_current_device_resource_ref();
@@ -147,6 +151,8 @@ void BM_filter_min_max(nvbench::state& state)
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 #define FILTER_BENCHMARK_DEFINE(name, key_type)                                 \

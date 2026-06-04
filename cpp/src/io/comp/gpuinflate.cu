@@ -44,6 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
@@ -1216,7 +1218,8 @@ class cost_model {
                                              task_type task_type)
   {
     if (task_type == task_type::DECOMPRESSION) {
-      auto const compression_ratio = std::max(1., static_cast<double>(output_size) / input_size);
+      auto const compression_ratio =
+        cuda::std::max(1., static_cast<double>(output_size) / input_size);
       // When the compression ratio is one, the cost factor is the same as the copy cost ratio,
       // meaning that the cost of decompressing the block is the same as the cost of copying it. The
       // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
@@ -1260,11 +1263,13 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
 {
   CUDF_FUNC_RANGE();
   rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   order.begin(),
+                   order.end());
 
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     thrust::make_zip_iterator(inputs.begin(), outputs.begin()),
                     thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
@@ -1274,7 +1279,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                       return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 
-  thrust::sort(rmm::exec_policy_nosync(stream),
+  thrust::sort(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                order.begin(),
                order.end(),
                [costs = costs.data()] __device__(std::size_t a, std::size_t b) {
@@ -1282,14 +1287,14 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                });
 
   auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  inputs.begin(),
                  sorted_inputs.begin());
 
   auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  outputs.begin(),
@@ -1400,7 +1405,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                     device_span<std::size_t const> order,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   sorted_results.begin(),
                   sorted_results.end(),
                   order.begin(),
