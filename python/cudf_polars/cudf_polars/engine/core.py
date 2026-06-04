@@ -685,7 +685,9 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+    ir, partition_info = lower_ir_graph(
+        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
+    )
 
     if comm.rank == 0:
         # At least for now, the query plan is identical on all ranks,
