@@ -6680,6 +6680,220 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingMultiOrderByUnboundedToCurrentRow() {
+    // PARTITION BY part ORDER BY oby_int ASC, oby_str DESC
+    // RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW. Input is pre-sorted.
+    try (Table sorted = new Table.TestBuilder()
+        .column(0, 0, 0, 0, 0, 1, 1, 1)                  // part (GBY key)
+        .column(10, 10, 20, 20, 30, 5, 5, 7)             // oby_int (ASC)
+        .column("b", "a", "z", "z", "m", "y", "y", "x")  // oby_str (DESC)
+        .column(1, 2, 3, 4, 5, 6, 7, 8)                  // agg column (non-null)
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .unboundedPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{1, 2},
+                              new boolean[]{true, false},
+                              new boolean[]{true, true})
+              .build();
+           Table result = sorted.groupBy(0)
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(3).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 4, 4, 5, 2, 2, 3)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByCurrentRowPeers() {
+    // ORDER BY oby_int ASC, oby_str DESC  RANGE BETWEEN CURRENT ROW AND CURRENT ROW.
+    // The window for each row is its peer group (rows equal on every order-by column).
+    try (Table sorted = new Table.TestBuilder()
+        .column(10, 10, 20, 20, 30)              // oby_int (ASC)
+        .column("b", "a", "z", "z", "m")         // oby_str (DESC)
+        .column(1, 2, 3, 4, 5)                   // agg column
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{true, false},
+                              new boolean[]{true, true})
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(1, 1, 2, 2, 1)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByCurrentRowToUnbounded() {
+    // ORDER BY oby_int DESC, oby_str ASC  RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING.
+    try (Table sorted = new Table.TestBuilder()
+        .column(30, 20, 20, 10, 10)              // oby_int (DESC)
+        .column("m", "z", "z", "a", "b")         // oby_str (ASC)
+        .column(1, 2, 3, 4, 5)                   // agg column
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .unboundedFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{false, true},
+                              new boolean[]{true, true})
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(5, 4, 4, 2, 1)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByNullsFirstPeers() {
+    // ORDER BY oby_int ASC NULLS FIRST, oby_str DESC  RANGE BETWEEN CURRENT ROW AND CURRENT ROW.
+    // Null order-by values sort before non-null values, and null rows that match on the remaining
+    // order-by columns are grouped together as peers.
+    try (Table sorted = new Table.TestBuilder()
+        .column((Integer) null, (Integer) null, 10, 20)  // oby_int (ASC, nulls first)
+        .column("x", "x", "y", "z")                       // oby_str (DESC)
+        .column(1, 2, 3, 4)                               // agg column
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{true, false},
+                              new boolean[]{true, true})   // nulls first on oby_int
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(2, 2, 1, 1)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByNullsLastPeers() {
+    // ORDER BY oby_int ASC NULLS LAST, oby_str DESC  RANGE BETWEEN CURRENT ROW AND CURRENT ROW.
+    // Null order-by values sort after non-null values; null rows that match on the remaining
+    // order-by columns are grouped together as peers.
+    try (Table sorted = new Table.TestBuilder()
+        .column(10, 20, (Integer) null, (Integer) null)  // oby_int (ASC, nulls last)
+        .column("y", "z", "x", "x")                       // oby_str (DESC)
+        .column(1, 2, 3, 4)                               // agg column
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{true, false},
+                              new boolean[]{false, true})  // nulls last on oby_int
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(1, 1, 2, 2)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByNullsLastUnboundedToCurrentRow() {
+    // ORDER BY oby_int ASC NULLS LAST, oby_str DESC  RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT
+    // ROW. The cumulative window extends through the last peer of the current row, so the trailing
+    // null peers see the whole group.
+    try (Table sorted = new Table.TestBuilder()
+        .column(10, 20, (Integer) null, (Integer) null)  // oby_int (ASC, nulls last)
+        .column("y", "z", "x", "x")                       // oby_str (DESC)
+        .column(1, 2, 3, 4)                               // agg column
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .unboundedPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{true, false},
+                              new boolean[]{false, true})  // nulls last on oby_int
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 4, 4)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByBoundedScalarThrows() {
+    // Multi-column RANGE windows do not support bounded scalar ranges.
+    try (Table table = new Table.TestBuilder()
+        .column(10, 10, 20)
+        .column("b", "a", "z")
+        .column(1, 2, 3)
+        .build();
+         Scalar one = Scalar.fromInt(1);
+         WindowOptions window = WindowOptions.builder()
+             .minPeriods(1)
+             .window(one, one)
+             .orderByColumns(new int[]{0, 1},
+                             new boolean[]{true, false},
+                             new boolean[]{true, true})
+             .build()) {
+      assertThrows(IllegalArgumentException.class,
+          () -> table.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window)));
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByUnsupportedTypeThrows() {
+    // An unsupported type on any order-by column is rejected (validation loops over all columns).
+    try (Table table = new Table.TestBuilder()
+        .column(10, 20, 30)              // valid int order-by
+        .column(true, false, true)       // unsupported BOOL8 order-by
+        .column(1, 2, 3)                 // agg column
+        .build();
+         WindowOptions window = WindowOptions.builder()
+             .minPeriods(1)
+             .currentRowPreceding()
+             .currentRowFollowing()
+             .orderByColumns(new int[]{0, 1},
+                             new boolean[]{true, true},
+                             new boolean[]{true, true})
+             .build()) {
+      assertThrows(IllegalArgumentException.class,
+          () -> table.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window)));
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByMismatchedArraysThrows() {
+    assertThrows(IllegalArgumentException.class,
+        () -> WindowOptions.builder()
+            .orderByColumns(new int[]{0, 1},
+                            new boolean[]{true},
+                            new boolean[]{true, true}));
+  }
+
+  @Test
   void testRangeWindowingOrderByUnsupportedDataTypeExceptions() {
     try (Table table = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key

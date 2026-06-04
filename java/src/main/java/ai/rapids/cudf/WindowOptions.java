@@ -7,6 +7,8 @@
 
 package ai.rapids.cudf;
 
+import java.util.Arrays;
+
 /**
   * Options for rolling windows.
  */
@@ -38,6 +40,12 @@ public class WindowOptions implements AutoCloseable {
   private final ColumnVector followingCol;
   private final int orderByColumnIndex;
   private final boolean orderByOrderAscending;
+  // Multi-column RANGE order-by state. Null when the single-column order-by methods were used.
+  // When set, these arrays are parallel and non-empty; element [0] mirrors the single-column
+  // fields above for compatibility and frame-type detection.
+  private final int[] orderByColumnIndices;
+  private final boolean[] orderByAscendingFlags;
+  private final boolean[] orderByNullsFirstFlags;
   private final FrameType frameType;
   private final RangeExtentType precedingBoundsExtent;
   private final RangeExtentType followingBoundsExtent;
@@ -62,6 +70,9 @@ public class WindowOptions implements AutoCloseable {
     }
     this.orderByColumnIndex = builder.orderByColumnIndex;
     this.orderByOrderAscending = builder.orderByOrderAscending;
+    this.orderByColumnIndices = builder.orderByColumnIndices;
+    this.orderByAscendingFlags = builder.orderByAscendingFlags;
+    this.orderByNullsFirstFlags = builder.orderByNullsFirstFlags;
     this.frameType = orderByColumnIndex == -1? FrameType.ROWS : FrameType.RANGE;
     this.precedingBoundsExtent = builder.precedingBoundsExtent;
     this.followingBoundsExtent = builder.followingBoundsExtent;
@@ -76,6 +87,9 @@ public class WindowOptions implements AutoCloseable {
       boolean ret = this.minPeriods == o.minPeriods &&
               this.orderByColumnIndex == o.orderByColumnIndex &&
               this.orderByOrderAscending == o.orderByOrderAscending &&
+              Arrays.equals(this.orderByColumnIndices, o.orderByColumnIndices) &&
+              Arrays.equals(this.orderByAscendingFlags, o.orderByAscendingFlags) &&
+              Arrays.equals(this.orderByNullsFirstFlags, o.orderByNullsFirstFlags) &&
               this.frameType == o.frameType &&
               this.precedingBoundsExtent == o.precedingBoundsExtent &&
               this.followingBoundsExtent == o.followingBoundsExtent;
@@ -102,6 +116,9 @@ public class WindowOptions implements AutoCloseable {
     ret = 31 * ret + minPeriods;
     ret = 31 * ret + orderByColumnIndex;
     ret = 31 * ret + Boolean.hashCode(orderByOrderAscending);
+    ret = 31 * ret + Arrays.hashCode(orderByColumnIndices);
+    ret = 31 * ret + Arrays.hashCode(orderByAscendingFlags);
+    ret = 31 * ret + Arrays.hashCode(orderByNullsFirstFlags);
     ret = 31 * ret + frameType.hashCode();
     if (precedingCol != null) {
       ret = 31 * ret + precedingCol.hashCode();
@@ -144,6 +161,31 @@ public class WindowOptions implements AutoCloseable {
 
   boolean isOrderByOrderAscending() { return this.orderByOrderAscending; }
 
+  /**
+   * Order-by column indices for this RANGE window. Returns the multi-column array when the
+   * multi-column builder was used, otherwise a length-1 array holding the single-column index.
+   */
+  int[] getOrderByColumnIndices() {
+    return orderByColumnIndices != null ? orderByColumnIndices : new int[]{orderByColumnIndex};
+  }
+
+  /**
+   * Per-order-by-column ascending flags, parallel to {@link #getOrderByColumnIndices()}.
+   */
+  boolean[] getOrderByOrderAscending() {
+    return orderByAscendingFlags != null ? orderByAscendingFlags
+                                         : new boolean[]{orderByOrderAscending};
+  }
+
+  /**
+   * Per-order-by-column null-placement flags (true == nulls first), parallel to
+   * {@link #getOrderByColumnIndices()}. Only consumed for multi-column RANGE windows; the
+   * single-column path deduces null placement natively, so the returned value is unused there.
+   */
+  boolean[] getOrderByNullsFirst() {
+    return orderByNullsFirstFlags != null ? orderByNullsFirstFlags : new boolean[]{true};
+  }
+
   boolean isUnboundedPreceding() { return this.precedingBoundsExtent == RangeExtentType.UNBOUNDED; }
 
   boolean isUnboundedFollowing() { return this.followingBoundsExtent == RangeExtentType.UNBOUNDED; }
@@ -166,6 +208,9 @@ public class WindowOptions implements AutoCloseable {
     private ColumnVector followingCol = null;
     private int orderByColumnIndex = -1;
     private boolean orderByOrderAscending = true;
+    private int[] orderByColumnIndices = null;
+    private boolean[] orderByAscendingFlags = null;
+    private boolean[] orderByNullsFirstFlags = null;
     private RangeExtentType precedingBoundsExtent = RangeExtentType.BOUNDED;
     private RangeExtentType followingBoundsExtent = RangeExtentType.BOUNDED;
 
@@ -231,6 +276,39 @@ public class WindowOptions implements AutoCloseable {
 
     public Builder orderByColumnIndex(int index) {
       this.orderByColumnIndex = index;
+      return this;
+    }
+
+    /**
+     * Specify multiple order-by columns for a multi-column RANGE window. All three arrays must be
+     * non-empty and of equal length; entry {@code i} describes the i-th order-by column.
+     *
+     * <p>Multi-column RANGE windows support only peer-frame bounds ({@code UNBOUNDED} and
+     * {@code CURRENT_ROW}); bounded scalar ranges are not supported across multiple order-by
+     * columns. Unlike the single-column order-by methods, null placement is not deduced from the
+     * data and must be stated explicitly here. Element [0] also populates the single-column
+     * order-by state for compatibility.
+     *
+     * @param indices    input-table column indices of the order-by columns, in order.
+     * @param ascending  per-column sort direction (true == ascending).
+     * @param nullsFirst per-column null placement (true == nulls ordered before non-null values).
+     */
+    public Builder orderByColumns(int[] indices, boolean[] ascending, boolean[] nullsFirst) {
+      if (indices == null || ascending == null || nullsFirst == null) {
+        throw new IllegalArgumentException("order-by column arrays cannot be null");
+      }
+      if (indices.length == 0) {
+        throw new IllegalArgumentException("at least one order-by column is required");
+      }
+      if (indices.length != ascending.length || indices.length != nullsFirst.length) {
+        throw new IllegalArgumentException(
+            "order-by index, ascending, and nullsFirst arrays must have the same length");
+      }
+      this.orderByColumnIndices = indices;
+      this.orderByAscendingFlags = ascending;
+      this.orderByNullsFirstFlags = nullsFirst;
+      this.orderByColumnIndex = indices[0];
+      this.orderByOrderAscending = ascending[0];
       return this;
     }
 
