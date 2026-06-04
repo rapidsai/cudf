@@ -250,11 +250,10 @@ def test_groupby_nan_minmax_raises(engine: pl.GPUEngine, op):
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
-                # polars < 1.40 emits the list literal directly in the agg;
-                # 1.40+ wraps element-wise aggs in an implode that we unwrap,
-                # which avoids the issue.
                 condition=POLARS_VERSION_LT_140,
-                reason="https://github.com/rapidsai/cudf/issues/19610",
+                reason="polars < 1.40 emits the list literal at its inner dtype, "
+                "nested per group, which we mishandle: "
+                "https://github.com/rapidsai/cudf/issues/19610",
             ),
         ),
         pl.col("float") * (1 - pl.col("int")),
@@ -266,15 +265,14 @@ def test_groupby_literal_in_agg(engine: pl.GPUEngine, df, key, expr, request):
     # so just sort by the group key
     q = df.group_by(key).agg(expr).sort(key, maintain_order=True)
     if not POLARS_VERSION_LT_140 and isinstance(key, int):
-        # polars >= 1.40 rewrites group_by(<literal>) into a Select that wraps
-        # element-wise aggregations in an `implode` (collect-to-list), which we
-        # do not support. The translation error is executor-independent, so
-        # probe with a default engine.
         translator = Translator(q._ldf.visit(), pl.GPUEngine())
         translator.translate_ir()
         if any("implode" in str(e) for e in translator.errors):
             request.applymarker(
-                pytest.mark.xfail(reason="implode aggregation is not supported")
+                pytest.mark.xfail(
+                    reason="group_by(<literal>) wraps element-wise aggs in an "
+                    "unsupported implode on polars >= 1.40"
+                )
             )
     assert_gpu_result_equal(q, engine=engine)
 
@@ -518,12 +516,6 @@ def test_groupby_empty_keys_raises(engine: pl.GPUEngine, request):
     if POLARS_VERSION_LT_140:
         assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
-        # polars >= 1.40 rewrites an empty-key group_by into a Select(len)
-        # (whole-frame aggregation). On polars >= 1.41 that len() lowers to a
-        # column-less Len whose row count is lost in zero-column streaming
-        # chunks, so the streaming engines return zero
-        # (https://github.com/rapidsai/cudf/issues/21428). polars 1.40 keeps a
-        # column, so it works there.
         if not POLARS_VERSION_LT_141 and is_streaming_engine(engine):
             request.applymarker(
                 pytest.mark.xfail(
