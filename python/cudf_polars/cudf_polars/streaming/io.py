@@ -482,7 +482,6 @@ class StreamingScan(IR):
     _non_child = (
         "scans",
         "base_scan",
-        "schema",
     )
     _n_non_child_args = 2
     scans: list[Scan | SplitScan]
