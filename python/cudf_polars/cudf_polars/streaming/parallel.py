@@ -150,7 +150,7 @@ def _(
             Slice(
                 ir.schema,
                 *ir.zlice,
-                Union(ir.schema, None, *ir.children),
+                Union(ir.schema, None, ir.maintain_order, *ir.children),
             )
         )
 
