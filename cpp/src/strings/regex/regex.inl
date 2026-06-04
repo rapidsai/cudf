@@ -425,8 +425,11 @@ __device__ __forceinline__ match_result reprog_device::find(int32_t const thread
   // Dispatch to Glushkov bit-parallel engine when available.
   // extract() always uses Thompson (Glushkov does not track capture groups).
   if (_glushkov) {
-    if (_glushkov_cache) { return glushkov_find<P>(*_glushkov, dstr, begin, end, _glushkov_cache); }
-    return glushkov_find<P>(*_glushkov, dstr, begin, end);
+    // if (_glushkov_cache) { return glushkov_find<P>(*_glushkov, dstr, begin, end,
+    // _glushkov_cache); } return glushkov_find<P>(*_glushkov, dstr, begin, end);
+    auto gk = *_glushkov;  // copy it
+    gk.store_cache(_glushkov_cache);
+    return glushkov_find<P>(gk, dstr, begin, end, _glushkov_cache);
   }
   return call_regexec<P>(thread_idx, dstr, begin, end);
 }

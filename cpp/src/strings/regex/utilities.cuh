@@ -47,6 +47,7 @@ CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
       shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
     glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
     s_prog.set_glushkov_cache(g_cache);
+    __syncthreads();
   }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
@@ -94,6 +95,7 @@ CUDF_KERNEL void transform_kernel(TransformFunction fn,
       shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
     glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
     s_prog.set_glushkov_cache(g_cache);
+    __syncthreads();
   }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();

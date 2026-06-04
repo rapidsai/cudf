@@ -45,7 +45,7 @@ namespace detail {
  * (0 .. num_states-1), which corresponds to the left-to-right order of
  * character-consuming instructions in the Thompson NFA.
  */
-struct glushkov_host_program {
+struct gkprog {
   uint32_t num_states{};    ///< Number of character-consuming positions
   g_state_t first_set{};    ///< Bitmask: positions reachable before first character
   g_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
@@ -113,7 +113,7 @@ struct glushkov_host_program {
  * @param prog  Compiled Thompson NFA (after reprog::finalize()).
  * @return      Host-side Glushkov program, or nullptr on failure.
  */
-std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog);
+std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog);
 
 }  // namespace detail
 }  // namespace strings

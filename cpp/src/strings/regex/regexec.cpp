@@ -44,11 +44,11 @@ reprog_device::reprog_device(reprog const& prog)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Pack a glushkov_host_program into a contiguous device buffer and
- *        return a device pointer to the embedded glushkov_program_device struct.
+ * @brief Pack a gkprog into a contiguous device buffer and
+ *        return a device pointer to the embedded gkprog_device struct.
  *
  * Buffer layout:
- *   [glushkov_program_device struct]
+ *   [gkprog_device struct]
  *   [_positions    : num_states × glushkov_position]
  *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × g_state_t]
  *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
@@ -56,13 +56,11 @@ reprog_device::reprog_device(reprog const& prog)
  *   [_exception_succs : num_states × g_state_t]
  *   [_classes : classes_count × reclass_device + variable-length literals]
  *
- * Returns {device_ptr_to_glushkov_program_device, raw_buffer_to_delete}
+ * Returns {device_ptr_to_gkprog_device, raw_buffer_to_delete}
  * where the device ptr is the beginning of the buffer (cast as the struct).
  */
-static std::pair<glushkov_program_device const*, rmm::device_uvector<u_char>*>
-create_glushkov_device(glushkov_host_program const& h_gp,
-                       uint8_t const* d_codepoint_flags,
-                       rmm::cuda_stream_view stream)
+static std::pair<gkprog_device const*, rmm::device_uvector<u_char>*> create_glushkov_device(
+  gkprog const& h_gp, uint8_t const* d_codepoint_flags, rmm::cuda_stream_view stream)
 {
   uint32_t const num_states = h_gp.num_states;
   uint32_t const num_shifts = h_gp.shift_count;
@@ -70,12 +68,12 @@ create_glushkov_device(glushkov_host_program const& h_gp,
 
   // ---- Compute cumulative section offsets from buffer start ---------------
   // This ensures each section's ABSOLUTE address (buf_base + offset) satisfies
-  // its alignment requirement regardless of sizeof(glushkov_program_device).
+  // its alignment requirement regardless of sizeof(gkprog_device).
   std::size_t off = 0;
 
   // Header
   std::size_t const hdr_off = off;
-  off += sizeof(glushkov_program_device);
+  off += sizeof(gkprog_device);
 
   // _positions: 4-byte aligned (int32_t / char32_t fields)
   // off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
@@ -124,8 +122,8 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   u_char* const h_base = h_buf.data();
   u_char* const d_base = d_raw->data();
 
-  // ---- Place glushkov_program_device header --------------------------------
-  auto* h_gp_dev           = new (h_base + hdr_off) glushkov_program_device{};
+  // ---- Place gkprog_device header --------------------------------
+  auto* h_gp_dev           = new (h_base + hdr_off) gkprog_device{};
   h_gp_dev->num_states     = num_states;
   h_gp_dev->shift_count    = num_shifts;
   h_gp_dev->first_set      = h_gp.first_set;
@@ -188,8 +186,8 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   // Copy flat buffer to device
   cudf::detail::cuda_memcpy_async<u_char>(*d_raw, h_buf, stream);
 
-  // The glushkov_program_device struct lives at the start of the device buffer
-  auto* d_gp_ptr = reinterpret_cast<glushkov_program_device const*>(d_base);
+  // The gkprog_device struct lives at the start of the device buffer
+  auto* d_gp_ptr = reinterpret_cast<gkprog_device const*>(d_base);
   return {d_gp_ptr, d_raw};
 }
 
@@ -205,7 +203,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 }
 
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  reprog const& h_prog, glushkov_host_program const* h_glushkov, rmm::cuda_stream_view stream)
+  reprog const& h_prog, gkprog const* h_glushkov, rmm::cuda_stream_view stream)
 {
   // ---- Thompson NFA: existing layout ----
   auto const insts_count   = h_prog.insts_count();

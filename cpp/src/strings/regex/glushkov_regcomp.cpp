@@ -208,7 +208,7 @@ void ordered_eps_frontier(int32_t const inst_id,
 /**
  * @brief Returns true if Glushkov position @p p matches ASCII character @p c.
  */
-bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, uint8_t const c)
+bool position_matches_char(gkprog const& gp, uint32_t const p, uint8_t const c)
 {
   switch (gp.pos_insts[p].type) {
     case CHAR: return gp.pos_insts[p].u1.c == static_cast<char32_t>(c);
@@ -230,7 +230,7 @@ bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, ui
  * function is conservative: if either side is a wildcard type (ANY/ANYNL/
  * CCLASS/NCCLASS) it may match non-ASCII code points, so overlap is assumed.
  */
-bool positions_chars_overlap(glushkov_host_program const& gp, uint32_t const p, uint32_t const q)
+bool positions_chars_overlap(gkprog const& gp, uint32_t const p, uint32_t const q)
 {
   for (int c = 0; c < GLUSHKOV_ASCII_TABLE_SIZE; ++c) {
     if (position_matches_char(gp, p, static_cast<uint8_t>(c)) &&
@@ -265,8 +265,7 @@ bool positions_chars_overlap(glushkov_host_program const& gp, uint32_t const p, 
  *             they can match a common character → priority_kill picks the wrong
  *             alternative when both are active.
  */
-bool frontier_has_priority_conflict(std::vector<frontier_item> const& items,
-                                    glushkov_host_program const& gp)
+bool frontier_has_priority_conflict(std::vector<frontier_item> const& items, gkprog const& gp)
 {
   // Rule 1: ACCEPT before any CHAR_POS, but only when the frontier also
   // contains at least one CHAR_POS.  An ACCEPT-only frontier (the normal
@@ -315,7 +314,7 @@ bool frontier_has_priority_conflict(std::vector<frontier_item> const& items,
  * We select the GLUSHKOV_MAX_SHIFTS most-populated span values as shift slots.
  * Any span that does not get a slot is demoted to the exception table.
  */
-void build_shift_masks(glushkov_host_program& gp)
+void build_shift_masks(gkprog& gp)
 {
   // Collect per-span source-position bitmasks
   std::map<int32_t, g_state_t> span_to_mask;
@@ -378,7 +377,7 @@ void build_shift_masks(glushkov_host_program& gp)
 // Public entry point
 // ---------------------------------------------------------------------------
 
-std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog)
+std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
 {
   int32_t const num_insts = prog.insts_count();
 
@@ -406,7 +405,7 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
     inst_to_pos[char_insts[idx]] = idx;
   }
 
-  auto gp        = std::make_unique<glushkov_host_program>();
+  auto gp        = std::make_unique<gkprog>();
   gp->num_states = static_cast<uint32_t>(char_insts.size());
 
   // ---- Step 3: Per-position character-matching descriptors ----------------

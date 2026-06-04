@@ -26,7 +26,7 @@ namespace strings {
  */
 struct regex_program::regex_program_impl {
   detail::reprog prog;
-  std::unique_ptr<detail::glushkov_host_program> glushkov_prog;
+  std::unique_ptr<detail::gkprog> glushkov_prog;
 
   regex_program_impl(detail::reprog const& p) : prog(p) {}
   regex_program_impl(detail::reprog&& p) : prog(std::move(p)) {}

@@ -25,8 +25,8 @@ namespace detail {
 
 // Forward declaration so reprog_device::create() can reference the type without
 // pulling glushkov_regcomp.h (a host-only header) into device compilation units.
-struct glushkov_host_program;
-struct glushkov_program_device;
+struct gkprog;
+struct gkprog_device;
 
 template <positional P>
 struct reljunk;
@@ -38,7 +38,7 @@ constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing w
 class reprog;
 
 // Include Glushkov device program definitions here so that
-// glushkov_program_device is visible before reprog_device is declared.
+// gkprog_device is visible before reprog_device is declared.
 // This file is included inside the cudf::strings::detail namespace block,
 // so all declarations in glushkov.cuh land in that namespace.
 // NOTE: glushkov.cuh must NOT include regex.cuh (no circular dependency).
@@ -88,7 +88,7 @@ class alignas(16) reprog_device {
    * @return The program device object
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    reprog const& prog, glushkov_host_program const* h_glushkov, rmm::cuda_stream_view stream);
+    reprog const& prog, gkprog const* h_glushkov, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -174,10 +174,7 @@ class alignas(16) reprog_device {
   /**
    * @brief Returns the Glushkov device program pointer (may be nullptr).
    */
-  [[nodiscard]] __device__ inline glushkov_program_device const* glushkov_prog() const
-  {
-    return _glushkov;
-  }
+  [[nodiscard]] __device__ inline gkprog_device const* glushkov_prog() const { return _glushkov; }
 
   /**
    * @brief Returns the thread count passed on `set_working_memory`.
@@ -289,7 +286,7 @@ class alignas(16) reprog_device {
   // Optional Glushkov NFA program.  When non-null, find() dispatches to the
   // Glushkov bit-parallel engine instead of the Thompson list-based engine.
   // extract() always uses the Thompson engine (Glushkov does not track groups).
-  glushkov_program_device const* _glushkov{};
+  gkprog_device const* _glushkov{};
 
   // Optional shared-memory cache of Glushkov program arrays.  Set at kernel
   // entry after cooperative load; nullptr means fall back to global memory.
@@ -300,7 +297,7 @@ class alignas(16) reprog_device {
 };
 
 // Include Glushkov device functions after both reclass_device and
-// glushkov_program_device are fully defined.
+// gkprog_device are fully defined.
 // (glushkov.inl opens and closes the cudf::strings::detail namespace itself.)
 
 /**
