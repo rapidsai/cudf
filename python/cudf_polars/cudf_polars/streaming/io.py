@@ -441,7 +441,7 @@ def can_use_native_parquet_node(
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
     parquet_options = config_options.parquet_options
     if (

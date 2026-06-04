@@ -242,11 +242,19 @@ def prefetch_parquet_file_metadata_for_ir(
         metadata concurrently, its ``parquet_file_metadata`` is mutated
         to cache the newly read parquet metadata.
     """
-    groups = {
-        tuple(node.paths)
-        for node in traversal([root])
-        if isinstance(node, Scan) and node.typ == "parquet" and node.paths
-    }
+    from cudf_polars.streaming.io import SplitScan, StreamingScan
+
+    groups = set()
+    for node in traversal([root]):
+        if isinstance(node, StreamingScan):
+            for child in node.children:
+                if isinstance(child, Scan) and child.typ == "parquet":
+                    groups.add(tuple(child.paths))
+        elif isinstance(node, Scan) and node.typ == "parquet":
+            groups.add(tuple(node.paths))
+        elif isinstance(node, SplitScan) and node.base_scan.typ == "parquet":
+            groups.add(tuple(node.base_scan.paths))
+
     if not groups:
         return
 
