@@ -77,12 +77,9 @@ class Filter(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, mask = (child.evaluate(df, context=context) for child in self.children)
-        # polars type-puns length-1 columns as scalars, so a scalar ``values``
-        # (e.g. ``pl.lit(2)`` or ``col.first()``) or a scalar ``mask`` (e.g.
-        # ``pl.lit(True)``) must be broadcast to a common length before
-        # ``apply_boolean_mask``, which otherwise raises a size mismatch.
-        values, mask = broadcast(values, mask, target_length=df.num_rows, stream=df.stream)
-table = plc.stream_compaction.apply_boolean_mask(
-plc.Table([values.obj]), mask.obj, stream=df.stream
-)
+        # polars type-puns length-1 columns as scalars.
+        values, mask = broadcast(values, mask, stream=df.stream)
+        table = plc.stream_compaction.apply_boolean_mask(
+            plc.Table([values.obj]), mask.obj, stream=df.stream
+        )
         return Column(table.columns()[0], dtype=self.dtype).sorted_like(values)
