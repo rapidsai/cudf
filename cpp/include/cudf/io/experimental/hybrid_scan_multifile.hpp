@@ -167,6 +167,37 @@ class hybrid_scan_multifile {
   secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                 parquet_reader_options const& options) const;
 
+  /**
+   * @brief Builds a boolean survival column of size equal to the total number of rows in the row
+   * groups containing all `true` values
+   *
+   * @param row_group_indices Input per-source row group indices (one inner vector per source)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return An all-true boolean (survival) column spanning all selected rows across all sources
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
+   * page index
+   *
+   * @param row_group_indices Input per-source row group indices (one inner vector per source)
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return A boolean column spanning all selected rows across all sources and indicating which
+   * filter column rows survive the statistics in the page index
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };
