@@ -1225,11 +1225,12 @@ def _(
         and translator._expr_context
         in (ExecutionContext.GROUPBY, ExecutionContext.ROLLING)
     ):
-        # polars >= 1.40 wraps element-wise expressions in a groupby/rolling
-        # aggregation in an implicit ``implode`` (collect-to-list per group).
-        # Earlier versions emitted the bare expression, whose dtype already
-        # reflects the per-group list. Unwrap so the existing pointwise-collect
-        # path handles it as before.
+        # polars >= 1.40 makes the per-group collect-to-list explicit: an
+        # element-wise expression inside a groupby/rolling aggregation is now
+        # wrapped in an explicit ``implode`` node. Earlier versions left it
+        # implicit, emitting the bare expression (whose dtype already reflects
+        # the per-group list). Unwrap the explicit ``implode`` so the existing
+        # pointwise-collect path handles it as before.
         (child,) = args
         return child
 
