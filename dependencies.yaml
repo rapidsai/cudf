@@ -240,6 +240,7 @@ files:
     extras:
       table: project
     includes:
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
