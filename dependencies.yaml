@@ -468,6 +468,34 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  py_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+  py_run_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
   test_python_narwhals:
     output: none
     includes:
@@ -1287,6 +1315,31 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_librapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librapidsmpf_unsuffixed
   depends_on_ray:
     common:
       - output_types: conda
