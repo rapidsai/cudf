@@ -975,13 +975,14 @@ TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
     bool abc_anchored_en;     // contains "^abc$"   EXT
     bool abc_anchored_ml;     // contains "^abc$"   EXT|MULTILINE
     bool abc_dollar_matches;  // matches_re "abc$"  EXT  (anchored at start of string)
-    int  az_dollar_count_en;  // count_re "[a-z]+$" EXT
-    int  az_dollar_count_ml;  // count_re "[a-z]+$" EXT|MULTILINE
-    int  az_start_count_ml;   // count_re "^[a-z]+" EXT|MULTILINE
+    int az_dollar_count_en;   // count_re "[a-z]+$" EXT
+    int az_dollar_count_ml;   // count_re "[a-z]+$" EXT|MULTILINE
+    int az_start_count_ml;    // count_re "^[a-z]+" EXT|MULTILINE
     bool cr_dollar_ml;        // contains "\r$"     EXT|MULTILINE  (never inside \r\n)
     bool start_nl_ml;         // contains "^\n"     EXT|MULTILINE  (^ never lands between \r\n)
     bool alt_a_or_b_en;       // contains "(a$|b)"  EXT            (#14856 alternation)
   };
+  // clang-format off
   constexpr static edge_case cases[] = {
     // Column: CRLF, lone CR, lone LF, no-term, mid-CRLF, double-CRLF, empty, NEL,
     //         mixed, CRLF-only, leading-CRLF, reversed \n\r, \r\r, \n\n.
@@ -1002,13 +1003,14 @@ TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
     {"a\r\rb",          0,    0,    0,      1,      2,      2,      1,   0,   1},
     {"a\n\nb",          0,    0,    0,      1,      2,      2,      0,   1,   1},
   };
+  // clang-format on
 
   auto strings_view = std::span(cases) | std::views::transform(&edge_case::s);
   auto input        = cudf::test::strings_column_wrapper(strings_view.begin(), strings_view.end());
   auto view         = cudf::strings_column_view(input);
   auto const EXT    = cudf::strings::regex_flags::EXT_NEWLINE;
-  auto const MLX    = static_cast<cudf::strings::regex_flags>(
-    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto const MLX = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                           cudf::strings::regex_flags::MULTILINE);
 
   auto bool_col = [](bool edge_case::* m) {
     auto v = std::span(cases) | std::views::transform([m](auto const& c) { return c.*m; });

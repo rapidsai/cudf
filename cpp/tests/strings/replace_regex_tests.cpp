@@ -487,6 +487,7 @@ TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
     char const* exp_abc_dollar_X;  // replace_re             "abc$"   -> "[X]"   EXT
     char const* exp_abc_backref;   // replace_with_backrefs  "(abc)$" -> "[\\1]" EXT
   };
+  // clang-format off
   constexpr static edge_case cases[] = {
     {"abc\r\n",       "[X]\r\n",       "[abc]\r\n"},
     {"abc\n",         "[X]\n",         "[abc]\n"},
@@ -503,6 +504,7 @@ TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
     {"a\r\rb",        "a\r\rb",        "a\r\rb"},
     {"a\n\nb",        "a\n\nb",        "a\n\nb"},
   };
+  // clang-format on
 
   auto strings_view = std::span(cases) | std::views::transform(&edge_case::s);
   auto input        = cudf::test::strings_column_wrapper(strings_view.begin(), strings_view.end());
