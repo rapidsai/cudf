@@ -360,7 +360,7 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
-def should_use_native_parquet_node(
+def can_use_native_parquet_node(
     ir: Scan,
     *,
     plan: IOPartitionPlan,
@@ -450,7 +450,7 @@ def _(
         )
         count = 1
 
-    if not should_use_native_parquet_node(
+    if not can_use_native_parquet_node(
         ir,
         plan=plan,
         count=count,

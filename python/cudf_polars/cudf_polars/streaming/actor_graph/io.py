@@ -47,7 +47,7 @@ from cudf_polars.streaming.io import (
     StreamingSink,
     _prepare_sink_directory,
     _sink_to_file,
-    should_use_native_parquet_node,
+    can_use_native_parquet_node,
 )
 
 if TYPE_CHECKING:
@@ -569,7 +569,7 @@ def _(
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
 
-    use_native = should_use_native_parquet_node(
+    use_native = can_use_native_parquet_node(
         ir.base_scan,
         plan=plan,
         count=partition_info.count,
