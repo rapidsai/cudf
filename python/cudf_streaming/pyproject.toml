@@ -61,7 +61,7 @@ select = [
 max_allowed_size_compressed = '75M'
 
 [tool.pytest.ini_options]
-addopts = "--tb=native --strict-config --strict-markers --import-mode=importlib"
+addopts = "--tb=native --strict-config --strict-markers"
 empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
   "error",
