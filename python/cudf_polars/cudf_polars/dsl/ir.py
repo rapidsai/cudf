@@ -250,6 +250,8 @@ def prefetch_parquet_file_metadata_for_ir(
             for child in node.children:
                 if isinstance(child, Scan) and child.typ == "parquet":
                     groups.add(tuple(child.paths))
+                elif isinstance(child, SplitScan) and child.base_scan.typ == "parquet":
+                    groups.add(tuple(child.base_scan.paths))
         elif isinstance(node, Scan) and node.typ == "parquet":
             groups.add(tuple(node.paths))
         elif isinstance(node, SplitScan) and node.base_scan.typ == "parquet":
