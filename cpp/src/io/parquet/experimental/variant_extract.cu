@@ -32,6 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
@@ -88,7 +89,7 @@ __device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t co
 {
   if (cuda::std::cmp_greater(pos + width, data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
-  memcpy(&v, data.data() + pos, width);
+  cuda::std::memcpy(&v, data.data() + pos, width);
   return v;
 }
 
@@ -310,15 +311,13 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
     return cuda::std::nullopt;
   }
   T v;
-  memcpy(&v, enc.data() + 1, sizeof(T));
+  cuda::std::memcpy(&v, enc.data() + 1, sizeof(T));
   return v;
 }
 
-// Walk a path of object-key steps level by level starting at `val` and return the span of the
-// final value (subspan of `val`). Returns an empty span on failure.
-__device__ inline device_span<uint8_t const> locate_path(device_span<uint8_t const> meta,
-                                                         device_span<uint8_t const> val,
-                                                         column_device_view path)
+__device__ inline device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
+                                                          device_span<uint8_t const> val,
+                                                          column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
@@ -354,7 +353,7 @@ __device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
     constexpr std::size_t long_string_prefix_bytes = 1 + sizeof(uint32_t);
     if (len < long_string_prefix_bytes) { return cuda::std::nullopt; }
     uint32_t str_len;
-    memcpy(&str_len, enc.data() + 1, sizeof(str_len));
+    cuda::std::memcpy(&str_len, enc.data() + 1, sizeof(str_len));
     // Encoded length claims more char bytes than the buffer holds: truncated/malformed blob
     if (long_string_prefix_bytes + str_len > len) { return cuda::std::nullopt; }
     return enc.subspan(long_string_prefix_bytes, str_len);
@@ -401,7 +400,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
 
   auto const [meta, val] = metadata_and_value_at(metadata, values, row);
 
-  auto const field = locate_path(meta, val, path);
+  auto const field = resolve_path(meta, val, path);
   if (field.empty()) {
     d_sizes[row]       = 0;
     d_src_offsets[row] = 0;
@@ -472,7 +471,7 @@ struct cast_variant_string_fn {
     if (!d_chars) {
       d_sizes[row] = str->size();
     } else {
-      memcpy(d_chars + d_offsets[row], str->data(), str->size());
+      cuda::std::memcpy(d_chars + d_offsets[row], str->data(), str->size());
     }
   }
 };
@@ -487,7 +486,7 @@ void validate_variant_child(column_view const& child)
                std::invalid_argument);
 }
 
-struct cast_variant_launcher {
+struct cast_variant_fn {
   cudf::detail::lists_column_device_view values;
   size_type num_rows;
   data_type desired_type;
@@ -691,13 +690,13 @@ std::unique_ptr<column> cast_variant(column_view const& values,
   auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
 
   return cudf::type_dispatcher(desired_type,
-                               cast_variant_launcher{val_lists_device_view,
-                                                     num_rows,
-                                                     desired_type,
-                                                     d_null_mask,
-                                                     std::move(null_mask),
-                                                     stream,
-                                                     mr});
+                               cast_variant_fn{val_lists_device_view,
+                                               num_rows,
+                                               desired_type,
+                                               d_null_mask,
+                                               std::move(null_mask),
+                                               stream,
+                                               mr});
 }
 
 }  // namespace detail
