@@ -16,6 +16,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <ranges>
+#include <span>
 #include <vector>
 
 struct StringsReplaceRegexTest : public cudf::test::BaseFixture {};
@@ -478,58 +480,49 @@ TEST_F(StringsReplaceRegexTest, CrlfLineAnchorExtNewline)
 TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
 {
   // Full edge column; expecteds verified vs OpenJDK 17 replaceAll (default flags).
-  auto input     = cudf::test::strings_column_wrapper({"abc\r\n",
-                                                       "abc\n",
-                                                       "abc\r",
-                                                       "abc",
-                                                       "a\r\nb",
-                                                       "abc\r\n\r\n",
-                                                       "",
-                                                       "abc" NEXT_LINE,
-                                                       "a\nb\r\nc",
-                                                       "\r\n",
-                                                       "\r\nabc",
-                                                       "x\n\r",
-                                                       "a\r\rb",
-                                                       "a\n\nb"});
-  auto view      = cudf::strings_column_view(input);
-  auto const EXT = cudf::strings::regex_flags::EXT_NEWLINE;
+  // Each row bundles every replacement output for one input, so adding an input or
+  // a new replace pattern touches a single row or column.
+  struct edge_case {
+    char const* s;
+    char const* exp_abc_dollar_X;  // replace_re             "abc$"   -> "[X]"   EXT
+    char const* exp_abc_backref;   // replace_with_backrefs  "(abc)$" -> "[\\1]" EXT
+  };
+  constexpr static edge_case cases[] = {
+    {"abc\r\n",       "[X]\r\n",       "[abc]\r\n"},
+    {"abc\n",         "[X]\n",         "[abc]\n"},
+    {"abc\r",         "[X]\r",         "[abc]\r"},
+    {"abc",           "[X]",           "[abc]"},
+    {"a\r\nb",        "a\r\nb",        "a\r\nb"},
+    {"abc\r\n\r\n",   "abc\r\n\r\n",   "abc\r\n\r\n"},
+    {"",              "",              ""},
+    {"abc" NEXT_LINE, "[X]" NEXT_LINE, "[abc]" NEXT_LINE},
+    {"a\nb\r\nc",     "a\nb\r\nc",     "a\nb\r\nc"},
+    {"\r\n",          "\r\n",          "\r\n"},
+    {"\r\nabc",       "\r\n[X]",       "\r\n[abc]"},
+    {"x\n\r",         "x\n\r",         "x\n\r"},
+    {"a\r\rb",        "a\r\rb",        "a\r\rb"},
+    {"a\n\nb",        "a\n\nb",        "a\n\nb"},
+  };
+
+  auto strings_view = std::span(cases) | std::views::transform(&edge_case::s);
+  auto input        = cudf::test::strings_column_wrapper(strings_view.begin(), strings_view.end());
+  auto view         = cudf::strings_column_view(input);
+  auto const EXT    = cudf::strings::regex_flags::EXT_NEWLINE;
+
+  auto str_col = [](char const* edge_case::* m) {
+    auto v = std::span(cases) | std::views::transform([m](auto const& c) { return c.*m; });
+    return cudf::test::strings_column_wrapper(v.begin(), v.end());
+  };
 
   {  // replace_re  abc$ -> [X]   (\r\n preserved as a unit)
     auto p = cudf::strings::regex_program::create("abc$", EXT);
     auto r = cudf::string_scalar("[X]");
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::replace_re(view, *p, r),
-                                   cudf::test::strings_column_wrapper({"[X]\r\n",
-                                                                       "[X]\n",
-                                                                       "[X]\r",
-                                                                       "[X]",
-                                                                       "a\r\nb",
-                                                                       "abc\r\n\r\n",
-                                                                       "",
-                                                                       "[X]" NEXT_LINE,
-                                                                       "a\nb\r\nc",
-                                                                       "\r\n",
-                                                                       "\r\n[X]",
-                                                                       "x\n\r",
-                                                                       "a\r\rb",
-                                                                       "a\n\nb"}));
+                                   str_col(&edge_case::exp_abc_dollar_X));
   }
   {  // replace_with_backrefs  (abc)$ -> [\1]   (the spark-rapids scenario, native pattern)
     auto p = cudf::strings::regex_program::create("(abc)$", EXT);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::replace_with_backrefs(view, *p, "[\\1]"),
-                                   cudf::test::strings_column_wrapper({"[abc]\r\n",
-                                                                       "[abc]\n",
-                                                                       "[abc]\r",
-                                                                       "[abc]",
-                                                                       "a\r\nb",
-                                                                       "abc\r\n\r\n",
-                                                                       "",
-                                                                       "[abc]" NEXT_LINE,
-                                                                       "a\nb\r\nc",
-                                                                       "\r\n",
-                                                                       "\r\n[abc]",
-                                                                       "x\n\r",
-                                                                       "a\r\rb",
-                                                                       "a\n\nb"}));
+                                   str_col(&edge_case::exp_abc_backref));
   }
 }
