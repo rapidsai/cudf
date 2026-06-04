@@ -15,7 +15,6 @@ import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
     DataFrameScan,
     Join,
-    Scan,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -247,7 +246,7 @@ def generate_network(
     num_io_nodes: int = 0
     ir_dep_count: defaultdict[IR, int] = defaultdict(int)
     for node in traversal([ir]):
-        if isinstance(node, (DataFrameScan, Scan, StreamingScan)):
+        if isinstance(node, (DataFrameScan, StreamingScan)):
             num_io_nodes += 1
         for child in node.children:
             ir_dep_count[child] += 1
