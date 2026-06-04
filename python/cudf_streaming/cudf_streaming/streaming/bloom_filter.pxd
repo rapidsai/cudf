@@ -28,19 +28,5 @@ cdef extern from "<cudf_streaming/integrations/bloom_filter.hpp>" nogil:
 
 
 cdef class BloomFilter:
-    """
-    Streaming bloom filter construction and application.
-
-    Parameters
-    ----------
-    ctx
-        Streaming context.
-    comm
-        The communicator the bloom filter construction is collective over.
-    seed
-        Seed used for hashing values into the bloom filter.
-    num_filter_blocks
-        Number of blocks used to size the filter.
-    """
     cdef unique_ptr[cpp_BloomFilter] _handle
     cdef Communicator _comm

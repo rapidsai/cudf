@@ -192,6 +192,10 @@ cdef class BloomFilter:
         tag
             Disambiguating tag to combine filters across ranks.
         """
+        # Coroutine bridging pattern: create a Python future, transfer
+        # ownership to C++ via OwningWrapper (Py_INCREF here, py_deleter
+        # calls Py_DECREF when the C++ task completes), then spawn the
+        # C++ coroutine which resolves the future via cpp_set_py_future.
         ret = asyncio.get_running_loop().create_future()
         Py_INCREF(ret)
         with nogil:
