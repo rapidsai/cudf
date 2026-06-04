@@ -234,6 +234,11 @@ TEST_F(StringsFindallTests, EmptyMatch)
   prog     = cudf::strings::regex_program::create("\\b");
   results  = cudf::strings::findall(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  expected = LCW({LCW{}, LCW{"", "", "", ""}, LCW{"", "", "", ""}});
+  prog     = cudf::strings::regex_program::create("(\\b)");
+  results  = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsFindallTests, Errors)
