@@ -90,14 +90,6 @@ def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     }
 
 
-def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
-    return {
-        colname: dtype
-        for colname, dtype in frame._dtypes
-        if str(dtype) in supported_types
-    }
-
-
 def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
