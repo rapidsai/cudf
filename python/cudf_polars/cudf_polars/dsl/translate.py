@@ -658,10 +658,14 @@ def _(
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.IR:
-    # polars < 1.41 bundled the optional slice in an ``options`` attribute;
-    # 1.41+ exposes it directly on the node as ``slice``.
     zlice = node.options if POLARS_VERSION_LT_141 else node.slice
-    return ir.Union(schema, zlice, *(translator.translate_ir(n=n) for n in node.inputs))
+    maintain_order = True if POLARS_VERSION_LT_141 else node.maintain_order
+    return ir.Union(
+        schema,
+        zlice,
+        maintain_order,
+        *(translator.translate_ir(n=n) for n in node.inputs),
+    )
 
 
 @_translate_ir.register
