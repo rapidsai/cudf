@@ -94,13 +94,7 @@ def test_series_groupby(groupby_reduction_methods):
     assert_groupby_results_equal(sa, ga)
 
 
-def test_groupby_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_level_zero(groupby_reduction_methods):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
     gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
@@ -113,13 +107,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
     )
 
 
-def test_groupby_series_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_series_level_zero(groupby_reduction_methods):
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
     gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
