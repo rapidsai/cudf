@@ -9,8 +9,6 @@ import cupy
 import pylibcudf as plc
 import pytest
 
-pytest.importorskip("cudf_streaming.streaming")
-
 from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,

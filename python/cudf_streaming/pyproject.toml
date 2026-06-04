@@ -28,6 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0",
+    "numpy>=1.26,<3.0",
     "pytest",
     "pytest-cov",
     "pytest-xdist",

@@ -10,8 +10,6 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-pytest.importorskip("cudf_streaming.streaming")
-
 from cudf_streaming.streaming import ChannelMetadata
 from cudf_streaming.streaming.bloom_filter import BloomFilter
 from cudf_streaming.streaming.table_chunk import TableChunk

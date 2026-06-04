@@ -539,6 +539,7 @@ files:
     includes:
       - test_python_common
       - depends_on_cupy
+      - numpy_run
   test_python_narwhals:
     output: none
     includes:

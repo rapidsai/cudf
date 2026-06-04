@@ -10,8 +10,6 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-pytest.importorskip("cudf_streaming.streaming")
-
 from cudf_streaming.streaming.parquet import Filter, read_parquet
 from cudf_streaming.streaming.table_chunk import TableChunk
 from rapidsmpf.streaming.core.actor import run_actor_network
