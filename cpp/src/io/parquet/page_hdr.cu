@@ -493,6 +493,19 @@ struct parse_page_header_fn {
 };
 
 /**
+ * @brief Parse and validate a page header from a byte stream
+ *
+ * @param bs Byte stream
+ * @return True if the page header is parsed and has a valid compressed size
+ */
+inline __device__ bool parse_valid_page_header(byte_stream_s* bs)
+{
+  return parse_page_header_fn{}(bs) and
+         (bs->page.compressed_page_size > 0 or
+          (bs->page.compressed_page_size == 0 and bs->page_type == PageType::DICTIONARY_PAGE));
+}
+
+/**
  * @brief Zero out page header info
  *
  * @param bs Byte stream
@@ -598,7 +611,7 @@ void __launch_bounds__(decode_page_headers_block_size)
       bs->page.num_nulls                         = 0;
       bs->page.lvl_bytes[level_type::DEFINITION] = 0;
       bs->page.lvl_bytes[level_type::REPETITION] = 0;
-      if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size > 0) {
+      if (parse_valid_page_header(bs)) {
         if (not is_supported_encoding(bs->page.encoding)) {
           error[warp_id] |=
             static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -699,7 +712,7 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
     warp.sync();
     // Must be lane 0 here as `shuffle(values_found)` assumes lane 0 is the root
     if (lane_id == 0) {
-      if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size > 0) {
+      if (parse_valid_page_header(bs)) {
         if (not is_supported_encoding(bs->page.encoding)) {
           error[warp_id] |=
             static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -789,7 +802,7 @@ struct decode_page_headers_with_pgidx_fn {
     // `fill_in_page_info()`.
 
     // Parsed page must be valid and not empty
-    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size <= 0) {
+    if (not parse_valid_page_header(&bs)) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
                 error_code);
       return;

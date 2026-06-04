@@ -2,6 +2,9 @@
 cpp/                 @rapidsai/cudf-cpp-codeowners
 python/cudf/udf_cpp/ @rapidsai/cudf-cpp-codeowners
 
+#libcudf_streaming code owners (order matters, this supersedes cpp/ for files in this directory)
+cpp/libcudf_streaming/  @rapidsai/rapidsmpf-cpp-codeowners
+
 #python code owners
 python/            @rapidsai/cudf-python-codeowners
 notebooks/         @rapidsai/cudf-python-codeowners
@@ -12,6 +15,9 @@ python/cudf_polars/ @rapidsai/cudf-polars-codeowners
 CMakeLists.txt @rapidsai/cudf-cmake-codeowners
 **/cmake/      @rapidsai/cudf-cmake-codeowners
 *.cmake        @rapidsai/cudf-cmake-codeowners
+cpp/libcudf_streaming/CMakeLists.txt @rapidsai/rapidsmpf-cmake-codeowners
+cpp/libcudf_streaming/**/cmake/      @rapidsai/rapidsmpf-cmake-codeowners
+cpp/libcudf_streaming/*.cmake        @rapidsai/rapidsmpf-cmake-codeowners
 
 #java code owners
 java/              @rapidsai/cudf-java-codeowners
