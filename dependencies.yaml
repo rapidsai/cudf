@@ -139,6 +139,16 @@ files:
     includes:
       - develop
       - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_version
+      - develop
+      - py_version
   clang_tidy:
     output: none
     includes:
