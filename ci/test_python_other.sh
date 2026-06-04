@@ -42,7 +42,8 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
-timeout 30m ./ci/run_cudf_polars_pytests.sh \
+./ci/run_cudf_polars_pytests.sh \
+  -vv \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=8 \
   --dist=worksteal \
