@@ -891,7 +891,6 @@ class chunked_parquet_reader {
    *        or `0` if there is no limit. Because this overload does not take a `pass_read_limit`, a
    *        nonzero `chunk_read_limit` automatically derives a `pass_read_limit` of
    *        `1.5 * chunk_read_limit`.
-   *        Use an overload that accepts `pass_read_limit` to control this explicitly.
    * @param options The options used to read Parquet file
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -914,7 +913,6 @@ class chunked_parquet_reader {
    *        or `0` if there is no limit. Because this overload does not take a `pass_read_limit`, a
    *        nonzero `chunk_read_limit` automatically derives a `pass_read_limit` of
    *        `1.5 * chunk_read_limit`.
-   *        Use an overload that accepts `pass_read_limit` to control this explicitly.
    * @param sources Input `datasource` objects to read the dataset from
    * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options The options used to read Parquet file
