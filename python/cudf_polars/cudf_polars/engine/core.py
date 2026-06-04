@@ -679,19 +679,21 @@ def evaluate_on_rank(
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     ir, partition_info = lower_ir_graph(ir, config_options, stats)
-    ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
-    )
-    if config_options.parquet_options.prefetch_file_metadata:
-        prefetch_parquet_file_metadata_for_ir(
-            ir,
-            ir_context,
-        )
 
     if comm.rank == 0:
         # At least for now, the query plan is identical on all ranks,
         # so we only log it once.
         log_query_plan(ir, config_options)
+
+    ir_context = IRExecutionContext(
+        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+    )
+
+    if config_options.parquet_options.prefetch_file_metadata:
+        prefetch_parquet_file_metadata_for_ir(
+            ir,
+            ir_context,
+        )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

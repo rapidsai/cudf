@@ -468,6 +468,34 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  py_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+  py_run_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
   test_python_narwhals:
     output: none
     includes:
@@ -490,7 +518,7 @@ files:
   test_cudf_polars_compat:
     output: none
     matrix:
-      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39"]
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
     includes:
       - test_cudf_polars_compat
 channels:
@@ -852,7 +880,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.40
+          - polars>=1.35,<1.42
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -916,7 +944,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==3.0.*
-              - numba-cuda==0.22.2,<0.29.0
+              - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==3.0.3
@@ -1077,7 +1105,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2,<0.29.0
+        - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1085,12 +1113,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2,<0.29.0
+              - numba-cuda[cu12]>=0.22.2
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu13]>=0.22.2,<0.29.0
+              - numba-cuda[cu13]>=0.22.2
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
             packages:
@@ -1287,6 +1315,31 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_librapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librapidsmpf_unsuffixed
   depends_on_ray:
     common:
       - output_types: conda
@@ -1435,5 +1488,13 @@ dependencies:
               polars_compat_version: "1.39"
             packages:
               - polars==1.39.*
+          - matrix:
+              polars_compat_version: "1.40"
+            packages:
+              - polars==1.40.*
+          - matrix:
+              polars_compat_version: "1.41"
+            packages:
+              - polars==1.41.*
           - matrix:
             packages:

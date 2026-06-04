@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import itertools
 import math
@@ -31,6 +32,7 @@ from cudf_polars.streaming.base import (
     SerializedDataSourceInfo,
 )
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.utils import _dynamic_planning_on
 from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
@@ -101,6 +103,104 @@ def scan_partition_plan(
 
     # TODO: Use file sizes for csv and json
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
+
+
+def expand_scan_for_rank(
+    ir: Scan,
+    plan: IOPartitionPlan,
+    *,
+    rank: int,
+    nranks: int,
+    parquet_options: ParquetOptions,
+) -> list[Scan | SplitScan]:
+    """
+    Expand a Scan node into rank-local Scan and SplitScan operations.
+
+    Parameters
+    ----------
+    ir
+        The Scan node to expand.
+    plan
+        The IO partitioning plan for the scan.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers.
+    parquet_options
+        Parquet reader options.
+
+    Returns
+    -------
+    list[Scan | SplitScan]
+        Rank-local scan operations.
+    """
+    scans: list[Scan | SplitScan] = []
+    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
+        count = plan.factor * len(ir.paths)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        path_offset = local_offset // plan.factor
+        path_end = math.ceil((local_offset + local_count) / plan.factor)
+        path_count = path_end - path_offset
+        local_paths = ir.paths[path_offset : path_offset + path_count]
+        sindex = local_offset % plan.factor
+        splits_created = 0
+        for path in local_paths:
+            base_scan = Scan(
+                ir.schema,
+                ir.typ,
+                ir.reader_options,
+                ir.cloud_options,
+                [path],
+                ir.with_columns,
+                ir.skip_rows,
+                ir.n_rows,
+                ir.row_index,
+                ir.include_file_paths,
+                ir.predicate,
+                parquet_options,
+            )
+            while sindex < plan.factor and splits_created < local_count:
+                scans.append(
+                    SplitScan(
+                        ir.schema,
+                        base_scan,
+                        sindex,
+                        plan.factor,
+                        parquet_options,
+                    )
+                )
+                sindex += 1
+                splits_created += 1
+            sindex = 0
+
+    else:
+        count = math.ceil(len(ir.paths) / plan.factor)
+        local_count = math.ceil(count / nranks)
+        local_offset = local_count * rank
+        paths_offset_start = local_offset * plan.factor
+        paths_offset_end = paths_offset_start + plan.factor * local_count
+        for offset in range(paths_offset_start, paths_offset_end, plan.factor):
+            local_paths = ir.paths[offset : offset + plan.factor]
+            if len(local_paths) > 0:  # Only add scan if there are paths
+                scans.append(
+                    Scan(
+                        ir.schema,
+                        ir.typ,
+                        ir.reader_options,
+                        ir.cloud_options,
+                        local_paths,
+                        ir.with_columns,
+                        ir.skip_rows,
+                        ir.n_rows,
+                        ir.row_index,
+                        ir.include_file_paths,
+                        ir.predicate,
+                        parquet_options,
+                    )
+                )
+
+    return scans
 
 
 class SplitScan(IR):
@@ -277,11 +377,73 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
+def can_use_native_parquet_node(
+    ir: Scan,
+    *,
+    plan: IOPartitionPlan,
+    count: int,
+    nranks: int,
+    parquet_options: ParquetOptions,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> bool:
+    """
+    Determine whether we should use rapidsmpf's native parquet node.
+
+    Parameters
+    ----------
+    ir
+        The Scan node that might need to fall back.
+    plan
+        The IO partitioning plan.
+    count
+        The number of partitions associated with this Scan node.
+    nranks
+        The number of ranks.
+    parquet_options
+        The parquet options.
+    config_options
+        The configuration options.
+
+    Returns
+    -------
+    bool
+        Whether to use rapidsmpf's native parquet node.
+
+    Notes
+    -----
+    Native parquet node is used under the following conditions:
+
+    - Our plan indicates we should split the file into multiple partitions
+    - We have more than one rank
+    - There's more than one partition or dynamic planning is enabled
+    - The file type is parquet
+    - The row index is not set
+    - File paths are not included
+    - The number of rows is not set
+    - The skip rows is not set
+    """
+    distributed_split_files = (
+        plan.flavor == IOPartitionFlavor.SPLIT_FILES and nranks > 1
+    )
+
+    return (
+        parquet_options.use_rapidsmpf_native
+        and (count > 1 or _dynamic_planning_on(config_options))
+        and ir.typ == "parquet"
+        and ir.row_index is None
+        and ir.include_file_paths is None
+        and ir.n_rows == -1
+        and ir.skip_rows == 0
+        and not distributed_split_files
+    )
+
+
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
+    parquet_options = config_options.parquet_options
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -299,13 +461,73 @@ def _(
             count = plan.factor * len(paths)
         else:
             count = math.ceil(len(paths) / plan.factor)
-
-        return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
     else:
         plan = IOPartitionPlan(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )
-        return ir, {ir: PartitionInfo(count=1, io_plan=plan)}
+        count = 1
+
+    if not can_use_native_parquet_node(
+        ir,
+        plan=plan,
+        count=count,
+        nranks=rec.state["nranks"],
+        parquet_options=parquet_options,
+        config_options=config_options,
+    ):
+        parquet_options = dataclasses.replace(parquet_options, chunked=False)
+
+    scans = expand_scan_for_rank(
+        ir,
+        plan,
+        rank=rec.state["rank"],
+        nranks=rec.state["nranks"],
+        parquet_options=parquet_options,
+    )
+    new_ir = StreamingScan(scans, ir)
+    return new_ir, {new_ir: PartitionInfo(count=count, io_plan=plan)}
+
+
+class StreamingScan(IR):
+    """A streaming scan node."""
+
+    __slots__ = (
+        "base_scan",
+        "scans",
+        "schema",
+    )
+    _non_child = (
+        "scans",
+        "base_scan",
+    )
+    _n_non_child_args = 2
+    scans: list[Scan | SplitScan]
+    base_scan: Scan
+
+    def __init__(self, scans: list[Scan | SplitScan], base_scan: Scan):
+        self.scans = scans
+        self.base_scan = base_scan
+        self.schema = base_scan.schema
+        self._non_child_args = (scans, base_scan)
+        self.children = ()
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        # We don't need to include base_scan / schema, since it's in all the scan nodes.
+        return (type(self), *tuple(x.get_hashable() for x in self.scans))
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        scans: list[Scan | SplitScan],
+        base_scan: Scan,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Raises NotImplementedError for StreamingScan nodes."""
+        raise NotImplementedError(
+            "StreamingScan.do_evaluate should not be called directly. Call Scan.do_evaluate on each scan node instead."
+        )
 
 
 class StreamingSink(IR):
