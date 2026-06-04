@@ -248,9 +248,9 @@ def test_expand_scan_for_rank_split_files(
         assert scan.base_scan.paths == ["file.parquet"]
 
 
-def test_streaming_scan_raises():
+def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
     ctx = IRExecutionContext()
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([scan], scan, context=ctx)
