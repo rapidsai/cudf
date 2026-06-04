@@ -80,7 +80,8 @@ for version in "${VERSIONS[@]}"; do
         COVERAGE_ARGS=(--no-cov)
     fi
 
-    timeout 35m ./ci/run_cudf_polars_pytests.sh \
+    ./ci/run_cudf_polars_pytests.sh \
+        -vv \
         "${COVERAGE_ARGS[@]}" \
         --numprocesses=8 \
         --dist=worksteal \
