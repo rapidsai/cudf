@@ -159,13 +159,12 @@ def set_memory_resource(
     """
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
-        # Use cuda async by default with the rapidsmpf runtime.
+        # Use cuda async by default with the streaming executor.
         if (
             memory_resource_config is None
             and executor.name == "streaming"
-            and executor.runtime == "rapidsmpf"
             and (device_size := get_total_device_memory()) is not None
-        ):  # pragma: no cover; Requires rapidsmpf runtime.
+        ):  # pragma: no cover
             memory_resource_config = MemoryResourceConfig(
                 qualname="rmm.mr.CudaAsyncMemoryResource",
                 options={
@@ -308,15 +307,13 @@ def _callback(
             else:
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
-            from cudf_polars.experimental.parallel import evaluate_streaming
+            from cudf_polars.streaming.parallel import evaluate_streaming
 
             if timer is not None:
                 msg = textwrap.dedent("""\
                     LazyFrame.profile() is not supported with the streaming executor.
-                    To profile execution with the streaming executor, use:
-
-                    - NVIDIA NSight Systems with the 'streaming' scheduler.
-                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    To profile execution with the streaming executor, use NVIDIA
+                    NSight Systems with the 'streaming' scheduler.
                     """)
                 raise NotImplementedError(msg)
 
@@ -368,12 +365,6 @@ def execute_with_cudf(
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
 
-        if (
-            memory_resource is None
-            and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; Requires distributed cluster
-            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051

@@ -5,11 +5,13 @@
 
 #include "reader_impl_helpers.hpp"
 
+#include "column_path_helpers.hpp"
 #include "compact_protocol_reader.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
+#include "parquet_common.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>
@@ -19,6 +21,7 @@
 #include <cudf/logger.hpp>
 
 #include <cuda/iterator>
+#include <cuda/numeric>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -91,27 +94,6 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
 }
 
 }  // namespace
-
-std::string normalize_column_path(std::string_view col_path, bool case_sensitive_names)
-{
-  if (case_sensitive_names) { return std::string{col_path}; }
-  auto normalized_path = std::string(col_path.size(), '\0');
-  std::transform(col_path.begin(), col_path.end(), normalized_path.begin(), [](unsigned char c) {
-    return std::tolower(c);
-  });
-  return normalized_path;
-}
-
-bool are_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
-{
-  if (lhs.size() != rhs.size()) { return false; }
-  if (case_sensitive) { return lhs == rhs; }
-  // Optimize by normalizing and comparing char-by-char instead of whole strings
-  return std::equal(
-    lhs.begin(), lhs.end(), rhs.begin(), [](unsigned char lhs_char, unsigned char rhs_char) {
-      return std::equal_to<>{}(std::tolower(lhs_char), std::tolower(rhs_char));
-    });
-}
 
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
@@ -212,6 +194,8 @@ type_id to_type_id(SchemaElement const& schema,
       // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
       case LogicalType::UNKNOWN: return type_id::STRING;
 
+      case LogicalType::VARIANT: return type_id::STRUCT;
+
       default: break;
     }
   }
@@ -271,51 +255,58 @@ void metadata::sanitize_schema()
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
-      auto const parent_type = schema[schema_elem.parent_idx].converted_type;
-      if (schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
-          schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
+      auto const& parent_schema    = schema[schema_elem.parent_idx];
+      auto const is_parent_variant = parent_schema.logical_type.has_value() &&
+                                     parent_schema.logical_type->type == LogicalType::VARIANT;
+      auto const parent_type = parent_schema.converted_type;
+      if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+          schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
-        // This is a list of structs, so we need to mark this as a list, but also
-        // add a struct child and move this element's children to the struct
+        // Parquet backward-compatibility rule: when the repeated field is a group,
+        // the element type is the group itself, regardless of its field count. Rewrite
+        // as `list<struct<...>>` for any number of children >= 1.
+        // Spec:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
+        auto const struct_node_idx = static_cast<size_type>(schema.size());
+
+        SchemaElement struct_elem;
+        struct_elem.name                 = "struct_node";
+        struct_elem.repetition_type      = FieldRepetitionType::REQUIRED;
+        struct_elem.num_children         = schema_elem.num_children;
+        struct_elem.type                 = Type::UNDEFINED;
+        struct_elem.converted_type       = std::nullopt;
+        struct_elem.parent_idx           = schema_idx;
+        struct_elem.max_definition_level = schema_elem.max_definition_level;
+        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        struct_elem.children_idx         = std::move(schema_elem.children_idx);
+        for (auto const child_idx : struct_elem.children_idx) {
+          schema[child_idx].parent_idx = struct_node_idx;
+        }
+
         schema_elem.converted_type  = ConvertedType::LIST;
         schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
-        auto const struct_node_idx  = static_cast<size_type>(schema.size());
-
-        SchemaElement struct_elem;
-        struct_elem.name            = "struct_node";
-        struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
-        struct_elem.num_children    = schema_elem.num_children;
-        struct_elem.type            = Type::UNDEFINED;
-        struct_elem.converted_type  = std::nullopt;
-
-        // swap children
-        struct_elem.children_idx = std::move(schema_elem.children_idx);
-        schema_elem.children_idx = {struct_node_idx};
-        schema_elem.num_children = 1;
-
-        struct_elem.max_definition_level = schema_elem.max_definition_level;
-        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
         schema_elem.max_definition_level--;
         schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
 
-        // change parent index on new node and on children
-        struct_elem.parent_idx = schema_idx;
-        for (auto& child_idx : struct_elem.children_idx) {
-          schema[child_idx].parent_idx = struct_node_idx;
-        }
-        // add our struct
-        schema.push_back(struct_elem);
+        // push_back may reallocate; do not use `schema_elem` past this point.
+        schema.push_back(std::move(struct_elem));
+        schema[schema_idx].children_idx = {struct_node_idx};
+        schema[schema_idx].num_children = 1;
       }
     }
 
     // convert ConvertedType to LogicalType for older files
-    if (schema_elem.converted_type.has_value() and not schema_elem.logical_type.has_value()) {
-      schema_elem.logical_type = converted_to_logical_type(schema_elem);
+    if (schema[schema_idx].converted_type.has_value() and
+        not schema[schema_idx].logical_type.has_value()) {
+      schema[schema_idx].logical_type = converted_to_logical_type(schema[schema_idx]);
     }
 
-    for (auto& child_idx : schema_elem.children_idx) {
-      process(child_idx);
+    // Recursive `process` may append to `schema`; index into it each iteration
+    // instead of holding a reference.
+    auto const num_children = schema[schema_idx].num_children;
+    for (size_type i = 0; i < num_children; ++i) {
+      process(schema[schema_idx].children_idx[i]);
     }
   };
 
@@ -1362,36 +1353,38 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
   auto filtered_row_group_indices =
     std::vector<std::vector<size_type>>(input_row_group_indices.size());
 
-  std::for_each(
-    input_row_group_indices.front().begin(),
-    input_row_group_indices.front().end(),
-    [&](auto const& rg_idx) {
-      // Get the file offset of this row group
-      auto const row_group_file_offset = [&]() {
-        auto const& rg = per_file_metadata.front().row_groups[rg_idx];
-        if (rg.file_offset.has_value()) {
-          return rg.file_offset.value();
-        } else if (rg.columns.front().file_offset != 0) {
-          return rg.columns.front().file_offset;
-        } else {
-          auto const& col_meta = rg.columns.front().meta_data;
-          return col_meta.dictionary_page_offset != 0
-                   ? std::min(col_meta.dictionary_page_offset, col_meta.data_page_offset)
-                   : col_meta.data_page_offset;
-        }
-      }();
+  std::for_each(input_row_group_indices.front().begin(),
+                input_row_group_indices.front().end(),
+                [&](auto const& rg_idx) {
+                  // Get the file offset of this row group
+                  auto const row_group_file_offset = [&]() {
+                    auto const& rg = per_file_metadata.front().row_groups[rg_idx];
+                    if (rg.file_offset.has_value()) {
+                      return rg.file_offset.value();
+                    } else if (rg.columns.front().file_offset != 0) {
+                      return rg.columns.front().file_offset;
+                    } else {
+                      auto const& col_meta = rg.columns.front().meta_data;
+                      return col_meta.dictionary_page_offset != 0
+                               ? std::min(col_meta.dictionary_page_offset,
+                                          col_meta.data_page_offset)
+                               : col_meta.data_page_offset;
+                    }
+                  }();
 
-      // Check if the row group starts within the byte range: row group file offset is >=
-      // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
-      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
-      auto const is_within_byte_range =
-        std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
-        (not bytes_to_read.has_value() or
-         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
-         std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
+                  // Check if the row group starts within the byte range: row group file offset is
+                  // >= bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset
+                  // overflows size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+                  auto const is_within_byte_range =
+                    std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
+                    (not bytes_to_read.has_value() or
+                     cuda::add_overflow<size_t>(bytes_to_skip, bytes_to_read.value()).overflow or
+                     std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
 
-      if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
-    });
+                  if (is_within_byte_range) {
+                    filtered_row_group_indices.front().emplace_back(rg_idx);
+                  }
+                });
 
   return filtered_row_group_indices;
 }
@@ -1710,7 +1703,8 @@ aggregate_reader_metadata::select_columns(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
 
-      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+      auto const& parent_schema = get_schema(schema_elem.parent_idx);
+      auto const one_level_list = schema_elem.is_one_level_list(parent_schema);
 
       // if we're at the root, this is a new output column
       auto const col_type =
@@ -1776,6 +1770,14 @@ aggregate_reader_metadata::select_columns(
 
         // pop off the extra nesting element.
         if (one_level_list) { nesting.pop_back(); }
+
+        // Flag the `metadata` / `value` BYTE_ARRAY children of a VARIANT group so that
+        // `make_column` materializes them as `list<uint8>` instead of strings.
+        if (schema_elem.type == Type::BYTE_ARRAY && parent_schema.logical_type.has_value() &&
+            parent_schema.logical_type->type == LogicalType::VARIANT &&
+            (schema_elem.name == "metadata" || schema_elem.name == "value")) {
+          output_col.string_as_binary = true;
+        }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }

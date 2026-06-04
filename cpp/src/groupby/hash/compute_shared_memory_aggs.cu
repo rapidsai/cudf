@@ -205,10 +205,14 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
     col_start = 0;
     col_end   = 0;
   }
-  block.sync();
+  // Workaround: use __syncthreads() instead of block.sync() throughout this
+  // kernel. cooperative_groups::thread_block::sync() does not properly fence
+  // shared memory on sm_120 with CUDA 13.2, causing init stores to be
+  // invisible to subsequent phases.
+  __syncthreads();
 
   while (col_end < num_cols) {
-    block.sync();
+    __syncthreads();
     if (block.thread_rank() == 0) {
       calculate_columns_to_aggregate(col_start,
                                      col_end,
@@ -219,7 +223,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      num_agg_locations,
                                      total_agg_size);
     }
-    block.sync();
+    __syncthreads();
 
     initialize_shmem_aggregations(block,
                                   col_start,
@@ -230,7 +234,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_mask_offsets,
                                   num_agg_locations,
                                   d_agg_kinds);
-    block.sync();
+    __syncthreads();
 
     compute_pre_aggregations(col_start,
                              col_end,
@@ -243,7 +247,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                              shmem_agg_mask_offsets,
                              d_agg_kinds,
                              agg_location_offset);
-    block.sync();
+    __syncthreads();
 
     compute_final_aggregations(block,
                                col_start,

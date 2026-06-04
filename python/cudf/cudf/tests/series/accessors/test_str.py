@@ -8,13 +8,11 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 
 import cudf
 from cudf import concat
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -205,8 +203,7 @@ def test_string_get_json_object_empty_json_strings(json_path):
     )
 
     got = gs.str.get_json_object(json_path)
-    expect = cudf.Series([None], dtype="object")
-
+    expect = cudf.Series([None], dtype="str")
     assert_eq(got, expect)
 
 
@@ -282,13 +279,13 @@ def test_string_get_json_object_allow_single_quotes():
         gs.str.get_json_object(
             "$.store.book[0].author", allow_single_quotes=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
     assert_eq(
         gs.str.get_json_object(
             "$.store.book[*].title", allow_single_quotes=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
 
 
@@ -382,7 +379,7 @@ def test_string_get_json_object_missing_fields_as_nulls():
         gs.str.get_json_object(
             "$.store.book[0].category", missing_fields_as_nulls=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
     assert_eq(
         gs.str.get_json_object(
@@ -1101,12 +1098,12 @@ def test_string_str_rindex(data, sub, er):
         (
             ["hello", "there", "world", "-1234", None, "accént"],
             ["lo", "e", "o", "+1234", " ", "e"],
-            [True, True, True, False, None, False],
+            [True, True, True, False, False, False],
         ),
         (
             ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", None],
             ["A", "B", "C", " ", "y", "e"],
-            [True, True, True, False, False, None],
+            [True, True, True, False, False, False],
         ),
     ],
 )
@@ -1115,7 +1112,7 @@ def test_string_contains_multi(data, sub, expect):
     sub = cudf.Series(sub)
     got = gs.str.contains(sub)
     expect = cudf.Series(expect)
-    assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got)
 
 
 # Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern
@@ -1135,7 +1132,7 @@ def test_string_compiled_re(ps_gs, pat, repl):
     expect = ps.str.match(pat)
     got = gs.str.match(pat)
     assert_eq(expect, got)
-
+    # count raises error with re.compile
     expect = ps.str.count(pat)
     got = gs.str.count(pat)
     assert_eq(expect, got, check_dtype=False)
@@ -1159,16 +1156,7 @@ def test_string_compiled_re(ps_gs, pat, repl):
     ],
 )
 @pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
-@pytest.mark.parametrize(
-    "na",
-    [
-        None
-        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
-        else no_default,
-        True,
-        False,
-    ],
-)
+@pytest.mark.parametrize("na", [no_default, True, False])
 def test_string_str_match(data, pat, na):
     ps = pd.Series(data)
     gs = cudf.Series(data)
@@ -1510,6 +1498,17 @@ def test_string_findall(pat, flags):
     assert_eq(expected, actual)
 
 
+def test_string_findall_one_capture():
+    test_data = ["1 One", "12 Twelve", "3 Three 4 Four 5 Five", "Six 6"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
+
+    pat = r"(\d+) \w+"
+    expected = ps.str.findall(pat)
+    actual = gs.str.findall(pat)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "pat, flags, pos",
     [
@@ -1535,7 +1534,7 @@ def test_string_replace_multi():
     ps = pd.Series(["hello", "goodbye"])
     gs = cudf.Series(["hello", "goodbye"])
     expect = ps.str.replace("e", "E").str.replace("o", "O")
-    got = gs.str.replace(["e", "o"], ["E", "O"])
+    got = gs.str.replace(["e", "o"], ["E", "O"], regex=False)
 
     assert_eq(expect, got)
 
@@ -1543,7 +1542,7 @@ def test_string_replace_multi():
     gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
-    got = gs.str.replace(["f."], ["ba"], regex=True)
+    got = gs.str.replace("f.", "ba", regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
@@ -1796,22 +1795,24 @@ def test_split_part_whitespace(data, index, expected):
 @pytest.mark.parametrize("n", [-1, 0, 1, 4])
 @pytest.mark.parametrize("expand", [True, False])
 def test_strings_split(data, n, expand):
-    gs = cudf.Series(data)
-    ps = pd.Series(data)
+    gs = cudf.Series(data, dtype=pd.StringDtype("pyarrow"))
+    ps = gs.to_pandas()
 
     assert_eq(
-        ps.str.split(n=n, expand=expand).reset_index(),
-        gs.str.split(n=n, expand=expand).reset_index(),
-        check_index_type=False,
+        ps.str.split(n=n, expand=expand),
+        gs.str.split(n=n, expand=expand),
+        check_dtype=expand,
     )
 
     assert_eq(
         ps.str.split(",", n=n, expand=expand),
         gs.str.split(",", n=n, expand=expand),
+        check_dtype=expand,
     )
     assert_eq(
         ps.str.split("-", n=n, expand=expand),
         gs.str.split("-", n=n, expand=expand),
+        check_dtype=expand,
     )
 
 
@@ -1948,21 +1949,23 @@ def test_string_partition_fail():
 @pytest.mark.parametrize("n", [-1, 2, 9])
 @pytest.mark.parametrize("expand", [True, False])
 def test_strings_rsplit(data, n, expand):
-    gs = cudf.Series(data)
-    ps = pd.Series(data)
+    gs = cudf.Series(data, dtype=pd.StringDtype("pyarrow"))
+    ps = gs.to_pandas()
 
     assert_eq(
-        ps.str.rsplit(n=n, expand=expand).reset_index(),
-        gs.str.rsplit(n=n, expand=expand).reset_index(),
-        check_index_type=False,
+        ps.str.rsplit(n=n, expand=expand),
+        gs.str.rsplit(n=n, expand=expand),
+        check_dtype=expand,
     )
     assert_eq(
         ps.str.rsplit(",", n=n, expand=expand),
         gs.str.rsplit(",", n=n, expand=expand),
+        check_dtype=expand,
     )
     assert_eq(
         ps.str.rsplit("-", n=n, expand=expand),
         gs.str.rsplit("-", n=n, expand=expand),
+        check_dtype=expand,
     )
 
 
@@ -2015,9 +2018,9 @@ def data_char_types(request):
         "islower",
     ],
 )
-def test_string_char_types(type_op, data_char_types):
-    gs = cudf.Series(data_char_types)
-    ps = pd.Series(data_char_types)
+def test_string_char_types(request, type_op, data_char_types):
+    gs = cudf.Series(data_char_types, dtype=pd.StringDtype("python"))
+    ps = gs.to_pandas()
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
@@ -2087,8 +2090,11 @@ def test_string_filter_alphanum():
     ],
 )
 def test_string_char_case(case_op, data_char_types):
-    gs = cudf.Series(data_char_types)
-    ps = pd.Series(data_char_types)
+    gs = cudf.Series(data_char_types, dtype=pd.StringDtype("python"))
+    ps = gs.to_pandas()
+    # https://github.com/pandas-dev/pandas/issues/63372
+    # python/cudf/cudf/tests/series/accessors/test_str.py::test_string_char_case[data_char_types3-isdigit]
+    # python/cudf/cudf/tests/series/accessors/test_str.py::test_string_char_case[data_char_types6-isdigit]
     assert_eq(getattr(gs.str, case_op)(), getattr(ps.str, case_op)())
 
 
@@ -2253,13 +2259,13 @@ def test_string_split_all_empty(pat, regex, expand):
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
 @pytest.mark.parametrize("expand", [True, False])
 def test_string_split_re(data, pat, n, expand):
-    ps = pd.Series(data, dtype="str")
-    gs = cudf.Series(data, dtype="str")
+    ps = pd.Series(data, dtype=pd.StringDtype("pyarrow"))
+    gs = cudf.from_pandas(ps)
 
     expect = ps.str.split(pat=pat, n=n, expand=expand, regex=True)
     got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=expand)
 
 
 def test_string_lower(ps_gs):
@@ -2286,14 +2292,13 @@ def test_string_lower(ps_gs):
     ],
 )
 def test_string_lower_greek_final_sigma(data):
-    with cudf.option_context("mode.pandas_compatible", True):
-        ps = pd.Series([data])
-        gs = cudf.Series([data])
+    ps = pd.Series([data], dtype=pd.StringDtype("python"))
+    gs = cudf.from_pandas(ps)
 
-        expect = ps.str.lower()
-        got = gs.str.lower()
+    expect = ps.str.lower()
+    got = gs.str.lower()
 
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 def test_string_upper(ps_gs):
@@ -2318,13 +2323,12 @@ def test_string_upper(ps_gs):
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
 @pytest.mark.parametrize("expand", [True, False])
 def test_string_split(data, pat, n, expand):
-    ps = pd.Series(data, dtype="str")
-    gs = cudf.Series(data, dtype="str")
+    ps = pd.Series(data, dtype=pd.StringDtype("pyarrow"))
+    gs = cudf.from_pandas(ps)
 
     expect = ps.str.split(pat=pat, n=n, expand=expand)
     got = gs.str.split(pat=pat, n=n, expand=expand)
-
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=expand)
 
 
 # Pandas doesn't respect the `n` parameter so ignoring it in test parameters
@@ -2351,7 +2355,11 @@ def test_string_replace(
 
 @pytest.mark.parametrize("pat", ["A*", "F?H?"])
 def test_string_replace_zero_length(ps_gs, pat):
-    ps, gs = ps_gs
+    _, gs = ps_gs
+    # https://github.com/pandas-dev/pandas/issues/64872
+    # Need to typecast because of the above bug
+    gs = gs.astype(pd.StringDtype("python"))
+    ps = gs.to_pandas()
 
     expect = ps.str.replace(pat, "_", regex=True)
     got = gs.str.replace(pat, "_", regex=True)
@@ -2383,16 +2391,7 @@ def test_string_replace_n(n):
     "flags,flags_raise",
     [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 0), (re.I | re.DOTALL, 0)],
 )
-@pytest.mark.parametrize(
-    "na",
-    [
-        None
-        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
-        else no_default,
-        True,
-        False,
-    ],
-)
+@pytest.mark.parametrize("na", [no_default, True, False])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na):
     ps, gs = ps_gs
 
@@ -2479,10 +2478,14 @@ def test_string_repeat(data, repeats):
     ps = pd.Series(["hello", "world", None, "", "!"])
     gs = cudf.from_pandas(ps)
 
-    expect = ps.str.repeat(repeats)
-    got = gs.str.repeat(repeats)
+    if isinstance(repeats, int) and repeats < 0:
+        with pytest.raises(ValueError):
+            gs.str.repeat(repeats)
+    else:
+        expect = ps.str.repeat(repeats)
+        got = gs.str.repeat(repeats)
 
-    assert_eq(expect, got)
+        assert_eq(expect, got)
 
 
 def test_string_cat_str_error():
@@ -2492,7 +2495,7 @@ def test_string_cat_str_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "others must be Series, Index, DataFrame, np.ndarrary "
+            "others must be Series, Index, DataFrame, np.ndarray "
             "or list-like (either containing only strings or "
             "containing only objects of type Series/Index/"
             "np.ndarray[1-dim])"
@@ -2777,20 +2780,36 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-@pytest.mark.parametrize(
-    "index",
-    [["1", "2", "3", "4", "5"]],
-)
-def test_string_cat(ps_gs, others, sep, na_rep, index):
+def test_string_cat(ps_gs, others, sep, na_rep, index, request):
+    # https://github.com/pandas-dev/pandas/issues/63371
     ps, gs = ps_gs
-
+    is_any_others_ndarray = isinstance(others, (list, tuple)) and any(
+        isinstance(item, np.ndarray) for item in others
+    )
+    is_any_others_series_with_string_index = isinstance(
+        others, (list, tuple)
+    ) and any(
+        isinstance(item, pd.Series)
+        and isinstance(item.index.dtype, pd.StringDtype)
+        for item in others
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            is_any_others_series_with_string_index,
+            reason="https://github.com/rapidsai/cudf/issues/21123",
+        )
+    )
     pd_others = others
     gd_others = _cat_convert_seq_to_cudf(others)
 
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
+    if is_any_others_ndarray:
+        # pandas returns Index[object] which cuDF doesn't support
+        expect.index = expect.index.astype(got.index.dtype)
     assert_eq(expect, got)
 
+    index = ["1", "2", "3", "4", "5"]
     ps.index = index
     gs.index = index
 
@@ -2916,12 +2935,8 @@ def test_string_len(ps_gs):
 
     expect = ps.str.len()
     got = gs.str.len()
-
-    # Can't handle nulls in Pandas so use PyArrow instead
-    # Pandas will return as a float64 so need to typecast to int32
-    expect = pa.array(expect, from_pandas=True).cast(pa.int32())
-    got = got.to_arrow()
-    assert pa.Array.equals(expect, got)
+    # pandas returns int64, cuDF returns int32
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_concat():
@@ -2965,8 +2980,7 @@ def test_string_list_get_access():
     gs = cudf.from_pandas(ps)
 
     expect = ps.str.split(",")
-    got = gs.str.split(",")
-
+    got = gs.str.split(",").to_pandas().fillna(np.nan)
     assert_eq(expect, got)
 
     expect = expect.str.get(1)

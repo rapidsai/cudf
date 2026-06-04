@@ -6,7 +6,6 @@ from libcpp.vector cimport vector
 from libc.stdint cimport uint64_t
 
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
@@ -27,7 +26,7 @@ cdef class OwnerWithCAI:
     cdef dict cai
 
     @staticmethod
-    cdef create(column_view cv, object owner, Stream stream)
+    cdef create(column_view cv, object owner, object stream)
 
 
 cdef class OwnerMaskWithCAI:
@@ -38,7 +37,7 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
-cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=*)
+cdef gpumemoryview _copy_array_to_device(object buf, object stream=*)
 
 
 cdef class Column:
@@ -61,7 +60,7 @@ cdef class Column:
     @staticmethod
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     )
 
@@ -72,7 +71,7 @@ cdef class Column:
     cdef Column from_column_view_of_arbitrary(
         const column_view& cv,
         object owner,
-        Stream stream,
+        object stream,
     )
 
     @staticmethod
@@ -81,10 +80,10 @@ cdef class Column:
         tuple shape,
         DataType dtype,
         Column base=*,
-        Stream stream=*,
+        object stream=*,
     )
 
-    cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)
+    cpdef Scalar to_scalar(self, object stream=*, DeviceMemoryResource mr=*)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)
@@ -95,7 +94,7 @@ cdef class Column:
     cpdef object data(self)
     cpdef object null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
+    cpdef Column copy(self, object stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, object, size_type, bint validate=*)
 
@@ -108,10 +107,10 @@ cdef class ListsColumnView:
     cpdef child(self)
     cpdef offsets(self)
     cdef lists_column_view view(self) nogil
-    cpdef Column get_sliced_child(self, Stream stream=*)
+    cpdef Column get_sliced_child(self, object stream=*)
 
 
 cdef class StructsColumnView:
     cdef Column _column
     cdef structs_column_view view(self) nogil
-    cpdef Column get_sliced_child(self, int index, Stream stream=*)
+    cpdef Column get_sliced_child(self, int index, object stream=*)

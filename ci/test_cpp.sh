@@ -32,10 +32,9 @@ if (( SUITEERROR == 0 )); then
     SUITEERROR=$?
 fi
 
-# Ensure that benchmarks are runnable
 if (( SUITEERROR == 0 )); then
-    rapids-logger "Run tests of libcudf benchmarks"
-    timeout 30m ./ci/run_cudf_benchmark_smoketests.sh
+    rapids-logger "Run libcudf_streaming gtests"
+    timeout 30m ./ci/run_cudf_streaming_ctests.sh -j20
     SUITEERROR=$?
 fi
 
