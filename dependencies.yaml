@@ -1387,7 +1387,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &libcudf_streaming_unsuffixed libcudf_streaming==26.8.*,>=0.0.0a0
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
