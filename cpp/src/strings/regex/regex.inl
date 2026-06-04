@@ -344,8 +344,8 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
           case EOL: {
             // EOL matches at end-of-string, or before a line terminator (MULTILINE: any
             // terminator; otherwise: only the final terminator). For EXT_NEWLINE the
-            // two-character CRLF (\r\n) is treated as a SINGLE terminator to match
-            // JDK/Spark semantics: '$' matches before the \r and never between \r and \n.
+            // two-character CRLF (\r\n) is treated as a SINGLE terminator: '$' matches before
+            // the \r and never between \r and \n.
             if (last_character) {
               id_activate = inst.u2.next_id;
               expanded    = true;
@@ -355,26 +355,22 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
             bool const nl  = ext ? is_newline(c) : (c == '\n');
             if (nl && (inst.u1.c != 'Z')) {
               // For EXT_NEWLINE, suppress a match wedged between the CR and LF of a CRLF.
-              bool mid_crlf = false;
-              if (ext && (c == '\n')) {
-                auto titr = itr;
-                mid_crlf  = (pos > 0) && (*(--titr) == '\r');
-              }
+              auto titr     = itr;
+              bool mid_crlf = ext && (c == '\n') && (pos > 0) && (*(--titr) == '\r');
               if (!mid_crlf) {
                 // MULTILINE matches before any terminator; otherwise only the final one.
                 bool matched = (inst.u1.c == '$' || inst.u1.c == 'S');
                 if (!matched) {
-                  bool is_final = (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes());
-                  if (!is_final && ext && (c == '\r')) {
+                  matched = (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes());
+                  if (!matched && ext && (c == '\r')) {
                     // a CR beginning a trailing CRLF also ends the string
                     auto nitr = itr;
                     ++nitr;
-                    is_final =
+                    matched =
                       (nitr.byte_offset() < dstr.size_bytes()) && (*nitr == '\n') &&
                       (nitr.byte_offset() + bytes_in_char_utf8(static_cast<char_utf8>('\n')) ==
                        dstr.size_bytes());
                   }
-                  matched = is_final;
                 }
                 if (matched) {
                   id_activate = inst.u2.next_id;
