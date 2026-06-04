@@ -125,7 +125,7 @@ def expand_scan_for_rank(
     rank
         Rank of the current worker.
     nranks
-        Number of workers. Values less than 1 are treated as 1.
+        Number of workers.
     parquet_options
         Parquet reader options.
 
