@@ -354,6 +354,8 @@ cpdef object unspill_partitions(
     ReservationError
         If overbooking exceeds the amount spilled and ``allow_overbooking is False``.
     """
+    if not isinstance(allow_overbooking, bool):
+        raise TypeError("allow_overbooking must be a bool")
     cdef cpp_BufferResource* _br = br.ptr()
     cdef vector[cpp_PackedData] _partitions = _partitions_py_to_cpp(partitions)
     cdef vector[cpp_PackedData] _ret

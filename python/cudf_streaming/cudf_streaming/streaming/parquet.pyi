@@ -12,7 +12,7 @@ from rapidsmpf.streaming.core.context import Context
 from rmm.pylibrmm.stream import Stream
 
 class Filter:
-    def __init__(self, stream: Stream, expression: Expression) -> None: ...
+    def __init__(self, stream: Stream, filter: Expression) -> None: ...
 
 def read_parquet(
     ctx: Context,

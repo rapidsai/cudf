@@ -46,7 +46,7 @@ def partition_and_pack(
     Asynchronously partition and pack table chunks.
 
     This is the streaming equivalent of
-    :func:`cudf_streaming.integrations.partition.partition_and_split()`,
+    :func:`cudf_streaming.integrations.partition.partition_and_pack()`,
     operating on incoming table chunks via channels.
 
     Each incoming table from `ch_in` is partitioned into `num_partitions` outputs

@@ -11,6 +11,8 @@ from pylibcudf.libcudf.types cimport null_order as cpp_null_order
 from pylibcudf.libcudf.types cimport order as cpp_order
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
+from rapidsmpf._detail.exception_handling cimport ex_handler
+
 from rapidsmpf.memory.buffer_resource cimport cpp_BufferResource
 from rapidsmpf.streaming.core.message cimport cpp_Message
 from cudf_streaming.streaming.table_chunk cimport TableChunk, cpp_TableChunk
@@ -22,8 +24,8 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
     cdef cppclass cpp_HashScheme "cudf_streaming::streaming::HashScheme":
         vector[int32_t] column_indices
         int modulus
-        cpp_HashScheme() except +
-        cpp_HashScheme(vector[int32_t], int) except +
+        cpp_HashScheme() except +ex_handler
+        cpp_HashScheme(vector[int32_t], int) except +ex_handler
         bool_t operator==(const cpp_HashScheme&)
 
     cdef cppclass cpp_OrderKey "cudf_streaming::streaming::OrderKey":
@@ -38,14 +40,14 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
         cpp_OrderScheme() noexcept
         cpp_OrderScheme(
             vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
-        ) except +
+        ) except +ex_handler
         vector[cpp_OrderKey] keys
         shared_ptr[cpp_TableChunk] boundaries
         bool_t strict_boundaries
-        cpp_OrderScheme with_keys(vector[cpp_OrderKey]) except +
+        cpp_OrderScheme with_keys(vector[cpp_OrderKey]) except +ex_handler
         bool_t boundaries_aligned_with(
             const cpp_OrderScheme&, const cpp_BufferResource&
-        ) except +
+        ) except +ex_handler
 
     cdef cppclass cpp_PartitioningSpec "cudf_streaming::streaming::PartitioningSpec":
         enum cpp_Type "cudf_streaming::streaming::PartitioningSpec::Type":
@@ -73,8 +75,8 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
     cdef cppclass cpp_Partitioning "cudf_streaming::streaming::Partitioning":
         cpp_PartitioningSpec inter_rank
         cpp_PartitioningSpec local
-        cpp_Partitioning() except +
-        cpp_Partitioning(const cpp_Partitioning&) except +
+        cpp_Partitioning() except +ex_handler
+        cpp_Partitioning(const cpp_Partitioning&) except +ex_handler
 
     cdef cppclass cpp_ChannelMetadata "cudf_streaming::streaming::ChannelMetadata":
         uint64_t local_count
@@ -84,12 +86,12 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
             uint64_t,
             cpp_Partitioning,
             bool_t
-        ) except +
+        ) except +ex_handler
 
     cpp_Message cpp_to_message_channel_metadata \
         "cudf_streaming::streaming::to_message"(
             uint64_t, unique_ptr[cpp_ChannelMetadata]
-        ) except +
+        ) except +ex_handler
 
 
 cdef class HashScheme:
