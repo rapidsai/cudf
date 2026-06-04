@@ -692,7 +692,7 @@ TEST(GroupedRollingRangeMultiOrderByTest, CurrentRowPeerFrameWithStringOrderBy)
 {
   auto const grouping_keys = ints_column{0, 0, 0, 0, 0, 1, 1, 1}.release();
   auto const orderby0      = ints_column{1, 1, 1, 2, 2, 1, 1, 2}.release();
-  auto const orderby1      = strings_column{"a", "a", "b", "a", "a", "a", "b", "a"}.release();
+  auto const orderby1      = strings_column{"α", "α", "世", "α", "α", "α", "世", "α"}.release();
   auto const values        = bigints_column{10, 20, 30, 40, 50, 100, 200, 300}.release();
 
   std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};

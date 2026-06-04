@@ -161,6 +161,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   range_window_type following,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(orderby.num_columns() > 0, "orderby must be non-empty");
   CUDF_EXPECTS(group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.num_rows(),
                "Size mismatch between group_keys and orderby table.");
