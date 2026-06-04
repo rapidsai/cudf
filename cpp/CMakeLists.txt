@@ -1152,12 +1152,12 @@ if(BUILD_SHARED_LIBS)
       set(_${_dep}_link)
       target_link_libraries(cudf PRIVATE ${_whole_archive_link})
       get_target_property(
-        _private_absorbed_include_dirs
-        ${_dep}::${_dep}
-        INTERFACE_INCLUDE_DIRECTORIES
+        _private_absorbed_include_dirs ${_dep}::${_dep} INTERFACE_INCLUDE_DIRECTORIES
       )
       if(_private_absorbed_include_dirs)
-        target_include_directories(cudf PUBLIC "$<BUILD_INTERFACE:${_private_absorbed_include_dirs}>")
+        target_include_directories(
+          cudf PUBLIC "$<BUILD_INTERFACE:${_private_absorbed_include_dirs}>"
+        )
       endif()
       continue()
     endif()
