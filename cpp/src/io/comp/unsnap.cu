@@ -713,6 +713,8 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<codec_exec_result> results,
                 rmm::cuda_stream_view stream)
 {
+  if (inputs.empty()) { return; }
+
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
@@ -751,6 +753,8 @@ void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> 
                                   device_span<size_t> uncompressed_sizes,
                                   rmm::cuda_stream_view stream)
 {
+  if (inputs.empty()) { return; }
+
   int threads_per_block = 128;
   auto const num_blocks =
     cudf::util::div_rounding_up_safe<size_t>(inputs.size(), threads_per_block);

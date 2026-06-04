@@ -474,6 +474,8 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
 {
   CUDF_FUNC_RANGE();
 
+  if (pages.size() == 0) { return; }
+
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
