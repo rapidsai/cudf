@@ -57,7 +57,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.22.2,<0.29.0
+- numba-cuda>=0.22.2
 - numba>=0.60.0,<0.65.0
 - numexpr
 - numpy>=1.26,<3.0
@@ -103,6 +103,7 @@ dependencies:
 - structlog
 - sysroot_linux-64==2.28
 - typing_extensions>=4.0.0
+- xlsxwriter
 - zlib>=1.2.13
 - zstandard
 name: all_cuda-132_arch-x86_64
