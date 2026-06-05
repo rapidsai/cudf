@@ -39,8 +39,12 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 # ##################################################################################################
 # * Build options
 option(BUILD_TESTS "Build tests for libcudf_streaming" OFF)
+option(BUILD_BENCHMARKS "Build benchmarks for libcudf_streaming" OFF)
+option(BUILD_EXAMPLES "Build examples for libcudf_streaming" OFF)
 
 message(VERBOSE "CUDF_STREAMING: Build gtests: ${BUILD_TESTS}")
+message(VERBOSE "CUDF_STREAMING: Build benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF_STREAMING: Build examples: ${BUILD_EXAMPLES}")
 
 # ##################################################################################################
 # * Dependencies
@@ -113,6 +117,16 @@ if(BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
   add_subdirectory(tests)
+endif()
+
+# Benchmarks if enabled
+if(BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+
+# Examples if enabled
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
 
 # ##################################################################################################
