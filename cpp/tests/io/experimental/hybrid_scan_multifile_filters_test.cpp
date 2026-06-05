@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
@@ -16,8 +17,12 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <numeric>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -217,4 +222,125 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
   ASSERT_EQ(page_index_byte_ranges.size(), num_sources);
   EXPECT_FALSE(page_index_byte_ranges.front().is_empty());
   EXPECT_TRUE(page_index_byte_ranges.back().is_empty());
+
+  auto const passes = reader->construct_row_group_passes(all_rgs, 1);
+  ASSERT_EQ(passes.size(), all_rgs.front().size());
+  for (auto const& pass : passes) {
+    ASSERT_EQ(pass.size(), num_sources);
+    ASSERT_EQ(pass.front().size(), 1);
+    EXPECT_TRUE(pass.back().empty());
+  }
+}
+
+TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
+{
+  using T = uint32_t;
+
+  srand(0xced);
+
+  auto constexpr num_sources = 2;
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+
+  auto inputs = build_multifile_inputs(file_buffers);
+
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
+  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+    inputs.footer_byte_spans, options);
+
+  auto const all_rgs = reader->all_row_groups(options);
+  ASSERT_EQ(all_rgs.size(), num_sources);
+  EXPECT_TRUE(std::all_of(all_rgs.begin(), all_rgs.end(), [](auto const& rgs) {
+    return rgs == (std::vector<cudf::size_type>{0, 1, 2, 3});
+  }));
+
+  {
+    auto invalid_rgs = all_rgs;
+    invalid_rgs.pop_back();
+    EXPECT_THROW(static_cast<void>(reader->construct_row_group_passes(invalid_rgs, 0)),
+                 std::invalid_argument);
+  }
+
+  {
+    auto const passes = reader->construct_row_group_passes(all_rgs, 0);
+    ASSERT_EQ(passes.size(), 1);
+    ASSERT_EQ(passes.front().size(), num_sources);
+    EXPECT_EQ(passes.front(), all_rgs);
+  }
+
+  {
+    auto const passes = reader->construct_row_group_passes(all_rgs, 10'000);
+    ASSERT_GT(passes.size(), 1);
+    auto const pass_num_row_groups = [](auto const& pass) {
+      return std::accumulate(
+        pass.begin(), pass.end(), std::size_t{0}, [](auto sum, auto const& rgs) {
+          return sum + rgs.size();
+        });
+    };
+    EXPECT_TRUE(std::any_of(passes.begin(), passes.end(), [&](auto const& pass) {
+      return pass_num_row_groups(pass) > 1;
+    }));
+
+    auto flattened = std::vector<std::pair<std::size_t, cudf::size_type>>{};
+    for (auto const& pass : passes) {
+      ASSERT_EQ(pass.size(), num_sources);
+      for (auto source_index = std::size_t{0}; source_index < pass.size(); ++source_index) {
+        std::transform(pass[source_index].begin(),
+                       pass[source_index].end(),
+                       std::back_inserter(flattened),
+                       [source_index](auto const rg_index) {
+                         return std::pair{source_index, rg_index};
+                       });
+      }
+    }
+
+    auto expected = std::vector<std::pair<std::size_t, cudf::size_type>>{};
+    for (auto source_index = std::size_t{0}; source_index < all_rgs.size(); ++source_index) {
+      std::transform(all_rgs[source_index].begin(),
+                     all_rgs[source_index].end(),
+                     std::back_inserter(expected),
+                     [source_index](auto const rg_index) {
+                       return std::pair{source_index, rg_index};
+                     });
+    }
+    EXPECT_EQ(flattened, expected);
+  }
+}
+
+TEST_F(HybridScanMultifileFiltersTest, RowGroupPassesSingleSourceParity)
+{
+  using T = uint32_t;
+
+  srand(0xced);
+
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+
+  auto inputs = build_multifile_inputs(file_buffers);
+
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
+  auto const multifile_reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+  auto const single_file_reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      inputs.footer_byte_spans.front(), options);
+
+  auto const all_rgs            = multifile_reader->all_row_groups(options);
+  ASSERT_EQ(all_rgs.size(), 1);
+  auto constexpr pass_read_limit = std::size_t{10'000};
+  auto const multifile_passes =
+    multifile_reader->construct_row_group_passes(all_rgs, pass_read_limit);
+  auto const single_file_passes =
+    single_file_reader->construct_row_group_passes(all_rgs.front(), pass_read_limit);
+
+  auto projected_passes = std::vector<std::vector<cudf::size_type>>{};
+  projected_passes.reserve(multifile_passes.size());
+  for (auto const& pass : multifile_passes) {
+    ASSERT_EQ(pass.size(), 1);
+    projected_passes.push_back(pass.front());
+  }
+  EXPECT_EQ(projected_passes, single_file_passes);
 }

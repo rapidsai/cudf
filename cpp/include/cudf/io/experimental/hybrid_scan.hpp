@@ -672,8 +672,8 @@ class hybrid_scan_reader {
    * @throws cudf::logic_error if `row_group_indices` is empty
    *
    * @param row_group_indices Input row group indices
-   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing row
-   * group data or `0` if there is no limit
+   * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
+   * no limit (single pass)
    *
    * @return Vector of vectors of row group indices, one per constructed pass
    */
