@@ -415,40 +415,20 @@ TEST_F(HybridScanMultifileFiltersTest, BuildAllTrueRowMask)
   auto stream = cudf::get_default_stream();
   auto mr     = cudf::get_current_device_resource_ref();
 
-  auto const row_group_indices = std::vector<std::vector<cudf::size_type>>{{0, 2}, {1, 3}};
-  auto const row_mask          = reader->build_all_true_row_mask(row_group_indices, stream, mr);
+  auto test_all_true_row_mask =
+    [&](cudf::host_span<std::vector<cudf::size_type> const> row_group_indices) {
+      auto const row_mask = reader->build_all_true_row_mask(row_group_indices, stream, mr);
 
-  EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
-  EXPECT_EQ(row_mask->size(), reader->total_rows_in_row_groups(row_group_indices));
-  EXPECT_EQ(row_mask->null_count(), 0);
+      EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(row_mask->size(), reader->total_rows_in_row_groups(row_group_indices));
+      EXPECT_EQ(row_mask->null_count(), 0);
+    };
 
-  auto const host_row_mask = host_row_mask_data<bool>(row_mask->view(), stream);
-  auto const num_true_rows = std::count(host_row_mask.begin(), host_row_mask.end(), true);
-  EXPECT_EQ(num_true_rows, row_mask->size());
+  auto row_group_indices = std::vector<std::vector<cudf::size_type>>{{0, 2}, {1, 3}};
+  test_all_true_row_mask(row_group_indices);
 
-  auto expected = cudf::detail::make_empty_host_vector<bool>(0, stream);
-  for (auto const src_idx : {0, 1}) {
-    auto const single_reader =
-      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-        *inputs.footer_buffers[src_idx], options);
-    auto const single_row_mask =
-      single_reader->build_all_true_row_mask(row_group_indices[src_idx], stream, mr);
-    auto const host_single_row_mask = host_row_mask_data<bool>(single_row_mask->view(), stream);
-    expected.insert(expected.end(), host_single_row_mask.begin(), host_single_row_mask.end());
-  }
-  EXPECT_EQ(host_row_mask_data<bool>(row_mask->view(), stream), expected);
-
-  auto const empty_source_row_group_indices = std::vector<std::vector<cudf::size_type>>{{}, {0, 1}};
-  auto const empty_source_row_mask =
-    reader->build_all_true_row_mask(empty_source_row_group_indices, stream, mr);
-
-  EXPECT_EQ(empty_source_row_mask->size(),
-            reader->total_rows_in_row_groups(empty_source_row_group_indices));
-  auto const empty_source_host_row_mask =
-    host_row_mask_data<bool>(empty_source_row_mask->view(), stream);
-  auto const empty_source_num_true_rows =
-    std::count(empty_source_host_row_mask.begin(), empty_source_host_row_mask.end(), true);
-  EXPECT_EQ(empty_source_num_true_rows, empty_source_row_mask->size());
+  row_group_indices = reader->all_row_groups(options);
+  test_all_true_row_mask(row_group_indices);
 }
 
 template <typename T>
@@ -470,7 +450,7 @@ TYPED_TEST(HybridScanMultifilePageIndexRowMaskTest, BuildRowMaskWithPageIndexSta
 
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
-  auto constexpr seed = 31337;
+  auto constexpr seed = 0xa11b;
   std::transform(cuda::counting_iterator{seed},
                  cuda::counting_iterator{seed + num_sources},
                  std::back_inserter(file_buffers),
