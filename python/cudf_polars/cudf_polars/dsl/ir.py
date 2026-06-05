@@ -451,6 +451,7 @@ _COMPARISON_BINOPS = {
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
+    # This may not be able use prefetched metadata, since we don't (currently) have a Schema.
     metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
     column_types = metadata.schema().column_types()
 
@@ -747,12 +748,32 @@ class Scan(IR):
     @staticmethod
     @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
     def _get_parquet_row_count_from_metadata(
-        paths: list[str], skip_rows: int, n_rows: int
+        paths: list[str],
+        skip_rows: int,
+        n_rows: int,
+        parquet_options: ParquetOptions,
+        context: IRExecutionContext,
     ) -> int:
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-        meta = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
-        num_rows = meta.num_rows() - skip_rows
+        if parquet_options.prefetch_file_metadata:
+            try:
+                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+            except KeyError as e:
+                msg = (
+                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                    "Please report this as a bug to cudf-polars. You can work around it "
+                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                )
+                raise AssertionError(msg) from e
+            num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
+        else:
+            meta = plc.io.parquet_metadata.read_parquet_metadata(
+                plc.io.SourceInfo(paths)
+            )
+            num_rows = meta.num_rows()
+
+        num_rows -= skip_rows
         if n_rows != -1:
             num_rows = min(num_rows, n_rows)
         return max(num_rows, 0)
@@ -945,7 +966,9 @@ class Scan(IR):
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
                 num_rows = (
-                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    cls._get_parquet_row_count_from_metadata(
+                        paths, skip_rows, n_rows, parquet_options, context
+                    )
                     if not names
                     else None
                 )
@@ -969,7 +992,9 @@ class Scan(IR):
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 num_rows = (
-                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    cls._get_parquet_row_count_from_metadata(
+                        paths, skip_rows, n_rows, parquet_options, context
+                    )
                     if not col_names
                     else None
                 )
@@ -1647,7 +1672,7 @@ class Select(IR):
             stream = context.get_cuda_stream()
             scan = self.children[0]
             effective_rows = Scan._get_parquet_row_count_from_metadata(
-                scan.paths, scan.skip_rows, scan.n_rows
+                scan.paths, scan.skip_rows, scan.n_rows, scan.parquet_options, context
             )
             dtype = DataType(pl.UInt32())
             col = Column(

@@ -147,3 +147,63 @@ def test_select_fast_count_parquet_skip_rows(
 
     q = pl.scan_parquet(file).slice(1, 5).select(pl.len())
     assert_gpu_result_equal(q, engine=engine)
+
+
+PARQUET_FAST_COUNT_ROWS = 10
+
+
+@pytest.fixture(scope="module")
+def parquet_fast_count_df() -> pl.DataFrame:
+    return pl.DataFrame({"a": range(PARQUET_FAST_COUNT_ROWS)})
+
+
+@pytest.fixture
+def prefetch_engine() -> pl.GPUEngine:
+    return pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={"prefetch_file_metadata": True},
+    )
+
+
+@pytest.fixture(
+    params=[
+        pytest.param({"skip_rows": 0, "n_rows": None}, id="all_rows"),
+        pytest.param({"skip_rows": 3, "n_rows": None}, id="skip_rows"),
+        pytest.param({"skip_rows": 2, "n_rows": 4}, id="skip_rows_and_limit"),
+        pytest.param({"skip_rows": 0, "n_rows": 5}, id="n_rows"),
+        pytest.param({"skip_rows": 8, "n_rows": 10}, id="skip_near_end"),
+        pytest.param(
+            {"skip_rows": PARQUET_FAST_COUNT_ROWS, "n_rows": None},
+            id="skip_all",
+        ),
+    ],
+)
+def parquet_scan_row_bounds(request) -> dict[str, int | None]:
+    return request.param
+
+
+def test_select_fast_count_parquet_prefetch_metadata(
+    tmp_path,
+    parquet_fast_count_df: pl.DataFrame,
+    prefetch_engine: pl.GPUEngine,
+    parquet_scan_row_bounds: dict[str, int | None],
+) -> None:
+    skip_rows = parquet_scan_row_bounds["skip_rows"]
+    assert skip_rows is not None
+    n_rows = parquet_scan_row_bounds["n_rows"]
+
+    file = tmp_path / "data.parquet"
+    parquet_fast_count_df.write_parquet(file)
+
+    if skip_rows == 0 and n_rows is None:
+        q = pl.scan_parquet(file)
+    elif skip_rows == 0:
+        q = pl.scan_parquet(file, n_rows=n_rows)
+    elif n_rows is None:
+        q = pl.scan_parquet(file).slice(skip_rows)
+    else:
+        q = pl.scan_parquet(file).slice(skip_rows, n_rows)
+
+    q = q.select(pl.len())
+    assert_gpu_result_equal(q, engine=prefetch_engine)
