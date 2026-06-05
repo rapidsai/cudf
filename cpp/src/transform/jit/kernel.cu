@@ -22,23 +22,21 @@
 #include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
-                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
 // This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
-#include <cudf/detail/operation-udf.hpp>
+#include <cudf/detail/kernel_instance.cuh>
+#include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
 namespace cudf {
 namespace jit {
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <null_aware is_null_aware,
-          bool has_user_data,
-          typename InputAccessors,
-          typename OutputAccessors>
+template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
 CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
                                   void* __restrict__ user_data,
@@ -71,7 +69,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       }
     };
 
-    if constexpr (is_null_aware == null_aware::NO) {
+    if constexpr (!is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, row)) {
         if (row_errors != nullptr) { row_errors[row] = errc::SUCCESS; }
         continue;
@@ -127,3 +125,25 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
 }  // namespace jit
 }  // namespace cudf
+
+// The entry point for the JIT compiled kernel. This is the C-ABI function that will be used to
+// retrieve the `CuFunction` for the kernel from the compiled module. This is because we don't want
+// to track the scope-dependent C++ mangled name of the kernel, and can just use a fixed name to
+// retrieve the `CuFunction` of the kernel.
+// A C++-mangled symbol has ambiguous and complex resolution rules, and can change based on the
+// scope of the function, the types of the arguments, and other factors that will not be known until
+// after compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid
+// these issues and ensure that we can always retrieve the correct `CuFunction` for the kernel
+// regardless of the context in which it was compiled or used.
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type row_size,
+  cudf::bitmask_type const* __restrict__ stencil,
+  void* __restrict__ user_data,
+  cudf::column_device_view_core const* __restrict__ input_cols,
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols,
+  int32_t* __restrict__ max_error,
+  errc* __restrict__ row_errors)
+{
+  CUDF_KERNEL_INSTANCE(
+    row_size, stencil, user_data, input_cols, output_cols, max_error, row_errors);
+}

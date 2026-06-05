@@ -55,6 +55,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,
+        DtypeObj,
         MultiColumnAggType,
         ScalarLike,
     )
@@ -2871,7 +2873,58 @@ class GroupBy(Serializable, Reducible, Scannable):
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
-        return self.agg(func)
+        result = self.agg(func)
+        return self._align_quantile_dtypes(result, interpolation)
+
+    @staticmethod
+    def _quantile_result_dtype(
+        orig_dtype: DtypeObj | None, exact: bool
+    ) -> DtypeObj | None:
+        """Return the dtype pandas produces for a quantile of ``orig_dtype``.
+
+        libcudf's quantile aggregation always yields ``float64``. pandas,
+        however, chooses the result dtype from the input dtype and the
+        interpolation method (``exact`` is ``True`` for ``lower``/``higher``/
+        ``nearest``, where the quantile is an actual element of the input):
+
+        * numpy / pyarrow integer columns -> ``int64`` when ``exact`` else
+          ``float64``; numpy / pyarrow floating columns -> always ``float64``.
+        * pandas nullable (masked) integer columns -> keep their dtype when
+          ``exact`` else ``Float64``; nullable floating columns -> always keep
+          their dtype (e.g. ``Float32`` stays ``Float32``).
+
+        Returns ``None`` to leave the (float64) result untouched.
+        """
+        if orig_dtype is None:
+            return None
+        if is_pandas_nullable_numpy_dtype(orig_dtype) and not isinstance(
+            orig_dtype, pd.ArrowDtype
+        ):
+            # pandas nullable (masked) extension dtype.
+            if orig_dtype.kind == "f":
+                return orig_dtype
+            if orig_dtype.kind in "iu":
+                return orig_dtype if exact else pd.Float64Dtype()
+            return None
+        # numpy and pyarrow-backed columns do not preserve their dtype; the
+        # result is always numpy-backed.
+        if orig_dtype.kind == "f":
+            return np.dtype(np.float64)
+        if orig_dtype.kind in "iu":
+            return np.dtype(np.int64) if exact else np.dtype(np.float64)
+        return None
+
+    def _align_quantile_dtypes(
+        self, result: DataFrameOrSeries, interpolation: str
+    ) -> DataFrameOrSeries:
+        """Cast quantile result columns to the dtype pandas would produce."""
+        exact = interpolation in {"lower", "higher", "nearest"}
+        orig_dtypes = dict(self.grouping.values._dtypes)
+        for name, col in list(result._data.items()):
+            target = self._quantile_result_dtype(orig_dtypes.get(name), exact)
+            if target is not None and target != col.dtype:
+                result._data[name] = col.astype(target)
+        return result
 
     def _quantile_array(self, qs, interpolation="linear"):
         """Compute multiple quantiles and return result with proper
@@ -2921,13 +2974,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         combined.index = new_index
 
-        # If operating on a SeriesGroupBy, return a Series instead of
-        # a single-column DataFrame.
-        from cudf.core.series import Series
-
-        if isinstance(first, Series):
-            return combined.iloc[:, 0]
-
+        # If operating on a SeriesGroupBy, ``combined`` is already a Series;
+        # a DataFrameGroupBy yields a single-/multi-column DataFrame.
         return combined
 
     @_performance_tracking

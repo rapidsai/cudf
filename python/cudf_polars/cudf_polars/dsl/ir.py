@@ -529,8 +529,6 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("file://") for p in self.paths):
-            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
@@ -918,8 +916,8 @@ class Scan(IR):
                 dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns], stream=df.stream)
-            if next(iter(schema)) != name:
-                df = df.select(schema)
+            # Reorder to the row-index column is always first.
+            df = df.select(schema) if next(iter(schema)) != name else df
         assert all(
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
@@ -3205,15 +3203,24 @@ class MapFunction(IR):
 class Union(IR):
     """Concatenate dataframes vertically."""
 
-    __slots__ = ("zlice",)
-    _non_child = ("schema", "zlice")
+    __slots__ = ("maintain_order", "zlice")
+    _non_child = ("schema", "zlice", "maintain_order")
     _n_non_child_args = 1
+    maintain_order: bool
+    """Whether row order must be preserved."""
     zlice: Zlice | None
     """Optional slice to apply to the result."""
 
-    def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
+    def __init__(
+        self,
+        schema: Schema,
+        zlice: Zlice | None,
+        maintain_order: bool,  # noqa: FBT001
+        *children: IR,
+    ):
         self.schema = schema
         self.zlice = zlice
+        self.maintain_order = maintain_order
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
