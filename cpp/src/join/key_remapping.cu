@@ -19,6 +19,7 @@
 #include <cudf/join/key_remapping.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
@@ -576,13 +577,13 @@ class key_remapping_impl {
                  "Mismatch in number of columns to be joined on",
                  std::invalid_argument);
 
-    if (keys.num_rows() == 0) {
-      return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
-    }
-
     CUDF_EXPECTS(cudf::have_same_types(_right, keys),
                  "Mismatch in joining column data types",
                  cudf::data_type_error);
+
+    if (keys.num_rows() == 0) {
+      return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
+    }
 
     if (_table == nullptr) {
       auto result =

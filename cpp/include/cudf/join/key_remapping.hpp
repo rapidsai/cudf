@@ -55,6 +55,14 @@ constexpr size_type KEY_REMAP_NOT_FOUND = -1;
 constexpr size_type KEY_REMAP_RIGHT_NULL = -2;
 
 /**
+ * @brief Deprecated alias for `KEY_REMAP_RIGHT_NULL`.
+ *
+ * @deprecated Use `KEY_REMAP_RIGHT_NULL` instead.
+ */
+[[deprecated("Use KEY_REMAP_RIGHT_NULL instead.")]] constexpr size_type KEY_REMAP_BUILD_NULL =
+  KEY_REMAP_RIGHT_NULL;
+
+/**
  * @brief Remaps keys to unique integer IDs
  *
  * Each distinct key in the right table is assigned a unique non-negative integer ID.
@@ -118,6 +126,19 @@ class key_remapping {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
+   * @brief Deprecated alias for `remap_right_keys()`.
+   *
+   * @deprecated Use `remap_right_keys()` instead.
+   */
+  [[deprecated("Use remap_right_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
+  remap_build_keys(
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
+  {
+    return remap_right_keys(stream, mr);
+  }
+
+  /**
    * @brief Remap left keys to integer IDs.
    *
    * For each row in the input, returns the integer ID assigned to that key.
@@ -138,6 +159,20 @@ class key_remapping {
     cudf::table_view const& keys,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Deprecated alias for `remap_left_keys()`.
+   *
+   * @deprecated Use `remap_left_keys()` instead.
+   */
+  [[deprecated("Use remap_left_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
+  remap_probe_keys(
+    cudf::table_view const& keys,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
+  {
+    return remap_left_keys(keys, stream, mr);
+  }
 
   /**
    * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.
