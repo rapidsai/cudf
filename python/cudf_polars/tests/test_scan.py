@@ -41,10 +41,10 @@ NO_CHUNK_ENGINE = pl.GPUEngine(
 
 
 @pytest.fixture(
-    params=[(None, None), ("row-index", 0), ("index", 10)],
+    params=[(None, 0), ("row-index", 0), ("index", 10)],
     ids=["no_row_index", "zero_offset_row_index", "offset_row_index"],
 )
-def row_index(request):
+def row_index(request) -> tuple[str | None, int]:
     return request.param
 
 
@@ -475,13 +475,14 @@ def test_select_arbitrary_order_with_row_index_column(engine: pl.GPUEngine, tmp_
 )
 def test_scan_csv_with_and_without_header(
     engine: pl.GPUEngine,
-    df,
-    tmp_path,
-    has_header,
-    new_columns,
-    row_index,
-    columns,
-    zlice,
+    df: pl.DataFrame,
+    tmp_path: Path,
+    *,
+    has_header: bool,
+    new_columns: list[str] | None,
+    row_index: tuple[str | None, int],
+    columns: list[str] | None,
+    zlice: tuple[int, int] | None,
 ):
     path = tmp_path / "test.csv"
     make_partitioned_source(
