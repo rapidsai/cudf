@@ -405,6 +405,11 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
+  install(
+    TARGETS rtcx
+    EXPORT cudf-exports
+    DESTINATION ${lib_dir}
+  )
 endif()
 
 add_embed(cudf_cuda_embed)
@@ -1127,14 +1132,8 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
-          ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET}
-          kvikio::kvikio
-          ${CUDF_nanoarrow_TARGET}
-          zstd
-          $<BUILD_LOCAL_INTERFACE:rtcx::rtcx>
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
+          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
