@@ -917,7 +917,6 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       auto output_table = cudf::filter(read_table->view(),
                                        _expr_conv.get_converted_expr().value().get(),
                                        only_output,
-                                       error_output::ANY,
                                        _stream,
                                        _mr);
 
