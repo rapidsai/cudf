@@ -455,7 +455,7 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd)
+embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
