@@ -267,10 +267,10 @@ def prefetch_parquet_file_metadata_for_ir(
 
     if context.py_executor is None:
         cm = executor = concurrent.futures.ThreadPoolExecutor()
-        # We didn't create the executor, so we don't close it.
     else:
-        cm = contextlib.nullcontext()
         executor = context.py_executor
+        # We didn't create the executor, so we don't close it.
+        cm = contextlib.nullcontext()
 
     if missing_paths:
         with cm:
@@ -892,9 +892,12 @@ class Scan(IR):
                 try:
                     parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
                 except KeyError as e:
-                    raise AssertionError(
+                    msg = (
                         f"Parquet file metadata was not prefetched for paths: {list(paths)}."
-                    ) from e
+                        "Please report this as a bug to cudf-polars. You can work around it "
+                        "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                    )
+                    raise AssertionError(msg) from e
             else:
                 parquet_metadatas = None
 
