@@ -118,6 +118,7 @@ files:
       - depends_on_custreamz
       - depends_on_cudf_polars
       - depends_on_ray
+      - depends_on_cudf_streaming
   test_java:
     output: none
     includes:
@@ -240,6 +241,7 @@ files:
     extras:
       table: project
     includes:
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
@@ -496,6 +498,49 @@ files:
       - depends_on_libcudf
       - depends_on_librmm
       - depends_on_librapidsmpf
+  py_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - build_python_common
+      - depends_on_libcudf_streaming
+      - depends_on_librapidsmpf
+      - depends_on_librmm
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+  py_run_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf_streaming
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+  py_test_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - depends_on_cupy
+      - numpy_run
   test_python_narwhals:
     output: none
     includes:
@@ -1340,6 +1385,36 @@ dependencies:
           - matrix:
             packages:
               - *librapidsmpf_unsuffixed
+  depends_on_libcudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libcudf_streaming_unsuffixed
+  depends_on_cudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - cudf-streaming==26.8.*,>=0.0.0a0
   depends_on_ray:
     common:
       - output_types: conda
