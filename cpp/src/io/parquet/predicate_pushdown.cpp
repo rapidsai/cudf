@@ -149,22 +149,44 @@ struct row_group_stats_caster : public stats_caster_base {
            stats.max.has_value() or stats.null_count.has_value();
   };
 
-  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
-    if (input_row_group_indices[src_idx].empty()) { continue; }
+  auto const find_colchunk = [](RowGroup const& row_group, int schema_idx) {
+    return std::find_if(row_group.columns.begin(),
+                        row_group.columns.end(),
+                        [schema_idx](ColumnChunk const& c) { return c.schema_idx == schema_idx; });
+  };
 
-    auto const rg_idx     = input_row_group_indices[src_idx].front();
-    auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-
+  // Common case: a single source needs no cross-source reuse, so scan it directly
+  if (input_row_group_indices.size() == 1) {
+    if (input_row_group_indices[0].empty()) { return false; }
+    auto const& row_group = per_file_metadata[0].row_groups[input_row_group_indices[0].front()];
     for (auto const schema_idx : filter_column_schemas) {
-      // Map the zeroth-source schema index into this source's tree (would beidentity for matched
-      // schemas).
+      auto const col = find_colchunk(row_group, schema_idx);
+      if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
+    }
+    return false;
+  }
+
+  // Multiple sources: iterate columns on the outside so a single offset caches the chunk position
+  for (auto const schema_idx : filter_column_schemas) {
+    std::optional<size_type> colchunk_offset;
+
+    for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+      if (input_row_group_indices[src_idx].empty()) { continue; }
+
+      auto const& row_group =
+        per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
+      auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
       auto const mapped_schema_idx =
         aggregate_metadata.map_schema_index(schema_idx, static_cast<int>(src_idx));
-      auto const col = std::find_if(
-        row_group.columns.begin(),
-        row_group.columns.end(),
-        [mapped_schema_idx](ColumnChunk const& c) { return c.schema_idx == mapped_schema_idx; });
-      if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
+
+      if (not colchunk_offset.has_value() or colchunk_offset.value() >= num_col_chunks or
+          row_group.columns[colchunk_offset.value()].schema_idx != mapped_schema_idx) {
+        auto const it = find_colchunk(row_group, mapped_schema_idx);
+        if (it == row_group.columns.end()) { continue; }
+        colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
+      }
+
+      if (colchunk_has_stats(row_group.columns[colchunk_offset.value()])) { return true; }
     }
   }
   return false;
