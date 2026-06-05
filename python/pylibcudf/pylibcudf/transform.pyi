@@ -6,7 +6,7 @@ from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.table import Table
-from pylibcudf.types import DataType, NullAware, OutputNullability, ErrorOutput
+from pylibcudf.types import DataType, ErrorOutput, NullAware, OutputNullability
 from pylibcudf.utils import CudaStreamLike
 
 def nans_to_nulls(

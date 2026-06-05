@@ -119,7 +119,11 @@ cpdef Column column_nans_to_nulls(
 
 
 cpdef Column compute_column(
-    Table input, Expression expr, object error_policy=None, object stream=None, DeviceMemoryResource mr=None
+    Table input,
+    Expression expr,
+    object error_policy=None,
+    object stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Create a column by evaluating an expression on a table.
 
@@ -144,7 +148,8 @@ cpdef Column compute_column(
     """
     cdef unique_ptr[column] c_result
     cdef error_output c_error_policy = (
-        error_output.ANY if error_policy is None else <error_output>error_policy
+        error_output.ANY
+        if error_policy is None else <error_output>error_policy
     )
 
     cdef Stream _stream = _get_stream(stream)
@@ -153,14 +158,21 @@ cpdef Column compute_column(
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), c_error_policy, _cs, mr.get_mr()
+            input.view(),
+            dereference(expr.c_obj.get()),
+            c_error_policy, _cs,
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column compute_column_jit(
-    Table input, Expression expr, object error_policy=None, object stream=None, DeviceMemoryResource mr=None
+    Table input,
+    Expression expr,
+    object error_policy=None,
+    object stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Create a column by evaluating an expression on a table
@@ -196,7 +208,11 @@ cpdef Column compute_column_jit(
 
     with nogil:
         c_result = cpp_transform.compute_column_jit(
-            input.view(), dereference(expr.c_obj.get()), c_error_policy, _cs, mr.get_mr()
+            input.view(),
+            dereference(expr.c_obj.get()),
+            c_error_policy,
+            _cs,
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)

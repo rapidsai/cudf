@@ -136,7 +136,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
 
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
-int32_t tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY>{}(tmp_0);
+int32_t tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -155,7 +156,8 @@ int32_t tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDE
 
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
-numeric::decimal32 tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY>{}(tmp_0);
+numeric::decimal32 tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
@@ -183,7 +185,8 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_0;
-int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD>{}(tmp_0, tmp_1);
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -206,7 +209,8 @@ int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
 numeric::decimal32 tmp_1 = in_1;
-numeric::decimal32 tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD>{}(tmp_0, tmp_1);
+numeric::decimal32 tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
@@ -255,12 +259,16 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     auto expected_code =
       R"***(double tmp_0 = in_0;
 double tmp_1 = in_0;
-double tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL>{}(tmp_0, tmp_1);
+double tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_0, tmp_1);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_3 = in_1;
 double tmp_4 = in_1;
-double tmp_5 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL>{}(tmp_3, tmp_4);
-double tmp_6 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD>{}(tmp_2, tmp_5);
-double tmp_7 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT>{}(tmp_6);
+double tmp_5 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_3, tmp_4);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
+double tmp_6 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_2, tmp_5);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
+double tmp_7 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::SQRT, false>(&error_flag, tmp_6);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_8 = tmp_7;
 *out_0 = tmp_8;
 )***";
@@ -317,14 +325,16 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
             column->null_count());
 
   auto expected_udf =
-    R"***(__device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
+    R"***(__device__ cudf::errc expression(int32_t* out_0, int32_t in_0, int32_t in_1)
 {
+cudf::errc error_flag = cudf::errc::SUCCESS;
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
-int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD>{}(tmp_0, tmp_1);
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 int32_t tmp_3 = tmp_2;
 *out_0 = tmp_3;
-return;
+return cudf::errc::SUCCESS;
 })***";
 
   EXPECT_EQ(transform_args.udf, expected_udf);
@@ -356,7 +366,8 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(bool tmp_0 = in_0;
-bool tmp_1 = cudf::detail::ops::predicate(tmp_0);
+bool tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -374,7 +385,8 @@ bool tmp_1 = cudf::detail::ops::predicate(tmp_0);
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
-bool tmp_1 = cudf::detail::ops::predicate(tmp_0);
+cuda::std::optional<bool> tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
