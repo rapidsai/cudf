@@ -8,10 +8,12 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.config import ParquetOptions
 
 
 def test_select(engine: pl.GPUEngine):
@@ -207,3 +209,24 @@ def test_select_fast_count_parquet_prefetch_metadata(
 
     q = q.select(pl.len())
     assert_gpu_result_equal(q, engine=prefetch_engine)
+
+
+def test_get_parquet_row_count_from_metadata_missing_prefetch() -> None:
+    paths = ["/some/missing/file.parquet"]
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    context = IRExecutionContext()
+
+    with pytest.raises(
+        AssertionError,
+        match=(
+            r"Parquet file metadata was not prefetched for paths: "
+            r"\['/some/missing/file\.parquet'\]\."
+        ),
+    ):
+        Scan._get_parquet_row_count_from_metadata(
+            paths,
+            skip_rows=0,
+            n_rows=-1,
+            parquet_options=parquet_options,
+            context=context,
+        )

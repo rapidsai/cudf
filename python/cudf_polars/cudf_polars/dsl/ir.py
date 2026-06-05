@@ -752,11 +752,11 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         parquet_options: ParquetOptions,
-        context: IRExecutionContext,
+        context: IRExecutionContext | None,
     ) -> int:
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-        if parquet_options.prefetch_file_metadata:
+        if parquet_options.prefetch_file_metadata and context is not None:
             try:
                 parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
             except KeyError as e:
