@@ -221,7 +221,7 @@ TEST_F(StringsFindallTests, OneCaptureGroup)
 
 TEST_F(StringsFindallTests, EmptyMatch)
 {
-  auto input = cudf::test::strings_column_wrapper({" ", "hello world", "x\r\ny"});
+  auto input = cudf::test::strings_column_wrapper({" ", "hello world", "é\r\ny"});
   auto sv    = cudf::strings_column_view(input);
   using LCW  = cudf::test::lists_column_wrapper<cudf::string_view>;
 
