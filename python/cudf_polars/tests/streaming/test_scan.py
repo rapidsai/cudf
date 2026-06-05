@@ -11,7 +11,12 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import IRExecutionContext, Scan
+from cudf_polars.dsl.ir import (
+    Empty,
+    IRExecutionContext,
+    Scan,
+    prefetch_parquet_file_metadata_for_ir,
+)
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import SplitScan, StreamingScan, expand_scan_for_rank
@@ -105,6 +110,12 @@ def test_prefetch_file_metadata_non_parquet_scan(df, streaming_engine_factory) -
         StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
     )
     assert_gpu_result_equal(df.lazy().select("x"), engine=streaming_engine)
+
+
+def test_prefetch_parquet_file_metadata_no_parquet_scans() -> None:
+    context = IRExecutionContext()
+    prefetch_parquet_file_metadata_for_ir(Empty({}), context)
+    assert context.parquet_file_metadata == {}
 
 
 # ---------------------------------------------------------------------------
