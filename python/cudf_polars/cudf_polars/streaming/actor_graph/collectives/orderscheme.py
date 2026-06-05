@@ -20,6 +20,7 @@ from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.streaming.actor_graph.utils import (
+    ChunkStore,
     concat_batch,
     empty_table_chunk,
     gather_in_task_group,
@@ -260,6 +261,75 @@ def _copy_to_owned_chunk(
     )
 
 
+async def _adjust_orderscheme_local(
+    context: Context,
+    ref_ir: IR,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    output_scheme: OrderScheme,
+) -> None:
+    npartitions = output_scheme.num_boundaries + 1
+    boundary_chunk = output_scheme.get_boundaries(context.br())
+    boundary_table = boundary_chunk.table_view()
+    pending_pid: int | None = None
+    pending_chunks: ChunkStore | None = None
+    next_pid = 0
+
+    async def emit_pending(pid: int) -> None:
+        nonlocal pending_pid, pending_chunks
+        if pending_pid == pid and pending_chunks is not None:
+            chunks = [
+                TableChunk.from_message(msg, br=context.br()) for msg in pending_chunks
+            ]
+            chunk = await concat_batch(chunks, context, ref_ir.schema, ir_context)
+            pending_pid = None
+            pending_chunks = None
+        else:
+            chunk = empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
+        await ch_out.send(context, Message(pid, chunk))
+
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        if chunk.table_view().num_rows() == 0:
+            continue
+        with stream_ordered_after(
+            context.get_stream_from_pool,
+            upstreams=(chunk.stream, boundary_chunk.stream),
+        ) as stream:
+            table = chunk.table_view()
+            splits = _split_points(table, boundary_table, output_scheme, stream)
+            for pid, piece in enumerate(
+                plc.copying.split(table, splits, stream=stream)
+            ):
+                if piece.num_rows() == 0:
+                    continue
+                if pending_pid is not None and pending_pid != pid:
+                    emitted_pid = pending_pid
+                    await emit_pending(emitted_pid)
+                    next_pid = emitted_pid + 1
+                while next_pid < pid:
+                    await emit_pending(next_pid)
+                    next_pid += 1
+                if pending_pid is None:
+                    pending_pid = pid
+                    pending_chunks = ChunkStore(context)
+                assert pending_chunks is not None
+                pending_chunks.insert(
+                    Message(
+                        pid,
+                        _copy_to_owned_chunk(piece, stream, context.br()),
+                    )
+                )
+
+    while next_pid < npartitions:
+        await emit_pending(next_pid)
+        next_pid += 1
+    await ch_out.drain(context)
+
+
 async def adjust_orderscheme(
     context: Context,
     comm: Communicator,
@@ -311,6 +381,17 @@ async def adjust_orderscheme(
         raise ValueError("collective_id is required when comm.nranks > 1.")
 
     try:
+        if comm.nranks == 1:
+            await _adjust_orderscheme_local(
+                context,
+                ref_ir,
+                ir_context,
+                ch_out,
+                ch_in,
+                output_scheme,
+            )
+            return
+
         input_boundary_chunk = input_scheme.get_boundaries(context.br())
         boundary_chunk = output_scheme.get_boundaries(context.br())
         boundary_table = boundary_chunk.table_view()
