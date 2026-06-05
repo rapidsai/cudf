@@ -11,13 +11,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import (
-    Empty,
-    IRExecutionContext,
-    Scan,
-    prefetch_parquet_file_metadata_for_ir,
-)
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import SplitScan, StreamingScan, expand_scan_for_rank
@@ -80,126 +74,37 @@ def test_scan_parquet_prefetch_file_metadata(tmp_path, df, streaming_engine_fact
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
-def test_prefetch_parquet_file_metadata_streaming_scan_children(
-    tmp_path,
-    df,
-    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+def test_scan_parquet_prefetch_file_metadata_fused_files(
+    tmp_path, df, streaming_engine_factory
 ) -> None:
-    # Small files fused into Scan children (not SplitScan) inside StreamingScan.
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1_000_000,
+            parquet_options={"prefetch_file_metadata": True},
+        ),
+    )
     make_partitioned_source(df, tmp_path, "parquet", n_files=3)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={"target_partition_size": 1_000_000},
-        parquet_options={"prefetch_file_metadata": True},
-    )
-    q = pl.scan_parquet(tmp_path)
-    qir = Translator(q._ldf.visit(), engine).translate_ir()
-    config_options = ConfigOptions.from_polars_engine(engine)
-    stats = collect_statistics(qir, config_options, parquet_stats_executor)
-    ir, partition_info = lower_ir_graph(
-        qir,
-        config_options,
-        stats,
-        rank=0,
-        nranks=1,
-    )
-
-    streaming_scan = next(
-        node for node in traversal([ir]) if isinstance(node, StreamingScan)
-    )
-    parquet_scans = [
-        scan
-        for scan in streaming_scan.scans
-        if isinstance(scan, Scan) and scan.typ == "parquet"
-    ]
-    assert parquet_scans
-    io_plan = partition_info[streaming_scan].io_plan
-    assert io_plan is not None
-    assert io_plan.flavor != IOPartitionFlavor.SPLIT_FILES
-
-    context = IRExecutionContext()
-    prefetch_parquet_file_metadata_for_ir(ir, context)
-
-    for scan in parquet_scans:
-        assert tuple(scan.paths) in context.parquet_file_metadata
-        assert context.parquet_file_metadata[tuple(scan.paths)]
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
-def test_prefetch_parquet_file_metadata_streaming_split_scan_children(
-    tmp_path,
-    df,
-    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+def test_scan_parquet_prefetch_file_metadata_split_files(
+    tmp_path, df, streaming_engine_factory
 ) -> None:
-    # Large file split into SplitScan children inside StreamingScan.
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1_000,
+            parquet_options={"prefetch_file_metadata": True},
+        ),
+    )
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={"target_partition_size": 1_000},
-        parquet_options={"prefetch_file_metadata": True},
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
+
+
+def test_prefetch_file_metadata_non_parquet_scan(df, streaming_engine_factory) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
     )
-    q = pl.scan_parquet(tmp_path)
-    qir = Translator(q._ldf.visit(), engine).translate_ir()
-    config_options = ConfigOptions.from_polars_engine(engine)
-    stats = collect_statistics(qir, config_options, parquet_stats_executor)
-    ir, partition_info = lower_ir_graph(
-        qir,
-        config_options,
-        stats,
-        rank=0,
-        nranks=1,
-    )
-
-    streaming_scan = next(
-        node for node in traversal([ir]) if isinstance(node, StreamingScan)
-    )
-    split_scans = [
-        scan
-        for scan in streaming_scan.scans
-        if isinstance(scan, SplitScan) and scan.base_scan.typ == "parquet"
-    ]
-    assert split_scans
-    io_plan = partition_info[streaming_scan].io_plan
-    assert io_plan is not None
-    assert io_plan.flavor == IOPartitionFlavor.SPLIT_FILES
-
-    context = IRExecutionContext()
-    prefetch_parquet_file_metadata_for_ir(ir, context)
-
-    for scan in split_scans:
-        paths = tuple(scan.base_scan.paths)
-        assert paths in context.parquet_file_metadata
-        assert context.parquet_file_metadata[paths]
-
-
-def test_prefetch_parquet_file_metadata_split_scan_root(tmp_path, df) -> None:
-    # SplitScan is stored in StreamingScan.scans, not IR children, so prefetch
-    # must also handle a SplitScan node passed as the traversal root.
-    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
-    path = str(next(tmp_path.glob("*.parquet")))
-    split_scans = expand_scan_for_rank(
-        _make_parquet_scan([path]),
-        IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES),
-        rank=0,
-        nranks=1,
-        parquet_options=ParquetOptions(),
-    )
-    split_scan = split_scans[0]
-    assert isinstance(split_scan, SplitScan)
-
-    context = IRExecutionContext()
-    prefetch_parquet_file_metadata_for_ir(split_scan, context)
-
-    paths = tuple(split_scan.base_scan.paths)
-    assert paths in context.parquet_file_metadata
-    assert context.parquet_file_metadata[paths]
-
-
-def test_prefetch_parquet_file_metadata_no_parquet_scans() -> None:
-    context = IRExecutionContext()
-    prefetch_parquet_file_metadata_for_ir(Empty({}), context)
-    assert context.parquet_file_metadata == {}
+    assert_gpu_result_equal(df.lazy().select("x"), engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +202,10 @@ def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def _make_parquet_scan(paths: list[str]) -> Scan:
+def _make_parquet_scan(
+    paths: list[str], parquet_options: ParquetOptions | None = None
+) -> Scan:
+    parquet_options = parquet_options or ParquetOptions()
     return Scan(
         {"x": DataType(pl.Int64())},
         "parquet",
@@ -310,7 +218,7 @@ def _make_parquet_scan(paths: list[str]) -> Scan:
         None,
         None,
         None,
-        ParquetOptions(),
+        parquet_options,
     )
 
 
@@ -387,9 +295,37 @@ def test_expand_scan_for_rank_split_files(
         assert scan.base_scan.paths == ["file.parquet"]
 
 
-def test_streaming_scan_raises() -> None:
+def test_scan_missing_prefetch_metadata_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
-    scan = _make_parquet_scan(["file.parquet"])
+    scan = _make_parquet_scan(
+        ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
+    )
+    ctx = IRExecutionContext()
+    with pytest.raises(
+        AssertionError,
+        match=r"Parquet file metadata was not prefetched for paths: \['file\.parquet'\]\.",
+    ):
+        Scan.do_evaluate(
+            scan.schema,
+            scan.typ,
+            scan.reader_options,
+            scan.paths,
+            scan.with_columns,
+            scan.skip_rows,
+            scan.n_rows,
+            scan.row_index,
+            scan.include_file_paths,
+            scan.predicate,
+            scan.parquet_options,
+            context=ctx,
+        )
+
+
+def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
+    # This isn't reachable by normal cudf-polars usage.
+    scan = _make_parquet_scan(
+        ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
+    )
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([scan], scan, context=ctx)
