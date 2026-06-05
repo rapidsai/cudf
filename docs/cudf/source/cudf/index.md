@@ -14,7 +14,6 @@ guide-to-udfs
 cupy-interop
 performance-comparisons/index
 PandasCompat
-copy-on-write
 memory-profiling
 developer_guide/index
 ```
