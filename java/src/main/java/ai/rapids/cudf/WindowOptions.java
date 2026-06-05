@@ -304,11 +304,11 @@ public class WindowOptions implements AutoCloseable {
         throw new IllegalArgumentException(
             "order-by index, ascending, and nullsFirst arrays must have the same length");
       }
-      this.orderByColumnIndices = indices;
-      this.orderByAscendingFlags = ascending;
-      this.orderByNullsFirstFlags = nullsFirst;
-      this.orderByColumnIndex = indices[0];
-      this.orderByOrderAscending = ascending[0];
+      this.orderByColumnIndices = Arrays.copyOf(indices, indices.length);
+      this.orderByAscendingFlags = Arrays.copyOf(ascending, ascending.length);
+      this.orderByNullsFirstFlags = Arrays.copyOf(nullsFirst, nullsFirst.length);
+      this.orderByColumnIndex = this.orderByColumnIndices[0];
+      this.orderByOrderAscending = this.orderByAscendingFlags[0];
       return this;
     }
 

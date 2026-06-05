@@ -4253,7 +4253,12 @@ public final class Table implements AutoCloseable {
 
         // Validate the type of every order-by column (one for single-column RANGE, more for
         // multi-column RANGE).
+        int columnCount = operation.table.getNumberOfColumns();
         for (int orderByIndex : agg.getWindowOptions().getOrderByColumnIndices()) {
+          if (orderByIndex < 0 || orderByIndex >= columnCount) {
+            throw new IllegalArgumentException("Range window order-by column index is out of " +
+                "range: " + orderByIndex + " (column count: " + columnCount + ")");
+          }
           DType orderByType = operation.table.getColumn(orderByIndex).getType();
           switch (orderByType.getTypeId()) {
             case INT8:

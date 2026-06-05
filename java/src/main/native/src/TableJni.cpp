@@ -4470,6 +4470,10 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
     }
+    JNI_ARG_CHECK(env,
+                  orderby_offsets.size() == values.size() + 1,
+                  "orderby_offsets length must be one more than the number of aggregation columns",
+                  nullptr);
 
     // Extract table-view.
     cudf::table_view groupby_keys{
@@ -4501,6 +4505,8 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
       JNI_ARG_CHECK(
         env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
 
+      // orderby_offsets is CSR-style with length == values.size() + 1; ob_begin/ob_end
+      // delimit this op's order-by slice, and ob_count is the slice length.
       int const ob_begin = orderby_offsets[i];
       int const ob_end   = orderby_offsets[i + 1];
       int const ob_count = ob_end - ob_begin;
