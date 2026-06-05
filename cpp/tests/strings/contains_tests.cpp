@@ -24,6 +24,7 @@
 #include <array>
 #include <ranges>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 struct StringsContainsTests : public cudf::test::BaseFixture {};
@@ -1012,53 +1013,50 @@ TEST_F(StringsContainsTests, CrlfEdgeCasesExtNewline)
   auto const MLX = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
                                                            cudf::strings::regex_flags::MULTILINE);
 
-  auto bool_col = [](bool edge_case::* m) {
-    auto v = std::span(cases) | std::views::transform([m](auto const& c) { return c.*m; });
-    return cudf::test::fixed_width_column_wrapper<bool>(v.begin(), v.end());
-  };
-  auto int_col = [](int edge_case::* m) {
-    auto v = std::span(cases) | std::views::transform([m](auto const& c) { return c.*m; });
-    return cudf::test::fixed_width_column_wrapper<int32_t>(v.begin(), v.end());
+  auto to_col = [](auto edge_case::* m) {
+    auto v  = std::span(cases) | std::views::transform(m);
+    using T = std::remove_cvref_t<decltype(*v.begin())>;
+    return cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
   };
 
   {  // contains ^abc$  (non-multiline / multiline)
     auto p  = cudf::strings::regex_program::create("^abc$", EXT);
     auto pm = cudf::strings::regex_program::create("^abc$", MLX);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *p),
-                                   bool_col(&edge_case::abc_anchored_en));
+                                   to_col(&edge_case::abc_anchored_en));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *pm),
-                                   bool_col(&edge_case::abc_anchored_ml));
+                                   to_col(&edge_case::abc_anchored_ml));
   }
   {  // matches_re abc$  (match at start of string)
     auto p = cudf::strings::regex_program::create("abc$", EXT);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::matches_re(view, *p),
-                                   bool_col(&edge_case::abc_dollar_matches));
+                                   to_col(&edge_case::abc_dollar_matches));
   }
   {  // count_re [a-z]+$  (non-multiline / multiline)
     auto p  = cudf::strings::regex_program::create("[a-z]+$", EXT);
     auto pm = cudf::strings::regex_program::create("[a-z]+$", MLX);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::count_re(view, *p),
-                                   int_col(&edge_case::az_dollar_count_en));
+                                   to_col(&edge_case::az_dollar_count_en));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::count_re(view, *pm),
-                                   int_col(&edge_case::az_dollar_count_ml));
+                                   to_col(&edge_case::az_dollar_count_ml));
   }
   {  // count_re ^[a-z]+  (multiline line-starts)
     auto pm = cudf::strings::regex_program::create("^[a-z]+", MLX);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::count_re(view, *pm),
-                                   int_col(&edge_case::az_start_count_ml));
+                                   to_col(&edge_case::az_start_count_ml));
   }
   {  // CRLF-coupling discriminators: \r$ never matches inside \r\n; ^\n likewise
     auto pe = cudf::strings::regex_program::create("\\r$", MLX);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *pe),
-                                   bool_col(&edge_case::cr_dollar_ml));
+                                   to_col(&edge_case::cr_dollar_ml));
     auto pb = cudf::strings::regex_program::create("^\n", MLX);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *pb),
-                                   bool_col(&edge_case::start_nl_ml));
+                                   to_col(&edge_case::start_nl_ml));
   }
   {  // alternation containing $ (the #14856 construct) works natively, no transpiler
     auto p = cudf::strings::regex_program::create("(a$|b)", EXT);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *p),
-                                   bool_col(&edge_case::alt_a_or_b_en));
+                                   to_col(&edge_case::alt_a_or_b_en));
   }
 }
 
