@@ -16,12 +16,15 @@ from werkzeug import Response
 
 import polars as pl
 
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.utils.config import ParquetOptions
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
@@ -183,6 +186,35 @@ def test_scan_parquet_prefetch_file_metadata(
         },
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_scan_do_evaluate_missing_prefetch_metadata() -> None:
+    paths = ["/some/missing/file.parquet"]
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    context = IRExecutionContext()
+    schema = {"a": DataType(pl.Int64())}
+
+    with pytest.raises(
+        AssertionError,
+        match=(
+            r"Parquet file metadata was not prefetched for paths: "
+            r"\['/some/missing/file\.parquet'\]\."
+        ),
+    ):
+        Scan.do_evaluate(
+            schema,
+            "parquet",
+            {},
+            paths,
+            None,
+            0,
+            -1,
+            None,
+            None,
+            None,
+            parquet_options,
+            context=context,
+        )
 
 
 def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
