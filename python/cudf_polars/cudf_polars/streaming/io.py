@@ -826,18 +826,23 @@ def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
         plc.TypeId.UINT32,
         plc.TypeId.FLOAT32,
         plc.TypeId.TIMESTAMP_DAYS,
+        plc.TypeId.DURATION_DAYS,
+        plc.TypeId.DECIMAL32,
     ):
         return nrows * 4 + nullmask
     if dtype_id in (
         plc.TypeId.INT64,
         plc.TypeId.UINT64,
         plc.TypeId.FLOAT64,
+        plc.TypeId.TIMESTAMP_SECONDS,
         plc.TypeId.TIMESTAMP_MILLISECONDS,
         plc.TypeId.TIMESTAMP_MICROSECONDS,
         plc.TypeId.TIMESTAMP_NANOSECONDS,
+        plc.TypeId.DURATION_SECONDS,
         plc.TypeId.DURATION_MILLISECONDS,
         plc.TypeId.DURATION_MICROSECONDS,
         plc.TypeId.DURATION_NANOSECONDS,
+        plc.TypeId.DECIMAL64,
     ):
         return nrows * 8 + nullmask
     if dtype_id == plc.TypeId.DECIMAL128:
