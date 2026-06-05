@@ -16,6 +16,10 @@ import distributed
 import distributed.system
 import pynvml
 import ucxx._lib.libucxx as ucx_api
+
+import polars as pl
+
+import rmm.mr
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
@@ -23,10 +27,6 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import polars as pl
-
-import rmm.mr
 
 from cudf_polars.engine.core import (
     ClusterInfo,

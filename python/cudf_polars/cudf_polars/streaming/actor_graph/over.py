@@ -40,6 +40,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
+import pylibcudf as plc
 from cudf_streaming.streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.streaming.table_chunk import (
     TableChunk,
@@ -49,10 +52,6 @@ from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-
-import polars as pl
-
-import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import GroupedWindow
@@ -92,7 +91,6 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.expr import Col

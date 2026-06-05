@@ -10,7 +10,9 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
+import pylibcudf as plc
 from cudf_streaming.integrations.partition import unpack_and_concat
+from pylibcudf.contiguous_split import pack
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
@@ -22,9 +24,6 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
@@ -51,11 +50,11 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
+    import polars as pl
+
     from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T

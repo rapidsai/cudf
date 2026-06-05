@@ -6,14 +6,15 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
+import polars as pl
+
 from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
-
-import polars as pl
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.options import StreamingOptions

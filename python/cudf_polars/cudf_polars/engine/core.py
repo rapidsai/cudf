@@ -14,14 +14,15 @@ import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
+
+import polars as pl
+
 from cudf_streaming.streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
-
-import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext

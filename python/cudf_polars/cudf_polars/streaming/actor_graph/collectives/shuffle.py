@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
+import pylibcudf.partitioning
 from cudf_streaming.integrations.partition import (
     partition_and_pack as py_partition_and_pack,
     split_and_pack as py_split_and_pack,
@@ -24,9 +26,6 @@ from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
-
-import pylibcudf as plc
-import pylibcudf.partitioning
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.streaming.actor_graph.dispatch import (
@@ -48,7 +47,6 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.channel import Channel
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext

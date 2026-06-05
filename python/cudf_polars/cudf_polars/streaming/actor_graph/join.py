@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+import pylibcudf as plc
 from cudf_streaming.streaming.bloom_filter import BloomFilter
 from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
@@ -17,15 +18,13 @@ from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
-
-import pylibcudf as plc
-from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join

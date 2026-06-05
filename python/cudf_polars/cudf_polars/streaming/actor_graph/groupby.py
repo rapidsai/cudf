@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
 from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -17,8 +18,6 @@ from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
-
-import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr

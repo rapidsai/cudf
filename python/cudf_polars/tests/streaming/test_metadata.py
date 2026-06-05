@@ -6,6 +6,10 @@
 from __future__ import annotations
 
 import pytest
+
+import polars as pl
+
+import pylibcudf as plc
 from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -14,10 +18,6 @@ from cudf_streaming.streaming.channel_metadata import (
     Partitioning,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataFrame, DataType
