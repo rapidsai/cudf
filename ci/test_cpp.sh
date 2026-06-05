@@ -32,5 +32,11 @@ if (( SUITEERROR == 0 )); then
     SUITEERROR=$?
 fi
 
+if (( SUITEERROR == 0 )); then
+    rapids-logger "Run libcudf_streaming gtests"
+    timeout 30m ./ci/run_cudf_streaming_ctests.sh -j20
+    SUITEERROR=$?
+fi
+
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

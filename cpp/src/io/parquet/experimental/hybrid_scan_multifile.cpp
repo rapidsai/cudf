@@ -57,4 +57,30 @@ size_type hybrid_scan_multifile::total_rows_in_row_groups(
 
 void hybrid_scan_multifile::reset_column_selection() const { _impl->reset_column_selection(); }
 
+std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_with_byte_range(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->filter_row_groups_with_byte_range(row_group_indices, options);
+}
+
+std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_with_stats(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->filter_row_groups_with_stats(row_group_indices, options, stream);
+}
+
+std::pair<std::vector<text::byte_range_info>, std::vector<text::byte_range_info>>
+hybrid_scan_multifile::secondary_filters_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->secondary_filters_byte_ranges(row_group_indices, options);
+}
+
 }  // namespace cudf::io::parquet::experimental
