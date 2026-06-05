@@ -55,9 +55,6 @@ from cudf.core.dtype.conversions import (
 from cudf.core.dtype.validators import (
     is_dtype_obj_datetime_tz,
     is_dtype_obj_decimal,
-    is_dtype_obj_decimal32,
-    is_dtype_obj_decimal64,
-    is_dtype_obj_decimal128,
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
@@ -108,7 +105,7 @@ if TYPE_CHECKING:
     from cudf._typing import ColumnLike, DtypeObj, DtypePolicy, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.decimal import DecimalBaseColumn
+    from cudf.core.column.decimal import DecimalColumn
     from cudf.core.column.interval import IntervalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -677,13 +674,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
 
-    A ColumnBase may be composed of:
+    A ColumnBase is composed of:
 
-    * A *data* Buffer
-    * One or more (optional) *children* Columns
-    * An (optional) *mask* Buffer representing the nullmask
-
-    The *dtype* indicates the ColumnBase's element type.
+    * A pylibcudf.Column
+    * A valid pandas data type object reflecting the type of the values.
     """
 
     _VALID_REDUCTIONS = {
@@ -1016,14 +1010,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.IntervalColumn
         if is_dtype_obj_struct(dtype):
             return cudf.core.column.StructColumn
-
-        # Decimal types
-        if is_dtype_obj_decimal128(dtype):
-            return cudf.core.column.Decimal128Column
-        if is_dtype_obj_decimal64(dtype):
-            return cudf.core.column.Decimal64Column
-        if is_dtype_obj_decimal32(dtype):
-            return cudf.core.column.Decimal32Column
+        if is_dtype_obj_decimal(dtype):
+            return cudf.core.column.DecimalColumn
 
         # Numerical types
         if is_dtype_obj_numeric(dtype, include_decimal=False):
@@ -2381,7 +2369,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         raise NotImplementedError()
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         raise NotImplementedError()
 
     def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
@@ -2980,7 +2968,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
+            # Hook for subclasses (e.g., DecimalColumn adjusts precision)
             col_dtype = col._adjust_reduce_result_dtype(
                 op, col_dtype, plc_scalar
             )
@@ -3749,17 +3737,17 @@ def as_column(
             pa_type = pa.decimal128(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal128Column
+            column_class = cudf.core.column.DecimalColumn
         elif isinstance(dtype, cudf.Decimal64Dtype):
             pa_type = pa.decimal64(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal64Column
+            column_class = cudf.core.column.DecimalColumn
         elif isinstance(dtype, cudf.Decimal32Dtype):
             pa_type = pa.decimal32(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal32Column
+            column_class = cudf.core.column.DecimalColumn
         else:
             raise NotImplementedError(f"{dtype} not implemented")
         data = pa.array(arbitrary, type=pa_type)
