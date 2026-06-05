@@ -20,6 +20,7 @@ from cudf_polars.streaming.expressions import (
     decompose_expr_graph,
     make_expr_decomposer,
 )
+from cudf_polars.streaming.io import StreamingScan
 from cudf_polars.streaming.over import _fuse_over_nodes
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
@@ -421,8 +422,11 @@ def _(
         ):
             # Task engine case
             scan_child = child.children[0]
-        elif isinstance(child, Scan):  # pragma: no cover; Requires rapidsmpf runtime
+        elif isinstance(child, StreamingScan):  # pragma: no cover
             # RapidsMPF case
+            scan_child = child.base_scan
+        elif isinstance(child, Scan):  # pragma: no cover; Requires rapidsmpf runtime
+            # Legacy task-engine case
             scan_child = child
 
     if scan_child and scan_child.predicate is None and scan_child.typ == "parquet":
