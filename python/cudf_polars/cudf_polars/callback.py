@@ -304,10 +304,11 @@ def _callback(
     ):
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext()
-            prefetch_parquet_file_metadata_for_ir(
-                ir,
-                context,
-            )
+            if config_options.parquet_options.prefetch_file_metadata:
+                prefetch_parquet_file_metadata_for_ir(
+                    ir,
+                    context,
+                )
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
