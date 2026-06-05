@@ -3253,10 +3253,18 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
 
   // Speculative range does not include full footer bytes check
   {
+    cudf::io::parquet::file_ender_s ender{};
+    auto const ender_offset = parquet_bytes.size() - sizeof(ender);
+    std::memcpy(&ender, parquet_bytes.data() + ender_offset, sizeof(ender));
+    // Hint must reach the footer start; a fixed value (e.g. 64) can overshoot and route to
+    // the missing-prefix path when the actual footer is larger.
+    auto const speculative_hint = ender.footer_len + sizeof(ender);
+
     TailShortReadDatasource truncated_speculative_source(parquet_bytes, 1, 16);
     auto const source = cudf::io::source_info{&truncated_speculative_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 64); },
-                                "Speculative metadata read did not include full footer bytes");
+    expect_logic_error_contains(
+      [&] { (void)cudf::io::read_parquet_metadata(source, speculative_hint); },
+      "Speculative metadata read did not include full footer bytes");
   }
 
   // Missing footer prefix short read check
