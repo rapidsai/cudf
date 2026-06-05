@@ -55,4 +55,26 @@ install(
   EXCLUDE_FROM_ALL
 )
 
+add_executable(bench_pack "bench_pack.cpp")
+set_target_properties(
+  bench_pack
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
+             CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS ON
+             CUDA_STANDARD 20
+             CUDA_STANDARD_REQUIRED ON
+             LINK_FLAGS "-Wl,--allow-shlib-undefined"
+)
+target_link_libraries(
+  bench_pack PRIVATE cudf_streaming rapidsmpf::rapidsmpf benchmark::benchmark
+                     benchmark::benchmark_main $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
+)
+install(
+  TARGETS bench_pack
+  COMPONENT benchmarking
+  DESTINATION bin/benchmarks/libcudf_streaming
+  EXCLUDE_FROM_ALL
+)
+
 add_subdirectory(streaming)
