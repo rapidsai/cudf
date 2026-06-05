@@ -87,7 +87,7 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.column import DecimalBaseColumn
+    from cudf.core.column import DecimalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.string import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
@@ -730,7 +730,7 @@ class NumericalColumn(NumericalBaseColumn):
             ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: DtypeObj) -> NumericalColumn:
