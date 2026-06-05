@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import json
 import pickle
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
 import polars as pl
 
+import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import Empty, Projection
@@ -119,6 +120,50 @@ def test_base_stats_parquet(
         assert source.row_count is None
         assert source.column_storage_size("x") is None
         assert source.column_storage_size("y") is None
+
+
+def test_parquet_source_info_uses_decoded_dtype_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeParquetMetadata:
+        row_count = 2_000
+        mean_size_per_file: ClassVar[dict[str, int]] = {
+            "i64": 1,
+            "dec": 1,
+            "s": 1,
+            "already_large": 20_000,
+        }
+        num_row_groups_per_file = (1, 1)
+
+        def __init__(self, paths: tuple[str, ...], max_footer_samples: int) -> None:
+            self.paths = paths
+            self.max_footer_samples = max_footer_samples
+
+    def fake_sample_rg_sizes(*args: object) -> dict[str, int]:
+        return {}
+
+    monkeypatch.setattr(streaming_io, "ParquetMetadata", FakeParquetMetadata)
+    monkeypatch.setattr(streaming_io, "_sample_rg_sizes", fake_sample_rg_sizes)
+
+    source = ParquetSourceInfo.from_paths(
+        ("a.parquet", "b.parquet"),
+        frozenset({"i64", "dec", "s", "already_large"}),
+        (
+            ("i64", DataType(pl.Int64())),
+            ("dec", DataType(pl.Decimal(38, 15))),
+            ("s", DataType(pl.String())),
+            ("already_large", DataType(pl.Int64())),
+        ),
+        max_footer_samples=2,
+        max_row_group_samples=1,
+    )
+
+    rows_per_file = 1_000
+    nullmask = 125
+    assert source.column_storage_size("i64") == rows_per_file * 8 + nullmask
+    assert source.column_storage_size("dec") == rows_per_file * 16 + nullmask
+    assert source.column_storage_size("s") == (rows_per_file + 1) * 4 + nullmask
+    assert source.column_storage_size("already_large") == 20_000
 
 
 def test_dataframescan_stats_pickle(
