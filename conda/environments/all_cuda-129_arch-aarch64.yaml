@@ -57,8 +57,9 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.22.2,<0.29.0
+- numba-cuda>=0.22.2
 - numba>=0.60.0,<0.65.0
+- numexpr
 - numpy>=1.26,<3.0
 - numpydoc
 - nvidia-ml-py>=12
@@ -67,7 +68,7 @@ dependencies:
 - packaging
 - pandas>=3.0.0,<3.1.0
 - pandoc
-- polars>=1.35,<1.40
+- polars>=1.35,<1.42
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4
@@ -86,7 +87,6 @@ dependencies:
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.8.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
-- rapidsmpf==26.8.*,>=0.0.0a0
 - ray-default>=2.55.1
 - rich
 - rmm==26.8.*,>=0.0.0a0
@@ -103,6 +103,7 @@ dependencies:
 - structlog
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
+- xlsxwriter
 - zlib>=1.2.13
 - zstandard
 name: all_cuda-129_arch-aarch64

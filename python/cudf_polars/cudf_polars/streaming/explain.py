@@ -28,6 +28,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.streaming.io import StreamingScan
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.statistics import (
@@ -285,6 +286,18 @@ def _(ir: Scan) -> dict[str, Serializable]:
         "typ": ir.typ,
         "prefix": os.path.commonprefix(ir.paths),
         "predicate": _serialize_expr(ir.predicate) if ir.predicate else None,
+    }
+
+
+@_serialize_properties.register
+def _(ir: StreamingScan) -> dict[str, Serializable]:
+    return {
+        "typ": ir.base_scan.typ,
+        "scan_count": len(ir.scans),
+        "prefix": os.path.commonprefix(ir.base_scan.paths),
+        "predicate": (
+            _serialize_expr(ir.base_scan.predicate) if ir.base_scan.predicate else None
+        ),
     }
 
 
