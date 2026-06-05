@@ -131,12 +131,14 @@ struct row_group_stats_caster : public stats_caster_base {
  * `null_count`. See https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237
  * for why inspecting one row group per source is sufficient.
  *
+ * @param aggregate_metadata Aggregate reader metadata, used to map schema indices across sources
  * @param per_file_metadata Metadata for each input source
  * @param input_row_group_indices Selected row group indices, one vector per source
- * @param filter_column_schemas Schema indices of the columns referenced by the filter
+ * @param filter_column_schemas Zeroth-source schema indices of the columns referenced by the filter
  * @return True if any filter column carries row-group statistics
  */
 [[nodiscard]] bool any_row_group_stats_available(
+  aggregate_reader_metadata const& aggregate_metadata,
   host_span<metadata const> per_file_metadata,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<int const> filter_column_schemas)
@@ -154,10 +156,14 @@ struct row_group_stats_caster : public stats_caster_base {
     auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
 
     for (auto const schema_idx : filter_column_schemas) {
+      // Map the zeroth-source schema index into this source's tree (would beidentity for matched
+      // schemas).
+      auto const mapped_schema_idx =
+        aggregate_metadata.map_schema_index(schema_idx, static_cast<int>(src_idx));
       auto const col = std::find_if(
-        row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& c) {
-          return c.schema_idx == schema_idx;
-        });
+        row_group.columns.begin(),
+        row_group.columns.end(),
+        [mapped_schema_idx](ColumnChunk const& c) { return c.schema_idx == mapped_schema_idx; });
       if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
     }
   }
@@ -186,6 +192,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Scope the stats-availability check to the columns referenced by the filter.
   std::vector<int> filter_column_schemas;
+  filter_column_schemas.reserve(output_column_schemas.size());
   thrust::copy_if(thrust::host,
                   output_column_schemas.begin(),
                   output_column_schemas.end(),
@@ -195,7 +202,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Skip building the stats table if no filter column carries usable row-group statistics.
   if (not any_row_group_stats_available(
-        per_file_metadata, input_row_group_indices, filter_column_schemas)) {
+        *this, per_file_metadata, input_row_group_indices, filter_column_schemas)) {
     return std::nullopt;
   }
 
