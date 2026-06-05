@@ -123,16 +123,16 @@ __device__ cuda::std::optional<bool> null_logical_or(cuda::std::optional<A> a,
  * @param false_value Value selected when @p pred is false.
  * @param pred Selection predicate.
  */
-template <typename T>
-__device__ T if_else(T true_value, T false_value, bool pred)
+template <typename T, cuda::std::integral Predicate>
+__device__ T if_else(T true_value, T false_value, Predicate pred)
 {
   return pred ? true_value : false_value;
 }
 
-template <typename T>
+template <typename T, cuda::std::integral Predicate>
 __device__ cuda::std::optional<T> if_else(cuda::std::optional<T> true_value,
                                           cuda::std::optional<T> false_value,
-                                          cuda::std::optional<bool> pred)
+                                          cuda::std::optional<Predicate> pred)
 {
   return pred.value_or(false) ? true_value : false_value;
 }

@@ -41,6 +41,7 @@ namespace CUDF_EXPORT cudf {
  * types
  * @throws std::invalid_argument if any of the input columns have nulls
  * @throws std::logic_error if JIT is not supported by the runtime
+ * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the size of the largest column.
  *
@@ -51,6 +52,7 @@ namespace CUDF_EXPORT cudf {
  * @param user_data     User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param null_policy   Signifies if a null mask should be created for the output column
+ * @param error_policy  Specifies the error handling policy for the transform operation
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the transform function to
@@ -64,6 +66,7 @@ namespace CUDF_EXPORT cudf {
   std::optional<void*> user_data    = std::nullopt,
   null_aware is_null_aware          = null_aware::NO,
   output_nullability null_policy    = output_nullability::PRESERVE,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -101,6 +104,7 @@ struct transform_output {
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
+ * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input columns.
@@ -114,6 +118,7 @@ struct transform_output {
  * @param null_policy   Signifies if a null mask should be created for the output column
  * @param row_size The row size of the transform operation. If not provided, it is inferred from the
  * input columns.
+ * @param error_policy Specifies the error handling policy for the transform operation
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the transform function to
@@ -128,6 +133,7 @@ std::unique_ptr<column> transform_extended(
   null_aware is_null_aware          = null_aware::NO,
   std::optional<size_type> row_size = std::nullopt,
   output_nullability null_policy    = output_nullability::PRESERVE,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -147,6 +153,7 @@ std::unique_ptr<column> transform_extended(
  * this case.
  * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
  * if the number of string offsets does not match the number of output columns.
+ * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
@@ -161,6 +168,7 @@ std::unique_ptr<column> transform_extended(
  * to prevent overhead of compacting string views into run-end strings column.
  * @param row_size The row size of the transform operation. If not provided, it is inferred from the
  * input columns.
+ * @param error_policy Specifies the error handling policy for the transform operation
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              A table containing the columns resulting from applying the transform
@@ -176,6 +184,7 @@ std::unique_ptr<table> multi_transform(
   std::span<transform_output const> outputs,
   std::vector<std::unique_ptr<column>>&& string_offsets,
   std::optional<size_type> row_size,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -221,9 +230,12 @@ std::unique_ptr<column> column_nans_to_nulls(
  * transform.
  *
  * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ * @throws cudf::evaluation_error if the evaluation of the expression results in an error during
+ * execution.
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
+ * @param error_policy Specifies the error handling policy for the transform operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource
  * @return Output column
@@ -231,6 +243,7 @@ std::unique_ptr<column> column_nans_to_nulls(
 std::unique_ptr<column> compute_column(
   table_view const& table,
   ast::expression const& expr,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -242,9 +255,12 @@ std::unique_ptr<column> compute_column(
  * transform.
  *
  * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ * @throws cudf::evaluation_error if the evaluation of the expression results in an error during
+ * execution.
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
+ * @param error_policy Specifies the error handling policy for the transform operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource
  * @return Output column
@@ -252,6 +268,7 @@ std::unique_ptr<column> compute_column(
 std::unique_ptr<column> compute_column_jit(
   table_view const& table,
   ast::expression const& expr,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

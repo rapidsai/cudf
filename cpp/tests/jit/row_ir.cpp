@@ -130,7 +130,7 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
 
     row_ir::code_sink sink;
     row_ir::node op{
-      row_ir::opcode::IDENTITY, std::nullopt, row_ir::node{row_ir::input_reference{0}}};
+      row_ir::opcode::IDENTITY, std::nullopt, false, row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
     op.emit_code(ctx, target_info, sink);
 
@@ -149,7 +149,7 @@ int32_t tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDE
     [[maybe_unused]] auto in1 = ctx.add_input(*d32);
     row_ir::code_sink sink;
     row_ir::node op{
-      row_ir::opcode::IDENTITY, std::nullopt, row_ir::node{row_ir::input_reference{1}}};
+      row_ir::opcode::IDENTITY, std::nullopt, false, row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx);
     op.emit_code(ctx, target_info, sink);
 
@@ -174,6 +174,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD,
                     std::nullopt,
+                    false,
                     row_ir::node{row_ir::input_reference{0}},
                     row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
@@ -196,6 +197,7 @@ int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD,
                     std::nullopt,
+                    false,
                     row_ir::node{row_ir::input_reference{1}},
                     row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx);
@@ -221,17 +223,19 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     // where v = (x, y) and v is a 2D vector.
     auto x2 = row_ir::node(row_ir::opcode::MUL,
                            std::nullopt,
+                           false,
                            row_ir::node{row_ir::input_reference{input0}},
                            row_ir::node{row_ir::input_reference{input0}});
 
     auto y2 = row_ir::node(row_ir::opcode::MUL,
                            std::nullopt,
+                           false,
                            row_ir::node{row_ir::input_reference{input1}},
                            row_ir::node{row_ir::input_reference{input1}});
 
-    auto sum = row_ir::node(row_ir::opcode::ADD, std::nullopt, std::move(x2), std::move(y2));
+    auto sum = row_ir::node(row_ir::opcode::ADD, std::nullopt, false, std::move(x2), std::move(y2));
 
-    auto length = row_ir::node(row_ir::opcode::SQRT, std::nullopt, std::move(sum));
+    auto length = row_ir::node(row_ir::opcode::SQRT, std::nullopt, false, std::move(sum));
 
     return row_ir::node(row_ir::output_reference{0}, std::move(length));
   };
@@ -347,7 +351,7 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
     [[maybe_unused]] auto in0 = ctx.add_input(*b8);
     row_ir::code_sink sink;
     row_ir::node filter_predicate(
-      row_ir::opcode::PREDICATE, std::nullopt, row_ir::node{row_ir::input_reference{0}});
+      row_ir::opcode::PREDICATE, std::nullopt, false, row_ir::node{row_ir::input_reference{0}});
     filter_predicate.instantiate(ctx);
     filter_predicate.emit_code(ctx, target_info, sink);
 
@@ -364,7 +368,7 @@ bool tmp_1 = cudf::detail::ops::predicate(tmp_0);
     [[maybe_unused]] auto in0 = ctx.add_input(*b8);
     row_ir::code_sink sink;
     row_ir::node filter_predicate(
-      row_ir::opcode::PREDICATE, std::nullopt, row_ir::node{row_ir::input_reference{0}});
+      row_ir::opcode::PREDICATE, std::nullopt, false, row_ir::node{row_ir::input_reference{0}});
     ctx.set_has_nulls(true);
     filter_predicate.instantiate(ctx);
     filter_predicate.emit_code(ctx, target_info, sink);

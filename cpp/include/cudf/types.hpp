@@ -262,6 +262,14 @@ enum class output_nullability : uint8_t {
 };
 
 /**
+ * @brief Enum to specify the error handling policy for the transform operation
+ */
+enum class [[nodiscard]] error_output : int8_t {
+  ANY,     //< Only the maximum error code will be recorded
+  PER_ROW  //< Per-row errors will be recorded
+};
+
+/**
  * @brief Indicates the source language of a user defined function (UDF) to be used in JIT APIs.
  */
 enum class udf_source_type : uint8_t {

@@ -29,6 +29,7 @@ std::unique_ptr<table> filter(std::string const& predicate_udf,
                               std::span<transform_input const> predicate_inputs,
                               table_view const& filter_table,
                               output_nullability predicate_nullability,
+                              error_output error_policy,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
@@ -62,6 +63,7 @@ std::unique_ptr<table> filter(std::string const& predicate_udf,
                                       outputs,
                                       {},
                                       filter_table.num_rows(),
+                                      error_policy,
                                       stream,
                                       mr);
 
@@ -73,6 +75,7 @@ std::unique_ptr<table> filter(std::string const& predicate_udf,
 std::unique_ptr<table> filter(table_view const& predicate_table,
                               ast::expression const& predicate_expr,
                               table_view const& filter_table,
+                              error_output error_policy,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
@@ -91,6 +94,7 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
                         args.inputs,
                         filter_table,
                         args.outputs[0].nullability,
+                        error_policy,
                         stream,
                         mr);
 }
@@ -103,6 +107,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
   std::optional<void*> user_data,
   null_aware is_null_aware,
   output_nullability predicate_nullability,
+  error_output error_policy,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -114,6 +119,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
                               predicate_inputs,
                               table_view{filter_columns},
                               predicate_nullability,
+                              error_policy,
                               stream,
                               mr);
   return table->release();
@@ -126,6 +132,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
                                             std::optional<void*> user_data,
                                             null_aware is_null_aware,
                                             output_nullability predicate_nullability,
+                                            error_output error_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -151,6 +158,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
                               inputs,
                               table_view{filter_columns},
                               predicate_nullability,
+                              error_policy,
                               stream,
                               mr);
   return table->release();

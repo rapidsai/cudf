@@ -6,6 +6,7 @@ from libc.stdint cimport int32_t
 from libcpp cimport bool as cbool
 from pylibcudf.libcudf.types cimport (
     data_type,
+    error_output,
     interpolation,
     mask_state,
     nan_equality,

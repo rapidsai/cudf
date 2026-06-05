@@ -391,6 +391,7 @@ std::unique_ptr<table> stable_distinct(
  * @throws cudf::logic_error if JIT is not supported by the runtime
  * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
  * columns
+ * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the size of the largest column.
  *
@@ -401,6 +402,7 @@ std::unique_ptr<table> stable_distinct(
  * @param user_data User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param predicate_nullability Specifies the nullability of the predicate output
+ * @param error_policy Specifies the error handling policy for the filter operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The filtered target columns
@@ -413,6 +415,7 @@ std::unique_ptr<table> stable_distinct(
   std::optional<void*> user_data           = std::nullopt,
   null_aware is_null_aware                 = null_aware::NO,
   output_nullability predicate_nullability = output_nullability::PRESERVE,
+  error_output error_policy                = error_output::ANY,
   rmm::cuda_stream_view stream             = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
@@ -442,6 +445,7 @@ using filter_input = std::variant<column_view, scalar_column_view>;
  * @throws cudf::logic_error if JIT is not supported by the runtime
  * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
  * columns
+ * @throws cudf::evaluation_error if the UDF produces an error during execution
  *
  * The size of the resulting column is the size of the largest column.
  *
@@ -452,6 +456,7 @@ using filter_input = std::variant<column_view, scalar_column_view>;
  * @param user_data User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param predicate_nullability Specifies the nullability of the predicate output
+ * @param error_policy Specifies the error handling policy for the filter operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The filtered target columns
@@ -464,6 +469,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
   std::optional<void*> user_data           = std::nullopt,
   null_aware is_null_aware                 = null_aware::NO,
   output_nullability predicate_nullability = output_nullability::PRESERVE,
+  error_output error_policy                = error_output::ANY,
   rmm::cuda_stream_view stream             = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
@@ -479,10 +485,12 @@ std::vector<std::unique_ptr<column>> filter_extended(
  * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
  * types
  * @throws cudf::logic_error if JIT is not supported by the runtime
+ * @throws cudf::evaluation_error if the UDF produces an error during execution
  *
  * @param predicate_table The table used for predicate expression evaluation
  * @param predicate_expr The predicate filter expression
  * @param filter_table The table to be filtered
+ * @param error_policy Specifies the error handling policy for the filter operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The filtered table
@@ -491,6 +499,7 @@ std::unique_ptr<table> filter(
   table_view const& predicate_table,
   ast::expression const& predicate_expr,
   table_view const& filter_table,
+  error_output error_policy         = error_output::ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

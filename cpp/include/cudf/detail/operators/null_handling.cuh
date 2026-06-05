@@ -35,43 +35,22 @@ __device__ bool is_null(T a)
 }
 
 /**
- * @brief Sets the output to null when the condition is true.
- *
- * @tparam T Value type.
- * @param a Input value.
- * @param condition boolean condition.
- */
-template <typename T>
-__device__ cuda::std::optional<T> nullify_if(cuda::std::optional<T> a,
-                                             cuda::std::optional<bool> condition)
-{
-  if (condition.has_value() && a.has_value()) {
-    if (condition.value()) {
-      return {};
-    } else {
-      return a.value();
-    }
-  } else {
-    return {};
-  }
-}
-
-/**
  * @brief Returns the first non-null of two values.
  *
  * @tparam T Value type.
  * @param a First value.
  * @param b Second value.
  */
-template <typename T>
-__device__ T coalesce(T a, T b)
-  requires(!nullable<T>)
+template <typename A, typename B>
+__device__ auto coalesce(A a, B b)
+  requires(!nullable<A> && !nullable<B> && cuda::std::same_as<A, B>)
 {
   return a;
 }
 
-template <typename T>
-__device__ cuda::std::optional<T> coalesce(cuda::std::optional<T> a, cuda::std::optional<T> b)
+template <typename A, typename B>
+__device__ cuda::std::optional<A> coalesce(cuda::std::optional<A> a, cuda::std::optional<B> b)
+  requires(!nullable<A> && !nullable<B> && cuda::std::same_as<A, B>)
 {
   if (a.has_value()) {
     return a.value();

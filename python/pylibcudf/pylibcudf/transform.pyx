@@ -24,7 +24,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType, null_aware, output_nullability
+from .types cimport DataType, null_aware, output_nullability, error_output
 from .utils cimport _get_stream, _get_memory_resource
 from cuda.bindings.cyruntime cimport cudaStream_t
 
@@ -119,7 +119,7 @@ cpdef Column column_nans_to_nulls(
 
 
 cpdef Column compute_column(
-    Table input, Expression expr, object stream=None, DeviceMemoryResource mr=None
+    Table input, Expression expr, object error_policy=None, object stream=None, DeviceMemoryResource mr=None
 ):
     """Create a column by evaluating an expression on a table.
 
@@ -131,6 +131,8 @@ cpdef Column compute_column(
         Table used for expression evaluation
     expr : Expression
         Expression to evaluate
+    error_policy : ErrorOutput | None
+        Error handling policy. Defaults to ErrorOutput.ANY.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -141,6 +143,9 @@ cpdef Column compute_column(
     Column of the evaluated expression
     """
     cdef unique_ptr[column] c_result
+    cdef error_output c_error_policy = (
+        error_output.ANY if error_policy is None else <error_output>error_policy
+    )
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
@@ -148,14 +153,14 @@ cpdef Column compute_column(
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), c_error_policy, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column compute_column_jit(
-    Table input, Expression expr, object stream=None, DeviceMemoryResource mr=None
+    Table input, Expression expr, object error_policy=None, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Create a column by evaluating an expression on a table
@@ -169,6 +174,8 @@ cpdef Column compute_column_jit(
         Table used for expression evaluation
     expr : Expression
         Expression to evaluate
+    error_policy : ErrorOutput | None
+        Error handling policy. Defaults to ErrorOutput.ANY.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -179,6 +186,9 @@ cpdef Column compute_column_jit(
     Column of the evaluated expression
     """
     cdef unique_ptr[column] c_result
+    cdef error_output c_error_policy = (
+        error_output.ANY if error_policy is None else <error_output>error_policy
+    )
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
@@ -186,7 +196,7 @@ cpdef Column compute_column_jit(
 
     with nogil:
         c_result = cpp_transform.compute_column_jit(
-            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), c_error_policy, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -285,6 +295,7 @@ cpdef Column transform(
     bool is_ptx,
     null_aware is_null_aware,
     output_nullability null_policy,
+    object error_policy=None,
     object stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -309,6 +320,8 @@ cpdef Column transform(
         If `PRESERVE`, null-masks are produced if necessary.
         If `ALL_VALID`, null-masks are not produced.
         `ALL_VALID` has undefined behavior if the UDF can produce nulls.
+    error_policy : ErrorOutput | None
+        Error handling policy. Defaults to ErrorOutput.ANY.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -325,6 +338,9 @@ cpdef Column transform(
     cdef bool c_is_ptx = is_ptx
     cdef null_aware c_is_null_aware = is_null_aware
     cdef output_nullability c_null_policy = null_policy
+    cdef error_output c_error_policy = (
+        error_output.ANY if error_policy is None else <error_output>error_policy
+    )
     cdef optional[void *] user_data
 
     cdef Stream _stream = _get_stream(stream)
@@ -343,6 +359,7 @@ cpdef Column transform(
             user_data,
             c_is_null_aware,
             c_null_policy,
+            c_error_policy,
             _cs,
             mr.get_mr()
         )

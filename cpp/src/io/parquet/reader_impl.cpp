@@ -905,8 +905,11 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
 
     if (!use_jit) {
-      auto predicate = cudf::detail::compute_column(
-        *read_table, _expr_conv.get_converted_expr().value().get(), _stream, _mr);
+      auto predicate = cudf::detail::compute_column(*read_table,
+                                                    _expr_conv.get_converted_expr().value().get(),
+                                                    cudf::error_output::ANY,
+                                                    _stream,
+                                                    _mr);
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
@@ -917,6 +920,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       auto output_table = cudf::filter(read_table->view(),
                                        _expr_conv.get_converted_expr().value().get(),
                                        only_output,
+                                       error_output::ANY,
                                        _stream,
                                        _mr);
 

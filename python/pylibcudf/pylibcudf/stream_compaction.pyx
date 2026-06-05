@@ -10,6 +10,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport (
+    error_output,
     nan_equality,
     null_equality,
     size_type,
@@ -374,6 +375,7 @@ cpdef Table filter(
     Table predicate_table,
     Expression predicate_expr,
     Table filter_table,
+    object error_policy=None,
     object stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -389,6 +391,8 @@ cpdef Table filter(
         The predicate filter expression.
     filter_table : Table
         The table to be filtered.
+    error_policy : ErrorOutput | None
+        Error handling policy. Defaults to ErrorOutput.ANY.
 
     Returns
     -------
@@ -396,6 +400,9 @@ cpdef Table filter(
         The filtered table.
     """
     cdef unique_ptr[table] c_result
+    cdef error_output c_error_policy = (
+        error_output.ANY if error_policy is None else <error_output>error_policy
+    )
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
@@ -406,6 +413,7 @@ cpdef Table filter(
             predicate_table.view(),
             dereference(predicate_expr.c_obj.get()),
             filter_table.view(),
+            c_error_policy,
             _cs,
             mr.get_mr()
         )

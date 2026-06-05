@@ -158,6 +158,7 @@ struct q9_data {
                                   cudf::null_aware::NO,
                                   std::nullopt,
                                   cudf::output_nullability::PRESERVE,
+                                  cudf::error_output::ANY,
                                   stream,
                                   mr);
 }
@@ -195,7 +196,7 @@ struct q9_data {
   auto& result = tree.push(cudf::ast::operation{
     cudf::ast::ast_operator::SUB, extended_price_discounted, supply_cost_mul_quantity});
 
-  return cudf::compute_column(table, result, stream, mr);
+  return cudf::compute_column(table, result, cudf::error_output::ANY, stream, mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::column> compute_amount(

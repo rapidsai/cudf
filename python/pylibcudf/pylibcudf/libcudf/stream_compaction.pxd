@@ -10,6 +10,7 @@ from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport (
+    error_output,
     nan_equality,
     null_equality,
     size_type,
@@ -97,6 +98,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         table_view predicate_table,
         const expression& predicate_expr,
         table_view filter_table,
+        error_output error_policy,
         cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

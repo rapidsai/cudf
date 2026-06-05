@@ -90,6 +90,7 @@ static void BM_transform_polynomials(nvbench::state& state)
                              cudf::null_aware::NO,
                              std::nullopt,
                              cudf::output_nullability::PRESERVE,
+                             cudf::error_output::ANY,
                              launch.get_stream().get_stream());
   });
 

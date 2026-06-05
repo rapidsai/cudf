@@ -32,6 +32,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
+#include <cudf/utilities/evaluation_error.hpp>
 
 namespace transformation {
 
@@ -1179,6 +1180,102 @@ return l - t * l + t * h;
                                               cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Transform_ErrorHandling)
+{
+  // c = a*a*a*a
+  std::string const cuda =
+    R"***(
+__device__ cudf::errc expression (
+       int* c,
+       int a,
+       int b
+)
+{
+  auto e = cudf::detail::ops::ansi_div(a, b);
+  if(!e.has_value()){
+    return e.error();
+  }
+  *c = e.value();
+  return cudf::errc::SUCCESS;
+}
+)***";
+
+  cudf::test::fixed_width_column_wrapper<int32_t> a{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> b_fail{1, 2, 3, 4, 5, 6, 0, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> b{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+  {
+    cudf::transform_input inputs[]   = {a, b};
+    cudf::transform_output outputs[] = {
+      {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
+    std::unique_ptr<cudf::table> result;
+    EXPECT_NO_THROW(result = cudf::multi_transform(cuda,
+                                                   cudf::udf_source_type::CUDA,
+                                                   cudf::null_aware::NO,
+                                                   std::nullopt,
+                                                   inputs,
+                                                   outputs,
+                                                   {},
+                                                   std::nullopt,
+                                                   cudf::error_output::ANY));
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+  }
+
+  {
+    cudf::transform_input inputs[]   = {a, b_fail};
+    cudf::transform_output outputs[] = {
+      {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
+    std::unique_ptr<cudf::table> result;
+    EXPECT_THROW(result = cudf::multi_transform(cuda,
+                                                cudf::udf_source_type::CUDA,
+                                                cudf::null_aware::NO,
+                                                std::nullopt,
+                                                inputs,
+                                                outputs,
+                                                {},
+                                                std::nullopt,
+                                                cudf::error_output::ANY),
+                 cudf::evaluation_error);
+  }
+
+  {
+    cudf::transform_input inputs[]   = {a, b_fail};
+    cudf::transform_output outputs[] = {
+      {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
+    std::unique_ptr<cudf::table> result;
+    EXPECT_THROW(result = cudf::multi_transform(cuda,
+                                                cudf::udf_source_type::CUDA,
+                                                cudf::null_aware::NO,
+                                                std::nullopt,
+                                                inputs,
+                                                outputs,
+                                                {},
+                                                std::nullopt,
+                                                cudf::error_output::PER_ROW),
+                 cudf::evaluation_error);
+
+    try {
+      cudf::multi_transform(cuda,
+                            cudf::udf_source_type::CUDA,
+                            cudf::null_aware::NO,
+                            std::nullopt,
+                            inputs,
+                            outputs,
+                            {},
+                            std::nullopt,
+                            cudf::error_output::PER_ROW);
+      FAIL() << "Expected cudf::evaluation_error";
+    } catch (cudf::evaluation_error const& e) {
+      ASSERT_TRUE(e.row_errors().has_value());
+      ASSERT_EQ(e.row_errors()->size(), cudf::column_view(a).size());
+    } catch (...) {
+      FAIL() << "Expected cudf::evaluation_error";
+    }
+  }
 }
 
 }  // namespace transformation

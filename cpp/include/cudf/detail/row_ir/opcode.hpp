@@ -1,0 +1,313 @@
+
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+#include <cudf/detail/operators/operators.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
+
+namespace CUDF_EXPORT cudf {
+
+namespace detail::row_ir {
+
+enum class [[nodiscard]] opcode : int32_t {
+  GET_INPUT,
+  SET_OUTPUT,
+
+  // Identity operators
+  IDENTITY,
+
+  // Null handling operators
+  IS_NULL,
+
+  COALESCE,
+  PREDICATE,
+
+  /// Arithmetic operators
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  NEG,
+  ABS,
+  MOD,
+  PYMOD,
+  TRUE_DIV,
+  FLOOR_DIV,
+
+  /// ANSI Arithmetic functions. raise errors on overflow, division by zero, etc.
+  ANSI_ADD,
+  ANSI_SUB,
+  ANSI_MUL,
+  ANSI_DIV,
+  ANSI_NEG,
+  ANSI_ABS,
+  ANSI_MOD,
+  ANSI_PRECISION_CHECK,
+
+  /// Bitwise operators
+  BITWISE_AND,
+  BITWISE_INVERT,
+  BITWISE_OR,
+  BITWISE_XOR,
+  BITWISE_SHIFT_LEFT,
+  BITWISE_SHIFT_RIGHT,
+
+  /// Type conversion/scaling operators
+  CAST_TO_BOOL8,
+  CAST_TO_INT8,
+  CAST_TO_INT16,
+  CAST_TO_INT32,
+  CAST_TO_INT64,
+  CAST_TO_UINT8,
+  CAST_TO_UINT16,
+  CAST_TO_UINT32,
+  CAST_TO_UINT64,
+  CAST_TO_FLOAT32,
+  CAST_TO_FLOAT64,
+  CAST_TO_DECIMAL32,
+  CAST_TO_DECIMAL64,
+  CAST_TO_DECIMAL128,
+  RESCALE,
+
+  /// Comparison & Logic operators
+  EQUAL,
+  NOT_EQUAL,
+  GREATER,
+  GREATER_EQUAL,
+  LESS,
+  LESS_EQUAL,
+  NULL_EQUAL,
+  NULL_LOGICAL_AND,
+  NULL_LOGICAL_OR,
+  LOGICAL_AND,
+  LOGICAL_OR,
+  LOGICAL_NOT,
+  IF_ELSE,
+
+  /// Mathematical operators
+  CBRT,
+  CEIL,
+  FLOOR,
+  RINT,
+  SQRT,
+  POW,
+  EXP,
+  LOG,
+
+  /// Trigonometric operators
+  ARCCOS,
+  ARCCOSH,
+  ARCSIN,
+  ARCSINH,
+  ARCTAN,
+  ARCTANH,
+  COS,
+  COSH,
+  SIN,
+  SINH,
+  TAN,
+  TANH,
+};
+
+template <opcode op>
+struct opcode_evaluator;
+
+#define CUDF_OPCODE_EVALUATOR(Op, func_name)                \
+  template <>                                               \
+  struct opcode_evaluator<opcode::Op> {                     \
+    template <typename... Args>                             \
+    __device__ static inline constexpr auto eval(Args... a) \
+      -> decltype(cudf::detail::ops::func_name(a...))       \
+    {                                                       \
+      return cudf::detail::ops::func_name(a...);            \
+    }                                                       \
+  };
+
+CUDF_OPCODE_EVALUATOR(IDENTITY, identity)
+CUDF_OPCODE_EVALUATOR(IS_NULL, is_null)
+CUDF_OPCODE_EVALUATOR(COALESCE, coalesce)
+CUDF_OPCODE_EVALUATOR(PREDICATE, predicate)
+CUDF_OPCODE_EVALUATOR(ADD, add)
+CUDF_OPCODE_EVALUATOR(SUB, sub)
+CUDF_OPCODE_EVALUATOR(MUL, mul)
+CUDF_OPCODE_EVALUATOR(DIV, div)
+CUDF_OPCODE_EVALUATOR(NEG, neg)
+CUDF_OPCODE_EVALUATOR(ABS, abs)
+CUDF_OPCODE_EVALUATOR(MOD, mod)
+CUDF_OPCODE_EVALUATOR(PYMOD, pymod)
+CUDF_OPCODE_EVALUATOR(TRUE_DIV, true_div)
+CUDF_OPCODE_EVALUATOR(FLOOR_DIV, floor_div)
+CUDF_OPCODE_EVALUATOR(ANSI_ADD, ansi_add)
+CUDF_OPCODE_EVALUATOR(ANSI_SUB, ansi_sub)
+CUDF_OPCODE_EVALUATOR(ANSI_MUL, ansi_mul)
+CUDF_OPCODE_EVALUATOR(ANSI_DIV, ansi_div)
+CUDF_OPCODE_EVALUATOR(ANSI_NEG, ansi_neg)
+CUDF_OPCODE_EVALUATOR(ANSI_ABS, ansi_abs)
+CUDF_OPCODE_EVALUATOR(ANSI_MOD, ansi_mod)
+CUDF_OPCODE_EVALUATOR(ANSI_PRECISION_CHECK, ansi_precision_check)
+CUDF_OPCODE_EVALUATOR(BITWISE_AND, bitwise_and)
+CUDF_OPCODE_EVALUATOR(BITWISE_INVERT, bitwise_invert)
+CUDF_OPCODE_EVALUATOR(BITWISE_OR, bitwise_or)
+CUDF_OPCODE_EVALUATOR(BITWISE_XOR, bitwise_xor)
+CUDF_OPCODE_EVALUATOR(BITWISE_SHIFT_LEFT, bitwise_shift_left)
+CUDF_OPCODE_EVALUATOR(BITWISE_SHIFT_RIGHT, bitwise_shift_right)
+CUDF_OPCODE_EVALUATOR(CAST_TO_BOOL8, cast_to_bool8)
+CUDF_OPCODE_EVALUATOR(CAST_TO_INT8, cast_to_int8)
+CUDF_OPCODE_EVALUATOR(CAST_TO_INT16, cast_to_int16)
+CUDF_OPCODE_EVALUATOR(CAST_TO_INT32, cast_to_int32)
+CUDF_OPCODE_EVALUATOR(CAST_TO_INT64, cast_to_int64)
+CUDF_OPCODE_EVALUATOR(CAST_TO_UINT8, cast_to_uint8)
+CUDF_OPCODE_EVALUATOR(CAST_TO_UINT16, cast_to_uint16)
+CUDF_OPCODE_EVALUATOR(CAST_TO_UINT32, cast_to_uint32)
+CUDF_OPCODE_EVALUATOR(CAST_TO_UINT64, cast_to_uint64)
+CUDF_OPCODE_EVALUATOR(CAST_TO_FLOAT32, cast_to_float32)
+CUDF_OPCODE_EVALUATOR(CAST_TO_FLOAT64, cast_to_float64)
+CUDF_OPCODE_EVALUATOR(CAST_TO_DECIMAL32, cast_to_decimal32)
+CUDF_OPCODE_EVALUATOR(CAST_TO_DECIMAL64, cast_to_decimal64)
+CUDF_OPCODE_EVALUATOR(CAST_TO_DECIMAL128, cast_to_decimal128)
+CUDF_OPCODE_EVALUATOR(RESCALE, rescale)
+CUDF_OPCODE_EVALUATOR(EQUAL, equal)
+CUDF_OPCODE_EVALUATOR(NOT_EQUAL, not_equal)
+CUDF_OPCODE_EVALUATOR(GREATER, greater)
+CUDF_OPCODE_EVALUATOR(GREATER_EQUAL, greater_equal)
+CUDF_OPCODE_EVALUATOR(LESS, less)
+CUDF_OPCODE_EVALUATOR(LESS_EQUAL, less_equal)
+CUDF_OPCODE_EVALUATOR(NULL_EQUAL, null_equal)
+CUDF_OPCODE_EVALUATOR(NULL_LOGICAL_AND, null_logical_and)
+CUDF_OPCODE_EVALUATOR(NULL_LOGICAL_OR, null_logical_or)
+CUDF_OPCODE_EVALUATOR(LOGICAL_AND, logical_and)
+CUDF_OPCODE_EVALUATOR(LOGICAL_OR, logical_or)
+CUDF_OPCODE_EVALUATOR(LOGICAL_NOT, logical_not)
+CUDF_OPCODE_EVALUATOR(IF_ELSE, if_else)
+CUDF_OPCODE_EVALUATOR(CBRT, cbrt)
+CUDF_OPCODE_EVALUATOR(CEIL, ceil)
+CUDF_OPCODE_EVALUATOR(FLOOR, floor)
+CUDF_OPCODE_EVALUATOR(RINT, rint)
+CUDF_OPCODE_EVALUATOR(SQRT, sqrt)
+CUDF_OPCODE_EVALUATOR(POW, pow)
+CUDF_OPCODE_EVALUATOR(EXP, exp)
+CUDF_OPCODE_EVALUATOR(LOG, log)
+CUDF_OPCODE_EVALUATOR(ARCCOS, arccos)
+CUDF_OPCODE_EVALUATOR(ARCCOSH, arccosh)
+CUDF_OPCODE_EVALUATOR(ARCSIN, arcsin)
+CUDF_OPCODE_EVALUATOR(ARCSINH, arcsinh)
+CUDF_OPCODE_EVALUATOR(ARCTAN, arctan)
+CUDF_OPCODE_EVALUATOR(ARCTANH, arctanh)
+CUDF_OPCODE_EVALUATOR(COS, cos)
+CUDF_OPCODE_EVALUATOR(COSH, cosh)
+CUDF_OPCODE_EVALUATOR(SIN, sin)
+CUDF_OPCODE_EVALUATOR(SINH, sinh)
+CUDF_OPCODE_EVALUATOR(TAN, tan)
+CUDF_OPCODE_EVALUATOR(TANH, tanh)
+
+#undef CUDF_OPCODE_EVALUATOR
+
+template <typename T>
+inline constexpr bool is_fallible_result = false;
+
+template <typename T>
+inline constexpr bool is_fallible_result<cuda::std::expected<T, cudf::errc>> = true;
+
+// evaluation of non-nullable values
+template <opcode op, bool nullify_on_error, typename... T>
+__device__ constexpr auto evaluate(cudf::errc* error, T... args)
+  requires(!cudf::detail::ops::nullable<T> && ... &&
+           requires { opcode_evaluator<op>::eval(args...); })
+{
+  static_assert(!nullify_on_error, "nullify_on_error=true is not supported for non-nullable types");
+  using result_t = decltype(opcode_evaluator<op>::eval(args...));
+
+  if constexpr (is_fallible_result<result_t>) {
+    using return_t = typename result_t::value_type;
+    auto result    = opcode_evaluator<op>::eval(args...);
+    if (!result.has_value()) {
+      *error = result.error();
+      return return_t{};
+    }
+    return result.value();
+  } else {
+    *error = cudf::errc::SUCCESS;
+    return opcode_evaluator<op>::eval(args...);
+  }
+}
+
+// evaluation of nullable values
+template <opcode op, bool nullify_on_error, typename ... T>
+__device__ constexpr auto evaluate(cudf::errc* error, T ... args)
+  requires(cudf::detail::ops::nullable<T> && ... && ( requires{ opcode_evaluator<op>::eval(args...); } ||
+requires{ opcode_evaluator<op>::eval(args.value()...); }
+))
+{
+  // if the operator can handle nullable types, use it.
+  // otherwise propagate nulls.
+  if constexpr (requires { opcode_evaluator<op>::eval(args...); }) {
+    using result_t = decltype(opcode_evaluator<op>::eval(args...));
+
+    if constexpr (is_fallible_result<result_t>) {
+      // unwrap the result of the operator and propagate errors
+      using return_t = typename result_t::value_type;
+      auto result    = opcode_evaluator<op>::eval(args...);
+      if (!result.has_value()) {
+        if constexpr (nullify_on_error) {
+          *error = cudf::errc::SUCCESS;
+          return return_t{};
+        } else {
+          *error = result.error();
+          return return_t{};
+        }
+      }
+      return result.value();
+    } else {
+      *error = cudf::errc::SUCCESS;
+      return opcode_evaluator<op>::eval(args...);
+    }
+  } else {
+    using result_t = decltype(opcode_evaluator<op>::eval(args.value()...));
+
+    if constexpr (is_fallible_result<result_t>) {
+      using value_t  = typename result_t::value_type;
+      using return_t = cuda::std::optional<value_t>;
+
+      // If any of the arguments are null, return null without calling the operator and set error to
+      // SUCCESS.
+      if ((!args.has_value() || ...)) {
+        *error = cudf::errc::SUCCESS;
+        return return_t{};
+      }
+
+      auto result = opcode_evaluator<op>::eval(args.value()...);
+
+      if (!result.has_value()) {
+        if constexpr (nullify_on_error) {
+          *error = cudf::errc::SUCCESS;
+        } else {
+          *error = result.error();
+        }
+        return return_t{};
+      }
+
+      return return_t{result.value()};
+    } else {
+      *error = cudf::errc::SUCCESS;
+
+      using return_t = cuda::std::optional<result_t>;
+
+      if ((!args.has_value() || ...)) { return return_t{}; }
+
+      return return_t{opcode_evaluator<op>::eval(args.value()...)};
+    }
+  }
+}
+
+#define CUDF_CHECK_OPCODE_ERROR_FLAG(flag)              \
+  do {                                                  \
+    if (flag != ::cudf::errc::SUCCESS) { return flag; } \
+    flag = ::cudf::errc::SUCCESS;                       \
+  } while (0)
+
+}  // namespace detail::row_ir
+}  // namespace CUDF_EXPORT cudf

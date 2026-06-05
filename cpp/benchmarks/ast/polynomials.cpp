@@ -91,11 +91,13 @@ void BM_ast_polynomials(nvbench::state& state)
 
     switch (engine) {
       case engine_type::AST: {
-        cudf::compute_column(*table, tree.back(), launch.get_stream().get_stream());
+        cudf::compute_column(
+          *table, tree.back(), cudf::error_output::ANY, launch.get_stream().get_stream());
         break;
       }
       case engine_type::JIT: {
-        cudf::compute_column_jit(*table, tree.back(), launch.get_stream().get_stream());
+        cudf::compute_column_jit(
+          *table, tree.back(), cudf::error_output::ANY, launch.get_stream().get_stream());
         break;
       }
       default: CUDF_FAIL("Invalid engine type");

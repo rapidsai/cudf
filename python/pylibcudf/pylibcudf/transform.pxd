@@ -21,11 +21,11 @@ cpdef Column column_nans_to_nulls(
 )
 
 cpdef Column compute_column(
-    Table input, Expression expr, object stream = *, DeviceMemoryResource mr = *
+    Table input, Expression expr, object error_policy = *, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Column compute_column_jit(
-    Table input, Expression expr, object stream = *, DeviceMemoryResource mr = *
+    Table input, Expression expr, object error_policy = *, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef tuple[gpumemoryview, int] bools_to_mask(
@@ -47,6 +47,7 @@ cpdef Column transform(
     bool is_ptx,
     null_aware is_null_aware,
     output_nullability null_policy,
+    object error_policy = *,
     object stream = *,
     DeviceMemoryResource mr = *,
 )

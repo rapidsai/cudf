@@ -23,6 +23,7 @@ namespace detail {
  */
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
+                                       error_output error_policy,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
 

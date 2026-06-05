@@ -62,6 +62,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         PRESERVE
         ALL_VALID
 
+    cpdef enum class error_output(int8_t):
+        ANY
+        PER_ROW
+
     cpdef enum class nan_equality(bool):
         ALL_EQUAL
         UNEQUAL
