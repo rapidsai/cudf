@@ -15,15 +15,16 @@ namespace detail {
 
 cudf::size_type operation::accept(cudf::ast::detail::expression_parser& visitor) const
 {
-  CUDF_FAIL("predicate is an internal expression and should not be visited by expression_parser",
-            std::invalid_argument);
+  CUDF_FAIL(
+    "JIT operation is an internal expression and should not be visited by expression_parser",
+    std::invalid_argument);
 }
 
 std::reference_wrapper<expression const> operation::accept(
   cudf::ast::detail::expression_transformer& visitor) const
 {
   CUDF_FAIL(
-    "predicate is an internal expression and should not be visited by "
+    "JIT operation is an internal expression and should not be visited by "
     "expression_transformer",
     std::invalid_argument);
 }
@@ -32,7 +33,7 @@ bool operation::may_evaluate_null(table_view const& left,
                                   table_view const& right,
                                   rmm::cuda_stream_view stream) const
 {
-  CUDF_FAIL("predicate is an internal expression and should not be evaluated directly",
+  CUDF_FAIL("JIT operation is an internal expression and should not be evaluated directly",
             std::invalid_argument);
 }
 
@@ -63,7 +64,9 @@ std::tuple<opcode, bool> resolve_op(opcode default_op, opcode ansi_op, jit::comp
     case jit::compliance_mode::DEFAULT: return {default_op, false};
     case jit::compliance_mode::ANSI: return {ansi_op, false};
     case jit::compliance_mode::ANSI_TRY: return {ansi_op, true};
-    default: CUDF_FAIL("Invalid compliance mode", std::invalid_argument);
+    default:
+      CUDF_FAIL(std::format("Invalid compliance mode: {}", static_cast<int>(mode)),
+                std::invalid_argument);
   }
 }
 
@@ -152,7 +155,10 @@ expression const& jit::precision_check(ast::tree& tree,
       op               = opcode::ANSI_PRECISION_CHECK;
       nullify_on_error = true;
     } break;
-    default: CUDF_FAIL("Invalid compliance mode for precision check", std::invalid_argument);
+    default:
+      CUDF_FAIL(
+        std::format("Invalid compliance mode for precision check: {}", static_cast<int>(mode)),
+        std::invalid_argument);
   }
 
   return tree.push(detail::operation(op, {a, precision}, nullify_on_error));

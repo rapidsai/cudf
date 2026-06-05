@@ -579,7 +579,6 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
       // Filter the input table using AST expression and return the (BOOL8) predicate column.
       auto const page_mask = cudf::detail::compute_column(page_stats_table,
                                                           stats_expr.get_stats_expr().get(),
-                                                          cudf::error_output::ANY,
                                                           stream,
                                                           cudf::get_current_device_resource_ref());
 
@@ -978,7 +977,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Filter the input table using AST expression and return the (BOOL8) predicate column.
   return cudf::detail::compute_column(
-    page_stats_table, stats_expr.get_stats_expr().get(), cudf::error_output::ANY, stream, mr);
+    page_stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
 template <typename ColumnView>

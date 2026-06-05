@@ -353,8 +353,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const col_ref = cudf::ast::column_reference(0);
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, current_date_literal);
-    auto const binary_mask = cudf::compute_column(
-      cudf::table_view({l_receiptdate_ts->view()}), pred, cudf::error_output::ANY, stream, mr);
+    auto const binary_mask =
+      cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), pred, stream, mr);
 
     auto const multiplier =
       generate_repeat_sequence_column<int8_t>(2, false, l_num_rows, stream, mr);
@@ -378,8 +378,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const col_ref = cudf::ast::column_reference(0);
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
-    auto mask = cudf::compute_column(
-      cudf::table_view({l_shipdate_ts->view()}), pred, cudf::error_output::ANY, stream, mr);
+    auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, stream, mr);
     auto mask_index_type =
       cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8}, stream, mr);
     auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
@@ -486,7 +485,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     auto const count_ref = cudf::ast::column_reference(1);
     auto const sum_ref   = cudf::ast::column_reference(2);
     auto const expr_a    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
-    auto const mask_a    = cudf::compute_column(table, expr_a, cudf::error_output::ANY, stream, mr);
+    auto const mask_a    = cudf::compute_column(table, expr_a, stream, mr);
     auto const o_orderstatus_intermediate = cudf::copy_if_else(
       cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view(), stream, mr);
 
@@ -499,7 +498,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
     auto const expr_b =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_b_left, expr_b_right);
-    auto const mask_b = cudf::compute_column(table, expr_b, cudf::error_output::ANY, stream, mr);
+    auto const mask_b = cudf::compute_column(table, expr_b, stream, mr);
     return cudf::copy_if_else(
       cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view(), stream, mr);
   }();

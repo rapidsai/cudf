@@ -37,7 +37,6 @@ void test_udf(char const* udf,
                            cudf::null_aware::NO,
                            std::nullopt,
                            cudf::output_nullability::PRESERVE,
-                           cudf::error_output::ANY,
                            cudf::test::get_default_stream());
 }
 
@@ -106,8 +105,7 @@ TEST_F(TransformTest, ComputeColumn)
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
-  cudf::compute_column(
-    table, expression, cudf::error_output::ANY, cudf::test::get_default_stream());
+  cudf::compute_column(table, expression, cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, ComputeColumnJIT)
@@ -118,8 +116,7 @@ TEST_F(TransformTest, ComputeColumnJIT)
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
-  cudf::compute_column_jit(
-    table, expression, cudf::error_output::ANY, cudf::test::get_default_stream());
+  cudf::compute_column_jit(table, expression, cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, BoolsToMask)

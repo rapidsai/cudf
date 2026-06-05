@@ -880,6 +880,30 @@ std::unique_ptr<table> multi_transform(std::string const& udf,
                                        std::span<transform_output const> outputs,
                                        std::vector<std::unique_ptr<column>>&& string_offsets,
                                        std::optional<size_type> row_size,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  return multi_transform(udf,
+                         source_type,
+                         is_null_aware,
+                         user_data,
+                         inputs,
+                         outputs,
+                         std::move(string_offsets),
+                         row_size,
+                         error_output::ANY,
+                         stream,
+                         mr);
+}
+
+std::unique_ptr<table> multi_transform(std::string const& udf,
+                                       udf_source_type source_type,
+                                       null_aware is_null_aware,
+                                       std::optional<void*> user_data,
+                                       std::span<transform_input const> inputs,
+                                       std::span<transform_output const> outputs,
+                                       std::vector<std::unique_ptr<column>>&& string_offsets,
+                                       std::optional<size_type> row_size,
                                        error_output error_policy,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
@@ -907,7 +931,6 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
                                            null_aware is_null_aware,
                                            std::optional<size_type> row_size,
                                            output_nullability null_policy,
-                                           error_output error_policy,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
@@ -920,7 +943,7 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
                                outputs,
                                                {},
                                row_size,
-                               error_policy,
+                               error_output::ANY,
                                stream,
                                mr);
   auto cols                  = table->release();
@@ -934,7 +957,6 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
                                   std::optional<void*> user_data,
                                   null_aware is_null_aware,
                                   output_nullability null_policy,
-                                  error_output error_policy,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
@@ -961,9 +983,16 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
                             is_null_aware,
                             base_column->size(),
                             null_policy,
-                            error_policy,
                             stream,
                             mr);
+}
+
+std::unique_ptr<column> compute_column_jit(table_view const& table,
+                                           ast::expression const& expr,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  return compute_column_jit(table, expr, error_output::ANY, stream, mr);
 }
 
 std::unique_ptr<column> compute_column_jit(table_view const& table,

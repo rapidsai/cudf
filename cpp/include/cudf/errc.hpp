@@ -24,7 +24,7 @@ enum class [[nodiscard]] errc : cuda::std::int8_t {
  * @param error The error code to convert
  * @return A C-string representing the error code
  */
-constexpr char const* to_string(errc error)
+[[nodiscard]] constexpr char const* to_string(errc error)
 {
   switch (error) {
     case errc::SUCCESS: return "SUCCESS";

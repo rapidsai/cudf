@@ -8,7 +8,7 @@ from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.table import Table
-from pylibcudf.types import ErrorOutput, NanEquality, NullEquality
+from pylibcudf.types import NanEquality, NullEquality
 from pylibcudf.utils import CudaStreamLike
 
 class DuplicateKeepOption(IntEnum):
@@ -81,7 +81,6 @@ def filter(
     predicate_table: Table,
     predicate_expr: Expression,
     filter_table: Table,
-    error_policy: ErrorOutput | None = None,
     stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...

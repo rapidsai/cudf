@@ -86,7 +86,6 @@ cpdef Table filter(
     Table predicate_table,
     Expression predicate_expr,
     Table filter_table,
-    object error_policy = *,
     object stream = *,
     DeviceMemoryResource mr = *,
 )

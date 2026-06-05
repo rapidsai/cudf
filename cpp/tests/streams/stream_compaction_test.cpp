@@ -411,7 +411,6 @@ __device__ void filter(bool * out, int32_t a){
                                             std::nullopt,
                                             cudf::null_aware::NO,
                                             cudf::output_nullability::PRESERVE,
-                                            cudf::error_output::ANY,
                                             cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result[0]);
 }
@@ -427,8 +426,7 @@ TEST_F(StreamCompactionTest, FilterASTJit)
   cudf::table_view input({col});
   auto const col_expected = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   cudf::table_view expected({col_expected});
-  auto const result = cudf::filter(
-    input, expression, input, cudf::error_output::ANY, cudf::test::get_default_stream());
+  auto const result = cudf::filter(input, expression, input, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
 }
 

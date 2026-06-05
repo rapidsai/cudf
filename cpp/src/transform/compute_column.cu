@@ -26,12 +26,11 @@
 #include <algorithm>
 
 namespace cudf {
-namespace detail {
-std::unique_ptr<column> compute_column(table_view const& table,
-                                       ast::expression const& expr,
-                                       error_output error_policy,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+std::unique_ptr<column> execute_compute_column(table_view const& table,
+                                               ast::expression const& expr,
+                                               error_output error_policy,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   if (get_context().use_jit()) { return compute_column_jit(table, expr, error_policy, stream, mr); }
 
@@ -110,7 +109,26 @@ std::unique_ptr<column> compute_column(table_view const& table,
   return output_column;
 }
 
+namespace detail {
+
+std::unique_ptr<column> compute_column(table_view const& table,
+                                       ast::expression const& expr,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  return execute_compute_column(table, expr, error_output::ANY, stream, mr);
+}
+
 }  // namespace detail
+
+std::unique_ptr<column> compute_column(table_view const& table,
+                                       ast::expression const& expr,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return execute_compute_column(table, expr, error_output::ANY, stream, mr);
+}
 
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
@@ -119,7 +137,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, error_policy, stream, mr);
+  return execute_compute_column(table, expr, error_policy, stream, mr);
 }
 
 }  // namespace cudf

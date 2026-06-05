@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from enum import IntEnum
 from typing import Any, Final
@@ -37,10 +37,6 @@ class NullAware(IntEnum):
 class OutputNullability(IntEnum):
     PRESERVE = ...
     ALL_VALID = ...
-
-class ErrorOutput(IntEnum):
-    ANY = ...
-    PER_ROW = ...
 
 class NullOrder(IntEnum):
     AFTER = ...

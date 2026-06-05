@@ -1046,7 +1046,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     auto final_row_mask =
       cudf::detail::compute_column(*read_table,
                                    _expr_conv.get_converted_expr().value().get(),
-                                   cudf::error_output::ANY,
                                    _stream,
                                    cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,

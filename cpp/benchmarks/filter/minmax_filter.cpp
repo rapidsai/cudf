@@ -127,10 +127,9 @@ void BM_filter_min_max(nvbench::state& state)
 
     switch (engine) {
       case engine_type::AST: {
-        auto predicate_table = cudf::table_view{{predicate_column->view()}};
-        auto filter_table    = cudf::table_view{filter_column_views};
-        auto const filter_boolean =
-          cudf::compute_column(predicate_table, tree.back(), cudf::error_output::ANY, stream, mr);
+        auto predicate_table      = cudf::table_view{{predicate_column->view()}};
+        auto filter_table         = cudf::table_view{filter_column_views};
+        auto const filter_boolean = cudf::compute_column(predicate_table, tree.back(), stream, mr);
         auto const result =
           cudf::apply_boolean_mask(filter_table, filter_boolean->view(), stream, mr);
       } break;
@@ -146,7 +145,6 @@ void BM_filter_min_max(nvbench::state& state)
                                             std::nullopt,
                                             cudf::null_aware::NO,
                                             cudf::output_nullability::PRESERVE,
-                                            cudf::error_output::ANY,
                                             stream,
                                             mr);
       } break;
