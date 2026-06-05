@@ -217,6 +217,46 @@ jobs:
       date: ${{ inputs.date }}
       package-name: libcudf_streaming
       package-type: cpp
+  wheel-build-cudf-streaming:
+    needs: [telemetry-setup, wheel-build-libcudf-streaming, wheel-build-pylibcudf]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build a wheel for each CUDA x ARCH x minimum supported Python version
+      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      node_type: cpu16
+      script: ci/build_wheel_cudf_streaming.sh
+      package-name: cudf_streaming
+      package-type: python
+  wheel-publish-cudf-streaming:
+    needs: wheel-build-cudf-streaming
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf_streaming
+      package-type: python
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
     permissions:
