@@ -3253,8 +3253,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
 
   // Speculative range does not include full footer bytes check
   {
-    TailShortReadDatasource truncated_speculative_source(
-      parquet_bytes, /*tail_short_read_call=*/1, /*tail_short_read_size=*/16);
+    TailShortReadDatasource truncated_speculative_source(parquet_bytes, 1, 16);
     auto const source = cudf::io::source_info{&truncated_speculative_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 64); },
                                 "Speculative metadata read did not include full footer bytes");
