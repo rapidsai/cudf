@@ -129,6 +129,11 @@ class key_remapping {
    * @brief Deprecated alias for `remap_right_keys()`.
    *
    * @deprecated Use `remap_right_keys()` instead.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate device memory for the returned column
+   *
+   * @return A column of INT32 values with the remapped key IDs
    */
   [[deprecated("Use remap_right_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
   remap_build_keys(
@@ -164,6 +169,12 @@ class key_remapping {
    * @brief Deprecated alias for `remap_left_keys()`.
    *
    * @deprecated Use `remap_left_keys()` instead.
+   *
+   * @param keys The left keys to remap (must have same schema as the right table)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate device memory for the returned column
+   *
+   * @return A column of INT32 values with the remapped key IDs
    */
   [[deprecated("Use remap_left_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
   remap_probe_keys(
