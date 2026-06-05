@@ -27,26 +27,27 @@ static void bench_dictionary_concatenate(nvbench::state& state)
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto constexpr width   = 32;  // width does not matter so keep it smallish
 
+  auto stream = cudf::get_default_stream();
+
   auto columns = std::vector<std::unique_ptr<cudf::column>>{};
   auto views   = std::vector<cudf::column_view>{};
   for (cudf::size_type i = 0; i < num_cols; ++i) {
     auto input = create_string_column(num_rows, width, cardinality);
     columns.emplace_back(
-      cudf::dictionary::encode(input->view(), cudf::data_type{cudf::type_id::INT32}));
+      cudf::dictionary::encode(input->view(), cudf::data_type{cudf::type_id::INT32}, stream));
     views.push_back(columns.back()->view());
   }
 
   auto input_table = cudf::table(std::move(columns));
 
   state.add_global_memory_reads<uint8_t>(input_table.alloc_size());
-  auto result = cudf::concatenate(views);
+  auto result = cudf::concatenate(views, stream);
   state.add_global_memory_writes<uint8_t>(result->alloc_size());
 
-  auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto const mem_stats_logger = cudf::memory_stats_logger();
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) { cudf::concatenate(views); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) { cudf::concatenate(views, stream); });
 
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
