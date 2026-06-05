@@ -30,8 +30,12 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cuda/numeric>
+
 #include <algorithm>
+#include <format>
 #include <functional>
+#include <limits>
 #include <utility>
 
 namespace cudf::io {
@@ -742,19 +746,17 @@ namespace {
 {
   if (chunk_read_limit == 0) { return 0; }
 
-  auto const half_chunk_read_limit = chunk_read_limit / 2;
-  auto const pass_read_limit =
-    chunk_read_limit > std::numeric_limits<std::size_t>::max() - half_chunk_read_limit
-      ? std::numeric_limits<std::size_t>::max()
-      : chunk_read_limit + half_chunk_read_limit;  // 1.5x chunk_read_limit, overflow-guarded
+  // 1.5x chunk_read_limit, saturating at the maximum representable value on overflow
+  auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
+  auto const pass_read_limit = sum.overflow ? std::numeric_limits<std::size_t>::max() : sum.value;
 
-  CUDF_LOG_WARN(
-    "Chunked Parquet reader: a chunk_read_limit (%zu bytes) was provided without a "
-    "pass_read_limit; defaulting pass_read_limit to %zu bytes (1.5x chunk_read_limit) to bound "
+  CUDF_LOG_WARN(std::format(
+    "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
+    "pass_read_limit; defaulting pass_read_limit to {} bytes (1.5x chunk_read_limit) to bound "
     "input and decompression memory and reduce the risk of out-of-memory errors on large files. "
     "Use a constructor overload that accepts pass_read_limit to control this explicitly.",
     chunk_read_limit,
-    pass_read_limit);
+    pass_read_limit));
 
   return pass_read_limit;
 }
