@@ -212,11 +212,13 @@ inline constexpr bool is_fallible_result = false;
 template <typename T>
 inline constexpr bool is_fallible_result<cuda::std::expected<T, cudf::errc>> = true;
 
+template <opcode op, typename... T>
+concept evaluable = requires(T... args) { opcode_evaluator<op>::eval(args...); };
+
 // evaluation of non-nullable values
 template <opcode op, bool nullify_on_error, typename... T>
 __device__ constexpr auto evaluate(cudf::errc* error, T... args)
-  requires(!cudf::detail::ops::nullable<T> && ... &&
-           requires { opcode_evaluator<op>::eval(args...); })
+  requires(!cudf::detail::ops::nullable<T> && ... && evaluable<op, T...>)
 {
   static_assert(!nullify_on_error, "nullify_on_error=true is not supported for non-nullable types");
   using result_t = decltype(opcode_evaluator<op>::eval(args...));
@@ -236,15 +238,14 @@ __device__ constexpr auto evaluate(cudf::errc* error, T... args)
 }
 
 // evaluation of nullable values
-template <opcode op, bool nullify_on_error, typename ... T>
-__device__ constexpr auto evaluate(cudf::errc* error, T ... args)
-  requires(cudf::detail::ops::nullable<T> && ... && ( requires{ opcode_evaluator<op>::eval(args...); } ||
-requires{ opcode_evaluator<op>::eval(args.value()...); }
-))
+template <opcode op, bool nullify_on_error, typename... T>
+__device__ constexpr auto evaluate(cudf::errc* error, T... args)
+  requires(cudf::detail::ops::nullable<T> && ... &&
+           (evaluable<op, T...> || evaluable<op, decltype(args.value())...>))
 {
   // if the operator can handle nullable types, use it.
   // otherwise propagate nulls.
-  if constexpr (requires { opcode_evaluator<op>::eval(args...); }) {
+  if constexpr (evaluable<op, T...>) {
     using result_t = decltype(opcode_evaluator<op>::eval(args...));
 
     if constexpr (is_fallible_result<result_t>) {
