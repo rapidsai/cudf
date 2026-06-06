@@ -288,14 +288,18 @@ def _write_parquet(
 ) -> np.ndarray | None:
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
-            ValueError("partition info is required for multiple paths")
+            raise ValueError("partition info is required for multiple paths")
         elif not is_list_like(partitions_info):
-            ValueError("partition info must be list-like for multiple paths")
+            raise ValueError(
+                "partition info must be list-like for multiple paths"
+            )
         elif not len(paths) == len(partitions_info):
-            ValueError("partitions_info and paths must be of same size")
+            raise ValueError("partitions_info and paths must be of same size")
     if is_list_like(partitions_info) and len(partitions_info) > 1:
         if not is_list_like(paths):
-            ValueError("paths must be list-like when partitions_info provided")
+            raise ValueError(
+                "paths must be list-like when partitions_info provided"
+            )
 
     paths_or_bufs = [
         ioutils.get_writer_filepath_or_buffer(

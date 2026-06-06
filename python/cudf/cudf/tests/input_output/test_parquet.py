@@ -2189,6 +2189,29 @@ def test_parquet_writer_chunked_max_file_size_error():
         ParquetDatasetWriter("sample", partition_cols=["a"], max_file_size=100)
 
 
+@pytest.mark.parametrize(
+    "path_names,partition_offsets,match",
+    [
+        (
+            ["a.parquet", "b.parquet"],
+            None,
+            "partition info is required",
+        ),
+        (
+            ["a.parquet", "b.parquet"],
+            [0, 1],
+            "same size",
+        ),
+    ],
+)
+def test_write_parquet_partitions_info_validation(
+    simple_gdf, tmp_path, path_names, partition_offsets, match
+):
+    paths = [str(tmp_path / path_name) for path_name in path_names]
+    with pytest.raises(ValueError, match=match):
+        simple_gdf.to_parquet(paths, partition_offsets=partition_offsets)
+
+
 def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
