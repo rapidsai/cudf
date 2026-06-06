@@ -6,6 +6,7 @@
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/row_ir/opcode.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/errc.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -142,7 +143,7 @@ extern "C" __global__ void cudf_kernel_entry(
   cudf::column_device_view_core const* __restrict__ input_cols,
   cudf::mutable_column_device_view_core const* __restrict__ output_cols,
   int32_t* __restrict__ max_error,
-  errc* __restrict__ row_errors)
+  cudf::errc* __restrict__ row_errors)
 {
   CUDF_KERNEL_INSTANCE(
     row_size, stencil, user_data, input_cols, output_cols, max_error, row_errors);
