@@ -1157,7 +1157,7 @@ def test_series_astype_null_categorical():
 
 
 # Converting a categorical with nulls to a non-nullable numpy integer dtype
-# raises under pandas-compatible mode, matching pandas.
+# raises, matching pandas.
 @pytest.mark.parametrize(
     "data",
     [
@@ -1171,13 +1171,12 @@ def test_categorical_astype_nan_to_int_pandas_compat(
 ):
     psr = pd.Series(data, dtype="category")
     gsr = cudf.Series(data, dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_exceptions_equal(
-            psr.astype,
-            gsr.astype,
-            ([integer_types_as_str],),
-            ([integer_types_as_str],),
-        )
+    assert_exceptions_equal(
+        psr.astype,
+        gsr.astype,
+        ([integer_types_as_str],),
+        ([integer_types_as_str],),
+    )
 
 
 def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(
@@ -1185,26 +1184,24 @@ def test_categorical_astype_nan_to_int_via_np_dtype_pandas_compat(
 ):
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_exceptions_equal(
-            psr.astype,
-            gsr.astype,
-            ([np.dtype(integer_types_as_str)],),
-            ([np.dtype(integer_types_as_str)],),
-        )
+    assert_exceptions_equal(
+        psr.astype,
+        gsr.astype,
+        ([np.dtype(integer_types_as_str)],),
+        ([np.dtype(integer_types_as_str)],),
+    )
 
 
 @pytest.mark.parametrize("dtype", ["bool", np.dtype("bool")])
 def test_categorical_astype_nan_to_bool_pandas_compat_deviation(dtype):
     # cuDF intentionally deviates from pandas here. Casting a null-containing
-    # categorical to ``bool`` under ``mode.pandas_compatible``:
+    # categorical to ``bool``:
     #   * pandas promotes to ``object`` dtype, e.g. ``[True, True, nan]``
     #   * cuDF has no object-backed bool, so it keeps a nullable ``bool``
     #     column, e.g. ``[True, True, <NA>]``
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        got = gsr.astype(dtype)
+    got = gsr.astype(dtype)
     # Confirm pandas' (divergent) object-dtype behavior so this test fails if
     # pandas ever changes and the deviation needs revisiting.
     assert psr.astype(dtype).dtype == object
@@ -1216,25 +1213,22 @@ def test_categorical_astype_nan_to_bool_pandas_compat_deviation(dtype):
 def test_categorical_astype_nan_to_float_pandas_compat(dtype):
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(psr.astype(dtype), gsr.astype(dtype))
+    assert_eq(psr.astype(dtype), gsr.astype(dtype))
 
 
 def test_categorical_astype_no_nulls_int_pandas_compat(integer_types_as_str):
     psr = pd.Series([1, 2, 3], dtype="category")
     gsr = cudf.Series([1, 2, 3], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(
-            psr.astype(integer_types_as_str),
-            gsr.astype(integer_types_as_str),
-        )
+    assert_eq(
+        psr.astype(integer_types_as_str),
+        gsr.astype(integer_types_as_str),
+    )
 
 
 def test_categorical_astype_no_nulls_bool_pandas_compat():
     psr = pd.Series([1, 2, 3], dtype="category")
     gsr = cudf.Series([1, 2, 3], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(psr.astype("bool"), gsr.astype("bool"))
+    assert_eq(psr.astype("bool"), gsr.astype("bool"))
 
 
 def test_categorical_astype_nan_to_int_default_mode(integer_types_as_str):
@@ -1273,8 +1267,7 @@ def test_categorical_astype_nan_to_bool_default_mode():
 def test_categorical_astype_nan_to_nullable_extension_pandas_compat(ext_dtype):
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(psr.astype(ext_dtype), gsr.astype(ext_dtype))
+    assert_eq(psr.astype(ext_dtype), gsr.astype(ext_dtype))
 
 
 @pytest.mark.parametrize(
@@ -1285,35 +1278,31 @@ def test_categorical_astype_nan_to_arrow_pandas_compat(pa_type):
     arrow_dtype = pd.ArrowDtype(pa_type)
     psr = pd.Series([1, 2, None], dtype="category")
     gsr = cudf.Series([1, 2, None], dtype="category")
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(psr.astype(arrow_dtype), gsr.astype(arrow_dtype))
+    assert_eq(psr.astype(arrow_dtype), gsr.astype(arrow_dtype))
 
 
 @pytest.mark.parametrize("dtype", ["int8", "int64", "uint32"])
 def test_categoricalindex_astype_nan_to_int_pandas_compat(dtype):
     pi = pd.CategoricalIndex([1, 2, None])
     gi = cudf.CategoricalIndex([1, 2, None])
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_exceptions_equal(
-            pi.astype,
-            gi.astype,
-            ([dtype],),
-            ([dtype],),
-        )
+    assert_exceptions_equal(
+        pi.astype,
+        gi.astype,
+        ([dtype],),
+        ([dtype],),
+    )
 
 
 def test_categoricalindex_astype_nan_to_bool_pandas_compat():
     gi = cudf.CategoricalIndex([1, 2, None])
-    with cudf.option_context("mode.pandas_compatible", True):
-        got = gi.astype("bool")
+    got = gi.astype("bool")
     assert_eq(got, cudf.Index([True, True, None], dtype="bool"))
 
 
 def test_categoricalindex_astype_nan_to_float_pandas_compat():
     pi = pd.CategoricalIndex([1, 2, None])
     gi = cudf.CategoricalIndex([1, 2, None])
-    with cudf.option_context("mode.pandas_compatible", True):
-        assert_eq(pi.astype("float64"), gi.astype("float64"))
+    assert_eq(pi.astype("float64"), gi.astype("float64"))
 
 
 @pytest.mark.parametrize("precision, scale", [(7, 2), (11, 4), (18, 9)])

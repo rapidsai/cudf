@@ -1693,11 +1693,6 @@ class Index(SingleColumnFrame):
         if not len(self):
             return self._return_get_indexer_result(result.values)
 
-        # Match the target against the index's values. For a categorical
-        # index, match against the decategorized values so that the targets
-        # are compared to actual category values. This also avoids casting a
-        # null-containing categorical to its (possibly non-nullable integer)
-        # category dtype, which is rejected under ``mode.pandas_compatible``.
         haystack = self._column
         if isinstance(haystack.dtype, CategoricalDtype):
             haystack = haystack._get_decategorized_column()
@@ -1823,13 +1818,8 @@ class Index(SingleColumnFrame):
                 # split the categories into data and categories
                 # and generate the repr separately and
                 # merge them.
-                # Decategorize while preserving nulls (a plain ``astype`` to
-                # the category dtype raises for null-containing integer
-                # categories, matching pandas).
                 pd_cats = pd.Categorical(
-                    cudf.Index._from_column(
-                        preprocess._column._get_decategorized_column()
-                    ).to_pandas()
+                    preprocess._column._get_decategorized_column().to_pandas()
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")
