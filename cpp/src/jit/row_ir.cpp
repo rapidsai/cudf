@@ -903,7 +903,7 @@ std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_
   sink.emit(std::format("__device__ cudf::errc {}(", function_name));
   sink.emit(args_decl);
   sink.emit(")\n{\n");
-  sink.emit("cudf::errc error_flag = cudf::errc::SUCCESS;\n");
+  sink.emit("[[maybe_unused]] cudf::errc error_flag = cudf::errc::SUCCESS;\n");
   for (auto& ir : output_irs_) {
     ir->emit_code(instance_, target, sink);
   }
