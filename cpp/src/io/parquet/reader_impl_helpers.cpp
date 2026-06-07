@@ -16,6 +16,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
@@ -26,6 +27,7 @@
 #include <thrust/iterator/zip_iterator.h>
 
 #include <cmath>
+#include <format>
 #include <functional>
 #include <future>
 #include <numeric>
@@ -2070,6 +2072,25 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
                  });
 
   return parquet_types;
+}
+
+std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
+{
+  if (chunk_read_limit == 0) { return 0; }
+
+  // 1.5x chunk_read_limit, saturating at the maximum representable value on overflow
+  auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
+  auto const pass_read_limit = sum.overflow ? std::numeric_limits<std::size_t>::max() : sum.value;
+
+  CUDF_LOG_WARN(std::format(
+    "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
+    "pass_read_limit; defaulting pass_read_limit to {} bytes (1.5x chunk_read_limit) to bound "
+    "input and decompression memory and reduce the risk of out-of-memory errors on large files. "
+    "Use a constructor overload that accepts pass_read_limit to control this explicitly.",
+    chunk_read_limit,
+    pass_read_limit));
+
+  return pass_read_limit;
 }
 
 }  // namespace cudf::io::parquet::detail

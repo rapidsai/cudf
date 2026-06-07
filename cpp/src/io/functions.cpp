@@ -30,12 +30,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cuda/numeric>
-
 #include <algorithm>
-#include <format>
 #include <functional>
-#include <limits>
 #include <utility>
 
 namespace cudf::io {
@@ -738,31 +734,6 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
 chunked_parquet_reader::chunked_parquet_reader() = default;
 
-namespace {
-
-// Derive a `pass_read_limit` from a `chunk_read_limit` when a `chunk_read_limit` is provided
-// without a `pass_read_limit`.
-[[nodiscard]] std::size_t derive_pass_limit(std::size_t chunk_read_limit)
-{
-  if (chunk_read_limit == 0) { return 0; }
-
-  // 1.5x chunk_read_limit, saturating at the maximum representable value on overflow
-  auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
-  auto const pass_read_limit = sum.overflow ? std::numeric_limits<std::size_t>::max() : sum.value;
-
-  CUDF_LOG_WARN(std::format(
-    "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
-    "pass_read_limit; defaulting pass_read_limit to {} bytes (1.5x chunk_read_limit) to bound "
-    "input and decompression memory and reduce the risk of out-of-memory errors on large files. "
-    "Use a constructor overload that accepts pass_read_limit to control this explicitly.",
-    chunk_read_limit,
-    pass_read_limit));
-
-  return pass_read_limit;
-}
-
-}  // namespace
-
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
@@ -770,13 +741,14 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            derive_pass_limit(chunk_read_limit),
-                                                            make_datasources(options.get_source()),
-                                                            std::vector<parquet::FileMetaData>{},
-                                                            options,
-                                                            stream,
-                                                            mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(
+      chunk_read_limit,
+      detail_parquet::derive_pass_read_limit(chunk_read_limit),
+      make_datasources(options.get_source()),
+      std::vector<parquet::FileMetaData>{},
+      options,
+      stream,
+      mr)}
 {
 }
 
@@ -790,13 +762,14 @@ chunked_parquet_reader::chunked_parquet_reader(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            derive_pass_limit(chunk_read_limit),
-                                                            std::move(datasources),
-                                                            std::move(parquet_metadatas),
-                                                            options,
-                                                            stream,
-                                                            mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(
+      chunk_read_limit,
+      detail_parquet::derive_pass_read_limit(chunk_read_limit),
+      std::move(datasources),
+      std::move(parquet_metadatas),
+      options,
+      stream,
+      mr)}
 {
 }
 
