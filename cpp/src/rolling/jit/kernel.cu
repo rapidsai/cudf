@@ -10,10 +10,11 @@
 #include <rolling/detail/rolling_jit.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
-                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
-#include <cudf/detail/operation-udf.hpp>
+#include <cudf/detail/kernel_instance.cuh>
+#include <cudf/detail/operation_udf.cuh>
 
 struct rolling_udf_ptx {
   template <typename OutType, typename InType>
@@ -44,20 +45,22 @@ template <typename InType,
           class agg_op,
           typename PrecedingWindowType,
           typename FollowingWindowType>
-CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
-                                       InType const* const __restrict__ in_col,
-                                       cudf::bitmask_type const* const __restrict__ in_col_valid,
-                                       OutType* __restrict__ out_col,
-                                       cudf::bitmask_type* __restrict__ out_col_valid,
-                                       cudf::size_type* __restrict__ output_valid_count,
-                                       detail::window_wrapper_base b_preceding_window_begin,
-                                       detail::window_wrapper_base b_following_window_begin,
-                                       cudf::size_type min_periods)
+__device__ void rolling_window_kernel(cudf::size_type nrows,
+                                      void const* __restrict__ p_in_col,
+                                      cudf::bitmask_type const* const __restrict__ in_col_valid,
+                                      void* __restrict__ p_out_col,
+                                      cudf::bitmask_type* __restrict__ out_col_valid,
+                                      cudf::size_type* __restrict__ output_valid_count,
+                                      detail::window_wrapper_base b_preceding_window_begin,
+                                      detail::window_wrapper_base b_following_window_begin,
+                                      cudf::size_type min_periods)
 {
   auto i                                           = cudf::detail::grid_1d::global_thread_id();
   auto const stride                                = cudf::detail::grid_1d::grid_stride();
   PrecedingWindowType const preceding_window_begin = b_preceding_window_begin;
   FollowingWindowType const following_window_begin = b_following_window_begin;
+  auto const* const in_col                         = static_cast<InType const*>(p_in_col);
+  auto* const out_col                              = static_cast<OutType*>(p_out_col);
 
   cudf::size_type warp_valid_count{0};
 
@@ -109,3 +112,25 @@ CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
 }  // namespace jit
 }  // namespace rolling
 }  // namespace cudf
+
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type nrows,
+  void const* __restrict__ in_col,
+  cudf::bitmask_type const* __restrict__ in_col_valid,
+  void* __restrict__ out_col,
+  cudf::bitmask_type* __restrict__ out_col_valid,
+  cudf::size_type* __restrict__ output_valid_count,
+  cudf::detail::window_wrapper_base preceding_window_begin,
+  cudf::detail::window_wrapper_base following_window_begin,
+  cudf::size_type min_periods)
+{
+  CUDF_KERNEL_INSTANCE(nrows,
+                       in_col,
+                       in_col_valid,
+                       out_col,
+                       out_col_valid,
+                       output_valid_count,
+                       preceding_window_begin,
+                       following_window_begin,
+                       min_periods);
+}
