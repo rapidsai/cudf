@@ -102,9 +102,9 @@ class geometric_distribution : public cuda::std::normal_distribution<integral_to
   {
     // Distribution always biases towards lower_bound
     realType const result = _lower_bound < _upper_bound
-                              ? std::abs(super_t::operator()(urng)) + _lower_bound
-                              : _lower_bound - std::abs(super_t::operator()(urng));
-    return std::round(result);
+                              ? cuda::std::abs(super_t::operator()(urng)) + _lower_bound
+                              : _lower_bound - cuda::std::abs(super_t::operator()(urng));
+    return cuda::std::round(result);
   }
 };
 
