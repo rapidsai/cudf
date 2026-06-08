@@ -123,25 +123,11 @@ struct row_group_stats_caster : public stats_caster_base {
   }
 };
 
-/**
- * @brief Probe whether the filter columns carry usable row-group statistics.
- *
- * Returns true iff at least one column chunk referenced by `filter_column_schemas` in the first
- * selected row group of any source carries any of `min` / `max` / `min_value` / `max_value` /
- * `null_count`. See https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237
- * for why inspecting one row group per source is sufficient.
- *
- * @param aggregate_metadata Aggregate reader metadata, used to map schema indices across sources
- * @param per_file_metadata Metadata for each input source
- * @param input_row_group_indices Selected row group indices, one vector per source
- * @param filter_column_schemas Zeroth-source schema indices of the columns referenced by the filter
- * @return True if any filter column carries row-group statistics
- */
-[[nodiscard]] bool any_row_group_stats_available(
-  aggregate_reader_metadata const& aggregate_metadata,
-  host_span<metadata const> per_file_metadata,
+}  // namespace
+
+bool aggregate_reader_metadata::any_row_group_stats_available(
   host_span<std::vector<size_type> const> input_row_group_indices,
-  host_span<int const> filter_column_schemas)
+  host_span<int const> filter_column_schemas) const
 {
   auto const colchunk_has_stats = [](ColumnChunk const& colchunk) {
     auto const& stats = colchunk.meta_data.statistics;
@@ -175,9 +161,8 @@ struct row_group_stats_caster : public stats_caster_base {
 
       auto const& row_group =
         per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
-      auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
-      auto const mapped_schema_idx =
-        aggregate_metadata.map_schema_index(schema_idx, static_cast<int>(src_idx));
+      auto const num_col_chunks    = static_cast<size_type>(row_group.columns.size());
+      auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
 
       if (not colchunk_offset.has_value() or colchunk_offset.value() >= num_col_chunks or
           row_group.columns[colchunk_offset.value()].schema_idx != mapped_schema_idx) {
@@ -191,8 +176,6 @@ struct row_group_stats_caster : public stats_caster_base {
   }
   return false;
 }
-
-}  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
   host_span<std::vector<size_type> const> input_row_group_indices,
@@ -223,8 +206,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   [](auto mask) { return mask; });
 
   // Skip building the stats table if no filter column carries usable row-group statistics.
-  if (not any_row_group_stats_available(
-        *this, per_file_metadata, input_row_group_indices, filter_column_schemas)) {
+  if (not any_row_group_stats_available(input_row_group_indices, filter_column_schemas)) {
     return std::nullopt;
   }
 
