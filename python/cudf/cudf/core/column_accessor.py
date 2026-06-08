@@ -803,6 +803,10 @@ class ColumnAccessor(MutableMapping):
         self._level_names = (
             self.level_names[:level] + self.level_names[level + 1 :]
         )
+        if self._level_dtypes is not None:
+            self._level_dtypes = (
+                self._level_dtypes[:level] + self._level_dtypes[level + 1 :]
+            )
 
         if len(self.level_names) == 1:
             # can't use nlevels, as it depends on multiindex
