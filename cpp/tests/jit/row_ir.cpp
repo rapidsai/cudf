@@ -327,7 +327,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   auto expected_udf =
     R"***(__device__ cudf::errc expression(int32_t* out_0, int32_t in_0, int32_t in_1)
 {
-cudf::errc error_flag = cudf::errc::SUCCESS;
+[[maybe_unused]] cudf::errc error_flag = cudf::errc::SUCCESS;
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
 int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
