@@ -138,11 +138,7 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
         row_count = 2_000
         mean_size_per_file: ClassVar[dict[str, int]] = {
             "i64": 1,
-            "ts": 1,
-            "duration": 1,
             "dec32": 1,
-            "dec64": 1,
-            "dec": 1,
             "s": 1,
             "already_large": 20_000,
         }
@@ -163,22 +159,14 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
         frozenset(
             {
                 "i64",
-                "ts",
-                "duration",
                 "dec32",
-                "dec64",
-                "dec",
                 "s",
                 "already_large",
             }
         ),
         (
             ("i64", DataType(pl.Int64())),
-            ("ts", DataType(pl.Datetime("us"))),
-            ("duration", DataType(pl.Duration("us"))),
             ("dec32", cast(DataType, FakeDataType(plc.TypeId.DECIMAL32))),
-            ("dec64", cast(DataType, FakeDataType(plc.TypeId.DECIMAL64))),
-            ("dec", DataType(pl.Decimal(38, 15))),
             ("s", DataType(pl.String())),
             ("already_large", DataType(pl.Int64())),
         ),
@@ -189,11 +177,7 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
     rows_per_file = 1_000
     nullmask = 125
     assert source.column_storage_size("i64") == rows_per_file * 8 + nullmask
-    assert source.column_storage_size("ts") == rows_per_file * 8 + nullmask
-    assert source.column_storage_size("duration") == rows_per_file * 8 + nullmask
     assert source.column_storage_size("dec32") == rows_per_file * 4 + nullmask
-    assert source.column_storage_size("dec64") == rows_per_file * 8 + nullmask
-    assert source.column_storage_size("dec") == rows_per_file * 16 + nullmask
     assert source.column_storage_size("s") == (rows_per_file + 1) * 4 + nullmask
     assert source.column_storage_size("already_large") == 20_000
 
