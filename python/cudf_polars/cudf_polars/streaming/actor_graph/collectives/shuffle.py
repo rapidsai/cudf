@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import nvtx
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import (
@@ -29,6 +30,7 @@ import pylibcudf as plc
 import pylibcudf.partitioning
 
 from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -91,6 +93,7 @@ class ShuffleManager:
         def __init__(self, manager: ShuffleManager):
             self._manager = manager
 
+        @nvtx_annotate_cudf_polars()
         def insert_hash(
             self, chunk: TableChunk, columns_to_hash: tuple[int, ...]
         ) -> None:
@@ -105,6 +108,7 @@ class ShuffleManager:
                 )
             )
 
+        @nvtx_annotate_cudf_polars()
         def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
             """Split chunk at the given indices and insert into the shuffler."""
             self._manager.shuffler.insert(
@@ -116,6 +120,7 @@ class ShuffleManager:
                 )
             )
 
+        @nvtx_annotate_cudf_polars()
         def insert_index(self, chunk: TableChunk, partition_map: TableChunk) -> None:
             """
             Partition chunk by a separate single-column partition-map and insert.
@@ -372,14 +377,28 @@ async def _global_shuffle(
     collective_id
         The collective ID.
     """
+    global_rng = nvtx.start_range(
+        message="global_shuffle", domain="cudf_polars", category=collective_id
+    )
+
+    recv_metadata_rng = nvtx.start_range(
+        message="recv_metadata", domain="cudf_polars", category=collective_id
+    )
     metadata_in = await recv_metadata(ch_in, context)
+    nvtx.end_range(recv_metadata_rng)
 
     # Check if we can skip the shuffle (already partitioned correctly)
     if _is_already_partitioned(
         metadata_in, columns_to_hash, num_partitions, comm.nranks
     ):
         # Forward metadata and data unchanged
+        send_metadata_already_partitioned_rng = nvtx.start_range(
+            message="send_metadata-already-partitioned",
+            domain="cudf_polars",
+            category=collective_id,
+        )
         await send_metadata(ch_out, context, metadata_in)
+        nvtx.end_range(send_metadata_already_partitioned_rng)
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
         await ch_out.drain(context)
@@ -393,23 +412,43 @@ async def _global_shuffle(
             local="inherit",
         ),
     )
+    send_metadata_rng = nvtx.start_range(
+        message="send_metadata", domain="cudf_polars", category=collective_id
+    )
     await send_metadata(ch_out, context, output_metadata)
+    nvtx.end_range(send_metadata_rng)
 
     # When input is duplicated, only rank 0 should contribute data.
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
     shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
+    inserting_rng = nvtx.start_range(
+        message="inserting", domain="cudf_polars", category=collective_id
+    )
     async with shuffle.inserting() as inserter:
-        while (msg := await ch_in.recv(context)) is not None:
-            if not skip_insert:
-                inserter.insert_hash(
-                    TableChunk.from_message(
-                        msg, br=context.br()
-                    ).make_available_and_spill(context.br(), allow_overbooking=True),
-                    columns_to_hash,
-                )
+        insert_recv_rng = nvtx.start_range(
+            message="insert-recv", domain="cudf_polars", category=collective_id
+        )
+        msg = await ch_in.recv(context)
+        nvtx.end_range(insert_recv_rng)
 
+        if msg is not None and not skip_insert:
+            insert_hash_rng = nvtx.start_range(
+                message="insert-hash", domain="cudf_polars", category=collective_id
+            )
+            inserter.insert_hash(
+                TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                ),
+                columns_to_hash,
+            )
+            nvtx.end_range(insert_hash_rng)
+    nvtx.end_range(inserting_rng)
+
+    extract_and_send_rng = nvtx.start_range(
+        message="extract_and_send", domain="cudf_polars", category=collective_id
+    )
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         await ch_out.send(
@@ -424,8 +463,14 @@ async def _global_shuffle(
                 ),
             ),
         )
+    nvtx.end_range(extract_and_send_rng)
 
+    drain_rng = nvtx.start_range(
+        message="drain", domain="cudf_polars", category=collective_id
+    )
     await ch_out.drain(context)
+    nvtx.end_range(drain_rng)
+    nvtx.end_range(global_rng)
 
 
 @define_actor()
