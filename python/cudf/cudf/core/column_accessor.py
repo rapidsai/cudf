@@ -556,6 +556,12 @@ class ColumnAccessor(MutableMapping):
         new_names = list(self.level_names)
         new_names[i], new_names[j] = new_names[j], new_names[i]  # type: ignore[call-overload]
 
+        new_level_dtypes = self._level_dtypes
+        if new_level_dtypes is not None:
+            level_dtypes = list(new_level_dtypes)
+            level_dtypes[i], level_dtypes[j] = level_dtypes[j], level_dtypes[i]  # type: ignore[call-overload]
+            new_level_dtypes = tuple(level_dtypes)
+
         return type(self)(
             new_data,  # type: ignore[arg-type]
             multiindex=self.multiindex,
@@ -563,6 +569,7 @@ class ColumnAccessor(MutableMapping):
             rangeindex=self.rangeindex,
             label_dtype=self.label_dtype,
             verify=False,
+            level_dtypes=new_level_dtypes,
         )
 
     def set_by_label(self, key: Hashable, value: ColumnBase) -> None:

@@ -649,14 +649,8 @@ class DateOffset:
     def __eq__(self, other):
         if isinstance(other, DateOffset):
             return self.kwds == other.kwds
-        # Delegate all other comparisons (freq strings and pandas offsets) to
-        # the equivalent fast pandas offset, matching MonthEnd/YearEnd above.
-        # An ``isinstance(other, (pd.DateOffset, pd.offsets.Tick))`` guard here
-        # is unreliable under ``cudf.pandas``: ``other`` may be a native pandas
-        # offset (e.g. one produced by pandas-internal code) while ``pd`` in
-        # this module resolves to the proxy module, so the check wrongly fails
-        # and ``__eq__`` returns ``NotImplemented`` (making equal frequencies
-        # compare unequal).
+        # Compare via the equivalent fast pandas offset so freq strings and
+        # pandas offsets (including cudf.pandas-proxied ones) compare equal.
         return self._maybe_as_fast_pandas_offset() == other
 
     def __init__(self, n=1, normalize=False, **kwds):
