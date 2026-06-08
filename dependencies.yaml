@@ -23,8 +23,10 @@ files:
       - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_libnvcomp
+      - depends_on_librapidsmpf
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
       - develop
