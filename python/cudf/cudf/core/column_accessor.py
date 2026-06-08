@@ -221,6 +221,11 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._level_names
 
+    @property
+    def level_dtypes(self) -> tuple[DtypeObj, ...] | None:
+        """Per-level dtypes used to rebuild an empty MultiIndex column axis."""
+        return self._level_dtypes
+
     def is_cached(self, attr_name: str) -> bool:
         return attr_name in self.__dict__
 
@@ -515,6 +520,7 @@ class ColumnAccessor(MutableMapping):
             multiindex=self.multiindex,
             level_names=self.level_names,
             label_dtype=self.label_dtype,
+            level_dtypes=self._level_dtypes,
             verify=False,
         )
 
@@ -621,6 +627,7 @@ class ColumnAccessor(MutableMapping):
             multiindex=self.multiindex,
             level_names=self.level_names,
             label_dtype=self.label_dtype,
+            level_dtypes=self._level_dtypes,
             verify=False,
         )
 
@@ -643,6 +650,11 @@ class ColumnAccessor(MutableMapping):
                 result,
                 multiindex=self.nlevels - len(key) > 1,
                 level_names=self.level_names[len(key) :],
+                level_dtypes=(
+                    None
+                    if self._level_dtypes is None
+                    else self._level_dtypes[len(key) :]
+                ),
                 verify=False,
             )
 
@@ -677,6 +689,7 @@ class ColumnAccessor(MutableMapping):
             multiindex=self.multiindex,
             level_names=self.level_names,
             label_dtype=self.label_dtype,
+            level_dtypes=self._level_dtypes,
             verify=False,
         )
 
@@ -692,6 +705,7 @@ class ColumnAccessor(MutableMapping):
             multiindex=self.multiindex,
             level_names=self.level_names,
             label_dtype=self.label_dtype,
+            level_dtypes=self._level_dtypes,
             verify=False,
         )
 

@@ -1191,6 +1191,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 level_names=self.obj._data.level_names,
                 rangeindex=self.obj._data.rangeindex,
                 label_dtype=self.obj._data.label_dtype,
+                level_dtypes=self.obj._data.level_dtypes,
             )
         elif (
             not multilevel
