@@ -560,6 +560,7 @@ cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
     ----------
     src_info : SourceInfo
         Dataset source.
+
     Returns
     -------
     ParquetMetadata
@@ -573,6 +574,7 @@ cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
         in :func:`pylibcudf.io.parquet.read_parquet`.
     """
     cdef cpp_parquet_metadata.parquet_metadata c_result
+
     with nogil:
         c_result = cpp_parquet_metadata.read_parquet_metadata(src_info.c_obj)
 
@@ -587,6 +589,7 @@ cpdef list read_parquet_footers(SourceInfo src_info):
     ----------
     src_info : SourceInfo
         Dataset source.
+
     Returns
     -------
     list[FileMetaData]
