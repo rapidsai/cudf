@@ -7,6 +7,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -27,6 +28,14 @@ TEST_F(SampleTest, FailCaseRowMultipleSampling)
 
   EXPECT_THROW(cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, 0),
                cudf::logic_error);
+}
+
+TEST_F(SampleTest, FailCaseNonzeroSampleFromEmptyTable)
+{
+  auto col1 = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16}, 0);
+  cudf::table_view input({col1->view()});
+
+  EXPECT_THROW(cudf::sample(input, 1, cudf::sample_with_replacement::TRUE, 0), cudf::logic_error);
 }
 
 TEST_F(SampleTest, RowMultipleSamplingDisallowed)

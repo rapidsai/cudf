@@ -20,7 +20,7 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/random>
-#include <thrust/random.h>
+#include <thrust/random/linear_congruential_engine.h>
 #include <thrust/shuffle.h>
 
 namespace cudf {
@@ -41,6 +41,8 @@ std::unique_ptr<table> sample(table_view const& input,
   }
 
   if (n == 0) return cudf::empty_like(input);
+
+  CUDF_EXPECTS(num_rows > 0, "Cannot sample a non-zero number of rows from an empty table");
 
   if (replacement == sample_with_replacement::TRUE) {
     auto RandomGen = cuda::proclaim_return_type<size_type>([seed, num_rows] __device__(auto i) {
@@ -65,7 +67,7 @@ std::unique_ptr<table> sample(table_view const& input,
                          cuda::counting_iterator<size_type>{0},
                          cuda::counting_iterator<size_type>{num_rows},
                          gather_map_mutable_view.begin<size_type>(),
-                         thrust::default_random_engine(seed));
+                         thrust::minstd_rand(seed));
 
     auto gather_map_view = (n == num_rows)
                              ? gather_map->view()
