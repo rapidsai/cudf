@@ -409,16 +409,93 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
-        if isinstance(self.dtype, pd.ArrowDtype) or isinstance(
-            other_cudf_dtype, pd.ArrowDtype
-        ):
+        self_is_arrow = isinstance(self.dtype, pd.ArrowDtype)
+        other_is_arrow = isinstance(other_cudf_dtype, pd.ArrowDtype)
+        if self_is_arrow or other_is_arrow:
             if op == "__mod__":
                 raise NotImplementedError("ArrowDtype does not support modulo")
-            if op == "__truediv__":
-                if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                    raise TypeError(
-                        "ArrowDtype boolean division is not supported"
+            # pyarrow.compute raises ArrowInvalid for integer divide by zero in
+            # floordiv. Mirror that behavior for ArrowDtype operands instead of
+            # silently returning inf via float promotion.
+            if op == "__floordiv__":
+                divisor = self if reflect else other
+                divisor_dtype = self.dtype if reflect else other_cudf_dtype
+                if divisor_dtype.kind in "iu" and (
+                    (isinstance(divisor, NumericalColumn) and 0 in divisor)
+                    or (
+                        isinstance(divisor, pa.Scalar) and divisor.as_py() == 0
                     )
+                ):
+                    raise pa.ArrowInvalid("divide by zero")
+            # pyarrow.compute.subtract_checked raises ArrowInvalid on overflow
+            # for unsigned integer subtraction. Mirror that for ArrowDtype, but
+            # only when both operands are unsigned: a Python int operand is
+            # promoted to signed int64, so the subtraction is no longer
+            # unsigned and cannot underflow.
+            if (
+                op == "__sub__"
+                and self_is_arrow
+                and self.dtype.kind == "u"
+                and other_is_arrow
+                and other_cudf_dtype.kind == "u"
+            ):
+                actual_lhs = other if reflect else self
+                actual_rhs = self if reflect else other
+                overflow = False
+                if isinstance(actual_lhs, NumericalColumn) and isinstance(
+                    actual_rhs, NumericalColumn
+                ):
+                    overflow = bool(
+                        actual_lhs._binaryop(actual_rhs, "__lt__").any()
+                    )
+                elif isinstance(actual_lhs, NumericalColumn) and isinstance(
+                    actual_rhs, pa.Scalar
+                ):
+                    if actual_rhs.is_valid:
+                        overflow = bool(
+                            actual_lhs._binaryop(
+                                actual_rhs.as_py(), "__lt__"
+                            ).any()
+                        )
+                elif isinstance(actual_lhs, pa.Scalar) and isinstance(
+                    actual_rhs, NumericalColumn
+                ):
+                    if actual_lhs.is_valid:
+                        overflow = bool(
+                            actual_rhs._binaryop(
+                                actual_lhs.as_py(), "__gt__"
+                            ).any()
+                        )
+                if overflow:
+                    raise pa.ArrowInvalid("overflow")
+            bool_unsupported_ops = {
+                "__add__",
+                "__radd__",
+                "__sub__",
+                "__rsub__",
+                "__mul__",
+                "__rmul__",
+                "__truediv__",
+                "__rtruediv__",
+                "__floordiv__",
+                "__rfloordiv__",
+                "__pow__",
+                "__rpow__",
+            }
+            if op in bool_unsupported_ops and (
+                (self_is_arrow and self.dtype.kind == "b")
+                or (other_is_arrow and other_cudf_dtype.kind == "b")
+            ):
+                # pandas raises TypeError for arithmetic on bool[pyarrow]:
+                # operation 'X' not supported for dtype 'bool[pyarrow]' ...
+                other_py = (
+                    other.as_py() if isinstance(other, pa.Scalar) else other
+                )
+                raise TypeError(
+                    f"operation '{op[2:-2]}' not supported for dtype "
+                    f"'bool[pyarrow]' with object of type "
+                    f"{type(other_py).__name__!r}"
+                )
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
@@ -433,6 +510,29 @@ class NumericalColumn(NumericalBaseColumn):
                     out_dtype = get_dtype_of_same_kind(
                         out_dtype, np.dtype(np.float64)
                     )
+            # pandas pyarrow preserves the LHS dtype for integer floordiv
+            # rather than upcasting based on the operand widths. The LHS is
+            # `other` when the operation is reflected, otherwise `self`.
+            if (
+                op == "__floordiv__"
+                and self.dtype.kind in "iu"
+                and other_cudf_dtype.kind in "iu"
+            ):
+                lhs_is_arrow = other_is_arrow if reflect else self_is_arrow
+                if lhs_is_arrow:
+                    out_dtype = other_cudf_dtype if reflect else self.dtype
+            # For ArrowDtype integer + Python int (now a pa.Scalar with a
+            # pyarrow int type), pandas pyarrow promotes to int64[pyarrow]
+            # regardless of width. numpy promotion would instead pick float64
+            # for (uint64, int64); override to match pandas pyarrow.
+            elif (
+                self_is_arrow
+                and self.dtype.kind in "iu"
+                and isinstance(other, pa.Scalar)
+                and other_cudf_dtype.kind in "iu"
+                and op in {"__add__", "__sub__", "__mul__", "__pow__"}
+            ):
+                out_dtype = pd.ArrowDtype(pa.int64())
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -626,9 +726,15 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             if is_pandas_nullable_extension_dtype(self.dtype):
                 if isinstance(self.dtype, pd.ArrowDtype):
-                    common_dtype = cudf.utils.dtypes.find_common_type(
-                        [self.dtype, other]
-                    )
+                    if self.dtype.kind in "iu" and type(other) is int:
+                        # pandas pyarrow treats a Python int as int64 when
+                        # combined with an ArrowDtype integer column, so the
+                        # promoted scalar type is int64 regardless of width.
+                        common_dtype = pd.ArrowDtype(pa.int64())
+                    else:
+                        common_dtype = cudf.utils.dtypes.find_common_type(
+                            [self.dtype, other]
+                        )
                 else:
                     common_dtype = get_dtype_of_same_kind(
                         self.dtype,
