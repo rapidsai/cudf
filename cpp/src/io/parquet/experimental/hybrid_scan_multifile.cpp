@@ -69,15 +69,13 @@ std::vector<std::vector<std::vector<size_type>>> hybrid_scan_multifile::construc
                     row_group_indices.end(),
                     std::size_t{0},
                     [](auto sum, auto const& rgs) { return sum + rgs.size(); });
-  CUDF_EXPECTS(total_row_groups > 0, "Empty input row group indices encountered");
-
-  if (pass_read_limit == 0) {
-    return {
-      std::vector<std::vector<size_type>>{row_group_indices.begin(), row_group_indices.end()}};
-  }
+  CUDF_EXPECTS(
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
 
   auto [passes, source_map] =
     _impl->construct_row_group_passes(row_group_indices, total_row_groups, pass_read_limit);
+
+  if (pass_read_limit == 0) { return {passes}; }
 
   auto source_passes = std::vector<std::vector<std::vector<size_type>>>{};
   source_passes.reserve(passes.size());

@@ -372,9 +372,8 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_grou
 {
   auto const total_row_groups = row_group_indices.size();
 
-  CUDF_EXPECTS(total_row_groups > 0, "Empty input row group indices encountered");
-
-  if (pass_read_limit == 0) { return {{row_group_indices.begin(), row_group_indices.end()}}; }
+  CUDF_EXPECTS(
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
 
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};

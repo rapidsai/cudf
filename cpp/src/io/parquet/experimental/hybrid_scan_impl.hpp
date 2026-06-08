@@ -286,8 +286,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @return Pair of a vector of flattened row group passes and a source index map. The source index
    * map is empty for single source input
    *
-   * @throws std::invalid_argument if @p pass_read_limit` is `0`or if @p row_group_indices.size() is
-   * not equal to the number of input datasources
+   * @throws std::invalid_argument if @p row_group_indices.size() is empty or not equal to the
+   * number of input datasources
    */
   [[nodiscard]] std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
   construct_row_group_passes(cudf::host_span<std::vector<size_type> const> row_group_indices,

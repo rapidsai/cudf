@@ -731,6 +731,12 @@ hybrid_scan_reader_impl::construct_row_group_passes(
     "datasources",
     std::invalid_argument);
 
+  if (pass_read_limit == 0) {
+    return {
+      std::vector<std::vector<cudf::size_type>>{row_group_indices.begin(), row_group_indices.end()},
+      std::vector<cudf::size_type>{}};
+  }
+
   CUDF_EXPECTS(
     pass_read_limit > 0, "Pass read limit must be greater than 0", std::invalid_argument);
 

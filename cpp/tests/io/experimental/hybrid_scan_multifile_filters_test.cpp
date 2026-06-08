@@ -256,6 +256,7 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
     return rgs == (std::vector<cudf::size_type>{0, 1, 2, 3});
   }));
 
+  // Invalid row group indices => throw error
   {
     auto invalid_rgs = all_rgs;
     invalid_rgs.pop_back();
@@ -263,6 +264,16 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
                  std::invalid_argument);
   }
 
+  // Empty row group indices => throw error
+  {
+    auto const empty_rgs = std::vector<std::vector<cudf::size_type>>(num_sources);
+    EXPECT_THROW(static_cast<void>(reader->construct_row_group_passes(empty_rgs, 0)),
+                 std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(reader->construct_row_group_passes(empty_rgs, 1)),
+                 std::invalid_argument);
+  }
+
+  // Zero pass read limit => single pass with all row groups
   {
     auto const passes = reader->construct_row_group_passes(all_rgs, 0);
     ASSERT_EQ(passes.size(), 1);
@@ -270,6 +281,21 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
     EXPECT_EQ(passes.front(), all_rgs);
   }
 
+  // Small pass read limit => each row group in its own pass
+  {
+    auto const passes = reader->construct_row_group_passes(all_rgs, 1);
+    ASSERT_EQ(passes.size(), num_sources * all_rgs.front().size());
+    for (auto const& pass : passes) {
+      ASSERT_EQ(pass.size(), num_sources);
+      auto const pass_num_row_groups =
+        std::accumulate(pass.begin(), pass.end(), std::size_t{0}, [](auto sum, auto const& rgs) {
+          return sum + rgs.size();
+        });
+      EXPECT_EQ(pass_num_row_groups, 1);
+    }
+  }
+
+  // Large pass read limit => multiple passes
   {
     auto const passes = reader->construct_row_group_passes(all_rgs, 10'000);
     ASSERT_GT(passes.size(), 1);
