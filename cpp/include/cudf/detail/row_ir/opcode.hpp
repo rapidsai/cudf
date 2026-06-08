@@ -239,13 +239,12 @@ __device__ constexpr auto evaluate(cudf::errc* error, T... args)
 
 // evaluation of nullable values
 template <opcode op, bool nullify_on_error, typename... T>
-__device__ constexpr auto evaluate(cudf::errc* error, T... args)
-  requires(cudf::detail::ops::nullable<T> && ... &&
-           (evaluable<op, T...> || evaluable<op, decltype(args.value())...>))
+__device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... args)
+  requires((evaluable<op, cuda::std::optional<T>...> || evaluable<op, T...>))
 {
   // if the operator can handle nullable types, use it.
   // otherwise propagate nulls.
-  if constexpr (evaluable<op, T...>) {
+  if constexpr (evaluable<op, cuda::std::optional<T>...>) {
     using result_t = decltype(opcode_evaluator<op>::eval(args...));
 
     if constexpr (is_fallible_result<result_t>) {
