@@ -482,6 +482,13 @@ TEST_F(StringsContainsTests, FixedQuantifier)
 
 TEST_F(StringsContainsTests, ZeroRangeQuantifier)
 {
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("a{0}"));
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("a{0,1}"));
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("a{0,}"));
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("(ab){0}"));
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("(ab){0,1}"));
+  EXPECT_NO_THROW(cudf::strings::regex_program::create("(ab){0,}"));
+
   auto input = cudf::test::strings_column_wrapper({"a", "", "abc", "XYAZ", "ABC", "ZYXA"});
   auto sv    = cudf::strings_column_view(input);
 
