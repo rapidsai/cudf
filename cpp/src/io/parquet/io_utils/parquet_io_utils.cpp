@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <format>
 #include <functional>
 #include <mutex>
 #include <numeric>
@@ -107,11 +108,13 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
 
     auto speculative_buffer = datasource.host_read(speculative_read_offset, speculative_read_size);
     CUDF_EXPECTS(speculative_buffer->size() >= speculative_read_size,
-                 "Failed to read Parquet speculative metadata bytes: requested_offset=" +
-                   std::to_string(speculative_read_offset) +
-                   ", requested_size=" + std::to_string(speculative_read_size) +
-                   ", bytes_read=" + std::to_string(speculative_buffer->size()) +
-                   ", required_size=" + std::to_string(speculative_read_size));
+                 std::format("Failed to read Parquet speculative metadata bytes: "
+                             "requested_offset={}, requested_size={}, bytes_read={}, "
+                             "required_size={}",
+                             speculative_read_offset,
+                             speculative_read_size,
+                             speculative_buffer->size(),
+                             speculative_read_size));
 
     file_ender_s ender{};
     std::memcpy(
@@ -132,12 +135,16 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
       auto const footer_start_offset = footer_offset - speculative_read_offset;
       CUDF_EXPECTS(
         footer_start_offset + ender.footer_len <= speculative_buffer->size(),
-        "Speculative metadata read did not include full footer bytes: file_size=" +
-          std::to_string(len) + ", metadata_size_hint=" + std::to_string(metadata_size_hint) +
-          ", speculative_read_offset=" + std::to_string(speculative_read_offset) +
-          ", speculative_read_size=" + std::to_string(speculative_read_size) +
-          ", bytes_read=" + std::to_string(speculative_buffer->size()) + ", footer_offset=" +
-          std::to_string(footer_offset) + ", footer_len=" + std::to_string(ender.footer_len));
+        std::format("Speculative metadata read did not include full footer bytes: "
+                    "file_size={}, metadata_size_hint={}, speculative_read_offset={}, "
+                    "speculative_read_size={}, bytes_read={}, footer_offset={}, footer_len={}",
+                    len,
+                    metadata_size_hint,
+                    speculative_read_offset,
+                    speculative_read_size,
+                    speculative_buffer->size(),
+                    footer_offset,
+                    ender.footer_len));
       std::vector<uint8_t> footer_bytes(ender.footer_len);
       std::memcpy(
         footer_bytes.data(), speculative_buffer->data() + footer_start_offset, ender.footer_len);
@@ -148,19 +155,23 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     auto const missing_prefix_size = speculative_read_offset - footer_offset;
     auto missing_prefix            = datasource.host_read(footer_offset, missing_prefix_size);
     CUDF_EXPECTS(missing_prefix->size() == missing_prefix_size,
-                 "Failed to read the missing footer prefix bytes: requested_offset=" +
-                   std::to_string(footer_offset) +
-                   ", requested_size=" + std::to_string(missing_prefix_size) + ", bytes_read=" +
-                   std::to_string(missing_prefix->size()) + ", file_size=" + std::to_string(len));
+                 std::format("Failed to read the missing footer prefix bytes: "
+                             "requested_offset={}, requested_size={}, bytes_read={}, file_size={}",
+                             footer_offset,
+                             missing_prefix_size,
+                             missing_prefix->size(),
+                             len));
     std::vector<uint8_t> footer_bytes(ender.footer_len);
     std::memcpy(footer_bytes.data(), missing_prefix->data(), missing_prefix_size);
     auto const footer_suffix_size = ender.footer_len - missing_prefix_size;
     CUDF_EXPECTS(speculative_buffer->size() >= footer_suffix_size,
-                 "Failed to read Parquet speculative metadata suffix bytes: requested_offset=" +
-                   std::to_string(speculative_read_offset) +
-                   ", requested_size=" + std::to_string(speculative_read_size) +
-                   ", bytes_read=" + std::to_string(speculative_buffer->size()) +
-                   ", required_size=" + std::to_string(footer_suffix_size));
+                 std::format("Failed to read Parquet speculative metadata suffix bytes: "
+                             "requested_offset={}, requested_size={}, bytes_read={}, "
+                             "required_size={}",
+                             speculative_read_offset,
+                             speculative_read_size,
+                             speculative_buffer->size(),
+                             footer_suffix_size));
     std::memcpy(
       footer_bytes.data() + missing_prefix_size, speculative_buffer->data(), footer_suffix_size);
     return cudf::io::datasource::buffer::create(std::move(footer_bytes));
@@ -399,10 +410,8 @@ fetch_byte_ranges_to_device_async_impl(
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
   CUDF_FUNC_RANGE();
-  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasource_refs{std::ref(datasource)};
-  auto footer_buffers =
-    fetch_footers_to_host_impl(cudf::host_span<std::reference_wrapper<cudf::io::datasource> const>{
-      datasource_refs.data(), datasource_refs.size()});
+  std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
+  auto footer_buffers = fetch_footers_to_host_impl({datasources.data(), datasources.size()});
   return std::move(footer_buffers.front());
 }
 
