@@ -4655,3 +4655,252 @@ TEST_F(ParquetReaderTest, DecodeVariableWidthDecimalStats)
   EXPECT_THROW(ParquetStatsDecoder::decode<int32_t>({0xff, 0xff, 0xff, 0xfe, 0x0c}),
                cudf::logic_error);
 }
+
+// Writes `tbl` to a temp Parquet file with the given top-level column names (stats on by default).
+[[nodiscard]] std::string write_named_parquet(cudf::table_view const& tbl,
+                                              std::vector<std::string> const& names,
+                                              std::string const& label)
+{
+  cudf::io::table_input_metadata md{tbl};
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    md.column_metadata[i].set_name(names[i]);
+  }
+  auto const path = temp_env->get_temp_filepath(label);
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path}, tbl)
+      .metadata(std::move(md));
+  cudf::io::write_parquet(opts);
+  return path;
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterColumnCollision)
+{
+  // Different-type collision: source 0's double `price` lands on source 1's int64 `id`.
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{50.0, 150.0, 75.0};
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchCollisionA.parquet");
+
+  auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
+  auto const id_b       = column_wrapper<int64_t>{1000, 1001, 1002};
+  auto const price_b    = column_wrapper<double>{40.0, 200.0, 99.0};
+  cudf::table_view const table_b{{category_b, id_b, price_b}};
+  auto const path_b =
+    write_named_parquet(table_b, {"category", "id", "price"}, "MismatchCollisionB.parquet");
+
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id", "price"})
+      .filter(filter)
+      .build();
+
+  auto const exp_id    = column_wrapper<int64_t>{1, 3, 1000, 1002};
+  auto const exp_price = column_wrapper<double>{50.0, 75.0, 40.0, 99.0};
+  cudf::table_view const expected{{exp_id, exp_price}};
+  auto const result = cudf::io::read_parquet(opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterSameTypeCollisionWrongResult)
+{
+  // Same-type collision: source 0's int64 `a` lands on source 1's int64 `b`.
+  auto const a_a = column_wrapper<int64_t>{1, 2, 3};
+  auto const b_a = column_wrapper<int64_t>{7, 8, 9};
+  cudf::table_view const table_a{{a_a, b_a}};
+  auto const path_a = write_named_parquet(table_a, {"a", "b"}, "MismatchSameTypeA.parquet");
+
+  auto const b_b = column_wrapper<int64_t>{1000, 2000, 3000};  // B's `b` lands at a's index
+  auto const a_b = column_wrapper<int64_t>{10, 20, 30};        // B's `a` (all < 100)
+  cudf::table_view const table_b{{b_b, a_b}};
+  auto const path_b = write_named_parquet(table_b, {"b", "a"}, "MismatchSameTypeB.parquet");
+
+  auto value  = cudf::numeric_scalar<int64_t>(100);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("a");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"a", "b"})
+      .filter(filter)
+      .build();
+
+  // All rows have a < 100, so none should be pruned.
+  auto const exp_a = column_wrapper<int64_t>{1, 2, 3, 10, 20, 30};
+  auto const exp_b = column_wrapper<int64_t>{7, 8, 9, 1000, 2000, 3000};
+  cudf::table_view const expected{{exp_a, exp_b}};
+  auto const result = cudf::io::read_parquet(opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnCollision)
+{
+  // Filter-only column (referenced in the filter, not projected) with a different-type collision.
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{10.0, 200.0, 30.0};
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchFilterOnlyA.parquet");
+
+  auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
+  auto const id_b       = column_wrapper<int64_t>{1000, 1001, 1002};
+  auto const price_b    = column_wrapper<double>{40.0, 500.0, 60.0};
+  cudf::table_view const table_b{{category_b, id_b, price_b}};
+  auto const path_b =
+    write_named_parquet(table_b, {"category", "id", "price"}, "MismatchFilterOnlyB.parquet");
+
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id"})  // `price` is filter-only
+      .filter(filter)
+      .build();
+
+  auto const exp_id = column_wrapper<int64_t>{1, 3, 1000, 1002};
+  cudf::table_view const expected{{exp_id}};
+  auto const result = cudf::io::read_parquet(opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterColumnMissingFromSource)
+{
+  // Filter column present in source 0 but absent from another source -> must throw
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{10.0, 20.0, 30.0};
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchMissingA.parquet");
+
+  auto const id_b  = column_wrapper<int64_t>{4, 5, 6};  // source B has no `price`
+  auto const qty_b = column_wrapper<int64_t>{7, 8, 9};
+  cudf::table_view const table_b{{id_b, qty_b}};
+  auto const path_b = write_named_parquet(table_b, {"id", "qty"}, "MismatchMissingB.parquet");
+
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id", "price"})
+      .filter(filter)
+      .build();
+
+  EXPECT_THROW(cudf::io::read_parquet(opts), std::logic_error);
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnMissingFromFirstSource)
+{
+  // Filter-only column absent from source 0 -> must throw
+  auto const id_a  = column_wrapper<int64_t>{1, 2, 3};  // source 0 has no `price`
+  auto const qty_a = column_wrapper<int64_t>{7, 8, 9};
+  cudf::table_view const table_a{{id_a, qty_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "qty"}, "MismatchFOMissingA.parquet");
+
+  auto const id_b    = column_wrapper<int64_t>{4, 5, 6};
+  auto const price_b = column_wrapper<double>{10.0, 20.0, 30.0};
+  cudf::table_view const table_b{{id_b, price_b}};
+  auto const path_b = write_named_parquet(table_b, {"id", "price"}, "MismatchFOMissingB.parquet");
+
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id"})  // `price` is filter-only, missing from source 0
+      .filter(filter)
+      .build();
+
+  EXPECT_THROW(cudf::io::read_parquet(opts), std::logic_error);
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaFilterColumnTypeMismatch)
+{
+  // Filter column present in all sources but with a different type (double vs int64) -> throw
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{10.0, 20.0, 30.0};  // double
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchTypeA.parquet");
+
+  auto const id_b    = column_wrapper<int64_t>{4, 5, 6};
+  auto const price_b = column_wrapper<int64_t>{40, 50, 60};  // int64 (different type)
+  cudf::table_view const table_b{{id_b, price_b}};
+  auto const path_b = write_named_parquet(table_b, {"id", "price"}, "MismatchTypeB.parquet");
+
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id", "price"})
+      .filter(filter)
+      .build();
+
+  EXPECT_THROW(cudf::io::read_parquet(opts), std::logic_error);
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaColumnIndicesUnsupported)
+{
+  // allow_mismatched_pq_schemas only applies to column-name selection. With column_indices the
+  // schemas must match, so reordered sources throw "All sources must have the same schema".
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{10.0, 20.0, 30.0};
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchIdxA.parquet");
+
+  auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
+  auto const id_b       = column_wrapper<int64_t>{4, 5, 6};
+  auto const price_b    = column_wrapper<double>{40.0, 50.0, 60.0};
+  cudf::table_view const table_b{{category_b, id_b, price_b}};
+  auto const path_b =
+    write_named_parquet(table_b, {"category", "id", "price"}, "MismatchIdxB.parquet");
+
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_indices({0, 1})
+      .build();
+
+  EXPECT_THROW(cudf::io::read_parquet(opts), std::logic_error);
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaReorderedNoFilter)
+{
+  // Control: reordered schemas + name projection + no filter reads correctly (the decode path maps
+  // schema indices per source). Confirms the bug is specific to the stats/filter path.
+  auto const id_a    = column_wrapper<int64_t>{1, 2, 3};
+  auto const price_a = column_wrapper<double>{10.0, 20.0, 30.0};
+  cudf::table_view const table_a{{id_a, price_a}};
+  auto const path_a = write_named_parquet(table_a, {"id", "price"}, "MismatchNoFilterA.parquet");
+
+  auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
+  auto const id_b       = column_wrapper<int64_t>{1000, 1001, 1002};
+  auto const price_b    = column_wrapper<double>{40.0, 50.0, 60.0};
+  cudf::table_view const table_b{{category_b, id_b, price_b}};
+  auto const path_b =
+    write_named_parquet(table_b, {"category", "id", "price"}, "MismatchNoFilterB.parquet");
+
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_names({"id", "price"})
+      .build();
+
+  auto const exp_id    = column_wrapper<int64_t>{1, 2, 3, 1000, 1001, 1002};
+  auto const exp_price = column_wrapper<double>{10.0, 20.0, 30.0, 40.0, 50.0, 60.0};
+  cudf::table_view const expected{{exp_id, exp_price}};
+  auto const result = cudf::io::read_parquet(opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
