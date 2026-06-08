@@ -23,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <format>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -148,10 +149,10 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
     for (auto const schema_idx : filter_column_schemas) {
       auto const col = find_colchunk(row_group, schema_idx);
       CUDF_EXPECTS(col != row_group.columns.end(),
-                   "Filter column '" + get_schema(schema_idx).name + "' (schema index " +
-                     std::to_string(schema_idx) +
-                     ") is not present in source 0 column chunks. Filter columns must be present "
-                     "in each input source",
+                   std::format("Filter column '{}' (schema index {}) is not present in source 0 "
+                               "column chunks. Filter columns must be present in each input source",
+                               get_schema(schema_idx).name,
+                               schema_idx),
                    std::invalid_argument);
       if (colchunk_has_stats(*col)) { return true; }
     }
@@ -174,11 +175,13 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
           row_group.columns[colchunk_offset.value()].schema_idx != mapped_schema_idx) {
         auto const it = find_colchunk(row_group, mapped_schema_idx);
         CUDF_EXPECTS(it != row_group.columns.end(),
-                     "Filter column '" + get_schema(schema_idx).name +
-                       "' is not present in source " + std::to_string(src_idx) +
-                       " column chunks (source-0 schema index " + std::to_string(schema_idx) +
-                       " maps to source schema index " + std::to_string(mapped_schema_idx) +
-                       "). Filter columns must be present in each input source",
+                     std::format("Filter column '{}' is not present in source {} column chunks "
+                                 "(source-0 schema index {} maps to source schema index {}). "
+                                 "Filter columns must be present in each input source",
+                                 get_schema(schema_idx).name,
+                                 src_idx,
+                                 schema_idx,
+                                 mapped_schema_idx),
                      std::invalid_argument);
         colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
       }
