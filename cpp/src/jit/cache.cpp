@@ -14,10 +14,16 @@
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
 
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <future>
+#include <mutex>
+#include <string_view>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 
@@ -37,6 +43,51 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
     ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
   }
   return ctx.finalize();
+}
+
+std::string make_nvrtc_source_name(std::string_view source_file_id)
+{
+  std::string result;
+  result.reserve(source_file_id.size());
+
+  for (auto const c : source_file_id) {
+    auto const is_alnum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                          (c >= '0' && c <= '9');
+    result.push_back(is_alnum || c == '.' ? c : '_');
+  }
+
+  return result;
+}
+
+std::string& process_pch_dir_path()
+{
+  static std::string path;
+  return path;
+}
+
+std::string make_process_pch_dir()
+{
+  static std::once_flag init;
+  std::call_once(init, [] {
+    auto path_template =
+      (std::filesystem::temp_directory_path() / "libcudf-nvrtc-pch-XXXXXX").string();
+    std::vector<char> path_buffer(path_template.begin(), path_template.end());
+    path_buffer.push_back('\0');
+
+    if (::mkdtemp(path_buffer.data()) == nullptr) {
+      auto const error = errno;
+      CUDF_FAIL(std::format("Failed to create JIT PCH temporary directory from template: {} "
+                            "with error ({}): {}",
+                            path_template,
+                            error,
+                            std::strerror(error)),
+                std::runtime_error);
+    }
+
+    process_pch_dir_path() = path_buffer.data();
+  });
+
+  return process_pch_dir_path();
 }
 
 void install_file_set(
@@ -217,10 +268,10 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
   auto runtime = get_runtime_version();
 
   auto include_dirs = bundle.get_include_directories();
-  auto pch_dir      = ctx.get_jit_pch_dir();
 
   auto use_pch     = runtime >= MIN_CUDA_VERSION_PCH;
   auto use_minimal = runtime >= MIN_CUDA_VERSION_MINIMAL;
+  auto pch_dir     = use_pch ? make_process_pch_dir() : std::string{};
 
   std::vector<std::string> options;
 
@@ -329,9 +380,10 @@ kernel_instance={}
   auto cache_key_sha256 = hash(cache_key);
 
   auto compile = [&] {
-    auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
-    auto source     = read_file_string(source_file.c_str());
-    return compile_library(name.c_str(), source.c_str(), header_include_names, headers, {});
+    auto source            = read_file_string(source_file.c_str());
+    auto nvrtc_source_name = make_nvrtc_source_name(source_file_id);
+    return compile_library(
+      nvrtc_source_name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
   auto fut =
