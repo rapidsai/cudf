@@ -14,7 +14,6 @@
 
 #include <functional>
 #include <future>
-#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -41,12 +40,10 @@ using cudf::io::text::byte_range_info;
  * @ingroup io_utils
  *
  * @param datasource Input data source
- * @param metadata_size_hint Optional number of bytes to speculatively read from the end of the
- * source when locating and reading the footer metadata. If not set, uses libcudf runtime config.
  * @return Host buffer containing footer bytes
  */
 [[nodiscard]] std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
-  cudf::io::datasource& datasource, std::optional<size_t> metadata_size_hint = std::nullopt);
+  cudf::io::datasource& datasource);
 
 /**
  * @brief Fetches host buffers of Parquet footer bytes from multiple input data sources

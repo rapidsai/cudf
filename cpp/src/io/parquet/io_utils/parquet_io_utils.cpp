@@ -410,12 +410,10 @@ fetch_byte_ranges_to_device_async_impl(
 
 }  // namespace
 
-std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
-  cudf::io::datasource& datasource, std::optional<size_t> metadata_size_hint)
+std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
   CUDF_FUNC_RANGE();
-  return fetch_footer_buffer(
-    datasource, metadata_size_hint.value_or(cudf::io::parquet_integration::metadata_size_hint()));
+  return fetch_footer_buffer(datasource, cudf::io::parquet_integration::metadata_size_hint());
 }
 
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(

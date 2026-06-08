@@ -315,11 +315,9 @@ void metadata::sanitize_schema()
 
 metadata::metadata(FileMetaData&& other) : FileMetaData(std::move(other)) {}
 
-metadata::metadata(datasource* source,
-                   bool read_page_indexes,
-                   std::optional<size_t> metadata_size_hint)
+metadata::metadata(datasource* source, bool read_page_indexes)
 {
-  auto const buffer = cudf::io::parquet::fetch_footer_to_host(*source, metadata_size_hint);
+  auto const buffer = cudf::io::parquet::fetch_footer_to_host(*source);
   CompactProtocolReader cp(buffer->data(), buffer->size());
   cp.read(this);
   auto const is_schema_initialized = cp.InitSchema(this);
@@ -448,14 +446,12 @@ metadata::~metadata()
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources,
-  bool read_page_indexes,
-  std::optional<size_t> metadata_size_hint)
+  host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   // Avoid using the thread pool for a single source
   if (sources.size() == 1) {
     std::vector<metadata> result;
-    result.emplace_back(sources[0].get(), read_page_indexes, metadata_size_hint);
+    result.emplace_back(sources[0].get(), read_page_indexes);
     return result;
   }
 
@@ -463,9 +459,7 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
     metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get(), read_page_indexes, metadata_size_hint] {
-        return metadata{source, read_page_indexes, metadata_size_hint};
-      }));
+      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -759,9 +753,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources,
   bool use_arrow_schema,
   bool has_cols_from_mismatched_srcs,
-  bool read_page_indexes,
-  std::optional<size_t> metadata_size_hint)
-  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes, metadata_size_hint)),
+  bool read_page_indexes)
+  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes)),
     keyval_maps(collect_keyval_metadata()),
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),

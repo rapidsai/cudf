@@ -2949,49 +2949,6 @@ class ShortReadFooterDatasource : public cudf::io::datasource {
   size_t call_count_{0};
 };
 
-class TailShortReadDatasource : public cudf::io::datasource {
- public:
-  TailShortReadDatasource(std::vector<char> const& data,
-                          size_t tail_short_read_call,
-                          size_t tail_short_read_size)
-    : data_(data),
-      tail_short_read_call_(tail_short_read_call),
-      tail_short_read_size_(tail_short_read_size)
-  {
-  }
-
-  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
-  {
-    ++call_count_;
-    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
-    auto const max_read_size = std::min(size, data_.size() - offset);
-    auto read_size           = max_read_size;
-    auto read_offset         = offset;
-    if (call_count_ == tail_short_read_call_) {
-      read_size   = std::min(max_read_size, tail_short_read_size_);
-      read_offset = offset + (max_read_size - read_size);
-    }
-    std::vector<std::byte> out(read_size);
-    std::memcpy(out.data(), data_.data() + read_offset, read_size);
-    return cudf::io::datasource::buffer::create(std::move(out));
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    auto buffer = host_read(offset, size);
-    std::memcpy(dst, buffer->data(), buffer->size());
-    return buffer->size();
-  }
-
-  [[nodiscard]] size_t size() const override { return data_.size(); }
-
- private:
-  std::vector<char> const& data_;
-  size_t tail_short_read_call_;
-  size_t tail_short_read_size_;
-  size_t call_count_{0};
-};
-
 std::vector<char> make_simple_parquet_bytes()
 {
   auto ints = random_values<int32_t>(128);
@@ -3079,40 +3036,6 @@ TEST_F(ParquetMetadataReaderTest, Basics)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, MetadataSizeHintReadCallCount)
-{
-  auto const num_rows = 1024;
-  auto ints           = random_values<int32_t>(num_rows);
-  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
-  cudf::table_view input_table({int_col});
-
-  std::vector<char> parquet_bytes;
-  auto const write_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
-      .build();
-  cudf::io::write_parquet(write_opts);
-
-  TrackingFooterDatasource tracking_source(parquet_bytes);
-  auto const source = cudf::io::source_info{&tracking_source};
-
-  // A hint as large as the source should result in a single read.
-  auto const metadata_full_hint = cudf::io::read_parquet_metadata(source, tracking_source.size());
-  EXPECT_EQ(metadata_full_hint.num_rows(), num_rows);
-  ASSERT_EQ(tracking_source.reads().size(), 1);
-  EXPECT_EQ(tracking_source.reads()[0].first, 0);
-  EXPECT_EQ(tracking_source.reads()[0].second, tracking_source.size());
-
-  tracking_source.reset();
-
-  // A minimal hint (ender size only) should require a second read for the footer bytes.
-  constexpr size_t minimal_hint = 8;
-  auto const metadata_min_hint  = cudf::io::read_parquet_metadata(source, minimal_hint);
-  EXPECT_EQ(metadata_min_hint.num_rows(), num_rows);
-  ASSERT_EQ(tracking_source.reads().size(), 2);
-  EXPECT_EQ(tracking_source.reads()[0].first, tracking_source.size() - minimal_hint);
-  EXPECT_EQ(tracking_source.reads()[0].second, minimal_hint);
-}
-
 TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
 {
   auto const num_rows = 1200;
@@ -3152,42 +3075,7 @@ TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, FooterSizeHintReadCallCount)
-{
-  auto const num_rows = 1024;
-  auto ints           = random_values<int32_t>(num_rows);
-  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
-  cudf::table_view input_table({int_col});
-
-  std::vector<char> parquet_bytes;
-  auto const write_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
-      .build();
-  cudf::io::write_parquet(write_opts);
-
-  TrackingFooterDatasource tracking_source(parquet_bytes);
-  std::vector<std::unique_ptr<cudf::io::datasource>> sources;
-  sources.emplace_back(cudf::io::datasource::create(&tracking_source));
-
-  auto const full_hint_footers = cudf::io::read_parquet_footers(sources, tracking_source.size());
-  ASSERT_EQ(full_hint_footers.size(), 1);
-  EXPECT_EQ(full_hint_footers[0].num_rows, num_rows);
-  ASSERT_EQ(tracking_source.reads().size(), 1);
-  EXPECT_EQ(tracking_source.reads()[0].first, 0);
-  EXPECT_EQ(tracking_source.reads()[0].second, tracking_source.size());
-
-  tracking_source.reset();
-
-  constexpr size_t minimal_hint   = 8;
-  auto const minimal_hint_footers = cudf::io::read_parquet_footers(sources, minimal_hint);
-  ASSERT_EQ(minimal_hint_footers.size(), 1);
-  EXPECT_EQ(minimal_hint_footers[0].num_rows, num_rows);
-  ASSERT_EQ(tracking_source.reads().size(), 2);
-  EXPECT_EQ(tracking_source.reads()[0].first, tracking_source.size() - minimal_hint);
-  EXPECT_EQ(tracking_source.reads()[0].second, minimal_hint);
-}
-
-TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
+TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
 {
   auto parquet_bytes = make_simple_parquet_bytes();
 
@@ -3196,7 +3084,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
     std::vector<char> tiny(8, '\0');
     TrackingFooterDatasource tiny_source(tiny);
     auto const source = cudf::io::source_info{&tiny_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 8); },
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
                                 "Parquet source is too small to contain header and footer ender");
   }
 
@@ -3205,7 +3093,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
     ShortReadFooterDatasource short_ender_source(
       parquet_bytes, /*short_read_call=*/1, /*short_read_size=*/7);
     auto const source = cudf::io::source_info{&short_ender_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 8); },
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
                                 "Failed to read Parquet footer ender bytes");
   }
 
@@ -3218,9 +3106,8 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
     bad_header[3]   = '!';
     TrackingFooterDatasource bad_header_source(bad_header);
     auto const source = cudf::io::source_info{&bad_header_source};
-    expect_logic_error_contains(
-      [&] { (void)cudf::io::read_parquet_metadata(source, bad_header.size()); },
-      "Invalid Parquet file header magic");
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Invalid Parquet file header magic");
   }
 
   // Footer magic check
@@ -3233,7 +3120,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
     bad_footer_magic[footer_magic_offset + 3] = '!';
     TrackingFooterDatasource bad_footer_source(bad_footer_magic);
     auto const source = cudf::io::source_info{&bad_footer_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 8); },
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
                                 "Invalid Parquet footer magic");
   }
 
@@ -3247,33 +3134,8 @@ TEST_F(ParquetMetadataReaderTest, MetadataSizeHintErrorMessages)
     bad_footer_len[footer_len_offset + 3] = 0;
     TrackingFooterDatasource bad_footer_len_source(bad_footer_len);
     auto const source = cudf::io::source_info{&bad_footer_len_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 8); },
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
                                 "Invalid Parquet footer length");
-  }
-
-  // Speculative range does not include full footer bytes check
-  {
-    cudf::io::parquet::file_ender_s ender{};
-    auto const ender_offset = parquet_bytes.size() - sizeof(ender);
-    std::memcpy(&ender, parquet_bytes.data() + ender_offset, sizeof(ender));
-    // Hint must reach the footer start; a fixed value (e.g. 64) can overshoot and route to
-    // the missing-prefix path when the actual footer is larger.
-    auto const speculative_hint = ender.footer_len + sizeof(ender);
-
-    TailShortReadDatasource truncated_speculative_source(parquet_bytes, 1, 16);
-    auto const source = cudf::io::source_info{&truncated_speculative_source};
-    expect_logic_error_contains(
-      [&] { (void)cudf::io::read_parquet_metadata(source, speculative_hint); },
-      "Speculative metadata read did not include full footer bytes");
-  }
-
-  // Missing footer prefix short read check
-  {
-    ShortReadFooterDatasource short_prefix_source(
-      parquet_bytes, /*short_read_call=*/2, /*short_read_size=*/4);
-    auto const source = cudf::io::source_info{&short_prefix_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source, 8); },
-                                "Failed to read the missing footer prefix bytes");
   }
 }
 

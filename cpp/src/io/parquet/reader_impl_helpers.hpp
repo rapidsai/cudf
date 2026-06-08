@@ -105,9 +105,7 @@ struct row_group_info {
  */
 struct metadata : public FileMetaData {
   metadata() = default;
-  explicit metadata(datasource* source,
-                    bool read_page_indexes                   = true,
-                    std::optional<size_t> metadata_size_hint = std::nullopt);
+  explicit metadata(datasource* source, bool read_page_indexes = true);
   explicit metadata(FileMetaData&& other);
   metadata(metadata const& other)            = delete;
   metadata(metadata&& other)                 = default;
@@ -150,9 +148,7 @@ class aggregate_reader_metadata {
    * @brief Create a metadata object from each element in the source vector
    */
   static std::vector<metadata> metadatas_from_sources(
-    host_span<std::unique_ptr<datasource> const> sources,
-    bool read_page_indexes                   = true,
-    std::optional<size_t> metadata_size_hint = std::nullopt);
+    host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes = true);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
@@ -341,8 +337,7 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs,
-                            bool read_page_indexes                   = true,
-                            std::optional<size_t> metadata_size_hint = std::nullopt);
+                            bool read_page_indexes = true);
 
   aggregate_reader_metadata(std::vector<FileMetaData>&& parquet_metadatas,
                             bool use_arrow_schema,

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
-from libc.stddef cimport size_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -553,9 +552,7 @@ cdef class FileMetaData:
         return FileMetaData.from_cpp(metadata)
 
 
-cpdef ParquetMetadata read_parquet_metadata(
-    SourceInfo src_info, object metadata_size_hint=None
-):
+cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):
     """
     Reads metadata of parquet dataset.
 
@@ -563,11 +560,6 @@ cpdef ParquetMetadata read_parquet_metadata(
     ----------
     src_info : SourceInfo
         Dataset source.
-    metadata_size_hint : int, optional
-        Number of bytes to speculatively read from the end of each source while
-        locating and reading footer metadata. If not set, libcudf uses the
-        runtime configuration default.
-
     Returns
     -------
     ParquetMetadata
@@ -581,24 +573,13 @@ cpdef ParquetMetadata read_parquet_metadata(
         in :func:`pylibcudf.io.parquet.read_parquet`.
     """
     cdef cpp_parquet_metadata.parquet_metadata c_result
-    cdef size_t c_metadata_size_hint
-
-    if metadata_size_hint is None:
-        with nogil:
-            c_result = cpp_parquet_metadata.read_parquet_metadata(src_info.c_obj)
-    else:
-        if metadata_size_hint < 0:
-            raise ValueError("metadata_size_hint must be non-negative")
-        c_metadata_size_hint = <size_t>metadata_size_hint
-        with nogil:
-            c_result = cpp_parquet_metadata.read_parquet_metadata(
-                src_info.c_obj, c_metadata_size_hint
-            )
+    with nogil:
+        c_result = cpp_parquet_metadata.read_parquet_metadata(src_info.c_obj)
 
     return ParquetMetadata.from_metadata(c_result)
 
 
-cpdef list read_parquet_footers(SourceInfo src_info, object metadata_size_hint=None):
+cpdef list read_parquet_footers(SourceInfo src_info):
     """
     Read parquet file footers as ``FileMetaData`` objects.
 
@@ -606,11 +587,6 @@ cpdef list read_parquet_footers(SourceInfo src_info, object metadata_size_hint=N
     ----------
     src_info : SourceInfo
         Dataset source.
-    metadata_size_hint : int, optional
-        Number of bytes to speculatively read from the end of each source while
-        locating and reading footer metadata. If not set, libcudf uses the
-        runtime configuration default.
-
     Returns
     -------
     list[FileMetaData]
@@ -619,28 +595,13 @@ cpdef list read_parquet_footers(SourceInfo src_info, object metadata_size_hint=N
     cdef vector[unique_ptr[datasource]] sources
     cdef vector[cpp_FileMetaData] c_result
     cdef cpp_FileMetaData metadata
-    cdef size_t c_metadata_size_hint
-    cdef bint has_metadata_size_hint = metadata_size_hint is not None
     with nogil:
         sources = make_datasources(src_info.c_obj)
-        if not has_metadata_size_hint:
-            c_result = cpp_parquet_metadata.read_parquet_footers(
-                host_span[const_unique_ptr_datasource](
-                    <const_unique_ptr_datasource*>sources.data(),
-                    sources.size(),
-                )
+        c_result = cpp_parquet_metadata.read_parquet_footers(
+            host_span[const_unique_ptr_datasource](
+                <const_unique_ptr_datasource*>sources.data(),
+                sources.size(),
             )
-    if has_metadata_size_hint:
-        if metadata_size_hint < 0:
-            raise ValueError("metadata_size_hint must be non-negative")
-        c_metadata_size_hint = <size_t>metadata_size_hint
-        with nogil:
-            c_result = cpp_parquet_metadata.read_parquet_footers(
-                host_span[const_unique_ptr_datasource](
-                    <const_unique_ptr_datasource*>sources.data(),
-                    sources.size(),
-                ),
-                c_metadata_size_hint,
-            )
+        )
 
     return [FileMetaData.from_cpp(metadata) for metadata in c_result]
