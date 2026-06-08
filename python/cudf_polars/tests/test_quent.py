@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import uuid
 from typing import TYPE_CHECKING
 
@@ -369,7 +370,9 @@ def test_lower_ir_graph_with_node_map() -> None:
     engine = pl.GPUEngine(executor="streaming")
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_statistics(ir, config_options)
+    stats = collect_statistics(
+        ir, config_options, concurrent.futures.ThreadPoolExecutor()
+    )
 
     lowered_ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
