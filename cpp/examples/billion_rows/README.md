@@ -4,6 +4,8 @@ This C++ example demonstrates using libcudf APIs to read and process
 a table with 1 billion rows. The 1 billion row challenge is described here:
 https://github.com/gunnarmorling/1brc
 
+Blog post that uses this code: https://developer.nvidia.com/blog/processing-one-billion-rows-of-data-with-rapids-cudf-pandas-accelerator-mode/
+
 The examples load the 1 billion row text file using the CSV reader.
 The file contains around 400 unique city names (string type) along with
 random temperature values (float type).
@@ -42,5 +44,3 @@ build/brc_pipeline input.txt 25 2
 If your machine does not come with a pre-built libcudf binary, expect the
 first build to take some time, as it would build libcudf on the host machine.
 It may be sped up by configuring the proper `PARALLEL_LEVEL` number.
-
-Blog post that uses this code: https://developer.nvidia.com/blog/processing-one-billion-rows-of-data-with-rapids-cudf-pandas-accelerator-mode/

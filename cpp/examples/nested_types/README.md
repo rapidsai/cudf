@@ -3,6 +3,8 @@
 This C++ example demonstrates using libcudf APIs to perform operations on
 tables containing nested data types (e.g. structs and lists).
 
+Blog post that uses this code: https://developer.nvidia.com/blog/streamline-etl-workflows-with-nested-data-types-in-rapids-libcudf/
+
 The example reads a line-delimited JSON file whose records contain nested
 fields, then deduplicates the rows and annotates each unique row with the
 number of times it occurs. It showcases the libcudf nested-type row operators
@@ -34,5 +36,3 @@ build/deduplication example.json output.json pool
 If your machine does not come with a pre-built libcudf binary, expect the
 first build to take some time, as it would build libcudf on the host machine.
 It may be sped up by configuring the proper `PARALLEL_LEVEL` number.
-
-Blog post that uses this code: https://developer.nvidia.com/blog/streamline-etl-workflows-with-nested-data-types-in-rapids-libcudf/
