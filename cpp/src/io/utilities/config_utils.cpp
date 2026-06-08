@@ -83,7 +83,7 @@ namespace integrated_memory_optimization {
 
 }  // namespace integrated_memory_optimization
 
-namespace parquet_integration {
+namespace parquet_reader {
 
 [[nodiscard]] std::size_t metadata_size_hint()
 {
@@ -93,5 +93,5 @@ namespace parquet_integration {
   return metadata_size_hint;
 }
 
-}  // namespace parquet_integration
+}  // namespace parquet_reader
 }  // namespace cudf::io

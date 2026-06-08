@@ -174,7 +174,7 @@ auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host_impl(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
 {
-  auto const metadata_size_hint = cudf::io::parquet_integration::metadata_size_hint();
+  auto const metadata_size_hint = cudf::io::parquet_reader::metadata_size_hint();
   // Helper to fetch footer from a datasource
   auto const fetch_footer = [metadata_size_hint](cudf::io::datasource& datasource) {
     return fetch_footer_buffer(datasource, metadata_size_hint);
@@ -413,7 +413,7 @@ fetch_byte_ranges_to_device_async_impl(
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
   CUDF_FUNC_RANGE();
-  return fetch_footer_buffer(datasource, cudf::io::parquet_integration::metadata_size_hint());
+  return fetch_footer_buffer(datasource, cudf::io::parquet_reader::metadata_size_hint());
 }
 
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(

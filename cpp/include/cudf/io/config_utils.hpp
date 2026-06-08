@@ -71,7 +71,7 @@ namespace integrated_memory_optimization {
 }  // namespace integrated_memory_optimization
 
 //! Parquet
-namespace parquet_integration {
+namespace parquet_reader {
 
 /**
  * @brief Returns the speculative Parquet metadata read size in bytes.
@@ -83,6 +83,6 @@ namespace parquet_integration {
  */
 [[nodiscard]] std::size_t metadata_size_hint();
 
-}  // namespace parquet_integration
+}  // namespace parquet_reader
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
