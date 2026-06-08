@@ -147,7 +147,13 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
     auto const& row_group = per_file_metadata[0].row_groups[input_row_group_indices[0].front()];
     for (auto const schema_idx : filter_column_schemas) {
       auto const col = find_colchunk(row_group, schema_idx);
-      if (col != row_group.columns.end() and colchunk_has_stats(*col)) { return true; }
+      CUDF_EXPECTS(col != row_group.columns.end(),
+                   "Filter column '" + get_schema(schema_idx).name + "' (schema index " +
+                     std::to_string(schema_idx) +
+                     ") is not present in source 0 column chunks. Filter columns must be present "
+                     "in each input source",
+                   std::invalid_argument);
+      if (colchunk_has_stats(*col)) { return true; }
     }
     return false;
   }
@@ -167,7 +173,13 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
       if (not colchunk_offset.has_value() or colchunk_offset.value() >= num_col_chunks or
           row_group.columns[colchunk_offset.value()].schema_idx != mapped_schema_idx) {
         auto const it = find_colchunk(row_group, mapped_schema_idx);
-        if (it == row_group.columns.end()) { continue; }
+        CUDF_EXPECTS(it != row_group.columns.end(),
+                     "Filter column '" + get_schema(schema_idx).name +
+                       "' is not present in source " + std::to_string(src_idx) +
+                       " column chunks (source-0 schema index " + std::to_string(schema_idx) +
+                       " maps to source schema index " + std::to_string(mapped_schema_idx) +
+                       "). Filter columns must be present in each input source",
+                     std::invalid_argument);
         colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
       }
 
