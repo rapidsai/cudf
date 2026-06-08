@@ -25,9 +25,13 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import polars as pl
+
 import pylibcudf as plc
 import pylibcudf.partitioning
+import pylibcudf.search
 
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
@@ -40,14 +44,15 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
 )
 from cudf_polars.streaming.shuffle import Shuffle
-from cudf_polars.utils.cuda_stream import stream_ordered_after
+from cudf_polars.utils.cuda_stream import join_cuda_streams, stream_ordered_after
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.channel import Channel
+    from rapidsmpf.streaming.cudf.channel_metadata import OrderScheme
 
     from rmm.pylibrmm.stream import Stream
 
@@ -320,6 +325,59 @@ class LocalRepartitioner:
                     TableChunk.from_pylibcudf_table(
                         partition_map, stream, exclusive_view=True, br=self._br
                     ),
+                )
+
+    async def repartition_by_orderscheme(
+        self,
+        *,
+        scheme: OrderScheme,
+        stream: Stream,
+        key_column_indices: Sequence[int] | None = None,
+    ) -> None:
+        """
+        Re-partition items by range using the boundaries in an OrderScheme.
+
+        Parameters
+        ----------
+        scheme
+            The ``OrderScheme`` to use for re-partitioning.
+        stream
+            The stream to use for the unpack operation.
+        key_column_indices
+            The indices of the columns to use for re-partitioning.
+            If ``None``, column indices in ``scheme`` are used.
+        """
+        column_order = [k.order for k in scheme.keys]
+        null_order = [k.null_order for k in scheme.keys]
+        if key_column_indices is None:
+            key_column_indices = [k.column_index for k in scheme.keys]
+        boundary_chunk = scheme.get_boundaries(self._br)
+        join_cuda_streams(downstreams=(stream,), upstreams=(boundary_chunk.stream,))
+        async with self._local_shuffle.inserting() as inserter:
+            for table in self._iter_chunks(stream):
+                key_table = plc.Table([table.columns()[i] for i in key_column_indices])
+                split_col = plc.search.lower_bound(
+                    key_table,
+                    boundary_chunk.table_view(),
+                    column_order,
+                    null_order,
+                    stream=stream,
+                )
+                splits = (
+                    DataFrame.from_table(
+                        plc.Table([split_col]),
+                        ["split"],
+                        [DataType(pl.Int32())],
+                        stream=stream,
+                    )
+                    .to_polars()["split"]
+                    .to_list()
+                )
+                inserter.insert_split(
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=self._br
+                    ),
+                    splits,
                 )
 
     def local_partitions(self) -> list[int]:

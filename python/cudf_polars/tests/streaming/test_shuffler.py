@@ -9,11 +9,15 @@ import pytest
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
+    OrderKey,
+    OrderScheme,
     Partitioning,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
+
+import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.options import StreamingOptions
@@ -270,3 +274,92 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
             engine=spmd_engine, local_df=local_df, op_id=op_id
         )
     assert global_df.height == 12 * comm.nranks
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize("local_count", [1, 2, 3])
+def test_local_repartitioner_boundaries(spmd_engine, local_count) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+
+    # Each rank holds a sorted, contiguous key slice of [0, n_total)
+    n_per_rank = 6
+    key_start = comm.rank * n_per_rank
+    pl_df = pl.DataFrame(
+        {
+            "key": pl.Series(
+                list(range(key_start, key_start + n_per_rank)), dtype=pl.Int32()
+            ),
+            "val": pl.Series(list(range(n_per_rank)), dtype=pl.Int32()),
+        }
+    )
+    col_names = pl_df.columns
+    dtypes = [DataType(dt) for dt in pl_df.dtypes]
+
+    results: list[tuple[int, pl.DataFrame]] = []
+
+    async def _run() -> None:
+        stream = context.get_stream_from_pool()
+        cudf_df = DataFrame.from_polars(pl_df, stream)
+
+        # Build an OrderScheme whose boundaries evenly split this rank's key range
+        boundary_keys = [
+            key_start + n_per_rank * i // local_count for i in range(1, local_count)
+        ]
+        boundary_df = DataFrame.from_polars(
+            pl.DataFrame({"key": pl.Series(boundary_keys, dtype=pl.Int32())}), stream
+        )
+        scheme = OrderScheme(
+            [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)],
+            TableChunk.from_pylibcudf_table(
+                boundary_df.table, stream, exclusive_view=False, br=context.br()
+            ),
+            strict_boundaries=True,
+        )
+
+        with reserve_op_id() as op_id:
+            shuffle = ShuffleManager(
+                context, comm, num_partitions=comm.nranks, collective_id=op_id
+            )
+            # Route each rank's sorted slice only to its own partition
+            splits = [0] * comm.rank + [n_per_rank] * (comm.nranks - comm.rank - 1)
+            async with shuffle.inserting() as inserter:
+                inserter.insert_split(
+                    TableChunk.from_pylibcudf_table(
+                        cudf_df.table, stream, exclusive_view=True, br=context.br()
+                    ),
+                    splits,
+                )
+
+            local = LocalRepartitioner(shuffle, local_count=local_count)
+            await local.repartition_by_orderscheme(
+                scheme=scheme,
+                stream=stream,
+                key_column_indices=(0,),
+            )
+
+            for pid in local.local_partitions():
+                tbl = local.extract_chunk(pid, stream)
+                results.append(
+                    (
+                        pid,
+                        DataFrame.from_table(
+                            tbl, col_names, dtypes, stream
+                        ).to_polars(),
+                    )
+                )
+
+    asyncio.run(_run())
+
+    assert len(results) == local_count
+
+    # All rows present
+    all_keys = sorted(pl.concat([df for _, df in results])["key"].to_list())
+    assert all_keys == list(range(key_start, key_start + n_per_rank))
+
+    # Each partition holds keys in the correct range
+    for pid, df in results:
+        lo = key_start + n_per_rank * pid // local_count
+        hi = key_start + n_per_rank * (pid + 1) // local_count
+        for key_val in df["key"].to_list():
+            assert lo <= key_val < hi
