@@ -758,10 +758,10 @@ class regex_parser {
         auto const n = item.d.count.n;  // minimum count
         auto const m = item.d.count.m;  // maximum count
         assert(n >= 0 && "invalid repeat count value n");
+        std::vector<regex_parser::Item> repeat_copy(begin, end);
         // zero-repeat edge-case: need to erase the previous items
         if (n == 0) { out.erase(begin, end); }
 
-        std::vector<regex_parser::Item> repeat_copy(begin, end);
         // special handling for quantified capture groups
         if ((n > 1) && (*begin).type == LBRA) {
           (*begin).type = LBRA_NC;  // change first one to non-capture
