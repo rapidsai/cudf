@@ -2080,7 +2080,7 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
 
   // 1.5x chunk_read_limit, saturating at the maximum representable value on overflow
   auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
-  auto const pass_read_limit = sum.overflow ? std::numeric_limits<std::size_t>::max() : sum.value;
+  auto const pass_read_limit = sum.overflow ? 0 : sum.value;
 
   CUDF_LOG_WARN(std::format(
     "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
