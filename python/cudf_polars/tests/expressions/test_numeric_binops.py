@@ -11,6 +11,7 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_140
 
 dtypes = [
     pl.Int8,
@@ -136,12 +137,12 @@ def test_multiply_with_decimals(engine: pl.GPUEngine):
 
 
 def test_sum_decimal_widens_precision(request) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            # Should be fixed in polars 1.40
-            reason="Polars does not widen precision for sum of decimals."
+    if POLARS_VERSION_LT_140:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="Polars does not widen precision for sum of decimals."
+            )
         )
-    )
     df = pl.LazyFrame(
         {"x": [Decimal("5000000000000.00"), Decimal("5000000000000.00")]},
         schema={"x": pl.Decimal(15, 2)},

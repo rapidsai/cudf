@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf_test/nanoarrow_utils.hpp>
@@ -36,9 +37,14 @@ void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::to_arrow_device(table->view(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -57,9 +63,14 @@ void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::to_arrow_host(table->view(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -98,10 +109,15 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::from_arrow_device_column(
       schema.get(), input.get(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <cudf::type_id data_type>
@@ -140,10 +156,15 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
   state.add_global_memory_reads(size_bytes);
   state.add_global_memory_writes(size_bytes);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::from_arrow_host_column(
       schema.get(), input.get(), rmm::cuda_stream_view{launch.get_stream()});
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 using data_types = nvbench::enum_type_list<cudf::type_id::INT8,
