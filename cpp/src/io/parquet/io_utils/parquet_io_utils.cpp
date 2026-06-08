@@ -120,24 +120,12 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     if (speculative_read_offset == 0) {
       file_header_s header{};
       std::memcpy(&header, speculative_buffer->data(), header_len);
-      CUDF_EXPECTS(
-        header.magic == detail::parquet_magic,
-        "Invalid Parquet file header magic: expected=" + std::to_string(detail::parquet_magic) +
-          " (\"PAR1\"), actual=" + std::to_string(header.magic) +
-          ", file_size=" + std::to_string(len));
-    }
+      CUDF_EXPECTS(header.magic == detail::parquet_magic, "Corrupted header");
+    };
 
-    CUDF_EXPECTS(ender.magic == detail::parquet_magic,
-                 "Invalid Parquet footer magic: expected=" + std::to_string(detail::parquet_magic) +
-                   " (\"PAR1\"), actual=" + std::to_string(ender.magic) +
-                   ", file_size=" + std::to_string(len) +
-                   ", speculative_read_offset=" + std::to_string(speculative_read_offset) +
-                   ", speculative_read_size=" + std::to_string(speculative_read_size));
+    CUDF_EXPECTS(ender.magic == detail::parquet_magic, "Corrupted footer");
     CUDF_EXPECTS(ender.footer_len != 0 && ender.footer_len <= (len - header_len - ender_len),
-                 "Invalid Parquet footer length: footer_len=" + std::to_string(ender.footer_len) +
-                   ", valid_range=[1, " + std::to_string(len - header_len - ender_len) +
-                   "], file_size=" + std::to_string(len) + ", header_size=" +
-                   std::to_string(header_len) + ", ender_size=" + std::to_string(ender_len));
+                 "Incorrect footer length");
 
     auto const footer_offset = len - ender.footer_len - ender_len;
     if (footer_offset >= speculative_read_offset) {
