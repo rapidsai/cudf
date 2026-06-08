@@ -21,8 +21,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-
 #include <memory>
 
 namespace cudf {
@@ -90,24 +88,29 @@ inline std::unique_ptr<column> rolling_window_udf_impl(
     0, stream, cudf::get_current_device_resource_ref()};
 
   std::string kernel_reflection =
-    jitify2::reflection::Template("cudf::rolling::jit::rolling_window_kernel")  //
-      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
-                   cudf::type_to_name(output->type()),
-                   udf_agg._operator_name,
-                   preceding_window_str,
-                   following_window_str);
+    rtcx::reflect_template("cudf::rolling::jit::rolling_window_kernel",
+                           cudf::type_to_name(input.type()),  // list of template arguments
+                           cudf::type_to_name(output->type()),
+                           udf_agg._operator_name,
+                           preceding_window_str,
+                           following_window_str);
 
-  cudf::jit::get_udf_kernel(*rolling_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
-    ->launch(input.size(),
-             cudf::jit::get_data_ptr(input),
-             input.null_mask(),
-             cudf::jit::get_data_ptr(output_view),
-             output_view.null_mask(),
-             device_valid_count.data(),
-             preceding_window,
-             following_window,
-             min_periods);
+  auto kernel =
+    cudf::jit::get_udf_kernel("cudf/cpp/src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch_with({cfg.min_grid_size},
+                     {cfg.block_size},
+                     0,
+                     stream,
+                     input.size(),
+                     cudf::jit::get_data_ptr(input),
+                     input.null_mask(),
+                     cudf::jit::get_data_ptr(output->mutable_view()),
+                     output_view.null_mask(),
+                     device_valid_count.data(),
+                     preceding_window,
+                     following_window,
+                     min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
