@@ -23,7 +23,6 @@ from cudf.utils.dtypes import get_dtype_of_same_kind
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, DtypeObj
-    from cudf.core.buffer import Buffer
 
 
 class IntervalColumn(ColumnBase):
@@ -39,7 +38,8 @@ class IntervalColumn(ColumnBase):
     @functools.cached_property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         if isinstance(self.dtype, IntervalDtype):
-            return self.dtype.closed
+            closed = self.dtype.closed
+            return "right" if closed is None else closed
         else:
             return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
@@ -51,36 +51,6 @@ class IntervalColumn(ColumnBase):
             else cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
         )
         return pa.ExtensionArray.from_storage(pa_type, pa_array)
-
-    @classmethod
-    def _deserialize_plc_column(
-        cls,
-        header: dict,
-        dtype: DtypeObj,
-        data: Buffer | None,
-        mask: Buffer | None,
-        children: list[plc.Column],
-    ) -> plc.Column:
-        """Construct plc.Column using STRUCT type for interval columns."""
-        offset = header.get("offset", 0)
-        if mask is None:
-            null_count = 0
-        else:
-            null_count = plc.null_mask.null_count(
-                mask, offset, header["size"] + offset
-            )
-
-        plc_type = plc.DataType(plc.TypeId.STRUCT)
-        return plc.Column(
-            plc_type,
-            header["size"],
-            data,
-            mask,
-            null_count,
-            offset,
-            children,
-            validate=False,
-        )
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
