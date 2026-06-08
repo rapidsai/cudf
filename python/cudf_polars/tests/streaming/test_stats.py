@@ -129,10 +129,10 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
 ) -> None:
     class FakeDataType:
         def __init__(self, type_id: plc.TypeId) -> None:
-            self.type_id = type_id
+            self.plc_type = plc.DataType(type_id)
 
         def id(self) -> plc.TypeId:
-            return self.type_id
+            return self.plc_type.id()
 
     class FakeParquetMetadata:
         row_count = 2_000

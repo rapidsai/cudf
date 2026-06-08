@@ -816,39 +816,14 @@ def _sample_rg_sizes(
 def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
     """Return a conservative decoded-column byte floor for scan planning."""
     nullmask = (nrows + 7) // 8
+    plc_dtype = dtype.plc_type
     dtype_id = dtype.id()
-    if dtype_id in (plc.TypeId.INT8, plc.TypeId.UINT8, plc.TypeId.BOOL8):
-        return nrows + nullmask
-    if dtype_id in (plc.TypeId.INT16, plc.TypeId.UINT16):
-        return nrows * 2 + nullmask
-    if dtype_id in (
-        plc.TypeId.INT32,
-        plc.TypeId.UINT32,
-        plc.TypeId.FLOAT32,
-        plc.TypeId.TIMESTAMP_DAYS,
-        plc.TypeId.DURATION_DAYS,
-        plc.TypeId.DECIMAL32,
-    ):
-        return nrows * 4 + nullmask
-    if dtype_id in (
-        plc.TypeId.INT64,
-        plc.TypeId.UINT64,
-        plc.TypeId.FLOAT64,
-        plc.TypeId.TIMESTAMP_SECONDS,
-        plc.TypeId.TIMESTAMP_MILLISECONDS,
-        plc.TypeId.TIMESTAMP_MICROSECONDS,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-        plc.TypeId.DURATION_SECONDS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-        plc.TypeId.DECIMAL64,
-    ):
-        return nrows * 8 + nullmask
-    if dtype_id == plc.TypeId.DECIMAL128:
-        return nrows * 16 + nullmask
     if dtype_id == plc.TypeId.STRING:
         return (nrows + 1) * 4 + nullmask
+    if dtype_id not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
+        plc.traits.is_fixed_width(plc_dtype)
+    ):
+        return nrows * plc.types.size_of(plc_dtype) + nullmask
     return max(1, nrows)
 
 
