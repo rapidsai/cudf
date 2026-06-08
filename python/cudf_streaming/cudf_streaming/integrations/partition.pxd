@@ -21,9 +21,3 @@ cpdef object split_and_pack(
     BufferResource br,
 )
 cpdef object unpack_and_concat(object partitions, Stream stream, BufferResource br)
-cpdef object spill_partitions(object partitions, BufferResource br)
-cpdef object unspill_partitions(
-    object partitions,
-    BufferResource br,
-    object allow_overbooking,
-)
