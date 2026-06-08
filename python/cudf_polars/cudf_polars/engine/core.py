@@ -41,7 +41,7 @@ from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import Executor, ThreadPoolExecutor
 
     import rapidsmpf.config
     from rapidsmpf.communicator.communicator import Communicator
@@ -592,12 +592,7 @@ def all_gather_host_data(
     -------
     List of bytes, one element per rank, ordered by rank index.
     """
-    allgather = AllGather(
-        comm=comm,
-        op_id=op_id,
-        br=br,
-        statistics=Statistics(enable=False),
-    )
+    allgather = AllGather(comm=comm, op_id=op_id, br=br)
     # TODO: Make AllGather (bulk) a context manager so this becomes
     # with AllGather(...) as ag:
     #     ag.insert(0, PackedData.from_host_bytes(data, br))
@@ -615,6 +610,7 @@ def allgather_stats(
     br: BufferResource,
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
+    executor: Executor,
 ) -> StatsCollector:
     """
     Collect scan statistics on rank 0 and distribute to all ranks.
@@ -632,16 +628,19 @@ def allgather_stats(
         Root of the pre-lowered IR graph (same object on every rank).
     config_options
         Executor configuration.
+    executor: concurrent.futures.Executor
+        Executor to use for IO operations. This function does not start
+        or shutdown the executor.
 
     Returns
     -------
     A :class:`StatsCollector` valid for the local rank's IR node objects.
     """
     if comm.nranks == 1:
-        return collect_statistics(ir, config_options)
+        return collect_statistics(ir, config_options, executor)
 
     if comm.rank == 0:
-        stats = collect_statistics(ir, config_options)
+        stats = collect_statistics(ir, config_options, executor)
         data = json.dumps(stats.serialize(ir)).encode()
     else:
         data = b""
@@ -702,7 +701,7 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
-    stats = allgather_stats(comm, ctx.br(), ir, config_options)
+    stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     logical_plan_id = ir.get_stable_plan_id()
 
     physical_plan_id = uuid.uuid4()
@@ -723,7 +722,7 @@ def evaluate_on_rank(
         )
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
-        ir, config_options, stats
+        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
     log_query_plan(ir, config_options)

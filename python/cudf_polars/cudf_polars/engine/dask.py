@@ -21,6 +21,7 @@ from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_comm
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -47,7 +48,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -273,16 +273,15 @@ def _setup_worker(
         comm = mp_ctx.comm
 
     barrier(comm)
-
     worker_id = worker_ids[comm.rank]
-
     quent_worker = cudf_polars.quent._types.Worker(
         id=worker_id,
         engine=cudf_polars.quent.Engine(id=engine_id),
         instance_name=f"rank-{comm.rank}",
     )
+    statistics = Statistics.from_options(options)
+    ctx = Context.from_options(comm.logger, mr, options, statistics)
 
-    ctx = Context.from_options(comm.logger, mr, options)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
@@ -386,7 +385,10 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    mp_ctx.ctx = Context.from_options(mp_ctx.comm.logger, mp_ctx.mr, options)
+    statistics = Statistics.from_options(options)
+    mp_ctx.ctx = Context.from_options(
+        mp_ctx.comm.logger, mp_ctx.mr, options, statistics
+    )
     rmm.mr.set_current_device_resource(mp_ctx.ctx.br().device_mr)
 
 

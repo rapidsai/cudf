@@ -68,6 +68,9 @@ def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -80,6 +83,10 @@ def lower_ir_graph(
         GPUEngine configuration options.
     stats
         Pre-computed statistics collector.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers in the current cluster.
 
     Returns
     -------
@@ -99,6 +106,8 @@ def lower_ir_graph(
     state: State = {
         "config_options": config_options,
         "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
@@ -108,6 +117,9 @@ def lower_ir_graph_with_node_map(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], dict[str, list[str]]]:
     """
     Lower an IR graph and return a mapping from physical to logical stable IDs.
@@ -124,6 +136,10 @@ def lower_ir_graph_with_node_map(
         GPUEngine configuration options.
     stats
         Pre-computed statistics collector.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers in the current cluster.
 
     Returns
     -------
@@ -139,6 +155,8 @@ def lower_ir_graph_with_node_map(
     state: State = {
         "config_options": config_options,
         "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     result = mapper(ir)
@@ -189,7 +207,7 @@ def _(
             Slice(
                 ir.schema,
                 *ir.zlice,
-                Union(ir.schema, None, *ir.children),
+                Union(ir.schema, None, ir.maintain_order, *ir.children),
             )
         )
 

@@ -433,7 +433,14 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            self._ctx = Context.from_options(comm.logger, mr, self.rapidsmpf_options)
+            if self.rapidsmpf_options is not None:
+                statistics = Statistics.from_options(self.rapidsmpf_options)
+            else:
+                statistics = None
+
+            self._ctx = Context.from_options(
+                comm.logger, mr, self.rapidsmpf_options, statistics
+            )
             exit_stack.callback(self._cleanup_ctx)
 
             quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
@@ -579,7 +586,16 @@ class SPMDEngine(StreamingEngine):
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
-        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+
+        if rapidsmpf_options is not None:
+            statistics = Statistics.from_options(rapidsmpf_options)
+        else:
+            statistics = None
+
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, rapidsmpf_options, statistics
+        )
+
         quent_context = synchronize_quent_context(
             comm=self._comm,
             context=self._ctx,

@@ -5027,3 +5027,11 @@ def test_read_parquet_snappy_malformed_copy_elem(
     )
     with pytest.raises(RuntimeError, match=match_string):
         cudf.read_parquet(fname)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["one_null_row_dict.parquet", "one_null_row_nodict.parquet"],
+)
+def test_parquet_reader_one_null_row(datadir, filename):
+    cudf.read_parquet(datadir / filename)

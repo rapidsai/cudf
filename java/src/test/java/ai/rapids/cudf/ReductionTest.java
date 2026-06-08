@@ -13,7 +13,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.math.BigInteger;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Stream;
@@ -695,24 +694,22 @@ class ReductionTest extends CudfTestBase {
 
   @Test
   void testSumWithOverflowPositiveOverflow() {
-    // Long.MAX_VALUE + 1 wraps via two's complement to Long.MIN_VALUE.
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
       SumWithOverflowResult r = readSumWithOverflow(result);
       assertTrue(r.sumValid);
-      assertEquals(Long.MIN_VALUE, r.sumValue);
       assertTrue(r.overflow);
     }
   }
 
   @Test
   void testSumWithOverflowNegativeOverflow() {
-    // Long.MIN_VALUE + (-1) wraps via two's complement to Long.MAX_VALUE.
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
       SumWithOverflowResult r = readSumWithOverflow(result);
       assertTrue(r.sumValid);
-      assertEquals(Long.MAX_VALUE, r.sumValue);
       assertTrue(r.overflow);
     }
   }
@@ -738,38 +735,9 @@ class ReductionTest extends CudfTestBase {
   }
 
   @Test
-  void testSumWithOverflowRejectsNonInt64() {
-    try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3)) {
-      assertThrows(CudfException.class, () ->
-          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
-    }
-  }
-
-  // The reduction path of cudf::SUM_WITH_OVERFLOW is INT64-only (see
-  // cpp/src/reductions/reductions.cpp's `requires(std::is_same_v<Source, int64_t>)`).
-  // The three tests below pin down the throw contract for fixed-point inputs;
-  // if a future cudf change broadens that requires-clause to accept decimals,
-  // these tests will start failing — the signal to expose decimal reduction.
-  @Test
-  void testSumWithOverflowReductionRejectsDecimal32() {
-    try (ColumnVector cv = ColumnVector.decimalFromInts(-2, 100, 200, 300)) {
-      assertThrows(CudfException.class, () ->
-          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
-    }
-  }
-
-  @Test
-  void testSumWithOverflowReductionRejectsDecimal64() {
-    try (ColumnVector cv = ColumnVector.decimalFromLongs(-4, 100L, 200L, 300L)) {
-      assertThrows(CudfException.class, () ->
-          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
-    }
-  }
-
-  @Test
-  void testSumWithOverflowReductionRejectsDecimal128() {
-    try (ColumnVector cv = ColumnVector.decimalFromBigInt(-10,
-             BigInteger.valueOf(100), BigInteger.valueOf(200), BigInteger.valueOf(300))) {
+  void testSumWithOverflowRejectsUnsupportedTypes() {
+    // SUM_WITH_OVERFLOW supports signed integers and decimals; float remains unsupported.
+    try (ColumnVector cv = ColumnVector.fromFloats(1.0f, 2.0f, 3.0f)) {
       assertThrows(CudfException.class, () ->
           cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
     }
