@@ -106,6 +106,7 @@ class ColumnAccessor(MutableMapping):
 
     _data: dict[Hashable, ColumnBase]
     _level_names: tuple[Hashable, ...]
+    _level_dtypes: tuple[DtypeObj, ...] | None
 
     def __init__(
         self,
@@ -115,6 +116,7 @@ class ColumnAccessor(MutableMapping):
         rangeindex: bool = False,
         label_dtype: DtypeObj | None = None,
         verify: bool = True,
+        level_dtypes: tuple[DtypeObj, ...] | None = None,
     ) -> None:
         if isinstance(data, ColumnAccessor):
             self._data = data._data
@@ -122,6 +124,7 @@ class ColumnAccessor(MutableMapping):
             self.multiindex: bool = data.multiindex
             self.rangeindex: bool = data.rangeindex
             self.label_dtype: DtypeObj | None = data.label_dtype
+            self._level_dtypes = data._level_dtypes
         elif isinstance(data, MutableMapping):
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -149,6 +152,7 @@ class ColumnAccessor(MutableMapping):
             self.multiindex = multiindex
             self.label_dtype = label_dtype
             self._level_names = level_names
+            self._level_dtypes = level_dtypes
         else:
             raise ValueError(
                 f"data must be a ColumnAccessor or MutableMapping, not {type(data).__name__}"
@@ -205,6 +209,7 @@ class ColumnAccessor(MutableMapping):
             rangeindex=self.rangeindex,
             label_dtype=self.label_dtype,
             verify=verify,
+            level_dtypes=self._level_dtypes,
         )
 
     @property
@@ -294,10 +299,24 @@ class ColumnAccessor(MutableMapping):
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
-            result = pd.MultiIndex.from_tuples(
-                self.names,
-                names=self.level_names,
-            )
+            if len(self.names) == 0 and self._level_dtypes is not None:
+                # An empty MultiIndex cannot have its per-level dtypes inferred
+                # from (zero) tuples by ``from_tuples`` (every level would
+                # default to object). Rebuild from the preserved per-level
+                # dtypes so e.g. an empty integer level stays integer rather
+                # than becoming object.
+                result = pd.MultiIndex.from_arrays(
+                    [
+                        pd.Index([], dtype=level_dtype)
+                        for level_dtype in self._level_dtypes
+                    ],
+                    names=self.level_names,
+                )
+            else:
+                result = pd.MultiIndex.from_tuples(
+                    self.names,
+                    names=self.level_names,
+                )
         else:
             # Determine if we can return a RangeIndex
             if self.rangeindex:
@@ -408,6 +427,7 @@ class ColumnAccessor(MutableMapping):
             rangeindex=self.rangeindex,
             label_dtype=self.label_dtype,
             verify=False,
+            level_dtypes=self._level_dtypes,
         )
 
     def select_by_label(self, key: Any) -> Self:
@@ -759,6 +779,7 @@ class ColumnAccessor(MutableMapping):
             multiindex=self.multiindex,
             label_dtype=label_dtype,
             verify=False,
+            level_dtypes=self._level_dtypes,
         )
 
     def droplevel(self, level: int) -> None:
