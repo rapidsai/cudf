@@ -291,6 +291,15 @@ endfunction()
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in in site-packages --------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
