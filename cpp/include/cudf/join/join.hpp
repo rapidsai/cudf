@@ -322,6 +322,7 @@ std::unique_ptr<cudf::table> cross_join(
  *
  * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ * @throw std::invalid_argument if predicate does not produce a Boolean output.
  *
  * @param left The left table for predicate evaluation (conditional columns only).
  * @param right The right table for predicate evaluation (conditional columns only).
@@ -363,6 +364,7 @@ filter_join_indices(cudf::table_view const& left,
  *
  * @throw std::invalid_argument if `join_kind` is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
+ * @throw std::invalid_argument if `predicate` does not produce a Boolean output.
  *
  * @param left The left table for predicate evaluation (conditional columns only).
  * @param right The right table for predicate evaluation (conditional columns only).

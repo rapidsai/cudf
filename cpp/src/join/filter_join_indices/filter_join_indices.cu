@@ -78,7 +78,8 @@ filter_join_indices(cudf::table_view const& left,
     predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref()};
 
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The predicate expression must produce a Boolean output");
+               "The predicate expression must produce a Boolean output",
+               std::invalid_argument);
 
   // Check if expression contains complex types
   auto const has_complex_type = parser.has_complex_type();
@@ -384,7 +385,8 @@ std::size_t filter_join_indices_output_size(cudf::table_view const& left,
     predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref()};
 
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The predicate expression must produce a Boolean output");
+               "The predicate expression must produce a Boolean output",
+               std::invalid_argument);
 
   auto const has_complex_type = parser.has_complex_type();
 
