@@ -81,7 +81,7 @@ struct one_capture_fn {
     auto output_idx = size_type{0};
 
     auto itr = d_str.begin();
-    while (itr.byte_offset() <= bytes) {
+    while (itr.byte_offset() < bytes) {
       auto const match = d_prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
       itr += (match->first - itr.position());  // position to beginning of the match
