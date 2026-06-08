@@ -3085,7 +3085,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
     TrackingFooterDatasource tiny_source(tiny);
     auto const source = cudf::io::source_info{&tiny_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Parquet source is too small to contain header and footer ender");
+                                "Incorrect data source");
   }
 
   // Speculative ender short read check
@@ -3094,7 +3094,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
       parquet_bytes, /*short_read_call=*/1, /*short_read_size=*/7);
     auto const source = cudf::io::source_info{&short_ender_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Failed to read Parquet footer ender bytes");
+                                "Failed to read Parquet speculative metadata bytes");
   }
 
   // Header magic check when speculative read starts at offset 0
@@ -3107,7 +3107,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
     TrackingFooterDatasource bad_header_source(bad_header);
     auto const source = cudf::io::source_info{&bad_header_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Invalid Parquet file header magic");
+                                "Corrupted header");
   }
 
   // Footer magic check
@@ -3121,7 +3121,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
     TrackingFooterDatasource bad_footer_source(bad_footer_magic);
     auto const source = cudf::io::source_info{&bad_footer_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Invalid Parquet footer magic");
+                                "Corrupted footer");
   }
 
   // Footer length check
@@ -3135,7 +3135,7 @@ TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
     TrackingFooterDatasource bad_footer_len_source(bad_footer_len);
     auto const source = cudf::io::source_info{&bad_footer_len_source};
     expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Invalid Parquet footer length");
+                                "Incorrect footer length");
   }
 }
 
