@@ -306,10 +306,32 @@ class SplitScan(IR):
         # - We can use all this information to calculate the
         #   "skip_rows" and "n_rows" options to use locally.
 
-        rowgroup_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(paths)
-        ).rowgroup_metadata()
-        total_row_groups = len(rowgroup_metadata)
+        if parquet_options.prefetch_file_metadata:
+            try:
+                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+            except KeyError as e:
+                msg = (
+                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                    "Please report this as a bug to cudf-polars. You can work around it "
+                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                )
+                raise AssertionError(msg) from e
+
+            row_group_num_rows = [
+                num_rows
+                for metadata in parquet_metadatas
+                for num_rows in metadata.row_group_num_rows
+            ]
+
+        else:
+            row_group_num_rows = [
+                rg["num_rows"]
+                for rg in plc.io.parquet_metadata.read_parquet_metadata(
+                    plc.io.SourceInfo(paths)
+                ).rowgroup_metadata()
+            ]
+
+        total_row_groups = len(row_group_num_rows)
         if total_splits <= total_row_groups:
             # We have enough row-groups in the file to align
             # all "total_splits" of our reads with row-group
@@ -318,17 +340,14 @@ class SplitScan(IR):
             # the row-group indices to "skip_rows" and "n_rows".
             rg_stride = total_row_groups // total_splits
             skip_rgs = rg_stride * split_index
-            skip_rows = sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
-            n_rows = sum(
-                rg["num_rows"]
-                for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
-            )
+            skip_rows = sum(row_group_num_rows[:skip_rgs])
+            n_rows = sum(row_group_num_rows[skip_rgs : skip_rgs + rg_stride])
         else:
             # There are not enough row-groups to align
             # all "total_splits" of our reads with row-group
             # boundaries. Use metadata to directly calculate
             # "skip_rows" and "n_rows" for the current read.
-            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
+            total_rows = sum(row_group_num_rows)
             n_rows = total_rows // total_splits
             skip_rows = n_rows * split_index
 
@@ -424,7 +443,7 @@ def can_use_native_parquet_node(
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
     parquet_options = config_options.parquet_options
     if (
