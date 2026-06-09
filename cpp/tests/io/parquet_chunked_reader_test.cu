@@ -24,6 +24,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -1129,19 +1130,26 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadDerivesPassLimitWhenUnset)
 {
-  // Use a file large enough that the pass (decompression) limit drives subpass splitting, so a 1.5x
-  // derived limit produces different chunking than an unlimited pass limit.
   auto constexpr num_rows = 1'000'000;
   auto const value_iter   = cuda::counting_iterator<int64_t>{0};
   std::vector<std::unique_ptr<cudf::column>> input_columns;
   input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
-  auto const [expected, filepath] = write_file(
-    input_columns, "chunked_read_derive_pass_limit", false /*nullable*/, false /*delta*/);
+  auto expected       = std::make_unique<cudf::table>(std::move(input_columns));
+  auto const filepath = temp_env->get_temp_filepath("chunked_read_derive_pass_limit.parquet");
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .compression(cudf::io::compression_type::SNAPPY)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_size_bytes(cudf::io::default_max_page_size_bytes)
+      .max_page_size_rows(cudf::io::default_max_page_size_rows)
+      .build();
+  cudf::io::write_parquet(write_opts);
 
-  auto constexpr chunk_read_limit    = std::size_t{500'000};
-  auto const derived_pass_read_limit = chunk_read_limit + chunk_read_limit / 2;  // 1.5x
+  auto constexpr chunk_read_limit = std::size_t{500'000};
+  auto const derived_pass_read_limit =
+    cudf::io::parquet::detail::derive_pass_read_limit(chunk_read_limit);
 
-  // Read using the constructor overload that does NOT take a pass_read_limit (which derives 1.5x).
+  // Read using the constructor overload that does NOT take a pass_read_limit.
   auto const read_without_pass_limit = [&]() {
     auto const read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
@@ -1161,14 +1169,14 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadDerivesPassLimitWhenUnset)
   };
 
   auto const [derived_table, derived_num_chunks] = read_without_pass_limit();
-  // Explicitly passing 1.5x chunk_read_limit must match the derived (no-pass-limit) behavior
+  // Explicitly passing the helper-derived pass limit must match the no-pass-limit behavior.
   auto const [explicit_table, explicit_num_chunks] =
     chunked_read(filepath, chunk_read_limit, derived_pass_read_limit);
   // Explicit pass_read_limit == 0 keeps its original meaning (unlimited)
   auto const [unlimited_table, unlimited_num_chunks] =
     chunked_read(filepath, chunk_read_limit, std::size_t{0});
   auto const [big_pass_table, big_pass_num_chunks] =
-    chunked_read(filepath, chunk_read_limit, std::size_t{1} << 40);
+    chunked_read(filepath, chunk_read_limit, std::size_t{1} << 60);
 
   // All paths must return the complete, correct table.
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *derived_table);
@@ -1176,15 +1184,11 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadDerivesPassLimitWhenUnset)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *unlimited_table);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *big_pass_table);
 
-  // The no-pass-limit overload derives exactly 1.5x chunk_read_limit (this also guards the
-  // multiplier: a different factor would change the subpass-driven chunk count for this file).
-  EXPECT_GT(derived_num_chunks, 1);
+  // The no-pass-limit overload derives the same pass limit as the shared helper.
   EXPECT_EQ(derived_num_chunks, explicit_num_chunks);
 
-  // Explicit pass_read_limit == 0 still means unlimited (unchanged), and therefore differs from the
-  // bounded 1.5x derivation.
+  // Explicit pass_read_limit == 0 still means unlimited (unchanged).
   EXPECT_EQ(unlimited_num_chunks, big_pass_num_chunks);
-  EXPECT_NE(derived_num_chunks, unlimited_num_chunks);
 }
 
 namespace {

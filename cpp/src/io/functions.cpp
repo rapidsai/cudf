@@ -741,15 +741,15 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
 {
   if (chunk_read_limit == 0) { return 0; }
 
-  // 1.5x chunk_read_limit
+  // Derive a bounded pass limit from the output chunk limit.
   auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
   auto const pass_read_limit = sum.overflow ? 0 : sum.value;
 
   CUDF_LOG_WARN(std::format(
     "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
-    "pass_read_limit; defaulting pass_read_limit to {} bytes (1.5x chunk_read_limit) to bound "
-    "input and decompression memory and reduce the risk of out-of-memory errors on large files. "
-    "Use a constructor overload that accepts pass_read_limit to control this explicitly.",
+    "pass_read_limit; defaulting pass_read_limit to {} bytes to bound input and decompression "
+    "memory and reduce the risk of out-of-memory errors on large files. Use a constructor overload "
+    "that accepts pass_read_limit to control this explicitly.",
     chunk_read_limit,
     pass_read_limit));
 
