@@ -6,9 +6,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_streaming.integrations.partition import unpack_and_concat
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 from pylibcudf.contiguous_split import pack
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 
 if TYPE_CHECKING:
@@ -70,7 +72,7 @@ class AllGatherManager:
                 sequence_number,
                 # TODO: Avoid unnecessary copies.
                 # See https://github.com/rapidsai/rapidsmpf/issues/933
-                PackedData.from_cudf_packed_columns(
+                packed_data_from_cudf_packed_columns(
                     pack(
                         chunk.table_view(),
                         chunk.stream,
