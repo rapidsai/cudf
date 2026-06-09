@@ -7,6 +7,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -47,7 +48,7 @@ static void BM_PartitionAndPack(benchmark::State& state)
 
   // Get total GPU memory
   cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, 0);
+  CUDF_CUDA_TRY(cudaGetDeviceProperties(&prop, 0));
   std::size_t total_memory = prop.totalGlobalMem;
 
   // Calculate 50% of GPU memory
@@ -73,7 +74,7 @@ static void BM_PartitionAndPack(benchmark::State& state)
                                                        stream,
                                                        br.get());
     benchmark::DoNotOptimize(pack_partitions);
-    cudaStreamSynchronize(stream);
+    CUDF_CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
   // Set metrics
@@ -97,7 +98,7 @@ static void BM_PartitionAndPackCurrentImpl(benchmark::State& state)
 
   // Get total GPU memory
   cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, 0);
+  CUDF_CUDA_TRY(cudaGetDeviceProperties(&prop, 0));
   std::size_t total_memory = prop.totalGlobalMem;
 
   // Calculate 50% of GPU memory
@@ -125,7 +126,7 @@ static void BM_PartitionAndPackCurrentImpl(benchmark::State& state)
                                                          br.get());
       benchmark::DoNotOptimize(pack_partitions);
     }
-    cudaStreamSynchronize(stream);
+    CUDF_CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
   // Set metrics
