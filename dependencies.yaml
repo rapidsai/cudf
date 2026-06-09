@@ -758,38 +758,13 @@ dependencies:
         packages:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
+          - cuda-nvrtc-static
           - cuda-nvtx-dev
           - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
-          # (e.g. for DLFW and pip devcontainers)
-          - matrix:
-              use_cuda_wheels: "false"
-            packages:
-          # We always want nvJitLink >= whatever minor version was available in the build environment
-          # nvJitLink tends to follow the CTK's minor versions, but check at https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
-          #
-          # ref: https://github.com/rapidsai/cudf/pull/20873
-          - matrix:
-              cuda: "12.9"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvjitlink-cu12>=12.9,<13
-          - matrix:
-              cuda: "13.*"
-              use_cuda_wheels: "true"
-            packages:
-              - &nvjitlink_cu13 nvidia-nvjitlink>=13.0,<14
-          # if no matching matrix selectors passed, list the CUDA 13 requirement
-          # (just as a source of documentation, as this populates pyproject.toml in source control)
-          - matrix:
-            packages:
-              - *nvjitlink_cu13
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
