@@ -24,6 +24,35 @@ function(find_and_configure_rapidsmpf VERSION)
             "BUILD_UCXX_SUPPORT ${rapidsmpf_build_comm_support}" "BUILD_SLURM_SUPPORT OFF"
             "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
+  if(BUILD_BENCHMARKS)
+    set(rapidsmpf_missing_required_features OFF)
+    if((DEFINED RAPIDSMPF_HAVE_MPI AND NOT RAPIDSMPF_HAVE_MPI)
+       OR (DEFINED RAPIDSMPF_HAVE_UCXX AND NOT RAPIDSMPF_HAVE_UCXX)
+    )
+      set(rapidsmpf_missing_required_features ON)
+    endif()
+
+    if(TARGET rapidsmpf::rapidsmpf)
+      get_target_property(
+        rapidsmpf_compile_definitions rapidsmpf::rapidsmpf INTERFACE_COMPILE_DEFINITIONS
+      )
+      if(rapidsmpf_compile_definitions
+         AND (rapidsmpf_compile_definitions MATCHES "\\$<\\$<BOOL:OFF>:RAPIDSMPF_HAVE_MPI>"
+              OR rapidsmpf_compile_definitions MATCHES "\\$<\\$<BOOL:OFF>:RAPIDSMPF_HAVE_UCXX>"
+         )
+      )
+        set(rapidsmpf_missing_required_features ON)
+      endif()
+    endif()
+
+    if(rapidsmpf_missing_required_features)
+      message(
+        FATAL_ERROR
+          "libcudf_streaming benchmarks require rapidsmpf with MPI and UCXX support. "
+          "Use -DCPM_DOWNLOAD_rapidsmpf=ON to build rapidsmpf from source, or disable BUILD_BENCHMARKS."
+      )
+    endif()
+  endif()
 endfunction()
 
 set(CUDF_STREAMING_MIN_VERSION
