@@ -392,14 +392,14 @@ class parquet_reader_options {
    * To read row groups [0, 2] from the first input and [1] from the second input, call:
    *   set_row_groups({{0, 2}, {1}});
    *
-   * Output ordering: rows from `sources[i]` are emitted before rows from `sources[j]` for
-   * `j > i`. Within each source, row groups appear in the exact order given by the inner
-   * vector; the reader does not sort or deduplicate the indices, and repeated indices are
-   * emitted multiple times. An empty inner vector means that source contributes no rows but
-   * does not affect the order of the remaining sources. When this setter is not called, all
-   * row groups are read in source order, then in on-disk order within each source. Row groups
-   * removed by standard `read_parquet` predicate pushdown (statistics or bloom filter pruning)
-   * are dropped in place; the remaining row groups keep their relative order.
+   * Output ordering: rows are emitted in input-source order; all rows selected from source 0
+   * are emitted before rows selected from source 1, and so on. Within each source, row groups
+   * appear in the exact order given by the inner vector; the reader does not sort or deduplicate
+   * the indices, and repeated indices are emitted multiple times. An empty inner vector means that
+   * source contributes no rows but does not affect the order of the remaining sources. When this
+   * setter is not called, all row groups are read in source order, then in on-disk order within
+   * each source. Row groups removed by standard `read_parquet` predicate pushdown (statistics or
+   * bloom filter pruning) are dropped in place; the remaining row groups keep their relative order.
    *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.
