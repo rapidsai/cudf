@@ -21,13 +21,16 @@ function(find_and_configure_rapidsmpf VERSION)
     GIT_TAG "${RAPIDS_BRANCH}"
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "BUILD_MPI_SUPPORT ${rapidsmpf_build_comm_support}"
-            "BUILD_UCXX_SUPPORT ${rapidsmpf_build_comm_support}" "BUILD_SLURM_SUPPORT OFF"
-            "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
+            "BUILD_UCXX_SUPPORT ${rapidsmpf_build_comm_support}"
+            "BUILD_SLURM_SUPPORT OFF"
+            "BUILD_TESTS OFF"
+            "BUILD_BENCHMARKS OFF"
+            "BUILD_EXAMPLES OFF"
   )
   if(BUILD_BENCHMARKS)
     set(rapidsmpf_missing_required_features OFF)
-    if((DEFINED RAPIDSMPF_HAVE_MPI AND NOT RAPIDSMPF_HAVE_MPI)
-       OR (DEFINED RAPIDSMPF_HAVE_UCXX AND NOT RAPIDSMPF_HAVE_UCXX)
+    if((DEFINED RAPIDSMPF_HAVE_MPI AND NOT RAPIDSMPF_HAVE_MPI) OR (DEFINED RAPIDSMPF_HAVE_UCXX
+                                                                   AND NOT RAPIDSMPF_HAVE_UCXX)
     )
       set(rapidsmpf_missing_required_features ON)
     endif()
@@ -38,8 +41,7 @@ function(find_and_configure_rapidsmpf VERSION)
       )
       if(rapidsmpf_compile_definitions
          AND (rapidsmpf_compile_definitions MATCHES "\\$<\\$<BOOL:OFF>:RAPIDSMPF_HAVE_MPI>"
-              OR rapidsmpf_compile_definitions MATCHES "\\$<\\$<BOOL:OFF>:RAPIDSMPF_HAVE_UCXX>"
-         )
+              OR rapidsmpf_compile_definitions MATCHES "\\$<\\$<BOOL:OFF>:RAPIDSMPF_HAVE_UCXX>")
       )
         set(rapidsmpf_missing_required_features ON)
       endif()

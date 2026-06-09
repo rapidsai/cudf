@@ -15,9 +15,8 @@ set_target_properties(
              CUDA_STANDARD_REQUIRED ON
 )
 target_link_libraries(
-  bench_streaming_shuffle
-  PRIVATE cudf_streaming rapidsmpf::rapidsmpf ucxx::ucxx MPI::MPI_CXX
-          $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
+  bench_streaming_shuffle PRIVATE cudf_streaming rapidsmpf::rapidsmpf ucxx::ucxx MPI::MPI_CXX
+                                  $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
 )
 install(
   TARGETS bench_streaming_shuffle
