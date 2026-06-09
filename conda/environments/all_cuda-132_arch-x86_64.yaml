@@ -18,7 +18,6 @@ dependencies:
 - cramjam
 - cuda-cudart-dev
 - cuda-nvcc
-- cuda-nvml-dev
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
 - cuda-python>=13.0.1,<14.0
