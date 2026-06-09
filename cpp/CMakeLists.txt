@@ -82,7 +82,7 @@ if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
   )
   set(RTCX_STATIC_LINK_NVJITLINK
       ON
-      CACHE BOOL "Use static linking for NVJitLink" FORCE
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
   )
 else()
   set(CUDA_STATIC_RUNTIME
