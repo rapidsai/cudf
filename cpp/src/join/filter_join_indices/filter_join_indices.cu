@@ -15,7 +15,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/dispatchers.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -33,6 +35,7 @@
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -400,64 +403,30 @@ std::size_t filter_join_indices_output_size(cudf::table_view const& left,
   cudf::detail::device_scalar<std::size_t> d_count(
     std::size_t{0}, stream, cudf::get_current_device_resource_ref());
 
-  // For LEFT_JOIN, allocate per-left-row mark buffer; for others, pass nullptr.
-  rmm::device_uvector<bool> left_passing_marks(
-    join_kind == join_kind::LEFT_JOIN ? static_cast<std::size_t>(left.num_rows()) : 0, stream);
-  if (join_kind == join_kind::LEFT_JOIN) {
-    CUDF_CUDA_TRY(cudaMemsetAsync(
-      left_passing_marks.data(), 0, left_passing_marks.size() * sizeof(bool), stream.value()));
-  }
+  // For LEFT_JOIN, allocate a zeroed per-left-row mark buffer; for others, pass nullptr.
+  auto left_passing_marks = cudf::detail::make_zeroed_device_uvector_async<bool>(
+    join_kind == join_kind::LEFT_JOIN ? static_cast<std::size_t>(left.num_rows()) : 0,
+    stream,
+    cudf::get_current_device_resource_ref());
   auto* const marks_ptr = join_kind == join_kind::LEFT_JOIN ? left_passing_marks.data() : nullptr;
 
-  if (has_nulls && has_complex_type) {
-    launch_filter_output_size_kernel<true, true>(*left_table,
-                                                 *right_table,
-                                                 left_indices,
-                                                 right_indices,
-                                                 parser.device_expression_data,
-                                                 config,
-                                                 shmem_per_block,
-                                                 join_kind,
-                                                 d_count.data(),
-                                                 marks_ptr,
-                                                 stream);
-  } else if (has_nulls && !has_complex_type) {
-    launch_filter_output_size_kernel<true, false>(*left_table,
-                                                  *right_table,
-                                                  left_indices,
-                                                  right_indices,
-                                                  parser.device_expression_data,
-                                                  config,
-                                                  shmem_per_block,
-                                                  join_kind,
-                                                  d_count.data(),
-                                                  marks_ptr,
-                                                  stream);
-  } else if (!has_nulls && has_complex_type) {
-    launch_filter_output_size_kernel<false, true>(*left_table,
-                                                  *right_table,
-                                                  left_indices,
-                                                  right_indices,
-                                                  parser.device_expression_data,
-                                                  config,
-                                                  shmem_per_block,
-                                                  join_kind,
-                                                  d_count.data(),
-                                                  marks_ptr,
-                                                  stream);
-  } else {
-    launch_filter_output_size_kernel<false, false>(*left_table,
-                                                   *right_table,
-                                                   left_indices,
-                                                   right_indices,
-                                                   parser.device_expression_data,
-                                                   config,
-                                                   shmem_per_block,
-                                                   join_kind,
-                                                   d_count.data(),
-                                                   marks_ptr,
-                                                   stream);
-  }
+  cudf::detail::dispatch_bool(has_nulls, [&](auto has_nulls_c) {
+    cudf::detail::dispatch_bool(has_complex_type, [&](auto has_complex_c) {
+      launch_filter_output_size_kernel<decltype(has_nulls_c)::value,
+                                       decltype(has_complex_c)::value>(
+        *left_table,
+        *right_table,
+        left_indices,
+        right_indices,
+        parser.device_expression_data,
+        config,
+        shmem_per_block,
+        join_kind,
+        d_count.data(),
+        marks_ptr,
+        stream);
+    });
+  });
 
   auto const num_predicate_passing = d_count.value(stream);
 
@@ -466,12 +435,8 @@ std::size_t filter_join_indices_output_size(cudf::table_view const& left,
     case join_kind::FULL_JOIN: return left_indices.size() + num_predicate_passing;
     case join_kind::LEFT_JOIN: {
       auto const num_filter_passing = cudf::detail::count_if(
-        left_passing_marks.begin(),
-        left_passing_marks.end(),
-        [] __device__(bool m) -> bool { return m; },
-        stream);
-      auto const num_invalid =
-        static_cast<std::size_t>(left.num_rows()) - static_cast<std::size_t>(num_filter_passing);
+        left_passing_marks.begin(), left_passing_marks.end(), cuda::std::identity{}, stream);
+      auto const num_invalid = static_cast<std::size_t>(left.num_rows()) - num_filter_passing;
       return num_predicate_passing + num_invalid;
     }
     default: CUDF_FAIL("Unsupported join kind for filter_join_indices_output_size");
