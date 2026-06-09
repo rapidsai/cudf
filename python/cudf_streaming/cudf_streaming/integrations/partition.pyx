@@ -4,16 +4,18 @@
 
 from cython.operator cimport dereference as deref
 from cython.operator cimport postincrement
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint8_t, uint32_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pylibcudf.contiguous_split cimport PackedColumns
 from pylibcudf.libcudf.table.table cimport table as cpp_table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
 
 from rapidsmpf._detail.exception_handling cimport ex_handler
@@ -250,3 +252,84 @@ cpdef object unpack_and_concat(
             _br,
         )
     return Table.from_libcudf(move(_ret), stream, br._device_mr)
+
+cdef extern from *:
+    """
+    #include <rapidsmpf/error.hpp>
+    #include <rapidsmpf/memory/packed_data.hpp>
+    #include <rapidsmpf/memory/buffer_resource.hpp>
+    #include <rmm/device_buffer.hpp>
+
+    std::unique_ptr<rapidsmpf::PackedData> cpp_packed_data_from_buffers(
+        std::unique_ptr<std::vector<std::uint8_t>> metadata,
+        std::unique_ptr<rmm::device_buffer> gpu_data,
+        rmm::cuda_stream_view stream,
+        rapidsmpf::BufferResource* br
+    ) {
+        return std::make_unique<rapidsmpf::PackedData>(
+            std::move(metadata), br->move(std::move(gpu_data), stream)
+        );
+    }
+    """
+    unique_ptr[cpp_PackedData] cpp_packed_data_from_buffers(
+        unique_ptr[vector[uint8_t]] metadata,
+        unique_ptr[device_buffer] gpu_data,
+        cuda_stream_view stream,
+        cpp_BufferResource* br,
+    ) except +ex_handler nogil
+
+
+cpdef object packed_data_from_cudf_packed_columns(
+    PackedColumns packed_columns,
+    Stream stream,
+    BufferResource br,
+):
+    """
+    Construct a PackedData from a pylibcudf PackedColumns.
+
+    Takes ownership of the metadata and GPU data from the PackedColumns
+    object, leaving it empty.
+
+    Parameters
+    ----------
+    packed_columns
+        Packed columns from ``pylibcudf.contiguous_split.pack()``.
+        Must not already be empty (already released).
+    stream
+        The CUDA stream on which the preceding ``pack()`` call was performed.
+        Must be the same stream to ensure correct memory ordering.
+    br
+        Buffer resource for memory management.
+
+    Returns
+    -------
+    A new PackedData instance owning the packed column data.
+
+    Raises
+    ------
+    ValueError
+        If the PackedColumns object is empty (already released).
+
+    See Also
+    --------
+    pylibcudf.contiguous_split.pack
+    cudf_streaming.integrations.partition.unpack_and_concat
+    """
+    if packed_columns is None or stream is None or br is None:
+        raise TypeError("Arguments must not be None")
+    cdef cuda_stream_view _stream = stream.view()
+    cdef cpp_BufferResource* _br = br.ptr()
+    cdef PackedData ret = PackedData.__new__(PackedData)
+    with nogil:
+        if not (packed_columns.c_obj != NULL and
+                deref(packed_columns.c_obj).metadata and
+                deref(packed_columns.c_obj).gpu_data):
+            raise ValueError("Cannot release empty PackedColumns")
+        ret.c_obj = cpp_packed_data_from_buffers(
+            move(deref(packed_columns.c_obj).metadata),
+            move(deref(packed_columns.c_obj).gpu_data),
+            _stream,
+            _br,
+        )
+    ret._br = br
+    return ret
