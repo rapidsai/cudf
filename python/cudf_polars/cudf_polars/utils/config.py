@@ -36,13 +36,13 @@ if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     import distributed
-    from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
 

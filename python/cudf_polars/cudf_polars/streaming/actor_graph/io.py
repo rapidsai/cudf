@@ -8,15 +8,14 @@ import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import pylibcudf as plc
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -481,7 +480,7 @@ def make_rapidsmpf_read_parquet_node(
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from rapidsmpf.streaming.cudf.parquet import Filter, read_parquet
+    from cudf_streaming.streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
