@@ -74,10 +74,17 @@ namespace integrated_memory_optimization {
 namespace parquet_reader {
 
 /**
- * @brief Returns the speculative Parquet metadata read size in bytes.
+ * @brief Returns the Parquet reader's footer speculative read size in bytes.
  *
  * Controlled by the `LIBCUDF_PARQUET_METADATA_SIZE_HINT` environment variable.
  * Defaults to 64 KiB.
+ *
+ * When the footer is smaller than the speculative read size, the footer metadata
+ * is loaded in a single read, which is especially useful for high-latency, remote
+ * storage systems. When the footer is larger than the speculative read size, the
+ * footer metadata will be loaded in two reads.
+ *
+ * Set `LIBCUDF_PARQUET_METADATA_SIZE_HINT=0` to disable speculative reads.
  *
  * @return Number of bytes to speculatively read from the end of the source.
  */
