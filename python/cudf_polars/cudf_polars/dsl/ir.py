@@ -135,6 +135,9 @@ class IRExecutionContext:
         A cache of parquet file metadata. The keys are the ``paths`` of Scan nodes
         with a ``parquet`` type. The values are a list of ``FileMetaData`` objects
         associated with those ``paths``.
+
+        This cache lasts for the duration of the a single query's execution
+        (e.g. ``LazyFrame.collect()``).
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
