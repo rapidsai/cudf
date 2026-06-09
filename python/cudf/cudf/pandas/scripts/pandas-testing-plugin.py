@@ -2472,6 +2472,7 @@ NODEIDS_THAT_FAIL = {
     "tests/groupby/test_categorical.py::test_agg_list[False-True-std-keys0-True]": "TODO: Add a reason for failure",
     "tests/groupby/test_categorical.py::test_agg_list[False-True-sum-keys0-True]": "TODO: Add a reason for failure",
     "tests/groupby/test_categorical.py::test_agg_list[False-True-var-keys0-True]": "TODO: Add a reason for failure",
+    "tests/groupby/test_categorical.py::test_describe_categorical_columns": "cudf's multi-level groupby aggregation and stack() drop the categorical column-index dtype",
     "tests/groupby/test_counting.py::TestCounting::test_ngroup_distinct": "TODO: Add a reason for failure",
     "tests/groupby/test_cumulative.py::test_cython_api2[False]": "AssertionError: DataFrame are different",
     "tests/groupby/test_cumulative.py::test_groupby_cumprod_nan_influences_other_columns": "TODO: Add a reason for failure",

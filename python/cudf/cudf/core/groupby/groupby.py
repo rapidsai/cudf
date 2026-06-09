@@ -3344,7 +3344,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(result, Series):
             result = result.fillna(fill_value).astype(bool_np)
         else:
-            for col_name in result._column_names:
+            # With ``as_index=False`` the key columns are reset onto ``result``
+            # as ordinary columns; only the value columns were reduced, so
+            # restrict the fill/cast to them (otherwise the key columns -- e.g.
+            # a categorical grouper -- would be clobbered to ``bool``).
+            for col_name in self.grouping._values_column_names:
                 result[col_name] = (
                     result[col_name].fillna(fill_value).astype(bool_np)
                 )
