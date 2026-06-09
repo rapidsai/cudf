@@ -13,9 +13,9 @@ from cudf_polars.dsl.tracing import LOG_TRACES, Scope
 from cudf_polars.streaming.explain import SerializablePlan
 
 if TYPE_CHECKING:
+    from cudf_streaming.streaming.table_chunk import TableChunk
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.utils.config import ConfigOptions

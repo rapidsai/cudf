@@ -12,9 +12,10 @@ import textwrap
 from typing import TYPE_CHECKING
 
 import pytest
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
+
+from cudf_streaming.streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
