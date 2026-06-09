@@ -35,6 +35,9 @@ def test_filter(engine: pl.GPUEngine, expr, predicate_pushdown):
 
 
 def test_filter_drops_dynamic_predicate_hint():
+    class DynamicPredHint(Exception):
+        pass
+
     class DynamicPredVisitor:
         def __init__(self, inner, op):
             self.inner = inner
@@ -46,7 +49,7 @@ def test_filter_drops_dynamic_predicate_hint():
         def view_expression(self, n):
             node = self.inner.view_expression(n)
             if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op == self.op:
-                raise Exception("dynamic_pred")
+                raise DynamicPredHint("dynamic_pred")
             return node
 
     ldf = pl.LazyFrame(
