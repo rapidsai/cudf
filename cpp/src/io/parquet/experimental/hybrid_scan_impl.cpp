@@ -730,10 +730,12 @@ hybrid_scan_reader_impl::construct_row_group_passes(
   std::size_t pass_read_limit) const
 {
   CUDF_EXPECTS(
-    row_group_indices.size() == _extended_metadata->get_num_sources(),
-    "Encountered a mismatch in the number of row group indices vectors and the number of input "
-    "datasources",
-    std::invalid_argument);
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
+
+  CUDF_EXPECTS(row_group_indices.size() == _extended_metadata->get_num_sources(),
+               "Mismatch in the number of row group indices vectors and the number of input "
+               "datasources",
+               std::invalid_argument);
 
   if (pass_read_limit == 0) {
     return {

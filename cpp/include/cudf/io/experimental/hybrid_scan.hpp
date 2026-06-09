@@ -669,7 +669,7 @@ class hybrid_scan_reader {
    * size is estimated over all columns in each row group (not just the columns selected for
    * reading), for conservative estimates.
    *
-   * @throws cudf::logic_error if `row_group_indices` is empty
+   * @throws std::invalid_argument if no row group indices in the input
    *
    * @param row_group_indices Input row group indices
    * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
