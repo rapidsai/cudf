@@ -736,7 +736,8 @@ jobs:
       build_command: |
         sccache --zero-stats;
         configure-cudf-cpp -DBUILD_BENCHMARKS=ON;
-        build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        configure-cudf_streaming-cpp -DBUILD_BENCHMARKS=OFF;
+        build-all -j0 --verbose 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
