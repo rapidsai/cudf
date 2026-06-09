@@ -462,16 +462,24 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                "Must pass a struct to `from_arrow_host`",
                cudf::data_type_error);
 
-  std::transform(input->array.children,
-                 input->array.children + input->array.n_children,
-                 view.schema->children,
-                 std::back_inserter(columns),
-                 [&stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
-                   ArrowSchemaView view;
-                   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-                   auto type = arrow_to_cudf_type(&view);
-                   return get_column_copy(&view, child, type, false, stream, mr);
-                 });
+  std::transform(
+    input->array.children,
+    input->array.children + input->array.n_children,
+    view.schema->children,
+    std::back_inserter(columns),
+    [&stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
+      ArrowSchemaView view;
+      NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
+      auto type   = arrow_to_cudf_type(&view);
+      auto result = get_column_copy(&view, child, type, false, stream, mr);
+      if (!result->has_nulls() && !result->nullable() &&        // no nulls, not nullable
+          ((view.schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
+        result->set_null_mask(
+          cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr),
+          0);
+      }
+      return result;
+    });
 
   return std::make_unique<table>(std::move(columns));
 }
@@ -491,8 +499,14 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
 
-  auto type = arrow_to_cudf_type(&view);
-  return get_column_copy(&view, &input->array, type, false, stream, mr);
+  auto type   = arrow_to_cudf_type(&view);
+  auto result = get_column_copy(&view, &input->array, type, false, stream, mr);
+  if (!result->has_nulls() && !result->nullable() &&        // no nulls, not nullable
+      ((view.schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
+    result->set_null_mask(
+      cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+  }
+  return result;
 }
 
 std::unique_ptr<column> get_column_from_host_copy(ArrowSchemaView const* schema,

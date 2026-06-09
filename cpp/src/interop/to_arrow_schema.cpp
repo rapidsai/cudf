@@ -218,7 +218,7 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
     auto col   = input.column(i);
     ArrowSchemaInit(child);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child, metadata[i].name.c_str()));
-    child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+    child->flags = col.nullable() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
       NANOARROW_THROW_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));
