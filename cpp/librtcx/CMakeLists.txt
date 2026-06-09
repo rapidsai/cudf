@@ -21,7 +21,7 @@ project(
 )
 
 option(RTCX_STATIC_LINK_NVRTC "Use static linking for NVRTC" OFF)
-option(RTCX_STATIC_LINK_NVJITLINK "Use static linking for NVJitLink" OFF)
+option(RTCX_STATIC_LINK_NVJITLINK "Use static linking for nvJitLink" OFF)
 
 find_package(CUDAToolkit REQUIRED)
 
