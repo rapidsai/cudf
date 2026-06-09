@@ -291,6 +291,16 @@ endfunction()
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in in site-packages --------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  include(${rapids-cmake-dir}/cython-core/find_prefix_paths.cmake)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
@@ -384,6 +394,9 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
+# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
+add_subdirectory(librtcx)
+
 # JIT Embedding helper functions
 include(librtcx/embed.cmake)
 
@@ -402,6 +415,11 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
+  install(
+    TARGETS rtcx
+    EXPORT cudf-exports
+    DESTINATION ${lib_dir}
+  )
 endif()
 
 add_embed(cudf_cuda_embed)
@@ -452,7 +470,7 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd)
+embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -1013,7 +1031,6 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
-  librtcx/rtcx.cpp
   ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
 )
 
@@ -1087,7 +1104,6 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
@@ -1131,7 +1147,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
+          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
