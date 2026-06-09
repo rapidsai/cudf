@@ -3,6 +3,7 @@
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf_streaming/integrations/partition.hpp>
 #include <mpi.h>
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/ucxx.hpp>
@@ -12,7 +13,6 @@
 #include <rapidsmpf/communicator/ucxx.hpp>
 #include <rapidsmpf/communicator/ucxx_utils.hpp>
 #include <rapidsmpf/error.hpp>
-#include <rapidsmpf/integrations/cudf/partition.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/progress_thread.hpp>
 #include <rapidsmpf/shuffler/shuffler.hpp>
@@ -265,8 +265,8 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
     shuffler.wait();
     for (auto finished_partition : shuffler.local_partitions()) {
       auto packed_chunks    = shuffler.extract(finished_partition);
-      auto output_partition = rapidsmpf::unpack_and_concat(
-        rapidsmpf::unspill_partitions(
+      auto output_partition = cudf_streaming::integrations::unpack_and_concat(
+        cudf_streaming::integrations::unspill_partitions(
           std::move(packed_chunks), br, rapidsmpf::AllowOverbooking::YES),
         stream,
         br);
@@ -283,14 +283,14 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
   // thus we only check large shuffles).
   if (args.num_local_rows >= 1000000) {
     for (const auto& output_partition : output_partitions) {
-      auto [parts, owner] =
-        rapidsmpf::partition_and_split(output_partition->view(),
-                                       {0},
-                                       static_cast<std::int32_t>(total_num_partitions),
-                                       cudf::hash_id::HASH_MURMUR3,
-                                       cudf::DEFAULT_HASH_SEED,
-                                       stream,
-                                       br);
+      auto [parts, owner] = cudf_streaming::integrations::partition_and_split(
+        output_partition->view(),
+        {0},
+        static_cast<std::int32_t>(total_num_partitions),
+        cudf::hash_id::HASH_MURMUR3,
+        cudf::DEFAULT_HASH_SEED,
+        stream,
+        br);
       RAPIDSMPF_EXPECTS(
         std::count_if(
           parts.begin(), parts.end(), [](auto const& table) { return table.num_rows() > 0; }) == 1,
@@ -385,13 +385,14 @@ rapidsmpf::Duration run_hash_partition_inline(std::shared_ptr<rapidsmpf::Communi
     generate_input_partitions(args, stream, br, std::identity{});
 
   auto make_chunk_fn = [&](cudf::table const& partition) {
-    return rapidsmpf::partition_and_pack(partition,
-                                         {0},
-                                         static_cast<std::int32_t>(total_num_partitions),
-                                         cudf::hash_id::HASH_MURMUR3,
-                                         cudf::DEFAULT_HASH_SEED,
-                                         stream,
-                                         br);
+    return cudf_streaming::integrations::partition_and_pack(
+      partition,
+      {0},
+      static_cast<std::int32_t>(total_num_partitions),
+      cudf::hash_id::HASH_MURMUR3,
+      cudf::DEFAULT_HASH_SEED,
+      stream,
+      br);
   };
 
   return do_run(total_num_partitions, comm, args, stream, br, statistics, [&](auto& shuffler) {
@@ -424,13 +425,14 @@ rapidsmpf::Duration run_hash_partition_with_datagen(
 
   std::vector<std::unordered_map<rapidsmpf::shuffler::PartID, rapidsmpf::PackedData>>
     input_partitions = generate_input_partitions(args, stream, br, [&](cudf::table&& table) {
-      return rapidsmpf::partition_and_pack(table,
-                                           {0},
-                                           static_cast<std::int32_t>(total_num_partitions),
-                                           cudf::hash_id::HASH_MURMUR3,
-                                           cudf::DEFAULT_HASH_SEED,
-                                           stream,
-                                           br);
+      return cudf_streaming::integrations::partition_and_pack(
+        table,
+        {0},
+        static_cast<std::int32_t>(total_num_partitions),
+        cudf::hash_id::HASH_MURMUR3,
+        cudf::DEFAULT_HASH_SEED,
+        stream,
+        br);
     });
 
   return do_run(total_num_partitions, comm, args, stream, br, statistics, [&](auto& shuffler) {

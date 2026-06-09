@@ -10,13 +10,15 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
+#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/streaming/core/actor.hpp>
 #include <rapidsmpf/streaming/core/channel.hpp>
 #include <rapidsmpf/streaming/core/context.hpp>
-#include <rapidsmpf/streaming/cudf/table_chunk.hpp>
 #include <rapidsmpf/utils/misc.hpp>
 
 namespace rapidsmpf::streaming::actor {
+
+using cudf_streaming::streaming::TableChunk;
 
 /**
  * @brief Asynchronously generates and sends a sequence of random numeric tables.

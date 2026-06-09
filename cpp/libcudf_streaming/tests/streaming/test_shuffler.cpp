@@ -25,7 +25,9 @@
 
 using namespace rapidsmpf;
 using namespace rapidsmpf::streaming;
-namespace actor = rapidsmpf::streaming::actor;
+using cudf_streaming::streaming::TableChunk;
+namespace actor    = rapidsmpf::streaming::actor;
+namespace cs_actor = cudf_streaming::streaming::actor;
 
 class BaseStreamingShuffle : public BaseStreamingFixture {};
 
@@ -96,13 +98,13 @@ class StreamingShuffler : public BaseStreamingShuffle, public ::testing::WithPar
 
       auto ch2 = ctx->create_channel();
       actors.push_back(
-        actor::partition_and_pack(ctx, ch1, ch2, {1}, num_partitions, hash_function, seed));
+        cs_actor::partition_and_pack(ctx, ch1, ch2, {1}, num_partitions, hash_function, seed));
 
       auto ch3 = ctx->create_channel();
       actors.emplace_back(make_shuffler_actor_fn(ch2, ch3));
 
       auto ch4 = ctx->create_channel();
-      actors.push_back(actor::unpack_and_concat(ctx, ch3, ch4));
+      actors.push_back(cs_actor::unpack_and_concat(ctx, ch3, ch4));
 
       actors.push_back(actor::pull_from_channel(ctx, ch4, output_chunks));
 

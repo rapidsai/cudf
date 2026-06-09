@@ -11,6 +11,7 @@ rapids_cpm_gbench(BUILD_STATIC)
 
 add_library(bench_utils INTERFACE)
 target_sources(bench_utils INTERFACE utils/random_data.cu)
+target_compile_options(bench_utils INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>)
 
 add_executable(bench_shuffle "bench_shuffle.cpp")
 set_target_properties(

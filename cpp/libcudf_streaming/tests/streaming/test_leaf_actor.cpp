@@ -28,6 +28,7 @@
 using namespace rapidsmpf;
 using namespace rapidsmpf::streaming;
 namespace actor = rapidsmpf::streaming::actor;
+using namespace cudf_streaming::streaming;
 
 using StreamingLeafTasks = BaseStreamingFixture;
 

@@ -12,6 +12,7 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/per_device_resource.hpp>
 
+#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <getopt.h>
 #include <mpi.h>
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
@@ -27,7 +28,6 @@
 #include <rapidsmpf/memory/pinned_memory_resource.hpp>
 #include <rapidsmpf/rmm_resource_adaptor.hpp>
 #include <rapidsmpf/streaming/core/context.hpp>
-#include <rapidsmpf/streaming/cudf/table_chunk.hpp>
 
 #include <array>
 #include <cstdlib>
@@ -104,8 +104,9 @@ streaming::Actor consume_channel(std::shared_ptr<streaming::Context> ctx,
   while (true) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    if (msg.holds<streaming::TableChunk>()) {
-      auto chunk = co_await msg.release<streaming::TableChunk>().make_available(ctx);
+    if (msg.holds<cudf_streaming::streaming::TableChunk>()) {
+      auto chunk =
+        co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
       ctx->logger()->print("Consumed chunk with ",
                            chunk.table_view().num_rows(),
                            " rows and ",
