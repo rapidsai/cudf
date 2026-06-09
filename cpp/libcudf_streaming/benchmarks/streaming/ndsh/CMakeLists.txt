@@ -23,7 +23,7 @@ set_target_properties(
 
 target_link_libraries(
   cudf_streaming_ndsh
-  PRIVATE cudf_streaming rapidsmpf::rapidsmpf cuco::cuco $<TARGET_NAME_IF_EXISTS:MPI::MPI_CXX>
+  PRIVATE cudf_streaming rapidsmpf::rapidsmpf cuco::cuco MPI::MPI_CXX
           $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -41,7 +41,7 @@ foreach(query IN ITEMS ${CUDF_STREAMING_NDSH_QUERIES})
   )
   target_link_libraries(
     ${query} PRIVATE cudf_streaming_ndsh cudf_streaming rapidsmpf::rapidsmpf
-                     $<TARGET_NAME_IF_EXISTS:MPI::MPI_CXX> $<TARGET_NAME_IF_EXISTS:conda_env>
+                     MPI::MPI_CXX $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 endforeach()
 

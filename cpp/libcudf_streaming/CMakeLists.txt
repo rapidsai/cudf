@@ -37,6 +37,16 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Modules/ConfigureCUDA.cmake)
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in site-packages -----------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  include(${rapids-cmake-dir}/cython-core/find_prefix_paths.cmake)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * Build options
 option(BUILD_TESTS "Build tests for libcudf_streaming" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks for libcudf_streaming" OFF)
@@ -54,6 +64,11 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
 include(../cmake/thirdparty/get_cucollections.cmake)
+
+if(BUILD_BENCHMARKS)
+  rapids_find_package(ucxx REQUIRED)
+  rapids_find_package(MPI REQUIRED)
+endif()
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
