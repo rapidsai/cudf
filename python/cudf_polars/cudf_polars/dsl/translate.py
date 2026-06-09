@@ -289,7 +289,6 @@ class set_expr_context(AbstractContextManager[None]):
 def _drop_dyn_pred_hints(
     translator: Translator, n: int, schema: Schema
 ) -> expr.Expr | None:
-    """Drop Polars' dynamic predicate hints."""
     try:
         node = translator.visitor.view_expression(n)
     except Exception as e:
@@ -318,7 +317,7 @@ def _drop_dyn_pred_hints(
 def translate_predicate(
     translator: Translator, *, n: Any, schema: Schema
 ) -> expr.NamedExpr | None:
-    """Translate a filter predicate, dropping Polars' dynamic-predicate conjuncts."""
+    """Translate predicate, dropping Polars' dynamic predicate hints."""
     mask = _drop_dyn_pred_hints(translator, n.node, schema)
     if mask is None:
         return None
