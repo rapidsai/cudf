@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """IO testing utilities."""
@@ -99,7 +99,7 @@ def make_lazy_frame(
     n_rows : optional, int
         Slice to apply to the final LazyFrame before returning.
     """
-    from cudf_polars.experimental.io import _clear_source_info_cache
+    from cudf_polars.streaming.io import _clear_source_info_cache
 
     _clear_source_info_cache()
 

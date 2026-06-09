@@ -43,7 +43,8 @@ enum class join_kind : int32_t {
 };
 
 /**
- * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ * @brief Specifies whether a join implementation should apply an optional prefilter that reduces
+ *        candidate rows before probing the hash table.
  *
  * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
  * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
@@ -87,6 +88,14 @@ struct join_match_context {
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
   }
+  join_match_context(join_match_context const&)            = delete;
+  join_match_context& operator=(join_match_context const&) = delete;
+  join_match_context(join_match_context&&)                 = default;  ///< Move constructor
+  /**
+   * @brief Move assignment operator
+   * @return Reference to this object
+   */
+  join_match_context& operator=(join_match_context&&) = default;
   virtual ~join_match_context() = default;  ///< Virtual destructor for proper polymorphic deletion
 };
 
