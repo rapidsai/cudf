@@ -11,7 +11,7 @@ where
         select
             0.2 * avg(l_quantity)
         from
-            read_parquet('/datasets/toaugspurger/tpch-rs/scale-10/lineitem/*.parquet') as lineitem
+            lineitem
         where
             l_partkey = p_partkey
     )
