@@ -1215,6 +1215,9 @@ class Index(SingleColumnFrame):
             # exactly the join reduces to a set operation over the full tuples.
             if list(self.names) == list(other.names):
                 return self._join_same_level_multi(other, how, sort)
+            # pandas ignores ``sort`` for differing-name MultiIndex joins
+            # (its Index._join_multi is invoked without it), sorting only outer
+            # joins, so ``sort`` is intentionally not forwarded here.
             return self._join_multi(other, how)
 
         if other_is_multi:
@@ -1272,17 +1275,21 @@ class Index(SingleColumnFrame):
         With identical level names the join behaves like a set operation over
         the full tuples, matching pandas' ``Index.join`` fast path.
         """
-        if how == "left":
-            return self.copy(deep=False)
-        elif how == "right":
-            return other.copy(deep=False)
-        elif how == "inner":
-            return self.intersection(other, sort=sort)
+        # pandas always sorts the result of an outer join, regardless of
+        # ``sort``; for the other join types ``sort`` controls whether the
+        # join keys are ordered lexicographically.
+        sort = sort or how == "outer"
+        if how == "inner":
+            result = self.intersection(other, sort=False)
         elif how == "outer":
-            # pandas always sorts the result of an outer join.
             return self.union(other).sort_values()
+        elif how == "left":
+            result = self.copy(deep=False)
+        elif how == "right":
+            result = other.copy(deep=False)
         else:
             raise ValueError(f"Invalid join type {how}")
+        return result.sort_values() if sort else result
 
     @_performance_tracking
     def _join_multi(self, other, how: str):
@@ -1292,29 +1299,45 @@ class Index(SingleColumnFrame):
         the remaining levels are carried through, mirroring pandas'
         ``Index._join_multi``. The resulting level order is ``self``'s levels
         followed by ``other``'s unique levels (or the reverse for ``how`` of
-        ``"right"``).
+        ``"right"``). Like pandas, the result preserves the driving side's row
+        order except for ``how="outer"``, which is sorted lexicographically.
         """
         self_names = list(self.names)
         other_names = list(other.names)
-        other_names_set = set(other_names)
-        # Common level names, preserving self's order.
-        overlap = [name for name in self_names if name in other_names_set]
+
+        # Identify each level by ``(name, occurrence)`` so that duplicate level
+        # names are matched by their position among equal names instead of
+        # collapsing onto a single join key.
+        def _tag(names):
+            counts: dict = {}
+            tags = []
+            for name in names:
+                occ = counts.get(name, 0)
+                counts[name] = occ + 1
+                tags.append((name, occ))
+            return tags
+
+        self_tags = _tag(self_names)
+        other_tags = _tag(other_names)
+        other_tag_set = set(other_tags)
+        # Shared ``(name, occurrence)`` levels, preserving self's order.
+        overlap = [tag for tag in self_tags if tag in other_tag_set]
         if not overlap:
             raise ValueError("cannot join with no overlapping index names")
-        overlap_set = set(overlap)
+        overlap_index = {tag: i for i, tag in enumerate(overlap)}
 
         # Give each shared level a stable join-key label and each level unique
         # to one side a distinct placeholder label so merge keys line up and
         # non-key columns never collide.
         key_labels = [f"__join_key_{i}" for i in range(len(overlap))]
 
-        def _label(side: str, pos: int, name) -> str:
-            if name in overlap_set:
-                return key_labels[overlap.index(name)]
+        def _label(side: str, pos: int, tag) -> str:
+            if tag in overlap_index:
+                return key_labels[overlap_index[tag]]
             return f"__{side}_{pos}"
 
-        left_labels = [_label("l", i, n) for i, n in enumerate(self_names)]
-        right_labels = [_label("r", j, n) for j, n in enumerate(other_names)]
+        left_labels = [_label("l", i, t) for i, t in enumerate(self_tags)]
+        right_labels = [_label("r", j, t) for j, t in enumerate(other_tags)]
 
         left_df = cudf.DataFrame(
             {
@@ -1329,7 +1352,8 @@ class Index(SingleColumnFrame):
             }
         )
 
-        # Preserve the row order of the side that drives the join.
+        # Preserve the row order of the side that drives the join; pandas only
+        # sorts the result for outer joins.
         if how != "outer":
             order_side = right_df if how == "right" else left_df
             order_side["__join_order"] = cudf.Series(range(len(order_side)))
@@ -1347,15 +1371,19 @@ class Index(SingleColumnFrame):
             ordered = list(zip(right_labels, other_names, strict=True))
             ordered += [
                 (lbl, name)
-                for lbl, name in zip(left_labels, self_names, strict=True)
-                if name not in overlap_set
+                for lbl, name, tag in zip(
+                    left_labels, self_names, self_tags, strict=True
+                )
+                if tag not in overlap_index
             ]
         else:
             ordered = list(zip(left_labels, self_names, strict=True))
             ordered += [
                 (lbl, name)
-                for lbl, name in zip(right_labels, other_names, strict=True)
-                if name not in overlap_set
+                for lbl, name, tag in zip(
+                    right_labels, other_names, other_tags, strict=True
+                )
+                if tag not in overlap_index
             ]
 
         return cudf.MultiIndex.from_arrays(
