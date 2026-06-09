@@ -23,7 +23,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <format>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -142,47 +141,23 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
                         [schema_idx](ColumnChunk const& c) { return c.schema_idx == schema_idx; });
   };
 
-  // Common case: a single source needs no cross-source reuse, so scan it directly
-  if (input_row_group_indices.size() == 1) {
-    if (input_row_group_indices[0].empty()) { return false; }
-    auto const& row_group = per_file_metadata[0].row_groups[input_row_group_indices[0].front()];
-    for (auto const schema_idx : filter_column_schemas) {
-      auto const col = find_colchunk(row_group, schema_idx);
-      CUDF_EXPECTS(col != row_group.columns.end(),
-                   std::format("Filter column '{}' (schema index {}) is not present in source 0 "
-                               "column chunks. Filter columns must be present in each input source",
-                               get_schema(schema_idx).name,
-                               schema_idx),
-                   std::invalid_argument);
-      if (colchunk_has_stats(*col)) { return true; }
-    }
-    return false;
-  }
-
-  // Multiple sources: iterate columns on the outside so a single offset caches the chunk position
+  // Iterate columns on the outside so a single offset caches the chunk position across sources
   for (auto const schema_idx : filter_column_schemas) {
     std::optional<size_type> colchunk_offset;
 
     for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
-      if (input_row_group_indices[src_idx].empty()) { continue; }
+      auto const& row_group_indices = input_row_group_indices[src_idx];
+      if (row_group_indices.empty()) { continue; }
 
-      auto const& row_group =
-        per_file_metadata[src_idx].row_groups[input_row_group_indices[src_idx].front()];
-      auto const num_col_chunks    = static_cast<size_type>(row_group.columns.size());
+      auto const& row_group     = per_file_metadata[src_idx].row_groups[row_group_indices.front()];
+      auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
       auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
+      auto const cached_offset     = colchunk_offset.value_or(-1);
 
-      if (not colchunk_offset.has_value() or colchunk_offset.value() >= num_col_chunks or
-          row_group.columns[colchunk_offset.value()].schema_idx != mapped_schema_idx) {
+      if (cached_offset < 0 or cached_offset >= num_col_chunks or
+          row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
         auto const it = find_colchunk(row_group, mapped_schema_idx);
-        CUDF_EXPECTS(it != row_group.columns.end(),
-                     std::format("Filter column '{}' is not present in source {} column chunks "
-                                 "(source-0 schema index {} maps to source schema index {}). "
-                                 "Filter columns must be present in each input source",
-                                 get_schema(schema_idx).name,
-                                 src_idx,
-                                 schema_idx,
-                                 mapped_schema_idx),
-                     std::invalid_argument);
+        if (it == row_group.columns.end()) { continue; }
         colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
       }
 
