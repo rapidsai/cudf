@@ -762,6 +762,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - cuda-cudart-dev
+          - cuda-nvml-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
