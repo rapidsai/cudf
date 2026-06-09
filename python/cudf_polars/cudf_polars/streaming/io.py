@@ -290,7 +290,8 @@ class SplitScan(IR):
 
         if parquet_options.prefetch_file_metadata:
             try:
-                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+                cached_parquet_info = context.parquet_file_metadata[tuple(paths)]
+                parquet_metadatas = cached_parquet_info.metadata
             except KeyError as e:
                 msg = (
                     f"Parquet file metadata was not prefetched for paths: {list(paths)}."
