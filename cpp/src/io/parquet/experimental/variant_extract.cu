@@ -57,7 +57,7 @@ constexpr size_type variant_header_bytes = 1;
 enum class basic_type : uint8_t { primitive = 0, short_string = 1, object = 2, array = 3 };
 
 // For a primitive value, the value_header is the physical type id of the payload.
-enum class primitive_type : int {
+enum class primitive_type : uint8_t {
   null                 = 0,
   boolean_true         = 1,
   boolean_false        = 2,
@@ -81,9 +81,9 @@ enum class primitive_type : int {
   uuid                 = 20,
 };
 
-__device__ inline cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> data,
-                                                            size_type pos,
-                                                            int width)
+__device__ cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> data,
+                                                     size_type pos,
+                                                     int width)
 {
   if (cuda::std::cmp_greater(pos + width, data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
@@ -92,7 +92,7 @@ __device__ inline cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t 
 }
 
 // Safely narrow a decoded value to size_type
-__device__ inline cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64_t> value)
+__device__ cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64_t> value)
 {
   if (!value.has_value() ||
       cuda::std::cmp_greater(value.value(), cuda::std::numeric_limits<size_type>::max())) {
@@ -101,12 +101,12 @@ __device__ inline cuda::std::optional<size_type> narrow_cast(cuda::std::optional
   return static_cast<size_type>(value.value());
 }
 
-__device__ inline basic_type variant_basic_type(uint8_t value_metadata)
+__device__ basic_type variant_basic_type(uint8_t value_metadata)
 {
   return static_cast<basic_type>(value_metadata & 0x03);
 }
 
-__device__ inline int variant_value_header(uint8_t value_metadata)
+__device__ uint8_t variant_value_header(uint8_t value_metadata)
 {
   return (value_metadata >> 2) & 0x3F;
 }
@@ -134,10 +134,10 @@ struct object_array_header {
  * @param is_object True for object values, false for array values
  * @return The decoded byte widths
  */
-__device__ inline object_array_header decode_object_array_header(int value_header, bool is_object)
+__device__ object_array_header decode_object_array_header(uint8_t value_header, bool is_object)
 {
-  int const large_bit = is_object ? 4 : 2;
-  bool const is_large = (value_header >> large_bit) & 0x01;
+  auto const large_bit = is_object ? 4 : 2;
+  bool const is_large  = (value_header >> large_bit) & 0x01;
 
   return {.field_offset_size = (value_header & 0x03) + 1,
           .field_id_size     = is_object ? ((value_header >> 2) & 0x03) + 1 : 0,
@@ -161,12 +161,12 @@ __device__ inline object_array_header decode_object_array_header(int value_heade
  * @return The total length in bytes of the value, or nullopt if `enc` is empty/malformed or the
  *         type id is unrecognized
  */
-__device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
+__device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
 {
   if (enc.size() < 1) { return cuda::std::nullopt; }
-  uint8_t const value_metadata = enc[0];
-  auto const btype             = variant_basic_type(value_metadata);
-  int const value_header       = variant_value_header(value_metadata);
+  auto const value_metadata = enc[0];
+  auto const btype          = variant_basic_type(value_metadata);
+  auto const value_header   = variant_value_header(value_metadata);
 
   if (btype == basic_type::primitive) {
     // The leading header byte plus a payload keyed by the physical type id
@@ -248,14 +248,14 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
  * @param key The key to search for
  * @return The dictionary index of `key`, or nullopt if absent or the blob is malformed
  */
-__device__ inline cuda::std::optional<size_type> find_key_in_metadata(
-  device_span<uint8_t const> meta, cudf::string_view key)
+__device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8_t const> meta,
+                                                               cudf::string_view key)
 {
   auto const meta_len = static_cast<size_type>(meta.size());
   if (meta_len < 1) { return cuda::std::nullopt; }
 
-  uint8_t const header = meta[0];
-  int const version    = header & 0x0F;
+  auto const header = meta[0];
+  int const version = header & 0x0F;
   if (version != variant_version_v1) { return cuda::std::nullopt; }
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
@@ -264,8 +264,8 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   if (!num_entries.has_value()) { return cuda::std::nullopt; }
   pos += offset_size;
 
-  size_type const offsets_start = pos;
-  auto const offsets_bytes      = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
+  auto const offsets_start = pos;
+  auto const offsets_bytes = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
   if (offsets_bytes > static_cast<uint64_t>(meta_len - offsets_start)) {
     return cuda::std::nullopt;
   }
@@ -316,32 +316,30 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
  * @return The encoded bytes of the field value, or an empty span if `val` is not an object, the
  *         field is absent, or the blob is malformed
  */
-__device__ inline device_span<uint8_t const> locate_object_field(device_span<uint8_t const> val,
-                                                                 int id)
+__device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t const> val, int id)
 {
   auto const val_len = static_cast<size_type>(val.size());
   if (val_len < 1) { return {}; }
-  uint8_t const value_metadata = val[0];
+  auto const value_metadata = val[0];
   if (variant_basic_type(value_metadata) != basic_type::object) { return {}; }
 
-  int const value_header = variant_value_header(value_metadata);
   auto const [offset_size, id_size, num_elements_size] =
-    decode_object_array_header(value_header, true);
+    decode_object_array_header(variant_value_header(value_metadata), true);
 
   size_type pos         = 1;
   auto const num_fields = narrow_cast(read_uint64(val, pos, num_elements_size));
   if (!num_fields.has_value()) { return {}; }
   pos += num_elements_size;
 
-  size_type const ids_start = pos;
-  auto const ids_bytes      = static_cast<uint64_t>(num_fields.value()) * id_size;
+  auto const ids_start = pos;
+  auto const ids_bytes = static_cast<uint64_t>(num_fields.value()) * id_size;
   if (ids_bytes > val_len - ids_start) { return {}; }
 
-  size_type const offsets_start = ids_start + static_cast<size_type>(ids_bytes);
-  auto const offsets_bytes      = (static_cast<uint64_t>(num_fields.value()) + 1) * offset_size;
+  auto const offsets_start = ids_start + static_cast<size_type>(ids_bytes);
+  auto const offsets_bytes = (static_cast<uint64_t>(num_fields.value()) + 1) * offset_size;
   if (offsets_bytes > val_len - offsets_start) { return {}; }
 
-  size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
+  auto const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
   // Maximum legitimate field-offset value: bytes available after values_base
   auto const values_extent = val_len - values_base;
 
@@ -397,15 +395,15 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
                                                                          : primitive_type::int64;
   uint8_t const value_metadata      = enc[0];
   if (variant_basic_type(value_metadata) != basic_type::primitive ||
-      variant_value_header(value_metadata) != static_cast<int>(expected)) {
+      variant_value_header(value_metadata) != static_cast<uint8_t>(expected)) {
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
-__device__ inline device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
-                                                          device_span<uint8_t const> val,
-                                                          column_device_view path)
+__device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
+                                                   device_span<uint8_t const> val,
+                                                   column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
@@ -420,14 +418,14 @@ __device__ inline device_span<uint8_t const> resolve_path(device_span<uint8_t co
   return sub_val;
 }
 
-__device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
+__device__ cuda::std::optional<device_span<uint8_t const>> decode_string(
   device_span<uint8_t const> enc)
 {
   auto const len = enc.size();
   if (len < 1) { return cuda::std::nullopt; }
   uint8_t const value_metadata = enc[0];
   auto const btype             = variant_basic_type(value_metadata);
-  int const value_header       = variant_value_header(value_metadata);
+  auto const value_header      = variant_value_header(value_metadata);
 
   if (btype == basic_type::short_string) {
     // Short string: value_header = length
@@ -436,7 +434,7 @@ __device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
     return enc.subspan(1, str_len);
   }
   if (btype == basic_type::primitive &&
-      value_header == static_cast<int>(primitive_type::long_string)) {
+      value_header == static_cast<uint8_t>(primitive_type::long_string)) {
     // Long string: 1-byte header + 4-byte LE length + char bytes
     constexpr std::size_t long_string_prefix_bytes = 1 + sizeof(uint32_t);
     if (len < long_string_prefix_bytes) { return cuda::std::nullopt; }
@@ -449,7 +447,7 @@ __device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
 }
 
 // Returns the metadata and value list bytes for a given row from device views
-__device__ inline cuda::std::pair<device_span<uint8_t const>, device_span<uint8_t const>>
+__device__ cuda::std::pair<device_span<uint8_t const>, device_span<uint8_t const>>
 metadata_and_value_at(cudf::detail::lists_column_device_view const& metadata,
                       cudf::detail::lists_column_device_view const& values,
                       size_type row)
