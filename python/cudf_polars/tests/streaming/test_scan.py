@@ -28,7 +28,10 @@ from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from collections.abc import Callable
     from pathlib import Path
+
+    from cudf_polars.engine.core import StreamingEngine
 
 
 @pytest.fixture(scope="module")
@@ -68,40 +71,23 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine_factor
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
-def test_scan_parquet_prefetch_file_metadata(tmp_path, df, streaming_engine_factory):
+@pytest.mark.parametrize(
+    "target_partition_size_and_n_files", [(1_000, 1), (1_000, 2), (1_000_000, 3)]
+)
+def test_scan_parquet_prefetch_file_metadata(
+    tmp_path: Path,
+    target_partition_size_and_n_files: tuple[int, int],
+    df: pl.DataFrame,
+    streaming_engine_factory: Callable[..., StreamingEngine],
+):
+    target_partition_size, n_files = target_partition_size_and_n_files
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
-            target_partition_size=1_000,
+            target_partition_size=target_partition_size,
             parquet_options={"prefetch_file_metadata": True},
         ),
     )
-    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
-    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
-
-
-def test_scan_parquet_prefetch_file_metadata_fused_files(
-    tmp_path, df, streaming_engine_factory
-) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            target_partition_size=1_000_000,
-            parquet_options={"prefetch_file_metadata": True},
-        ),
-    )
-    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
-    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
-
-
-def test_scan_parquet_prefetch_file_metadata_split_files(
-    tmp_path, df, streaming_engine_factory
-) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(
-            target_partition_size=1_000,
-            parquet_options={"prefetch_file_metadata": True},
-        ),
-    )
-    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
+    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
