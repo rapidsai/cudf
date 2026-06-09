@@ -104,7 +104,7 @@ enum class capture_groups : uint32_t {
  */
 enum class literal_fast_path : int8_t {
   NONE,          ///< pattern is not eligible for any literal fast-path
-  LITERAL_ONLY,  ///< pattern is a bare literal sequence (matches literal_only)
+  LITERAL_ONLY,  ///< pattern is a simple character sequence (literal)
   STARTS_WITH,   ///< pattern is a literal preceded by a begin-of-line anchor
   ENDS_WITH      ///< pattern is a literal followed by an end-of-line anchor
 };
