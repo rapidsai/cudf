@@ -289,13 +289,23 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   return val.subspan(values_base + match_start, value_len.value());
 }
 
+// The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
+// exact width types (not e.g. __int128) since those are the only variant primitive int headers.
+template <typename T>
+constexpr bool is_variant_int =
+  cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
+  cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+
+// The output types a VARIANT value can be cast to: the fixed-width signed integers plus strings.
+template <typename T>
+constexpr bool is_variant_castable =
+  is_variant_int<T> || cuda::std::is_same_v<T, cudf::string_view>;
+
 // Variant primitive ints: basic_type == primitive, value_header maps INT{8,16,32,64}.
 template <typename T>
 __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> enc)
 {
-  static_assert(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-                  cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>,
-                "decode_int: T must be int8_t, int16_t, int32_t, or int64_t");
+  static_assert(is_variant_int<T>, "decode_int: T must be int8_t, int16_t, int32_t, or int64_t");
 
   if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
 
@@ -495,8 +505,7 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-             cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>)
+    requires(is_variant_int<T>)
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
 
@@ -533,9 +542,7 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(not(cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-                 cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t> ||
-                 cuda::std::is_same_v<T, cudf::string_view>))
+    requires(not is_variant_castable<T>)
   {
     CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
   }
