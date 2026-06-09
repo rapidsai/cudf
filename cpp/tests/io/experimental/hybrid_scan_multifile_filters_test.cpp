@@ -314,23 +314,21 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
     for (auto const& pass : passes) {
       ASSERT_EQ(pass.size(), num_sources);
       for (auto source_index = std::size_t{0}; source_index < pass.size(); ++source_index) {
-        std::transform(pass[source_index].begin(),
-                       pass[source_index].end(),
-                       std::back_inserter(flattened),
-                       [source_index](auto const rg_index) {
-                         return std::pair{source_index, rg_index};
-                       });
+        std::transform(
+          pass[source_index].begin(),
+          pass[source_index].end(),
+          std::back_inserter(flattened),
+          [source_index](auto const rg_index) { return std::pair{source_index, rg_index}; });
       }
     }
 
     auto expected = std::vector<std::pair<std::size_t, cudf::size_type>>{};
     for (auto source_index = std::size_t{0}; source_index < all_rgs.size(); ++source_index) {
-      std::transform(all_rgs[source_index].begin(),
-                     all_rgs[source_index].end(),
-                     std::back_inserter(expected),
-                     [source_index](auto const rg_index) {
-                       return std::pair{source_index, rg_index};
-                     });
+      std::transform(
+        all_rgs[source_index].begin(),
+        all_rgs[source_index].end(),
+        std::back_inserter(expected),
+        [source_index](auto const rg_index) { return std::pair{source_index, rg_index}; });
     }
     EXPECT_EQ(flattened, expected);
   }
@@ -355,7 +353,7 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPassesSingleSourceParity)
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
       inputs.footer_byte_spans.front(), options);
 
-  auto const all_rgs            = multifile_reader->all_row_groups(options);
+  auto const all_rgs = multifile_reader->all_row_groups(options);
   ASSERT_EQ(all_rgs.size(), 1);
   auto constexpr pass_read_limit = std::size_t{10'000};
   auto const multifile_passes =
