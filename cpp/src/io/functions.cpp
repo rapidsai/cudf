@@ -741,8 +741,7 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
 {
   if (chunk_read_limit == 0) { return 0; }
 
-  // Derive a heuristic pass limit (1.5x the chunk_read_limit) to reduce to reduce the risk of
-  // surprising OOMs.
+  // Derive a heuristic pass limit (1.5x the chunk_read_limit) to reduce surprising OOMs
   auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
   auto const pass_read_limit = sum.overflow ? 0 : sum.value;
 
