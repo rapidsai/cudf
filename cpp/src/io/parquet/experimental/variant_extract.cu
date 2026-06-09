@@ -80,9 +80,9 @@ enum class primitive_type : int {
   uuid                 = 20,
 };
 
-__device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t const> data,
-                                                          size_type pos,
-                                                          int width)
+__device__ inline cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> data,
+                                                            size_type pos,
+                                                            int width)
 {
   if (cuda::std::cmp_greater(pos + width, data.size())) { return cuda::std::nullopt; }
   uint64_t v = 0;
@@ -157,7 +157,7 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
       case primitive_type::binary:
       case primitive_type::long_string: {
         constexpr int length_prefix_bytes = 4;
-        auto const len = read_uint(enc, variant_header_bytes, length_prefix_bytes);
+        auto const len = read_uint64(enc, variant_header_bytes, length_prefix_bytes);
         if (!len.has_value()) { return cuda::std::nullopt; }
         payload = length_prefix_bytes + len.value();
         break;
@@ -178,7 +178,7 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   auto const [offset_size, id_size, num_elements_size] =
     decode_object_array_header(value_header, is_object);
 
-  auto const num_elements = read_uint(enc, variant_header_bytes, num_elements_size);
+  auto const num_elements = read_uint64(enc, variant_header_bytes, num_elements_size);
   if (!num_elements.has_value()) { return cuda::std::nullopt; }
   auto const n = num_elements.value();
 
@@ -187,7 +187,7 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   // Sentinel offset (entry n) holds the total size of the values region.
   auto const sentinel_pos = narrow_cast(offsets_start + n * offset_size);
   if (!sentinel_pos.has_value()) { return cuda::std::nullopt; }
-  auto const sentinel = read_uint(enc, sentinel_pos.value(), offset_size);
+  auto const sentinel = read_uint64(enc, sentinel_pos.value(), offset_size);
   if (!sentinel.has_value()) { return cuda::std::nullopt; }
   return values_base + sentinel.value();
 }
@@ -204,7 +204,7 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
-  auto const num_entries = narrow_cast(read_uint(meta, pos, offset_size));
+  auto const num_entries = narrow_cast(read_uint64(meta, pos, offset_size));
   if (!num_entries.has_value()) { return cuda::std::nullopt; }
   pos += offset_size;
 
@@ -214,13 +214,13 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
     return cuda::std::nullopt;
   }
 
-  auto start_off = read_uint(meta, offsets_start, offset_size);
+  auto start_off = read_uint64(meta, offsets_start, offset_size);
   if (!start_off.has_value()) { return cuda::std::nullopt; }
   auto const strings_base = offsets_start + static_cast<size_type>(offsets_bytes);
   // Bytes available for dictionary string payloads
   auto const strings_extent = meta_len - strings_base;
   for (size_type i = 0; i < num_entries.value(); ++i) {
-    auto const end_off = read_uint(meta, offsets_start + (i + 1) * offset_size, offset_size);
+    auto const end_off = read_uint64(meta, offsets_start + (i + 1) * offset_size, offset_size);
     if (!end_off.has_value()) { return cuda::std::nullopt; }
     if (end_off.value() < start_off.value() || end_off.value() > strings_extent) {
       return cuda::std::nullopt;
@@ -247,7 +247,7 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
     decode_object_array_header(value_header, true);
 
   size_type pos         = 1;
-  auto const num_fields = narrow_cast(read_uint(val, pos, num_elements_size));
+  auto const num_fields = narrow_cast(read_uint64(val, pos, num_elements_size));
   if (!num_fields.has_value()) { return {}; }
   pos += num_elements_size;
 
@@ -267,11 +267,11 @@ __device__ inline device_span<uint8_t const> locate_object_field(device_span<uin
   bool found           = false;
   uint64_t match_start = 0;
   for (size_type i = 0; i < num_fields.value(); ++i) {
-    auto const current_id = read_uint(val, ids_start + i * id_size, id_size);
+    auto const current_id = read_uint64(val, ids_start + i * id_size, id_size);
     if (!current_id.has_value()) { return {}; }
     if (cuda::std::cmp_not_equal(current_id.value(), id)) { continue; }
 
-    auto const match_offset = read_uint(val, offsets_start + i * offset_size, offset_size);
+    auto const match_offset = read_uint64(val, offsets_start + i * offset_size, offset_size);
     if (!match_offset.has_value()) { return {}; }
     if (match_offset.value() > values_extent) { return {}; }
     match_start = match_offset.value();
