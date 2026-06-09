@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/logger.hpp>
-
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <nvtx3/nvtx3.hpp>
@@ -119,7 +117,7 @@ namespace rtcx {
 namespace {
 
 struct nvtx_domain {
-  static constexpr char const* name = "rtcx";
+  static constexpr char const* name [[maybe_unused]] = "rtcx";
 };
 
 enum class object_type : std::uint8_t { LIBRARY, BLOB };
@@ -166,12 +164,12 @@ std::string join_strings(std::span<StringType> strings, std::string_view separat
 
 void log_warning(std::string_view msg)
 {
-  CUDF_LOG_WARN("%.*s", static_cast<std::int32_t>(msg.size()), msg.data());
+  std::fprintf(stderr, "[rtcx] warn: %.*s\n", static_cast<int>(msg.size()), msg.data());
 }
 
 void log_error(std::string_view msg)
 {
-  CUDF_LOG_ERROR("%.*s", static_cast<std::int32_t>(msg.size()), msg.data());
+  std::fprintf(stderr, "[rtcx] error: %.*s\n", static_cast<int>(msg.size()), msg.data());
 }
 
 #define FOR_EACH_CUDA_FUNC(DO_IT)       \
