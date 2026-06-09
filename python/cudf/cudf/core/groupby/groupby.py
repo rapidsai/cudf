@@ -1333,18 +1333,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             return result
 
         def gather_labels(positions: ColumnBase) -> ColumnBase:
-            # ``gather`` cannot consume a null gather-map, so temporarily fill
-            # null positions with a safe index before restoring them on the
-            # gathered labels.
-            has_null = positions.has_nulls()
-            pos_series = Series._from_column(positions)
-            safe = pos_series.fillna(0)._column if has_null else positions
-            labels = Series._from_column(
-                index._column.take(safe, nullify=True)
-            )
-            if has_null:
-                labels[pos_series.isnull()] = None
-            return labels._column
+            # ``gather`` cannot consume a null gather-map, so redirect null
+            # positions to an out-of-bounds index; ``take(nullify=True)`` then
+            # yields a null label for them while valid positions still gather
+            # their (possibly null) index label.
+            if positions.has_nulls():
+                positions = positions.fillna(len(index))
+            return index._column.take(positions, nullify=True)
 
         if result.ndim == 2:
             for name, col in value_items:
@@ -1792,9 +1787,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         num_labeled = num_groups
         if skip_null:
             num_labeled -= int(null_group_mask.sum())
-        seq = list(range(num_labeled))
+        seq = range(num_labeled)
         if not ascending:
-            seq.reverse()
+            seq = reversed(seq)
         seq_iter = iter(seq)
         ids: list[int | None] = [
             None if (skip_null and is_null) else next(seq_iter)
