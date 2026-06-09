@@ -7,13 +7,13 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/io/experimental/variant.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -37,10 +37,7 @@
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string_view>
@@ -97,7 +94,7 @@ __device__ inline cuda::std::optional<uint64_t> read_uint(device_span<uint8_t co
 __device__ inline cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64_t> value)
 {
   if (!value.has_value() ||
-      value.value() > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
+      cuda::std::cmp_greater(value.value(), cuda::std::numeric_limits<size_type>::max())) {
     return cuda::std::nullopt;
   }
   return static_cast<size_type>(value.value());
@@ -107,6 +104,7 @@ __device__ inline basic_type variant_basic_type(uint8_t value_metadata)
 {
   return static_cast<basic_type>(value_metadata & 0x03);
 }
+
 __device__ inline int variant_value_header(uint8_t value_metadata)
 {
   return (value_metadata >> 2) & 0x3F;
@@ -543,7 +541,7 @@ struct cast_variant_fn {
   }
 };
 
-std::unique_ptr<column> build_path_column(std::vector<std::string> const& steps,
+std::unique_ptr<column> build_path_column(cudf::host_span<std::string const> steps,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
@@ -647,15 +645,15 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     data_type{type_id::UINT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
   if (total_bytes > 0) {
     auto const out_base = val_child->mutable_view().data<uint8_t>();
-    auto src_iter       = thrust::make_transform_iterator(
-      thrust::counting_iterator<size_type>(0),
+    auto src_iter       = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
       cuda::proclaim_return_type<uint8_t const*>(
         [vlv   = val_lists_device_view,
          d_src = d_src_offsets.data()] __device__(size_type row) -> uint8_t const* {
           return vlv.child().template data<uint8_t>() + vlv.offset_at(row) + d_src[row];
         }));
-    auto dst_iter = thrust::make_transform_iterator(
-      thrust::counting_iterator<size_type>(0),
+    auto dst_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
       cuda::proclaim_return_type<uint8_t*>(
         [out_base, d_off = d_offsets.data()] __device__(size_type row) -> uint8_t* {
           return out_base + d_off[row];
