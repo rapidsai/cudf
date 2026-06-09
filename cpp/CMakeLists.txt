@@ -95,7 +95,7 @@ else()
   )
   set(RTCX_STATIC_LINK_NVJITLINK
       OFF
-      CACHE BOOL "Use static linking for NVJitLink" FORCE
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
   )
 endif()
 
