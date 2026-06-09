@@ -28,10 +28,13 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -2872,6 +2875,109 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
+namespace {
+class TrackingFooterDatasource : public cudf::io::datasource {
+ public:
+  explicit TrackingFooterDatasource(std::vector<char> const& data) : data_(data) {}
+
+  [[nodiscard]] std::vector<std::pair<size_t, size_t>> const& reads() const { return reads_; }
+
+  void reset() { reads_.clear(); }
+
+  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
+  {
+    reads_.emplace_back(offset, size);
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto const read_size = std::min(size, data_.size() - offset);
+    std::vector<std::byte> out(read_size);
+    std::memcpy(out.data(), data_.data() + offset, read_size);
+    return cudf::io::datasource::buffer::create(std::move(out));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    reads_.emplace_back(offset, size);
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto const read_size = std::min(size, data_.size() - offset);
+    std::memcpy(dst, data_.data() + offset, read_size);
+    return read_size;
+  }
+
+  [[nodiscard]] size_t size() const override { return data_.size(); }
+
+ private:
+  std::vector<char> const& data_;
+  std::vector<std::pair<size_t, size_t>> reads_;
+};
+
+class ShortReadFooterDatasource : public cudf::io::datasource {
+ public:
+  ShortReadFooterDatasource(std::vector<char> const& data,
+                            size_t short_read_call,
+                            size_t short_read_size)
+    : data_(data), short_read_call_(short_read_call), short_read_size_(short_read_size)
+  {
+  }
+
+  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
+  {
+    ++call_count_;
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto read_size = std::min(size, data_.size() - offset);
+    if (call_count_ == short_read_call_) { read_size = std::min(read_size, short_read_size_); }
+    std::vector<std::byte> out(read_size);
+    std::memcpy(out.data(), data_.data() + offset, read_size);
+    return cudf::io::datasource::buffer::create(std::move(out));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    ++call_count_;
+    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
+    auto read_size = std::min(size, data_.size() - offset);
+    if (call_count_ == short_read_call_) { read_size = std::min(read_size, short_read_size_); }
+    std::memcpy(dst, data_.data() + offset, read_size);
+    return read_size;
+  }
+
+  [[nodiscard]] size_t size() const override { return data_.size(); }
+
+ private:
+  std::vector<char> const& data_;
+  size_t short_read_call_;
+  size_t short_read_size_;
+  size_t call_count_{0};
+};
+
+std::vector<char> make_simple_parquet_bytes()
+{
+  auto ints = random_values<int32_t>(128);
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
+  cudf::table_view input_table({int_col});
+
+  std::vector<char> parquet_bytes;
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
+      .build();
+  cudf::io::write_parquet(write_opts);
+  return parquet_bytes;
+}
+
+template <typename Fn>
+void expect_logic_error_contains(Fn&& fn, std::string const& needle)
+{
+  try {
+    fn();
+    FAIL() << "Expected cudf::logic_error";
+  } catch (cudf::logic_error const& e) {
+    EXPECT_NE(std::string{e.what()}.find(needle), std::string::npos)
+      << "Actual message: " << e.what();
+  } catch (...) {
+    FAIL() << "Expected cudf::logic_error";
+  }
+}
+}  // namespace
+
 TEST_F(ParquetMetadataReaderTest, Basics)
 {
   auto const num_rows = 1200;
@@ -2967,6 +3073,70 @@ TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
   test_parquet_metadata(1);
   // Test with multiple files
   test_parquet_metadata(3);
+}
+
+TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
+{
+  auto parquet_bytes = make_simple_parquet_bytes();
+
+  // Small source size check
+  {
+    std::vector<char> tiny(8, '\0');
+    TrackingFooterDatasource tiny_source(tiny);
+    auto const source = cudf::io::source_info{&tiny_source};
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Incorrect data source");
+  }
+
+  // Speculative ender short read check
+  {
+    ShortReadFooterDatasource short_ender_source(
+      parquet_bytes, /*short_read_call=*/1, /*short_read_size=*/7);
+    auto const source = cudf::io::source_info{&short_ender_source};
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Failed to read Parquet speculative metadata bytes");
+  }
+
+  // Header magic check when speculative read starts at offset 0
+  {
+    auto bad_header = parquet_bytes;
+    bad_header[0]   = 'B';
+    bad_header[1]   = 'A';
+    bad_header[2]   = 'D';
+    bad_header[3]   = '!';
+    TrackingFooterDatasource bad_header_source(bad_header);
+    auto const source = cudf::io::source_info{&bad_header_source};
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Corrupted header");
+  }
+
+  // Footer magic check
+  {
+    auto bad_footer_magic                     = parquet_bytes;
+    auto const footer_magic_offset            = bad_footer_magic.size() - sizeof(uint32_t);
+    bad_footer_magic[footer_magic_offset + 0] = 'B';
+    bad_footer_magic[footer_magic_offset + 1] = 'A';
+    bad_footer_magic[footer_magic_offset + 2] = 'D';
+    bad_footer_magic[footer_magic_offset + 3] = '!';
+    TrackingFooterDatasource bad_footer_source(bad_footer_magic);
+    auto const source = cudf::io::source_info{&bad_footer_source};
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Corrupted footer");
+  }
+
+  // Footer length check
+  {
+    auto bad_footer_len          = parquet_bytes;
+    auto const footer_len_offset = bad_footer_len.size() - sizeof(cudf::io::parquet::file_ender_s);
+    bad_footer_len[footer_len_offset + 0] = 0;
+    bad_footer_len[footer_len_offset + 1] = 0;
+    bad_footer_len[footer_len_offset + 2] = 0;
+    bad_footer_len[footer_len_offset + 3] = 0;
+    TrackingFooterDatasource bad_footer_len_source(bad_footer_len);
+    auto const source = cudf::io::source_info{&bad_footer_len_source};
+    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
+                                "Incorrect footer length");
+  }
 }
 
 TEST_F(ParquetMetadataReaderTest, Nested)

@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
