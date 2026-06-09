@@ -759,9 +759,9 @@ TEST(GroupedRollingRangeMultiOrderByTest, CurrentRowPeerFrameHonorsMinPeriods)
   auto const grouping_keys = ints_column{0, 0, 0, 0, 0, 1, 1, 1}.release();
   auto const orderby0      = ints_column{1, 1, 1, 2, 2, 1, 1, 2}.release();
   auto const orderby1      = ints_column{1, 1, 2, 1, 1, 1, 2, 1}.release();
-  auto const values        = bigints_column{{10, 0, 30, 40, 50, 0, 200, 300},
-                                            {true, false, true, true, true, false, true, true}}
-                        .release();
+  auto const values =
+    bigints_column{{10, 0, 30, 40, 50, 0, 200, 300}, cudf::test::iterators::nulls_at({1, 5})}
+      .release();
 
   std::vector<cudf::order> orders{cudf::order::ASCENDING, cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
@@ -781,7 +781,7 @@ TEST(GroupedRollingRangeMultiOrderByTest, CurrentRowPeerFrameHonorsMinPeriods)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *columns[0],
     bigints_column{{0, 0, 0, 90, 90, 0, 0, 0},
-                   {false, false, false, true, true, false, false, false}});
+                   cudf::test::iterators::nulls_at({0, 1, 2, 5, 6, 7})});
 }
 
 TEST(GroupedRollingRangeMultiOrderByTest, UnpartitionedUnboundedPrecedingCurrentRowCount)
