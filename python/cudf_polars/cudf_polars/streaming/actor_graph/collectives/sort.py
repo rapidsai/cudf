@@ -6,20 +6,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rapidsmpf.shuffler import PartitionAssignment
-from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
+import polars as pl
+
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
+from cudf_streaming.streaming.table_chunk import TableChunk
+from rapidsmpf.shuffler import PartitionAssignment
+from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
