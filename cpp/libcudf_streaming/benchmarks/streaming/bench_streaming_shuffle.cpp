@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -346,7 +347,12 @@ int main(int argc, char** argv)
   if (!use_bootstrap) {
     RAPIDSMPF_MPI(MPI_Barrier(MPI_COMM_WORLD));
   } else {
-    std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm)->barrier();
+    auto ucxx = std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm);
+    if (ucxx == nullptr) {
+      log.print("Expected UCXX communicator when using bootstrap mode");
+      throw std::runtime_error{"Expected UCXX communicator when using bootstrap mode"};
+    }
+    ucxx->barrier();
   }
 
   {
