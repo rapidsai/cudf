@@ -15,10 +15,11 @@ from . import (
     types,
 )
 from .parquet_metadata import FileMetaData
-from .types import SinkInfo, SourceInfo, TableWithMetadata
+from .types import FilepathSource, SinkInfo, SourceInfo, TableWithMetadata
 
 __all__ = [
     "FileMetaData",
+    "FilepathSource",
     "SinkInfo",
     "SourceInfo",
     "TableWithMetadata",
