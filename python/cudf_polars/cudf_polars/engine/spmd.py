@@ -30,7 +30,6 @@ from rapidsmpf.streaming.core.context import Context
 
 import cudf_polars.quent
 import cudf_polars.quent._logging
-import cudf_polars.quent._types
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
     ClusterInfo,
