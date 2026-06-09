@@ -23,6 +23,7 @@ from cudf_polars.dsl.ir import (
     Empty,
     Scan,
     Sink,
+    _prefetch_parquet_footers_for_paths,
 )
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.base import (
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl.expr import NamedExpr
-    from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext
     from cudf_polars.streaming.base import (
         DataSourceInfo,
         SerializedDataSourceInfo,
@@ -289,7 +290,8 @@ class SplitScan(IR):
         #   "skip_rows" and "n_rows" options to use locally.
 
         if parquet_options.prefetch_file_metadata:
-            parquet_metadatas = Scan._lookup_parquet_metadatas(paths, context)
+            cached_parquet_info = Scan._lookup_parquet_metadatas(paths, context)
+            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
 
             row_group_num_rows = [
                 num_rows
@@ -864,8 +866,8 @@ class ParquetMetadata:
     """
 
     __slots__ = (
+        "cached_parquet_info",
         "column_names",
-        "file_metadata",
         "max_footer_samples",
         "mean_size_per_file",
         "num_row_groups_per_file",
@@ -890,8 +892,8 @@ class ParquetMetadata:
     """All column names found it the dataset."""
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
-    file_metadata: tuple[plc.io.parquet_metadata.FileMetaData, ...] | None
-    """Parquet footers read for ``sample_paths``. Populated only if all files were sampled."""
+    cached_parquet_info: list[CachedParquetInfo] | None
+    """Cached parquet info for the sampled paths. Only set if all files were sampled."""
 
     @nvtx_annotate_cudf_polars(message="ParquetMetadata")
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
@@ -901,7 +903,7 @@ class ParquetMetadata:
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
         self.column_names = ()
-        self.file_metadata = None
+        self.cached_parquet_info = None
         self.total_file_count = len(self.paths)
         self.sampled_file_count = 0
         if max_footer_samples <= 0:
@@ -917,14 +919,16 @@ class ParquetMetadata:
             return
 
         sampled_file_count = len(self.sample_paths)
-        sample_footers = plc.io.parquet_metadata.read_parquet_footers(
-            plc.io.SourceInfo(list(self.sample_paths))
+
+        sample_parquet_info = _prefetch_parquet_footers_for_paths(
+            list(self.sample_paths)
         )
-        self.file_metadata = tuple(sample_footers)
+        sample_footers = [info.file_metadata for info in sample_parquet_info]
 
         sampled_row_count = sum(fmd.num_rows for fmd in sample_footers)
         if self.total_file_count == sampled_file_count:
             row_count = sampled_row_count
+            self.cached_parquet_info = sample_parquet_info
         else:
             num_rows_per_sampled_file = int(sampled_row_count / sampled_file_count)
             row_count = num_rows_per_sampled_file * self.total_file_count
@@ -1030,14 +1034,15 @@ class ParquetSourceInfo:
         row_count: int | None,
         per_file_means: dict[str, int] | None = None,
         *,
-        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None = None,
+        # TODO: change this to cached_parquet_info
+        cached_parquet_info: list[CachedParquetInfo] | None = None,
     ):
         if per_file_means is None:
             per_file_means = {}
 
         self.row_count = row_count
         self.per_file_means = per_file_means
-        self.file_metadata = file_metadata
+        self.cached_parquet_info = cached_parquet_info
 
     @classmethod
     def from_paths(
@@ -1096,15 +1101,15 @@ class ParquetSourceInfo:
                     else max(footer_mean, decoded_floor)
                 )
 
-        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None
+        cached_parquet_info: list[CachedParquetInfo] | None
         if (
             metadata.sampled_file_count == metadata.total_file_count
-            and metadata.file_metadata is not None
+            and metadata.cached_parquet_info is not None
         ):
-            file_metadata = list(metadata.file_metadata)
+            cached_parquet_info = list(metadata.cached_parquet_info)
         else:
-            file_metadata = None
-        return cls(row_count, per_file_means, file_metadata=file_metadata)
+            cached_parquet_info = None
+        return cls(row_count, per_file_means, cached_parquet_info=cached_parquet_info)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""

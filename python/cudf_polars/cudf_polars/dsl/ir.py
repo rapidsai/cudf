@@ -116,6 +116,15 @@ __all__ = [
 
 
 @dataclass(frozen=True)
+class CachedParquetInfo:
+    """Metadata for a parquet file."""
+
+    path: str
+    size: int
+    file_metadata: plc.io.parquet_metadata.FileMetaData
+
+
+@dataclass(frozen=True)
 class IRExecutionContext:
     """
     Runtime context for IR node execution.
@@ -134,7 +143,9 @@ class IRExecutionContext:
         Identifier for the query being executed.
     parquet_file_metadata
         A cache of parquet file metadata keyed by file path for parquet scans.
-        The values are ``FileMetaData`` objects for each cached file.
+        The values are `CachedParquetInfo` objects storing
+        a ``SourceInfo`` with known size and a list of ``FileMetaData`` objects
+        associated with those ``paths``.
 
         This cache lasts for the duration of the a single query's execution
         (e.g. ``LazyFrame.collect()``).
@@ -143,9 +154,7 @@ class IRExecutionContext:
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    parquet_file_metadata: dict[str, plc.io.parquet_metadata.FileMetaData] = field(
-        default_factory=dict
-    )
+    parquet_file_metadata: dict[str, CachedParquetInfo] = field(default_factory=dict)
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -200,9 +209,7 @@ class IRExecutionContext:
 
 
 @nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
-def _prefetch_parquet_footers_for_paths(
-    paths: list[str],
-) -> tuple[list[str], list[plc.io.parquet_metadata.FileMetaData]]:
+def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetInfo]:
     """
     Prefetch parquet footers for a list of paths.
 
@@ -221,8 +228,39 @@ def _prefetch_parquet_footers_for_paths(
     metadata
         The list of ``FileMetaData`` objects for the ``paths``.
     """
-    metadata = plc.io.parquet_metadata.read_parquet_footers(plc.io.SourceInfo(paths))
-    return paths, metadata
+    # TODO: https://github.com/rapidsai/cudf/issues/22734, use object metadata from polars
+    # For now, we'll just use kvikio to explicitly get the size.
+    sizes = []
+
+    try:
+        import kvikio
+    except ImportError:
+        kvikio = None
+
+    for path in paths:
+        if paths and kvikio is not None and plc.io.SourceInfo._is_remote_uri(path):
+            # We're OK to use `kvikio.RemoteFile.open` here. It does make an HTTP HEAD
+            # request for S3/HTTP endpoints, but that's the entire reason we're running
+            # this code. So long as it makes just *one* HTTP request, there's no advantage
+            # to inferring the endpoint type.
+            with kvikio.RemoteFile.open(path) as remote_file:
+                sizes.append(remote_file.nbytes())
+        else:
+            sizes.append(None)
+
+    metadata = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.types.SourceInfo(
+            [
+                plc.io.types.FilepathSource(path, size)
+                for path, size in zip(paths, sizes, strict=True)
+            ]
+        )
+    )
+
+    return [
+        CachedParquetInfo(path, size, file_metadata)
+        for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
+    ]
 
 
 @nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
@@ -276,13 +314,16 @@ def prefetch_parquet_file_metadata_for_ir(
 
     if missing_paths:
         with cm:
-            # TODO: "Consider batching footer reads for SplitScan"
-            # https://github.com/rapidsai/cudf/pull/22700#discussion_r3455262132
-            paths, metadata = executor.submit(
-                _prefetch_parquet_footers_for_paths, missing_paths
-            ).result()
-            for path, file_metadata in zip(paths, metadata, strict=True):
-                context.parquet_file_metadata.setdefault(path, file_metadata)
+            futures = [
+                executor.submit(_prefetch_parquet_footers_for_paths, [path])
+                for path in missing_paths
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                for cached_parquet_info in future.result():
+                    context.parquet_file_metadata.setdefault(
+                        cached_parquet_info.path, cached_parquet_info
+                    )
 
 
 def seed_parquet_file_metadata_from_stats(
@@ -311,10 +352,12 @@ def seed_parquet_file_metadata_from_stats(
             isinstance(node, Scan)
             and node.typ == "parquet"
             and isinstance(info, ParquetSourceInfo)
-            and info.file_metadata is not None
+            and info.cached_parquet_info is not None
         ):
-            for path, file_metadata in zip(node.paths, info.file_metadata, strict=True):
-                context.parquet_file_metadata.setdefault(path, file_metadata)
+            for cached_parquet_info in info.cached_parquet_info:
+                context.parquet_file_metadata.setdefault(
+                    cached_parquet_info.path, cached_parquet_info
+                )
 
 
 _BINOPS = {
@@ -790,7 +833,8 @@ class Scan(IR):
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if parquet_options.prefetch_file_metadata and context is not None:
-            parquet_metadatas = Scan._lookup_parquet_metadatas(paths, context)
+            cached_parquet_info = Scan._lookup_parquet_metadatas(paths, context)
+            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
             num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
         else:
             meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -935,9 +979,17 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             if parquet_options.prefetch_file_metadata:
-                parquet_metadatas = cls._lookup_parquet_metadatas(paths, context)
+                cached_parquet_info = cls._lookup_parquet_metadatas(paths, context)
+                source_info = plc.io.SourceInfo(
+                    [
+                        plc.io.types.FilepathSource(info.path, info.size)
+                        for info in cached_parquet_info
+                    ]
+                )
+                parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
             else:
                 parquet_metadatas = None
+                source_info = plc.io.SourceInfo(paths)
 
             filters = None
             if predicate is not None and row_index is None:
@@ -949,7 +1001,7 @@ class Scan(IR):
                     stream=stream,
                 )
             parquet_reader_options = (
-                plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
+                plc.io.parquet.ParquetReaderOptions.builder(source_info)
                 .decimal_width(plc.TypeId.DECIMAL128)
                 .build()
             )
@@ -1089,7 +1141,7 @@ class Scan(IR):
     @staticmethod
     def _lookup_parquet_metadatas(
         paths: list[str], context: IRExecutionContext
-    ) -> list[plc.io.parquet_metadata.FileMetaData]:
+    ) -> list[CachedParquetInfo]:
         """
         Lookup parquet metadata from the prefetch metadata cache.
 

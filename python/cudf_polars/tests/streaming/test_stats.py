@@ -19,6 +19,7 @@ import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import (
+    CachedParquetInfo,
     Empty,
     IRExecutionContext,
     Projection,
@@ -266,9 +267,12 @@ def test_parquet_source_info_stores_footers_when_all_files_sampled(
         max_row_group_samples=0,
     )
 
-    assert info.file_metadata is not None
-    assert len(info.file_metadata) == len(paths)
-    assert sum(fmd.num_rows for fmd in info.file_metadata) == df.height
+    assert info.cached_parquet_info is not None
+    assert len(info.cached_parquet_info) == len(paths)
+    assert (
+        sum(cached.file_metadata.num_rows for cached in info.cached_parquet_info)
+        == df.height
+    )
 
 
 def test_parquet_source_info_omits_footers_when_paths_are_sampled(
@@ -287,7 +291,7 @@ def test_parquet_source_info_omits_footers_when_paths_are_sampled(
         max_row_group_samples=0,
     )
 
-    assert info.file_metadata is None
+    assert info.cached_parquet_info is None
 
 
 def test_seed_parquet_file_metadata_from_stats(
@@ -316,9 +320,10 @@ def test_seed_parquet_file_metadata_from_stats(
         for node, info in stats.scan_stats.items()
         if isinstance(node, Scan) and isinstance(info, ParquetSourceInfo)
     )
-    file_metadata = parquet_info.file_metadata
-    assert file_metadata is not None
-    for path, metadata in zip(scan_node.paths, file_metadata, strict=True):
+    cached_parquet_info = parquet_info.cached_parquet_info
+    assert cached_parquet_info is not None
+    for path, metadata in zip(scan_node.paths, cached_parquet_info, strict=True):
+        assert isinstance(metadata, CachedParquetInfo)
         assert context.parquet_file_metadata[path] is metadata
 
 
@@ -331,8 +336,8 @@ def test_parquet_metadata_reads_footers(
     path = next(tmp_path.iterdir())
     metadata = ParquetMetadata((str(path),), max_footer_samples=1)
 
-    assert metadata.file_metadata is not None
-    assert len(metadata.file_metadata) == 1
+    assert metadata.cached_parquet_info is not None
+    assert len(metadata.cached_parquet_info) == 1
     assert metadata.row_count == df.height
 
 
