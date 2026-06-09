@@ -4,6 +4,7 @@
  */
 
 #include "detail/range_utils.cuh"
+#include "detail/rolling.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -26,6 +27,7 @@
 
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
+#include <thrust/copy.h>
 #include <thrust/reduce.h>
 
 #include <optional>

@@ -10,7 +10,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -97,34 +96,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   order order,
   null_order null_order,
   range_window_type window,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-/**
- * @brief Construct preceding and following columns for a multi-column order-by RANGE window.
- *
- * Implementation detail of the multi-column `grouped_range_rolling_window` overload. Multi-column
- * order-by windows support only peer-frame endpoints (`unbounded` and `current_row`) since a scalar
- * delta is not well-defined across multiple order-by columns.
- *
- * @param group_keys Possibly empty table of sorted keys defining groups.
- * @param orderby Table defining sorted order-by keys. If `group_keys` is non-empty, must be sorted
- * groupwise.
- * @param orders Sort order for each order-by column.
- * @param null_orders Null sort order for each order-by column.
- * @param preceding Type of the preceding window. Must be `unbounded` or `current_row`.
- * @param following Type of the following window. Must be `unbounded` or `current_row`.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned columns' device memory.
- * @return Pair of preceding and following columns suitable for passing to `rolling_window`.
- */
-[[nodiscard]] std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
-  table_view const& group_keys,
-  table_view const& orderby,
-  host_span<order const> orders,
-  host_span<null_order const> null_orders,
-  range_window_type preceding,
-  range_window_type following,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

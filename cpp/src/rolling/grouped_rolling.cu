@@ -24,8 +24,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/concepts>
 #include <cuda/std/functional>
+
+#include <concepts>
 
 namespace cudf {
 
@@ -210,7 +211,7 @@ namespace detail {
 namespace {
 
 template <typename MakeWindows>
-  requires(cuda::std::invocable<MakeWindows&>)
+  requires(std::invocable<MakeWindows&>)
 std::unique_ptr<table> grouped_range_rolling_window_impl(table_view const& group_keys,
                                                          host_span<rolling_request const> requests,
                                                          range_window_type preceding,
@@ -301,8 +302,14 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     following,
     orderby.size(),
     [&] {
-      return make_range_windows(
-        group_keys, orderby, order, null_order, preceding, following, stream);
+      return make_range_windows(group_keys,
+                                orderby,
+                                order,
+                                null_order,
+                                preceding,
+                                following,
+                                stream,
+                                cudf::get_current_device_resource_ref());
     },
     stream,
     mr);
@@ -507,7 +514,8 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                 null_order,
                                 get_window_type(preceding),
                                 get_window_type(following),
-                                stream);
+                                stream,
+                                cudf::get_current_device_resource_ref());
     }
   }();
 

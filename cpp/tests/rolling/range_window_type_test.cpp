@@ -12,13 +12,14 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <src/rolling/detail/rolling.hpp>
 
 #include <limits>
 #include <set>
