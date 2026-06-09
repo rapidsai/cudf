@@ -1209,6 +1209,14 @@ class Index(SingleColumnFrame):
             if not is_scalar(level):
                 raise ValueError("level should be an int or a label only")
 
+        if level is None and self_is_multi and other_is_multi:
+            # Joining two MultiIndexes joins on the levels they have in common
+            # (mirroring pandas' Index._join_multi). When the level names match
+            # exactly the join reduces to a set operation over the full tuples.
+            if list(self.names) == list(other.names):
+                return self._join_same_level_multi(other, how, sort)
+            return self._join_multi(other, how)
+
         if other_is_multi:
             if how == "left":
                 how = "right"
@@ -1256,6 +1264,104 @@ class Index(SingleColumnFrame):
             idx = _index_from_data(output._data)
             idx.name = self.name if same_names else None
             return idx
+
+    @_performance_tracking
+    def _join_same_level_multi(self, other, how: str, sort: bool):
+        """Join two MultiIndexes that share the same level names.
+
+        With identical level names the join behaves like a set operation over
+        the full tuples, matching pandas' ``Index.join`` fast path.
+        """
+        if how == "left":
+            return self.copy(deep=False)
+        elif how == "right":
+            return other.copy(deep=False)
+        elif how == "inner":
+            return self.intersection(other, sort=sort)
+        elif how == "outer":
+            # pandas always sorts the result of an outer join.
+            return self.union(other).sort_values()
+        else:
+            raise ValueError(f"Invalid join type {how}")
+
+    @_performance_tracking
+    def _join_multi(self, other, how: str):
+        """Join two MultiIndexes with differing level names.
+
+        The join is performed on the levels the two indexes have in common and
+        the remaining levels are carried through, mirroring pandas'
+        ``Index._join_multi``. The resulting level order is ``self``'s levels
+        followed by ``other``'s unique levels (or the reverse for ``how`` of
+        ``"right"``).
+        """
+        self_names = list(self.names)
+        other_names = list(other.names)
+        other_names_set = set(other_names)
+        # Common level names, preserving self's order.
+        overlap = [name for name in self_names if name in other_names_set]
+        if not overlap:
+            raise ValueError("cannot join with no overlapping index names")
+        overlap_set = set(overlap)
+
+        # Give each shared level a stable join-key label and each level unique
+        # to one side a distinct placeholder label so merge keys line up and
+        # non-key columns never collide.
+        key_labels = [f"__join_key_{i}" for i in range(len(overlap))]
+
+        def _label(side: str, pos: int, name) -> str:
+            if name in overlap_set:
+                return key_labels[overlap.index(name)]
+            return f"__{side}_{pos}"
+
+        left_labels = [_label("l", i, n) for i, n in enumerate(self_names)]
+        right_labels = [_label("r", j, n) for j, n in enumerate(other_names)]
+
+        left_df = cudf.DataFrame(
+            {
+                lbl: cudf.Series._from_column(col)
+                for lbl, col in zip(left_labels, self._columns, strict=True)
+            }
+        )
+        right_df = cudf.DataFrame(
+            {
+                lbl: cudf.Series._from_column(col)
+                for lbl, col in zip(right_labels, other._columns, strict=True)
+            }
+        )
+
+        # Preserve the row order of the side that drives the join.
+        if how != "outer":
+            order_side = right_df if how == "right" else left_df
+            order_side["__join_order"] = cudf.Series(range(len(order_side)))
+
+        merged = left_df.merge(right_df, on=key_labels, how=how, sort=False)
+
+        if how == "outer":
+            merged = merged.sort_values(by=key_labels)
+        else:
+            merged = merged.sort_values(by="__join_order")
+
+        # Reassemble levels: self's levels then other's unique levels, or the
+        # reverse when joining with how="right".
+        if how == "right":
+            ordered = list(zip(right_labels, other_names, strict=True))
+            ordered += [
+                (lbl, name)
+                for lbl, name in zip(left_labels, self_names, strict=True)
+                if name not in overlap_set
+            ]
+        else:
+            ordered = list(zip(left_labels, self_names, strict=True))
+            ordered += [
+                (lbl, name)
+                for lbl, name in zip(right_labels, other_names, strict=True)
+                if name not in overlap_set
+            ]
+
+        return cudf.MultiIndex.from_arrays(
+            [merged[lbl] for lbl, _ in ordered],
+            names=[name for _, name in ordered],
+        )
 
     def drop_duplicates(
         self,
