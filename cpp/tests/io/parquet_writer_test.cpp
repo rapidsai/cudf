@@ -853,6 +853,47 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   EXPECT_EQ(expected_max, stats.max_value);
 }
 
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmitted)
+{
+  // PARQUET-1246: a float/double column containing a NaN must not expose min/max, or a
+  // reader doing `= NaN` predicate pushdown skips the row group. NVIDIA/spark-rapids#15004.
+  auto const nanf = std::numeric_limits<float>::quiet_NaN();
+  auto const nand = std::numeric_limits<double>::quiet_NaN();
+
+  column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};      // NaN mixed with non-NaN
+  column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};        // double variant
+  column_wrapper<float> col_f_allnan{{nanf, nanf, nanf, nanf}};   // all NaN
+  column_wrapper<float> col_f_nonan{{1.0f, 2.0f, 3.0f, 4.0f}};    // control: no NaN
+
+  auto const expected = table_view{{col_f_nan, col_d_nan, col_f_allnan, col_f_nonan}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointWithNaNStats.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  auto const stats_f_nan    = get_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats_d_nan    = get_statistics(fmd.row_groups[0].columns[1]);
+  auto const stats_f_allnan = get_statistics(fmd.row_groups[0].columns[2]);
+  auto const stats_f_nonan  = get_statistics(fmd.row_groups[0].columns[3]);
+
+  // any column containing a NaN must not expose min/max
+  EXPECT_FALSE(stats_f_nan.min_value.has_value());
+  EXPECT_FALSE(stats_f_nan.max_value.has_value());
+  EXPECT_FALSE(stats_d_nan.min_value.has_value());
+  EXPECT_FALSE(stats_d_nan.max_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.min_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.max_value.has_value());
+
+  // a column with no NaN is unaffected and still carries min/max
+  EXPECT_TRUE(stats_f_nonan.min_value.has_value());
+  EXPECT_TRUE(stats_f_nonan.max_value.has_value());
+}
+
 TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
 {
   std::array coldata{// in-range 7 bit.  should truncate to "yyyyyyyz"

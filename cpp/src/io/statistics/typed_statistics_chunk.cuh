@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -112,6 +112,7 @@ struct typed_statistics_chunk<T, true> {
 
   uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum{false};     //!< Nonzero if sum is valid
+  uint8_t has_nan{false};     //!< Nonzero if a NaN was seen (floating point only)
 
   __device__ typed_statistics_chunk()
     : minimum_value(detail::minimum_identity<E>()),
@@ -123,6 +124,9 @@ struct typed_statistics_chunk<T, true> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
+    if constexpr (std::is_floating_point_v<T>) {
+      if (isnan(elem)) { has_nan = true; }
+    }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     aggregate += detail::aggregation_type<T>::convert(elem);
@@ -138,6 +142,7 @@ struct typed_statistics_chunk<T, true> {
     if (chunk.has_sum) { aggregate += union_member::get<A>(chunk.sum); }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
+    has_nan |= chunk.has_nan;
   }
 };
 
@@ -153,6 +158,7 @@ struct typed_statistics_chunk<T, false> {
 
   uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum{false};     //!< Nonzero if sum is valid
+  uint8_t has_nan{false};     //!< Nonzero if a NaN was seen (floating point only)
 
   __device__ typed_statistics_chunk()
     : minimum_value(detail::minimum_identity<E>()), maximum_value(detail::maximum_identity<E>())
@@ -162,6 +168,9 @@ struct typed_statistics_chunk<T, false> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
+    if constexpr (std::is_floating_point_v<T>) {
+      if (isnan(elem)) { has_nan = true; }
+    }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     has_minmax    = true;
@@ -175,6 +184,7 @@ struct typed_statistics_chunk<T, false> {
     }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
+    has_nan |= chunk.has_nan;
   }
 };
 
@@ -209,6 +219,7 @@ __inline__ __device__ typed_statistics_chunk<T, include_aggregate> block_reduce(
     count_reduce(storage.template get<uint32_t>()).Sum(output_chunk.null_count);
   __syncthreads();
   output_chunk.has_minmax = __syncthreads_or(output_chunk.has_minmax);
+  output_chunk.has_nan    = __syncthreads_or(output_chunk.has_nan);
 
   // FIXME : Is another syncthreads needed here?
   if constexpr (include_aggregate) {
@@ -237,6 +248,7 @@ get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
   stat.non_nulls  = chunk.non_nulls;
   stat.null_count = chunk.null_count;
   stat.has_minmax = chunk.has_minmax;
+  stat.has_nan    = chunk.has_nan;
   stat.has_sum    = [&]() {
     // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
