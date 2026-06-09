@@ -34,6 +34,12 @@ namespace cudf {
 namespace io {
 namespace {
 
+char const* set_up_kvikio_before_handle_construction(char const* filepath)
+{
+  kvikio_integration::set_up_kvikio();
+  return filepath;
+}
+
 /**
  * @brief Base class for kvikIO-based data sources.
  */
@@ -140,7 +146,8 @@ class kvikio_source : public datasource {
  */
 class file_source : public kvikio_source<kvikio::FileHandle> {
  public:
-  explicit file_source(char const* filepath) : kvikio_source{kvikio::FileHandle(filepath, "r")}
+  explicit file_source(char const* filepath)
+    : kvikio_source{kvikio::FileHandle(set_up_kvikio_before_handle_construction(filepath), "r")}
   {
     CUDF_EXPECTS(!_kvikio_handle.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO(
@@ -360,7 +367,7 @@ class user_datasource_wrapper : public datasource {
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
  public:
   explicit remote_file_source(char const* filepath)
-    : kvikio_source{kvikio::RemoteHandle::open(filepath)}
+    : kvikio_source{kvikio::RemoteHandle::open(set_up_kvikio_before_handle_construction(filepath))}
   {
   }
 
