@@ -396,28 +396,29 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
   bitmask_type* d_null_mask)
 {
   auto const num_rows = static_cast<size_type>(d_sizes.size());
-  auto const tid      = cudf::detail::grid_1d::global_thread_id();
-  if (tid >= num_rows) { return; }
-  auto const row = tid;
+  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
 
-  if (!cudf::bit_is_set(d_null_mask, row)) {
-    d_sizes[row]       = 0;
-    d_src_offsets[row] = 0;
-    return;
+  for (auto row = tid; row < num_rows; row += stride) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
+      d_sizes[row]       = 0;
+      d_src_offsets[row] = 0;
+      continue;
+    }
+
+    auto const [meta, val] = metadata_and_value_at(metadata, values, row);
+
+    auto const field = resolve_path(meta, val, path);
+    if (field.empty()) {
+      d_sizes[row]       = 0;
+      d_src_offsets[row] = 0;
+      cudf::clear_bit(d_null_mask, row);
+      continue;
+    }
+
+    d_sizes[row]       = static_cast<size_type>(field.size());
+    d_src_offsets[row] = static_cast<size_type>(field.data() - val.data());
   }
-
-  auto const [meta, val] = metadata_and_value_at(metadata, values, row);
-
-  auto const field = resolve_path(meta, val, path);
-  if (field.empty()) {
-    d_sizes[row]       = 0;
-    d_src_offsets[row] = 0;
-    cudf::clear_bit(d_null_mask, row);
-    return;
-  }
-
-  d_sizes[row]       = static_cast<size_type>(field.size());
-  d_src_offsets[row] = static_cast<size_type>(field.data() - val.data());
 }
 
 template <typename T>
@@ -425,27 +426,28 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   cudf::detail::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
 {
   auto const num_rows = static_cast<size_type>(d_output.size());
-  auto const tid      = cudf::detail::grid_1d::global_thread_id();
-  if (tid >= num_rows) { return; }
-  auto const row = tid;
+  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
 
-  if (!cudf::bit_is_set(d_null_mask, row)) {
-    d_output[row] = 0;
-    return;
-  }
+  for (auto row = tid; row < num_rows; row += stride) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
+      d_output[row] = 0;
+      continue;
+    }
 
-  auto const val_begin = values.offset_at(row);
-  auto const val_end   = values.offset_at(row + 1);
-  auto const val_child = values.child();
-  device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
-                                       static_cast<std::size_t>(val_end - val_begin)};
+    auto const val_begin = values.offset_at(row);
+    auto const val_end   = values.offset_at(row + 1);
+    auto const val_child = values.child();
+    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
+                                         static_cast<std::size_t>(val_end - val_begin)};
 
-  auto const decoded = decode_int<T>(val);
-  if (decoded.has_value()) {
-    d_output[row] = *decoded;
-  } else {
-    d_output[row] = 0;
-    cudf::clear_bit(d_null_mask, row);
+    auto const decoded = decode_int<T>(val);
+    if (decoded.has_value()) {
+      d_output[row] = *decoded;
+    } else {
+      d_output[row] = 0;
+      cudf::clear_bit(d_null_mask, row);
+    }
   }
 }
 
