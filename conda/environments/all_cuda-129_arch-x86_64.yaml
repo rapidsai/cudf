@@ -19,7 +19,6 @@ dependencies:
 - cuda-cudart-dev
 - cuda-nvcc
 - cuda-nvrtc-dev
-- cuda-nvrtc-static
 - cuda-nvtx-dev
 - cuda-python>=12.9.2,<13.0
 - cuda-sanitizer-api
@@ -45,7 +44,6 @@ dependencies:
 - libkvikio==26.8.*,>=0.0.0a0
 - libnvcomp-dev==5.2.0.10
 - libnvjitlink-dev
-- libnvjitlink-static
 - librapidsmpf==26.8.*,>=0.0.0a0
 - librdkafka>=2.11.1,<2.12.0
 - librmm==26.8.*,>=0.0.0a0

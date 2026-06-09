@@ -20,7 +20,8 @@ project(
   LANGUAGES CXX
 )
 
-option(RTCX_STATIC_LINKING "Only use static linking for RTCX dependencies" ON)
+option(RTCX_STATIC_LINK_NVRTC "Use static linking for NVRTC" OFF)
+option(RTCX_STATIC_LINK_NVJITLINK "Use static linking for NVJitLink" OFF)
 
 find_package(CUDAToolkit REQUIRED)
 
@@ -71,18 +72,18 @@ target_include_directories(
   PRIVATE ${CUDAToolkit_INCLUDE_DIRS}
 )
 
-target_link_libraries(rtcx PRIVATE zstd ${CMAKE_DL_LIBS} nvtx3::nvtx3-cpp CUDA::cuda_driver)
+target_link_libraries(rtcx PRIVATE zstd ${CMAKE_DL_LIBS} nvtx3::nvtx3-cpp)
 
-if(RTCX_STATIC_LINKING)
-  target_link_libraries(
-    rtcx PRIVATE CUDA::nvJitLink_static CUDA::nvrtc_static CUDA::nvrtc_builtins_static
-  )
-  target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBCUDA=1)
+if(RTCX_STATIC_LINK_NVRTC)
+  target_link_libraries(rtcx PRIVATE CUDA::nvrtc_static CUDA::nvrtc_builtins_static)
   target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVRTC=1)
+else()
+  target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVRTC=0)
+endif()
+
+if(RTCX_STATIC_LINK_NVJITLINK)
+  target_link_libraries(rtcx PRIVATE CUDA::nvJitLink_static)
   target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVJITLINK=1)
 else()
-  target_link_libraries(rtcx PRIVATE CUDA::nvJitLink CUDA::nvrtc CUDA::nvrtc_builtins)
-  target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBCUDA=0)
-  target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVRTC=0)
   target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVJITLINK=0)
 endif()

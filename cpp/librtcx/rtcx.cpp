@@ -25,16 +25,12 @@
 #include <numeric>
 #include <source_location>
 
-#ifndef RTCX_STATIC_LINK_LIBCUDA
-#define RTCX_STATIC_LINK_LIBCUDA 1
-#endif
-
 #ifndef RTCX_STATIC_LINK_LIBNVRTC
-#define RTCX_STATIC_LINK_LIBNVRTC 1
+#define RTCX_STATIC_LINK_LIBNVRTC 0
 #endif
 
 #ifndef RTCX_STATIC_LINK_LIBNVJITLINK
-#define RTCX_STATIC_LINK_LIBNVJITLINK 1
+#define RTCX_STATIC_LINK_LIBNVJITLINK 0
 #endif
 
 #define RTCX_EXPECTS(condition_, reason_, exception_type_)                               \
@@ -316,33 +312,20 @@ struct LibCuda {
   LibCuda(LibCuda&&)                 = delete;
   LibCuda& operator=(LibCuda const&) = delete;
   LibCuda& operator=(LibCuda&&)      = delete;
-  ~LibCuda()
-  {
-#if !RTCX_STATIC_LINK_LIBCUDA
-    ::dlclose(_handle);
-#endif
-  }
+  ~LibCuda() { ::dlclose(_handle); }
 
   static void* _load()
   {
-#if !RTCX_STATIC_LINK_LIBCUDA
     std::string lib_names[] = {"libcuda.so.1"};  // NOLINT(modernize-avoid-c-arrays)
     return load_dso("libcuda.so", lib_names);
-#else
-    return nullptr;
-#endif
   }
 
  private:
   void _load_symbols()
   {
-#if !RTCX_STATIC_LINK_LIBCUDA
 #define DO_IT(func) \
   this->func =      \
     reinterpret_cast<decltype(cu##func)*>(get_dso_symbol("libcuda", _handle, "cu" #func));
-#else
-#define DO_IT(func) this->func = ::cu##func;
-#endif
 
     FOR_EACH_CUDA_FUNC(DO_IT)
 
