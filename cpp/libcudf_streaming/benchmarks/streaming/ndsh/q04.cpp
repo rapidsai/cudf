@@ -240,8 +240,6 @@ rapidsmpf::streaming::Actor fanout_bounded(std::shared_ptr<rapidsmpf::streaming:
  */
 int main(int argc, char** argv)
 {
-  CUDF_CUDA_TRY(cudaFree(nullptr));
-
   rapidsmpf::ndsh::FinalizeMPI finalize{};
   CUDF_CUDA_TRY(cudaFree(nullptr));
   // work around https://github.com/rapidsai/cudf/issues/20849

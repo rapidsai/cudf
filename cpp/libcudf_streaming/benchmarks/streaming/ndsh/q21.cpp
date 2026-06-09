@@ -224,6 +224,7 @@ rapidsmpf::streaming::Actor filter_grouped_greater(
   std::shared_ptr<coro::latch> latch)
 {
   rapidsmpf::streaming::ShutdownAtExit c{ch_in, ch_out};
+  bool released_lineitem_read = false;
 
   while (!ch_out->is_shutdown()) {
     auto msg = co_await ch_in->receive();
@@ -238,14 +239,18 @@ rapidsmpf::streaming::Actor filter_grouped_greater(
                              cudf::data_type(cudf::type_id::BOOL8),
                              chunk.stream(),
                              ctx->br()->device_mr());
-    latch->count_down();
     co_await ch_out->send(cudf_streaming::streaming::to_message(
       msg.sequence_number(),
       std::make_unique<cudf_streaming::streaming::TableChunk>(
         cudf::apply_boolean_mask(
           chunk.table_view().select({0}), mask->view(), chunk.stream(), ctx->br()->device_mr()),
         chunk.stream())));
+    if (!released_lineitem_read) {
+      latch->count_down();
+      released_lineitem_read = true;
+    }
   }
+  if (!released_lineitem_read) { latch->count_down(); }
   co_await ch_out->drain(ctx->executor());
 }
 
