@@ -10,9 +10,11 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.integrations.partition import unpack_and_concat
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 from cudf_streaming.streaming.table_chunk import TableChunk
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.chunks.packed_data import PackedDataChunk
 from rapidsmpf.streaming.coll.allgather import AllGather, allgather
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
@@ -52,7 +54,7 @@ def test_allgather_actor(context: Context, comm: Communicator) -> None:
     ]
     inputs = [
         PackedDataChunk.from_packed_data(
-            PackedData.from_cudf_packed_columns(
+            packed_data_from_cudf_packed_columns(
                 plc.contiguous_split.pack(table, stream=stream),
                 stream,
                 context.br(),
@@ -111,7 +113,7 @@ async def generate_inputs(
         msg = Message(
             i,
             PackedDataChunk.from_packed_data(
-                PackedData.from_cudf_packed_columns(
+                packed_data_from_cudf_packed_columns(
                     plc.contiguous_split.pack(table, stream=stream),
                     stream,
                     context.br(),

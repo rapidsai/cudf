@@ -12,15 +12,18 @@ import pylibcudf as plc
 import pytest
 from pylibcudf.contiguous_split import pack
 
-from cudf_streaming.integrations.partition import unpack_and_concat
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 from rapidsmpf.coll import AllGather
 from rapidsmpf.memory.buffer_resource import BufferResource
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     import rmm.mr
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.packed_data import PackedData
     from rmm.pylibrmm.stream import Stream
 
 
@@ -52,7 +55,7 @@ def generate_packed_data(
     values = np.arange(offset, offset + n_elements, dtype=np.int32)
     table = plc.Table([plc.Column.from_array(values, stream=stream)])
     packed_columns = pack(table, stream=stream)
-    return PackedData.from_cudf_packed_columns(packed_columns, stream, br)
+    return packed_data_from_cudf_packed_columns(packed_columns, stream, br)
 
 
 def validate_packed_data(

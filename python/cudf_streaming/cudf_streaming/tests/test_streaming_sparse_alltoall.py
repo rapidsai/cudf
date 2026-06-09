@@ -10,20 +10,23 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.integrations.partition import unpack_and_concat
-from rapidsmpf.memory.packed_data import PackedData
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.context import Context
 
 
 def make_packed_data(context: Context, values: np.ndarray) -> PackedData:
     stream = context.get_stream_from_pool()
     table = plc.Table([plc.Column.from_array(values, stream=stream)])
-    return PackedData.from_cudf_packed_columns(
+    return packed_data_from_cudf_packed_columns(
         plc.contiguous_split.pack(table, stream=stream),
         stream,
         context.br(),
