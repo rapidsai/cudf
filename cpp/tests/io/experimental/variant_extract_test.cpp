@@ -446,15 +446,15 @@ inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 
 TEST_F(ExtractVariantFieldTest, NestedPathMultiRowMixedNulls)
 {
-  // Row 0: { a: { b: INT32(1) } } -> path "$.a.b" = 1.  Dictionary strings are stored in
-  // non-lexicographic order ({"b", "a"})
-  auto const m0 = build_metadata({"b", "a"});
-  auto const v0 =
-    build_single_field_object(/*fid=a*/ 1, build_single_field_object(/*fid=b*/ 0, enc_int32(1)));
-  // Row 1: { a: INT32(5) } -> non-object intermediate at "a" -> null
-  auto const m1 = build_metadata({"a"});
-  auto const v1 = build_single_field_object(/*fid=a*/ 0, enc_int32(5));
-  // Row 2: { q: INT32(7) } -> key "a" missing from dict -> null
+  // Row 0: { 1st: { foo-bar: INT32(1) } } -> path "$.1st.foo-bar" = 1.  Dictionary strings are
+  // stored in non-lexicographic order ({"foo-bar", "1st"})
+  auto const m0 = build_metadata({"foo-bar", "1st"});
+  auto const v0 = build_single_field_object(
+    /*fid=1st*/ 1, build_single_field_object(/*fid=foo-bar*/ 0, enc_int32(1)));
+  // Row 1: { 1st: INT32(5) } -> non-object intermediate at "1st" -> null
+  auto const m1 = build_metadata({"1st"});
+  auto const v1 = build_single_field_object(/*fid=1st*/ 0, enc_int32(5));
+  // Row 2: { q: INT32(7) } -> key "1st" missing from dict -> null
   auto const m2 = build_metadata({"q"});
   auto const v2 = build_single_field_object(/*fid=q*/ 0, enc_int32(7));
 
@@ -465,7 +465,7 @@ TEST_F(ExtractVariantFieldTest, NestedPathMultiRowMixedNulls)
   cudf::test::structs_column_wrapper col{{meta, val}};
 
   auto got = cudf::io::parquet::experimental::extract_variant_field(
-    col, "$.a.b", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+    col, "$.1st.foo-bar", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0, 0}, {true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);

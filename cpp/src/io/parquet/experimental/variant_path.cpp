@@ -8,8 +8,11 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cstddef>
+#include <format>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -20,24 +23,18 @@ namespace {
 
 [[noreturn]] void throw_parse_error(std::string_view path, std::size_t pos, std::string_view msg)
 {
-  CUDF_FAIL("invalid variant path \"" + std::string{path} + "\" at position " +
-              std::to_string(pos) + ": " + std::string{msg},
+  CUDF_FAIL(std::format("invalid variant path \"{}\" at position {}: {}", path, pos, msg),
             std::invalid_argument);
 }
 
-std::size_t read_unquoted_name(std::string_view path, std::size_t pos, std::string& out)
+// Reads a maximal run of name characters from the front of `tail`.
+[[nodiscard]] std::string read_unquoted_name(std::string_view tail)
 {
-  auto const start = pos;
-  auto const len   = path.size();
-  if (pos >= len || !is_name_char(path[pos])) {
-    throw_parse_error(path, pos, "field name cannot be empty");
+  std::size_t n = 0;
+  while (n < tail.size() && is_name_char(tail[n])) {
+    ++n;
   }
-  ++pos;
-  while (pos < len && is_name_char(path[pos])) {
-    ++pos;
-  }
-  out.assign(path.data() + start, pos - start);
-  return pos;
+  return std::string{tail.substr(0, n)};
 }
 
 }  // namespace
@@ -56,18 +53,16 @@ std::vector<std::string> parse_variant_path(std::string_view path)
     char const c = path[pos];
     if (c == '.') {
       ++pos;
-      if (pos >= len) { throw_parse_error(path, pos - 1, "trailing '.' with no field name"); }
-      std::string name;
-      pos = read_unquoted_name(path, pos, name);
-      steps.emplace_back(std::move(name));
-    } else if (first && is_name_char(c)) {
-      // Allow a bare leading name (e.g. "x" or "foo" with no leading '$').
-      std::string name;
-      pos = read_unquoted_name(path, pos, name);
-      steps.emplace_back(std::move(name));
-    } else {
+      if (pos >= len || !is_name_char(path[pos])) {
+        throw_parse_error(path, pos - 1, "trailing '.' with no field name");
+      }
+    } else if (!(first && is_name_char(c))) {
+      // Not a '.' step or a bare leading name (e.g. "x", "$foo") - invalid
       throw_parse_error(path, pos, "unexpected character in variant path");
     }
+
+    steps.emplace_back(read_unquoted_name(path.substr(pos)));
+    pos += steps.back().size();
     first = false;
   }
 
