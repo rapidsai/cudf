@@ -74,7 +74,9 @@ class ShufflingActor(RapidsMPFActor):
                 ),
                 plc.Column.from_array(rng.integers(0, 1000, self._num_rows)),
                 plc.Column.from_iterable_of_py(
-                    ["cat", "dog"] * (self._num_rows // 2),
+                    (["cat", "dog"] * ((self._num_rows + 1) // 2))[
+                        : self._num_rows
+                    ],
                     plc.DataType(plc.TypeId.STRING),
                 ),
             ]
