@@ -6,6 +6,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -94,7 +95,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       counting_iter,
       counting_iter + col.size(),
-      null_aware_to_sum_overflow<DeviceType>{*dcol},
+      null_replaced_to_sum_overflow<DeviceType>{*dcol},
       initial_value,
       overflow_sum_op<DeviceType>{});
   } else {
@@ -115,8 +116,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
 
 struct sum_with_overflow_dispatcher {
   template <typename Source>
-    requires((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-             cudf::is_fixed_point<Source>())
+    requires(cudf::detail::is_sum_with_overflow_supported<Source>())
   std::unique_ptr<cudf::scalar> operator()(column_view const& col,
                                            std::optional<std::reference_wrapper<scalar const>> init,
                                            rmm::cuda_stream_view stream,
@@ -126,8 +126,7 @@ struct sum_with_overflow_dispatcher {
   }
 
   template <typename Source>
-    requires(!((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-               cudf::is_fixed_point<Source>()))
+    requires(!cudf::detail::is_sum_with_overflow_supported<Source>())
   std::unique_ptr<cudf::scalar> operator()(column_view const&,
                                            std::optional<std::reference_wrapper<scalar const>>,
                                            rmm::cuda_stream_view,

@@ -96,8 +96,7 @@ struct reduction_function<Source, cudf::aggregation::SUM> : public base_reductio
 };
 
 template <typename Source>
-  requires((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-           cudf::is_fixed_point<Source>())
+  requires(cudf::detail::is_sum_with_overflow_supported<Source>())
 struct reduction_function<Source, cudf::aggregation::SUM_WITH_OVERFLOW>
   : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const

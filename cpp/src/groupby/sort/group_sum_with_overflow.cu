@@ -7,6 +7,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/reduction/detail/sum_with_overflow.cuh>
@@ -32,13 +33,6 @@
 namespace cudf::groupby::detail {
 namespace {
 
-template <typename Source>
-constexpr bool is_supported()
-{
-  return (cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-         cudf::is_fixed_point<Source>();
-}
-
 // Splits a reduced {sum, wraps} accumulator into the (sum, overflow-flag) pair of the output
 // struct.
 template <typename DeviceType>
@@ -52,7 +46,7 @@ struct split_accumulator {
 
 struct group_sum_with_overflow_fn {
   template <typename Source>
-    requires(is_supported<Source>())
+    requires(cudf::detail::is_sum_with_overflow_supported<Source>())
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
                                      cudf::device_span<size_type const> group_labels,
@@ -72,7 +66,7 @@ struct group_sum_with_overflow_fn {
     // Segmented reduction per group, written straight into the two struct children.
     auto const values_in = cuda::make_transform_iterator(
       cuda::counting_iterator<size_type>{0},
-      cudf::reduction::detail::null_aware_to_sum_overflow<DeviceType>{*dcol});
+      cudf::reduction::detail::null_replaced_to_sum_overflow<DeviceType>{*dcol});
     auto const children_out = cuda::transform_output_iterator{
       cuda::make_zip_iterator(sum_child->mutable_view().begin<DeviceType>(),
                               overflow_child->mutable_view().begin<bool>()),
@@ -114,7 +108,7 @@ struct group_sum_with_overflow_fn {
   }
 
   template <typename Source, typename... Args>
-    requires(!is_supported<Source>())
+    requires(!cudf::detail::is_sum_with_overflow_supported<Source>())
   std::unique_ptr<column> operator()(Args&&...) const
   {
     CUDF_FAIL("SUM_WITH_OVERFLOW is only supported for signed integral and fixed-point types");
