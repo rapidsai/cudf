@@ -72,3 +72,12 @@ Most users interact with them through `StreamingOptions` fields rather than dire
       StreamingExecutor,
       StreamingFallbackMode,
 ```
+
+## Quent Integration
+
+cudf-polars can emit [Quent events](https://github.com/rapidsai/quent), which can be
+used to profile your queries.
+
+```{eval-rst}
+.. automodule:: cudf_polars.quent
+```
