@@ -134,6 +134,7 @@ struct rolling_request {
  * @param preceding Type of the preceding window.
  * @param following Type of the following window.
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return pair of preceding and following columns that define the window bounds for each row,
  * suitable for passing to `rolling_window`.
  */
@@ -144,7 +145,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a fixed-size rolling window function to the values in a column.

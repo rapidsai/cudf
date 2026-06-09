@@ -115,6 +115,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @param preceding Type of the preceding window. Must be `unbounded` or `current_row`.
  * @param following Type of the following window. Must be `unbounded` or `current_row`.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @return Pair of preceding and following columns suitable for passing to `rolling_window`.
  */
 [[nodiscard]] std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
@@ -124,7 +125,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   host_span<null_order const> null_orders,
   range_window_type preceding,
   range_window_type following,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf
