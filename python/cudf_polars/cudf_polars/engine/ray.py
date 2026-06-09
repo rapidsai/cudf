@@ -436,7 +436,6 @@ class RankActor:
             self._py_executor,
             ir,
             config_options,
-            collect_metadata=collect_metadata,
             local_quent_context=local_quent_context,
             query_id=query_id,
         )
