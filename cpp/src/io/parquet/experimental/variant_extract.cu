@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/utilities/block_utils.cuh"
 #include "variant_path.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -318,9 +319,7 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
       variant_value_header(value_metadata) != static_cast<int>(expected)) {
     return cuda::std::nullopt;
   }
-  T v;
-  cuda::std::memcpy(&v, enc.data() + 1, sizeof(T));
-  return v;
+  return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
 __device__ inline device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
@@ -360,8 +359,7 @@ __device__ inline cuda::std::optional<device_span<uint8_t const>> decode_string(
     // Long string: 1-byte header + 4-byte LE length + char bytes
     constexpr std::size_t long_string_prefix_bytes = 1 + sizeof(uint32_t);
     if (len < long_string_prefix_bytes) { return cuda::std::nullopt; }
-    uint32_t str_len;
-    cuda::std::memcpy(&str_len, enc.data() + 1, sizeof(str_len));
+    auto const str_len = cudf::io::unaligned_load<uint32_t>(enc.data() + 1);
     // Encoded length claims more char bytes than the buffer holds: truncated/malformed blob
     if (long_string_prefix_bytes + str_len > len) { return cuda::std::nullopt; }
     return enc.subspan(long_string_prefix_bytes, str_len);
