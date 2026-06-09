@@ -7,14 +7,14 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.memory.memory_reservation import opaque_memory_usage
-from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import (
+from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
