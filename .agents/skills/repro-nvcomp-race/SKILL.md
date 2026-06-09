@@ -38,21 +38,21 @@ Clone to `~/` (only the `tpch_generator/` is used; the C++ reproducer is already
 
 Inspect `~/nvcomp-zstd-reproducer/tpch_generator/generate.py` and `~/nvcomp-zstd-reproducer/tpch_generator/requirements.txt` to confirm the generator interface and Python deps.
 
-### Step 2: Install Python deps and generate SF1 TPC-H ZSTD data (if not already generated)
+### Step 2: Install Python deps and generate SF10 TPC-H ZSTD data (if not already generated)
 
 ```bash
 pip install 'duckdb>=0.10.0'
 mkdir -p ~/data
-python ~/nvcomp-zstd-reproducer/tpch_generator/generate.py ~/data/tpch_sf1 \
-    --scale-factor 1 --files-per-table 100 --compression zstd
+python ~/nvcomp-zstd-reproducer/tpch_generator/generate.py ~/data/tpch_sf10 \
+    --scale-factor 10 --files-per-table 1000 --compression zstd
 ```
 
-Expected output: 602 files, ~280 MB total across 8 tables (lineitem is the largest at 100 files / ~183 MB).
+Expected output: 6002 files, ~3 GB total across 8 tables (lineitem is the largest at 1000 files / ~2 GB).
 
 Verify ZSTD compression on one file before proceeding:
 
 ```bash
-python -c "import pyarrow.parquet as pq; m = pq.ParquetFile('/home/coder/data/tpch_sf1/lineitem/00000-lineitem.parquet'); print(m.metadata.row_group(0).column(0).compression)"
+python -c "import pyarrow.parquet as pq; m = pq.ParquetFile('/home/coder/data/tpch_sf10/lineitem/00000-lineitem.parquet'); print(m.metadata.row_group(0).column(0).compression)"
 # Expected: ZSTD
 ```
 
@@ -96,18 +96,18 @@ export CUDA_VISIBLE_DEVICES=0
 
 # Tier 1: quick smoke
 export LIBCUDF_NVCOMP_POLICY=ALWAYS && /home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
-    /home/coder/data/tpch_sf1 --iterations 30 --threads 8
+    /home/coder/data/tpch_sf10 --iterations 30 --threads 8
 
 # Tier 2: if Tier 1 passes, increase pressure
 export LIBCUDF_NVCOMP_POLICY=ALWAYS && /home/coder/cudf/cpp/examples/nvcomp_zstd_repro/build/nvcomp_zstd_repro \
-    /home/coder/data/tpch_sf1 --iterations 50 --threads 16
+    /home/coder/data/tpch_sf10 --iterations 30 --threads 16
 ```
 
 If still passing, loop the run until failure or further increase `--threads` / `--iterations`.
 
 **Note that** setting env-var `LIBCUDF_NVCOMP_POLICY=OFF` should make the race condition go away for the same test that was failing under the `ALWAYS` policy.
 
-**Known reproduction:** on `umb-b200-220` the bug was reproduced with `--threads 16 --iterations 50` against full SF1 (602 files), failing around iteration ~46 with:
+**Known reproduction:** on an Ada GPU, the bug was reproduced with `--threads 16 --iterations 30` against full SF10 (6002 files), failing as early as iteration 1 with:
 
 ```
 CUDF failure at: /home/coder/cudf/cpp/src/io/parquet/reader_impl_chunking_utils.cu:628: Error during decompression
@@ -134,7 +134,7 @@ When reporting, capture the exact failure line. Expect one of:
 Tips for raising trigger probability:
 - More threads (8 → 16 → 32)
 - More iterations (30 → 50 → 100)
-- Point at full SF1 dir (more files = more reader create/destroy churn) rather than a single table
+- Point at full SF10 dir (more files = more reader create/destroy churn) rather than a single table
 - Drop OS file cache between runs (`sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'` if permitted) for cold-cache pressure.
 
 ## Notes / Caveats
