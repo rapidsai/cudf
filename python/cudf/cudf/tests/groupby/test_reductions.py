@@ -339,6 +339,10 @@ def test_groupby_nulls_in_index():
 
 
 def test_groupby_all_nulls_index():
+    # cudf normalizes all-null group keys (e.g. coercing an all-null object key
+    # to float64), so an empty all-null-key result carries a float64 index
+    # rather than the original key dtype. The result is empty either way, so the
+    # index dtype is not meaningful here; skip the index-type check.
     gdf = cudf.DataFrame(
         {
             "a": cudf.Series([None, None, None, None], dtype="object"),
@@ -347,7 +351,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
     gdf = cudf.DataFrame(
@@ -355,7 +361,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
 

@@ -700,11 +700,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             index = Index._from_column(group_keys[0])
         split = cp.split(indices.values, offsets[1:-1])
-        if get_option("mode.pandas_compatible"):
-            # pandas' ``GroupBy.indices`` returns host numpy arrays; match it
-            # so the dict integrates with pandas-facing code (e.g. under
-            # ``cudf.pandas``). Native cudf keeps the device (cupy) arrays.
-            split = [arr.get() for arr in split]
         return dict(
             zip(
                 index.to_pandas(),
@@ -3900,26 +3895,24 @@ class _Grouping(Serializable):
         self._series_key_column_names = dict(series_key_column_names or {})
         self._handle_by_or_level(by, level)
 
-        if get_option("mode.pandas_compatible"):
-            # pandas treats NaN and null group keys identically, whereas cudf
-            # keeps them distinct, and pandas labels an all-null object key
-            # with a float64 NaN. Externally supplied key columns (e.g. a
-            # Series or array passed as ``by``) also bypass the
-            # ``nans_to_nulls`` conversion applied to ``obj``. Normalize the
-            # key columns here so that, e.g., a float key of ``[None, NaN]``
-            # collapses to a single null group and an all-null object key
-            # produces a float64 NaN group label, matching pandas.
-            normalized = []
-            for col in self._key_columns:
-                if (
-                    isinstance(col.dtype, np.dtype)
-                    and col.dtype.kind == "O"
-                    and len(col)
-                    and col.null_count == len(col)
-                ):
-                    col = column_empty(len(col), np.dtype("float64"))
-                normalized.append(col.nans_to_nulls())
-            self._key_columns = normalized
+        # pandas treats NaN and null group keys identically, and labels an
+        # all-null object key with a float64 NaN. Externally supplied key
+        # columns (e.g. a Series or array passed as ``by``) also bypass the
+        # ``nans_to_nulls`` conversion applied to ``obj``. Normalize the key
+        # columns here so that, e.g., a float key of ``[None, NaN]`` collapses
+        # to a single null group and an all-null object key produces a float64
+        # NaN group label, matching pandas.
+        normalized = []
+        for col in self._key_columns:
+            if (
+                isinstance(col.dtype, np.dtype)
+                and col.dtype.kind == "O"
+                and len(col)
+                and col.null_count == len(col)
+            ):
+                col = column_empty(len(col), np.dtype("float64"))
+            normalized.append(col.nans_to_nulls())
+        self._key_columns = normalized
 
         if len(obj) and not len(self._key_columns):
             raise ValueError("No group keys passed")

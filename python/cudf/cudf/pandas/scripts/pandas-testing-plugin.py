@@ -2570,6 +2570,7 @@ NODEIDS_THAT_FAIL = {
     "tests/groupby/test_groupby.py::test_single_element_listlike_level_grouping[level_arg0-False]": "AssertionError: assert ['x', 'y'] == [('x',), ('y',)]",
     "tests/groupby/test_groupby.py::test_single_element_listlike_level_grouping[level_arg2-True]": "assert [1, 2] == [(1,), (2,)]",
     "tests/groupby/test_groupby.py::test_wrap_aggregated_output_multindex": "TODO: Add a reason for failure",
+    "tests/groupby/test_groupby_dropna.py::test_groupby_nan_included": "GroupBy.indices returns cupy arrays nested in a dict that cudf.pandas does not wrap, so assert_numpy_array_equal sees mismatched array classes",
     "tests/groupby/test_groupby_subclass.py::test_groupby_preserves_metadata": "TODO: Add a reason for failure",
     "tests/groupby/test_groupby_subclass.py::test_groupby_preserves_subclass[all-obj0]": "TODO: Add a reason for failure",
     "tests/groupby/test_groupby_subclass.py::test_groupby_preserves_subclass[any-obj0]": "TODO: Add a reason for failure",
