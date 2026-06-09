@@ -9450,32 +9450,37 @@ public class TableTest extends CudfTestBase {
             new ColumnWriterOptions("value0"),
             true)).build();
     File f = File.createTempFile("test-map", ".parquet");
-    List<HostColumnVector.StructData> list1 =
-        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
-    List<HostColumnVector.StructData> list2 =
-        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
-    List<HostColumnVector.StructData> list3 =
-     Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
-    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
-     Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
-        new HostColumnVector.BasicType(true, DType.STRING)));
-    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-            structType), list1, list2, list3);
-         Table t0 = new Table(listColumn)) {
-      try (TableWriter writer = Table.writeParquetChunked(options, f)) {
-        writer.write(t0);
+    try {
+      List<HostColumnVector.StructData> list1 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+      List<HostColumnVector.StructData> list2 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+      List<HostColumnVector.StructData> list3 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+              new HostColumnVector.BasicType(true, DType.STRING)));
+      try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+              structType), list1, list2, list3);
+           Table t0 = new Table(listColumn)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, f)) {
+          writer.write(t0);
+        }
+        try (ParquetFileReader reader =
+             ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
+                 new Configuration()))) {
+          MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+          assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
+        }
       }
-      ParquetFileReader reader =
-       ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
-           new Configuration()));
-      MessageType schema = reader.getFooter().getFileMetaData().getSchema();
-      assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
-    }
-    try (ColumnVector cv = Table.readParquet(f).getColumn(0);
-         Scalar aString = Scalar.fromString("a");
-         ColumnVector res = cv.getMapValue(aString);
-         ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
-      assertColumnsAreEqual(expected, res);
+      try (Table table = Table.readParquet(f);
+           Scalar aString = Scalar.fromString("a");
+           ColumnVector res = table.getColumn(0).getMapValue(aString);
+           ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+        assertColumnsAreEqual(expected, res);
+      }
+    } finally {
+      f.delete();
     }
   }
 
