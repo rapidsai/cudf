@@ -9,6 +9,9 @@ import cupy
 import pylibcudf as plc
 import pytest
 
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+)
 from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
@@ -406,7 +409,7 @@ def test_shape_accessor(
     expected_shape = (expect.num_rows(), expect.num_columns())
 
     if from_pack:
-        pd = PackedData.from_cudf_packed_columns(
+        pd = packed_data_from_cudf_packed_columns(
             plc.contiguous_split.pack(expect, stream), stream, context.br()
         )
         device_chunk = TableChunk.from_packed_data(pd, br=context.br())
@@ -444,7 +447,7 @@ def test_into_packed_data(
 ) -> None:
     expect = random_table(1024)
     if from_pack:
-        pd = PackedData.from_cudf_packed_columns(
+        pd = packed_data_from_cudf_packed_columns(
             plc.contiguous_split.pack(expect, stream), stream, context.br()
         )
         chunk = TableChunk.from_packed_data(pd, br=context.br())

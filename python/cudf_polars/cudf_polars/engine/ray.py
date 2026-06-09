@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING, Any, cast
 import ray
 import ray.exceptions
 import ucxx._lib.libucxx as ucx_api
+
+import polars as pl
+
+import rmm.mr
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
@@ -21,10 +25,6 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import polars as pl
-
-import rmm.mr
 
 import cudf_polars.quent
 import cudf_polars.quent._logging
@@ -45,9 +45,10 @@ from cudf_polars.utils.config import MemoryResourceConfig, RayContext
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
+
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from rapidsmpf.communicator.communicator import Communicator
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
