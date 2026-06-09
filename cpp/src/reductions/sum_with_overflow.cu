@@ -10,6 +10,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/sum_with_overflow.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -26,49 +27,6 @@
 namespace cudf::reduction::detail {
 
 namespace {
-
-// `wraps` is the net number of times the running sum has stepped outside [MIN, MAX].
-// A final `wraps == 0` means the true sum fits in DeviceType, i.e. no overflow.
-template <typename DeviceType>
-struct sum_overflow_result {
-  DeviceType sum;
-  cudf::size_type wraps;
-
-  CUDF_HOST_DEVICE sum_overflow_result() : sum{0}, wraps{0} {}
-  CUDF_HOST_DEVICE sum_overflow_result(DeviceType s, cudf::size_type w) : sum{s}, wraps{w} {}
-};
-
-template <typename DeviceType>
-struct overflow_sum_op {
-  __device__ sum_overflow_result<DeviceType> operator()(
-    sum_overflow_result<DeviceType> const& lhs, sum_overflow_result<DeviceType> const& rhs) const
-  {
-    auto const r     = cuda::add_overflow<DeviceType>(lhs.sum, rhs.sum);
-    auto const carry = r.overflow ? (rhs.sum > DeviceType{0} ? 1 : -1) : 0;
-    return sum_overflow_result<DeviceType>{r.value, lhs.wraps + rhs.wraps + carry};
-  }
-};
-
-template <typename DeviceType>
-struct to_sum_overflow {
-  __device__ sum_overflow_result<DeviceType> operator()(DeviceType value) const
-  {
-    return sum_overflow_result<DeviceType>{value, 0};
-  }
-};
-
-template <typename DeviceType>
-struct null_aware_to_sum_overflow {
-  cudf::column_device_view dcol;
-
-  CUDF_HOST_DEVICE null_aware_to_sum_overflow(cudf::column_device_view const& d) : dcol{d} {}
-
-  __device__ sum_overflow_result<DeviceType> operator()(cudf::size_type idx) const
-  {
-    return dcol.is_valid(idx) ? sum_overflow_result<DeviceType>{dcol.element<DeviceType>(idx), 0}
-                              : sum_overflow_result<DeviceType>{DeviceType{0}, 0};
-  }
-};
 
 template <typename Source>
 std::unique_ptr<cudf::scalar> make_sum_overflow_struct_scalar(
