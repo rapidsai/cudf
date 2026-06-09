@@ -97,7 +97,7 @@ class ArgumentParser {
               }
             }
             break;
-          case 'r': parse_integer(num_runs, optarg); break;
+          case 'r': parse_integer(num_runs, optarg, 1); break;
           case 'w': parse_integer(num_warmups, optarg); break;
           case 'c': parse_integer(num_columns, optarg); break;
           case 'n': parse_integer(num_local_rows, optarg); break;
