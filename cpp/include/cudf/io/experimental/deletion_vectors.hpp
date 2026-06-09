@@ -67,7 +67,7 @@ class chunked_parquet_reader {
    * Requires the same arguments as the `cudf::io::parquet::experimental::read_parquet()`, and an
    * additional parameter to specify the size byte limit of the output table chunk produced.
    *
-   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit.
+   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
    * @param options Parquet reader options
    * @param deletion_vector_info Information about the deletion vectors and the index column
    * @param stream CUDA stream used for device memory operations and kernel launches
