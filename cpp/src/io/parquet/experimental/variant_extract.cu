@@ -117,14 +117,50 @@ struct object_array_header {
   int num_elements_size;  // bytes holding num_elements
 };
 
+/**
+ * @brief Decode the size fields packed into an object/array value header.
+ *
+ * For object and array values, the 6-bit value header (bits 2..7 of the value metadata byte)
+ * encodes the widths used by the rest of the value. The layout differs between the two:
+ *
+ *   object value_header bits:  | is_large (1) | field_id_size-1 (2) | field_offset_size-1 (2) |
+ *   array  value_header bits:  |          is_large (1)             | field_offset_size-1 (2) |
+ *
+ * where each `*_size-1` field stores (width in bytes - 1), so the decoded width is the field + 1
+ * (1..4 bytes), and `is_large` selects the width of the `num_elements` field: 4 bytes if set,
+ * else 1 byte. Arrays have no field ids, so `field_id_size` is 0.
+ *
+ * @param value_header The 6-bit value header (see variant_value_header)
+ * @param is_object True for object values, false for array values
+ * @return The decoded byte widths
+ */
 __device__ inline object_array_header decode_object_array_header(int value_header, bool is_object)
 {
   int const large_bit = is_object ? 4 : 2;
-  return {(value_header & 0x03) + 1,
-          is_object ? ((value_header >> 2) & 0x03) + 1 : 0,
-          ((value_header >> large_bit) & 0x01) ? 4 : 1};
+  bool const is_large = (value_header >> large_bit) & 0x01;
+
+  return {.field_offset_size = (value_header & 0x03) + 1,
+          .field_id_size     = is_object ? ((value_header >> 2) & 0x03) + 1 : 0,
+          .num_elements_size = is_large ? 4 : 1};
 }
 
+/**
+ * @brief Compute the total encoded byte length of a single VARIANT value.
+ *
+ * Every value starts with a 1-byte value metadata header (`basic_type` in bits 0..1, `value_header`
+ * in bits 2..7); the bytes that follow depend on the basic type:
+ *
+ *   - primitive (0): header + a fixed payload keyed by the primitive type id. Binary/long_string
+ *     carry a 4-byte little-endian length prefix followed by that many payload bytes.
+ *   - short_string (1): header + `value_header` payload bytes (the header is the string length).
+ *   - object/array (2/3): header + num_elements + field-id list + field-offset list + values; the
+ *     total values-region size is read from the trailing field_offset (the "sentinel" at index
+ *     num_elements). See decode_object_array_header / locate_object_field for the sub-layout.
+ *
+ * @param enc The encoded value bytes (must begin at the value metadata byte)
+ * @return The total length in bytes of the value, or nullopt if `enc` is empty/malformed or the
+ *         type id is unrecognized
+ */
 __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_t const> enc)
 {
   if (enc.size() < 1) { return cuda::std::nullopt; }
@@ -193,6 +229,25 @@ __device__ inline cuda::std::optional<uint64_t> variant_value_length(device_span
   return values_base + sentinel.value();
 }
 
+/**
+ * @brief Find the dictionary index of a key in a VARIANT metadata blob.
+ *
+ * The metadata blob is the per-row string dictionary, laid out as:
+ *
+ *   byte 0:          header        | version (4) | sorted (1) | unused (1) | offset_size-1 (2) |
+ *   bytes 1..:       dictionary_size   (offset_size bytes, little-endian) = number of keys N
+ *   next (N+1)*offset_size bytes:  offsets[0..N]   (offset_size bytes each, little-endian)
+ *   remaining bytes: string_data   (concatenated UTF-8 key bytes)
+ *
+ * `offset_size` (1..4 bytes, from the header) is the width of every dictionary_size/offset entry.
+ * Key `i` occupies `string_data[offsets[i] : offsets[i+1]]`; the trailing offset `offsets[N]` is
+ * the total length of `string_data`. Offsets are relative to the start of `string_data`, i.e. to `1
+ * + offset_size + (N+1)*offset_size`.
+ *
+ * @param meta The metadata blob bytes for a single row
+ * @param key The key to search for
+ * @return The dictionary index of `key`, or nullopt if absent or the blob is malformed
+ */
 __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   device_span<uint8_t const> meta, cudf::string_view key)
 {
@@ -235,6 +290,32 @@ __device__ inline cuda::std::optional<size_type> find_key_in_metadata(
   return cuda::std::nullopt;
 }
 
+/**
+ * @brief Locate the encoded bytes of a single field within an object value by field id.
+ *
+ * An object value is laid out as:
+ *
+ *   byte 0:        value metadata | basic_type=object (2) | value_header (6) |
+ *   bytes 1..:     num_elements   (num_elements_size bytes) = number of fields N
+ *   next N*field_id_size bytes:        field_ids[0..N-1]   (sorted by field name)
+ *   next (N+1)*field_offset_size bytes: field_offsets[0..N] (relative to values_base)
+ *   remaining bytes (values_base..):   the concatenated field values
+ *
+ * `num_elements_size`, `field_id_size`, and `field_offset_size` come from the value header (see
+ * decode_object_array_header). The trailing offset `field_offsets[N]` is the total size of the
+ * values region. This scans `field_ids` for `id`, then uses the matching `field_offsets[i]` to
+ * slice out the field's value, whose length is derived from its own header via
+ * variant_value_length.
+ *
+ * Per the spec, field ids/offsets are ordered by the corresponding field names (lexicographically),
+ * but the values themselves may be in any order, so `field_offsets` are not necessarily monotonic —
+ * hence the value length is taken from each field's own header rather than from offset deltas.
+ *
+ * @param val The object value bytes
+ * @param id The dictionary index of the field to locate
+ * @return The encoded bytes of the field value, or an empty span if `val` is not an object, the
+ *         field is absent, or the blob is malformed
+ */
 __device__ inline device_span<uint8_t const> locate_object_field(device_span<uint8_t const> val,
                                                                  int id)
 {
@@ -385,6 +466,13 @@ metadata_and_value_at(cudf::detail::lists_column_device_view const& metadata,
 
 constexpr int block_size = 256;
 
+/**
+ * @brief Resolves `path` in each VARIANT row and record the located field's size and source offset.
+ *
+ * For each non-null row, walks `path` to the target value and writes its byte length to
+ * `d_sizes[row]` and its offset within the row's value blob to `d_src_offsets[row]`. Rows that are
+ * null, or whose path does not resolve, are marked null in `d_null_mask` with a size of 0.
+ */
 CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
   cudf::detail::lists_column_device_view metadata,
   cudf::detail::lists_column_device_view values,
@@ -419,6 +507,14 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
   }
 }
 
+/**
+ * @brief Per-row kernel: decode each VARIANT value blob into an integer of type `T`.
+ *
+ * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
+ * int whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an
+ * int32 output; there is no widening). Rows that are null, or whose value is not an exact-width
+ * match for `T`, are marked null in `d_null_mask` with an output of 0.
+ */
 template <typename T>
 CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   cudf::detail::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
@@ -449,6 +545,14 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
   }
 }
 
+/**
+ * @brief Strings-children functor: decode each VARIANT value blob into a string.
+ *
+ * Used with `make_strings_children`, so it runs in two passes. On the sizing pass (`d_chars ==
+ * nullptr`) it writes each decoded string's length to `d_sizes[row]`; on the write pass it copies
+ * the decoded bytes to `d_chars` at `d_offsets[row]`. Rows that are null, or whose value does not
+ * decode to a string, are marked null in `d_null_mask` with size 0.
+ */
 struct cast_variant_string_fn {
   cudf::detail::lists_column_device_view d_values;
   bitmask_type* d_null_mask;
