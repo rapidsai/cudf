@@ -55,8 +55,7 @@ struct group_sum_with_overflow_fn {
   {
     using DeviceType = cudf::device_storage_type_t<Source>;
 
-    auto const num_rows = values.size();
-    auto const dcol     = cudf::column_device_view::create(values, stream);
+    auto const dcol = cudf::column_device_view::create(values, stream);
 
     auto sum_child =
       cudf::make_fixed_width_column(values.type(), num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -74,7 +73,7 @@ struct group_sum_with_overflow_fn {
 
     thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                           group_labels.begin(),
-                          group_labels.begin() + num_rows,
+                          group_labels.end(),
                           values_in,
                           cuda::make_discard_iterator(),
                           children_out,
@@ -90,7 +89,7 @@ struct group_sum_with_overflow_fn {
       thrust::reduce_by_key(
         rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         group_labels.begin(),
-        group_labels.begin() + num_rows,
+        group_labels.end(),
         cudf::detail::make_validity_iterator(*dcol),
         cuda::make_discard_iterator(),
         group_valid.begin(),

@@ -989,8 +989,8 @@ constexpr bool is_sum_with_overflow_supported()
          cudf::is_fixed_point<Source>();
 }
 
-// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where sum type matches input
-// type, only supports signed integral types (excluding bool) and decimal types
+// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where the sum matches the input
+// type
 template <typename Source>
   requires(is_sum_with_overflow_supported<Source>())
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
