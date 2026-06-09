@@ -43,7 +43,8 @@ enum class join_kind : int32_t {
 };
 
 /**
- * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ * @brief Specifies whether a join implementation should apply an optional prefilter that reduces
+ *        candidate rows before probing the hash table.
  *
  * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
  * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.

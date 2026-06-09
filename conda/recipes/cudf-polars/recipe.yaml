@@ -37,6 +37,7 @@ requirements:
     - python
     - pylibcudf =${{ version }}
     - rapidsmpf =${{ minor_version }}
+    - cudf-streaming =${{ version }}
     - polars>=1.35,<1.42
     - packaging
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
