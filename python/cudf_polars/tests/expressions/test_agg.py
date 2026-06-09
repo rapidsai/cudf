@@ -192,7 +192,11 @@ def test_implode_agg_unsupported(engine: pl.GPUEngine):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_decimal_aggs(engine: pl.GPUEngine, decimal_df: pl.LazyFrame) -> None:
+def test_decimal_aggs(
+    engine: pl.GPUEngine,
+    decimal_df: pl.LazyFrame,
+    xfail_decimal_sum_precision_polars_140,
+) -> None:
     q = decimal_df.with_columns(
         sum=pl.col("a").sum(),
         min=pl.col("a").min(),
@@ -231,7 +235,9 @@ def test_invalid_agg(engine: pl.GPUEngine, request):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_sum_all_null_decimal_dtype(engine: pl.GPUEngine):
+def test_sum_all_null_decimal_dtype(
+    engine: pl.GPUEngine, xfail_decimal_sum_precision_polars_140
+):
     df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
     q = df.select(pl.col("foo").sum())
     assert_gpu_result_equal(q, engine=engine)
