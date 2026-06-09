@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
+from pylibcudf.contiguous_split cimport PackedColumns
 from pylibcudf.table cimport Table
 from rmm.pylibrmm.stream cimport Stream
 
@@ -26,4 +27,9 @@ cpdef object unspill_partitions(
     object partitions,
     BufferResource br,
     object allow_overbooking,
+)
+cpdef object packed_data_from_cudf_packed_columns(
+    PackedColumns packed_columns,
+    Stream stream,
+    BufferResource br,
 )
