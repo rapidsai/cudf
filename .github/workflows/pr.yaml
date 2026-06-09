@@ -734,7 +734,7 @@ jobs:
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
       build_command: |
         sccache --zero-stats;
-        build-all -j0 -DBUILD_BENCHMARKS=ON -DCPM_DOWNLOAD_rapidsmpf=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
