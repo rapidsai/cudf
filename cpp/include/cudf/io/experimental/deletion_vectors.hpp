@@ -68,8 +68,6 @@ class chunked_parquet_reader {
    * additional parameter to specify the size byte limit of the output table chunk produced.
    *
    * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit.
-   *        Because this overload does not take a `pass_read_limit`, a nonzero `chunk_read_limit`
-   *        automatically derives a bounded `pass_read_limit`.
    * @param options Parquet reader options
    * @param deletion_vector_info Information about the deletion vectors and the index column
    * @param stream CUDA stream used for device memory operations and kernel launches
