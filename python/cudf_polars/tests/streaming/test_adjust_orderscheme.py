@@ -8,16 +8,16 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import pytest
+
+import polars as pl
+
+import pylibcudf as plc
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     OrderKey,
     OrderScheme,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.ir import Empty, IRExecutionContext
@@ -30,7 +30,6 @@ from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.engine.spmd import SPMDEngine
