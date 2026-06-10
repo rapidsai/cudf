@@ -249,6 +249,18 @@ class SplitScan(IR):
                 f"Unhandled Scan type for file splitting: {base_scan.typ}"
             )
 
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.base_scan.get_hashable(),
+            tuple(self.paths),
+            self.split_index,
+            self.total_splits,
+            self.parquet_options,
+        )
+
     @classmethod
     def do_evaluate(
         cls,
@@ -316,7 +328,7 @@ class SplitScan(IR):
 
         # Perform the partial read
         with nvtx_annotate_cudf_polars(
-            message=f"SplitScan: {Path(paths[0]).name} [{split_index + 1}/{total_splits}]"
+            message=f"SplitScan: {paths[0]} [{split_index + 1}/{total_splits}]"
         ):
             return Scan.do_evaluate(
                 schema,
@@ -416,8 +428,7 @@ class FusedScan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        names = ", ".join(Path(p).name for p in paths)
-        with nvtx_annotate_cudf_polars(message=f"FusedScan: {names}"):
+        with nvtx_annotate_cudf_polars(message=f"FusedScan: {', '.join(paths)}"):
             return Scan.do_evaluate(
                 schema,
                 typ,

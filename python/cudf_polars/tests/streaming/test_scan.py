@@ -223,7 +223,7 @@ def test_expand_scan_for_rank_fused_and_single_read(
     )
     for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
         assert isinstance(scan, FusedScan)
-        assert scan.base_scan.paths == expected_paths
+        assert scan.paths == expected_paths
 
 
 @pytest.mark.parametrize(
