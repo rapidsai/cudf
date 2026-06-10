@@ -1285,23 +1285,33 @@ public class TableTest extends CudfTestBase {
 
   private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader,
                                       String trueValue, String falseValue) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getFlattenedColumnNames())
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
+                                               .build();
+    CSVOptions readOptions = CSVOptions.builder()
+                                       .includeColumn("i")
+                                       .includeColumn("f")
+                                       .includeColumn("b")
+                                       .includeColumn("str")
+                                       .hasHeader(includeHeader)
+                                       .withDelim(fieldDelim)
+                                       .withTrueValue(trueValue)
+                                       .withFalseValue(falseValue)
+                                       .build();
     try (TempFile outputTempFile = TempFile.create("testWriteCSVToFile", ".csv")) {
       File outputFile = outputTempFile.getFile();
-      Schema schema = Schema.builder()
-                            .column(DType.INT32, "i")
-                            .column(DType.FLOAT64, "f")
-                            .column(DType.BOOL8, "b")
-                            .column(DType.STRING, "str")
-                            .build();
-      CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                                 .withColumnNames(schema.getFlattenedColumnNames())
-                                                 .withIncludeHeader(includeHeader)
-                                                 .withFieldDelimiter((byte)fieldDelim)
-                                                 .withRowDelimiter("\n")
-                                                 .withNullValue("\\N")
-                                                 .withTrueValue(trueValue)
-                                                 .withFalseValue(falseValue)
-                                                 .build();
       try (Table inputTable = new Table.TestBuilder()
           .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
           .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
@@ -1311,16 +1321,6 @@ public class TableTest extends CudfTestBase {
         inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
 
         // Read back.
-        CSVOptions readOptions = CSVOptions.builder()
-                                           .includeColumn("i")
-                                           .includeColumn("f")
-                                           .includeColumn("b")
-                                           .includeColumn("str")
-                                           .hasHeader(includeHeader)
-                                           .withDelim(fieldDelim)
-                                           .withTrueValue(trueValue)
-                                           .withFalseValue(falseValue)
-                                           .build();
         try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
           assertTablesAreEqual(inputTable, readTable);
         }
@@ -1339,39 +1339,39 @@ public class TableTest extends CudfTestBase {
   }
 
   private void testWriteUnquotedCSVToFileImpl(char fieldDelim) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getFlattenedColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withQuoteStyle(QuoteStyle.NONE)
+                                               .build();
+    CSVOptions readOptions = CSVOptions.builder()
+                                       .includeColumn("str")
+                                       .hasHeader(false)
+                                       .withDelim(fieldDelim)
+                                       .withQuoteStyle(QuoteStyle.NONE)
+                                       .build();
     try (TempFile outputTempFile = TempFile.create("testWriteUnquotedCSVToFile", ".csv")) {
       File outputFile = outputTempFile.getFile();
-      Schema schema = Schema.builder()
-                            .column(DType.STRING, "str")
-                            .build();
-      CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                                 .withColumnNames(schema.getFlattenedColumnNames())
-                                                 .withIncludeHeader(false)
-                                                 .withFieldDelimiter((byte)fieldDelim)
-                                                 .withRowDelimiter("\n")
-                                                 .withNullValue("\\N")
-                                                 .withQuoteStyle(QuoteStyle.NONE)
-                                                 .build();
       try (Table inputTable = new Table.TestBuilder()
           .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
                   "are\"brown",
                   "and\nthe\nsky\nis\ngrey")
           .build()) {
         inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+      }
 
-        // Read back.
-        CSVOptions readOptions = CSVOptions.builder()
-                                           .includeColumn("str")
-                                           .hasHeader(false)
-                                           .withDelim(fieldDelim)
-                                           .withQuoteStyle(QuoteStyle.NONE)
-                                           .build();
-        try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
-             Table expected = new Table.TestBuilder()
-               .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
-               .build()) {
-          assertTablesAreEqual(expected, readTable);
-        }
+      // Read back.
+      try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
+           Table expected = new Table.TestBuilder()
+             .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
+             .build()) {
+        assertTablesAreEqual(expected, readTable);
       }
     }
   }
@@ -10000,16 +10000,11 @@ public class TableTest extends CudfTestBase {
         // Reading from Arrow converts decimals to DECIMAL128
         try (StreamedTableReader reader = Table.readArrowIPCChunked(file);
              Table expected = castDecimal64To128(table0)) {
-          boolean done = false;
-          int count = 0;
-          while (!done) {
+          int count;
+          for (count = 0; ; count++) {
             try (Table t = reader.getNextIfAvailable()) {
-              if (t == null) {
-                done = true;
-              } else {
-                assertTablesAreEqual(expected, t);
-                count++;
-              }
+              if (t == null) break;
+              assertTablesAreEqual(expected, t);
             }
           }
           assertEquals(1, count);
@@ -10153,17 +10148,17 @@ public class TableTest extends CudfTestBase {
                     new ColumnWriterOptions("key0", false),
                     new ColumnWriterOptions("value0"),
                     true)).build();
+    List<HostColumnVector.StructData> list1 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+            Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.STRING)));
     try (TempFile tempFile = TempFile.create("test-map", ".orc")) {
       File f = tempFile.getFile();
-      List<HostColumnVector.StructData> list1 =
-              Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
-      List<HostColumnVector.StructData> list2 =
-              Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
-      List<HostColumnVector.StructData> list3 =
-              Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
-      HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
-              Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
-                      new HostColumnVector.BasicType(true, DType.STRING)));
       try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
               structType), list1, list2, list3);
            Table t0 = new Table(listColumn)) {
