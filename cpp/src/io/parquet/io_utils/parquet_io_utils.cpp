@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <format>
 #include <functional>
 #include <mutex>
@@ -121,7 +122,29 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
 
-    return datasource.host_read(len - ender->footer_len - ender_len, ender->footer_len);
+    auto const footer_offset = len - ender->footer_len - ender_len;
+    if (footer_offset >= speculative_read_offset) {
+      // fastpath: the speculative read includes the full footer.
+      auto const footer_start_offset = footer_offset - speculative_read_offset;
+      CUDF_EXPECTS(footer_start_offset + ender->footer_len <= speculative_buffer->size(),
+                   "Speculative metadata read did not include full footer bytes");
+      std::vector<uint8_t> footer_bytes(ender->footer_len);
+      std::memcpy(
+        footer_bytes.data(), speculative_buffer->data() + footer_start_offset, ender->footer_len);
+      return cudf::io::datasource::buffer::create(std::move(footer_bytes));
+    }
+
+    // The speculative read only got part of the footer. Read the missing prefix, then stitch.
+    auto const missing_prefix_size = speculative_read_offset - footer_offset;
+    auto missing_prefix            = datasource.host_read(footer_offset, missing_prefix_size);
+    CUDF_EXPECTS(missing_prefix->size() == missing_prefix_size,
+                 "Failed to read the missing footer prefix bytes");
+    std::vector<uint8_t> footer_bytes(ender->footer_len);
+    std::memcpy(footer_bytes.data(), missing_prefix->data(), missing_prefix_size);
+    auto const footer_suffix_size = ender->footer_len - missing_prefix_size;
+    std::memcpy(
+      footer_bytes.data() + missing_prefix_size, speculative_buffer->data(), footer_suffix_size);
+    return cudf::io::datasource::buffer::create(std::move(footer_bytes));
   };
 
   return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
