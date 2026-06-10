@@ -633,6 +633,7 @@ class RunConfig:
         print("Iteration Summary")
         print("=======================================")
 
+        successful_durations = []
         for query, records in self.records.items():
             print(f"query: {query}")
             print(f"path: {self.dataset_path}")
@@ -655,19 +656,11 @@ class RunConfig:
                 print(f"max time : {max(valid_durations):0.4f}")
                 print(f"mean time: {mean(valid_durations):0.4f}")
                 print("=======================================")
-        any_success = any(record.status == "success" for record in records)
+                successful_durations.append(valid_durations)
 
-        if any_success:
-            total_mean_time = sum(
-                mean(
-                    record.duration for record in records if record.status == "success"
-                )
-                for records in self.records.values()
-                if records
-            )
+        if successful_durations:
+            total_mean_time = sum(mean(durations) for durations in successful_durations)
             print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
-        else:
-            print("No successful queries")
 
 
 def get_executor_options(
