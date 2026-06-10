@@ -227,7 +227,7 @@ __device__ inline bool decode_tag(uint8_t const*& cur,
 
   cur += key_bytes;
   uint64_t fn = key >> 3;
-  if (fn == 0 || fn > static_cast<uint64_t>(MAX_FIELD_NUMBER)) {
+  if (fn == 0 || fn > static_cast<uint64_t>(max_field_number)) {
     set_error_once(error_flag, proto_decode_error::FIELD_NUMBER);
     return false;
   }

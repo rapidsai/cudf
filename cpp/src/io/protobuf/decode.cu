@@ -150,11 +150,11 @@ void validate_decode_options(decode_protobuf_options const& context)
   for (size_t i = 0; i < num_fields; ++i) {
     auto const& field = context.schema[i];
     auto const type   = cudf::data_type{field.output_type};
-    if (field.field_number <= 0 || field.field_number > MAX_FIELD_NUMBER) {
+    if (field.field_number <= 0 || field.field_number > max_field_number) {
       CUDF_FAIL("protobuf decode context: invalid field number at field " + std::to_string(i),
                 std::invalid_argument);
     }
-    if (field.depth < 0 || field.depth >= MAX_NESTING_DEPTH) {
+    if (field.depth < 0 || field.depth >= max_nesting_depth) {
       CUDF_FAIL("protobuf decode context: field depth exceeds supported limit at field " +
                   std::to_string(i),
                 std::invalid_argument);

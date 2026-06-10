@@ -150,15 +150,6 @@ pb::decode_protobuf_options make_scalar_options(std::vector<int> const& field_nu
     .build();
 }
 
-auto make_empty_vectors(int count)
-{
-  struct result {
-    std::vector<std::vector<uint8_t>> bytes;
-    std::vector<std::vector<int32_t>> ints;
-  };
-  return result{std::vector<std::vector<uint8_t>>(count), std::vector<std::vector<int32_t>>(count)};
-}
-
 }  // anonymous namespace
 
 // ============================================================================
@@ -176,7 +167,7 @@ TEST_F(ProtobufReaderTest, EmptySchema)
 {
   auto input = make_binary_column({encode_varint_field(1, 42), encode_varint_field(1, 7)});
 
-  pb::decode_protobuf_options options{{}, {}, {}, {}, {}, {}, {}, true};
+  pb::decode_protobuf_options options{{}};
 
   auto result = pb::decode_protobuf(*input, options);
 
@@ -233,16 +224,7 @@ TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
      false},
   };
 
-  auto [bytes, ints] = make_empty_vectors(n);
-
-  pb::decode_protobuf_options options{std::move(schema),
-                                      std::vector<int64_t>(n, 0),
-                                      std::vector<double>(n, 0.0),
-                                      std::vector<uint8_t>(n, 0),
-                                      std::move(bytes),
-                                      std::move(ints),
-                                      std::vector<std::vector<std::vector<uint8_t>>>(n),
-                                      true};
+  auto options = pb::decode_protobuf_options::builder(std::move(schema)).build();
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 
@@ -269,16 +251,7 @@ TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
      false},
   };
 
-  auto [bytes, ints] = make_empty_vectors(n);
-
-  pb::decode_protobuf_options options{std::move(schema),
-                                      std::vector<int64_t>(n, 0),
-                                      std::vector<double>(n, 0.0),
-                                      std::vector<uint8_t>(n, 0),
-                                      std::move(bytes),
-                                      std::move(ints),
-                                      std::vector<std::vector<std::vector<uint8_t>>>(n),
-                                      true};
+  auto options = pb::decode_protobuf_options::builder(std::move(schema)).build();
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 

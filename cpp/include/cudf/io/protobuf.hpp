@@ -42,7 +42,7 @@ CUDF_HOST_DEVICE constexpr int encoding_value(proto_encoding encoding)
 }
 
 /// Maximum protobuf field number (29-bit).
-constexpr int MAX_FIELD_NUMBER = (1 << 29) - 1;
+constexpr int max_field_number = (1 << 29) - 1;
 
 /**
  * @brief Protobuf wire types.
@@ -65,7 +65,7 @@ CUDF_HOST_DEVICE constexpr int wire_type_value(proto_wire_type wire_type)
 }
 
 /// Maximum supported nesting depth for nested protobuf messages.
-constexpr int MAX_NESTING_DEPTH = 10;
+constexpr int max_nesting_depth = 10;
 
 /**
  * @brief Descriptor for a single field in a (possibly nested) protobuf schema.
@@ -99,40 +99,23 @@ struct decode_protobuf_options {
   decode_protobuf_options() = default;
 
   /**
-   * @brief Construct options from complete schema metadata.
+   * @brief Construct options from a schema, initializing per-field metadata to defaults.
    *
    * @param schema Flat array of field descriptors
-   * @param default_ints Default integer values per field
-   * @param default_floats Default float values per field
-   * @param default_bools Default boolean values per field
-   * @param default_strings Default string values per field
-   * @param enum_valid_values Valid enum numbers per field
-   * @param enum_names UTF-8 enum names per field
-   * @param fail_on_errors Whether malformed messages should raise an error
    */
-  decode_protobuf_options(std::vector<nested_field_descriptor> schema,
-                          std::vector<int64_t> default_ints,
-                          std::vector<double> default_floats,
-                          std::vector<uint8_t> default_bools,
-                          std::vector<byte_vector> default_strings,
-                          std::vector<enum_value_vector> enum_valid_values,
-                          std::vector<enum_name_vector> enum_names,
-                          bool fail_on_errors = true)
+  explicit decode_protobuf_options(std::vector<nested_field_descriptor> schema)
     : schema(std::move(schema)),
-      default_ints(std::move(default_ints)),
-      default_floats(std::move(default_floats)),
-      default_bools(std::move(default_bools)),
-      default_strings(std::move(default_strings)),
-      enum_valid_values(std::move(enum_valid_values)),
-      enum_names(std::move(enum_names)),
-      fail_on_errors(fail_on_errors)
+      default_ints(this->schema.size()),
+      default_floats(this->schema.size()),
+      default_bools(this->schema.size()),
+      default_strings(this->schema.size()),
+      enum_valid_values(this->schema.size()),
+      enum_names(this->schema.size())
   {
   }
 
   /**
    * @brief Creates a builder for decode_protobuf_options.
-   *
-   * The builder initializes per-field metadata containers to match the schema size.
    *
    * @param schema Flat array of field descriptors
    * @return A builder initialized with the provided schema
@@ -160,17 +143,8 @@ class decode_protobuf_options_builder {
    * @param schema Flat array of field descriptors
    */
   explicit decode_protobuf_options_builder(std::vector<nested_field_descriptor> schema)
+    : _options(std::move(schema))
   {
-    auto const num_fields    = schema.size();
-    _options.schema          = std::move(schema);
-    _options.default_ints    = std::vector<int64_t>(num_fields);
-    _options.default_floats  = std::vector<double>(num_fields);
-    _options.default_bools   = std::vector<uint8_t>(num_fields);
-    _options.default_strings = std::vector<decode_protobuf_options::byte_vector>(num_fields);
-    _options.enum_valid_values =
-      std::vector<decode_protobuf_options::enum_value_vector>(num_fields);
-    _options.enum_names     = std::vector<decode_protobuf_options::enum_name_vector>(num_fields);
-    _options.fail_on_errors = true;
   }
 
   /**
@@ -283,7 +257,7 @@ inline decode_protobuf_options_builder decode_protobuf_options::builder(
  * Takes a LIST<INT8> or LIST<UINT8> column where each row contains a serialized
  * protobuf message, and decodes it into a STRUCT column according to the provided schema.
  *
- * Supports nested messages (up to MAX_NESTING_DEPTH levels), repeated fields (as LIST columns),
+ * Supports nested messages (up to max_nesting_depth levels), repeated fields (as LIST columns),
  * enum-as-string conversion, default values, and required field checking.
  *
  * @param binary_input LIST<INT8> or LIST<UINT8> column of serialized protobuf messages
