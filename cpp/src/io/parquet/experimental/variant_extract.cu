@@ -671,7 +671,7 @@ std::unique_ptr<column> build_path_column(cudf::host_span<std::string const> ste
                                               rmm::device_buffer{},
                                               0);
 
-  auto d_chars = cudf::detail::make_device_uvector_async(
+  auto d_chars = cudf::detail::make_device_uvector(
     host_span<char const>{host_chars.data(), host_chars.size()}, stream, mr);
   return cudf::make_strings_column(
     depth, std::move(offsets_col), d_chars.release(), 0, rmm::device_buffer{});
