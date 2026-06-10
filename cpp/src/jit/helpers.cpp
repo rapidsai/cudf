@@ -10,6 +10,8 @@
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
+#include <rtcx.hpp>
+#include <runtime/context.hpp>
 
 namespace cudf {
 namespace jit {
@@ -64,6 +66,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
   if (has_user_data) {
     params.emplace(index++, "void *");
     params.emplace(index++, "cudf::size_type");
+    params.emplace(index++, "cudf::size_type");
   }
 
   for (auto& name : output_typenames) {
@@ -92,6 +95,9 @@ std::vector<std::string> input_type_names(
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& cuda_source)
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& cuda_source)
 {
   CUDF_FUNC_RANGE();
 
@@ -100,7 +106,7 @@ kernel get_udf_kernel(std::string const& source_file,
  )***",
                                             kernel_name);
   char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
-    {"cudf/detail/operation-udf.hpp", "cudf/detail/kernel-instance.hpp"};
+    {"cudf/detail/operation_udf.cuh", "cudf/detail/kernel_instance.cuh"};
   char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
     {cuda_source.c_str(), kernel_instance_source.c_str()};
 

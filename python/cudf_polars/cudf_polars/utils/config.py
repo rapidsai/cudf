@@ -36,13 +36,13 @@ if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     import distributed
-    from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
 
@@ -352,12 +352,14 @@ class MemoryResourceConfig:
     Examples
     --------
     Create a memory resource config for a single memory resource:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.CudaAsyncMemoryResource",
     ...     options={"initial_pool_size": 100},
     ... )
 
     Create a memory resource config for a nested memory resource configuration:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.PrefetchResourceAdaptor",
     ...     options={

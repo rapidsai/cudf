@@ -14,14 +14,15 @@ import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
+
+import polars as pl
+
+from cudf_streaming.streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
@@ -39,13 +40,13 @@ from cudf_polars.utils.config import get_total_device_memory
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable, MutableMapping
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import Executor, ThreadPoolExecutor
 
     import rapidsmpf.config
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import PartitionInfo
@@ -581,12 +582,7 @@ def all_gather_host_data(
     -------
     List of bytes, one element per rank, ordered by rank index.
     """
-    allgather = AllGather(
-        comm=comm,
-        op_id=op_id,
-        br=br,
-        statistics=Statistics(enable=False),
-    )
+    allgather = AllGather(comm=comm, op_id=op_id, br=br)
     # TODO: Make AllGather (bulk) a context manager so this becomes
     # with AllGather(...) as ag:
     #     ag.insert(0, PackedData.from_host_bytes(data, br))
@@ -604,6 +600,7 @@ def allgather_stats(
     br: BufferResource,
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
+    executor: Executor,
 ) -> StatsCollector:
     """
     Collect scan statistics on rank 0 and distribute to all ranks.
@@ -621,16 +618,19 @@ def allgather_stats(
         Root of the pre-lowered IR graph (same object on every rank).
     config_options
         Executor configuration.
+    executor: concurrent.futures.Executor
+        Executor to use for IO operations. This function does not start
+        or shutdown the executor.
 
     Returns
     -------
     A :class:`StatsCollector` valid for the local rank's IR node objects.
     """
     if comm.nranks == 1:
-        return collect_statistics(ir, config_options)
+        return collect_statistics(ir, config_options, executor)
 
     if comm.rank == 0:
-        stats = collect_statistics(ir, config_options)
+        stats = collect_statistics(ir, config_options, executor)
         data = json.dumps(stats.serialize(ir)).encode()
     else:
         data = b""
@@ -685,8 +685,10 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
-    stats = allgather_stats(comm, ctx.br(), ir, config_options)
-    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+    stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
+    ir, partition_info = lower_ir_graph(
+        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
+    )
 
     if comm.rank == 0:
         # At least for now, the query plan is identical on all ranks,

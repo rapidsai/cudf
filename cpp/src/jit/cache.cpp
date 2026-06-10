@@ -39,28 +39,13 @@ rtcx::sha256 hash(std::span<char const* const> inputs)
   return ctx.finalize();
 }
 
-rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments,
-                  std::span<rtcx::memory_fragment const> memory_fragments)
-{
-  rtcx::sha256_context ctx;
-  for (auto const& fragment : file_fragments) {
-    ctx.update(
-      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
-  }
-
-  for (auto const& fragment : memory_fragments) {
-    ctx.update(fragment.data);
-  }
-
-  return ctx.finalize();
-}
-
-void install_file_set(std::string_view target_dir,
-                      std::span<uint8_t const> compressed_binary,
-                      size_t uncompressed_size,
-                      std::span<std::size_t const[2]> file_ranges,
-                      std::span<char const* const> destinations,
-                      std::string_view compression)
+void install_file_set(
+  std::string_view target_dir,
+  std::span<uint8_t const> compressed_binary,
+  size_t uncompressed_size,
+  std::span<std::size_t const[2]> file_ranges,  // NOLINT(modernize-avoid-c-arrays)
+  std::span<char const* const> destinations,
+  std::string_view compression)
 {
   auto decompressed = rtcx::decompress_blob(compressed_binary, uncompressed_size, compression);
   for (size_t i = 0; i < file_ranges.size(); ++i) {
@@ -187,8 +172,9 @@ std::vector<std::string> jit_bundle_t::get_include_directories() const
 
 namespace {
 
-constexpr int MIN_CUDA_VERSION_PCH     = 12800;  // CUDA 12.8
-constexpr int MIN_CUDA_VERSION_MINIMAL = 12800;  // CUDA 12.8
+constexpr int MIN_CUDA_VERSION_PCH = 12800;  // minimum CUDA version for the "--pch" NVRTC flag
+constexpr int MIN_CUDA_VERSION_MINIMAL =
+  12800;  // minimum CUDA version for the "--minimal" NVRTC flag
 
 int32_t get_driver_version()
 {
@@ -204,7 +190,7 @@ int32_t get_runtime_version()
   return runtime_version;
 }
 
-int32_t get_current_device_physical_model()
+int32_t get_current_device_compute_capability()
 {
   int32_t device;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
@@ -215,7 +201,7 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
-std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
+std::tuple<rtcx::library, rtcx::blob> compile_library(
   char const* name,
   char const* cuda_code,
   std::span<char const* const> extra_header_include_names,
@@ -227,7 +213,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   auto& ctx    = cudf::get_context();
   auto& cfg    = ctx.config();
   auto& bundle = ctx.jit_bundle();
-  auto sm      = get_current_device_physical_model();
+  auto sm      = get_current_device_compute_capability();
   auto runtime = get_runtime_version();
 
   auto include_dirs = bundle.get_include_directories();
@@ -258,6 +244,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 
   if (use_pch) {
     options.emplace_back("--pch");
+    options.emplace_back(std::format("--pch-dir={}", pch_dir));
 
     if (cfg.jit_verbose) {
       options.emplace_back("--pch-verbose=true");
@@ -311,7 +298,7 @@ kernel get_kernel(std::string const& name,
 
   auto runtime                   = get_runtime_version();
   auto driver                    = get_driver_version();
-  auto sm                        = get_current_device_physical_model();
+  auto sm                        = get_current_device_compute_capability();
   auto header_include_names_hash = hash(header_include_names).to_hex_string();
   auto headers_hash              = hash(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
@@ -344,8 +331,7 @@ kernel_instance={}
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
     auto source     = read_file_string(source_file.c_str());
-    return compile_library_uncached(
-      name.c_str(), source.c_str(), header_include_names, headers, {});
+    return compile_library(name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
   auto fut =

@@ -24,12 +24,24 @@ class program_cache;
 struct jit_bundle_t;
 
 struct [[nodiscard]] context_config {
-  bool dump_codegen          : 1      = false;
-  bool use_jit               : 1      = false;
+  bool dump_codegen          : 1               : 1      = false;
+  bool use_jit               : 1               : 1      = false;
   bool preload_jit_cache     : 1      = false;
   bool disable_jit_cache     : 1      = false;
   bool clear_jit_cache       : 1      = false;
   bool disable_codegen_cache : 1      = false;
+  bool disable_cuda_cache    : 1      = false;
+  bool jit_verbose           : 1      = false;
+  bool dump_jit_trace        : 1      = false;
+  bool dump_jit_time_profile : 1      = false;
+  std::string rtcx_cache_dir          = {};
+  std::string jit_bundle_dir          = {};
+  std::string jit_pch_dir             = {};
+  std::string jit_tmp_dir             = {};
+  uint32_t kernel_cache_limit_process = 0;
+  bool preload_jit_cache     : 1      = false;
+  bool disable_jit_cache     : 1      = false;
+  bool clear_jit_cache       : 1      = false;
   bool disable_cuda_cache    : 1      = false;
   bool jit_verbose           : 1      = false;
   bool dump_jit_trace        : 1      = false;
@@ -58,7 +70,7 @@ class context {
   void ensure_jit_cache_initialized();
 
  public:
-  context(context_config const& cfg = {}, init_flags flags = init_flags::DEFAULT);
+  context(context_config cfg = {}, init_flags flags = init_flags::DEFAULT);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;

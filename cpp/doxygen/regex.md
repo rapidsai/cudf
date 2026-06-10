@@ -24,6 +24,8 @@ By default, only the `\n` character is recognized as a line break. The [cudf::st
 - Next line (Unicode: `0085`, UTF-8: `C285`)
 - Carriage return (Unicode: `000D`, UTF-8: `0D`)
 
+With `EXT_NEWLINE`, a carriage-return/line-feed pair (`\r\n`) is treated as a single line terminator: the `^` and `$` anchors match before the `\r` and after the `\n`, and never between them.
+
 **Invalid regex patterns will result in undefined behavior**. This includes but is not limited to the following:
 - Unescaped special characters (listed in the third row of the Characters table below) when they are intended to match as literals.
 - Unmatched paired special characters like `()`, `[]`, and `{}`.
