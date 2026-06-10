@@ -76,10 +76,26 @@ if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
       ON
       CACHE BOOL "Statically link the CUDA runtime" FORCE
   )
+  set(RTCX_STATIC_LINK_NVRTC
+      ON
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      ON
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
+  )
 else()
   set(CUDA_STATIC_RUNTIME
       OFF
       CACHE BOOL "Statically link the CUDA runtime" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVRTC
+      OFF
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      OFF
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
   )
 endif()
 
@@ -394,6 +410,9 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
+# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
+add_subdirectory(librtcx)
+
 # JIT Embedding helper functions
 include(librtcx/embed.cmake)
 
@@ -412,6 +431,11 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
+  install(
+    TARGETS rtcx
+    EXPORT cudf-exports
+    DESTINATION ${lib_dir}
+  )
 endif()
 
 add_embed(cudf_cuda_embed)
@@ -462,7 +486,7 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd)
+embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -732,11 +756,16 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
-  src/join/filter_join_indices.cu
-  src/join/filter_join_indices_kernel_complex.cu
-  src/join/filter_join_indices_kernel_null_complex.cu
-  src/join/filter_join_indices_kernel_null_primitive.cu
-  src/join/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices.cu
+  src/join/filter_join_indices/filter_join_indices_jit.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
@@ -759,11 +788,10 @@ add_library(
   src/join/hash_join/partitioned_left_join.cu
   src/join/hash_join/partitioned_retrieve.cu
   src/join/hash_join/partitioned_retrieve_outer.cu
-  src/join/mark_join.cu
-  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
+  src/join/mark_join.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
@@ -1019,7 +1047,6 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
-  librtcx/rtcx.cpp
   ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
 )
 
@@ -1093,7 +1120,6 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
@@ -1137,7 +1163,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
+          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
