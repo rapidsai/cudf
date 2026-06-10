@@ -369,6 +369,52 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
   return val.subspan(values_base + match_start, value_len.value());
 }
 
+// Parse an array value header and return the sub-span of the element at `index` (0-based) within
+// `val`. Returns an empty span if `val` is not an array (`basic_type != array`), if `index` is out
+// of bounds, or if the encoded data is truncated.
+//
+// Array layout per the Variant spec:
+//   byte 0: header (basic_type=array in low 2 bits; value_header in high 6 bits)
+//     value_header bits: (offset_size - 1) in bits 0-1, is_large in bit 2, bits 3-5 unused
+//   num_elements: 1 byte if !is_large else 4 bytes (little-endian)
+//   offsets:      (num_elements + 1) entries, each `offset_size` bytes, relative to the end of
+//                 offsets
+//   values:       concatenated element blobs
+__device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> val,
+                                                           size_type index)
+{
+  auto const val_len = static_cast<size_type>(val.size());
+  if (val_len < 1) { return {}; }
+  uint8_t const value_metadata = val[0];
+  if (variant_basic_type(value_metadata) != basic_type::array) { return {}; }
+
+  int const value_header = variant_value_header(value_metadata);
+  [[maybe_unused]] auto const [offset_size, id_size, num_elements_size] =
+    decode_object_array_header(value_header, false);
+
+  size_type pos           = 1;
+  auto const num_elements = narrow_cast(read_uint64(val, pos, num_elements_size));
+  if (!num_elements.has_value()) { return {}; }
+  auto const n = num_elements.value();
+  pos += num_elements_size;
+
+  if (index < 0 || index >= n) { return {}; }
+
+  size_type const offsets_start = pos;
+  auto const offsets_bytes      = (static_cast<uint64_t>(n) + 1) * offset_size;
+  if (offsets_bytes > static_cast<uint64_t>(val_len - offsets_start)) { return {}; }
+  size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
+  auto const values_extent    = val_len - values_base;
+
+  auto const o0 = read_uint64(val, offsets_start + index * offset_size, offset_size);
+  auto const o1 = read_uint64(val, offsets_start + (index + 1) * offset_size, offset_size);
+  if (!o0 || !o1) { return {}; }
+  auto const start_u = *o0;
+  auto const end_u   = *o1;
+  if (end_u < start_u || end_u > static_cast<uint64_t>(values_extent)) { return {}; }
+  return val.subspan(values_base + start_u, end_u - start_u);
+}
+
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
@@ -401,18 +447,43 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
   return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
+// Walk a path of object-key or array-index steps level by level starting at `val` and return
+// the span of the final value (subspan of `val`). Returns an empty span on failure.
+//
+// Each path step is encoded in the `path` strings column as either:
+//   - "<name>"  -> descend into an object by dictionary key, or
+//   - "[<N>]"   -> descend into an array by zero-based integer index.
+// The step kind is inferred from the first byte (`'['` means index).
 __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
                                                    device_span<uint8_t const> val,
                                                    column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
-    auto const name = path.element<cudf::string_view>(i);
+    auto const step = path.element<cudf::string_view>(i);
+    auto const slen = step.size_bytes();
+    auto const* sd  = step.data();
 
-    auto const field_id = find_key_in_metadata(meta, name);
-    if (!field_id.has_value()) { return {}; }
-
-    sub_val = locate_object_field(sub_val, field_id.value());
+    if (slen >= 2 && sd[0] == '[') {
+      size_type index    = 0;
+      bool ok            = (sd[slen - 1] == ']');
+      size_type const lo = 1;
+      size_type const hi = slen - 1;
+      for (size_type k = lo; ok && k < hi; ++k) {
+        char const c = sd[k];
+        if (c < '0' || c > '9') {
+          ok = false;
+          break;
+        }
+        index = index * 10 + static_cast<size_type>(c - '0');
+      }
+      if (!ok || lo == hi) { return {}; }
+      sub_val = locate_array_element(sub_val, index);
+    } else {
+      auto const field_id = find_key_in_metadata(meta, step);
+      if (!field_id.has_value()) { return {}; }
+      sub_val = locate_object_field(sub_val, field_id.value());
+    }
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
