@@ -342,7 +342,6 @@ ConfigureTest(
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
-  io/variant_extract_test.cpp
   GPUS 1
   PERCENT 100
 )
@@ -355,7 +354,7 @@ ConfigureTest(
   io/parquet_common.cpp
   io/parquet_test.cpp
 )
-ConfigureTest(VARIANT_EXTRACT_TEST io/variant_extract_test.cpp)
+ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
   io/parquet_deletion_vectors_test.cpp
