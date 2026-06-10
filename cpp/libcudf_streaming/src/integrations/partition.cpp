@@ -183,44 +183,4 @@ std::unique_ptr<cudf::table> unpack_and_concat(std::vector<rapidsmpf::PackedData
   return cudf::concatenate(unpacked, stream, br->device_mr());
 }
 
-std::vector<rapidsmpf::PackedData> spill_partitions(std::vector<rapidsmpf::PackedData>&& partitions,
-                                                    rapidsmpf::BufferResource* br)
-{
-  // Sum the total size of all packed data in device memory.
-  std::size_t device_size{0};
-  for (auto& [_, data] : partitions) {
-    if (data->mem_type() == rapidsmpf::MemoryType::DEVICE) { device_size += data->size; }
-  }
-  // Spill each partition to host memory.
-  auto reservation = br->reserve_or_fail(device_size, rapidsmpf::SPILL_TARGET_MEMORY_TYPES);
-  std::vector<rapidsmpf::PackedData> ret;
-  ret.reserve(partitions.size());
-  for (auto& [metadata, data] : partitions) {
-    ret.emplace_back(std::move(metadata), br->move(std::move(data), reservation));
-  }
-  return ret;
-}
-
-std::vector<rapidsmpf::PackedData> unspill_partitions(
-  std::vector<rapidsmpf::PackedData>&& partitions,
-  rapidsmpf::BufferResource* br,
-  rapidsmpf::AllowOverbooking allow_overbooking)
-{
-  auto statistics = br->statistics();
-  // Sum the total size of all packed data not in device memory already.
-  std::size_t non_device_size{0};
-  for (auto& [_, data] : partitions) {
-    if (data->mem_type() != rapidsmpf::MemoryType::DEVICE) { non_device_size += data->size; }
-  }
-
-  // Unspill each partition.
-  auto reservation = br->reserve_device_memory_and_spill(non_device_size, allow_overbooking);
-  std::vector<rapidsmpf::PackedData> ret;
-  ret.reserve(partitions.size());
-  for (auto& [metadata, data] : partitions) {
-    ret.emplace_back(std::move(metadata), br->move(std::move(data), reservation));
-  }
-
-  return ret;
-}
 }  // namespace cudf_streaming::integrations
