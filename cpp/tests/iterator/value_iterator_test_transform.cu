@@ -111,7 +111,7 @@ TEST_F(TransformedIteratorTest, large_size_reduction)
   using T = int64_t;
 
   int const column_size{1000000};
-  const T init{0};
+  T const init{0};
 
   // data and valid arrays
   std::vector<T> host_values(column_size);

@@ -59,7 +59,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   transformer_optional_meanvar<T> transformer{};
 
   int const column_size{50};
-  const T init{0};
+  T const init{0};
 
   // data and valid arrays
   std::vector<T> host_values(column_size);

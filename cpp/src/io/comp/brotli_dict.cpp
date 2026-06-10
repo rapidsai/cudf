@@ -45,7 +45,7 @@ THE SOFTWARE.
 
 namespace cudf {
 namespace io {
-static const brotli_dictionary_s g_dictionary = {
+static brotli_dictionary_s const g_dictionary = {
   // size_bits_by_length
   {0, 0, 0, 0, 10, 10, 11, 11, 10, 10, 10, 10, 10, 9, 9, 8,
    7, 7, 8, 7, 7,  6,  6,  5,  5,  0,  0,  0,  0,  0, 0, 0},

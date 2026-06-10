@@ -153,7 +153,7 @@ int main(int argc, char const** argv)
     try {
       return extract_input_sources(
         input_paths, input_multiplier, num_threads, io_source_type, default_stream);
-    } catch (const std::exception& e) {
+    } catch (std::exception const& e) {
       print_usage();
       throw std::runtime_error(e.what());
     }

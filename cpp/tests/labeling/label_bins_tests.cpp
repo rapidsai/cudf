@@ -235,7 +235,7 @@ struct RealDataBinTestFixture : public BinTestFixture {
             T left_edge_start_val       = 0)
   {
     // Avoid testing numbers that are larger than the current type supports.
-    const T largest_value = (num_elements / inputs_per_bin) * 4;
+    T const largest_value = (num_elements / inputs_per_bin) * 4;
     num_elements          = std::min(std::numeric_limits<T>::max(), largest_value);
 
     unsigned int num_edges = num_elements / inputs_per_bin;

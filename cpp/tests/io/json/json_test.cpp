@@ -631,7 +631,7 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n");
   std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
-  const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << data;
   outfile.close();
@@ -656,7 +656,7 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
 
 TEST_F(JsonReaderTest, JsonLinesByteRangeCompleteRecord)
 {
-  const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -682,7 +682,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRangeCompleteRecord)
 
 TEST_F(JsonReaderTest, JsonLinesByteRangeIncompleteRecord)
 {
-  const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -754,7 +754,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRangeWithRealloc)
 
 TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
 {
-  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::string const file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
   std::ofstream outfile1(file1, std::ofstream::out);
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
@@ -780,7 +780,7 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
 
 TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_ExcessRangeSize)
 {
-  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::string const file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
   std::ofstream outfile1(file1, std::ofstream::out);
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
@@ -820,7 +820,7 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_ExcessRangeSize)
 
 TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_LoadAllFiles)
 {
-  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::string const file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
   std::ofstream outfile1(file1, std::ofstream::out);
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
@@ -859,7 +859,7 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_LoadAllFiles)
 
 TEST_P(JsonReaderRecordTest, JsonLinesObjects)
 {
-  const std::string fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
@@ -1286,12 +1286,12 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n") + "\n"};
   auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
-  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::string const file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
   std::ofstream outfile(file1, std::ofstream::out);
   outfile << data[0];
   outfile.close();
 
-  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::string const file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
   std::ofstream outfile2(file2, std::ofstream::out);
   outfile2 << data[1];
   outfile2.close();
@@ -1325,12 +1325,12 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputsNoNL)
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
   auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
-  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::string const file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
   std::ofstream outfile(file1, std::ofstream::out);
   outfile << data[0];
   outfile.close();
 
-  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::string const file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
   std::ofstream outfile2(file2, std::ofstream::out);
   outfile2 << data[1];
   outfile2.close();
@@ -1844,9 +1844,9 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                make_validity(validity)};
 
   // Types to test
-  const std::vector<data_type> dtypes = {
+  std::vector<data_type> const dtypes = {
     dtype<int32_t>(), dtype<float>(), dtype<cudf::string_view>(), dtype<bool>()};
-  const std::vector<cudf::column_view> cols{cudf::column_view(int_col),
+  std::vector<cudf::column_view> const cols{cudf::column_view(int_col),
                                             cudf::column_view(float_col),
                                             cudf::column_view(str_col),
                                             cudf::column_view(bool_col)};
@@ -3644,9 +3644,9 @@ TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
   try {
     cudf::io::read_json(read_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }
@@ -3667,9 +3667,9 @@ TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
   try {
     cudf::io::write_json(write_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }

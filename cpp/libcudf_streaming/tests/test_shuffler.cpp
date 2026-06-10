@@ -251,7 +251,7 @@ INSTANTIATE_TEST_SUITE_P(
                    testing::Values(1, 2, 5, 10),        // total_num_partitions
                    testing::Values(1, 9, 100, 100'000)  // total_num_rows
                    ),
-  [](const testing::TestParamInfo<MemoryLimits_NumPartition::ParamType>& info) {
+  [](testing::TestParamInfo<MemoryLimits_NumPartition::ParamType> const& info) {
     return std::to_string(info.index) + "__nparts_" + std::to_string(std::get<1>(info.param)) +
            "__nrows_" + std::to_string(std::get<2>(info.param));
   });
@@ -351,7 +351,7 @@ INSTANTIATE_TEST_SUITE_P(ConcurrentShuffle,
                          testing::Combine(testing::ValuesIn({1, 2, 4}),    // num_shufflers
                                           testing::ValuesIn({1, 10, 100})  // total_num_partitions
                                           ),
-                         [](const testing::TestParamInfo<ConcurrentShuffleTest::ParamType>& info) {
+                         [](testing::TestParamInfo<ConcurrentShuffleTest::ParamType> const& info) {
                            return "num_shufflers_" + std::to_string(std::get<0>(info.param)) +
                                   "__total_num_partitions_" +
                                   std::to_string(std::get<1>(info.param));
@@ -547,7 +547,7 @@ INSTANTIATE_TEST_SUITE_P(FinishCounterMultithreadingTestP,
                          FinishCounterMultithreadingTest,
                          testing::Combine(testing::Values(1, 2, 100, 101),
                                           testing::Values(1, 2, 3)),
-                         [](const auto& info) {
+                         [](auto const& info) {
                            return "npartitions_" + std::to_string(std::get<0>(info.param)) +
                                   "__nthreads_" + std::to_string(std::get<1>(info.param));
                          });
@@ -593,7 +593,7 @@ class ContiguousPartitionAssignmentTest
 INSTANTIATE_TEST_SUITE_P(PartitionAssignment,
                          ContiguousPartitionAssignmentTest,
                          testing::Values(1, 2, 3, 5, 7, 10, 16, 100),
-                         [](const testing::TestParamInfo<rapidsmpf::shuffler::PartID>& info) {
+                         [](testing::TestParamInfo<rapidsmpf::shuffler::PartID> const& info) {
                            return "nparts_" + std::to_string(info.param);
                          });
 

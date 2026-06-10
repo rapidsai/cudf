@@ -223,7 +223,7 @@ class native_arrow_ipc_writer_handle final {
     return col_meta;
   }
 
-  std::string& get_column_name(const size_t idx)
+  std::string& get_column_name(size_t const idx)
   {
     if (idx < 0 || idx >= column_names.size()) {
       throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
@@ -1199,13 +1199,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv* env,
     cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
                                                                            j_sort_keys_columns);
     jsize num_columns = n_sort_keys_columns.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(
       env, num_columns_is_desc == num_columns, "columns and is_descending lengths don't match", 0);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,
@@ -1243,13 +1243,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv* env,
     cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
                                                                            j_sort_keys_columns);
     jsize num_columns = n_sort_keys_columns.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(
       env, num_columns_is_desc == num_columns, "columns and is_descending lengths don't match", 0);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,
@@ -1290,9 +1290,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<cudf::table_view> n_table_handles(env, j_table_handles);
 
-    const cudf::jni::native_jintArray n_sort_key_indexes(env, j_sort_key_indexes);
+    cudf::jni::native_jintArray const n_sort_key_indexes(env, j_sort_key_indexes);
     jsize num_columns = n_sort_key_indexes.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(env,
@@ -1300,7 +1300,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv* env,
                   "columns and is_descending lengths don't match",
                   NULL);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,

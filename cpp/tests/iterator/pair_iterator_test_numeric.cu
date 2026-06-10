@@ -62,7 +62,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   transformer_pair_meanvar<T> transformer{};
 
   int const column_size{5000};
-  const T init{0};
+  T const init{0};
 
   // data and valid arrays
   std::vector<T> host_values(column_size);

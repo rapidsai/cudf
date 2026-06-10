@@ -211,7 +211,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createQuantAgg(JNIEnv* e
   {
     cudf::jni::auto_set_device(env);
 
-    const cudf::jni::native_jdoubleArray quantiles(env, j_quantiles);
+    cudf::jni::native_jdoubleArray const quantiles(env, j_quantiles);
 
     std::vector<double> quants(quantiles.data(), quantiles.data() + quantiles.size());
     cudf::interpolation interp = static_cast<cudf::interpolation>(j_method);

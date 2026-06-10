@@ -58,7 +58,7 @@ class modulo_partitioner {
   __device__ size_type operator()(hash_value_t hash_value) const { return hash_value % divisor; }
 
  private:
-  const size_type divisor;
+  size_type const divisor;
 };
 
 template <typename T>
@@ -88,7 +88,7 @@ class bitwise_partitioner {
   }
 
  private:
-  const size_type mask;
+  size_type const mask;
 };
 
 /**

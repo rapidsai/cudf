@@ -211,7 +211,7 @@ void BM_parquet_read_filter(nvbench::state& state)
   std::vector<cudf::column_view> table_columns;
   table_columns.push_back(filter_column->view());
 
-  for (const auto& col : copy_only_cols) {
+  for (auto const& col : copy_only_cols) {
     table_columns.push_back(col->view());
   }
 

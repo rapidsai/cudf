@@ -59,7 +59,7 @@
 // altered: use cudf namespaces
 namespace cudf::io::detail {
 
-static const std::string base64_chars =
+static std::string const base64_chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   "abcdefghijklmnopqrstuvwxyz"
   "0123456789+/";

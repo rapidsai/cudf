@@ -430,7 +430,7 @@ struct VectorOfArrays {
     return 0;
   }
 
-  static const char* get_last_error(ArrowArrayStream* stream) { return nullptr; }
+  static char const* get_last_error(ArrowArrayStream* stream) { return nullptr; }
 
   static void release(ArrowArrayStream* stream)
   {

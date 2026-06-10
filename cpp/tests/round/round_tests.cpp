@@ -322,7 +322,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
     cudf::round_decimal(input, -target_scale, cudf::rounding_method::HALF_EVEN);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_even, result_even->view());
 
-  const std::initializer_list<bool> validity = {
+  std::initializer_list<bool> const validity = {
     true, false, true, true, true, false, false, true, true, true, true, false};
   auto const input_null =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, validity, scale_type{1}};

@@ -117,7 +117,7 @@ CUDF_KERNEL void materialize_merged_bitmask_kernel(
   column_device_view right_dcol,
   bitmask_type* out_validity,
   size_type const num_destination_rows,
-  index_type const* const __restrict__ merged_indices)
+  index_type const* __restrict__ const merged_indices)
 {
   auto const stride = detail::grid_1d::grid_stride();
 

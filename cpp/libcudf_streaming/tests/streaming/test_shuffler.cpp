@@ -57,13 +57,13 @@ TEST_F(BaseStreamingShuffle, zero_owned_partitions_completes)
 
 class StreamingShuffler : public BaseStreamingShuffle, public ::testing::WithParamInterface<int> {
  public:
-  const unsigned int num_partitions = 10;
-  const unsigned int num_rows       = 1000;
-  const unsigned int num_chunks     = 5;
-  const unsigned int chunk_size     = num_rows / num_chunks;
-  const std::int64_t seed           = 42;
-  const cudf::hash_id hash_function = cudf::hash_id::HASH_MURMUR3;
-  const OpID op_id                  = 0;
+  unsigned int const num_partitions = 10;
+  unsigned int const num_rows       = 1000;
+  unsigned int const num_chunks     = 5;
+  unsigned int const chunk_size     = num_rows / num_chunks;
+  std::int64_t const seed           = 42;
+  cudf::hash_id const hash_function = cudf::hash_id::HASH_MURMUR3;
+  OpID const op_id                  = 0;
 
   void SetUp() override { BaseStreamingShuffle::SetUpWithThreads(GetParam()); }
 
@@ -186,7 +186,7 @@ INSTANTIATE_TEST_SUITE_P(StreamingShuffler,
                          ::testing::Combine(::testing::Values(1, 10),      // number of inserts
                                             ::testing::Values(1, 10, 100)  // number of partitions
                                             ),
-                         [](const testing::TestParamInfo<ShufflerAsyncTest::ParamType>& info) {
+                         [](testing::TestParamInfo<ShufflerAsyncTest::ParamType> const& info) {
                            return "ninserts_" + std::to_string(std::get<0>(info.param)) +
                                   "_nparts_" + std::to_string(std::get<1>(info.param));
                          });

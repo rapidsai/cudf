@@ -45,7 +45,7 @@ struct BloomFilter {
    *
    * @return A const-qualified bloom filter viewing the underlying storage.
    */
-  static const BloomFilter view(std::size_t num_blocks,
+  static BloomFilter const view(std::size_t num_blocks,
                                 std::uint64_t seed,
                                 void const* storage,
                                 rmm::cuda_stream_view stream);
