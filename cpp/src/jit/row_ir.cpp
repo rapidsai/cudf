@@ -162,6 +162,21 @@ enum class [[nodiscard]] null_output : uint8_t {
   }
 }
 
+[[nodiscard]] bool get_op_is_fallible(opcode op, bool nullify_on_error)
+{
+  switch (op) {
+    case opcode::ANSI_ADD:
+    case opcode::ANSI_SUB:
+    case opcode::ANSI_MUL:
+    case opcode::ANSI_DIV:
+    case opcode::ANSI_MOD:
+    case opcode::ANSI_ABS:
+    case opcode::ANSI_NEG:
+    case opcode::ANSI_PRECISION_CHECK: return !nullify_on_error;
+    default: return false;
+  }
+}
+
 /**
  * @brief Get the output scale for a given operator and input scales
  * This function returns the output scale for a given operator based on the input scales and the
@@ -755,14 +770,16 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
           }
 
           sink.emit(std::format(
-            R"***({} {} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{}, {}>(&error_flag, {});
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
-)***",
+            R"***({} {} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{}, {}>(&error_flag, {});)***",
             type,
             id_,
             get_opcode_name(op_),
             nullify_on_error_,
             args_str));
+
+          if (get_op_is_fallible(op_, nullify_on_error_)) {
+            sink.emit(R"***(CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);)***");
+          }
         }
       }
       break;

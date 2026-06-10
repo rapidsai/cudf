@@ -9,8 +9,13 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-namespace CUDF_EXPORT cudf {
+#define CUDF_CHECK_OPCODE_ERROR_FLAG(flag)              \
+  do {                                                  \
+    if (flag != ::cudf::errc::SUCCESS) { return flag; } \
+    flag = ::cudf::errc::SUCCESS;                       \
+  } while (0)
 
+namespace CUDF_EXPORT cudf {
 namespace detail::row_ir {
 
 enum class [[nodiscard]] opcode : int32_t {
@@ -302,12 +307,6 @@ __device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... 
     }
   }
 }
-
-#define CUDF_CHECK_OPCODE_ERROR_FLAG(flag)              \
-  do {                                                  \
-    if (flag != ::cudf::errc::SUCCESS) { return flag; } \
-    flag = ::cudf::errc::SUCCESS;                       \
-  } while (0)
 
 }  // namespace detail::row_ir
 }  // namespace CUDF_EXPORT cudf
