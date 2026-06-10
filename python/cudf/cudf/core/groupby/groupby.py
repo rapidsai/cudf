@@ -2163,6 +2163,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result = concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
+                # pandas names the columns axis after the row-like Series
+                # returned by the UDF (e.g. ``iloc[0]`` carries the original
+                # row label as its name); ``concat(..., axis=1).T`` otherwise
+                # drops it, leaving an unnamed columns axis.
+                result.columns = result.columns.set_names(
+                    [chunk_results[0].name]
+                )
             # When the UDF is like df.x + df.y, the result for each
             # group is the same length as the original group
             elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
