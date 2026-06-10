@@ -22,10 +22,7 @@ namespace CUDF_EXPORT cudf {
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.
  *
- * It is expected that `keys_column.has_nulls() == false`.
- * It is assumed the elements in `keys_column` are unique and
- * are in a strict, total order. Meaning, `keys_column[i]` is ordered before
- * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
+ * The keys_column column must contain no nulls.
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
@@ -62,9 +59,6 @@ std::unique_ptr<column> make_dictionary_column(
  * and indices columns.
  *
  * The keys_column and indices columns must contain no nulls.
- * It is assumed the elements in `keys_column` are unique and
- * are in a strict, total order. Meaning, `keys_column[i]` is ordered before
- * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
  *
  * The indices values must be in the range [0,keys_column.size()).
  *

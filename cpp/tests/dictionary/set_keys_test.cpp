@@ -106,3 +106,18 @@ TEST_F(DictionarySetKeysTest, MatchDictionaries)
   auto expected2 = cudf::dictionary::decode(cudf::dictionary_column_view(col2));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result2->view(), expected2->view());
 }
+
+TEST_F(DictionarySetKeysTest, DuplicateKeys)
+{
+  auto input = cudf::test::strings_column_wrapper{
+    "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
+  auto dictionary = cudf::dictionary::encode(input);
+
+  cudf::test::strings_column_wrapper new_keys{"fff", "eee", "ccc", "aaa", "ccc"};
+  auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+
+  auto expected = cudf::test::strings_column_wrapper(
+    {"eee", "aaa", "", "", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 0, 0, 1, 1, 1, 1, 1});
+  auto decoded = cudf::dictionary::decode(result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
+}
