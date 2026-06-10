@@ -831,6 +831,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
 
   // Shuffle to randomize order while preserving uniqueness
   // thrust::shuffle requires thrust:: engines due to URBG interface mismatch
+  // TODO: Replace when updating to CCCL 3.5 with NVIDIA/cccl#9319.
   thrust::shuffle(thrust::device,
                   col->mutable_view().template begin<T>(),
                   col->mutable_view().template end<T>(),

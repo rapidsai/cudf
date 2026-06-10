@@ -83,6 +83,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
 
   // Shuffle gather maps to avoid cache effects
   // thrust::shuffle requires thrust:: engines due to URBG interface mismatch
+  // TODO: Replace when updating to CCCL 3.5 with NVIDIA/cccl#9319.
   thrust::shuffle(thrust::device,
                   build_table_gather_map->mutable_view().begin<cudf::size_type>(),
                   build_table_gather_map->mutable_view().end<cudf::size_type>(),

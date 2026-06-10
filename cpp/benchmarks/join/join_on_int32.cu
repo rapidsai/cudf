@@ -121,6 +121,7 @@ std::unique_ptr<cudf::column> generate_int32_keys(cudf::size_type num_rows, cudf
 
   // Shuffle the generated data to reduce bias from data locality.
   // Use a fixed seed for reproducibility across benchmark runs.
+  // TODO: Replace when updating to CCCL 3.5 with NVIDIA/cccl#9319.
   thrust::shuffle(rmm::exec_policy_nosync(stream),
                   result->mutable_view().begin<int32_t>(),
                   result->mutable_view().end<int32_t>(),
