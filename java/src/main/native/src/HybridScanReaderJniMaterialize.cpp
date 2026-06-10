@@ -45,14 +45,11 @@ Java_ai_rapids_cudf_HybridScanReader_materializeFilterColumnsWithKind(JNIEnv* en
     auto stream   = cudf::get_default_stream();
     auto mr       = cudf::get_current_device_resource_ref();
     // Build the owned row mask according to the requested kind.
-    std::unique_ptr<cudf::column> row_mask_col;
-    if (all_true) {
-      row_mask_col = wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr);
-    } else {
-      row_mask_col = wrapper->reader->build_row_mask_with_page_index_stats(
-        holder.span(), wrapper->options, stream, mr);
-    }
-    auto mut_view = row_mask_col->mutable_view();
+    auto row_mask_col = all_true
+                          ? wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr)
+                          : wrapper->reader->build_row_mask_with_page_index_stats(
+                              holder.span(), wrapper->options, stream, mr);
+    auto mut_view     = row_mask_col->mutable_view();
     auto mode =
       use_data_page_mask ? exp_pq::use_data_page_mask::YES : exp_pq::use_data_page_mask::NO;
     auto result = wrapper->reader->materialize_filter_columns(
@@ -169,13 +166,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilt
     // implicitly ends the previous one.
     wrapper->chunked_filter_row_mask.reset();
     // Build the owned row mask according to the requested kind.
-    std::unique_ptr<cudf::column> row_mask_col;
-    if (all_true) {
-      row_mask_col = wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr);
-    } else {
-      row_mask_col = wrapper->reader->build_row_mask_with_page_index_stats(
-        holder.span(), wrapper->options, stream, mr);
-    }
+    auto row_mask_col = all_true
+                          ? wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr)
+                          : wrapper->reader->build_row_mask_with_page_index_stats(
+                              holder.span(), wrapper->options, stream, mr);
     auto mode =
       use_data_page_mask ? exp_pq::use_data_page_mask::YES : exp_pq::use_data_page_mask::NO;
     wrapper->reader->setup_chunking_for_filter_columns(chunk_limit,

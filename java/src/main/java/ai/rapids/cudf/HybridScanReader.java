@@ -93,6 +93,11 @@ public class HybridScanReader implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HybridScanReader.class);
 
+  /**
+   * Subclasses {@link MemoryCleaner.Cleaner} (the standard cudf-java pattern for native-backed
+   * resources) so the native reader is destroyed exactly once on {@link #close()} and is
+   * reported as a leak if reclaimed by the garbage collector without being closed.
+   */
   private static final class HybridScanReaderCleaner extends MemoryCleaner.Cleaner {
     private long nativeHandle;
 
@@ -288,7 +293,17 @@ public class HybridScanReader implements AutoCloseable {
     return decodeRanges(filterColumnChunksByteRanges(cleaner.nativeHandle, rowGroupIndices));
   }
 
-  /** @return byte ranges for the column chunks of <em>payload</em> columns. */
+  /**
+   * @return byte ranges for the column chunks of <em>payload</em> columns.
+   *
+   * <p>This result is order-dependent. If filter columns have already been processed on this
+   * reader (e.g. via {@link #filterColumnChunksByteRanges(int[])} or
+   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}),
+   * the filter columns are excluded and only the payload columns are returned. If filter columns
+   * have not yet been processed, nothing is excluded and the ranges cover the full set of columns
+   * that would be read i.e. the columns projected via {@link ParquetOptions}, or all columns in
+   * the file when no projection was set.
+   */
   public ByteRange[] payloadColumnChunksByteRanges(int[] rowGroupIndices) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);

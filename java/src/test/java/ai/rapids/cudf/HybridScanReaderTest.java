@@ -1164,9 +1164,15 @@ public class HybridScanReaderTest extends CudfTestBase {
         footer = extractFooter(file);
         reader = new HybridScanReader(footer, optsForColumns(cols), null);
       } catch (Throwable t) {
-        if (reader != null) reader.close();
-        if (footer != null) footer.close();
-        file.close();
+        for (AutoCloseable c : new AutoCloseable[]{reader, footer, file}) {
+          if (c != null) {
+            try {
+              c.close();
+            } catch (Throwable closeEx) {
+              t.addSuppressed(closeEx);
+            }
+          }
+        }
         throw t;
       }
       return new OpenReader(file, footer, reader, null);
@@ -1372,10 +1378,11 @@ public class HybridScanReaderTest extends CudfTestBase {
       for (int i = 0; i < ranges.length; i++) {
         ByteRange r = ranges[i];
         DeviceMemoryBuffer dev = DeviceMemoryBuffer.allocate(r.size());
+        // Store before the copy so the catch handler frees it if slice/copy throws.
+        out[i] = dev;
         try (HostMemoryBuffer slice = fileBuffer.slice(r.offset(), r.size())) {
           dev.copyFromHostBuffer(slice);
         }
-        out[i] = dev;
       }
       return out;
     } catch (Throwable t) {
