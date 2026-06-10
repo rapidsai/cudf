@@ -12,13 +12,14 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <src/rolling/detail/rolling.hpp>
 
 #include <limits>
 #include <set>
@@ -53,7 +54,8 @@ TEST(MultiOrderByRangeWindows, UngroupedPeerBounds)
                                                               null_orders,
                                                               cudf::current_row{},
                                                               cudf::current_row{},
-                                                              cudf::get_default_stream()),
+                                                              cudf::get_default_stream(),
+                                                              cudf::get_current_device_resource_ref()),
                              size_type_column{1, 2, 1, 1, 2, 1},
                              size_type_column{1, 0, 0, 1, 0, 0});
 
@@ -63,7 +65,8 @@ TEST(MultiOrderByRangeWindows, UngroupedPeerBounds)
                                                               null_orders,
                                                               cudf::unbounded{},
                                                               cudf::current_row{},
-                                                              cudf::get_default_stream()),
+                                                              cudf::get_default_stream(),
+                                                              cudf::get_current_device_resource_ref()),
                              size_type_column{1, 2, 3, 4, 5, 6},
                              size_type_column{1, 0, 0, 1, 0, 0});
 }
@@ -84,7 +87,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBounds)
                                      null_orders,
                                      cudf::unbounded{},
                                      cudf::current_row{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 2, 3, 1, 2, 3, 4, 5},
     size_type_column{0, 0, 0, 1, 0, 0, 1, 0});
 
@@ -95,7 +99,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBounds)
                                      null_orders,
                                      cudf::current_row{},
                                      cudf::unbounded{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 1, 1, 1, 2, 1, 1, 2},
     size_type_column{2, 1, 0, 4, 3, 2, 1, 0});
 }
@@ -116,7 +121,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBoundsAscDesc)
                                      null_orders,
                                      cudf::unbounded{},
                                      cudf::current_row{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 2, 3, 1, 2, 3, 4, 5},
     size_type_column{0, 0, 0, 0, 1, 0, 1, 0});
 
@@ -127,7 +133,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBoundsAscDesc)
                                      null_orders,
                                      cudf::current_row{},
                                      cudf::unbounded{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 1, 1, 1, 1, 2, 1, 2},
     size_type_column{2, 1, 0, 4, 3, 2, 1, 0});
 }
@@ -148,7 +155,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBoundsDescDesc)
                                      null_orders,
                                      cudf::unbounded{},
                                      cudf::current_row{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 2, 3, 1, 2, 3, 4, 5},
     size_type_column{0, 0, 0, 1, 0, 0, 1, 0});
 
@@ -159,7 +167,8 @@ TEST(MultiOrderByRangeWindows, GroupedPeerBoundsDescDesc)
                                      null_orders,
                                      cudf::current_row{},
                                      cudf::unbounded{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 1, 1, 1, 2, 1, 1, 2},
     size_type_column{2, 1, 0, 4, 3, 2, 1, 0});
 }
@@ -179,7 +188,8 @@ TEST(MultiOrderByRangeWindows, CurrentRowIncludesNullPeers)
                                      null_orders,
                                      cudf::current_row{},
                                      cudf::current_row{},
-                                     cudf::get_default_stream()),
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
     size_type_column{1, 2, 1, 1},
     size_type_column{1, 0, 0, 0});
 }
@@ -216,7 +226,8 @@ TEST(MultiOrderByRangeWindows, CurrentRowPeerDetectionAcrossAllNullPositions)
                                              null_orders,
                                              cudf::current_row{},
                                              cudf::current_row{},
-                                             cudf::get_default_stream());
+                                             cudf::get_default_stream(),
+                                             cudf::get_current_device_resource_ref());
 
           auto const [preceding_host, _p_valid] = cudf::test::to_host<cudf::size_type>(*preceding);
           auto const [following_host, _f_valid] = cudf::test::to_host<cudf::size_type>(*following);
@@ -250,7 +261,8 @@ TEST(MultiOrderByRangeWindows, BoundedRangesAreUnsupported)
                                                        null_orders,
                                                        cudf::bounded_closed{*delta},
                                                        cudf::current_row{},
-                                                       cudf::get_default_stream())),
+                                                       cudf::get_default_stream(),
+                                                       cudf::get_current_device_resource_ref())),
     cudf::logic_error);
 }
 

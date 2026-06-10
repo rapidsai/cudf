@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -398,6 +398,50 @@ TEST_F(StringsExtractTests, LargeRegex)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::extract(strings_view, *prog);
   std::vector<char const*> h_expected{"quick", nullptr, nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected);
+}
+
+TEST_F(StringsExtractTests, CrlfLineAnchorExtNewline)
+{
+  // extract group 1 of ([a-z]+)$ at \r\n line ends; null where no match.
+  // Verified vs OpenJDK 17 group(1) of first match.
+  auto input = cudf::test::strings_column_wrapper({"abc\r\n",
+                                                   "abc\n",
+                                                   "abc\r",
+                                                   "abc",
+                                                   "a\r\nb",
+                                                   "abc\r\n\r\n",
+                                                   "",
+                                                   "abc" NEXT_LINE,
+                                                   "a\nb\r\nc",
+                                                   "\r\n",
+                                                   "\r\nabc",
+                                                   "x\n\r",
+                                                   "a\r\rb",
+                                                   "a\n\nb"});
+  auto view  = cudf::strings_column_view(input);
+  auto prog =
+    cudf::strings::regex_program::create("([a-z]+)$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::extract(view, *prog);
+
+  std::vector<char const*> h_expected{"abc",
+                                      "abc",
+                                      "abc",
+                                      "abc",
+                                      "b",
+                                      nullptr,
+                                      nullptr,
+                                      "abc",
+                                      "c",
+                                      nullptr,
+                                      "abc",
+                                      nullptr,
+                                      "b",
+                                      "b"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
