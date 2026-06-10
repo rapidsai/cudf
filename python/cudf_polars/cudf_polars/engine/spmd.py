@@ -10,21 +10,22 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
+import pylibcudf as plc
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
+from pylibcudf.contiguous_split import pack
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
 from rapidsmpf.communicator.ucxx import barrier
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
@@ -51,11 +52,11 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
+    import polars as pl
+
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -162,12 +163,11 @@ def allgather_polars_dataframe(
 
     plc_table = plc.Table.from_arrow(local_df, stream=stream)
 
-    packed_data = PackedData.from_cudf_packed_columns(
+    packed_data = packed_data_from_cudf_packed_columns(
         pack(plc_table, stream),
         stream,
         ctx.br(),
     )
-
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
     try:
@@ -376,7 +376,14 @@ class SPMDEngine(StreamingEngine):
 
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            self._ctx = Context.from_options(comm.logger, mr, self.rapidsmpf_options)
+            if self.rapidsmpf_options is not None:
+                statistics = Statistics.from_options(self.rapidsmpf_options)
+            else:
+                statistics = None
+
+            self._ctx = Context.from_options(
+                comm.logger, mr, self.rapidsmpf_options, statistics
+            )
             exit_stack.callback(self._cleanup_ctx)
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
@@ -486,7 +493,15 @@ class SPMDEngine(StreamingEngine):
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
-        self._ctx = Context.from_options(self._comm.logger, self._mr, rapidsmpf_options)
+
+        if rapidsmpf_options is not None:
+            statistics = Statistics.from_options(rapidsmpf_options)
+        else:
+            statistics = None
+
+        self._ctx = Context.from_options(
+            self._comm.logger, self._mr, rapidsmpf_options, statistics
+        )
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
