@@ -14,7 +14,12 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
-from cudf_polars.streaming.io import SplitScan, StreamingScan, expand_scan_for_rank
+from cudf_polars.streaming.io import (
+    FusedScan,
+    SplitScan,
+    StreamingScan,
+    expand_scan_for_rank,
+)
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -217,7 +222,7 @@ def test_expand_scan_for_rank_fused_and_single_read(
         parquet_options=ParquetOptions(),
     )
     for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
-        assert isinstance(scan, Scan)
+        assert isinstance(scan, FusedScan)
         assert scan.paths == expected_paths
 
 
@@ -251,6 +256,7 @@ def test_expand_scan_for_rank_split_files(
 def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([scan], scan, context=ctx)
+        StreamingScan.do_evaluate([fused], scan, context=ctx)
