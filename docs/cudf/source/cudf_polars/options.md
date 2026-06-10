@@ -130,9 +130,9 @@ Lower-level streaming runtime knobs. Most users will not need to touch these dir
 
 These environment variables are intended for library developers and advanced users.
 
-| Environment variable        | Description                                                                                                           | Default |
-|-----------------------------|-----------------------------------------------------------------------------------------------------------------------|---------|
-| `CUDF_POLARS_WARN_UNSTABLE` | Emit an {class}`~cudf_polars.UnstableWarning` whenever an unstable cudf-polars feature is used. Set to `1` to enable. | `0`     |
+| Environment variable        | Description                                                                                                    | Default |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------|---------|
+| `CUDF_POLARS_WARN_UNSTABLE` | Raises a `cudf_polars.UnstableWarning` whenever an unstable cudf-polars feature is used. Set to `1` to enable. | `0`     |
 
 <!-- Reference links -->
 [rapidsmpf-config]: https://docs.rapids.ai/api/rapidsmpf/nightly/configuration/
