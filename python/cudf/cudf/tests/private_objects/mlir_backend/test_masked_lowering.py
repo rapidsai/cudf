@@ -8,12 +8,11 @@ writes the results to host arrays for comparison. Together they cover:
 
 * the data model registration (struct ``{value_ty, i1}``);
 * ``Masked(value, valid)`` constructor lowering;
-* the generic ``.value`` / ``.valid`` getattr lowering;
-* ``pack_return`` for both ``MaskedType`` (identity) and plain scalar
-  inputs (wrap with ``valid=True``).
+* the generic ``.value`` / ``.valid`` getattr lowering.
 
-Out of scope (later PRs): NA, masked binary/unary/comparison ops,
-masked-to-masked unification, datetime / timedelta / string value types.
+Out of scope (later PRs): ``pack_return``, NA, masked binary/unary/
+comparison ops, masked-to-masked unification, datetime / timedelta /
+string value types.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ import cudf.core.udf.mlir_backend.masked_lowering
 
 # Importing these registers typing/lowering on numba_cuda_mlir's registries.
 import cudf.core.udf.mlir_backend.masked_typing  # noqa: F401
-from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import DEPRECATED_SM_REGEX
 from cudf.utils._numba import _CUDFNumbaConfig
 
@@ -142,60 +141,4 @@ def test_masked_constructor_with_runtime_valid_flag():
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(k, out_value, out_valid, in_v, in_valid)
     assert int(out_value.get()[0]) == 42
-    assert bool(out_valid.get()[0]) is False
-
-
-# --- pack_return -----------------------------------------------------------
-
-
-@pytest.mark.parametrize("nb_ty,np_dt,sample", _DTYPE_SAMPLES)
-def test_pack_return_of_scalar(nb_ty, np_dt, sample):
-    """``pack_return(x: scalar)`` -> ``Masked(x, True)``, for every supported dtype."""
-
-    @cuda.jit(device=True)
-    def fn(x):
-        return pack_return(x)
-
-    @_jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
-    def k(out_value, out_valid, v):
-        m = fn(v[0])
-        out_value[0] = m.value
-        out_valid[0] = m.valid
-
-    in_v = cp.array([sample], dtype=np_dt)
-    out_value = cp.zeros(1, dtype=np_dt)
-    out_valid = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out_value, out_valid, in_v)
-    assert out_value.get()[0] == sample
-    assert bool(out_valid.get()[0]) is True
-
-
-def test_pack_return_of_masked_is_identity():
-    """``pack_return(m: Masked)`` -> ``m`` (round-trips both fields)."""
-
-    @cuda.jit(device=True)
-    def fn(m):
-        return pack_return(m)
-
-    @_jit(
-        types.void(
-            types.int64[::1],
-            types.boolean[::1],
-            types.int64[::1],
-            types.boolean[::1],
-        )
-    )
-    def k(out_value, out_valid, v, valid):
-        m_in = Masked(v[0], valid[0])
-        m_out = fn(m_in)
-        out_value[0] = m_out.value
-        out_valid[0] = m_out.valid
-
-    in_v = cp.array([777], dtype=np.int64)
-    in_valid = cp.array([False], dtype=np.bool_)
-    out_value = cp.zeros(1, dtype=np.int64)
-    out_valid = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out_value, out_valid, in_v, in_valid)
-    # Identity: both fields survive untouched.
-    assert int(out_value.get()[0]) == 777
     assert bool(out_valid.get()[0]) is False

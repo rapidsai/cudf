@@ -11,12 +11,11 @@ Scope of this PR (intentionally minimal):
   ``float32``, ``float64``, ``boolean``) -- string / datetime / timedelta
   cases are layered in later PRs;
 * the ``Masked(value, valid)`` constructor;
-* the ``.value`` and ``.valid`` attributes;
-* the ``pack_return`` template that bridges plain scalars and
-  ``MaskedType``.
+* the ``.value`` and ``.valid`` attributes.
 
 Out of scope (deferred to subsequent PRs in the stack):
 
+* ``pack_return`` (the scalar-vs-Masked return bridge for UDFs);
 * ``NAType`` and ``Masked + NA`` semantics;
 * binary / unary / comparison / bitwise op typing;
 * string- and datetime-flavored value types;
@@ -32,13 +31,12 @@ from numba_cuda_mlir.extending import typing_registry
 from numba_cuda_mlir.numba_cuda import types as nb_types
 from numba_cuda_mlir.numba_cuda.types.misc import unliteral
 from numba_cuda_mlir.numba_cuda.typing.templates import (
-    AbstractTemplate,
     AttributeTemplate,
     ConcreteTemplate,
 )
 from numba_cuda_mlir.typing import signature as nb_signature
 
-from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.api import Masked
 
 # Numba type classes that may serve as the inner value of a ``MaskedType``
 # at this layer. Subsequent PRs extend this tuple as new value types
@@ -87,8 +85,8 @@ class MaskedType(types.Type):
 
 
 def _register():
-    """Register typing for ``Masked``, ``pack_return``, and ``MaskedType``
-    attributes with ``numba_cuda_mlir``. Called once at module import.
+    """Register typing for ``Masked`` and ``MaskedType`` attributes with
+    ``numba_cuda_mlir``. Called once at module import.
     """
 
     # ``Masked(value, valid)`` constructor: produces a ``Masked(value_ty)``.
@@ -111,21 +109,6 @@ def _register():
                 return typ.value_type
             if attr == "valid":
                 return types.boolean
-            return None
-
-    # ``pack_return(x)``:
-    #   - if x is already a Masked, returns x's type (identity)
-    #   - if x is a plain numeric scalar, returns Masked(x's type)
-    @typing_registry.register_global(pack_return)
-    class PackReturnTemplate(AbstractTemplate):
-        def generic(self, args, kws):
-            if len(args) != 1 or kws:
-                return None
-            (arg,) = args
-            if isinstance(arg, MaskedType):
-                return nb_signature(arg, arg)
-            if isinstance(arg, _SUPPORTED_MASKED_VALUE_TYPE_CLASSES):
-                return nb_signature(MaskedType(arg), arg)
             return None
 
 
