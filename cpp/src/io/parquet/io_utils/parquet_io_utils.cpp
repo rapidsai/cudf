@@ -106,7 +106,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     auto const speculative_read_offset = len - speculative_read_size;
 
     auto speculative_buffer = datasource.host_read(speculative_read_offset, speculative_read_size);
-    CUDF_EXPECTS(speculative_buffer->size() >= speculative_read_size,
+    CUDF_EXPECTS(speculative_buffer->size() == speculative_read_size,
                  "Failed to read Parquet speculative metadata bytes");
 
     auto const ender = reinterpret_cast<file_ender_s const*>(
