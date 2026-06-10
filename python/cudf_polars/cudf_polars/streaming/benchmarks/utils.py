@@ -661,6 +661,8 @@ class RunConfig:
         if successful_durations:
             total_mean_time = sum(mean(durations) for durations in successful_durations)
             print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+        else:
+            print("No successful queries")
 
 
 def get_executor_options(
