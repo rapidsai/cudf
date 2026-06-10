@@ -8,6 +8,7 @@
 #include <cudf_streaming/streaming/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
+#include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/streaming/chunks/partition.hpp>
 #include <rapidsmpf/streaming/core/lineariser.hpp>
 
@@ -76,7 +77,7 @@ rapidsmpf::streaming::Actor unpack_and_concat(std::shared_ptr<rapidsmpf::streami
     auto stream = ctx->br()->stream_pool().get_stream();
 
     std::unique_ptr<cudf::table> ret = cudf_streaming::integrations::unpack_and_concat(
-      cudf_streaming::integrations::unspill_partitions(
+      rapidsmpf::unspill_partitions(
         std::move(data), ctx->br().get(), rapidsmpf::AllowOverbooking::NO),
       stream,
       ctx->br().get());

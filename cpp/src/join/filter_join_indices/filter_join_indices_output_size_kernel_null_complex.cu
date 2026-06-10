@@ -1,13 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "filter_join_indices_kernel.cuh"
-#include "filter_join_indices_kernel.hpp"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.cuh"
+#include "join/filter_join_indices/filter_join_indices_output_size_kernel.hpp"
 
 namespace cudf::detail {
-template void launch_filter_gather_map_kernel<false, true>(
+template void launch_filter_output_size_kernel<true, true>(
   cudf::table_device_view const& left_table,
   cudf::table_device_view const& right_table,
   cudf::device_span<cudf::size_type const> left_indices,
@@ -15,6 +15,8 @@ template void launch_filter_gather_map_kernel<false, true>(
   cudf::ast::detail::expression_device_view device_expression_data,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,
-  bool* output_flags,
+  cudf::join_kind join_kind,
+  std::size_t* count_out,
+  bool* left_passing_marks,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::detail
