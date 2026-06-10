@@ -860,10 +860,10 @@ TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmitted)
   auto const nanf = std::numeric_limits<float>::quiet_NaN();
   auto const nand = std::numeric_limits<double>::quiet_NaN();
 
-  column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};      // NaN mixed with non-NaN
-  column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};        // double variant
-  column_wrapper<float> col_f_allnan{{nanf, nanf, nanf, nanf}};   // all NaN
-  column_wrapper<float> col_f_nonan{{1.0f, 2.0f, 3.0f, 4.0f}};    // control: no NaN
+  column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};     // NaN mixed with non-NaN
+  column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};       // double variant
+  column_wrapper<float> col_f_allnan{{nanf, nanf, nanf, nanf}};  // all NaN
+  column_wrapper<float> col_f_nonan{{1.0f, 2.0f, 3.0f, 4.0f}};   // control: no NaN
 
   auto const expected = table_view{{col_f_nan, col_d_nan, col_f_allnan, col_f_nonan}};
 
