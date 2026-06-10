@@ -41,7 +41,7 @@ from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection,
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -691,17 +691,13 @@ async def chunkwise_evaluate(
                 ir_context=ir_context,
             )
         del msg, cd
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await send_chunk(context, ch_out, result, seq_num, tracer=tracer)
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
         result = await evaluate_chunk(context, chunk, ir, ir_context=ir_context)
         del chunk
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(0, result))
+        await send_chunk(context, ch_out, result, 0, tracer=tracer)
 
     await ch_out.drain(context)
 
