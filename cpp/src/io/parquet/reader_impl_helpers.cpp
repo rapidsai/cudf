@@ -5,13 +5,13 @@
 
 #include "reader_impl_helpers.hpp"
 
-#include "column_path_helpers.hpp"
 #include "compact_protocol_reader.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 #include "parquet_common.hpp"
+#include "parquet_reader_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>

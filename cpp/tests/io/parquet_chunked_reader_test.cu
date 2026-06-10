@@ -4,7 +4,7 @@
  */
 
 #include "compression_common.hpp"
-#include "io/parquet/chunked_reader_helpers.hpp"
+#include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -1097,7 +1097,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   }
 }
 
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCountWithoutExplicitPassLimit)
 {
   auto constexpr num_rows = 100'000;
 
@@ -1120,75 +1120,14 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   auto const byte_limit = page_limit_rows * sizeof(int);
   auto const read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  cudf::test::log_capture log;
   auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
+  EXPECT_TRUE(log.has_messages());
 
   do {
     // Every fourth row is null
     EXPECT_EQ(reader.read_chunk().tbl->get_column(0).null_count(), page_limit_rows / 4);
   } while (reader.has_next());
-}
-
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadDerivesPassLimitWhenUnset)
-{
-  auto constexpr num_rows = 1'000'000;
-  auto const value_iter   = cuda::counting_iterator<int64_t>{0};
-  std::vector<std::unique_ptr<cudf::column>> input_columns;
-  input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
-  auto expected       = std::make_unique<cudf::table>(std::move(input_columns));
-  auto const filepath = temp_env->get_temp_filepath("chunked_read_derive_pass_limit.parquet");
-  auto const write_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
-      .compression(cudf::io::compression_type::SNAPPY)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
-      .max_page_size_bytes(cudf::io::default_max_page_size_bytes)
-      .max_page_size_rows(cudf::io::default_max_page_size_rows)
-      .build();
-  cudf::io::write_parquet(write_opts);
-
-  auto constexpr chunk_read_limit = std::size_t{500'000};
-  auto const derived_pass_read_limit =
-    cudf::io::parquet::detail::derive_pass_read_limit(chunk_read_limit);
-
-  // Read using the constructor overload that does NOT take a pass_read_limit.
-  auto const read_without_pass_limit = [&]() {
-    auto const read_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
-    auto reader     = cudf::io::chunked_parquet_reader(chunk_read_limit, read_opts);
-    auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
-    auto num_chunks = 0;
-    do {
-      auto chunk = reader.read_chunk();
-      ++num_chunks;
-      out_tables.emplace_back(std::move(chunk.tbl));
-    } while (reader.has_next());
-    auto out_tviews = std::vector<cudf::table_view>{};
-    for (auto const& tbl : out_tables) {
-      out_tviews.emplace_back(tbl->view());
-    }
-    return std::pair{cudf::concatenate(out_tviews), num_chunks};
-  };
-
-  auto const [derived_table, derived_num_chunks] = read_without_pass_limit();
-  // Explicitly passing the helper-derived pass limit must match the no-pass-limit behavior.
-  auto const [explicit_table, explicit_num_chunks] =
-    chunked_read(filepath, chunk_read_limit, derived_pass_read_limit);
-  // Explicit pass_read_limit == 0 keeps its original meaning (unlimited)
-  auto const [unlimited_table, unlimited_num_chunks] =
-    chunked_read(filepath, chunk_read_limit, std::size_t{0});
-  auto const [big_pass_table, big_pass_num_chunks] =
-    chunked_read(filepath, chunk_read_limit, std::size_t{1} << 60);
-
-  // All paths must return the complete, correct table.
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *derived_table);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *explicit_table);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *unlimited_table);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *big_pass_table);
-
-  // The no-pass-limit overload derives the same pass limit as the shared helper.
-  EXPECT_EQ(derived_num_chunks, explicit_num_chunks);
-
-  // Explicit pass_read_limit == 0 still means unlimited (unchanged).
-  EXPECT_EQ(unlimited_num_chunks, big_pass_num_chunks);
 }
 
 namespace {
