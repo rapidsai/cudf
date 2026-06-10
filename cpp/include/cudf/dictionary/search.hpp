@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -21,7 +21,7 @@ namespace dictionary {
  *
  * If the key does not exist in the dictionary the returned scalar will have `is_valid()==false`
  *
- * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
+ * @throw std::invalid_argument if `key.type() != dictionary.keys().type()` or dictionary is empty.
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
