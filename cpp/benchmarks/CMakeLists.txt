@@ -317,6 +317,13 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet compression-threshold TPC-H benchmark (EXPERIMENTAL/DNM, issue #17313) -----------------
+ConfigureNVBench(
+  PARQUET_COMPRESSION_THRESHOLD_TPCH_NVBENCH
+  io/parquet/parquet_compression_threshold_tpch.cpp
+)
+
+# ##################################################################################################
 # * parquet reader strings benchmark
 # ------------------------------------------------------------------
 ConfigureNVBench(
