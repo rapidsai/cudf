@@ -4,6 +4,7 @@
  */
 
 #include "io/orc/orc.hpp"
+#include "io/parquet/chunked_reader_helpers.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -30,10 +31,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cuda/numeric>
-
 #include <algorithm>
-#include <format>
 #include <functional>
 #include <utility>
 
@@ -734,29 +732,6 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   return writer->close(options.get_column_chunks_file_paths());
 }
-
-namespace parquet::detail {
-
-std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
-{
-  if (chunk_read_limit == 0) { return 0; }
-
-  // Derive a heuristic pass limit (1.5x the chunk_read_limit) to reduce surprising OOMs
-  auto const sum             = cuda::add_overflow(chunk_read_limit, chunk_read_limit / 2);
-  auto const pass_read_limit = sum.overflow ? 0 : sum.value;
-
-  CUDF_LOG_WARN(std::format(
-    "Chunked Parquet reader: a chunk_read_limit ({} bytes) was provided without a "
-    "pass_read_limit; defaulting pass_read_limit to {} bytes to bound input and decompression "
-    "memory and reduce the risk of out-of-memory errors on large files. Use a constructor overload "
-    "that accepts pass_read_limit to control this explicitly.",
-    chunk_read_limit,
-    pass_read_limit));
-
-  return pass_read_limit;
-}
-
-}  // namespace parquet::detail
 
 chunked_parquet_reader::chunked_parquet_reader() = default;
 

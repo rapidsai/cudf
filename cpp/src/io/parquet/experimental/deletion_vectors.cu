@@ -4,10 +4,10 @@
  */
 
 #include "deletion_vectors_helpers.hpp"
+#include "io/parquet/chunked_reader_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/roaring_bitmap.hpp>

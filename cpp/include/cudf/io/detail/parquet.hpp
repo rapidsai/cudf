@@ -266,16 +266,6 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 std::vector<parquet::FileMetaData> read_parquet_footers(
   host_span<std::unique_ptr<datasource> const> sources);
 
-/**
- * @brief Derive a bounded `pass_read_limit` for chunked reads constructed without a
- * `pass_read_limit`.
- *
- * @param chunk_read_limit Output chunk byte limit
- *
- * @return The derived input pass byte limit
- */
-[[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
-
 }  // namespace parquet::detail
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

@@ -696,6 +696,7 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/bloom_filter_reader.cu
+  src/io/parquet/chunked_reader_helpers.cpp
   src/io/parquet/column_path_helpers.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
