@@ -15,7 +15,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
