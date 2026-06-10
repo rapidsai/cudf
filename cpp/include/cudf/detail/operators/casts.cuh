@@ -231,11 +231,10 @@ __device__ numeric::decimal128 cast_to_decimal128(numeric::decimal<R> a)
  * @param a Input value.
  * @param new_scale Target decimal scale.
  */
-template <typename R, typename Scale>
+template <typename R, signed_integer Scale>
 __device__ numeric::decimal<R> rescale(numeric::decimal<R> a, Scale new_scale)
-  requires(!nullable<Scale> && cuda::std::same_as<Scale, int32_t>)
 {
-  return a.rescaled(numeric::scale_type{new_scale});
+  return a.rescaled(numeric::scale_type{static_cast<int32_t>(new_scale)});
 }
 
 }  // namespace ops
