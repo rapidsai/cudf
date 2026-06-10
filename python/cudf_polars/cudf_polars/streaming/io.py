@@ -146,25 +146,12 @@ def expand_scan_for_rank(
         sindex = local_offset % plan.factor
         splits_created = 0
         for path in local_paths:
-            base_scan = Scan(
-                ir.schema,
-                ir.typ,
-                ir.reader_options,
-                ir.cloud_options,
-                [path],
-                ir.with_columns,
-                ir.skip_rows,
-                ir.n_rows,
-                ir.row_index,
-                ir.include_file_paths,
-                ir.predicate,
-                parquet_options,
-            )
             while sindex < plan.factor and splits_created < local_count:
                 scans.append(
                     SplitScan(
                         ir.schema,
-                        base_scan,
+                        ir,
+                        [path],
                         sindex,
                         plan.factor,
                         parquet_options,
@@ -201,6 +188,7 @@ class SplitScan(IR):
     __slots__ = (
         "base_scan",
         "parquet_options",
+        "paths",
         "schema",
         "split_index",
         "total_splits",
@@ -208,6 +196,7 @@ class SplitScan(IR):
     _non_child = (
         "schema",
         "base_scan",
+        "paths",
         "split_index",
         "total_splits",
         "parquet_options",
@@ -215,6 +204,8 @@ class SplitScan(IR):
     _n_non_child_args = 13
     base_scan: Scan
     """Scan operation this node is based on."""
+    paths: list[str]
+    """File path for this split task."""
     split_index: int
     """Index of the current split."""
     total_splits: int
@@ -226,12 +217,14 @@ class SplitScan(IR):
         self,
         schema: Schema,
         base_scan: Scan,
+        paths: list[str],
         split_index: int,
         total_splits: int,
         parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.base_scan = base_scan
+        self.paths = paths
         self.split_index = split_index
         self.total_splits = total_splits
         self._non_child_args = (
@@ -240,14 +233,14 @@ class SplitScan(IR):
             base_scan.schema,
             base_scan.typ,
             base_scan.reader_options,
-            base_scan.paths,
+            paths,
             base_scan.with_columns,
             base_scan.skip_rows,
             base_scan.n_rows,
             base_scan.row_index,
             base_scan.include_file_paths,
             base_scan.predicate,
-            base_scan.parquet_options,
+            parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -346,9 +339,7 @@ class FusedScan(IR):
     Input from one or more complete files read as a single task.
 
     Covers both FUSED_FILES (N > 1 small files grouped together) and
-    SINGLE_FILE (N = 1).  The ``paths`` attribute holds the file group
-    assigned to this task; the remaining read options come from
-    ``base_scan``.
+    SINGLE_FILE (N = 1).
     """
 
     __slots__ = (
@@ -425,7 +416,8 @@ class FusedScan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with nvtx_annotate_cudf_polars(message=f"FusedScan: {len(paths)} files"):
+        names = ", ".join(Path(p).name for p in paths)
+        with nvtx_annotate_cudf_polars(message=f"FusedScan: {names}"):
             return Scan.do_evaluate(
                 schema,
                 typ,

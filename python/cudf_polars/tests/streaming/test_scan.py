@@ -223,7 +223,7 @@ def test_expand_scan_for_rank_fused_and_single_read(
     )
     for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
         assert isinstance(scan, FusedScan)
-        assert scan.paths == expected_paths
+        assert scan.base_scan.paths == expected_paths
 
 
 @pytest.mark.parametrize(
@@ -250,13 +250,13 @@ def test_expand_scan_for_rank_split_files(
         assert isinstance(scan, SplitScan)
         assert scan.split_index == split_index
         assert scan.total_splits == total_splits
-        assert scan.base_scan.paths == ["file.parquet"]
+        assert scan.paths == ["file.parquet"]
 
 
 def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
-    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
+    fused = FusedScan(scan.schema, scan, scan.parquet_options)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([fused], scan, context=ctx)
