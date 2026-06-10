@@ -7,6 +7,7 @@ import datetime
 import itertools
 import operator
 import warnings
+from collections import Counter
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
@@ -102,6 +103,39 @@ def _get_result_name(
     left_name: Hashable, right_name: Hashable
 ) -> Hashable | None:
     return left_name if _is_same_name(left_name, right_name) else None
+
+
+def _tag_levels(names: list[Hashable]) -> list[tuple[Hashable, int]]:
+    """Tag each level name with its occurrence index.
+
+    Identifying a level by ``(name, occurrence)`` lets duplicate level names be
+    matched by their position among equal names instead of collapsing onto a
+    single join key. The tags are unique by construction.
+    """
+    seen: Counter = Counter()
+    tags = []
+    for name in names:
+        tags.append((name, seen[name]))
+        seen[name] += 1
+    return tags
+
+
+def _join_label(
+    side: str,
+    pos: int,
+    tag: tuple[Hashable, int],
+    overlap_index: dict[tuple[Hashable, int], int],
+    key_labels: list[str],
+) -> str:
+    """Map a level to its merge-key label.
+
+    Shared levels get a stable ``__join_key_<i>`` label so merge keys line up;
+    levels unique to one side get a distinct placeholder so non-key columns
+    never collide.
+    """
+    if tag in overlap_index:
+        return key_labels[overlap_index[tag]]
+    return f"__{side}_{pos}"
 
 
 def _lexsorted_equal_range(
@@ -1305,51 +1339,32 @@ class Index(SingleColumnFrame):
         self_names = list(self.names)
         other_names = list(other.names)
 
-        # Identify each level by ``(name, occurrence)`` so that duplicate level
-        # names are matched by their position among equal names instead of
-        # collapsing onto a single join key.
-        def _tag(names):
-            counts: dict = {}
-            tags = []
-            for name in names:
-                occ = counts.get(name, 0)
-                counts[name] = occ + 1
-                tags.append((name, occ))
-            return tags
-
-        self_tags = _tag(self_names)
-        other_tags = _tag(other_names)
+        self_tags = _tag_levels(self_names)
+        other_tags = _tag_levels(other_names)
+        # ``self_tags`` are unique by construction, so this set only removes
+        # nothing; ``overlap`` stays an ordered list because ``overlap_index``
+        # below relies on self's level order.
         other_tag_set = set(other_tags)
-        # Shared ``(name, occurrence)`` levels, preserving self's order.
         overlap = [tag for tag in self_tags if tag in other_tag_set]
         if not overlap:
             raise ValueError("cannot join with no overlapping index names")
         overlap_index = {tag: i for i, tag in enumerate(overlap)}
 
-        # Give each shared level a stable join-key label and each level unique
-        # to one side a distinct placeholder label so merge keys line up and
-        # non-key columns never collide.
         key_labels = [f"__join_key_{i}" for i in range(len(overlap))]
+        left_labels = [
+            _join_label("l", i, tag, overlap_index, key_labels)
+            for i, tag in enumerate(self_tags)
+        ]
+        right_labels = [
+            _join_label("r", j, tag, overlap_index, key_labels)
+            for j, tag in enumerate(other_tags)
+        ]
 
-        def _label(side: str, pos: int, tag) -> str:
-            if tag in overlap_index:
-                return key_labels[overlap_index[tag]]
-            return f"__{side}_{pos}"
-
-        left_labels = [_label("l", i, t) for i, t in enumerate(self_tags)]
-        right_labels = [_label("r", j, t) for j, t in enumerate(other_tags)]
-
-        left_df = cudf.DataFrame(
-            {
-                lbl: cudf.Series._from_column(col)
-                for lbl, col in zip(left_labels, self._columns, strict=True)
-            }
+        left_df = cudf.DataFrame._from_data(
+            dict(zip(left_labels, self._columns, strict=True))
         )
-        right_df = cudf.DataFrame(
-            {
-                lbl: cudf.Series._from_column(col)
-                for lbl, col in zip(right_labels, other._columns, strict=True)
-            }
+        right_df = cudf.DataFrame._from_data(
+            dict(zip(right_labels, other._columns, strict=True))
         )
 
         # Preserve the row order of the side that drives the join; pandas only
@@ -1365,26 +1380,31 @@ class Index(SingleColumnFrame):
         else:
             merged = merged.sort_values(by="__join_order")
 
-        # Reassemble levels: self's levels then other's unique levels, or the
-        # reverse when joining with how="right".
+        # Reassemble levels: the driving side's levels in full, then the other
+        # side's unique levels. The driving side is ``self`` except for
+        # ``how="right"``, which leads with ``other``.
         if how == "right":
-            ordered = list(zip(right_labels, other_names, strict=True))
-            ordered += [
-                (lbl, name)
-                for lbl, name, tag in zip(
-                    left_labels, self_names, self_tags, strict=True
-                )
-                if tag not in overlap_index
-            ]
+            first_labels, first_names = right_labels, other_names
+            second_labels, second_names, second_tags = (
+                left_labels,
+                self_names,
+                self_tags,
+            )
         else:
-            ordered = list(zip(left_labels, self_names, strict=True))
-            ordered += [
-                (lbl, name)
-                for lbl, name, tag in zip(
-                    right_labels, other_names, other_tags, strict=True
-                )
-                if tag not in overlap_index
-            ]
+            first_labels, first_names = left_labels, self_names
+            second_labels, second_names, second_tags = (
+                right_labels,
+                other_names,
+                other_tags,
+            )
+        ordered = list(zip(first_labels, first_names, strict=True))
+        ordered += [
+            (lbl, name)
+            for lbl, name, tag in zip(
+                second_labels, second_names, second_tags, strict=True
+            )
+            if tag not in overlap_index
+        ]
 
         return cudf.MultiIndex.from_arrays(
             [merged[lbl] for lbl, _ in ordered],
