@@ -646,6 +646,14 @@ class CategoricalColumn(ColumnBase):
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if (
+            isinstance(dtype, np.dtype)
+            and dtype.kind in "iu"
+            and self.null_count > 0
+        ):
+            # pandas promotes a null-containing Categorical's categories to
+            # float, so converting to a non-nullable integer dtype raises.
+            raise ValueError("Cannot convert float NaN to integer")
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
