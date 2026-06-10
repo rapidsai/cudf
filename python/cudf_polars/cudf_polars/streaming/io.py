@@ -819,6 +819,7 @@ def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
     plc_dtype = dtype.plc_type
     dtype_id = dtype.id()
     if dtype_id == plc.TypeId.STRING:
+        # Decoded strings always have int32 offsets (4 bytes)
         return (nrows + 1) * 4 + nullmask
     if dtype_id not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
         plc.traits.is_fixed_width(plc_dtype)
