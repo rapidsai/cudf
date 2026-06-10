@@ -1,0 +1,29 @@
+# =============================================================================
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+# =============================================================================
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(CUDAToolkit)
+
+include("${CMAKE_CURRENT_LIST_DIR}/rtcx-targets.cmake")
+
+# Embed functions (add_embed, embed_includes, embed_blob, embed)
+# are included automatically so consumers don't need explicit include()
+include("${CMAKE_CURRENT_LIST_DIR}/embed.cmake")
+
+# Set rtcx_LIBCXX_DIR for consumers using embed_includes with libcxx headers.
+# When CPM-fetched from source, rtcx_SOURCE_DIR is available.
+# When installed, use the installed location.
+if(DEFINED rtcx_SOURCE_DIR)
+  set(rtcx_LIBCXX_DIR "${rtcx_SOURCE_DIR}/libcxx")
+else()
+  set(rtcx_LIBCXX_DIR "${PACKAGE_PREFIX_DIR}/share/rtcx/libcxx")
+endif()
+
+check_required_components(rtcx)

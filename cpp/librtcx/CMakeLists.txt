@@ -87,3 +87,51 @@ if(RTCX_STATIC_LINK_NVJITLINK)
 else()
   target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVJITLINK=0)
 endif()
+
+# =============================================================================
+# Install / Export
+# =============================================================================
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+# Option to control install (default ON when built standalone, OFF when used as subdirectory)
+option(RTCX_INSTALL "Enable installation of rtcx targets" ${PROJECT_IS_TOP_LEVEL})
+
+if(RTCX_INSTALL)
+  install(
+    TARGETS rtcx
+    EXPORT rtcx-targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+
+  install(FILES rtcx.hpp sha256.hpp embed.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rtcx)
+
+  install(
+    EXPORT rtcx-targets
+    NAMESPACE rtcx::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtcx
+  )
+
+  install(FILES embed.cmake embed.in.cpp DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtcx)
+
+  install(DIRECTORY libcxx/ DESTINATION ${CMAKE_INSTALL_DATADIR}/rtcx/libcxx)
+
+  configure_package_config_file(
+    cmake/rtcxConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/rtcxConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtcx
+  )
+
+  write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/rtcxConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+  )
+
+  install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/rtcxConfig.cmake
+          ${CMAKE_CURRENT_BINARY_DIR}/rtcxConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtcx
+  )
+endif()
