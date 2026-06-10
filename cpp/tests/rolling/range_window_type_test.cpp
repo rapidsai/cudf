@@ -48,27 +48,29 @@ TEST(MultiOrderByRangeWindows, UngroupedPeerBounds)
   std::vector<cudf::null_order> null_orders{cudf::null_order::BEFORE, cudf::null_order::BEFORE};
   auto const orderby = cudf::table_view{{orderby0, orderby1}};
 
-  expect_range_windows_equal(cudf::detail::make_range_windows(cudf::table_view{},
-                                                              orderby,
-                                                              orders,
-                                                              null_orders,
-                                                              cudf::current_row{},
-                                                              cudf::current_row{},
-                                                              cudf::get_default_stream(),
-                                                              cudf::get_current_device_resource_ref()),
-                             size_type_column{1, 2, 1, 1, 2, 1},
-                             size_type_column{1, 0, 0, 1, 0, 0});
+  expect_range_windows_equal(
+    cudf::detail::make_range_windows(cudf::table_view{},
+                                     orderby,
+                                     orders,
+                                     null_orders,
+                                     cudf::current_row{},
+                                     cudf::current_row{},
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
+    size_type_column{1, 2, 1, 1, 2, 1},
+    size_type_column{1, 0, 0, 1, 0, 0});
 
-  expect_range_windows_equal(cudf::detail::make_range_windows(cudf::table_view{},
-                                                              orderby,
-                                                              orders,
-                                                              null_orders,
-                                                              cudf::unbounded{},
-                                                              cudf::current_row{},
-                                                              cudf::get_default_stream(),
-                                                              cudf::get_current_device_resource_ref()),
-                             size_type_column{1, 2, 3, 4, 5, 6},
-                             size_type_column{1, 0, 0, 1, 0, 0});
+  expect_range_windows_equal(
+    cudf::detail::make_range_windows(cudf::table_view{},
+                                     orderby,
+                                     orders,
+                                     null_orders,
+                                     cudf::unbounded{},
+                                     cudf::current_row{},
+                                     cudf::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
+    size_type_column{1, 2, 3, 4, 5, 6},
+    size_type_column{1, 0, 0, 1, 0, 0});
 }
 
 TEST(MultiOrderByRangeWindows, GroupedPeerBounds)
