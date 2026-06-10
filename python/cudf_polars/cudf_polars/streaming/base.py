@@ -20,13 +20,15 @@ if TYPE_CHECKING:
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "io_plan", "partitioned_on")
+    __slots__ = ("count", "estimated_chunk_bytes", "io_plan", "partitioned_on")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
     io_plan: IOPartitionPlan | None
     """IO partitioning plan (Scan nodes only)."""
+    estimated_chunk_bytes: int | None
+    """Estimated decompressed bytes per chunk (for Scan nodes)."""
 
     def __init__(
         self,
@@ -34,10 +36,12 @@ class PartitionInfo:
         *,
         partitioned_on: tuple[NamedExpr, ...] = (),
         io_plan: IOPartitionPlan | None = None,
+        estimated_chunk_bytes: int | None = None,
     ):
         self.count = count
         self.partitioned_on = partitioned_on
         self.io_plan = io_plan
+        self.estimated_chunk_bytes = estimated_chunk_bytes
 
     def __rich_repr__(self) -> Generator[Any, None, None]:
         """Formatting for rich.pretty.pprint."""

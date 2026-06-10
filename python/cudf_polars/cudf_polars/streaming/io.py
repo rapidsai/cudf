@@ -77,8 +77,8 @@ def _(
 
 def scan_partition_plan(
     ir: Scan, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
-) -> IOPartitionPlan:
-    """Extract the partitioning plan of a Scan operation."""
+) -> tuple[IOPartitionPlan, int | None]:
+    """Extract the partitioning plan and estimated chunk bytes of a Scan operation."""
     if ir.typ == "parquet":
         blocksize: int = config_options.executor.target_partition_size
         if source := stats.scan_stats.get(ir):
@@ -90,19 +90,21 @@ def scan_partition_plan(
             if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
                     # Split large files
-                    return IOPartitionPlan(
+                    plan = IOPartitionPlan(
                         math.ceil(file_size / blocksize),
                         IOPartitionFlavor.SPLIT_FILES,
                     )
+                    return plan, file_size // plan.factor
                 else:
                     # Fuse small files
-                    return IOPartitionPlan(
+                    plan = IOPartitionPlan(
                         max(blocksize // int(file_size), 1),
                         IOPartitionFlavor.FUSED_FILES,
                     )
+                    return plan, file_size * plan.factor
 
     # TODO: Use file sizes for csv and json
-    return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
+    return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE), None
 
 
 def expand_scan_for_rank(
@@ -438,7 +440,9 @@ def _(
         # The generate_ir_sub_network logic is NOT required
         # to obey this partition count. However, the count
         # WILL match after an IO operation (for now).
-        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
+        plan, estimated_chunk_bytes = scan_partition_plan(
+            ir, rec.state["stats"], config_options
+        )
         paths = list(ir.paths)
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(paths)
@@ -449,6 +453,7 @@ def _(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )
         count = 1
+        estimated_chunk_bytes = None
 
     if not can_use_native_parquet_node(
         ir,
@@ -468,7 +473,11 @@ def _(
         parquet_options=parquet_options,
     )
     new_ir = StreamingScan(scans, ir)
-    return new_ir, {new_ir: PartitionInfo(count=count, io_plan=plan)}
+    return new_ir, {
+        new_ir: PartitionInfo(
+            count=count, io_plan=plan, estimated_chunk_bytes=estimated_chunk_bytes
+        )
+    }
 
 
 class StreamingScan(IR):
