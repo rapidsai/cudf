@@ -69,10 +69,11 @@ def test_sink_csv(
         ("quote_char", "`"),
     ],
 )
-def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
+def test_sink_csv_unsupported_kwargs(engine: pl.GPUEngine, df, tmp_path, kwarg, value):
     assert_sink_ir_translation_raises(
         df,
         tmp_path / "unsupported.csv",
+        engine,
         {kwarg: value},
         NotImplementedError,
     )
@@ -114,7 +115,9 @@ def test_sink_parquet(
 @pytest.mark.parametrize(
     "compression", ["zstd", "gzip", "brotli", "snappy", "lz4", "uncompressed"]
 )
-def test_sink_parquet_compression_type(df, tmp_path, compression, compression_level):
+def test_sink_parquet_compression_type(
+    engine: pl.GPUEngine, df, tmp_path, compression, compression_level
+):
     is_zstd = compression == "zstd"
     is_zstd_and_none = is_zstd and compression_level is None
     # LZO compression not supported in polars
@@ -139,6 +142,7 @@ def test_sink_parquet_compression_type(df, tmp_path, compression, compression_le
         assert_sink_ir_translation_raises(
             df,
             tmp_path / "unsupported_compression.parquet",
+            engine,
             {"compression": compression, "compression_level": compression_level},
             NotImplementedError,
         )
@@ -182,11 +186,14 @@ def test_sink_in_memory_executor(df, tmp_path, file_type):
     POLARS_VERSION_LT_138,
     reason="compression parameter added in Polars 1.38",
 )
-def test_sink_compression_raises(df, tmp_path, compression, file_type):
+def test_sink_compression_raises(
+    engine: pl.GPUEngine, df, tmp_path, compression, file_type
+):
     path = tmp_path / f"out.{file_type}"
     assert_sink_ir_translation_raises(
         df,
         path,
+        engine,
         {"compression": compression, "check_extension": False},
         NotImplementedError,
     )

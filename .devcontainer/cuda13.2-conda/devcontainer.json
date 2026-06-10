@@ -6,7 +6,10 @@
       "CUDA": "13.2",
       "PYTHON_PACKAGE_MANAGER": "conda",
       "BASE": "rapidsai/devcontainers:26.08-cpp-mambaforge"
-    }
+    },
+    "cacheFrom": [
+      "ghcr.io/rapidsai/cudf/devcontainer:26.08-cuda13.2-conda"
+    ]
   },
   "runArgs": [
     "--rm",
@@ -49,7 +52,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.2-envs} ${localWorkspaceFolder}/../rapidsmpf"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.2-envs}"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -63,8 +66,7 @@
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.2-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../rapidsmpf,target=/home/coder/rapidsmpf,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.2-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {

@@ -223,7 +223,7 @@ Notes
 - Setting the cudf option `io.parquet.low_memory=True` will result in the chunked
   low memory parquet reader being used. This can make it easier to read large
   parquet datasets on systems with limited GPU memory. See all `available options
-  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
+  <https://docs.rapids.ai/api/cudf/nightly/cudf/api_docs/options/#api-options>`_.
 
 Examples
 --------
@@ -797,7 +797,7 @@ Notes
 - Setting the cudf option `io.json.low_memory=True` will result in the chunked
   low memory json reader being used. This can make it easier to read large
   json datasets on systems with limited GPU memory. See all `available options
-  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
+  <https://docs.rapids.ai/api/cudf/nightly/cudf/api_docs/options/#api-options>`_.
 
 See Also
 --------
@@ -2175,27 +2175,6 @@ def _fsspec_data_transfer(
     )
 
     return buf.tobytes()
-
-
-def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
-    # Simple utility to merge small/adjacent byte ranges
-    new_ranges = []
-    if not byte_ranges:
-        # Early return
-        return new_ranges
-
-    offset, size = byte_ranges[0]
-    for new_offset, new_size in byte_ranges[1:]:
-        gap = new_offset - (offset + size)
-        if gap > max_gap or (size + new_size + gap) > max_block:
-            # Gap is too large or total read is too large
-            new_ranges.append((offset, size))
-            offset = new_offset
-            size = new_size
-            continue
-        size += new_size + gap
-    new_ranges.append((offset, size))
-    return new_ranges
 
 
 def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):

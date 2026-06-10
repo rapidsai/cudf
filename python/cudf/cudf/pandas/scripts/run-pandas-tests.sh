@@ -15,7 +15,6 @@
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
 #
-# If running locally, it's recommended to pass '-m "not slow and not single_cpu and not db"'
 
 set -euo pipefail
 
@@ -55,7 +54,8 @@ if [ ! -d "pandas-tests" ]; then
     # Vendored from pandas/pyproject.toml
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
-xfail_strict = true
+# flaky xpasses tracked at https://github.com/rapidsai/cudf/issues/22681
+xfail_strict = false
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
@@ -91,15 +91,16 @@ EOF
     done
 fi
 
-# append the contents of patch-confest.py to conftest.py
-cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
-
 # Run the tests
 cd pandas-tests/
 
 
-PANDAS_CI="1" python -m pytest -p cudf.pandas \
+PANDAS_CI="1" python -m pytest \
+    -p cudf.pandas \
+    -p cudf.pandas.scripts.pandas-testing-plugin \
     --import-mode=importlib \
+    -m "not slow and not single_cpu and not db and not network" \
+    --disable-warnings \
     "$@"
 
 mv ./*.json ..

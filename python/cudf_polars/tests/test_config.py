@@ -37,14 +37,14 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
-def test_polars_verbose_warns(engine, monkeypatch):
+def test_polars_verbose_warns(engine: pl.GPUEngine, monkeypatch: pytest.MonkeyPatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
     monkeypatch.setattr(DataFrameScan, "__init__", raise_unimplemented)
     q = pl.LazyFrame({})
     # Ensure that things raise
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
     with (
         pl.Config(verbose=True),
         pytest.raises(pl.exceptions.ComputeError),
@@ -375,6 +375,18 @@ def test_target_partition_from_env(
         engine = pl.GPUEngine(executor="streaming")
         ConfigOptions.from_polars_engine(engine)  # no warning
         assert len(recwarn) == 0
+
+
+def test_target_partition_defaults_to_device_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.delenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", raising=False)
+        m.setattr(cudf_polars.utils.config, "get_total_device_memory", lambda: 32 << 30)
+
+        config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
+        assert config.executor.min_device_size == 32 << 30
+        assert config.executor.target_partition_size == int((32 << 30) * 0.025)
 
 
 def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
