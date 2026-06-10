@@ -15,9 +15,11 @@ from . import (
     timezone,
     types,
 )
+from .parquet_metadata import FileMetaData
 from .types import SinkInfo, SourceInfo, TableWithMetadata
 
 __all__ = [
+    "FileMetaData",
     "SinkInfo",
     "SourceInfo",
     "TableWithMetadata",

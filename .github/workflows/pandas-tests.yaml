@@ -24,8 +24,11 @@ jobs:
   pandas-tests:
       # run the Pandas unit tests
       permissions:
+        actions: read
         contents: read
         id-token: write
+        packages: read
+        pull-requests: read
       secrets: inherit # zizmor: ignore[secrets-inherit]
       uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
       with:

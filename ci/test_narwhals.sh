@@ -44,7 +44,25 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_first_last_expr_over_order_by[cudf] - now passing but tests expect failure
 # test_cast_datetime_tz_aware[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/21451
 # test_nested_structures: Passes as of https://github.com/rapidsai/cudf/pull/21514
+# test_group_by_depth_1_agg_bool_ops[cudf-*]: xpass(strict) - cudf groupby any/all on nullable bool now passes
+# test_replace_time_zone[cudf], test_replace_time_zone_series[cudf]: xpass(strict) - cudf tz replace + strftime now correct
+# test_convert_time_zone[cudf], test_convert_time_zone_series[cudf], test_convert_time_zone_from_none[cudf]: xpass(strict) - cudf tz convert + strftime now correct
+# test_contains_case_sensitive[cudf], test_contains_series_case_sensitive[cudf], test_contains_literal[cudf], test_contains_series_literal[cudf]:
+#   cudf's default ``str`` dtype mirrors pandas 3 ``str`` (fills nulls with False on ``str.contains``); narwhals
+#   expects ``None`` because it treats cudf strings as nullable. Compatibility mismatch, not a cudf bug.
+# polars 1.40 deprecated the DataFrame interchange protocol, which narwhals
+# 2.16.0 still exercises; narwhals' filterwarnings=error turns the resulting
+# DeprecationWarning into a failure. These run for every constructor, so skip
+# them across all runs. test_get_level also relies on the interchange protocol.
+# Remove once narwhals stops using the deprecated protocol.
+NARWHALS_TESTS_USING_DEPRECATED_INTERCHANGE=" \
+interchange or \
+test_get_level \
+"
+
+# test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
+test_dtypes or \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
 test_fill_null_series_limit_as_none[cudf] or \
@@ -69,7 +87,14 @@ test_first_last_expr_over_order_by[cudf] or \
 test_series_rfloordiv_by_zero[cudf-0] or \
 test_expr_rfloordiv_by_zero[cudf-0] or \
 test_cast_datetime_tz_aware[cudf] or \
-test_nested_structures \
+test_nested_structures or \
+(test_group_by_depth_1_agg_bool_ops and cudf) or \
+(test_replace_time_zone and cudf) or \
+(test_convert_time_zone and cudf) or \
+(test_contains_case_sensitive and cudf) or \
+(test_contains_series_case_sensitive and cudf) or \
+(test_contains_literal and cudf) or \
+(test_contains_series_literal and cudf) \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
@@ -82,7 +107,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
     -k "not ( \
-        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF} or \
+        ${NARWHALS_TESTS_USING_DEPRECATED_INTERCHANGE} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
@@ -93,7 +119,12 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 # test_to_datetime_tz_aware[polars[lazy]-None]: Fixed in the Narwhals version that supports polars 1.33.1
 # test_nested_structures[polars[lazy]-value0|1|3|4|6|7]: List/tuple literals without nested lists
 # test_series_from_iterable[pandas-*]: Pandas-specific test that shouldn't run with polars constructor
+# test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
+# test_namespace_len[polars[lazy]]: len() row count lost in zero-column streaming chunks
+#   (https://github.com/rapidsai/cudf/issues/21428).
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
+test_dtypes or \
+test_namespace_len[polars[lazy]] or \
 test_datetime[polars[lazy]] or \
 test_nan[polars[lazy]] or \
 test_to_datetime_tz_aware[polars[lazy]-None] or \
@@ -116,7 +147,8 @@ NARWHALS_POLARS_GPU=1 \
     -p env \
     -p no:pytest_benchmark \
     -k "not ( \
-        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} or \
+        ${NARWHALS_TESTS_USING_DEPRECATED_INTERCHANGE} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
@@ -174,6 +206,15 @@ test_pandas_object_series \
 # test_check_row_order_nested_only[pandas]: Nested dtype row ordering check not raising NotImplementedError as expected
 # test_cast_string: String casting issues with cudf.pandas
 # test_contains_case_insensitive[pandas], test_contains_series_case_insensitive[pandas]: String contains with case_insensitive returns False instead of None for nulls
+# test_fill_null_pandas_downcast: asserts dtype is 'object' after fill_null on [True, None]; cudf.pandas reports 'bool'
+#   because cudf represents nullable bool natively (not as object) — fundamental design difference, not fixable in cudf
+# test_self_equal[pandas]: Under cudf.pandas, narwhals identifies proxy DataFrames as Implementation.PANDAS
+#   but it detects cudf list/struct/decimal dtypes via str(series.dtype).startswith(("list","struct","decimal"))
+#   in _pandas_like/utils.py (CUDF_BASE_DTYPE_PREFIX), and cudf.pandas' _Series_dtype now correctly returns
+#   pandas-compatible 'object' for these types, so narwhals maps the column to its generic Object dtype
+#   instead of List, skipping the specialized _check_list_like path in assert_series_equal. The fallback
+#   `left != right` comparison then fails because element-wise != on nested lists containing NaN is undefined.
+#   narwhals needs to a different mechanism for detecting which path to follow.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes or \
 test_explode_multiple_cols or \
@@ -193,7 +234,9 @@ test_sqrt_dtype_pandas or \
 test_check_row_order_nested_only[pandas] or \
 test_cast_string or \
 (test_contains_case_insensitive and pandas) or \
-(test_contains_series_case_insensitive and pandas) \
+(test_contains_series_case_insensitive and pandas) or \
+test_fill_null_pandas_downcast or \
+test_self_equal[pandas] \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
@@ -209,7 +252,8 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
-        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} or \
+        ${NARWHALS_TESTS_USING_DEPRECATED_INTERCHANGE} \
     )" \
     --numprocesses=8 \
     --dist=worksteal

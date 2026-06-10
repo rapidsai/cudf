@@ -21,7 +21,6 @@ from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
-from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint  # noqa: F401, deprecated
 from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
@@ -42,7 +41,6 @@ __all__ = [
     "mixed_left_anti_join",
     "mixed_left_join",
     "mixed_left_semi_join",
-    "SetAsBuildTable",
 ]
 
 cdef Column _column_from_gather_map(
@@ -856,18 +854,18 @@ cdef class FilteredJoin:
     Filtered hash join that builds a hash table from the right (filter) table
     on creation and probes results in subsequent join member functions.
 
-    The build table is always treated as the right (filter) table. It will be
-    applied to multiple left (probe) tables in subsequent ``semi_join`` or
-    ``anti_join`` calls. For use cases where the left table should be reused
-    with multiple right tables, use ``MarkJoin`` instead.
+    The right table is used as the filter applied to multiple left tables in
+    subsequent ``semi_join`` or ``anti_join`` calls. For use cases where the
+    left table should be reused with multiple right tables, use ``MarkJoin``
+    instead.
 
     For details, see :cpp:class:`cudf::filtered_join`.
     """
 
     def __cinit__(
         self,
-        Table build,
-        null_equality compare_nulls,
+        Table right,
+        null_equality compare_nulls=null_equality.EQUAL,
         double load_factor=0.5,
         object stream=None,
     ):
@@ -876,7 +874,7 @@ cdef class FilteredJoin:
 
         Parameters
         ----------
-        build : Table
+        right : Table
             The right (filter) table used to build the hash table.
         compare_nulls : NullEquality
             Controls whether null join-key values should match or not.
@@ -892,7 +890,7 @@ cdef class FilteredJoin:
         with nogil:
             self.c_obj.reset(
                 new cpp_join.filtered_join(
-                    build.view(),
+                    right.view(),
                     compare_nulls,
                     load_factor,
                     _cs
@@ -901,20 +899,20 @@ cdef class FilteredJoin:
 
     def semi_join(
         self,
-        Table probe,
+        Table left,
         object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """
         Returns a column of row indices corresponding to a semi-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::semi_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
@@ -933,7 +931,7 @@ cdef class FilteredJoin:
 
         with nogil:
             c_result = self.c_obj.get()[0].semi_join(
-                probe.view(),
+                left.view(),
                 _cs,
                 mr.get_mr()
             )
@@ -941,20 +939,20 @@ cdef class FilteredJoin:
 
     def anti_join(
         self,
-        Table probe,
+        Table left,
         object stream=None,
         DeviceMemoryResource mr=None,
     ):
         """
         Returns a column of row indices corresponding to an anti-join
-        between the build table and probe table.
+        between the right (filter) table and left table.
 
         For details, see :cpp:func:`cudf::filtered_join::anti_join`.
 
         Parameters
         ----------
-        probe : Table
-            The probe table.
+        left : Table
+            The left table.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         mr : DeviceMemoryResource, optional
@@ -973,7 +971,7 @@ cdef class FilteredJoin:
 
         with nogil:
             c_result = self.c_obj.get()[0].anti_join(
-                probe.view(),
+                left.view(),
                 _cs,
                 mr.get_mr()
             )

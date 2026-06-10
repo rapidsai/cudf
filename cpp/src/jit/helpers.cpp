@@ -8,6 +8,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/cache.hpp>
+#include <rtcx.hpp>
+#include <runtime/context.hpp>
 
 namespace cudf {
 namespace jit {
@@ -61,7 +63,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
 
   if (has_user_data) {
     params.emplace(index++, "void *");
-    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+    params.emplace(index++, "cudf::size_type");
   }
 
   for (auto& name : output_typenames) {
@@ -87,32 +89,22 @@ std::vector<std::string> input_type_names(
   return names;
 }
 
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source,
-                               std::vector<std::string> const& extra_options)
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& cuda_source)
 {
   CUDF_FUNC_RANGE();
 
-  int runtime_version;
-  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
+  auto kernel_instance_source = std::format(R"***(
+ #define CUDF_KERNEL_INSTANCE {}
+ )***",
+                                            kernel_name);
+  char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
+    {"cudf/detail/operation_udf.cuh", "cudf/detail/kernel_instance.cuh"};
+  char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
+    {cuda_source.c_str(), kernel_instance_source.c_str()};
 
-  constexpr int min_pch_cuda_version     = 12800;  // CUDA 12.8
-  constexpr int min_minimal_cuda_version = 12800;  // CUDA 12.8
-
-  std::vector<std::string> options;
-  options.emplace_back("-arch=sm_.");
-
-  if (runtime_version >= min_minimal_cuda_version) { options.emplace_back("-minimal"); }
-
-  if (runtime_version >= min_pch_cuda_version) { options.emplace_back("-pch"); }
-
-  for (auto& opt : extra_options) {
-    options.push_back(opt);
-  }
-
-  return cudf::jit::get_program_cache(preprocessed_program_data)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);
+  return get_kernel(source_file, source_file, include_names, include_headers, kernel_name);
 }
 
 }  // namespace jit
