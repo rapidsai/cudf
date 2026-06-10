@@ -20,15 +20,13 @@ if TYPE_CHECKING:
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "estimated_chunk_bytes", "io_plan", "partitioned_on")
+    __slots__ = ("count", "io_plan", "partitioned_on")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
     io_plan: IOPartitionPlan | None
     """IO partitioning plan (Scan nodes only)."""
-    estimated_chunk_bytes: int | None
-    """Estimated decompressed bytes per chunk (for Scan nodes)."""
 
     def __init__(
         self,
@@ -36,12 +34,10 @@ class PartitionInfo:
         *,
         partitioned_on: tuple[NamedExpr, ...] = (),
         io_plan: IOPartitionPlan | None = None,
-        estimated_chunk_bytes: int | None = None,
     ):
         self.count = count
         self.partitioned_on = partitioned_on
         self.io_plan = io_plan
-        self.estimated_chunk_bytes = estimated_chunk_bytes
 
     def __rich_repr__(self) -> Generator[Any, None, None]:
         """Formatting for rich.pretty.pprint."""
@@ -170,12 +166,21 @@ class IOPartitionPlan:
       - SINGLE_READ: `factor` is the total number of files.
     """
 
-    __slots__ = ("factor", "flavor")
+    __slots__ = ("estimated_chunk_bytes", "factor", "flavor")
     factor: int
     flavor: IOPartitionFlavor
+    estimated_chunk_bytes: int | None
+    """Estimated decompressed bytes per chunk (Scan nodes only)."""
 
-    def __init__(self, factor: int, flavor: IOPartitionFlavor) -> None:
+    def __init__(
+        self,
+        factor: int,
+        flavor: IOPartitionFlavor,
+        *,
+        estimated_chunk_bytes: int | None = None,
+    ) -> None:
         if flavor == IOPartitionFlavor.SINGLE_FILE and factor != 1:  # pragma: no cover
             raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
         self.factor = factor
         self.flavor = flavor
+        self.estimated_chunk_bytes = estimated_chunk_bytes

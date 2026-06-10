@@ -607,8 +607,7 @@ def _(
                 ch_out,
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
-                    partition_info.estimated_chunk_bytes
-                    or executor.target_partition_size
+                    plan.estimated_chunk_bytes or executor.target_partition_size
                 ),
             )
         ]
