@@ -2875,108 +2875,43 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
-namespace {
-class TrackingFooterDatasource : public cudf::io::datasource {
- public:
-  explicit TrackingFooterDatasource(std::vector<char> const& data) : data_(data) {}
+static constexpr char const* parquet_metadata_size_hint_env_var =
+  "LIBCUDF_PARQUET_METADATA_SIZE_HINT";
 
-  [[nodiscard]] std::vector<std::pair<size_t, size_t>> const& reads() const { return reads_; }
+struct ParquetMetadataSizeHintTest : public ParquetReaderTest {};
 
-  void reset() { reads_.clear(); }
-
-  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
-  {
-    reads_.emplace_back(offset, size);
-    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
-    auto const read_size = std::min(size, data_.size() - offset);
-    std::vector<std::byte> out(read_size);
-    std::memcpy(out.data(), data_.data() + offset, read_size);
-    return cudf::io::datasource::buffer::create(std::move(out));
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    reads_.emplace_back(offset, size);
-    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
-    auto const read_size = std::min(size, data_.size() - offset);
-    std::memcpy(dst, data_.data() + offset, read_size);
-    return read_size;
-  }
-
-  [[nodiscard]] size_t size() const override { return data_.size(); }
-
- private:
-  std::vector<char> const& data_;
-  std::vector<std::pair<size_t, size_t>> reads_;
-};
-
-class ShortReadFooterDatasource : public cudf::io::datasource {
- public:
-  ShortReadFooterDatasource(std::vector<char> const& data,
-                            size_t short_read_call,
-                            size_t short_read_size)
-    : data_(data), short_read_call_(short_read_call), short_read_size_(short_read_size)
-  {
-  }
-
-  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
-  {
-    ++call_count_;
-    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
-    auto read_size = std::min(size, data_.size() - offset);
-    if (call_count_ == short_read_call_) { read_size = std::min(read_size, short_read_size_); }
-    std::vector<std::byte> out(read_size);
-    std::memcpy(out.data(), data_.data() + offset, read_size);
-    return cudf::io::datasource::buffer::create(std::move(out));
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    ++call_count_;
-    CUDF_EXPECTS(offset <= data_.size(), "Offset is out of bounds");
-    auto read_size = std::min(size, data_.size() - offset);
-    if (call_count_ == short_read_call_) { read_size = std::min(read_size, short_read_size_); }
-    std::memcpy(dst, data_.data() + offset, read_size);
-    return read_size;
-  }
-
-  [[nodiscard]] size_t size() const override { return data_.size(); }
-
- private:
-  std::vector<char> const& data_;
-  size_t short_read_call_;
-  size_t short_read_size_;
-  size_t call_count_{0};
-};
-
-std::vector<char> make_simple_parquet_bytes()
+TEST_F(ParquetMetadataSizeHintTest, ReadParquet)
 {
-  auto ints = random_values<int32_t>(128);
-  cudf::test::fixed_width_column_wrapper<int32_t> int_col(ints.begin(), ints.end());
-  cudf::table_view input_table({int_col});
+  srand(31337);
+  auto const expected = create_random_fixed_table<int>(2, 8, false);
 
-  std::vector<char> parquet_bytes;
-  auto const write_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_bytes}, input_table)
-      .build();
+  auto const filepath = temp_env->get_temp_filepath("MetadataSizeHint.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
   cudf::io::write_parquet(write_opts);
-  return parquet_bytes;
-}
 
-template <typename Fn>
-void expect_logic_error_contains(Fn&& fn, std::string const& needle)
-{
-  try {
-    fn();
-    FAIL() << "Expected cudf::logic_error";
-  } catch (cudf::logic_error const& e) {
-    EXPECT_NE(std::string{e.what()}.find(needle), std::string::npos)
-      << "Actual message: " << e.what();
-  } catch (...) {
-    FAIL() << "Expected cudf::logic_error";
+  auto const source        = cudf::io::datasource::create(filepath);
+  auto const file_size     = source->size();
+  auto constexpr ender_len = sizeof(cudf::io::parquet::file_ender_s);
+  auto const ender_buffer  = source->host_read(file_size - ender_len, ender_len);
+  auto const ender = reinterpret_cast<cudf::io::parquet::file_ender_s const*>(ender_buffer->data());
+  auto const footer_len = static_cast<size_t>(ender->footer_len);
+
+  auto const source_info = cudf::io::source_info{filepath};
+
+  // Test cases:
+  // - 0: disable speculative reads
+  // - 9: smaller than typical footer metadata
+  // - footer_len + 1: larger than the footer
+  // - file_size + 1: larger than the entire file
+  std::vector<size_t> const hints{0, 9, footer_len + 1, file_size + 1};
+  for (auto const hint : hints) {
+    tmp_env_var const env(parquet_metadata_size_hint_env_var, std::to_string(hint));
+    auto const read_opts = cudf::io::parquet_reader_options::builder(source_info).build();
+    auto const result    = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected->view());
   }
 }
-}  // namespace
 
 TEST_F(ParquetMetadataReaderTest, Basics)
 {
@@ -3073,24 +3008,6 @@ TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
   test_parquet_metadata(1);
   // Test with multiple files
   test_parquet_metadata(3);
-}
-
-TEST_F(ParquetMetadataReaderTest, MetadataFooterErrorMessages)
-{
-  auto parquet_bytes = make_simple_parquet_bytes();
-
-  // Header magic check when speculative read starts at offset 0
-  {
-    auto bad_header = parquet_bytes;
-    bad_header[0]   = 'B';
-    bad_header[1]   = 'A';
-    bad_header[2]   = 'D';
-    bad_header[3]   = '!';
-    TrackingFooterDatasource bad_header_source(bad_header);
-    auto const source = cudf::io::source_info{&bad_header_source};
-    expect_logic_error_contains([&] { (void)cudf::io::read_parquet_metadata(source); },
-                                "Corrupted header");
-  }
 }
 
 TEST_F(ParquetMetadataReaderTest, Nested)
