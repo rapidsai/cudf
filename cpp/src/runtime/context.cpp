@@ -55,7 +55,12 @@ void context::ensure_jit_cache_initialized()
   });
 }
 
-context::~context() { rtcx::teardown(); }
+context::~context()
+{
+  _jit_bundle.reset();
+  _rtcx_cache.reset();
+  rtcx::teardown();
+}
 
 rtcx::cache_t& context::rtcx_cache()
 {
