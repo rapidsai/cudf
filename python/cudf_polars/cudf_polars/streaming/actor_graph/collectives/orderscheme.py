@@ -7,16 +7,15 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+import polars as pl
+
+import pylibcudf as plc
+from pylibcudf.contiguous_split import pack
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.streaming.actor_graph.utils import (
@@ -33,7 +32,6 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import OrderScheme
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
