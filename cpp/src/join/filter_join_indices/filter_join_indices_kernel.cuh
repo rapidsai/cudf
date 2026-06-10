@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include "filter_join_indices_kernel.hpp"
+#include "join/filter_join_indices/filter_join_indices_kernel.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
