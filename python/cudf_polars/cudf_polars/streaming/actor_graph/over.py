@@ -40,19 +40,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.streaming.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import (
-    TableChunk,
-    make_table_chunks_available_or_wait,
-)
-
-import polars as pl
-
-import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import GroupedWindow
@@ -64,6 +63,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import (
     ShuffleManager,
 )
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     ChunkStore,
@@ -92,7 +92,6 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.expr import Col
@@ -419,9 +418,7 @@ async def _allgather_and_broadcast(
             ir_context,
             global_agg_per_row_size,
         )
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(msg.sequence_number, result))
+        await send_chunk(context, ch_out, result, msg.sequence_number, tracer=tracer)
 
     await ch_out.drain(context)
 
@@ -579,9 +576,7 @@ async def _reassemble_input_chunks(
                 exclusive_view=True,
                 br=context.br(),
             )
-        if tracer is not None:
-            tracer.add_chunk(table=chunk.table_view())
-        await ch_out.send(context, Message(sequence_number, chunk))
+        await send_chunk(context, ch_out, chunk, sequence_number, tracer=tracer)
 
 
 async def _shuffle_and_reassemble(
