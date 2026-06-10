@@ -6,20 +6,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rapidsmpf.shuffler import PartitionAssignment
-from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
+import polars as pl
+
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
+from cudf_streaming.streaming.table_chunk import TableChunk
+from rapidsmpf.shuffler import PartitionAssignment
+from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
@@ -32,6 +31,7 @@ from cudf_polars.streaming.actor_graph.nodes import (
     default_node_single,
     shutdown_on_error,
 )
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     ChunkStore,
@@ -129,9 +129,7 @@ async def _simple_top_or_bottom_k(
             ir_context=ir_context,
         )
 
-    if tracer is not None:
-        tracer.add_chunk(table=chunk.table_view())
-    await ch_out.send(context, Message(comm.rank, chunk))
+    await send_chunk(context, ch_out, chunk, comm.rank, tracer=tracer)
 
     await ch_out.drain(context)
 
@@ -447,17 +445,10 @@ async def _extract_partitions_and_send(
             ).table
             if table.num_columns() > ncols_out:
                 table = plc.Table(table.columns()[:ncols_out])
-            if tracer is not None:
-                tracer.add_chunk(table=table)
-            await ch_out.send(
-                context,
-                Message(
-                    partition_id,
-                    TableChunk.from_pylibcudf_table(
-                        table, stream, exclusive_view=True, br=context.br()
-                    ),
-                ),
+            chunk = TableChunk.from_pylibcudf_table(
+                table, stream, exclusive_view=True, br=context.br()
             )
+            await send_chunk(context, ch_out, chunk, partition_id, tracer=tracer)
 
     await ch_out.drain(context)
 
