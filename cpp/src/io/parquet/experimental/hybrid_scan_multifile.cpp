@@ -103,6 +103,52 @@ std::unique_ptr<cudf::column> hybrid_scan_multifile::build_row_mask_with_page_in
 }
 
 std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
+hybrid_scan_multifile::filter_column_chunks_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->filter_column_chunks_byte_ranges(row_group_indices, options);
+}
+
+table_with_metadata hybrid_scan_multifile::materialize_filter_columns(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  cudf::mutable_column_view& row_mask,
+  use_data_page_mask mask_data_pages,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->materialize_filter_columns(
+    row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
+}
+
+std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
+hybrid_scan_multifile::payload_column_chunks_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->payload_column_chunks_byte_ranges(row_group_indices, options);
+}
+
+table_with_metadata hybrid_scan_multifile::materialize_payload_columns(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->materialize_payload_columns(
+    row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
+}
+
+std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
 hybrid_scan_multifile::all_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options) const
