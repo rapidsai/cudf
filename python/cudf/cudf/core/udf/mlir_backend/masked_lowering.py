@@ -2,17 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import operator
 from typing import TYPE_CHECKING
 
 from numba_cuda_mlir import types
 from numba_cuda_mlir._mlir import ir as mlir_ir
-from numba_cuda_mlir._mlir.dialects import llvm
-from numba_cuda_mlir.extending import lowering_registry
+from numba_cuda_mlir._mlir.dialects import arith, llvm
+from numba_cuda_mlir.extending import lower_cast, lowering_registry
 from numba_cuda_mlir.lowering_utilities import convert
 from numba_cuda_mlir.models import PrimitiveModel, register_model
 
 from cudf.core.udf.api import Masked
-from cudf.core.udf.mlir_backend.masked_typing import MaskedType
+from cudf.core.udf.mlir_backend.masked_typing import (
+    MaskedType,
+    NAType,
+    na_type,
+)
 
 if TYPE_CHECKING:
     from numba_cuda_mlir.mlir_lowering import MLIRLower
@@ -62,6 +67,21 @@ class MaskedTypeModel(PrimitiveModel):
         super().__init__(data_model_manager, masked_type, struct_type)
 
 
+def _extract_masked_value_valid(struct_val, value_mlir_ty, valid_ty):
+    """Pull the ``(value, valid)`` SSA values out of a ``Masked`` struct."""
+    v = llvm.extractvalue(
+        res=value_mlir_ty,
+        container=struct_val,
+        position=mlir_ir.DenseI64ArrayAttr.get([0]),
+    )
+    valid = llvm.extractvalue(
+        res=valid_ty,
+        container=struct_val,
+        position=mlir_ir.DenseI64ArrayAttr.get([1]),
+    )
+    return v, valid
+
+
 def _lower_masked_constructor(
     builder: MLIRLower, target: Var, args: list[Var], kwargs: list
 ) -> None:
@@ -105,6 +125,77 @@ def _lower_masked_getattr(
     builder.store_var(target, convert(field_value, target_mlir_ty))
 
 
+# ``cast(NA -> Masked)``: NA has no payload, so build a struct with
+# an undef value and ``valid=False``. Triggered by branches like
+# ``return x if cond else cudf.NA`` where the unification is Masked.
+def _cast_na_to_masked(context, builder, fromty, toty, val):
+    value_mlir_ty = builder.get_mlir_type(toty.value_type)
+    undef_val = llvm.UndefOp(value_mlir_ty)
+    valid_zero = arith.constant(
+        result=builder.get_mlir_type(types.boolean), value=0
+    )
+    return _pack_masked(builder, toty, undef_val, valid_zero)
+
+
+# ``cast(scalar -> Masked)``: ``return 5`` / ``return 2.5`` patterns
+# where Numba unifies the branch return shape to Masked. Wrap the
+# scalar with ``valid=True``.
+def _cast_scalar_to_masked(context, builder, fromty, toty, val):
+    if not isinstance(toty, MaskedType):
+        raise TypeError(
+            f"cast to Masked expected MaskedType destination, got {toty!r}"
+        )
+    value_mlir_ty = builder.get_mlir_type(toty.value_type)
+    scalar_val = convert(val, value_mlir_ty)
+    valid_one = arith.constant(
+        result=builder.get_mlir_type(types.boolean), value=1
+    )
+    return _pack_masked(builder, toty, scalar_val, valid_one)
+
+
+# ``cast(Masked -> Masked)``: branch unification across different
+# inner widths (e.g. one branch returns Masked(int32), another
+# returns Masked(float64); Numba unifies to Masked(float64)).
+# Promote the payload, preserve the validity bit.
+def _cast_masked_to_masked(context, builder, fromty, toty, val):
+    if fromty.value_type == toty.value_type:
+        return val
+    st = llvm.StructType(val.type)
+    m_val, m_valid = _extract_masked_value_valid(
+        val, st.body[0], st.body[1]
+    )
+    value_mlir_ty = builder.get_mlir_type(toty.value_type)
+    casted = convert(m_val, value_mlir_ty)
+    return _pack_masked(builder, toty, casted, m_valid)
+
+
+# ``m is NA`` and ``NA is m`` -> ``not m.valid`` (i.e. invalid means "is NA").
+def _lower_masked_is_na(masked_arg):
+    def _impl(builder, target, args, kwargs):
+        m = builder.load_var(masked_arg(args))
+        st = llvm.StructType(m.type)
+        _, valid = _extract_masked_value_valid(
+            m, st.body[0], st.body[1]
+        )
+        one = arith.constant(valid.type, 1)
+        builder.store_var(target, arith.xori(valid, one))
+
+    return _impl
+
+
+# ``m is not NA`` and ``NA is not m`` -> ``m.valid``.
+def _lower_masked_is_not_na(masked_arg):
+    def _impl(builder, target, args, kwargs):
+        m = builder.load_var(masked_arg(args))
+        st = llvm.StructType(m.type)
+        _, valid = _extract_masked_value_valid(
+            m, st.body[0], st.body[1]
+        )
+        builder.store_var(target, valid)
+
+    return _impl
+
+
 def _register() -> None:
     """Register the data model and lowerings with ``numba_cuda_mlir``.
 
@@ -122,6 +213,20 @@ def _register() -> None:
     lower(Masked, types.Any, types.Literal)(_lower_masked_constructor)
 
     lowering_registry.lower_getattr_generic(MaskedType)(_lower_masked_getattr)
+
+    lower_cast(na_type, MaskedType)(_cast_na_to_masked)
+    for _scalar_cls in (types.Integer, types.Float, types.Boolean):
+        lower_cast(_scalar_cls, MaskedType)(_cast_scalar_to_masked)
+    lower_cast(MaskedType, MaskedType)(_cast_masked_to_masked)
+
+    lower(operator.is_, MaskedType, NAType)(_lower_masked_is_na(lambda a: a[0]))
+    lower(operator.is_, NAType, MaskedType)(_lower_masked_is_na(lambda a: a[1]))
+    lower(operator.is_not, MaskedType, NAType)(
+        _lower_masked_is_not_na(lambda a: a[0])
+    )
+    lower(operator.is_not, NAType, MaskedType)(
+        _lower_masked_is_not_na(lambda a: a[1])
+    )
 
 
 _register()
