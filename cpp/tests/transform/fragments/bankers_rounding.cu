@@ -41,7 +41,8 @@ __device__ Decimal bankers_round(Decimal x)
   return Decimal{q, numeric::scale_type{0}};
 }
 
-extern "C" __device__ void transform(numeric::decimal128* out, numeric::decimal128 in)
+extern "C" __device__ int transform(numeric::decimal128* out, numeric::decimal128 in)
 {
   *out = bankers_round(in);
+  return 0;
 }

@@ -185,4 +185,4 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
 
 
 LTO_BINARYOP_BENCHMARK_DEFINE(float,        float,      ADD,                  float);
-LTO_BINARYOP_BENCHMARK_DEFINE(decimal32,       decimal32,    NULL_MAX,  decimal32);
+LTO_BINARYOP_BENCHMARK_DEFINE(float,        float,      MUL,                  float);

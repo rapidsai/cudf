@@ -332,7 +332,7 @@ std::string reflect_udf_signature(bool is_null_aware,
           return std::format("{}, {}", a, b);
         });
 
-  return std::format("void({})", joined);
+  return std::format("int({})", joined);
 }
 
 rtcx::blob instantiate_fragment(bool is_null_aware,

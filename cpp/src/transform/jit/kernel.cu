@@ -33,7 +33,7 @@
 // clang-format on
 
 #ifndef CUDF_LTO_MODE
-#define CUDF_UDF_TYPE void()
+#define CUDF_UDF_TYPE int()
 #endif
 
 // Use LTO-dispatch for transform operators if we're in LTO mode. This allows the operator to be

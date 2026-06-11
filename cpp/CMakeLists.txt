@@ -597,7 +597,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
       KERNEL_INSTANCE
       ${INSTANCE}
       UDF_TYPE
-      "void(${TYPE} *, ${TYPE})"
+      "int(${TYPE} *, ${TYPE})"
       DEFINITIONS
       CUDF_LTO_MODE
       ARRAY_IDS
@@ -632,7 +632,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
         KERNEL_INSTANCE
         ${INSTANCE}
         UDF_TYPE
-        "void(${TYPE} *, ${TYPE}, ${TYPE})"
+        "int(${TYPE} *, ${TYPE}, ${TYPE})"
         DEFINITIONS
         CUDF_LTO_MODE
         ARRAY_IDS
