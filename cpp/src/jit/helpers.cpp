@@ -114,8 +114,7 @@ rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
   auto kernel_instance_source = std::format(R"***(#define CUDF_KERNEL_INSTANCE {}
  #define CUDF_LTO_MODE)***",
                                             kernel_name);
-  auto kernel_udf_source      = std::format(R"***(#define CUDF_UDF_TYPE {})***",
-                                       udf_type);
+  auto kernel_udf_source      = std::format(R"***(#define CUDF_UDF_TYPE {})***", udf_type);
   char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
     {"cudf/detail/kernel_instance.cuh", "cudf/detail/operation_udf.cuh"};
   char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)

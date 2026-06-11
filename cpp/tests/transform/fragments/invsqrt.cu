@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 extern "C" __device__ int transform(float* out, float a)
 {
   *out = 1.0F / sqrtf(a);

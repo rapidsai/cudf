@@ -3,4 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-extern "C" __device__ int transform(float* out, float a, float b) { *out = a * b; return 0; }
+extern "C" __device__ int transform(float* out, float a, float b)
+{
+  *out = a * b;
+  return 0;
+}

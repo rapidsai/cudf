@@ -508,9 +508,7 @@ macro(add_fragment)
 
   set(OBJECT_ID ${TARGET}_${ARG_FRAGMENT})
   add_library(${OBJECT_ID} OBJECT ${ARG_SOURCE})
-  target_compile_options(
-    ${OBJECT_ID} PRIVATE --compress-mode=size --expt-relaxed-constexpr --extended-lambda
-  )
+  target_compile_options(${OBJECT_ID} PRIVATE --compress-mode=size)
 
   if(DEFINED ARG_KERNEL_ONLY AND ARG_KERNEL_ONLY)
     # ensure that the FATBIN symbols only contain the specified kernel
@@ -529,7 +527,6 @@ macro(add_fragment)
   endif()
 
   if(ARG_UDF_TYPE)
-    set(INSTANTIATION_DIR "${CUDF_GENERATED_INCLUDE_DIR}/${TARGET}/instantiations/${ARG_FRAGMENT}")
     file(
       GENERATE
       OUTPUT "${INSTANTIATION_DIR}/cudf/detail/operation_udf.cuh"
@@ -562,10 +559,7 @@ macro(add_fragment)
     ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-  target_compile_options(
-    ${OBJECT_ID} PRIVATE 
-    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-  )
+  target_compile_options(${OBJECT_ID} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 
   embed_blob(
     ${TARGET} FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST fragments/${ARG_FRAGMENT}.fatbin ID
@@ -578,6 +572,41 @@ add_embed(cudf_fragments)
 foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t float
                       double numeric::decimal32 numeric::decimal64 numeric::decimal128
 )
+  set(FRAGMENT_NAME transform_kernel)
+  get_property(
+    FILE_INDEX
+    TARGET cudf_fragments__embed_props
+    PROPERTY EMBED_FILE_INDEX
+  )
+  set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+  set(INSTANCE
+      "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+  )
+  add_fragment(
+    cudf_fragments
+    FRAGMENT
+    ${VARIANT_NAME}
+    SOURCE
+    src/transform/jit/kernel.cu
+    KERNEL_INSTANCE
+    ${INSTANCE}
+    UDF_TYPE
+    "int(${TYPE} *, ${TYPE})"
+    DEFINITIONS
+    CUDF_LTO_MODE
+    ARRAY_IDS
+    ${FRAGMENT_NAME}_FILE_INDEX
+    ${FRAGMENT_NAME}_INSTANCE
+    ARRAY_VALUES
+    ${FILE_INDEX}
+    "${INSTANCE}"
+  )
+endforeach()
+
+foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t float
+                      double numeric::decimal32 numeric::decimal64 numeric::decimal128
+)
+  foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
     set(FRAGMENT_NAME transform_kernel)
     get_property(
       FILE_INDEX
@@ -586,7 +615,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
     )
     set(VARIANT_NAME transform_kernel_${FILE_INDEX})
     set(INSTANCE
-        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
     )
     add_fragment(
       cudf_fragments
@@ -597,7 +626,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
       KERNEL_INSTANCE
       ${INSTANCE}
       UDF_TYPE
-      "int(${TYPE} *, ${TYPE})"
+      "int(${TYPE} *, ${TYPE}, ${TYPE})"
       DEFINITIONS
       CUDF_LTO_MODE
       ARRAY_IDS
@@ -608,42 +637,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
       "${INSTANCE}"
     )
   endforeach()
-
-foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t float
-                      double numeric::decimal32 numeric::decimal64 numeric::decimal128
-)
-    foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
-      set(FRAGMENT_NAME transform_kernel)
-      get_property(
-        FILE_INDEX
-        TARGET cudf_fragments__embed_props
-        PROPERTY EMBED_FILE_INDEX
-      )
-      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-      set(INSTANCE
-          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
-      )
-      add_fragment(
-        cudf_fragments
-        FRAGMENT
-        ${VARIANT_NAME}
-        SOURCE
-        src/transform/jit/kernel.cu
-        KERNEL_INSTANCE
-        ${INSTANCE}
-        UDF_TYPE
-        "int(${TYPE} *, ${TYPE}, ${TYPE})"
-        DEFINITIONS
-        CUDF_LTO_MODE
-        ARRAY_IDS
-        ${FRAGMENT_NAME}_FILE_INDEX
-        ${FRAGMENT_NAME}_INSTANCE
-        ARRAY_VALUES
-        ${FILE_INDEX}
-        "${INSTANCE}"
-      )
-    endforeach()
-  endforeach()
+endforeach()
 
 embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
