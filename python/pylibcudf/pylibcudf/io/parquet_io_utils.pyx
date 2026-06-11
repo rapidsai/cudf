@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+"""IO utilities for the Parquet."""
 
 from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
