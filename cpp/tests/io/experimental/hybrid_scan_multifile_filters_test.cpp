@@ -314,3 +314,61 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
   EXPECT_TRUE(stats_filtered.front().empty());
   EXPECT_TRUE(stats_filtered.back().empty());
 }
+
+TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFilters)
+{
+  using T                    = uint32_t;
+  auto constexpr num_sources = 2;
+  auto const stream          = cudf::get_default_stream();
+
+  // Two sources, each with 4 row groups
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  srand(0xb100);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+  srand(0x600d);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+
+  auto inputs = build_multifile_inputs(file_buffers);
+
+  // An equality predicate makes col0 eligible for bloom filtering. cuDF's Parquet writer does not
+  // emit bloom filters, so the per-source bloom byte ranges come back empty (same as single-file).
+  {
+    auto literal_value = cudf::numeric_scalar<T>(T{42}, true, stream);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref       = cudf::ast::column_name_reference("col0");
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
+
+    auto options      = cudf::io::parquet_reader_options::builder().filter(filter).build();
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+
+    auto const input_row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(input_row_group_indices.size(), num_sources);
+
+    auto const bloom_byte_ranges =
+      reader->bloom_filters_byte_ranges(input_row_group_indices, options);
+    EXPECT_TRUE(bloom_byte_ranges.empty());
+  }
+
+  // Without any bloom-eligible (equality) predicate, bloom filtering is a no-op: the reader returns
+  // the input row groups unchanged, one inner vector per source. Validates the multifile bloom
+  // filter API delegation and per-source output shape.
+  {
+    auto literal_value = cudf::numeric_scalar<T>(T{50}, true, stream);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref       = cudf::ast::column_name_reference("col0");
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+
+    auto options      = cudf::io::parquet_reader_options::builder().filter(filter).build();
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+
+    auto const input_row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(input_row_group_indices.size(), num_sources);
+
+    auto const bloom_filtered =
+      reader->filter_row_groups_with_bloom_filters({}, input_row_group_indices, options, stream);
+    EXPECT_EQ(bloom_filtered, input_row_group_indices);
+  }
+}
