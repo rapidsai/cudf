@@ -621,6 +621,7 @@ void generate_cluster_limits(int delta,
       group_num_clusters,
       group_cluster_start,
       has_nulls);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // overlap CPU work
