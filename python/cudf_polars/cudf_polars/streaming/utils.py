@@ -69,7 +69,7 @@ def _lower_ir_fallback(
     ir = _inline_hstack_false(ir)
 
     if not ir.children:
-        # e.g. ErrorNode, nothing to lower or repartition.
+        # nothing to lower or repartition.
         return ir, {ir: PartitionInfo(count=1)}
 
     # Lower children
