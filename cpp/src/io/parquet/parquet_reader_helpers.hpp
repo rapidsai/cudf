@@ -103,11 +103,6 @@ template <typename Value>
 /**
  * @brief Derives a bounded input `pass_read_limit` from a `chunk_read_limit`.
  *
- * Used by the `chunked_parquet_reader` constructor overloads that do not accept a `pass_read_limit`
- * to bound input and decompression memory and reduce the risk of out-of-memory errors on large
- * files. A `chunk_read_limit` of 0 means unlimited input memory and is returned unchanged;
- * otherwise a heuristic limit is derived and a warning is emitted.
- *
  * @param chunk_read_limit The output chunk byte limit
  * @return The derived input pass byte limit
  */
