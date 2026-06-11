@@ -233,6 +233,7 @@ __device__ numeric::decimal128 cast_to_decimal128(numeric::decimal<R> a)
  */
 template <typename R, signed_integer Scale>
 __device__ numeric::decimal<R> rescale(numeric::decimal<R> a, Scale new_scale)
+  requires(sizeof(Scale) <= sizeof(int32_t))
 {
   return a.rescaled(numeric::scale_type{static_cast<int32_t>(new_scale)});
 }
