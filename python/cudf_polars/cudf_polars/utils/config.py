@@ -206,6 +206,10 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    use_hybrid_scan
+        Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
+        tasks when a predicate can be pushed down to a parquet filter.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -247,6 +251,13 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_hybrid_scan: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_HYBRID_SCAN",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -263,6 +274,8 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_hybrid_scan, bool):
+            raise TypeError("use_hybrid_scan must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:

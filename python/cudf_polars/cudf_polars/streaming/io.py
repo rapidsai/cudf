@@ -17,13 +17,16 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Empty,
     Scan,
     Sink,
+    _prepare_parquet_predicate,
 )
+from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
@@ -40,7 +43,9 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
-    from cudf_polars.containers import DataFrame
+    import pylibcudf.expressions as plc_expr
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.base import (
@@ -175,6 +180,129 @@ def expand_scan_for_rank(
     return scans
 
 
+def _read_with_hybrid_scan(
+    schema: Schema,
+    paths: list[str],
+    with_columns: list[str] | None,
+    plc_filter: plc_expr.Expression,
+    row_group_indices: list[int],
+    stream: Stream,
+    file_metadata: plc.io.parquet_metadata.FileMetaData,
+) -> DataFrame:
+    """Two-pass parquet read via HybridScanReader for a row-group-aligned split."""
+    assert plc_filter is not None
+    assert len(paths) == 1, "hybrid scan only supported for SplitScan; one physical file"
+    with nvtx_annotate_cudf_polars(message=f"HybridScan: {paths[0]}"):
+        source_info = plc.io.SourceInfo(paths)
+
+        options = (
+            plc.io.parquet.ParquetReaderOptions.builder(source_info)
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
+        )
+        if with_columns is not None:
+            options.set_column_names(with_columns)
+        options.set_filter(plc_filter)
+
+        reader = plc.io.experimental.HybridScanReader.from_parquet_metadata(
+            file_metadata, options
+        )
+
+        row_group_indices = reader.filter_row_groups_with_stats(
+            row_group_indices, options, stream=stream
+        )
+
+        if row_group_indices:
+            bloom_ranges, _dict_ranges = reader.secondary_filters_byte_ranges(
+                row_group_indices, options
+            )
+            if bloom_ranges:
+                bloom_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+                    source_info, bloom_ranges, stream=stream
+                )
+                row_group_indices = reader.filter_row_groups_with_bloom_filters(
+                    bloom_chunks, row_group_indices, options, stream=stream
+                )
+
+        if not row_group_indices:
+            byte_ranges = reader.all_column_chunks_byte_ranges(row_group_indices, options)
+            chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+                source_info, byte_ranges, stream=stream
+            )
+            tbl_w_meta = reader.materialize_all_columns(
+                row_group_indices, chunks, options, stream=stream
+            )
+            col_names = tbl_w_meta.column_names(include_children=False)
+            num_rows = tbl_w_meta.num_rows_per_source[0] if not col_names else None
+            stream.synchronize()
+            return DataFrame.from_table(
+                tbl_w_meta.tbl,
+                col_names,
+                [schema[name] for name in col_names],
+                stream=stream,
+                num_rows=num_rows,
+            )
+
+        n_rows = reader.total_rows_in_row_groups(row_group_indices)
+        row_mask = plc.Column.from_scalar(
+            plc.Scalar.from_py(True, dtype=plc.DataType(plc.TypeId.BOOL8), stream=stream),
+            n_rows,
+            stream=stream,
+        )
+
+        filter_ranges = reader.filter_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
+        filter_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+            source_info, filter_ranges, stream=stream
+        )
+        filter_tbl_w_meta = reader.materialize_filter_columns(
+            row_group_indices,
+            filter_chunks,
+            row_mask,
+            plc.io.experimental.UseDataPageMask.YES,
+            options,
+            stream=stream,
+        )
+
+        payload_ranges = reader.payload_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
+        # PERFORMANCE!! payload_column_chunks_byte_ranges does not need the row mask, so
+        # for local NVMe/GDS this fetch could be submitted async before
+        # materialize_filter_columns to overlap I/O with GPU decode.
+        payload_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+            source_info, payload_ranges, stream=stream
+        )
+        payload_tbl_w_meta = reader.materialize_payload_columns(
+            row_group_indices,
+            payload_chunks,
+            row_mask,
+            plc.io.experimental.UseDataPageMask.YES,
+            options,
+            stream=stream,
+        )
+
+        filter_names = filter_tbl_w_meta.column_names(include_children=False)
+        payload_names = payload_tbl_w_meta.column_names(include_children=False)
+        filter_df = DataFrame.from_table(
+            filter_tbl_w_meta.tbl,
+            filter_names,
+            [schema[n] for n in filter_names],
+            stream=stream,
+        )
+        payload_df = DataFrame.from_table(
+            payload_tbl_w_meta.tbl,
+            payload_names,
+            [schema[n] for n in payload_names],
+            stream=stream,
+        )
+        stream.synchronize()
+        return DataFrame(
+            [*filter_df.columns, *payload_df.columns], stream=stream
+        ).select(list(schema.keys()))
+
+
 class SplitScan(IR):
     """
     Input from a split file.
@@ -296,10 +424,14 @@ class SplitScan(IR):
         # - We can use all this information to calculate the
         #   "skip_rows" and "n_rows" options to use locally.
 
-        rowgroup_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(paths)
-        ).rowgroup_metadata()
-        total_row_groups = len(rowgroup_metadata)
+        row_group_num_rows = [
+            rg["num_rows"]
+            for rg in plc.io.parquet_metadata.read_parquet_metadata(
+                plc.io.SourceInfo(paths)
+            ).rowgroup_metadata()
+        ]
+
+        total_row_groups = len(row_group_num_rows)
         if total_splits <= total_row_groups:
             # We have enough row-groups in the file to align
             # all "total_splits" of our reads with row-group
@@ -308,17 +440,48 @@ class SplitScan(IR):
             # the row-group indices to "skip_rows" and "n_rows".
             rg_stride = total_row_groups // total_splits
             skip_rgs = rg_stride * split_index
-            skip_rows = sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
-            n_rows = sum(
-                rg["num_rows"]
-                for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
-            )
+            skip_rows = sum(row_group_num_rows[:skip_rgs])
+            n_rows = sum(row_group_num_rows[skip_rgs : skip_rgs + rg_stride])
+            # TODO: Investigate re-enabling for some of these
+            # paths. Needs perfromance investigation.
+            if (
+                parquet_options.use_hybrid_scan
+                and row_index is None
+                and include_file_paths is None
+                and predicate is not None
+            ):
+                stream = context.get_cuda_stream()
+                plc_filter = to_parquet_filter(
+                    _prepare_parquet_predicate(
+                        predicate.value, paths, schema, with_columns
+                    ),
+                    stream=stream,
+                )
+                if plc_filter is not None:
+                    end_rg = (
+                        total_row_groups
+                        if split_index == total_splits - 1
+                        else skip_rgs + rg_stride
+                    )
+                    [file_metadata] = plc.io.parquet_metadata.read_parquet_footers(
+                        plc.io.SourceInfo(paths)
+                    )
+                    return _read_with_hybrid_scan(
+                        schema,
+                        paths,
+                        with_columns,
+                        plc_filter,
+                        list(range(skip_rgs, end_rg)),
+                        stream,
+                        file_metadata,
+                    )
+
         else:
             # There are not enough row-groups to align
             # all "total_splits" of our reads with row-group
             # boundaries. Use metadata to directly calculate
             # "skip_rows" and "n_rows" for the current read.
-            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
+            total_rows = sum(row_group_num_rows)
             n_rows = total_rows // total_splits
             skip_rows = n_rows * split_index
 
@@ -516,7 +679,7 @@ def can_use_native_parquet_node(
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
     parquet_options = config_options.parquet_options
     if (

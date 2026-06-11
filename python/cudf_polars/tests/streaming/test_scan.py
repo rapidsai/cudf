@@ -11,7 +11,10 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import IRExecutionContext, Scan
+from cudf_polars.dsl.ir import (
+    IRExecutionContext,
+    Scan,
+)
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import (
@@ -28,7 +31,10 @@ from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from collections.abc import Callable
     from pathlib import Path
+
+    from cudf_polars.engine.core import StreamingEngine
 
 
 @pytest.fixture(scope="module")
@@ -254,9 +260,42 @@ def test_expand_scan_for_rank_split_files(
 
 
 def test_streaming_scan_raises() -> None:
-    # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
-    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([fused], scan, context=ctx)
+        StreamingScan.do_evaluate([scan], scan, context=ctx)
+
+
+@pytest.mark.parametrize(
+    "predicate,use_columns",
+    [
+        # pushdown-able predicate
+        (pl.col("x") < 1_000, None),
+        # predicate on all columns, with column selection
+        (pl.col("x") < 1_000, ["x", "z"]),
+        # non-pushdown predicate falls back to normal scan (no error)
+        (pl.col("y").str.contains("cat"), None),
+        # no predicate — hybrid scan disabled, normal read
+        (None, None),
+    ],
+)
+def test_split_scan_hybrid(
+    tmp_path: Path,
+    df: pl.DataFrame,
+    predicate: pl.Expr | None,
+    use_columns: list[str] | None,
+    streaming_engine_factory: Callable[..., StreamingEngine],
+) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=1_000,
+            parquet_options={"use_hybrid_scan": True},
+        ),
+    )
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1, row_group_size=100)
+    q = pl.scan_parquet(tmp_path)
+    if use_columns is not None:
+        q = q.select(use_columns)
+    if predicate is not None:
+        q = q.filter(predicate)
+    assert_gpu_result_equal(q, engine=streaming_engine)

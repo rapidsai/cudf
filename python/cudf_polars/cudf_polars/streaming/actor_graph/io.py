@@ -23,6 +23,7 @@ from cudf_polars.dsl.ir import (
     Sink,
     _prepare_parquet_predicate,
 )
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
@@ -322,23 +323,25 @@ async def read_chunk(
     tracer
         The actor tracer for collecting runtime statistics.
     """
-    with opaque_memory_usage(
-        await reserve_memory(
+    with nvtx_annotate_cudf_polars(message="reserve_memory"):
+        reservation = await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
-    ):
+    with opaque_memory_usage(reservation):
         df = await ir_context.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
         )
-    chunk = TableChunk.from_pylibcudf_table(
-        df.table,
-        df.stream,
-        exclusive_view=True,
-        br=context.br(),
-    )
-    await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
+    with nvtx_annotate_cudf_polars(message="TableChunk.from_pylibcudf_table"):
+        chunk = TableChunk.from_pylibcudf_table(
+            df.table,
+            df.stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
+    with nvtx_annotate_cudf_polars(message="send_chunk"):
+        await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
 @define_actor()

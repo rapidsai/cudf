@@ -6,7 +6,8 @@
 # =============================================================================
 
 set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx
-                   parquet_metadata.pyx text.pyx timezone.pyx types.pyx
+                   parquet_io_utils.pyx parquet_metadata.pyx text.pyx timezone.pyx
+                   types.pyx
 )
 
 set(linked_libraries cudf::cudf)

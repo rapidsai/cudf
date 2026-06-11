@@ -131,6 +131,28 @@ fetch_byte_ranges_to_device_async(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Fetches byte ranges from a single datasource into device buffers, blocking until complete
+ *
+ * @ingroup io_utils
+ *
+ * Convenience wrapper around @ref fetch_byte_ranges_to_device_async that waits for the
+ * returned future before returning.
+ *
+ * @param datasource Input datasource
+ * @param byte_ranges Byte ranges to fetch
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return A pair containing the device buffers and the device spans of the fetched data
+ */
+[[nodiscard]] std::pair<std::vector<rmm::device_buffer>,
+                        std::vector<cudf::device_span<uint8_t const>>>
+fetch_byte_ranges_to_device(cudf::io::datasource& datasource,
+                            cudf::host_span<byte_range_info const> byte_ranges,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr);
+
 /** @} */  // end of group
 }  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf
