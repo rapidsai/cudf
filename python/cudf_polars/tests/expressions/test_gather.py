@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 def test_gather(engine: pl.GPUEngine):
@@ -98,3 +101,17 @@ def test_gather_on_literal(
 
     q = df.select(lit.gather(idx))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").gather_every(2),
+        pl.col("a").repeat_by(pl.col("n")),
+    ],
+    ids=["gather_every", "repeat_by"],
+)
+def test_gather_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "n": [2, 1, 3, 1, 2]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
