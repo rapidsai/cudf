@@ -606,7 +606,9 @@ def _(
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
-                estimated_chunk_bytes=executor.target_partition_size,
+                estimated_chunk_bytes=(
+                    plan.estimated_chunk_bytes or executor.target_partition_size
+                ),
             )
         ]
     return nodes, channels
