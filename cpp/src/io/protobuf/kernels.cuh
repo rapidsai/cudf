@@ -859,10 +859,8 @@ inline std::unique_ptr<cudf::column> build_repeated_scalar_column(
                          0);
 
   int32_t total_count_i32 = static_cast<int32_t>(total_count);
-  thrust::fill_n(rmm::exec_policy_nosync(stream, mr),
-                 list_offs.data() + num_rows,
-                 1,
-                 total_count_i32);
+  thrust::fill_n(
+    rmm::exec_policy_nosync(stream, mr), list_offs.data() + num_rows, 1, total_count_i32);
 
   rmm::device_uvector<T> values(total_count, stream, mr);
 
