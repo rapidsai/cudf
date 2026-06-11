@@ -109,6 +109,8 @@ template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  static_assert(std::is_same_v<TypeLhs, TypeRhs> && std::is_same_v<TypeRhs, TypeOut>);
+  static_assert(std::is_same_v<TypeLhs, float>);
 
   auto const source_table = create_random_table(
     {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{num_rows});
@@ -121,12 +123,12 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
 
   switch (binop) {
     case cudf::binary_operator::ADD: {
-      fragment_id = cudf_benchmark_fragments::add;
+      fragment_id = cudf_benchmark_fragments::add_f32;
       null_aware  = false;
     } break;
-    case cudf::binary_operator::NULL_MAX: {
-      fragment_id = cudf_benchmark_fragments::null_max;
-      null_aware  = true;
+    case cudf::binary_operator::MUL: {
+      fragment_id = cudf_benchmark_fragments::mul_f32;
+      null_aware  = false;
     } break;
     default: throw std::runtime_error("Unsupported binary operator for LTO benchmark");
   }
