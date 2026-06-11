@@ -291,6 +291,10 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 
 
 TESTS_TO_SKIP: Mapping[str, str] = {
+    # TODO: remove once CI SQLite >= 3.44.0
+    # sqlite3.OperationalError: near "ORDER": syntax error on older versions
+    "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": "SQLite version in CI does not support ORDER BY in string aggregation",
+    "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": "SQLite version in CI does not support ORDER BY in string aggregation",
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
     # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
     # result may or may not match CPU. Skip rather than xfail to avoid a flaky
