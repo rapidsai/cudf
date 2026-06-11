@@ -627,7 +627,7 @@ inline std::unique_ptr<cudf::column> extract_and_build_string_or_bytes_column(
   }
 
   rmm::device_uvector<bool> valid(num_rows, stream, temp_mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(num_rows),
                     valid.data(),
@@ -827,7 +827,7 @@ inline std::unique_ptr<cudf::column> build_repeated_scalar_column(
 
   if (total_count == 0) {
     rmm::device_uvector<int32_t> offsets(num_rows + 1, stream, mr);
-    thrust::fill(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), 0);
+    thrust::fill(rmm::exec_policy_nosync(stream, mr), offsets.begin(), offsets.end(), 0);
     auto offsets_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                       num_rows + 1,
                                                       offsets.release(),
@@ -852,14 +852,17 @@ inline std::unique_ptr<cudf::column> build_repeated_scalar_column(
   }
 
   rmm::device_uvector<int32_t> list_offs(num_rows + 1, stream, mr);
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, mr),
                          d_field_counts.begin(),
                          d_field_counts.end(),
                          list_offs.begin(),
                          0);
 
   int32_t total_count_i32 = static_cast<int32_t>(total_count);
-  thrust::fill_n(rmm::exec_policy_nosync(stream), list_offs.data() + num_rows, 1, total_count_i32);
+  thrust::fill_n(rmm::exec_policy_nosync(stream, mr),
+                 list_offs.data() + num_rows,
+                 1,
+                 total_count_i32);
 
   rmm::device_uvector<T> values(total_count, stream, mr);
 

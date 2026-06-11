@@ -33,7 +33,7 @@ std::unique_ptr<cudf::column> make_null_column(cudf::data_type dtype,
       return cudf::make_fixed_width_column(dtype, num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     case cudf::type_id::STRING: {
       rmm::device_uvector<cudf::strings::detail::string_index_pair> pairs(num_rows, stream, mr);
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, mr),
                    pairs.data(),
                    pairs.end(),
                    cudf::strings::detail::string_index_pair{nullptr, 0});

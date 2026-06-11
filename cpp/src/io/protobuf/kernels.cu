@@ -103,10 +103,11 @@ void propagate_invalid_enum_flags_to_rows(rmm::device_uvector<bool> const& item_
 {
   if (num_items == 0 || row_invalid.size() == 0 || !propagate_to_rows) { return; }
 
+  auto const temp_mr = rmm::mr::get_current_device_resource_ref();
   if (top_row_indices == nullptr) {
     CUDF_EXPECTS(static_cast<size_t>(num_items) <= row_invalid.size(),
                  "enum invalid-row propagation exceeded row buffer");
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                       row_invalid.begin(),
                       row_invalid.begin() + num_items,
                       item_invalid.begin(),
@@ -117,7 +118,7 @@ void propagate_invalid_enum_flags_to_rows(rmm::device_uvector<bool> const& item_
     return;
   }
 
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, temp_mr),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(num_items),
                    [item_invalid = item_invalid.data(),
@@ -139,14 +140,16 @@ void validate_enum_and_propagate_rows(rmm::device_uvector<int32_t> const& values
   if (num_items == 0 || valid_enums.empty()) { return; }
 
   auto const blocks  = static_cast<int>((num_items + THREADS_PER_BLOCK - 1u) / THREADS_PER_BLOCK);
+  auto const temp_mr = rmm::mr::get_current_device_resource_ref();
   auto h_valid_enums = cudf::detail::make_pinned_vector_async<int32_t>(valid_enums.size(), stream);
   std::copy(valid_enums.begin(), valid_enums.end(), h_valid_enums.begin());
-  auto d_valid_enums = cudf::detail::make_device_uvector_async(
-    h_valid_enums, stream, rmm::mr::get_current_device_resource_ref());
+  auto d_valid_enums = cudf::detail::make_device_uvector_async(h_valid_enums, stream, temp_mr);
 
-  rmm::device_uvector<bool> item_invalid(
-    num_items, stream, rmm::mr::get_current_device_resource_ref());
-  thrust::fill(rmm::exec_policy_nosync(stream), item_invalid.begin(), item_invalid.end(), false);
+  rmm::device_uvector<bool> item_invalid(num_items, stream, temp_mr);
+  thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
+               item_invalid.begin(),
+               item_invalid.end(),
+               false);
   validate_enum_values_kernel<<<blocks, THREADS_PER_BLOCK, 0, stream.value()>>>(
     values.data(),
     valid.data(),
