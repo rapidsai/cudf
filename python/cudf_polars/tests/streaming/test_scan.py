@@ -260,6 +260,7 @@ def test_expand_scan_for_rank_split_files(
 
 
 def test_streaming_scan_raises() -> None:
+    # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
@@ -269,13 +270,11 @@ def test_streaming_scan_raises() -> None:
 @pytest.mark.parametrize(
     "predicate,use_columns",
     [
-        # pushdown-able predicate
+        # uses hybrid scan reader
         (pl.col("x") < 1_000, None),
-        # predicate on all columns, with column selection
         (pl.col("x") < 1_000, ["x", "z"]),
-        # non-pushdown predicate falls back to normal scan (no error)
+         # fallsback to default parquet reader
         (pl.col("y").str.contains("cat"), None),
-        # no predicate — hybrid scan disabled, normal read
         (None, None),
     ],
 )
