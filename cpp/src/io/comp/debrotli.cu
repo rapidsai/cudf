@@ -2102,6 +2102,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
     scratch.data() + fb_heap_size, get_brotli_dictionary(), sizeof(brotli_dictionary_s), stream));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     inputs, outputs, results, scratch.data(), fb_heap_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 #if DUMP_FB_HEAP
   uint32_t dump[2];
   uint32_t cur = 0;

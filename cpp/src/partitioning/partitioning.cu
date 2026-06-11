@@ -364,6 +364,7 @@ void copy_block_partitions_impl(InputIter const input,
     row_partition_offset,
     block_partition_sizes,
     scanned_block_partition_sizes);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
@@ -641,6 +642,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                       row_partition_offset.data(),
                                                       block_partition_sizes.data(),
                                                       global_partition_sizes.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     // Determines how the mapping between hash value and partition number is
     // computed
@@ -661,6 +663,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                       row_partition_offset.data(),
                                                       block_partition_sizes.data(),
                                                       global_partition_sizes.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
@@ -733,6 +736,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                    num_partitions * sizeof(size_type),
                                    stream.value()>>>(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     // Use the resulting scatter map to materialize the output
     auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);

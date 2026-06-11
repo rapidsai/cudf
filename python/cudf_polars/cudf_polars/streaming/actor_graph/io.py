@@ -32,6 +32,7 @@ from cudf_polars.streaming.actor_graph.nodes import (
     metadata_feeder_node,
     shutdown_on_error,
 )
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     chunk_to_frame,
@@ -331,20 +332,13 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
-    if tracer is not None:
-        tracer.add_chunk(table=df.table)
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table,
-                df.stream,
-                exclusive_view=True,
-                br=context.br(),
-            ),
-        ),
+    chunk = TableChunk.from_pylibcudf_table(
+        df.table,
+        df.stream,
+        exclusive_view=True,
+        br=context.br(),
     )
+    await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
 @define_actor()

@@ -428,6 +428,7 @@ void persisted_statistics::persist(int num_table_rows,
         offsets.data(),
         intermediate_stats.stripe_stat_chunks.data(),
         intermediate_stats.stripe_stat_merge.device_ptr());
+      CUDF_CUDA_TRY(cudaGetLastError());
       string_pools.emplace_back(std::move(string_pool));
     }
   }

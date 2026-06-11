@@ -319,6 +319,7 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
   dim3 dim_grid(inputs.size(), 1);
   if (inputs.size() > 0) {
     snap_kernel_no_racecheck<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

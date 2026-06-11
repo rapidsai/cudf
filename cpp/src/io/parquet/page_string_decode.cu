@@ -948,9 +948,11 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
   if (level_type_size == 1) {
     compute_string_page_bounds_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     compute_string_page_bounds_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // kernel mask may contain other kernels we don't need to count
@@ -963,6 +965,7 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
     dim3 dim_delta(delta_preproc_block_size, 1);
     compute_delta_page_string_sizes_kernel<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     dim3 dim_delta(delta_length_block_size, 1);
@@ -971,10 +974,12 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
                                                     0,
                                                     streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
     compute_page_string_sizes_kernel<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, page_mask, page_string_offset_indices, min_row, num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // synchronize the streams
@@ -1344,6 +1349,7 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
   preprocess_string_offsets_kernel<preprocess_block_size, prefetch_size>
     <<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_string_offset_indices, page_mask, min_row, num_rows);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::parquet::detail
