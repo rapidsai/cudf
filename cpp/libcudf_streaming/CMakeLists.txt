@@ -61,14 +61,10 @@ message(VERBOSE "CUDF_STREAMING: Build examples: ${BUILD_EXAMPLES}")
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+include(cmake/ConfigureOptionalCommunication.cmake)
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
 include(../cmake/thirdparty/get_cucollections.cmake)
-
-if(BUILD_BENCHMARKS)
-  rapids_find_package(ucxx REQUIRED)
-  rapids_find_package(MPI REQUIRED)
-endif()
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
