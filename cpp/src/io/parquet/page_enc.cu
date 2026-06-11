@@ -3435,6 +3435,7 @@ void InitRowGroupFragments(device_2dspan<PageFragment> frag,
   dim3 const dim_grid(num_columns, grid_y);  // 1 threadblock per fragment
   gpuInitRowGroupFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void CalculatePageFragments(device_span<PageFragment> frag,
@@ -3442,6 +3443,7 @@ void CalculatePageFragments(device_span<PageFragment> frag,
                             rmm::cuda_stream_view stream)
 {
   gpuCalculatePageFragments<512><<<frag.size(), 512, 0, stream.value()>>>(frag, column_frag_sizes);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void InitFragmentStatistics(device_span<statistics_group> groups,
@@ -3452,6 +3454,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
   int const dim =
     util::div_rounding_up_safe(num_fragments, encode_block_size / cudf::detail::warp_size);
   gpuInitFragmentStats<<<dim, encode_block_size, 0, stream.value()>>>(groups, fragments);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
@@ -3482,6 +3485,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                                    max_page_size_rows,
                                                                    page_align,
                                                                    write_v2_headers);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void EncodePages(device_span<EncPage> pages,
@@ -3509,43 +3513,55 @@ void EncodePages(device_span<EncPage> pages,
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::PLAIN);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers, false);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::BYTE_STREAM_SPLIT);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers, true);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::DELTA_BINARY);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodeDeltaBinaryPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::DELTA_LENGTH_BA);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodeDeltaLengthByteArrayPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::DELTA_BYTE_ARRAY);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodeDeltaByteArrayPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DICTIONARY) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::DICTIONARY);
+    CUDF_CUDA_TRY(cudaGetLastError());
     gpuEncodeDictPages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   cudf::detail::join_streams(streams, stream);
@@ -3559,6 +3575,7 @@ void decide_compression(device_span<EncColumnChunk> chunks,
     util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
   decide_compression_kernel<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(
     chunks, page_level_compression);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
@@ -3570,11 +3587,13 @@ void EncodePageHeaders(device_span<EncPage> pages,
   auto const num_blocks = util::div_rounding_up_safe<int>(pages.size(), encode_block_size);
   gpuEncodePageHeaders<<<num_blocks, encode_block_size, 0, stream.value()>>>(
     pages, comp_results, page_stats, chunk_stats);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void GatherPages(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
@@ -3584,6 +3603,7 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
 {
   gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(
     chunks, column_stats, column_index_truncate_length);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::parquet::detail

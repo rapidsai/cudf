@@ -206,7 +206,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 
   auto const num_rows = orderby.num_rows();
   auto make_offsets   = [&](range_window_type const& window, rolling::direction direction) {
-    auto result        = make_numeric_column(
+    auto result = make_numeric_column(
       data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto write_offsets = [&](auto grouping) {
       thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),

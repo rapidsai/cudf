@@ -169,16 +169,19 @@ void materialize_bitmask(column_view const& left_col,
       materialize_merged_bitmask_kernel<true, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       materialize_merged_bitmask_kernel<true, false>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   } else {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }

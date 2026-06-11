@@ -174,6 +174,7 @@ void launch_mixed_join(
       join_output_l,
       join_output_r,
       join_result_offsets);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace detail
