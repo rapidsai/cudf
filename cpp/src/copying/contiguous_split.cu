@@ -1759,6 +1759,7 @@ void copy_data(int num_batches_to_copy,
     auto index_to_buffer = [user_buffer] __device__(unsigned int) { return user_buffer; };
     copy_partitions<block_size><<<num_batches_to_copy, block_size, 0, stream.value()>>>(
       index_to_buffer, d_src_bufs, d_dst_buf_info.data() + starting_batch);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     auto index_to_buffer = [d_dst_bufs,
                             dst_buf_info = d_dst_buf_info.data(),
@@ -1768,6 +1769,7 @@ void copy_data(int num_batches_to_copy,
     };
     copy_partitions<block_size><<<num_batches_to_copy, block_size, 0, stream.value()>>>(
       index_to_buffer, d_src_bufs, d_dst_buf_info.data() + starting_batch);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
