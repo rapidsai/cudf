@@ -387,10 +387,8 @@ int main(int argc, char** argv)
   } else {
 #ifdef CUDF_STREAMING_HAVE_UCXX
     auto ucxx = std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm);
-    if (ucxx == nullptr) {
-      log.print("Expected UCXX communicator when using bootstrap mode");
-      throw std::runtime_error{"Expected UCXX communicator when using bootstrap mode"};
-    }
+    RAPIDSMPF_EXPECTS(
+      ucxx != nullptr, "Expected UCXX communicator when using bootstrap mode", std::runtime_error);
     ucxx->barrier();
 #else
     RAPIDSMPF_FAIL("UCXX bootstrap barrier requested, but UCXX support is not available",
