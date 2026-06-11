@@ -155,10 +155,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     .row_group_indices    = input_row_group_indices,
     .has_is_null_operator = has_is_null_operator};
 
-  // Scratch buffer holding a filter column's schema index mapped into each source
-  auto const num_sources = input_row_group_indices.size();
-  std::vector<int> per_source_schema_indices(num_sources);
-
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
@@ -188,12 +184,16 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       }
       continue;
     }
-    // Map the zeroth-source schema index into each source's schema tree
-    for (size_t src_idx = 0; src_idx < num_sources; ++src_idx) {
-      per_source_schema_indices[src_idx] = map_schema_index(schema_idx, static_cast<int>(src_idx));
-    }
+    // Map each filter column's zeroth-source schema index into every source's schema tree.
+    auto const num_sources         = input_row_group_indices.size();
+    auto per_source_schema_indices = std::vector<int>(num_sources);
+    auto const src_iter            = cuda::counting_iterator<size_t>{0};
+    std::transform(
+      src_iter, src_iter + num_sources, per_source_schema_indices.begin(), [&](size_t src_idx) {
+        return map_schema_index(schema_idx, static_cast<int>(src_idx));
+      });
     auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
-      dtype, stats_col, host_span<int const>{per_source_schema_indices}, dtype, stream, mr);
+      dtype, stats_col, per_source_schema_indices, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
     if (has_is_null_operator) {
