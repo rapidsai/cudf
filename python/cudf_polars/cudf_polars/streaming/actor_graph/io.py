@@ -63,7 +63,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import SplitScan
+    from cudf_polars.streaming.io import FusedScan, SplitScan
 
 
 class Lineariser:
@@ -408,7 +408,7 @@ async def scan_node(
         lineariser = Lineariser(context, ch_out, num_producers)
 
         # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, Scan | SplitScan]]] = [
+        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
             [] for _ in range(num_producers)
         ]
         for task_idx, scan in enumerate(scans):

@@ -353,6 +353,7 @@ class key_remap_table : public key_remap_table_interface {
 
     insert_and_count_kernel<<<grid.num_blocks, KEY_REMAP_BLOCK_SIZE, 0, stream.value()>>>(
       build_num_rows, set_ref, key_iter, counts.data(), d_distinct_count.data(), bitmask_ptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     _distinct_count = d_distinct_count.value(stream);
 
