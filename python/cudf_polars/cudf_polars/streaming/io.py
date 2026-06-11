@@ -233,8 +233,7 @@ def _read_with_hybrid_scan(
                 row_group_indices, chunks, options, stream=stream
             )
             col_names = tbl_w_meta.column_names(include_children=False)
-            num_rows = tbl_w_meta.num_rows_per_source[0] if not col_names else None
-            stream.synchronize()
+            num_rows = tbl_w_meta.num_rows_per_source[0] if not col_names else Nones
             return DataFrame.from_table(
                 tbl_w_meta.tbl,
                 col_names,
