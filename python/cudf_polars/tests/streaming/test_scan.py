@@ -262,9 +262,10 @@ def test_expand_scan_for_rank_split_files(
 def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
     scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([scan], scan, context=ctx)
+        StreamingScan.do_evaluate([fused], scan, context=ctx)
 
 
 @pytest.mark.parametrize(
@@ -273,7 +274,7 @@ def test_streaming_scan_raises() -> None:
         # uses hybrid scan reader
         (pl.col("x") < 1_000, None),
         (pl.col("x") < 1_000, ["x", "z"]),
-         # fallsback to default parquet reader
+        # fallsback to default parquet reader
         (pl.col("y").str.contains("cat"), None),
         (None, None),
     ],

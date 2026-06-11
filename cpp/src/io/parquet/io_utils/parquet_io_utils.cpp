@@ -431,7 +431,8 @@ fetch_byte_ranges_to_device(cudf::io::datasource& datasource,
                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto [buffers, spans, fut] = fetch_byte_ranges_to_device_async(datasource, byte_ranges, stream, mr);
+  auto [buffers, spans, fut] =
+    fetch_byte_ranges_to_device_async(datasource, byte_ranges, stream, mr);
   fut.get();
   return {std::move(buffers), std::move(spans)};
 }

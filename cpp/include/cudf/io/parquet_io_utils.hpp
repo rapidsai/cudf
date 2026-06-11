@@ -136,7 +136,7 @@ fetch_byte_ranges_to_device_async(
  *
  * @ingroup io_utils
  *
- * Convenience wrapper around @ref fetch_byte_ranges_to_device_async that waits for the
+ * Convenience wrapper around `fetch_byte_ranges_to_device_async` that waits for the
  * returned future before returning.
  *
  * @param datasource Input datasource

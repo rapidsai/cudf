@@ -23,8 +23,8 @@ from cudf_polars.dsl.ir import (
     Sink,
     _prepare_parquet_predicate,
 )
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
