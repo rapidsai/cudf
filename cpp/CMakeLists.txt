@@ -565,7 +565,6 @@ macro(add_fragment)
   target_compile_options(
     ${OBJECT_ID} PRIVATE 
     "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-    "$<$<COMPILE_LANGUAGE:CUDA>:--gen-opt-lto>"
   )
 
   embed_blob(
