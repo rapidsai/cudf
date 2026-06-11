@@ -653,28 +653,6 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
     CUDF_EXPECTS(is_null_aware == null_aware::NO,
                  "PTX UDFs do not support null-aware transformations",
                  std::invalid_argument);
-  } else if (std::holds_alternative<lto_binary_type>(source_type)) {
-    [[maybe_unused]] auto binary_type = std::get<lto_binary_type>(source_type);
-    CUDF_EXPECTS(
-      std::none_of(inputs.begin(),
-                   inputs.end(),
-                   [](auto& in) {
-                     return std::visit(
-                       [](auto& c) {
-                         return !is_fixed_width(c.type()) && c.type().id() != type_id::STRING;
-                       },
-                       in);
-                   }),
-      "Transforms with LTO binaries only support fixed-width types and strings as inputs",
-      std::invalid_argument);
-    CUDF_EXPECTS(
-      std::none_of(
-        outputs.begin(), outputs.end(), [](auto& out) { return !is_fixed_width(out.type); }),
-      "Transforms with LTO binaries only support output of fixed-width types",
-      std::invalid_argument);
-    CUDF_EXPECTS(inputs.size() == 2 || inputs.size() == 1,
-                 "LTO binary transforms only support 1 or 2 inputs",
-                 std::invalid_argument);
   }
 
   CUDF_EXPECTS(std::none_of(outputs.begin(),
@@ -1094,16 +1072,6 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
   return std::move(cols[0]);
 }
 
-std::string strip_whitespace(std::string_view str)
-{
-  std::string result;
-  result.reserve(str.size());
-  for (char c : str) {
-    if (!std::isspace(static_cast<unsigned char>(c))) { result.push_back(c); }
-  }
-  return result;
-}
-
 // if we have a matching pre-compiled kernel fragment for the given transform configuration, return
 // it to use for LTO linking instead of compiling a new one
 std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type>> dispatch_lto_kernel_fragment(
@@ -1112,9 +1080,19 @@ std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type>> dispatch_lt
   std::span<transform_input const> inputs,
   std::span<output_column const> outputs)
 {
-  // TODO: better symbol mangling, this is sufficient for now
-  // the contract here is that CMake and this function agree on symbol mangling of the reflected
-  // kernel name.
+  auto strip_whitespace = [](std::string_view str) {
+    std::string result;
+    result.reserve(str.size());
+    for (char c : str) {
+      if (!std::isspace(static_cast<unsigned char>(c))) { result.push_back(c); }
+    }
+    return result;
+  };
+
+  // TODO: better and less error-prone symbol mangling, but this is sufficient for now.
+
+  // the contract here is that CMake and this dispatch function agree on symbol mangling of the
+  // reflected kernel name.
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
     jit_transform::reflect(lto_binary_type::FATBIN, inputs, outputs);
   auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
