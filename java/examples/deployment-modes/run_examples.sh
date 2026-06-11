@@ -56,15 +56,20 @@ measured by the script and printed below the JVM output.
 USAGE
 }
 
-# Locate the latest non-classifier-test cudf-*.jar in the Maven repo.
+# Locate the non-classifier-test cudf JAR matching EXAMPLE_VERSION.
 # Accept any cuda* classifier (e.g. cudf-<version>-SNAPSHOT-cuda12.jar) but
 # skip *-tests.jar / *-sources.jar / *-javadoc.jar.
 locate_cudf_jar() {
   if [[ ! -d "$CUDF_GROUP_DIR" ]]; then
-    err "cudf Maven artifacts not found at $CUDF_GROUP_DIR. Build cudf first (mvn install)."
+    err "cudf Maven artifacts not found at $CUDF_GROUP_DIR. Make sure cudf is built first."
+  fi
+  local version_dir="$CUDF_GROUP_DIR/$EXAMPLE_VERSION"
+  if [[ ! -d "$version_dir" ]]; then
+    err "cudf Maven artifacts for version $EXAMPLE_VERSION not found at $version_dir." \
+        "Make sure the expected version of cudf is built first."
   fi
   local jar=""
-  for candidate in "$CUDF_GROUP_DIR"/*/cudf-*.jar; do
+  for candidate in "$version_dir"/cudf-"$EXAMPLE_VERSION"*.jar; do
     if [[ ! -f "$candidate" ]]; then
       continue
     fi
@@ -75,7 +80,7 @@ locate_cudf_jar() {
     break
   done
   if [[ -z "$jar" ]]; then
-    err "no cudf-*.jar found under $CUDF_GROUP_DIR. Build cudf first (mvn install)."
+    err "no cudf-$EXAMPLE_VERSION*.jar found under $version_dir. Make sure cudf is built first."
   fi
   printf '%s\n' "$jar"
 }
