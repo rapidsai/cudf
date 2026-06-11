@@ -232,7 +232,7 @@ TEST_P(ConcurrentShuffleTest, round_trip)
   }
 
   for (auto& f : futures) {
-    ASSERT_NO_THROW(f.wait());
+    ASSERT_NO_THROW(f.get());
   }
 }
 
