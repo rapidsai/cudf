@@ -814,6 +814,11 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
+
+  _output_chunk_produced       = false;
+  _is_filter_columns_selected  = false;
+  _is_payload_columns_selected = false;
+  _is_all_columns_selected     = false;
 }
 
 void hybrid_scan_reader_impl::initialize_column_selection_options(
