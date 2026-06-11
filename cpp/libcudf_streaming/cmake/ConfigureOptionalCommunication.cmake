@@ -54,6 +54,7 @@ add_library(cudf_streaming::optional_communication ALIAS cudf_streaming_optional
 message(STATUS "CUDF_STREAMING: MPI support: ${CUDF_STREAMING_HAVE_MPI}")
 message(STATUS "CUDF_STREAMING: UCXX support: ${CUDF_STREAMING_HAVE_UCXX}")
 
+# Emit a standardized status message for targets disabled by unavailable optional dependencies.
 function(cudf_streaming_skip_optional_target target reason)
   message(STATUS "CUDF_STREAMING: Skipping ${target}: ${reason}")
 endfunction()
