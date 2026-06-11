@@ -27,10 +27,13 @@
 
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/reduce.h>
 
 #include <optional>
+#include <variant>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -204,30 +207,50 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     group_helper.emplace(group_keys, null_policy::INCLUDE, sorted::YES, std::vector<null_order>{});
   }
 
-  auto const num_rows = orderby.num_rows();
-  auto make_offsets   = [&](range_window_type const& window, rolling::direction direction) {
-    auto result = make_numeric_column(
-      data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
-    auto write_offsets = [&](auto grouping) {
-      thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     cudf::detail::make_counting_transform_iterator(
-                       size_type{0}, rolling::unbounded_distance_functor{grouping, direction}),
-                     num_rows,
-                     result->mutable_view().begin<size_type>());
-    };
-    if (std::holds_alternative<current_row>(window)) {
-      write_offsets(peers);
-    } else if (group_helper.has_value()) {
-      write_offsets(rolling::grouped{group_helper->group_labels(stream).data(),
-                                     group_helper->group_offsets(stream).data()});
-    } else {
-      write_offsets(rolling::ungrouped{num_rows});
-    }
-    return result;
+  auto const num_rows   = orderby.num_rows();
+  auto preceding_result = make_numeric_column(
+    data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto following_result = make_numeric_column(
+    data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+
+  auto write_offsets = [&](auto preceding_grouping, auto following_grouping) {
+    auto preceding_view = preceding_result->mutable_view();
+    auto following_view = following_result->mutable_view();
+
+    auto const source_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(
+        [preceding_functor =
+           rolling::unbounded_distance_functor{preceding_grouping, rolling::direction::PRECEDING},
+         following_functor = rolling::unbounded_distance_functor{
+           following_grouping, rolling::direction::FOLLOWING}] __device__(size_type i) {
+          return {preceding_functor(i), following_functor(i)};
+        }));
+
+    thrust::copy_n(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      source_iter,
+      num_rows,
+      cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
   };
 
-  return {make_offsets(preceding, rolling::direction::PRECEDING),
-          make_offsets(following, rolling::direction::FOLLOWING)};
+  using offset_grouping      = std::variant<rolling::grouped, rolling::ungrouped>;
+  auto const select_grouping = [&](range_window_type const& window) -> offset_grouping {
+    if (std::holds_alternative<current_row>(window)) {
+      return peers;
+    } else if (group_helper.has_value()) {
+      return rolling::grouped{group_helper->group_labels(stream).data(),
+                              group_helper->group_offsets(stream).data()};
+    } else {
+      return rolling::ungrouped{num_rows};
+    }
+  };
+
+  auto preceding_grouping = select_grouping(preceding);
+  auto following_grouping = select_grouping(following);
+  std::visit(write_offsets, preceding_grouping, following_grouping);
+
+  return std::pair{std::move(preceding_result), std::move(following_result)};
 }
 }  // namespace detail
 
