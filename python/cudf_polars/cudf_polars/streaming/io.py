@@ -41,7 +41,7 @@ from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping, Sequence
+    from collections.abc import Hashable, MutableMapping
 
     import pylibcudf.expressions as plc_expr
     from rmm.pylibrmm.stream import Stream
@@ -222,19 +222,16 @@ def _read_with_hybrid_scan(
                 bloom_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
                     source_info, bloom_ranges, stream=stream
                 )
-                bloom_chunks_seq: Sequence[object] = bloom_chunks
                 row_group_indices = reader.filter_row_groups_with_bloom_filters(
-                    bloom_chunks_seq, row_group_indices, options, stream=stream
+                    bloom_chunks, row_group_indices, options, stream=stream
                 )
 
         if not row_group_indices:
             byte_ranges = reader.all_column_chunks_byte_ranges(
                 row_group_indices, options
             )
-            chunks: Sequence[object] = (
-                plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                    source_info, byte_ranges, stream=stream
-                )
+            chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+                source_info, byte_ranges, stream=stream
             )
             tbl_w_meta = reader.materialize_all_columns(
                 row_group_indices, chunks, options, stream=stream
@@ -252,7 +249,7 @@ def _read_with_hybrid_scan(
         n_rows = reader.total_rows_in_row_groups(row_group_indices)
         row_mask = plc.Column.from_scalar(
             plc.Scalar.from_py(
-                value=True, dtype=plc.DataType(plc.TypeId.BOOL8), stream=stream
+                py_val=True, dtype=plc.DataType(plc.TypeId.BOOL8), stream=stream
             ),
             n_rows,
             stream=stream,
@@ -261,10 +258,8 @@ def _read_with_hybrid_scan(
         filter_ranges = reader.filter_column_chunks_byte_ranges(
             row_group_indices, options
         )
-        filter_chunks: Sequence[object] = (
-            plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                source_info, filter_ranges, stream=stream
-            )
+        filter_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+            source_info, filter_ranges, stream=stream
         )
         filter_tbl_w_meta = reader.materialize_filter_columns(
             row_group_indices,
@@ -281,10 +276,8 @@ def _read_with_hybrid_scan(
         # PERFORMANCE!! payload_column_chunks_byte_ranges does not need the row mask, so
         # for local NVMe/GDS this fetch could be submitted async before
         # materialize_filter_columns to overlap I/O with GPU decode.
-        payload_chunks: Sequence[object] = (
-            plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                source_info, payload_ranges, stream=stream
-            )
+        payload_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+            source_info, payload_ranges, stream=stream
         )
         payload_tbl_w_meta = reader.materialize_payload_columns(
             row_group_indices,

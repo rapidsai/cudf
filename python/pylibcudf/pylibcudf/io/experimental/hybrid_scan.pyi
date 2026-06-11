@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from enum import IntEnum
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
@@ -49,14 +50,14 @@ class HybridScanReader:
     ) -> tuple[list[ByteRangeInfo], list[ByteRangeInfo]]: ...
     def filter_row_groups_with_dictionary_pages(
         self,
-        dictionary_page_data: list[Span],
+        dictionary_page_data: Sequence[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
     def filter_row_groups_with_bloom_filters(
         self,
-        bloom_filter_data: list[Span],
+        bloom_filter_data: Sequence[Span],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
@@ -74,7 +75,7 @@ class HybridScanReader:
     def materialize_filter_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_data: list[Span],
+        column_chunk_data: Sequence[Span],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -87,7 +88,7 @@ class HybridScanReader:
     def materialize_payload_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_data: list[Span],
+        column_chunk_data: Sequence[Span],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
@@ -100,7 +101,7 @@ class HybridScanReader:
     def materialize_all_columns(
         self,
         row_group_indices: list[int],
-        column_chunk_data: list[Span],
+        column_chunk_data: Sequence[Span],
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
@@ -112,7 +113,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_data: list[Span],
+        column_chunk_data: Sequence[Span],
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
@@ -128,7 +129,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
-        column_chunk_data: list[Span],
+        column_chunk_data: Sequence[Span],
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
