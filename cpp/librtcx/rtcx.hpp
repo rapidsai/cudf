@@ -819,7 +819,7 @@ std::string reflect(T value) = delete;
 template <>
 inline std::string reflect<bool>(bool value)
 {
-  return std::format("(bool){}", value);
+  return std::format("{}", value);
 }
 
 /**
@@ -830,7 +830,7 @@ inline std::string reflect<bool>(bool value)
 template <>
 inline std::string reflect<std::uint8_t>(std::uint8_t value)
 {
-  return std::format("(unsigned char){}U", value);
+  return std::format("{}U", value);
 }
 
 /**
@@ -841,7 +841,7 @@ inline std::string reflect<std::uint8_t>(std::uint8_t value)
 template <>
 inline std::string reflect<std::uint16_t>(std::uint16_t value)
 {
-  return std::format("(unsigned short){}U", value);
+  return std::format("{}U", value);
 }
 
 /**
@@ -852,7 +852,7 @@ inline std::string reflect<std::uint16_t>(std::uint16_t value)
 template <>
 inline std::string reflect<std::uint32_t>(std::uint32_t value)
 {
-  return std::format("(unsigned int){}U", value);
+  return std::format("{}U", value);
 }
 
 /**
@@ -863,7 +863,7 @@ inline std::string reflect<std::uint32_t>(std::uint32_t value)
 template <>
 inline std::string reflect<std::uint64_t>(std::uint64_t value)
 {
-  return std::format("(unsigned long long int){}ULL", value);
+  return std::format("{}ULL", value);
 }
 
 /**
@@ -874,7 +874,7 @@ inline std::string reflect<std::uint64_t>(std::uint64_t value)
 template <>
 inline std::string reflect<std::int8_t>(std::int8_t value)
 {
-  return std::format("(signed char){}", value);
+  return std::format("{}", value);
 }
 
 /**
@@ -885,7 +885,7 @@ inline std::string reflect<std::int8_t>(std::int8_t value)
 template <>
 inline std::string reflect<std::int16_t>(std::int16_t value)
 {
-  return std::format("(signed short){}", value);
+  return std::format("{}", value);
 }
 
 /**
@@ -896,7 +896,7 @@ inline std::string reflect<std::int16_t>(std::int16_t value)
 template <>
 inline std::string reflect<std::int32_t>(std::int32_t value)
 {
-  return std::format("(signed int){}", value);
+  return std::format("{}", value);
 }
 
 /**
@@ -907,7 +907,7 @@ inline std::string reflect<std::int32_t>(std::int32_t value)
 template <>
 inline std::string reflect<std::int64_t>(std::int64_t value)
 {
-  return std::format("(signed long long int){}LL", value);
+  return std::format("{}LL", value);
 }
 
 /**
@@ -918,7 +918,7 @@ inline std::string reflect<std::int64_t>(std::int64_t value)
 template <>
 inline std::string reflect<float>(float value)
 {
-  return std::format("(float){}F", value);
+  return std::format("{}F", value);
 }
 
 /**
@@ -929,20 +929,7 @@ inline std::string reflect<float>(float value)
 template <>
 inline std::string reflect<double>(double value)
 {
-  return std::format("(double){}", value);
-}
-
-/**
- * @brief Reflect a value of any type into its CUDA string representation, given the type name as a
- * string
- * @param type The name of the type to be reflected (e.g., "int", "float", "MyStruct", etc.)
- * @param value The string representation of the value to be reflected, which will be used in the
- * resulting CUDA code
- * @return A string containing the CUDA representation of the value with the specified type
- */
-inline std::string reflect_cast(std::string_view type, std::string_view value)
-{
-  return std::format("(({})({}))", type, value);
+  return std::format("{}", value);
 }
 
 /**
@@ -959,7 +946,7 @@ template <typename T>
   requires(std::is_enum_v<T>)
 std::string reflect_enum(std::string_view type, T value)
 {
-  return reflect_cast(type, reflect(static_cast<std::underlying_type_t<T>>(value)));
+  return std::format("{}{}{}{}", type, "{", static_cast<std::underlying_type_t<T>>(value), "}");
 }
 
 /**

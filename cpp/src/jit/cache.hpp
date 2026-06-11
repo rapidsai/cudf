@@ -1,6 +1,5 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,9 +9,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <rtcx.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
-#include <rtcx.hpp>
 
 namespace CUDF_EXPORT cudf {
 
@@ -37,32 +33,9 @@ struct [[nodiscard]] kernel {
  private:
   rtcx::library _library;
   rtcx::kernel_ref _kernel;
-namespace CUDF_EXPORT cudf {
-
-struct [[nodiscard]] jit_bundle_t {
- private:
-  std::string install_dir_;
-  rtcx::cache_t* cache_;
-
-  void ensure_installed() const;
 
  public:
-  jit_bundle_t(std::string install_dir, rtcx::cache_t& cache);
-
-  [[nodiscard]] std::string get_hash() const;
-
-  [[nodiscard]] std::string get_directory() const;
-
-  [[nodiscard]] std::vector<std::string> get_include_directories() const;
-};
-
-struct [[nodiscard]] kernel {
- private:
-  rtcx::library _library;
-  rtcx::kernel_ref _kernel;
-
- public:
-  kernel(rtcx::library lib, rtcx::kernel_ref kernel) : _library(std::move(lib)), _kernel(kernel) {};
+  kernel(rtcx::library lib, rtcx::kernel_ref kernel) : _library(std::move(lib)), _kernel(kernel) {}
   kernel(kernel const&)            = default;
   kernel(kernel&&)                 = default;
   kernel& operator=(kernel const&) = default;
@@ -92,6 +65,7 @@ struct [[nodiscard]] kernel {
                    uint32_t shared_mem_bytes,
                    rmm::cuda_stream_view stream,
                    Args&&... args)
+    requires(sizeof...(Args) > 0)
   {
     void const* params[] = {&args...};  // NOLINT(modernize-avoid-c-arrays)
     launch(grid_dim, block_dim, shared_mem_bytes, stream, const_cast<void**>(params));
@@ -114,6 +88,23 @@ kernel get_kernel(std::string const& name,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
                   std::string const& kernel_instance);
+
+/**
+ * @brief Gets a kernel fragment from an embedded CUDA source file
+ * @param name Debug name for the kernel fragment (used for caching and logging)
+ * @param source_file_id Identifier for the embedded source file (used to locate the source and for
+ * caching)
+ * @param header_include_names Names of any additional embedded header files to include during
+ * compilation
+ * @param headers Contents of any additional embedded header files to include during compilation
+ * @param kernel_instance String identifier for the specific kernel instance being requested (used
+ * for caching)
+ */
+rtcx::blob get_kernel_fragment(std::string const& name,
+                               std::string const& source_file_id,
+                               std::span<char const* const> header_include_names,
+                               std::span<char const* const> headers,
+                               std::string const& kernel_instance);
 
 /**
  * @brief Gets a kernel by linking together embedded binary fragments

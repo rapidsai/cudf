@@ -132,19 +132,22 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
   }
 
   // Call once for hot cache.
-  cudf::transform_output output{cudf::data_type{cudf::type_to_id<TypeOut>()},
-                                cudf::output_nullability::ALL_VALID};
+  cudf::transform_input inputs[]   = {lhs, rhs};
+  cudf::transform_output outputs[] = {{cudf::data_type{cudf::type_to_id<TypeOut>()},
+                                cudf::output_nullability::ALL_VALID}};
 
   auto const range = cudf_benchmark_fragments::file_ranges[fragment_id];
   std::span<uint8_t const> udf{cudf_benchmark_fragments::files.subspan(range[0], range[1])};
 
-  auto result = cudf::binary_op_lto(source_table->get_column(0),
-                                    source_table->get_column(1),
-                                    output,
-                                    udf,
+ auto result  =  cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
-                                    null_aware ? cudf::null_aware::YES : cudf::null_aware::NO
-                                   );
+                                     null_aware ? cudf::null_aware::YES : cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt);
+
 
   // use number of bytes read and written to global memory
   state.add_global_memory_reads<TypeLhs>(num_rows);
@@ -152,12 +155,14 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
   state.add_global_memory_writes<TypeOut>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::binary_op_lto(source_table->get_column(0),
-                        source_table->get_column(1),
-                        output,
-                        udf,
-                        cudf::lto_binary_type::FATBIN,
-                        null_aware ? cudf::null_aware::YES : cudf::null_aware::NO);
+   cudf::transform_lto(udf,
+                                    cudf::lto_binary_type::FATBIN,
+                                     null_aware ? cudf::null_aware::YES : cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt);
   });
 }
 

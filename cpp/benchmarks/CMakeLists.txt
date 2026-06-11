@@ -391,7 +391,9 @@ ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 add_embed(cudf_benchmark_fragments)
 add_fragment(cudf_benchmark_fragments FRAGMENT add SOURCE binaryop/fragments/add.cu)
 add_fragment(cudf_benchmark_fragments FRAGMENT null_max SOURCE binaryop/fragments/null_max.cu)
-embed(cudf_benchmark_fragments COMPRESSION none)
+embed(cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
+      "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------

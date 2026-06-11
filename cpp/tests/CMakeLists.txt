@@ -697,10 +697,12 @@ add_fragment(
 )
 
 add_fragment(
-  cudf_test_fragments FRAGMENT decimal_square SOURCE transform/fragments/decimal_square.cu
+  cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
 )
 
-embed(cudf_test_fragments COMPRESSION none)
+embed(cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY
+      "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 ConfigureTest(
   TRANSFORM_LTO_TEST transform/transform_lto_test.cpp

@@ -3,10 +3,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/jit/transform_operator.cuh>
-
-template <>
-__device__ void cudf::lto::transform<float*, float, float>(float* out, float a, float b)
-{
-  *out = a * a + b * b;
-}
+extern "C" __device__ void transform(float* out, float a, float b) { *out = a * a + b * b; }
