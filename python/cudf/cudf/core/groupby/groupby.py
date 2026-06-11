@@ -576,7 +576,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = self._by
         else:
             self.grouping = _Grouping(
-                obj, self._by, level, by_series_col_names
+                obj, self._by, level, by_series_col_names, dropna=self._dropna
             )
 
         self._groupby_manager = _GroupByContextManager(
@@ -3905,7 +3905,14 @@ class Grouper:
 
 
 class _Grouping(Serializable):
-    def __init__(self, obj, by=None, level=None, series_key_column_names=None):
+    def __init__(
+        self,
+        obj,
+        by=None,
+        level=None,
+        series_key_column_names=None,
+        dropna=True,
+    ):
         self._obj = obj
         self._key_columns = []
         self.names = []
@@ -3930,7 +3937,12 @@ class _Grouping(Serializable):
         normalized = []
         for col in self._key_columns:
             if (
-                isinstance(col.dtype, np.dtype)
+                # Only when ``dropna=False`` is the all-null group actually
+                # kept and labelled. With ``dropna=True`` the group is dropped,
+                # and pandas leaves the (empty) result index as the original
+                # object dtype rather than promoting it to float64.
+                not dropna
+                and isinstance(col.dtype, np.dtype)
                 and col.dtype.kind == "O"
                 and len(col)
                 and col.null_count == len(col)

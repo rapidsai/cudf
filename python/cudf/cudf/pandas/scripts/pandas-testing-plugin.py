@@ -5714,6 +5714,7 @@ NODEIDS_PATHS_TO_SKIP: dict[str, str] = {
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_frame_duplicate_columns_multiple_blocks": "flaky test",
     "tests/copy_view/test_methods.py::test_groupby_column_index_in_references": "flaky test",
     "tests/copy_view/test_methods.py::test_groupby_modify_series": "flaky test",
+    "tests/copy_view/test_methods.py::test_infer_objects_reference": "flaky test",
     "tests/arrays/sparse/test_libsparse.py": "Tests private pandas APIs",
     "tests/copy_view/test_internals.py": "Tests private pandas APIs",
     "tests/frame/methods/test_to_dict_of_blocks.py": "Tests private pandas APIs",
