@@ -6,7 +6,6 @@
 #include "parquet_reader_helpers.hpp"
 
 #include <cudf/logger.hpp>
-
 #include <cuda/numeric>
 
 #include <algorithm>
