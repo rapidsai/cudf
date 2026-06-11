@@ -94,8 +94,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
   //Constructor for lists and struct
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
-                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
-                   HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
+                          HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
+                          HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
     // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
     //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
@@ -126,8 +126,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * @throws IllegalStateException    if nullCount is greater than 0 but hostValidityBuffer is null
    */
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
-                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
-                   HostMemoryBuffer offsetBuffer) {
+                          HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
+                          HostMemoryBuffer offsetBuffer) {
     // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
     //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
