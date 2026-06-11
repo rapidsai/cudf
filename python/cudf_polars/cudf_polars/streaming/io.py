@@ -17,7 +17,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
@@ -180,6 +180,18 @@ def expand_scan_for_rank(
     return scans
 
 
+def _fetch_byte_ranges(
+    paths: list[str],
+    byte_ranges: list[plc.io.text.ByteRangeInfo],
+    stream: Stream,
+) -> list[plc.gpumemoryview]:
+    # TODO: Accept a pinned-host Datasource pre-fetched by the caller so the
+    # storage I/O overlaps with GPU work for better pipelining.
+    return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+        plc.io.SourceInfo(paths), byte_ranges, stream=stream
+    )
+
+
 def _read_with_hybrid_scan(
     schema: Schema,
     paths: list[str],
@@ -195,10 +207,8 @@ def _read_with_hybrid_scan(
         "hybrid scan only supported for SplitScan; one physical file"
     )
     with nvtx_annotate_cudf_polars(message=f"HybridScan: {paths[0]}"):
-        source_info = plc.io.SourceInfo(paths)
-
         options = (
-            plc.io.parquet.ParquetReaderOptions.builder(source_info)
+            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
             .decimal_width(plc.TypeId.DECIMAL128)
             .build()
         )
@@ -219,31 +229,25 @@ def _read_with_hybrid_scan(
                 row_group_indices, options
             )
             if bloom_ranges:
-                bloom_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                    source_info, bloom_ranges, stream=stream
-                )
+                bloom_chunks = _fetch_byte_ranges(paths, bloom_ranges, stream)
                 row_group_indices = reader.filter_row_groups_with_bloom_filters(
                     bloom_chunks, row_group_indices, options, stream=stream
                 )
 
         if not row_group_indices:
-            byte_ranges = reader.all_column_chunks_byte_ranges(
-                row_group_indices, options
-            )
-            chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                source_info, byte_ranges, stream=stream
-            )
-            tbl_w_meta = reader.materialize_all_columns(
-                row_group_indices, chunks, options, stream=stream
-            )
-            col_names = tbl_w_meta.column_names(include_children=False)
-            num_rows = tbl_w_meta.num_rows_per_source[0] if not col_names else None
-            return DataFrame.from_table(
-                tbl_w_meta.tbl,
-                col_names,
-                [schema[name] for name in col_names],
+            col_names = with_columns if with_columns is not None else list(schema)
+            return DataFrame(
+                [
+                    Column(
+                        plc.column_factories.make_empty_column(
+                            schema[name].plc_type, stream=stream
+                        ),
+                        dtype=schema[name],
+                        name=name,
+                    )
+                    for name in col_names
+                ],
                 stream=stream,
-                num_rows=num_rows,
             )
 
         n_rows = reader.total_rows_in_row_groups(row_group_indices)
@@ -258,9 +262,7 @@ def _read_with_hybrid_scan(
         filter_ranges = reader.filter_column_chunks_byte_ranges(
             row_group_indices, options
         )
-        filter_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-            source_info, filter_ranges, stream=stream
-        )
+        filter_chunks = _fetch_byte_ranges(paths, filter_ranges, stream)
         filter_tbl_w_meta = reader.materialize_filter_columns(
             row_group_indices,
             filter_chunks,
@@ -273,12 +275,10 @@ def _read_with_hybrid_scan(
         payload_ranges = reader.payload_column_chunks_byte_ranges(
             row_group_indices, options
         )
-        # PERFORMANCE!! payload_column_chunks_byte_ranges does not need the row mask, so
-        # for local NVMe/GDS this fetch could be submitted async before
+        # PERFORMANCE: payload_column_chunks_byte_ranges does not need the row mask,
+        # so with async prefetch this fetch could be submitted concurrently with
         # materialize_filter_columns to overlap I/O with GPU decode.
-        payload_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-            source_info, payload_ranges, stream=stream
-        )
+        payload_chunks = _fetch_byte_ranges(paths, payload_ranges, stream)
         payload_tbl_w_meta = reader.materialize_payload_columns(
             row_group_indices,
             payload_chunks,
