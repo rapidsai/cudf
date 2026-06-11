@@ -147,4 +147,3 @@ def test_select_fast_count_parquet_skip_rows(
 
     q = pl.scan_parquet(file).slice(1, 5).select(pl.len())
     assert_gpu_result_equal(q, engine=engine)
-
