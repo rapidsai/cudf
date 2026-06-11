@@ -13,7 +13,7 @@ add_library(bench_utils INTERFACE)
 target_sources(bench_utils INTERFACE utils/random_data.cu)
 target_compile_options(bench_utils INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>)
 
-if(RAPIDSMPF_HAVE_MPI)
+if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
   add_executable(bench_shuffle "bench_shuffle.cpp")
   set_target_properties(
     bench_shuffle
@@ -79,6 +79,6 @@ install(
   EXCLUDE_FROM_ALL
 )
 
-if(RAPIDSMPF_HAVE_MPI)
+if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
   add_subdirectory(streaming)
 endif()

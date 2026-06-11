@@ -5,7 +5,7 @@
 # cmake-format: on
 # =============================================================================
 
-if(RAPIDSMPF_HAVE_MPI)
+if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
   add_executable(bench_streaming_shuffle "bench_streaming_shuffle.cpp")
   set_target_properties(
     bench_streaming_shuffle
