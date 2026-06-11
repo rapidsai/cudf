@@ -98,6 +98,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
   auto const grid    = cudf::detail::grid_1d(indices->size(), 256);
   resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     segment_offsets, k, span_indices, segment_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   auto [offsets, total_elements] =
     cudf::detail::make_offsets_child_column(segment_sizes.begin(), segment_sizes.end(), stream, mr);
 

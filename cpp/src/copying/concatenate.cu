@@ -165,6 +165,7 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
       dest_mask,
       output_size,
       d_valid_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   return output_size - d_valid_count.value(stream);
 }
 
@@ -271,6 +272,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
     static_cast<size_type>(d_views.size()),
     *d_out_view,
     d_valid_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   if (has_nulls) {
     out_col->set_null_count(output_size - d_valid_count.value(stream));

@@ -474,6 +474,8 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
 {
   CUDF_FUNC_RANGE();
 
+  if (pages.size() == 0) { return; }
+
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
@@ -485,9 +487,11 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -513,10 +517,12 @@ void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
     preprocess_levels_kernel<uint8_t, level_decode_block_size>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     preprocess_levels_kernel<uint16_t, level_decode_block_size>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
