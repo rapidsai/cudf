@@ -23,10 +23,14 @@ files:
       - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_libnvcomp
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
       - depends_on_numba_cuda
       - depends_on_rapids_logger
+      - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
+      - depends_on_ucxx
       - develop
       - docs
       - iwyu
@@ -118,6 +122,7 @@ files:
       - depends_on_custreamz
       - depends_on_cudf_polars
       - depends_on_ray
+      - depends_on_cudf_streaming
   test_java:
     output: none
     includes:
@@ -250,6 +255,7 @@ files:
     extras:
       table: project
     includes:
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
@@ -343,6 +349,7 @@ files:
     includes:
       - run_cudf_polars
       - depends_on_rapidsmpf
+      - depends_on_cudf_streaming
       - depends_on_pylibcudf
       - depends_on_cuda_python
   # TODO(26.10): Remove this alias in favor of dask
@@ -478,6 +485,80 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  py_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
+  py_run_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+  py_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - build_python_common
+      - depends_on_libcudf_streaming
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
+      - depends_on_librmm
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+      - depends_on_ucxx
+  py_run_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf_streaming
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+  py_test_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - depends_on_cupy
+      - numpy_run
   test_python_narwhals:
     output: none
     includes:
@@ -500,7 +581,7 @@ files:
   test_cudf_polars_compat:
     output: none
     matrix:
-      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39"]
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
     includes:
       - test_cudf_polars_compat
 channels:
@@ -691,6 +772,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - cuda-cudart-dev
+          - cuda-cupti-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
@@ -862,7 +944,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.40
+          - polars>=1.35,<1.42
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -1272,6 +1354,56 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_libucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &libucxx_unsuffixed libucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libucxx_unsuffixed
+  depends_on_ucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &ucxx_unsuffixed ucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *ucxx_unsuffixed
   depends_on_rapidsmpf:
     common:
       - output_types: conda
@@ -1297,6 +1429,81 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_librapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librapidsmpf_unsuffixed
+  depends_on_libcudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libcudf_streaming_unsuffixed
+  depends_on_cudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - &cudf_streaming_unsuffixed cudf-streaming==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-streaming-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-streaming-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *cudf_streaming_unsuffixed
   depends_on_ray:
     common:
       - output_types: conda
@@ -1445,5 +1652,13 @@ dependencies:
               polars_compat_version: "1.39"
             packages:
               - polars==1.39.*
+          - matrix:
+              polars_compat_version: "1.40"
+            packages:
+              - polars==1.40.*
+          - matrix:
+              polars_compat_version: "1.41"
+            packages:
+              - polars==1.41.*
           - matrix:
             packages:

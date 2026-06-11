@@ -80,7 +80,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     parquet_reader_options const& options) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::total_rows_in_row_groups
    */
   [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
@@ -91,14 +91,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void reset_column_selection();
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_byte_range
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::filter_row_groups_with_byte_range
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::filter_row_groups_with_stats
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -106,7 +106,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::secondary_filters_byte_ranges
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::secondary_filters_byte_ranges
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
   secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -523,7 +523,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   [[nodiscard]] bool is_first_output_chunk() const
   {
-    return _file_itm_data._output_chunk_count == 0 and _rows_processed_so_far == 0;
+    return _file_itm_data._output_chunk_count == 0 and not _output_chunk_produced;
   }
 
  private:
@@ -531,7 +531,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 
-  cudf::size_type _rows_processed_so_far{0};
+  cudf::size_type _row_mask_offset{0};
+  bool _output_chunk_produced{false};
 
   bool _use_pandas_metadata{false};
 

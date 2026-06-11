@@ -10,15 +10,25 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
+from cudf_polars.streaming.io import (
+    FusedScan,
+    SplitScan,
+    StreamingScan,
+    expand_scan_for_rank,
+)
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -125,3 +135,128 @@ def test_target_partition_size(
         assert count > n_files
     else:
         assert count < n_files
+
+
+def test_scan_join(engine: pl.GPUEngine, tmp_path: Path) -> None:
+    # This test exercises some logic on nodes with multiple children (join)
+    # where one or more of the children are Scan nodes.
+    left = pl.DataFrame({"a": ["a", "b", "c", "d"], "b": [1, 2, 3, 4]})
+    right = pl.DataFrame({"a": ["a", "b", "c", "d"], "c": [10, 20, 30, 40]})
+
+    left.write_parquet(tmp_path / "left.parquet")
+    right.write_parquet(tmp_path / "right.parquet")
+
+    left_q = pl.scan_parquet(tmp_path / "left.parquet")
+    right_q = pl.scan_parquet(tmp_path / "right.parquet")
+    q = left_q.join(right_q, on="a", how="inner")
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
+    # This test exercises some logic on nodes with a Union[Scan, ...]
+    df = pl.DataFrame({"a": ["a", "b", "c", "d"], "b": [1, 2, 3, 4]})
+    df.write_parquet(tmp_path / "data.parquet")
+
+    df_q = pl.scan_parquet(tmp_path / "data.parquet")
+
+    q = pl.concat([df_q, df_q])
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def _make_parquet_scan(paths: list[str]) -> Scan:
+    return Scan(
+        {"x": DataType(pl.Int64())},
+        "parquet",
+        {},
+        None,
+        paths,
+        None,
+        0,
+        -1,
+        None,
+        None,
+        None,
+        ParquetOptions(),
+    )
+
+
+@pytest.mark.parametrize(
+    "plan,paths,rank,nranks,expected_path_groups",
+    [
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            0,
+            1,
+            [["f0", "f1"], ["f2", "f3"], ["f4", "f5"]],
+        ),
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            0,
+            2,
+            [["f0", "f1"], ["f2", "f3"]],
+        ),
+        (
+            IOPartitionPlan(2, IOPartitionFlavor.FUSED_FILES),
+            [f"f{i}" for i in range(6)],
+            1,
+            2,
+            [["f4", "f5"]],
+        ),
+        (IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ), ["a", "b", "c"], 1, 2, []),
+    ],
+)
+def test_expand_scan_for_rank_fused_and_single_read(
+    plan: IOPartitionPlan,
+    paths: list[str],
+    rank: int,
+    nranks: int,
+    expected_path_groups: list[list[str]],
+) -> None:
+    scans = expand_scan_for_rank(
+        _make_parquet_scan(paths),
+        plan,
+        rank=rank,
+        nranks=nranks,
+        parquet_options=ParquetOptions(),
+    )
+    for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
+        assert isinstance(scan, FusedScan)
+        assert scan.paths == expected_paths
+
+
+@pytest.mark.parametrize(
+    "rank,expected_splits",
+    [
+        (0, [(0, 4), (1, 4)]),
+        (1, [(2, 4), (3, 4)]),
+    ],
+)
+def test_expand_scan_for_rank_split_files(
+    rank: int,
+    expected_splits: list[tuple[int, int]],
+) -> None:
+    plan = IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES)
+    scans = expand_scan_for_rank(
+        _make_parquet_scan(["file.parquet"]),
+        plan,
+        rank=rank,
+        nranks=2,
+        parquet_options=ParquetOptions(),
+    )
+    assert len(scans) == len(expected_splits)
+    for scan, (split_index, total_splits) in zip(scans, expected_splits, strict=True):
+        assert isinstance(scan, SplitScan)
+        assert scan.split_index == split_index
+        assert scan.total_splits == total_splits
+        assert scan.paths == ["file.parquet"]
+
+
+def test_streaming_scan_raises() -> None:
+    # This isn't reachable by normal cudf-polars usage.
+    scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
+    ctx = IRExecutionContext()
+    with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
+        StreamingScan.do_evaluate([fused], scan, context=ctx)

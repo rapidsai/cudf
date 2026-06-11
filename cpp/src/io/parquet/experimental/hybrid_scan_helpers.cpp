@@ -21,6 +21,7 @@
 #include <numeric>
 #include <optional>
 #include <unordered_set>
+#include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -203,6 +204,16 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
   if (not opts_row_groups.empty()) {
     CUDF_EXPECTS(opts_row_groups.size() == per_file_metadata.size(),
                  "Row groups in parquet reader options must specify one vector per data source");
+    auto iter = cuda::zip_iterator(opts_row_groups.begin(), per_file_metadata.begin());
+    std::for_each(iter, iter + opts_row_groups.size(), [&](auto const& pair) {
+      auto const& [file_row_groups, file_metadata] = pair;
+      auto const& row_groups                       = file_metadata.row_groups;
+      for (auto const rg_idx : file_row_groups) {
+        CUDF_EXPECTS(rg_idx >= 0 and std::cmp_less(rg_idx, row_groups.size()),
+                     "Encountered out-of-bounds row group index for data source",
+                     std::invalid_argument);
+      }
+    });
     return opts_row_groups;
   }
 

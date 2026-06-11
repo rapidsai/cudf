@@ -54,5 +54,9 @@ rapids-logger "pytest cudf-polars"
   --durations=10 --durations-min=10 \
   -ra
 
+rapids-logger "pytest cudf_streaming"
+timeout 30m ./ci/run_cudf_streaming_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-streaming.xml"
+
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

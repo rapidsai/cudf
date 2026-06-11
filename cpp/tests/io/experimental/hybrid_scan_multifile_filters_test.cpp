@@ -7,6 +7,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 #include <cudf/io/parquet.hpp>
@@ -217,4 +218,99 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
   ASSERT_EQ(page_index_byte_ranges.size(), num_sources);
   EXPECT_FALSE(page_index_byte_ranges.front().is_empty());
   EXPECT_TRUE(page_index_byte_ranges.back().is_empty());
+}
+
+TEST_F(HybridScanMultifileFiltersTest, ErrorFilterRowGroupsWithByteRanges)
+{
+  using T                    = uint32_t;
+  auto constexpr num_sources = 2;
+  srand(0xb47e);
+
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+
+  auto inputs = build_multifile_inputs(file_buffers);
+
+  // Setting `skip_bytes` or `num_bytes` is ambiguous when reading multiple sources. The reader is
+  // expected to throw an exception if row groups are filtered using byte range in this case.
+  {
+    auto const options = cudf::io::parquet_reader_options::builder().skip_bytes(1000).build();
+    auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+    auto const row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(row_group_indices.size(), num_sources);
+    EXPECT_THROW(
+      std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
+      std::invalid_argument);
+  }
+  {
+    auto const options = cudf::io::parquet_reader_options::builder().num_bytes(1000).build();
+    auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+      inputs.footer_byte_spans, options);
+    auto const row_group_indices = reader->all_row_groups(options);
+    ASSERT_EQ(row_group_indices.size(), num_sources);
+    EXPECT_THROW(
+      std::ignore = reader->filter_row_groups_with_byte_range(row_group_indices, options),
+      std::invalid_argument);
+  }
+}
+
+TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
+{
+  using T                           = cudf::duration_ms;
+  auto constexpr num_sources        = 2;
+  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
+
+  // Two sources, each with 4 row groups and ascending strings in col2
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  srand(0xc001);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1, false>()));
+  srand(0xbeef);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1, false>()));
+
+  auto inputs = build_multifile_inputs(file_buffers);
+
+  // Filter - col0 < 50 and col2 > "000010000"
+  auto literal_value0 = cudf::duration_scalar<T>(T::rep(50), true, cudf::get_default_stream());
+  auto literal0       = cudf::ast::literal(literal_value0);
+  auto col_ref0       = cudf::ast::column_reference(0);
+  auto filter1        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal0);
+
+  auto literal_value2 = cudf::string_scalar("000010000", true, cudf::get_default_stream());
+  auto literal2       = cudf::ast::literal(literal_value2);
+  auto col_ref2       = cudf::ast::column_reference(2);
+  auto filter2        = cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal2, col_ref2);
+
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, filter1, filter2);
+
+  auto options      = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+    inputs.footer_byte_spans, options);
+
+  // Each source has 4 row groups (20000 rows / 5000 rows per row group)
+  auto input_row_group_indices = reader->all_row_groups(options);
+  ASSERT_EQ(input_row_group_indices.size(), num_sources);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices),
+            num_sources * 4 * rows_per_row_group);
+
+  // Each source prunes down to a single surviving row group
+  auto stats_filtered = reader->filter_row_groups_with_stats(
+    input_row_group_indices, options, cudf::get_default_stream());
+  ASSERT_EQ(stats_filtered.size(), num_sources);
+  for (std::size_t i = 0; i < stats_filtered.size(); ++i) {
+    EXPECT_EQ(stats_filtered[i].size(), 1) << "Source index: " << i;
+  }
+  EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), num_sources * rows_per_row_group);
+
+  // Custom per-source indices that prune all row groups via stats, including an empty source
+  input_row_group_indices = {{1, 2}, {}};
+  stats_filtered          = reader->filter_row_groups_with_stats(
+    input_row_group_indices, options, cudf::get_default_stream());
+  ASSERT_EQ(stats_filtered.size(), num_sources);
+  EXPECT_TRUE(stats_filtered.front().empty());
+  EXPECT_TRUE(stats_filtered.back().empty());
 }

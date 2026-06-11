@@ -674,13 +674,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
 
-    A ColumnBase may be composed of:
+    A ColumnBase is composed of:
 
-    * A *data* Buffer
-    * One or more (optional) *children* Columns
-    * An (optional) *mask* Buffer representing the nullmask
-
-    The *dtype* indicates the ColumnBase's element type.
+    * A pylibcudf.Column
+    * A valid pandas data type object reflecting the type of the values.
     """
 
     _VALID_REDUCTIONS = {

@@ -51,9 +51,11 @@ class BooleanFunction(Expr):
         AllHorizontal = auto()
         Any = auto()
         AnyHorizontal = auto()
+        HasNulls = auto()
         IsBetween = auto()
         IsClose = auto()
         IsDuplicated = auto()
+        IsEmpty = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
         IsIn = auto()
@@ -101,7 +103,9 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsClose,
+            BooleanFunction.Name.IsEmpty,
         }:
             raise NotImplementedError(
                 f"Boolean function {self.name}"

@@ -8,11 +8,10 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
 import polars as pl
 
 import pylibcudf as plc
+from cudf_streaming.streaming.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager

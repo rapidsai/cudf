@@ -123,6 +123,50 @@ class hybrid_scan_multifile {
    */
   void reset_column_selection() const;
 
+  /**
+   * @brief Filter the row groups using the byte range specified by [`bytes_to_skip`,
+   * `bytes_to_skip + bytes_to_read`)
+   *
+   * Filters the row groups such that only the row groups that start within the byte range are
+   * selected. Note that the last selected row group may end beyond the byte range.
+   *
+   * @param row_group_indices Input row group indices, one per source
+   * @param options Parquet reader options
+   * @return Filtered per-source row group indices (one inner vector per source)
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_byte_range(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options) const;
+
+  /**
+   * @brief Filter the input row groups using column chunk statistics
+   *
+   * @param row_group_indices Input row group indices, one per source
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Filtered row group indices, one per source
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
+   *        pruning
+   *
+   * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
+   *       aligned memory resource
+   *
+   * @param row_group_indices Input row group indices, one per source
+   * @param options Parquet reader options
+   * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
+   *         pages subject to filter predicate
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
+  secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options) const;
+
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };

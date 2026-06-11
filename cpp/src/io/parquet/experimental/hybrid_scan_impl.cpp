@@ -185,8 +185,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     _is_all_columns_selected     = false;
   }
 
-  // Reset the rows processed so far
-  _rows_processed_so_far = 0;
+  // Reset the materialization step flag
+  _output_chunk_produced = false;
 
   CUDF_EXPECTS(_input_columns.size() > 0 and _output_buffers.size() > 0, "No columns selected");
 
@@ -381,6 +381,10 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
   auto const num_rows = total_rows_in_row_groups(row_group_indices);
+  CUDF_EXPECTS(num_rows < std::numeric_limits<cudf::size_type>::max(),
+               "Total rows in row groups exceed the cudf's column size limit. Retry with a smaller "
+               "set of row groups",
+               std::invalid_argument);
   auto true_scalar =
     cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
@@ -510,7 +514,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
-      row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
+      row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
 
   prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, data_page_mask);
@@ -537,7 +541,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
-      row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
+      row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
 
   prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, data_page_mask);
@@ -565,8 +569,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   // Use the main reader's function
   auto result = reader_impl::read_chunk_internal(read_mode::READ_ALL);
 
-  // base read_chunk_internal() does not update the _rows_processed_so_far
-  _rows_processed_so_far += result.tbl->num_rows();
+  // base read_chunk_internal() does not update the output chunk produced flag
+  _output_chunk_produced = true;
 
   return result;
 }
@@ -599,7 +603,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
-      row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
+      row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
 
   prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, data_page_mask);
@@ -648,7 +652,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
-      row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream);
+      row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
 
   prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, data_page_mask);
@@ -713,8 +717,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   // Use the main reader's function for reading all columns
   auto result = reader_impl::read_chunk_internal(read_mode::CHUNKED_READ);
 
-  // base read_chunk_internal() does not update the _rows_processed_so_far
-  _rows_processed_so_far += result.tbl->num_rows();
+  // base read_chunk_internal() does not update the output chunk produced flag
+  _output_chunk_produced = true;
 
   return result;
 }
@@ -789,6 +793,7 @@ bool hybrid_scan_reader_impl::has_next_table_chunk()
 
 void hybrid_scan_reader_impl::reset_internal_state()
 {
+  _row_mask_offset   = 0;
   _file_itm_data     = file_intermediate_data{};
   _file_preprocessed = false;
   _has_page_index    = false;
@@ -1039,6 +1044,12 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // If the input row mask is empty, return the table as is.
   if (row_mask.is_empty()) { return {std::move(read_table), std::move(out_metadata)}; }
 
+  // Get the current row mask offset
+  auto const mask_offset = _row_mask_offset;
+  // Update the row mask offset and the output chunk produced flag
+  _row_mask_offset += read_table->num_rows();
+  _output_chunk_produced = true;
+
   // For filter columns, apply the filter expression and update the input row mask
   if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::FILTER_COLUMNS, "Invalid read mode");
@@ -1055,9 +1066,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     auto output_table = cudf::detail::apply_mask(
       read_table->view(), *final_row_mask, cudf::detail::mask_type::RETENTION, _stream, _mr);
 
-    auto const mask_offset = _rows_processed_so_far;
-    _rows_processed_so_far += read_table->num_rows();
-
     // Update the input row mask to reflect the final row mask.
     update_row_mask(final_row_mask->view(), row_mask, mask_offset, _stream);
 
@@ -1067,9 +1075,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // For payload columns, simply apply the input row mask to the table.
   else {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::PAYLOAD_COLUMNS, "Invalid read mode");
-
-    auto const mask_offset = _rows_processed_so_far;
-    _rows_processed_so_far += read_table->num_rows();
 
     CUDF_EXPECTS(mask_offset + read_table->num_rows() <= row_mask.size(),
                  "Encountered invalid sized row mask to apply");
