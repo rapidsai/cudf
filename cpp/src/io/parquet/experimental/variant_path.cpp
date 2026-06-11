@@ -57,7 +57,7 @@ std::vector<std::string> parse_variant_path(std::string_view path)
         throw_parse_error(path, pos - 1, "trailing '.' with no field name");
       }
     } else if (!(first && is_name_char(c))) {
-      // Not a '.' step or a bare leading name (e.g. "x", "$foo") - invalid
+      // Neither a '.' step nor a valid leading name (e.g. a bracket step like "[0]" or "foo[1]")
       throw_parse_error(path, pos, "unexpected character in variant path");
     }
 
