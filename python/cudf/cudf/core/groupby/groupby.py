@@ -1178,7 +1178,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         # Preserve the column axis label-dtype/level_names from the source
         # DataFrame so that aggregations such as ``nunique`` keep the column
         # axis name (matching pandas behavior).
-        if (
+        if len(data) == 0 and not multilevel and self.obj.ndim == 2:
+            # No columns were aggregated (e.g. a frame with no value
+            # columns): mirror the source column axis so its dtype and
+            # RangeIndex-ness are preserved. Otherwise an empty
+            # ColumnAccessor reconstructs its columns as a string/object
+            # Index, whereas pandas keeps the original (e.g. empty
+            # RangeIndex) columns.
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                rangeindex=self.obj._data.rangeindex,
+                label_dtype=self.obj._data.label_dtype,
+                level_dtypes=self.obj._data.level_dtypes,
+            )
+        elif (
             not multilevel
             and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
@@ -1191,7 +1206,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         else:
             data = ColumnAccessor(data, multiindex=multilevel)
-        if not multilevel:
+        if not multilevel and len(data) > 0:
+            # Skip when there are no columns: there is nothing to rename, and
+            # rebuilding the ColumnAccessor would discard column-axis metadata
+            # (e.g. the preserved RangeIndex/dtype set above).
             data = data.rename_levels({np.nan: None}, level=0)
 
         result = DataFrame._from_data(data, index=result_index)
