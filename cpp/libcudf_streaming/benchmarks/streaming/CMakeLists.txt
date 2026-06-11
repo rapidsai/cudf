@@ -17,11 +17,8 @@ if(CUDF_STREAMING_HAVE_COMM)
   )
   target_link_libraries(
     bench_streaming_shuffle
-    PRIVATE cudf_streaming
-            rapidsmpf::rapidsmpf
-            cudf_streaming::optional_communication
-            $<TARGET_NAME_IF_EXISTS:conda_env>
-            bench_utils
+    PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication
+            $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
   )
   install(
     TARGETS bench_streaming_shuffle

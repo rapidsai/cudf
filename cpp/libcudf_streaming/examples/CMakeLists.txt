@@ -17,14 +17,10 @@ if(CUDF_STREAMING_HAVE_MPI)
   )
   target_link_libraries(
     example_shuffle
-    PRIVATE cudf_streaming
-            rapidsmpf::rapidsmpf
-            cudf_streaming::optional_communication
+    PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication
             $<TARGET_NAME_IF_EXISTS:conda_env>
   )
-  target_compile_options(
-    example_shuffle PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>
-  )
+  target_compile_options(example_shuffle PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>)
   target_sources(
     example_shuffle PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../benchmarks/utils/random_data.cu"
   )
