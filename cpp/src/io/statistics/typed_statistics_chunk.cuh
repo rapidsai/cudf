@@ -20,8 +20,10 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/cmath>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <math_constants.h>
 
 namespace cudf {
@@ -124,8 +126,8 @@ struct typed_statistics_chunk<T, true> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(elem)) { has_nan = true; }
+    if constexpr (cuda::std::is_floating_point_v<T>) {
+      if (cuda::std::isnan(elem)) { has_nan = true; }
     }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
@@ -168,8 +170,8 @@ struct typed_statistics_chunk<T, false> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(elem)) { has_nan = true; }
+    if constexpr (cuda::std::is_floating_point_v<T>) {
+      if (cuda::std::isnan(elem)) { has_nan = true; }
     }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));

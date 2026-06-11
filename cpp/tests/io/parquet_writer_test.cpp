@@ -857,8 +857,8 @@ TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmitted)
 {
   // PARQUET-1246: a float/double column containing a NaN must not expose min/max, or a
   // reader doing `= NaN` predicate pushdown skips the row group. NVIDIA/spark-rapids#15004.
-  auto const nanf = std::numeric_limits<float>::quiet_NaN();
-  auto const nand = std::numeric_limits<double>::quiet_NaN();
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr nand = std::numeric_limits<double>::quiet_NaN();
 
   column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};     // NaN mixed with non-NaN
   column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};       // double variant
@@ -907,7 +907,7 @@ TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedAcrossFragments)
   // A NaN in any page fragment must propagate through the fragment -> column-chunk statistics
   // merge, so a multi-fragment column chunk with a single NaN still omits min/max.
   // NVIDIA/spark-rapids#15004.
-  auto const nanf         = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr nanf     = std::numeric_limits<float>::quiet_NaN();
   auto constexpr num_rows = 20000;  // > default 5000-row page fragment -> multiple fragments merged
   std::vector<float> data(num_rows);
   for (int i = 0; i < num_rows; ++i) {
@@ -935,7 +935,7 @@ TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedAcrossFragments)
 TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedNested)
 {
   // NaN detection must reach a float leaf nested in a LIST column (rapidsai/cudf#22817).
-  auto const nanf = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
   cudf::test::lists_column_wrapper<float> list_col{{1.0f, nanf, 3.0f}, {4.0f, 5.0f}};
   auto const expected = table_view{{list_col}};
 
