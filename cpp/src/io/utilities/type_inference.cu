@@ -239,6 +239,7 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
 
   infer_column_type_kernel<block_size><<<grid_size, block_size, 0, stream.value()>>>(
     options, data, offset_length_begin, size, d_column_info.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return d_column_info.value(stream);
 }

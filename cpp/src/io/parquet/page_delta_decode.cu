@@ -925,9 +925,11 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_delta_binary_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_binary_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -952,9 +954,11 @@ void decode_delta_byte_array(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_delta_byte_array_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_byte_array_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -979,9 +983,11 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
   if (level_type_size == 1) {
     decode_delta_length_byte_array_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_length_byte_array_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

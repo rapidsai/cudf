@@ -564,9 +564,11 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_page_data<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_page_data<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -591,10 +593,12 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
     decode_split_page_data_kernel<rolling_buf_size, uint8_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_split_page_data_kernel<rolling_buf_size, uint16_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

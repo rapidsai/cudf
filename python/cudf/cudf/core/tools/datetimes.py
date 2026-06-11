@@ -647,13 +647,11 @@ class DateOffset:
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __eq__(self, other):
-        if isinstance(other, str):
-            return self._maybe_as_fast_pandas_offset() == other
-        if isinstance(other, (pd.DateOffset, pd.offsets.Tick)):
-            return self._maybe_as_fast_pandas_offset() == other
-        if not isinstance(other, DateOffset):
-            return NotImplemented
-        return self.kwds == other.kwds
+        if isinstance(other, DateOffset):
+            return self.kwds == other.kwds
+        # Compare via the equivalent fast pandas offset so freq strings and
+        # pandas offsets (including cudf.pandas-proxied ones) compare equal.
+        return self._maybe_as_fast_pandas_offset() == other
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
