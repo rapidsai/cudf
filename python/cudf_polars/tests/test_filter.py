@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
-from polars import polars as plrs # type: ignore[attr-defined]
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 from cudf_polars import Translator
 from cudf_polars.dsl import expr, ir
