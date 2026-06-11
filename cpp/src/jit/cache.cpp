@@ -231,10 +231,8 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
   auto runtime = get_runtime_version();
 
   auto include_dirs = bundle.get_include_directories();
-  auto pch_dir      = ctx.get_jit_pch_dir();
-
-  auto use_pch     = runtime >= MIN_CUDA_VERSION_PCH;
-  auto use_minimal = runtime >= MIN_CUDA_VERSION_MINIMAL;
+  auto use_pch      = runtime >= MIN_CUDA_VERSION_PCH;
+  auto use_minimal  = runtime >= MIN_CUDA_VERSION_MINIMAL;
 
   std::vector<std::string> options;
 
@@ -258,7 +256,6 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
 
   if (use_pch) {
     options.emplace_back("--pch");
-    options.emplace_back(std::format("--pch-dir={}", pch_dir));
 
     if (cfg.jit_verbose) {
       options.emplace_back("--pch-verbose=true");
