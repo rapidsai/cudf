@@ -13,6 +13,7 @@
 #include <rapidsmpf/communicator/ucxx.hpp>
 #include <rapidsmpf/communicator/ucxx_utils.hpp>
 #include <rapidsmpf/error.hpp>
+#include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/progress_thread.hpp>
 #include <rapidsmpf/shuffler/shuffler.hpp>
@@ -266,7 +267,7 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
     for (auto finished_partition : shuffler.local_partitions()) {
       auto packed_chunks    = shuffler.extract(finished_partition);
       auto output_partition = cudf_streaming::integrations::unpack_and_concat(
-        cudf_streaming::integrations::unspill_partitions(
+        rapidsmpf::unspill_partitions(
           std::move(packed_chunks), br, rapidsmpf::AllowOverbooking::YES),
         stream,
         br);
