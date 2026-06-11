@@ -1125,14 +1125,20 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  perform_checks(binary_type, is_null_aware, in_row_size, inputs, outputs, {});
+  perform_checks(binary_type, is_null_aware, in_row_size, inputs, outputs, string_offsets);
   auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
   auto output_may_be_nullable = get_null_transformation(is_null_aware, inputs, outputs);
 
-  auto [output_columns, stencil] =
-    make_outputs(is_null_aware, row_size, inputs, outputs, output_may_be_nullable, {}, stream, mr);
-  auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
-  auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
+  auto [output_columns, stencil] = make_outputs(is_null_aware,
+                                                row_size,
+                                                inputs,
+                                                outputs,
+                                                output_may_be_nullable,
+                                                std::move(string_offsets),
+                                                stream,
+                                                mr);
+  auto stencil_arg               = stencil.has_value() ? stencil->first : nullptr;
+  auto stencil_has_nulls         = stencil.has_value() ? (stencil->second > 0) : false;
 
   auto precompiled_kernel_fragment = dispatch_lto_kernel_fragment(
     is_null_aware == null_aware::YES, user_data.has_value(), inputs, output_columns);
