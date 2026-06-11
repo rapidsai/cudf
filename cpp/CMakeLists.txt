@@ -1170,109 +1170,80 @@ target_link_libraries(
           ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
+# When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
+# interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
+# cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
+get_target_property(_rmm_type rmm::rmm TYPE)
+if(BUILD_SHARED_LIBS AND _rmm_type STREQUAL "STATIC_LIBRARY")
+  get_target_property(_rmm_real rmm::rmm ALIASED_TARGET)
+  if(_rmm_real)
+    get_target_property(_rmm_libs ${_rmm_real} INTERFACE_LINK_LIBRARIES)
+    if(_rmm_libs)
+      list(REMOVE_ITEM _rmm_libs nvtx3::nvtx3-cpp)
+      set_property(TARGET ${_rmm_real} PROPERTY INTERFACE_LINK_LIBRARIES ${_rmm_libs})
+    endif()
+  endif()
+endif()
+
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
 # their symbols are available to downstream users linking to libcudf.so without needing to link
 # against them directly. Public absorbed dependencies still promote their public transitive
 # dependencies and export set metadata into cudf's interface.
 set(_absorbed_deps rmm rapids_logger)
-set(_private_absorbed_deps ${_absorbed_deps})
-set(_private_absorbed_deps_with_public_interface rmm)
 foreach(_dep IN LISTS _absorbed_deps)
-  set(_${_dep}_link ${_dep}::${_dep})
-endforeach()
-if(BUILD_SHARED_LIBS)
-  # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
-  # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
-  # cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
-  get_target_property(_rmm_type rmm::rmm TYPE)
-  if(_rmm_type STREQUAL "STATIC_LIBRARY")
-    get_target_property(_rmm_real rmm::rmm ALIASED_TARGET)
-    if(_rmm_real)
-      get_target_property(_rmm_libs ${_rmm_real} INTERFACE_LINK_LIBRARIES)
-      if(_rmm_libs)
-        list(REMOVE_ITEM _rmm_libs nvtx3::nvtx3-cpp)
-        set_property(TARGET ${_rmm_real} PROPERTY INTERFACE_LINK_LIBRARIES ${_rmm_libs})
-      endif()
-    endif()
+  set(_dep_link "${_dep}::${_dep}")
+  get_target_property(_target_type ${_dep_link} TYPE)
+  if(NOT BUILD_SHARED_LIBS OR NOT _target_type STREQUAL "STATIC_LIBRARY")
+    # If not building a shared library, or the dependency is not a static library, link normally.
+    target_link_libraries(cudf PUBLIC ${_dep_link})
+    continue()
   endif()
-  foreach(_dep IN LISTS _absorbed_deps)
-    get_target_property(_target_type ${_dep}::${_dep} TYPE)
-    if(NOT _target_type STREQUAL "STATIC_LIBRARY")
+
+  # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
+  # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
+  # LINK_ONLY entries — those are private link deps already statically linked in.
+  get_target_property(_iface_libs ${_dep_link} INTERFACE_LINK_LIBRARIES)
+  if(_iface_libs)
+    foreach(_absorbed IN LISTS _absorbed_deps)
+      list(REMOVE_ITEM _iface_libs ${_absorbed}::${_absorbed})
+    endforeach()
+    list(FILTER _iface_libs EXCLUDE REGEX "\\\$<LINK_ONLY:")
+    target_link_libraries(cudf PUBLIC ${_iface_libs})
+  endif()
+
+  # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
+  # hidden from the installed interface.
+  target_link_libraries(
+    cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
+  )
+
+  # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
+  # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
+  foreach(_mode build install)
+    set(_src_target rapids_export_${_mode}_${_dep}-exports)
+    if(NOT TARGET ${_src_target})
       continue()
     endif()
-
-    # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
-    # hidden from the installed interface.
-    set(_whole_archive_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
-    if(_dep IN_LIST _private_absorbed_deps)
-      set(_${_dep}_link)
-      target_link_libraries(cudf PRIVATE ${_whole_archive_link})
-      get_target_property(
-        _private_absorbed_include_dirs ${_dep}::${_dep} INTERFACE_INCLUDE_DIRECTORIES
-      )
-      if(_private_absorbed_include_dirs)
-        target_include_directories(
-          cudf PUBLIC "$<BUILD_INTERFACE:${_private_absorbed_include_dirs}>"
-        )
-      endif()
-      if(_dep IN_LIST _private_absorbed_deps_with_public_interface)
-        get_target_property(_iface_libs ${_dep}::${_dep} INTERFACE_LINK_LIBRARIES)
-        if(_iface_libs)
-          foreach(_absorbed IN LISTS _absorbed_deps)
-            list(REMOVE_ITEM _iface_libs ${_absorbed}::${_absorbed})
-          endforeach()
-          list(FILTER _iface_libs EXCLUDE REGEX "\\\$<LINK_ONLY:")
-          target_link_libraries(cudf PUBLIC ${_iface_libs})
-        endif()
-      endif()
-      continue()
-    endif()
-    set(_${_dep}_link ${_whole_archive_link})
-
-    # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
-    # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
-    # LINK_ONLY entries — those are private link deps already statically linked in.
-    get_target_property(_iface_libs ${_dep}::${_dep} INTERFACE_LINK_LIBRARIES)
-    if(_iface_libs)
-      foreach(_absorbed IN LISTS _absorbed_deps)
-        list(REMOVE_ITEM _iface_libs ${_absorbed}::${_absorbed})
-      endforeach()
-      list(FILTER _iface_libs EXCLUDE REGEX "\\\$<LINK_ONLY:")
-      target_link_libraries(cudf PUBLIC ${_iface_libs})
-    endif()
-
-    # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
-    # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
-    foreach(_mode build install)
-      set(_src_target rapids_export_${_mode}_${_dep}-exports)
-      if(NOT TARGET ${_src_target})
+    get_property(
+      _pkg_names
+      TARGET ${_src_target}
+      PROPERTY "PACKAGE_NAMES"
+    )
+    get_property(
+      _global_tgts
+      TARGET ${_src_target}
+      PROPERTY "GLOBAL_TARGETS"
+    )
+    foreach(_pkg IN LISTS _pkg_names)
+      # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
+      # be installed as separate findable packages.
+      if(_mode STREQUAL "install" AND (_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3"))
         continue()
       endif()
-      get_property(
-        _pkg_names
-        TARGET ${_src_target}
-        PROPERTY "PACKAGE_NAMES"
-      )
-      get_property(
-        _global_tgts
-        TARGET ${_src_target}
-        PROPERTY "GLOBAL_TARGETS"
-      )
-      foreach(_pkg IN LISTS _pkg_names)
-        if(_pkg IN_LIST _private_absorbed_deps)
-          continue()
-        endif()
-        # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
-        # be installed as separate findable packages.
-        if(_mode STREQUAL "install" AND (_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3"))
-          continue()
-        endif()
-        rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
-      endforeach()
+      rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
     endforeach()
   endforeach()
-endif()
-target_link_libraries(cudf PUBLIC ${_rapids_logger_link} ${_rmm_link})
+endforeach()
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
