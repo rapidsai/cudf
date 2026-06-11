@@ -86,6 +86,7 @@ def scan_partition_plan(
     """Extract the partitioning plan of a Scan operation."""
     if ir.typ == "parquet":
         blocksize: int = config_options.executor.target_partition_size
+        single_file = len(ir.paths) == 1
         if source := stats.scan_stats.get(ir):
             column_sizes = [
                 sz
@@ -93,8 +94,9 @@ def scan_partition_plan(
                 if (sz := source.column_storage_size(col)) is not None
             ]
             if (file_size := sum(column_sizes)) > 0:
-                if file_size > blocksize:
-                    # Split large files
+                if file_size > blocksize or single_file:
+                    # A single file always uses SplitScan even if it is smaller than
+                    # the blocksize, so that hybrid scan can be used on it.
                     return IOPartitionPlan(
                         math.ceil(file_size / blocksize),
                         IOPartitionFlavor.SPLIT_FILES,
@@ -105,6 +107,9 @@ def scan_partition_plan(
                         max(blocksize // int(file_size), 1),
                         IOPartitionFlavor.FUSED_FILES,
                     )
+
+        if single_file:
+            return IOPartitionPlan(1, IOPartitionFlavor.SPLIT_FILES)
 
     # TODO: Use file sizes for csv and json
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
