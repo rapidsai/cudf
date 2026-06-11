@@ -455,6 +455,18 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
         return super().__setitem__(key, value)
 
 
+def _pd_index_level_dtypes(idx) -> tuple | None:
+    """Per-level dtypes of a pandas MultiIndex, else ``None``.
+
+    Used to preserve the dtype of each level when the column axis is an empty
+    MultiIndex, whose levels would otherwise reconstruct as object (their
+    dtype cannot be inferred from zero entries).
+    """
+    if isinstance(idx, pd.MultiIndex):
+        return tuple(idx.get_level_values(i).dtype for i in range(idx.nlevels))
+    return None
+
+
 @_performance_tracking
 def _listlike_to_column_accessor(
     data: Sequence,
@@ -1011,6 +1023,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     multiindex=isinstance(columns, pd.MultiIndex),
                     rangeindex=isinstance(columns, pd.RangeIndex),
                     label_dtype=columns.dtype,
+                    level_dtypes=_pd_index_level_dtypes(columns),
                 )
             else:
                 col_accessor = ColumnAccessor(
@@ -1095,6 +1108,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(columns, pd.MultiIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         elif is_list_like(data):
             col_dict, index, columns = _listlike_to_column_accessor(
@@ -1107,6 +1121,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(columns, pd.MultiIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         else:
             raise TypeError(
@@ -1129,6 +1144,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(second_columns, pd.MultiIndex),
                 level_names=tuple(second_columns.names),
                 label_dtype=second_columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(second_columns),
             )
 
         super().__init__(
