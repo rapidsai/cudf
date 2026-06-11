@@ -193,7 +193,6 @@ TEST_F(ProtobufReaderTest, ZeroRows)
 TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
 {
   // [0: id(INT32), 1: inner(STRUCT), 2: name(STRING, parent=1)]
-  int const n                                     = 3;
   std::vector<pb::nested_field_descriptor> schema = {
     {1,
      -1,
@@ -238,7 +237,6 @@ TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
 
 TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
 {
-  int const n                                     = 1;
   std::vector<pb::nested_field_descriptor> schema = {
     {1,
      -1,
