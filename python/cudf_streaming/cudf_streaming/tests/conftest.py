@@ -72,6 +72,21 @@ def comm(
 
 
 @pytest.fixture
+def device_mr() -> Generator[rmm.mr.CudaMemoryResource, None, None]:
+    """
+    Fixture for creating a new cuda memory resource and making it the
+    current rmm resource temporarily.
+    """
+    prior_mr = rmm.mr.get_current_device_resource()
+    try:
+        mr = rmm.mr.CudaMemoryResource()
+        rmm.mr.set_current_device_resource(mr)
+        yield mr
+    finally:
+        rmm.mr.set_current_device_resource(prior_mr)
+
+
+@pytest.fixture
 def stream() -> Stream:
     """CUDA stream for test operations."""
     return DEFAULT_STREAM
