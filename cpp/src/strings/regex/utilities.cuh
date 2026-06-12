@@ -30,9 +30,9 @@ namespace detail {
 
 constexpr auto regex_launch_kernel_block_size = 256;
 
-template <typename ForEachFunction>
+template <typename ForEachFunction, typename ProgDevice>
 CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
-                                 reprog_device const d_prog,
+                                 ProgDevice const d_prog,
                                  size_type size,
                                  int32_t thompson_shmem_bytes)
 {
@@ -59,9 +59,9 @@ CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
   }
 }
 
-template <typename ForEachFunction>
+template <typename ForEachFunction, typename ProgDevice>
 void launch_for_each_kernel(ForEachFunction fn,
-                            reprog_device& d_prog,
+                            ProgDevice& d_prog,
                             size_type size,
                             rmm::cuda_stream_view stream)
 {
@@ -78,9 +78,9 @@ void launch_for_each_kernel(ForEachFunction fn,
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
-template <typename TransformFunction, typename OutputType>
+template <typename TransformFunction, typename ProgDevice, typename OutputType>
 CUDF_KERNEL void transform_kernel(TransformFunction fn,
-                                  reprog_device const d_prog,
+                                  ProgDevice const d_prog,
                                   OutputType* d_output,
                                   size_type size,
                                   int32_t thompson_shmem_bytes)
@@ -108,9 +108,9 @@ CUDF_KERNEL void transform_kernel(TransformFunction fn,
   }
 }
 
-template <typename TransformFunction, typename OutputType>
+template <typename TransformFunction, typename ProgDevice, typename OutputType>
 void launch_transform_kernel(TransformFunction fn,
-                             reprog_device& d_prog,
+                             ProgDevice& d_prog,
                              OutputType* d_output,
                              size_type size,
                              rmm::cuda_stream_view stream)
