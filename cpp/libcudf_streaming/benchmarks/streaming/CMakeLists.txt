@@ -5,7 +5,7 @@
 # cmake-format: on
 # =============================================================================
 
-if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
+if(CUDF_STREAMING_HAVE_COMM)
   add_executable(bench_streaming_shuffle "bench_streaming_shuffle.cpp")
   set_target_properties(
     bench_streaming_shuffle
@@ -17,8 +17,9 @@ if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
                CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
-    bench_streaming_shuffle PRIVATE cudf_streaming rapidsmpf::rapidsmpf ucxx::ucxx MPI::MPI_CXX
-                                    $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
+    bench_streaming_shuffle
+    PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication
+            $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
   )
   install(
     TARGETS bench_streaming_shuffle
@@ -26,6 +27,8 @@ if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
     DESTINATION "${CUDF_STREAMING_BENCHMARK_INSTALL_DIR}"
     EXCLUDE_FROM_ALL
   )
-
-  add_subdirectory(ndsh)
+else()
+  cudf_streaming_skip_optional_target(bench_streaming_shuffle "requires MPI or UCXX")
 endif()
+
+add_subdirectory(ndsh)

@@ -16,7 +16,7 @@ add_library(bench_utils INTERFACE)
 target_sources(bench_utils INTERFACE utils/random_data.cu)
 target_compile_options(bench_utils INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>)
 
-if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
+if(CUDF_STREAMING_HAVE_COMM)
   add_executable(bench_shuffle "bench_shuffle.cpp")
   set_target_properties(
     bench_shuffle
@@ -29,8 +29,9 @@ if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
                CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
-    bench_shuffle PRIVATE cudf_streaming rapidsmpf::rapidsmpf ucxx::ucxx MPI::MPI_CXX
-                          $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
+    bench_shuffle
+    PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication
+            $<TARGET_NAME_IF_EXISTS:conda_env> bench_utils
   )
   install(
     TARGETS bench_shuffle
@@ -38,6 +39,8 @@ if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
     DESTINATION "${CUDF_STREAMING_BENCHMARK_INSTALL_DIR}"
     EXCLUDE_FROM_ALL
   )
+else()
+  cudf_streaming_skip_optional_target(bench_shuffle "requires MPI or UCXX")
 endif()
 
 add_executable(bench_partition "bench_partition.cpp")
@@ -85,6 +88,4 @@ install(
   EXCLUDE_FROM_ALL
 )
 
-if(RAPIDSMPF_HAVE_MPI AND RAPIDSMPF_HAVE_UCXX)
-  add_subdirectory(streaming)
-endif()
+add_subdirectory(streaming)
