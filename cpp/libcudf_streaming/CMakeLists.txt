@@ -64,6 +64,7 @@ rapids_cpm_init()
 include(cmake/ConfigureOptionalCommunication.cmake)
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
+cudf_streaming_configure_optional_communication()
 include(../cmake/thirdparty/get_cucollections.cmake)
 
 # ##################################################################################################
