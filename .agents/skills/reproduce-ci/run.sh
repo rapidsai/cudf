@@ -1,0 +1,123 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Reproduce a cudf CI job locally by launching the same container and script
+# used in GitHub Actions. The container stays running for interactive inspection.
+#
+# Usage:
+#   .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu]
+#
+# Examples:
+#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538
+#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu
+#   .agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:26.08-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
+#
+# To find the container image and script for a job, look in .github/workflows/pr.yaml
+# for the job definition's container_image and script fields.
+#
+# The container is left running. To inspect interactively:
+#   docker exec -it cudf-ci-repro bash
+#
+# To clean up:
+#   docker rm -f cudf-ci-repro
+
+set -euo pipefail
+
+CONTAINER_NAME="cudf-ci-repro"
+
+usage() {
+    echo "Usage: $0 <container-image> <ci-script> <pr-number> [--gpu]"
+    echo ""
+    echo "Arguments:"
+    echo "  container-image  Docker image (e.g., rapidsai/ci-conda:26.08-latest)"
+    echo "  ci-script        CI script to run (e.g., ci/test_cmake.sh)"
+    echo "  pr-number        Pull request number"
+    echo "  --gpu            Pass --gpus all to docker (for test jobs that need a GPU)"
+    echo ""
+    echo "Find these values in .github/workflows/pr.yaml under the job's 'with:' block."
+    echo ""
+    echo "Examples:"
+    echo "  $0 rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538"
+    echo "  $0 rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu"
+    echo "  $0 rapidsai/citestwheel:26.08-latest \"ci/cudf_pandas_scripts/pandas-tests/run.sh pr\" 22538 --gpu"
+    exit 1
+}
+
+if [[ $# -lt 3 ]]; then
+    usage
+fi
+
+CONTAINER_IMAGE="$1"
+CI_SCRIPT="$2"
+PR_NUMBER="$3"
+GPU_NEEDED="no"
+
+shift 3
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --gpu) GPU_NEEDED="yes" ;;
+        *) echo "Unknown option: $1"; usage ;;
+    esac
+    shift
+done
+
+# Get GH_TOKEN
+GH_TOKEN="${GH_TOKEN:-$(gh auth token 2>/dev/null || true)}"
+if [[ -z "$GH_TOKEN" ]]; then
+    echo "Warning: GH_TOKEN not set and 'gh auth token' failed."
+    echo "Artifact downloads may fail or prompt interactively."
+fi
+
+# Remove existing container with same name if present
+if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Removing existing container: ${CONTAINER_NAME}"
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1
+fi
+
+# Build docker run args
+DOCKER_ARGS=(
+    --pull=always
+    --volume "$PWD:/repo"
+    --workdir /repo
+    --env "RAPIDS_BUILD_TYPE=pull-request"
+    --env "RAPIDS_REPOSITORY=rapidsai/cudf"
+    --env "RAPIDS_REF_NAME=pull-request/${PR_NUMBER}"
+    --name "$CONTAINER_NAME"
+    -d
+)
+
+if [[ -n "$GH_TOKEN" ]]; then
+    DOCKER_ARGS+=(--env "GH_TOKEN=${GH_TOKEN}")
+fi
+
+if [[ "$GPU_NEEDED" == "yes" ]]; then
+    DOCKER_ARGS+=(--gpus all)
+fi
+
+echo "=== Reproducing CI job ==="
+echo "  PR:        #${PR_NUMBER}"
+echo "  Image:     ${CONTAINER_IMAGE}"
+echo "  Script:    ${CI_SCRIPT}"
+echo "  GPU:       ${GPU_NEEDED}"
+echo "  Container: ${CONTAINER_NAME}"
+echo ""
+
+# Launch container
+echo "Launching container..."
+docker run "${DOCKER_ARGS[@]}" "$CONTAINER_IMAGE" tail -f /dev/null
+echo ""
+
+# Run the CI script non-interactively
+echo "Running CI script: ${CI_SCRIPT}"
+echo "---"
+docker exec "$CONTAINER_NAME" bash -c "./${CI_SCRIPT}" || true
+echo "---"
+echo ""
+echo "CI script finished. Container is still running."
+echo ""
+echo "To inspect interactively:"
+echo "  docker exec -it ${CONTAINER_NAME} bash"
+echo ""
+echo "To clean up:"
+echo "  docker rm -f ${CONTAINER_NAME}"
