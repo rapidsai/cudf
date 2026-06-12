@@ -151,6 +151,7 @@ files:
       - build_base
       - build_cpp
       - cuda
+      - cuda_static
       - cuda_version
       - develop
       - py_version
@@ -806,6 +807,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
