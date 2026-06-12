@@ -21,7 +21,6 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "cuda-core>=1.0.0",
     "cuda-python>=13.0.1,<14.0",
     "cudf-streaming==26.8.*,>=0.0.0a0",
     "packaging",
