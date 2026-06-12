@@ -909,27 +909,23 @@ def _sample_rg_sizes(
     return result
 
 
+def _is_fixed_width(dtype: DataType) -> bool:
+    """Return whether dtype is a concrete fixed-width type."""
+    return dtype.id() not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
+        plc.traits.is_fixed_width(dtype.plc_type)
+    )
+
+
 def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
     """Return a conservative decoded-column byte floor for scan planning."""
     nullmask = (nrows + 7) // 8
     plc_dtype = dtype.plc_type
-    dtype_id = dtype.id()
-    if dtype_id == plc.TypeId.STRING:
+    if dtype.id() == plc.TypeId.STRING:
         # Decoded strings always have int32 offsets (4 bytes)
         return (nrows + 1) * 4 + nullmask
-    if dtype_id not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
-        plc.traits.is_fixed_width(plc_dtype)
-    ):
+    if _is_fixed_width(dtype):
         return nrows * plc.types.size_of(plc_dtype) + nullmask
     return max(1, nrows)
-
-
-def _has_exact_decoded_size_floor(dtype: DataType) -> bool:
-    """Return whether the decoded-size floor captures the full data buffer size."""
-    dtype_id = dtype.id()
-    return dtype_id not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
-        plc.traits.is_fixed_width(dtype.plc_type)
-    )
 
 
 class ParquetSourceInfo:
@@ -980,7 +976,7 @@ class ParquetSourceInfo:
             if (
                 footer_mean < decoded_floor
                 and max_row_group_samples > 0
-                and not _has_exact_decoded_size_floor(dtype)
+                and not _is_fixed_width(dtype)
             ):
                 sample_cols.append(col)
             else:
