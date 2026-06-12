@@ -81,11 +81,9 @@ def test_string_astype_object_pd_na_pandas_compat(dtype):
     sr = cudf.Series(["a", None, "b"], dtype=dtype)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(
-            NotImplementedError,
-            match="Casting nullable string columns with pd.NA to object",
-        ):
-            sr.astype(object)
+        result = sr.astype(object)
+    assert result.dtype == np.dtype("object")
+    assert result.to_arrow().to_pylist() == ["a", None, "b"]
 
     with cudf.option_context("mode.pandas_compatible", False):
         result = sr.astype(object)
