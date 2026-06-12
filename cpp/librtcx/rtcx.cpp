@@ -25,6 +25,14 @@
 #include <numeric>
 #include <source_location>
 
+#ifndef RTCX_STATIC_LINK_LIBNVRTC
+#define RTCX_STATIC_LINK_LIBNVRTC 0
+#endif
+
+#ifndef RTCX_STATIC_LINK_LIBNVJITLINK
+#define RTCX_STATIC_LINK_LIBNVJITLINK 0
+#endif
+
 #define RTCX_EXPECTS(condition_, reason_, exception_type_)                               \
   do {                                                                                   \
     if (!(condition_)) {                                                                 \
@@ -265,7 +273,7 @@ nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
   }
 }
 
-void* load_dso(std::string_view base_name, std::span<std::string const> names)
+[[maybe_unused]] void* load_dso(std::string_view base_name, std::span<std::string const> names)
 {
   for (auto& name : names) {
     void* handle = ::dlopen(name.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -278,7 +286,7 @@ void* load_dso(std::string_view base_name, std::span<std::string const> names)
     std::runtime_error);
 }
 
-void* get_symbol(char const* lib_name, void* handle, char const* sym_name)
+[[maybe_unused]] void* get_dso_symbol(char const* lib_name, void* handle, char const* sym_name)
 {
   void* sym = ::dlsym(handle, sym_name);
   if (sym == nullptr) {
@@ -316,8 +324,11 @@ struct LibCuda {
   void _load_symbols()
   {
 #define DO_IT(func) \
-  this->func = reinterpret_cast<decltype(cu##func)*>(get_symbol("libcuda", _handle, "cu" #func));
+  this->func =      \
+    reinterpret_cast<decltype(cu##func)*>(get_dso_symbol("libcuda", _handle, "cu" #func));
+
     FOR_EACH_CUDA_FUNC(DO_IT)
+
 #undef DO_IT
   }
 };
@@ -334,10 +345,16 @@ struct LibNVRTC {
   LibNVRTC(LibNVRTC&&)                 = delete;
   LibNVRTC& operator=(LibNVRTC const&) = delete;
   LibNVRTC& operator=(LibNVRTC&&)      = delete;
-  ~LibNVRTC() { ::dlclose(_handle); }
+  ~LibNVRTC()
+  {
+#if !RTCX_STATIC_LINK_LIBNVRTC
+    ::dlclose(_handle);
+#endif
+  }
 
   static void* _load()
   {
+#if !RTCX_STATIC_LINK_LIBNVRTC
     auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
     RTCX_CHECK_CUDART(::cudaRuntimeGetVersion(&cuda_version));
@@ -353,14 +370,22 @@ struct LibNVRTC {
       {std::format("libnvrtc.so.{}", major)};
 
     return load_dso("libnvrtc.so", lib_names);
+#else
+    return nullptr;
+#endif
   }
 
  private:
   void _load_symbols()
   {
+#if !RTCX_STATIC_LINK_LIBNVRTC
 #define DO_IT(func) \
   this->func =      \
-    reinterpret_cast<decltype(nvrtc##func)*>(get_symbol("libnvrtc", _handle, "nvrtc" #func));
+    reinterpret_cast<decltype(nvrtc##func)*>(get_dso_symbol("libnvrtc", _handle, "nvrtc" #func));
+#else
+#define DO_IT(func) this->func = ::nvrtc##func;
+#endif
+
     FOR_EACH_NVRTC_FUNC(DO_IT)
 #undef DO_IT
   }
@@ -378,10 +403,16 @@ struct LibNVJitLink {
   LibNVJitLink(LibNVJitLink&&)                 = delete;
   LibNVJitLink& operator=(LibNVJitLink const&) = delete;
   LibNVJitLink& operator=(LibNVJitLink&&)      = delete;
-  ~LibNVJitLink() { ::dlclose(_handle); }
+  ~LibNVJitLink()
+  {
+#if !RTCX_STATIC_LINK_LIBNVJITLINK
+    ::dlclose(_handle);
+#endif
+  }
 
   static void* _load()
   {
+#if !RTCX_STATIC_LINK_LIBNVJITLINK
     auto expected_major_version = major_version(CUDA_VERSION);
     std::int32_t cuda_version;
     RTCX_CHECK_CUDART(::cudaRuntimeGetVersion(&cuda_version));
@@ -398,14 +429,22 @@ struct LibNVJitLink {
       {std::format("libnvJitLink.so.{}", major)};
 
     return load_dso("libnvJitLink.so", lib_names);
+#else
+    return nullptr;
+#endif
   }
 
  private:
   void _load_symbols()
   {
+#if !RTCX_STATIC_LINK_LIBNVJITLINK
 #define DO_IT(func)                                          \
   this->func = reinterpret_cast<decltype(nvJitLink##func)*>( \
-    get_symbol("libnvJitLink", _handle, "nvJitLink" #func));
+    get_dso_symbol("libnvJitLink", _handle, "nvJitLink" #func));
+#else
+#define DO_IT(func) this->func = ::nvJitLink##func;
+#endif
+
     FOR_EACH_NVJITLINK_FUNC(DO_IT)
 #undef DO_IT
   }

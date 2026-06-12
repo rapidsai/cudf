@@ -19,10 +19,16 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
-from cudf_polars.streaming.io import SplitScan, StreamingScan, expand_scan_for_rank
+from cudf_polars.streaming.io import (
+    FusedScan,
+    SplitScan,
+    StreamingScan,
+    expand_scan_for_rank,
+)
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import SMALL_MAX_ROWS_PER_PARTITION
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
@@ -30,7 +36,9 @@ if TYPE_CHECKING:
     import concurrent.futures
     from collections.abc import Callable
     from pathlib import Path
+    from typing import Any, Literal
 
+    import cudf_polars.engine.core
     from cudf_polars.engine.core import StreamingEngine
 
 
@@ -54,7 +62,20 @@ def df():
     ],
 )
 @pytest.mark.timeout(90)
-def test_parallel_scan(tmp_path, df, fmt, scan_fn, streaming_engine):
+def test_parallel_scan(
+    tmp_path: Path,
+    df: pl.DataFrame,
+    fmt: Literal["csv", "ndjson", "parquet", "chunked_parquet"],
+    scan_fn: Any,
+    streaming_engine: cudf_polars.engine.core.StreamingEngine,
+) -> None:
+    # The spmd-small case creates *many* partitions with the length-3000 df.
+    # A smaller dataframe gives us sufficient test coverage, and runs much faster.
+    if (
+        streaming_engine.config["executor_options"]["max_rows_per_partition"]
+        == SMALL_MAX_ROWS_PER_PARTITION
+    ):
+        df = df.head(40)
     make_partitioned_source(df, tmp_path, fmt, n_files=3)
     q = scan_fn(tmp_path)
     assert_gpu_result_equal(q, engine=streaming_engine)
@@ -261,7 +282,7 @@ def test_expand_scan_for_rank_fused_and_single_read(
         parquet_options=ParquetOptions(),
     )
     for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
-        assert isinstance(scan, Scan)
+        assert isinstance(scan, FusedScan)
         assert scan.paths == expected_paths
 
 
@@ -289,7 +310,16 @@ def test_expand_scan_for_rank_split_files(
         assert isinstance(scan, SplitScan)
         assert scan.split_index == split_index
         assert scan.total_splits == total_splits
-        assert scan.base_scan.paths == ["file.parquet"]
+        assert scan.paths == ["file.parquet"]
+
+
+def test_streaming_scan_raises() -> None:
+    # This isn't reachable by normal cudf-polars usage.
+    scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
+    ctx = IRExecutionContext()
+    with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
+        StreamingScan.do_evaluate([fused], scan, context=ctx)
 
 
 def test_scan_missing_prefetch_metadata_raises() -> None:
@@ -323,9 +353,12 @@ def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
     scan = _make_parquet_scan(
         ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
     )
+    scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
+
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([scan], scan, context=ctx)
+        StreamingScan.do_evaluate([fused], scan, context=ctx)
 
 
 def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:

@@ -63,6 +63,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import (
     ShuffleManager,
 )
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     ChunkStore,
@@ -417,9 +418,7 @@ async def _allgather_and_broadcast(
             ir_context,
             global_agg_per_row_size,
         )
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(msg.sequence_number, result))
+        await send_chunk(context, ch_out, result, msg.sequence_number, tracer=tracer)
 
     await ch_out.drain(context)
 
@@ -577,9 +576,7 @@ async def _reassemble_input_chunks(
                 exclusive_view=True,
                 br=context.br(),
             )
-        if tracer is not None:
-            tracer.add_chunk(table=chunk.table_view())
-        await ch_out.send(context, Message(sequence_number, chunk))
+        await send_chunk(context, ch_out, chunk, sequence_number, tracer=tracer)
 
 
 async def _shuffle_and_reassemble(

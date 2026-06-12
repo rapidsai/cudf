@@ -152,21 +152,6 @@ template <std::integral T = std::int64_t>
   return sort_table(table->view(), column_indices);
 }
 
-/// @brief Create a PackedData object from a host buffer
-[[nodiscard]] inline rapidsmpf::PackedData create_packed_data(
-  std::span<std::uint8_t const> metadata,
-  std::span<std::uint8_t const> data,
-  rmm::cuda_stream_view stream,
-  rapidsmpf::BufferResource* br)
-{
-  auto metadata_ptr = std::make_unique<std::vector<std::uint8_t>>(metadata.begin(), metadata.end());
-
-  auto reservation =
-    br->reserve(rapidsmpf::MemoryType::DEVICE, data.size(), rapidsmpf::AllowOverbooking::YES);
-  auto data_ptr = std::make_unique<rmm::device_buffer>(data.data(), data.size(), stream);
-  return rapidsmpf::PackedData{std::move(metadata_ptr), br->move(std::move(data_ptr), stream)};
-}
-
 /**
  * @brief Generate a packed data object with the given number of elements and offset.
  *
