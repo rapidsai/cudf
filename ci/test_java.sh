@@ -45,7 +45,7 @@ export LIBCUDF_LARGE_STRINGS_ENABLED=0
 
 rapids-logger "Run Java tests"
 pushd java
-timeout 30m mvn test -B -s ci/../java/ci/test_java_settings.xml -DCUDF_JNI_ENABLE_PROFILING=OFF
+timeout 30m mvn test -B -s ci/test_java_settings.xml -DCUDF_JNI_ENABLE_PROFILING=OFF
 popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"
