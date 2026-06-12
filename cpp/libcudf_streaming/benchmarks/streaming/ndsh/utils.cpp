@@ -104,17 +104,17 @@ bool is_comm_type_available(CommType comm_type)
 {
   switch (comm_type) {
     case CommType::SINGLE: return true;
+    case CommType::MPI:
 #ifdef CUDF_STREAMING_HAVE_MPI
-    case CommType::MPI: return true;
-#else
-    case CommType::MPI: return false;
+      return true;
 #endif
+      break;
+    case CommType::UCXX:
 #ifdef CUDF_STREAMING_HAVE_UCXX
-    case CommType::UCXX: return true;
-#else
-    case CommType::UCXX: return false;
+      return true;
 #endif
-    case CommType::MAX: return false;
+      break;
+    case CommType::MAX: break;
   }
   return false;
 }
