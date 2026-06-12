@@ -25,7 +25,7 @@ add_test(
   COMMAND
     ${CMAKE_COMMAND} -S "${CMAKE_CURRENT_LIST_DIR}/cudf_export_consumer" -B
     "${cudf_export_consumer_build_dir}" -G "${CMAKE_GENERATOR}"
-    -DCUDF_REPOSITORY_DIR="${CUDF_REPOSITORY_DIR}"
+    "-DCUDF_REPOSITORY_DIR=${CUDF_REPOSITORY_DIR}"
 )
 
 add_test(NAME cudf_export_consumer COMMAND ${CMAKE_COMMAND} --build
