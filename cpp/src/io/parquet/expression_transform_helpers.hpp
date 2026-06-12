@@ -222,15 +222,18 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
@@ -309,6 +312,54 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  private:
   cudf::host_span<cudf::size_type const> _output_column_schemas;
   cudf::host_span<SchemaElement const> _schema_tree;
+};
+
+/**
+ * @brief Offsets every column referencein an expression by the specified value
+ *
+ */
+class offset_column_references : public ast::detail::expression_transformer {
+ public:
+  offset_column_references(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                           size_type offset);
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns the offset AST expression
+   *
+   * @return AST operation expression, or std::nullopt if no expression was provided
+   */
+  [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
+    const;
+
+ private:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+
+  size_type _offset{0};
+  std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
+  // Owns the transformed expressions and keeps references stable
+  ast::tree _expr_tree;
 };
 
 /**

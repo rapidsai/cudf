@@ -395,16 +395,6 @@ class reader_impl {
     return _file_itm_data._output_chunk_count == 0;
   }
 
-  /**
-   * @brief Check if number of rows per source should be included in output metadata.
-   *
-   * @return True if AST filter is not present
-   */
-  [[nodiscard]] bool include_output_num_rows_per_source() const
-  {
-    return not _expr_conv.get_converted_expr().has_value();
-  }
-
   [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
   {
     return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
@@ -419,6 +409,15 @@ class reader_impl {
    */
   [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
                                                                          size_t chunk_num_rows);
+
+  /**
+   * @brief Construct and prepend the source index column to the output columns
+   *
+   * @param num_rows_per_source Number of rows per parquet source
+   * @param out_columns Current output columns
+   */
+  void prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
+                                   std::vector<std::unique_ptr<column>>& out_columns);
 
   /**
    * @brief Computes the names of columns to be read from the file, if specified.
@@ -458,6 +457,8 @@ class reader_impl {
     bool use_jit_filter = false;
     // Whether to use case-sensitive matching for column names
     bool case_sensitive_names = true;
+    // Whether to prepend the source file index column to the output
+    bool prepend_source_index_column = false;
   } _options;
 
   // name to reference converter to extract AST output filter

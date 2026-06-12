@@ -9,6 +9,7 @@
 #include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -1116,6 +1117,75 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               _stream);
 
   return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
+}
+
+void reader_impl::prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
+                                              std::vector<std::unique_ptr<column>>& out_columns)
+{
+  if (not _options.prepend_source_index_column) { return; }
+
+  using column_type    = cudf::size_type;
+  auto constexpr dtype = cudf::data_type{cudf::type_to_id<column_type>()};
+
+  auto const num_rows = std::accumulate(num_rows_per_source.begin(), num_rows_per_source.end(), 0);
+
+  auto const prepend_column = [&](auto&& column) {
+    out_columns.emplace(out_columns.begin(), std::move(column));
+  };
+
+  // Empty column
+  if (num_rows == 0) {
+    prepend_column(cudf::make_empty_column(dtype));
+    return;
+  }
+
+  // Single source
+  auto const num_sources = num_rows_per_source.size();
+  if (num_sources == 1) {
+    auto const scalar = cudf::numeric_scalar<column_type>(0, true, _stream, _mr);
+    prepend_column(cudf::make_column_from_scalar(scalar, num_rows, _stream, _mr));
+    return;
+  }
+
+  auto col_data =
+    cudf::detail::make_zeroed_device_uvector_async<column_type>(num_rows, _stream, _mr);
+
+  // Multiple sources
+  {
+    auto temp_mr = cudf::get_current_device_resource_ref();
+
+    // Host per-source exclusive row offsets
+    auto host_row_offsets =
+      cudf::detail::make_empty_pinned_vector<cudf::size_type>(num_sources, _stream);
+    host_row_offsets.resize(num_sources);
+    std::exclusive_scan(num_rows_per_source.begin(),
+                        num_rows_per_source.end(),
+                        host_row_offsets.begin(),
+                        cudf::size_type{0});
+
+    // Copy row counts (scatter stencil) and offsets (scatter map) to device.
+    auto const row_counts =
+      cudf::detail::make_device_uvector_async(num_rows_per_source, _stream, temp_mr);
+    auto const row_offsets =
+      cudf::detail::make_device_uvector_async(host_row_offsets, _stream, temp_mr);
+
+    // Scatter each source index to its first row's position, but only for sources that have rows.
+    thrust::scatter_if(rmm::exec_policy_nosync(_stream, temp_mr),
+                       cuda::counting_iterator<cudf::size_type>(0),
+                       cuda::counting_iterator<cudf::size_type>(num_sources),
+                       row_offsets.begin(),
+                       row_counts.begin(),
+                       col_data.begin());
+    // Inclusive scan with maximum to replace zeros with the source index each row belongs to.
+    thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, temp_mr),
+                           col_data.begin(),
+                           col_data.end(),
+                           col_data.begin(),
+                           cuda::maximum<cudf::size_type>());
+    _stream.synchronize();
+  }
+
+  prepend_column(std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0));
 }
 
 }  // namespace cudf::io::parquet::detail
