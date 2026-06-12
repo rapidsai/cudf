@@ -477,6 +477,9 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
   // Flag to check if we have at least one valid dictionary page
   auto have_dictionary_pages = false;
 
+  // Cache each dictionary column's chunk offset across sources and row groups
+  std::vector<std::optional<size_type>> colchunk_offsets(dictionary_col_schemas.size());
+
   // For all sources
   std::for_each(
     cuda::counting_iterator<std::size_t>{0},
@@ -484,31 +487,36 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
-      std::optional<size_type> colchunk_iter_offset{};
       // For all row groups
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
-        // For all column chunks
+        auto const& row_group     = per_file_metadata[src_index].row_groups[rg_index];
+        auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
+        // For all dictionary column chunks (kept inner to preserve the source-major emission order)
         std::for_each(
-          dictionary_col_schemas.begin(),
-          dictionary_col_schemas.end(),
-          [&](auto const& schema_idx) {
-            // Get the column chunk iterator
-            if (not colchunk_iter_offset.has_value() or
-                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
-              auto const& colchunk_iter = std::find_if(
-                row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
-                  return col.schema_idx == schema_idx;
-                });
-              CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-                           "Column chunk with schema index " + std::to_string(schema_idx) +
+          cuda::counting_iterator<std::size_t>{0},
+          cuda::counting_iterator{dictionary_col_schemas.size()},
+          [&](auto const col) {
+            // Map the schema index to this source (for `allow_mismatched_pq_schemas`)
+            auto const mapped_schema_idx =
+              map_schema_index(dictionary_col_schemas[col], static_cast<int>(src_index));
+            auto& colchunk_offset    = colchunk_offsets[col];
+            auto const cached_offset = colchunk_offset.value_or(-1);
+            if (cached_offset < 0 or cached_offset >= num_col_chunks or
+                row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
+              auto const it = std::find_if(
+                row_group.columns.begin(),
+                row_group.columns.end(),
+                [mapped_schema_idx](auto const& c) { return c.schema_idx == mapped_schema_idx; });
+              CUDF_EXPECTS(it != row_group.columns.end(),
+                           "Column chunk with schema index " + std::to_string(mapped_schema_idx) +
                              " not found in row group",
                            std::invalid_argument);
-              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+              colchunk_offset =
+                static_cast<size_type>(std::distance(row_group.columns.begin(), it));
             }
-            auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
-            auto const& col_chunk    = *colchunk_iter;
-            auto const& col_meta     = col_chunk.meta_data;
+
+            auto const& col_chunk = row_group.columns[colchunk_offset.value()];
+            auto const& col_meta  = col_chunk.meta_data;
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages

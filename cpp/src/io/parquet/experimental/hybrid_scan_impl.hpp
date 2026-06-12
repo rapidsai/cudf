@@ -113,6 +113,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                 parquet_reader_options const& options);
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::dictionary_pages_byte_ranges
+   */
+  [[nodiscard]] std::vector<byte_range_info> dictionary_pages_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options);
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_dictionary_pages
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
