@@ -14,12 +14,12 @@ from cudf_streaming.streaming.table_chunk import (
 )
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.nodes import shutdown_on_error
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     empty_table_chunk,
@@ -158,8 +158,6 @@ async def concatenate_node(
             result_table = await allgather.extract_concatenated(
                 stream, ir_context=ir_context
             )
-            if tracer is not None:
-                tracer.add_chunk(table=result_table)
 
             # If no chunks were gathered, result_table has 0 columns.
             # We need to create an empty table with the correct schema.
@@ -170,7 +168,7 @@ async def concatenate_node(
                     result_table, stream, exclusive_view=True, br=context.br()
                 )
 
-            await ch_out.send(context, Message(0, output_chunk))
+            await send_chunk(context, ch_out, output_chunk, 0, tracer=tracer)
         else:
             # Local repartitioning (tree reduction).
 
@@ -220,19 +218,14 @@ async def concatenate_node(
                         if len(chunks) > 1:
                             # _concat reuses chunks[0] if len(chunks) == 1
                             del chunks
-                    if tracer is not None:
-                        tracer.add_chunk(table=df.table)
-                    await ch_out.send(
-                        context,
-                        Message(
-                            seq_num,
-                            TableChunk.from_pylibcudf_table(
-                                df.table,
-                                df.stream,
-                                exclusive_view=True,
-                                br=context.br(),
-                            ),
-                        ),
+                    output_chunk = TableChunk.from_pylibcudf_table(
+                        df.table,
+                        df.stream,
+                        exclusive_view=True,
+                        br=context.br(),
+                    )
+                    await send_chunk(
+                        context, ch_out, output_chunk, seq_num, tracer=tracer
                     )
                     seq_num += 1
                     del df
