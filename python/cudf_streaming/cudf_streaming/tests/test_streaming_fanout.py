@@ -11,6 +11,7 @@ import pylibcudf as plc
 import pytest
 
 from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.fanout import FanoutPolicy, fanout
 from rapidsmpf.streaming.core.leaf_actor import (
@@ -18,7 +19,6 @@ from rapidsmpf.streaming.core.leaf_actor import (
     push_to_channel,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.testing import assert_eq
 
 _INT64 = plc.DataType(plc.TypeId.INT64)
 
