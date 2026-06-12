@@ -3,7 +3,7 @@
 """IO utilities for the Parquet."""
 
 from libc.stddef cimport size_t
-from libc.stdint cimport uintptr_t
+from libc.stdint cimport uint8_t, uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -23,20 +23,21 @@ from pylibcudf.libcudf.io.parquet_io_utils cimport (
     const_byte_range_info,
     const_uint8_t,
     fetch_byte_ranges_to_device as cpp_fetch_byte_ranges_to_device,
+    fetch_page_index_to_host as cpp_fetch_page_index_to_host,
 )
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
-__all__ = ["fetch_byte_ranges_to_device"]
+__all__ = ["fetch_byte_ranges_to_device", "fetch_page_index_to_host"]
 
 
-def fetch_byte_ranges_to_device(
+cpdef list fetch_byte_ranges_to_device(
     SourceInfo source_info,
     list byte_ranges,
     object stream=None,
-    object mr=None,
-) -> list[gpumemoryview]:
+    DeviceMemoryResource mr=None,
+):
     """Fetch byte ranges from a Parquet source into device memory.
 
     Parameters
@@ -117,3 +118,46 @@ def fetch_byte_ranges_to_device(
         }
         result.append(gmv)
     return result
+
+
+cpdef bytes fetch_page_index_to_host(
+    SourceInfo source_info,
+    ByteRangeInfo page_index_range,
+):
+    """Fetch parquet page index bytes to host memory.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        Source describing a single Parquet file.
+    page_index_range : ByteRangeInfo
+        Byte range of the page index, as returned by
+        :meth:`~pylibcudf.io.experimental.HybridScanReader.page_index_byte_range`.
+
+    Returns
+    -------
+    bytes
+        Raw page index bytes copied to Python host memory.
+
+    Raises
+    ------
+    ValueError
+        If ``source_info`` does not describe exactly one source.
+    """
+    cdef vector[unique_ptr[datasource]] sources = make_datasources(source_info.c_obj)
+    if sources.size() != 1:
+        raise ValueError(
+            f"fetch_page_index_to_host requires exactly one source, "
+            f"got {sources.size()}"
+        )
+
+    cdef unique_ptr[datasource.buffer] buf
+    with nogil:
+        buf = move(cpp_fetch_page_index_to_host(
+            dereference(sources[0]),
+            (<ByteRangeInfo>page_index_range).c_obj,
+        ))
+
+    cdef const uint8_t* ptr = buf.get().data()
+    cdef size_t n = buf.get().size()
+    return bytes(ptr[:n])

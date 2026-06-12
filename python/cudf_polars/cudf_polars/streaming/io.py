@@ -255,14 +255,17 @@ def _read_with_hybrid_scan(
                 stream=stream,
             )
 
-        n_rows = reader.total_rows_in_row_groups(row_group_indices)
-        row_mask = plc.Column.from_scalar(
-            plc.Scalar.from_py(
-                py_val=True, dtype=plc.DataType(plc.TypeId.BOOL8), stream=stream
-            ),
-            n_rows,
-            stream=stream,
-        )
+        pi_range = reader.page_index_byte_range()
+        if pi_range.size > 0:
+            page_index_bytes = plc.io.parquet_io_utils.fetch_page_index_to_host(
+                plc.io.SourceInfo(paths), pi_range
+            )
+            reader.setup_page_index(page_index_bytes)
+            row_mask = reader.build_row_mask_with_page_index_stats(
+                row_group_indices, options, stream=stream
+            )
+        else:
+            row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
         filter_ranges = reader.filter_column_chunks_byte_ranges(
             row_group_indices, options

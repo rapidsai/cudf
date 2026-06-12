@@ -137,9 +137,10 @@ cdef class HybridScanReader:
         page_index_bytes : Buffer
             Parquet page index buffer bytes
         """
-        self.c_obj.get()[0].setup_page_index(
-            host_span[const_uint8_t](&page_index_bytes[0], len(page_index_bytes))
-        )
+        with nogil:
+            self.c_obj.get()[0].setup_page_index(
+                host_span[const_uint8_t](&page_index_bytes[0], len(page_index_bytes))
+            )
 
     def all_row_groups(self, ParquetReaderOptions options):
         """Get all available row groups from the parquet file.
@@ -209,15 +210,15 @@ cdef class HybridScanReader:
         """
         cdef Stream _stream = _get_stream(stream)
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[size_type] filtered = (
-            self.c_obj.get()[0].filter_row_groups_with_stats(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = move(self.c_obj.get()[0].filter_row_groups_with_stats(
                 host_span[const_size_type](
                     indices_vec.data(), indices_vec.size()
                 ),
                 options.c_obj,
                 _stream.view().value()
-            )
-        )
+            ))
         return list(filtered)
 
     def secondary_filters_byte_ranges(
@@ -240,11 +241,12 @@ cdef class HybridScanReader:
             Tuple of (bloom_filter_ranges, dictionary_page_ranges)
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef pair[vector[byte_range_info], vector[byte_range_info]] ranges = \
-            self.c_obj.get()[0].secondary_filters_byte_ranges(
+        cdef pair[vector[byte_range_info], vector[byte_range_info]] ranges
+        with nogil:
+            ranges = move(self.c_obj.get()[0].secondary_filters_byte_ranges(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
-            )
+            ))
 
         bloom_ranges = [
             ByteRangeInfo(r.offset(), r.size()) for r in ranges.first
@@ -286,15 +288,16 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[size_type] filtered = \
-            self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = move(self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
                 host_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
-            )
+            ))
         return list(filtered)
 
     def filter_row_groups_with_bloom_filters(
@@ -329,16 +332,51 @@ cdef class HybridScanReader:
 
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[size_type] filtered = \
-            self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = move(self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
                 host_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
-            )
+            ))
         return list(filtered)
+
+    def build_all_true_row_mask(
+        self,
+        list row_group_indices,
+        object stream=None,
+        DeviceMemoryResource mr=None
+    ):
+        """Build an all-true boolean survival column for the given row groups.
+
+        Parameters
+        ----------
+        row_group_indices : list[int]
+            Input row group indices
+        stream : Stream, optional
+            CUDA stream
+        mr : DeviceMemoryResource, optional
+            Device memory resource
+
+        Returns
+        -------
+        Column
+            All-true boolean column with one entry per row across all row groups
+        """
+        cdef vector[size_type] indices_vec = row_group_indices
+        cdef Stream _stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].build_all_true_row_mask(
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                _stream.view().value(),
+                mr.get_mr()
+            ))
+        return Column.from_libcudf(move(c_result), _stream, mr)
 
     def build_row_mask_with_page_index_stats(
         self,
@@ -368,13 +406,14 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
         cdef Stream _stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        cdef unique_ptr[column] c_result = \
-            self.c_obj.get()[0].build_row_mask_with_page_index_stats(
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].build_row_mask_with_page_index_stats(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
-            )
+            ))
         return Column.from_libcudf(move(c_result), _stream, mr)
 
     def filter_column_chunks_byte_ranges(
@@ -397,11 +436,12 @@ cdef class HybridScanReader:
             Byte ranges to column chunks of filter columns
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[byte_range_info] ranges = \
-            self.c_obj.get()[0].filter_column_chunks_byte_ranges(
+        cdef vector[byte_range_info] ranges
+        with nogil:
+            ranges = move(self.c_obj.get()[0].filter_column_chunks_byte_ranges(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
-            )
+            ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
 
     def materialize_filter_columns(
@@ -447,8 +487,9 @@ cdef class HybridScanReader:
             spans_vec.push_back(_get_device_span(span))
 
         cdef mutable_column_view mask_view = row_mask.mutable_view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_filter_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].materialize_filter_columns(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 host_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
@@ -458,7 +499,7 @@ cdef class HybridScanReader:
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
-            )
+            ))
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
     def payload_column_chunks_byte_ranges(
@@ -481,11 +522,12 @@ cdef class HybridScanReader:
             Byte ranges to column chunks of payload columns
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[byte_range_info] ranges = \
-            self.c_obj.get()[0].payload_column_chunks_byte_ranges(
+        cdef vector[byte_range_info] ranges
+        with nogil:
+            ranges = move(self.c_obj.get()[0].payload_column_chunks_byte_ranges(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
-            )
+            ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
 
     def materialize_payload_columns(
@@ -531,8 +573,9 @@ cdef class HybridScanReader:
             spans_vec.push_back(_get_device_span(span))
 
         cdef column_view mask_view = row_mask.view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_payload_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].materialize_payload_columns(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 host_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
@@ -542,7 +585,7 @@ cdef class HybridScanReader:
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
-            )
+            ))
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
     def all_column_chunks_byte_ranges(
@@ -565,11 +608,12 @@ cdef class HybridScanReader:
             Byte ranges to column chunks of all columns
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[byte_range_info] ranges = \
-            self.c_obj.get()[0].all_column_chunks_byte_ranges(
+        cdef vector[byte_range_info] ranges
+        with nogil:
+            ranges = move(self.c_obj.get()[0].all_column_chunks_byte_ranges(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
-            )
+            ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
 
     def materialize_all_columns(
@@ -607,8 +651,9 @@ cdef class HybridScanReader:
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_all_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].materialize_all_columns(
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 host_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
@@ -616,7 +661,7 @@ cdef class HybridScanReader:
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
-            )
+            ))
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
     def setup_chunking_for_filter_columns(
@@ -664,19 +709,20 @@ cdef class HybridScanReader:
         self.mr = _get_memory_resource(mr)
 
         cdef column_view mask_view = row_mask.view()
-        self.c_obj.get()[0].setup_chunking_for_filter_columns(
-            chunk_read_limit,
-            pass_read_limit,
-            host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-            mask_view,
-            mask_data_pages,
-            host_span[const_device_span_const_uint8_t](
-                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
-            ),
-            options.c_obj,
-            self._stream.view().value(),
-            self.mr.get_mr()
-        )
+        with nogil:
+            self.c_obj.get()[0].setup_chunking_for_filter_columns(
+                chunk_read_limit,
+                pass_read_limit,
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                mask_view,
+                mask_data_pages,
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
+                ),
+                options.c_obj,
+                self._stream.view().value(),
+                self.mr.get_mr()
+            )
 
     def materialize_filter_columns_chunk(
         self,
@@ -694,10 +740,11 @@ cdef class HybridScanReader:
             Table chunk of materialized filter columns and metadata
         """
         cdef mutable_column_view mask_view = row_mask.mutable_view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_filter_columns_chunk(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].materialize_filter_columns_chunk(
                 mask_view
-            )
+            ))
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )
@@ -747,19 +794,20 @@ cdef class HybridScanReader:
         self.mr = _get_memory_resource(mr)
 
         cdef column_view mask_view = row_mask.view()
-        self.c_obj.get()[0].setup_chunking_for_payload_columns(
-            chunk_read_limit,
-            pass_read_limit,
-            host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-            mask_view,
-            mask_data_pages,
-            host_span[const_device_span_const_uint8_t](
-                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
-            ),
-            options.c_obj,
-            self._stream.view().value(),
-            self.mr.get_mr()
-        )
+        with nogil:
+            self.c_obj.get()[0].setup_chunking_for_payload_columns(
+                chunk_read_limit,
+                pass_read_limit,
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                mask_view,
+                mask_data_pages,
+                host_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
+                ),
+                options.c_obj,
+                self._stream.view().value(),
+                self.mr.get_mr()
+            )
 
     def materialize_payload_columns_chunk(
         self,
@@ -777,10 +825,11 @@ cdef class HybridScanReader:
             Table chunk of materialized payload columns and metadata
         """
         cdef column_view mask_view = row_mask.view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_payload_columns_chunk(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].materialize_payload_columns_chunk(
                 mask_view
-            )
+            ))
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )
@@ -816,12 +865,15 @@ cdef class HybridScanReader:
             If ``row_group_indices`` is empty.
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        return self.c_obj.get()[0].construct_row_group_passes(
-            host_span[const_size_type](
-                indices_vec.data(), indices_vec.size()
-            ),
-            pass_read_limit
-        )
+        cdef vector[vector[size_type]] passes
+        with nogil:
+            passes = move(self.c_obj.get()[0].construct_row_group_passes(
+                host_span[const_size_type](
+                    indices_vec.data(), indices_vec.size()
+                ),
+                pass_read_limit
+            ))
+        return passes
 
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.

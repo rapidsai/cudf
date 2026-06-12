@@ -85,6 +85,12 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
             cudaStream_t stream
         ) except +libcudf_exception_handler
 
+        unique_ptr[column] build_all_true_row_mask(
+            host_span[const_size_type] row_group_indices,
+            cudaStream_t stream,
+            device_async_resource_ref mr
+        ) except +libcudf_exception_handler
+
         unique_ptr[column] build_row_mask_with_page_index_stats(
             host_span[const_size_type] row_group_indices,
             const parquet_reader_options& options,

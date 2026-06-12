@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
+from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 
@@ -27,3 +28,8 @@ cdef extern from "cudf/io/parquet_io_utils.hpp" \
             cuda_stream_view stream,
             device_async_resource_ref mr,
         ) except +libcudf_exception_handler
+
+    unique_ptr[datasource.buffer] fetch_page_index_to_host(
+        datasource& ds,
+        byte_range_info page_index_bytes,
+    ) except +libcudf_exception_handler

@@ -62,6 +62,12 @@ class HybridScanReader:
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
+    def build_all_true_row_mask(
+        self,
+        row_group_indices: list[int],
+        stream: CudaStreamLike | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...
     def build_row_mask_with_page_index_stats(
         self,
         row_group_indices: list[int],
