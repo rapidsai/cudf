@@ -353,7 +353,19 @@ class HardwareInfo:
 
     @classmethod
     def collect(cls, *, collect_gpus: bool = True) -> HardwareInfo:
-        """Collect the hardware information."""
+        """
+        Collect the hardware information.
+
+        Parameters
+        ----------
+        collect_gpus : bool, optional
+            Whether to collect GPU information.
+
+        Returns
+        -------
+        HardwareInfo
+            The hardware information.
+        """
         if collect_gpus and pynvml is not None:
             pynvml.nvmlInit()
             gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
