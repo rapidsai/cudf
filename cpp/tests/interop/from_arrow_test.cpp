@@ -222,7 +222,7 @@ TEST_F(FromArrowTest, NestedList)
 
   auto got_cudf_table = export_table(arrow_table);
   ASSERT_TRUE(got_cudf_table.has_value());
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table.value()->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table_view, got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, StructColumn)
@@ -454,8 +454,9 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTable)
 
   auto const precision = get_decimal_precision<T>();
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
-    auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const data = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const col  = fp_wrapper<T>(
+      data.cbegin(), data.cend(), cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(data, std::nullopt, precision, scale);
@@ -468,7 +469,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTable)
     auto got_cudf_table = export_table(arrow_table);
     ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table.value()->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 
@@ -483,7 +484,8 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto data = std::vector<T>(NUM_ELEMENTS);
     std::iota(data.begin(), data.end(), T{1});
-    auto const col      = fp_wrapper<T>(data.begin(), data.end(), scale_type{scale});
+    auto const col = fp_wrapper<T>(
+      data.begin(), data.end(), cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(data, std::nullopt, precision, scale);
@@ -496,7 +498,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
     auto got_cudf_table = export_table(arrow_table);
     ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table.value()->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 

@@ -344,14 +344,22 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView const* schema,
     "number of rows in Arrow column exceeds the column size limit",
     std::overflow_error);
 
-  return type.id() != type_id::EMPTY
-           ? std::move(type_dispatcher(
-               type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask))
-           : std::make_unique<column>(data_type(type_id::EMPTY),
-                                      input->length,
-                                      rmm::device_buffer{},
-                                      rmm::device_buffer{},
-                                      input->length);
+  if (type.id() == type_id::EMPTY) {
+    return std::make_unique<column>(data_type(type_id::EMPTY),
+                                    input->length,
+                                    rmm::device_buffer{},
+                                    rmm::device_buffer{},
+                                    input->length);
+  }
+
+  auto result = type_dispatcher(
+    type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask);
+  if (!result->has_nulls() && !result->nullable() &&           // no nulls, not nullable
+      ((schema->schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
+    result->set_null_mask(
+      cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+  }
+  return result;
 }
 
 /**
@@ -462,24 +470,16 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                "Must pass a struct to `from_arrow_host`",
                cudf::data_type_error);
 
-  std::transform(
-    input->array.children,
-    input->array.children + input->array.n_children,
-    view.schema->children,
-    std::back_inserter(columns),
-    [&stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
-      ArrowSchemaView view;
-      NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-      auto type   = arrow_to_cudf_type(&view);
-      auto result = get_column_copy(&view, child, type, false, stream, mr);
-      if (!result->has_nulls() && !result->nullable() &&        // no nulls, not nullable
-          ((view.schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
-        result->set_null_mask(
-          cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr),
-          0);
-      }
-      return result;
-    });
+  std::transform(input->array.children,
+                 input->array.children + input->array.n_children,
+                 view.schema->children,
+                 std::back_inserter(columns),
+                 [&stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
+                   ArrowSchemaView view;
+                   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
+                   auto type = arrow_to_cudf_type(&view);
+                   return get_column_copy(&view, child, type, false, stream, mr);
+                 });
 
   return std::make_unique<table>(std::move(columns));
 }
@@ -499,14 +499,8 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
 
-  auto type   = arrow_to_cudf_type(&view);
-  auto result = get_column_copy(&view, &input->array, type, false, stream, mr);
-  if (!result->has_nulls() && !result->nullable() &&        // no nulls, not nullable
-      ((view.schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
-    result->set_null_mask(
-      cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
-  }
-  return result;
+  auto type = arrow_to_cudf_type(&view);
+  return get_column_copy(&view, &input->array, type, false, stream, mr);
 }
 
 std::unique_ptr<column> get_column_from_host_copy(ArrowSchemaView const* schema,

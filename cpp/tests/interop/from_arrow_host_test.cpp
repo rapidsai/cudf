@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/table_utilities.hpp>
@@ -150,7 +151,9 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col_view.child_begin(), got_cudf_col_view.child_end())};
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
+  std::cout << "from_struct " << (int)from_struct.column(0).nullable() << std::endl;
+  cudf::test::print(from_struct.column(0));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
 }
 
 TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
@@ -207,7 +210,7 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col_view.child_begin(), got_cudf_col_view.child_end())};
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
 }
 
 template <typename T>
@@ -220,8 +223,9 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
 
   auto const precision = get_decimal_precision<T>();
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
-    auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const data = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const col  = fp_wrapper<T>(
+      data.cbegin(), data.cend(), cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -250,7 +254,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
 
     // converting arrow host memory to cudf table gives us the expected table
     auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
 
     // converting to a cudf table with a single struct column gives us the expected
     // result column
@@ -259,7 +263,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
                                                                 got_cudf_col_view.child_end())};
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
   }
 }
 
@@ -274,7 +278,8 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto iota       = cudf::detail::make_counting_transform_iterator(1, [](int i) { return T{i}; });
     auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col  = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const col  = fp_wrapper<T>(
+      iota, iota + NUM_ELEMENTS, cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -303,7 +308,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
 
     // converting arrow host memory to cudf table gives us the expected table
     auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
 
     // converting to a cudf table with a single struct column gives us the expected
     // result column
@@ -312,7 +317,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
                                                                 got_cudf_col_view.child_end())};
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
   }
 }
 
@@ -362,7 +367,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
                                                                 got_cudf_col_view.child_end())};
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
   }
 }
 
