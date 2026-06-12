@@ -100,20 +100,6 @@ The script sets these automatically:
 | `RAPIDS_REF_NAME` | `pull-request/<PR_NUMBER>` | Branch ref for artifact downloads |
 | `GH_TOKEN` | From `gh auth token` | Authentication for GitHub API/artifact store |
 
-## Running a Full Local Build + Test (No Artifact Downloads)
-
-If you want to skip downloading pre-built artifacts and instead build everything locally inside the container:
-
-```bash
-# Inside the container:
-sed -ri '/rapids-download-conda-from-github/ s/_CHANNEL=.*/_CHANNEL=${RAPIDS_CONDA_BLD_OUTPUT_DIR}/' ci/*.sh
-
-./ci/build_cpp.sh
-./ci/build_python.sh
-./ci/test_cpp.sh
-./ci/test_python_cudf.sh
-```
-
 ## Common Issues
 
 ### "GIT_DESCRIBE_NUMBER is undefined"
