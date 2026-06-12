@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Reproduce a cudf CI job locally by launching the same container and script
-# used in GitHub Actions. The container stays running for interactive inspection.
+# used in GitHub Actions. The container stays running for interactive inspection
+# and is automatically removed after an idle timeout.
 #
 # Usage:
-#   .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu]
+#   .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>]
 #
 # Examples (version tag derived from VERSION file — currently 26.08):
 #   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538
@@ -19,24 +20,30 @@
 # To find the container image and script for a job, look in .github/workflows/pr.yaml
 # for the job definition's container_image and script fields.
 #
-# The container is left running. To inspect interactively:
+# The container is left running after the CI script completes. To inspect interactively:
 #   docker exec -it cudf-ci-repro bash
 #
-# To clean up:
+# The container will be automatically removed after --timeout minutes of idle
+# (no docker exec sessions). Default: 30 minutes.
+#
+# To clean up manually:
 #   docker rm -f cudf-ci-repro
 
 set -euo pipefail
 
 CONTAINER_NAME="cudf-ci-repro"
 RAPIDS_VERSION="$(head -1 "$(dirname "$0")/../../VERSION" | cut -d. -f1,2)"
+IDLE_TIMEOUT_MINUTES=30
+
 usage() {
-    echo "Usage: $0 <container-image> <ci-script> <pr-number> [--gpu]"
+    echo "Usage: $0 <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>]"
     echo ""
     echo "Arguments:"
     echo "  container-image  Docker image (e.g., rapidsai/ci-conda:${RAPIDS_VERSION}-latest)"
     echo "  ci-script        CI script to run (e.g., ci/test_cmake.sh)"
     echo "  pr-number        Pull request number"
     echo "  --gpu            Pass --gpus all to docker (for test jobs that need a GPU)"
+    echo "  --timeout N      Idle timeout in minutes before container is auto-removed (default: 30)"
     echo ""
     echo "Find these values in .github/workflows/pr.yaml under the job's 'with:' block."
     echo ""
@@ -60,6 +67,10 @@ shift 3
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --gpu) GPU_NEEDED="yes" ;;
+        --timeout)
+            shift
+            IDLE_TIMEOUT_MINUTES="$1"
+            ;;
         *) echo "Unknown option: $1"; usage ;;
     esac
     shift
@@ -103,6 +114,7 @@ echo "  PR:        #${PR_NUMBER}"
 echo "  Image:     ${CONTAINER_IMAGE}"
 echo "  Script:    ${CI_SCRIPT}"
 echo "  GPU:       ${GPU_NEEDED}"
+echo "  Timeout:   ${IDLE_TIMEOUT_MINUTES} minutes"
 echo "  Container: ${CONTAINER_NAME}"
 echo ""
 
@@ -118,9 +130,49 @@ docker exec "$CONTAINER_NAME" bash -c "./${CI_SCRIPT}" || true
 echo "---"
 echo ""
 echo "CI script finished. Container is still running."
+echo "It will be automatically removed after ${IDLE_TIMEOUT_MINUTES} minutes of idle."
 echo ""
 echo "To inspect interactively:"
 echo "  docker exec -it ${CONTAINER_NAME} bash"
 echo ""
-echo "To clean up:"
+echo "To clean up manually:"
 echo "  docker rm -f ${CONTAINER_NAME}"
+
+# Start idle timeout watchdog in background.
+# The watchdog polls `docker top` every 60 seconds. If only the `tail -f /dev/null`
+# keepalive process remains for IDLE_TIMEOUT_MINUTES consecutive minutes, the
+# container is removed.
+(
+    idle_seconds=0
+    interval=60
+    timeout_seconds=$((IDLE_TIMEOUT_MINUTES * 60))
+
+    while true; do
+        sleep "$interval"
+
+        # If container no longer exists, we're done
+        if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+            exit 0
+        fi
+
+        # Count processes excluding the keepalive `tail -f /dev/null`
+        # docker top output: header line + process lines
+        active_procs=$(docker top "$CONTAINER_NAME" -o pid,cmd 2>/dev/null \
+            | tail -n +2 \
+            | grep -v -c 'tail -f /dev/null' || true)
+
+        if [[ "$active_procs" -eq 0 ]]; then
+            idle_seconds=$((idle_seconds + interval))
+        else
+            idle_seconds=0
+        fi
+
+        if [[ "$idle_seconds" -ge "$timeout_seconds" ]]; then
+            echo ""
+            echo "[reproduce-ci] Container idle for ${IDLE_TIMEOUT_MINUTES} minutes. Removing."
+            docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1
+            exit 0
+        fi
+    done
+) &
+disown

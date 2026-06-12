@@ -10,7 +10,7 @@ For full background, see the [RAPIDS docs on reproducing CI](https://docs.rapids
 ## Usage
 
 ```bash
-.agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu]
+.agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>]
 ```
 
 Examples:
@@ -25,10 +25,11 @@ The container image tag corresponds to the current RAPIDS version. Derive it fro
 RAPIDS_VERSION=$(head -1 VERSION | cut -d. -f1,2)  # e.g., "26.08"
 ```
 
-The script launches a detached container, runs the CI script, and leaves the container running for inspection:
+The script launches a detached container, runs the CI script, and leaves the container running for inspection.
+After `--timeout` minutes of idle (default: 30), the container is automatically removed.
 ```bash
 docker exec -it cudf-ci-repro bash   # inspect interactively
-docker rm -f cudf-ci-repro           # clean up
+docker rm -f cudf-ci-repro           # clean up manually before timeout
 ```
 
 ## Finding the Container Image, Script, and GPU Requirement
