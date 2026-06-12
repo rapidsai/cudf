@@ -157,6 +157,37 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   }
 }
 
+namespace {
+
+/**
+ * @brief Writes the preceding and following offsets for unbounded/current-row range windows.
+ */
+template <typename Preceding, typename Following>
+void write_offsets(Preceding preceding,
+                   Following following,
+                   mutable_column_view preceding_view,
+                   mutable_column_view following_view,
+                   size_type num_rows,
+                   rmm::cuda_stream_view stream)
+{
+  auto const src_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0},
+    cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(
+      [preceding_fn = rolling::unbounded_distance_functor{preceding, rolling::direction::PRECEDING},
+       following_fn = rolling::unbounded_distance_functor{
+         following, rolling::direction::FOLLOWING}] __device__(size_type i) {
+        return cuda::std::tuple<size_type, size_type>{preceding_fn(i), following_fn(i)};
+      }));
+
+  thrust::copy_n(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    src_iter,
+    num_rows,
+    cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
+}
+
+}  // namespace
+
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   table_view const& orderby,
@@ -213,27 +244,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   auto following_result = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-  auto write_offsets = [&](auto preceding_grouping, auto following_grouping) {
-    auto preceding_view = preceding_result->mutable_view();
-    auto following_view = following_result->mutable_view();
-
-    auto const source_iter = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(
-        [preceding_functor =
-           rolling::unbounded_distance_functor{preceding_grouping, rolling::direction::PRECEDING},
-         following_functor = rolling::unbounded_distance_functor{
-           following_grouping, rolling::direction::FOLLOWING}] __device__(size_type i) {
-          return {preceding_functor(i), following_functor(i)};
-        }));
-
-    thrust::copy_n(
-      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      source_iter,
-      num_rows,
-      cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
-  };
-
   using offset_grouping      = std::variant<rolling::grouped, rolling::ungrouped>;
   auto const select_grouping = [&](range_window_type const& window) -> offset_grouping {
     if (std::holds_alternative<current_row>(window)) {
@@ -248,7 +258,17 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 
   auto preceding_grouping = select_grouping(preceding);
   auto following_grouping = select_grouping(following);
-  std::visit(write_offsets, preceding_grouping, following_grouping);
+  std::visit(
+    [&](auto preceding_grouping, auto following_grouping) {
+      write_offsets(preceding_grouping,
+                    following_grouping,
+                    preceding_result->mutable_view(),
+                    following_result->mutable_view(),
+                    num_rows,
+                    stream);
+    },
+    preceding_grouping,
+    following_grouping);
 
   return std::pair{std::move(preceding_result), std::move(following_result)};
 }
