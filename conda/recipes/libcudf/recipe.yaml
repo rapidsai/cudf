@@ -223,6 +223,7 @@ outputs:
     build:
       script:
         - cmake --install cpp/libcudf_streaming/build
+        - cmake --install cpp/libcudf_streaming/build --component benchmarking
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
@@ -259,6 +260,12 @@ outputs:
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_streaming.so
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_pack
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_partition
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_read
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_shuffle
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_streaming_shuffle
+        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/q01
     about:
       homepage: https://rapids.ai/
       license: Apache-2.0
