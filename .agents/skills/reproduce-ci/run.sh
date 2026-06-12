@@ -9,13 +9,10 @@
 # Usage:
 #   .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>]
 #
-# Examples (version tag derived from VERSION file — currently 26.08):
-#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538
-#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu
-#   .agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:26.08-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
-#
-# Determine the current version tag with:
-#   head -1 VERSION | cut -d. -f1,2
+# Examples (derive the version tag from `head -1 VERSION | cut -d. -f1,2`):
+#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:<VERSION>-latest ci/test_cmake.sh 22538
+#   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:<VERSION>-latest ci/test_java.sh 22538 --gpu
+#   .agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:<VERSION>-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
 #
 # To find the container image and script for a job, look in .github/workflows/pr.yaml
 # for the job definition's container_image and script fields.
