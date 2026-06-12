@@ -28,8 +28,6 @@
 
 #include <cuda/iterator>
 
-#include <limits>
-
 namespace {
 
 /**
@@ -923,81 +921,6 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
     std::ignore = reader->materialize_filter_columns(
       row_groups, filter_data, row_mask_mutable, use_data_page_mask::NO, options, stream, mr),
     std::invalid_argument);
-}
-
-namespace {
-
-// Drives the fused `hybrid_scan_reader::read` and compares against `cudf::io::read_parquet` for the
-// same filter and column selection. `selected_columns` deliberately reorders columns and places the
-// filter column away from the front, exercising the projection-order reassembly inside `read`.
-void test_read_matches_read_parquet(std::vector<char> const& parquet_buffer,
-                                    cudf::ast::operation const& filter_expression,
-                                    std::vector<std::string> const& selected_columns)
-{
-  auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
-
-  auto const make_options = [&] {
-    auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(
-                                                               cudf::host_span<char const>(
-                                                                 parquet_buffer.data(),
-                                                                 parquet_buffer.size())))
-                     .filter(filter_expression)
-                     .build();
-    options.set_column_names(selected_columns);
-    return options;
-  };
-
-  auto const expected = cudf::io::read_parquet(make_options(), stream, mr).tbl;
-
-  auto const options = make_options();
-  auto datasource    = cudf::io::datasource::create(cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
-  auto reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
-
-  auto const row_groups = reader->all_row_groups(options);
-  auto const read_options =
-    cudf::io::parquet::experimental::hybrid_scan_read_options{};  // page index fetched internally
-  auto const actual = reader->read(*datasource, row_groups, options, read_options, stream, mr);
-
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), actual.tbl->view());
-}
-
-}  // namespace
-
-TEST_F(HybridScanTest, ReadMatchesReadParquetReorderedProjection)
-{
-  using T                              = int32_t;
-  auto constexpr num_concat            = 2;  // multiple row groups + pages so pruning engages
-  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
-
-  // Filter on the middle column; project columns in a different order with the filter column last.
-  auto literal_value     = cudf::numeric_scalar<T>(T{500});
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_1         = cudf::ast::column_name_reference("col1");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_1, literal);
-
-  test_read_matches_read_parquet(
-    parquet_buffer, filter_expression, std::vector<std::string>{"col2", "col0", "col1"});
-}
-
-TEST_F(HybridScanTest, ReadMatchesReadParquetNoSurvivingRows)
-{
-  using T                              = int32_t;
-  auto constexpr num_concat            = 2;
-  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
-
-  // A predicate no row can satisfy, exercising the empty-output path of `read`.
-  auto literal_value = cudf::numeric_scalar<T>(std::numeric_limits<T>::min());
-  auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref_0     = cudf::ast::column_name_reference("col0");
-  auto filter_expression =
-    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-  test_read_matches_read_parquet(
-    parquet_buffer, filter_expression, std::vector<std::string>{"col2", "col0"});
 }
 
 TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)

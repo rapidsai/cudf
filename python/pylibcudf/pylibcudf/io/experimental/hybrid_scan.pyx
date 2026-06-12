@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from cython.operator cimport dereference
 from libc.stdint cimport uint8_t, uintptr_t
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -21,17 +20,14 @@ from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
-from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
 from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_device_span_const_uint8_t,
     const_size_type,
     const_uint8_t,
-    hybrid_scan_read_options as cpp_hybrid_scan_read_options,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
 from pylibcudf.libcudf.io.text cimport byte_range_info
-from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
@@ -202,96 +198,6 @@ cdef class HybridScanReader:
         """
         with nogil:
             self.c_obj.get()[0].reset_column_selection()
-
-    def read(
-        self,
-        SourceInfo source_info,
-        list row_group_indices,
-        ParquetReaderOptions options,
-        const uint8_t[::1] page_index_bytes=None,
-        bool use_stats_filter=True,
-        bool use_dictionary_filter=True,
-        bool use_bloom_filter=True,
-        bool prune_filter_column_pages=False,
-        bool prune_payload_column_pages=True,
-        object stream=None,
-        DeviceMemoryResource mr=None,
-    ):
-        """Read the Parquet file in a single fused hybrid scan operation.
-
-        Performs row group pruning, row mask construction, and the two-pass
-        filter/payload materialization in one C++ call, so the entire per-chunk
-        read crosses into C++ (and acquires the GIL) once rather than once per
-        step.
-
-        Parameters
-        ----------
-        source_info : SourceInfo
-            Source describing the single Parquet file backing this reader.
-        row_group_indices : list[int]
-            Candidate row group indices to read, before pruning.
-        options : ParquetReaderOptions
-            Parquet reader options, including the optional filter expression and
-            column selection.
-        page_index_bytes : memoryview, optional
-            Host bytes of the page index. If ``None`` and the file contains a
-            page index, the bytes are fetched from the source. Pass cached bytes
-            to avoid a redundant read across reads of the same file.
-        use_stats_filter : bool, default True
-            Prune row groups using column chunk statistics.
-        use_dictionary_filter : bool, default True
-            Prune row groups using column chunk dictionary pages.
-        use_bloom_filter : bool, default True
-            Prune row groups using column chunk bloom filters.
-        prune_filter_column_pages : bool, default False
-            Whether to build and use a data page mask to prune filter column pages.
-        prune_payload_column_pages : bool, default True
-            Whether to build and use a data page mask to prune payload column pages.
-        stream : Stream, optional
-            CUDA stream.
-        mr : DeviceMemoryResource, optional
-            Device memory resource.
-
-        Returns
-        -------
-        TableWithMetadata
-            Materialized columns and metadata, in projection order.
-        """
-        cdef Stream _stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
-
-        cdef vector[unique_ptr[datasource]] sources = make_datasources(source_info.c_obj)
-        cdef vector[size_type] indices_vec = row_group_indices
-
-        cdef cpp_hybrid_scan_read_options read_options
-        read_options.use_stats_filter = use_stats_filter
-        read_options.use_dictionary_filter = use_dictionary_filter
-        read_options.use_bloom_filter = use_bloom_filter
-        read_options.prune_filter_column_pages = (
-            cpp_use_data_page_mask.YES if prune_filter_column_pages
-            else cpp_use_data_page_mask.NO
-        )
-        read_options.prune_payload_column_pages = (
-            cpp_use_data_page_mask.YES if prune_payload_column_pages
-            else cpp_use_data_page_mask.NO
-        )
-        if page_index_bytes is not None and page_index_bytes.shape[0] > 0:
-            read_options.page_index_bytes = host_span[const_uint8_t](
-                &page_index_bytes[0], page_index_bytes.shape[0]
-            )
-
-        cdef datasource* source_ptr = sources[0].get()
-        cdef table_with_metadata c_result
-        with nogil:
-            c_result = move(self.c_obj.get()[0].read(
-                dereference(source_ptr),
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                options.c_obj,
-                read_options,
-                _stream.view().value(),
-                mr.get_mr(),
-            ))
-        return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
     def filter_row_groups_with_stats(
         self,

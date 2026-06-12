@@ -189,18 +189,6 @@ def expand_scan_for_rank(
     return scans
 
 
-@functools.lru_cache(maxsize=256)
-def _fetch_page_index_bytes(path: str, offset: int, size: int) -> bytes:
-    """Fetch parquet page index bytes, cached per (path, offset, size).
-
-    Multiple splits of the same file share an identical page index byte range,
-    so caching here avoids a redundant host-side file read per extra split.
-    """
-    return plc.io.parquet_io_utils.fetch_page_index_to_host(
-        plc.io.SourceInfo([path]),
-        plc.io.text.ByteRangeInfo(offset=offset, size=size),
-    )
-
 
 # Per-file cache: row-group row counts, keyed by file path.
 # Avoids a redundant read_parquet_metadata call for every split of the same
@@ -211,6 +199,18 @@ _row_group_num_rows_cache: dict[str, list[int]] = {}
 # Avoids a redundant read_parquet_footers call for every split of the same
 # file; populated on first encounter.
 _parquet_footer_cache: dict[str, Any] = {}
+
+
+def _fetch_byte_ranges(
+    paths: list[str],
+    byte_ranges: list[plc.io.text.ByteRangeInfo],
+    stream: Stream,
+) -> list[plc.gpumemoryview]:
+    # TODO: Accept a pinned-host Datasource pre-fetched by the caller so the
+    # storage I/O overlaps with GPU work for better pipelining.
+    return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
+        plc.io.SourceInfo(paths), byte_ranges, stream=stream
+    )
 
 
 def _read_with_hybrid_scan(
@@ -247,38 +247,89 @@ def _read_with_hybrid_scan(
             options,
         )
 
-        # Pass the (cached) page index bytes so ``read`` does not re-read them per split.
-        pi_range = reader.page_index_byte_range()
-        page_index_bytes = (
-            _fetch_page_index_bytes(paths[0], pi_range.offset, pi_range.size)
-            if pi_range.size > 0
-            else None
-        )
+        if stats_pruning:
+            row_group_indices = reader.filter_row_groups_with_stats(
+                row_group_indices, options, stream=stream
+            )
 
-        # One fused C++ call performs pruning, row-mask construction, and the two-pass
-        # read, crossing into C++ (and the GIL) once per split rather than once per step.
-        tbl_w_meta = reader.read(
-            plc.io.SourceInfo(paths),
+            if row_group_indices:
+                bloom_ranges, _ = reader.secondary_filters_byte_ranges(
+                    row_group_indices, options
+                )
+                if bloom_ranges:
+                    bloom_chunks = _fetch_byte_ranges(paths, bloom_ranges, stream)
+                    row_group_indices = reader.filter_row_groups_with_bloom_filters(
+                        bloom_chunks, row_group_indices, options, stream=stream
+                    )
+
+        if not row_group_indices:
+            col_names = with_columns if with_columns is not None else list(schema)
+            return DataFrame(
+                [
+                    Column(
+                        plc.column_factories.make_empty_column(
+                            schema[name].plc_type, stream=stream
+                        ),
+                        dtype=schema[name],
+                        name=name,
+                    )
+                    for name in col_names
+                ],
+                stream=stream,
+            )
+
+        # TODO: Consider implementing page-index stats pruning. For SplitScans, we can
+        # reuse the same page index for all splits of the same file, so the overhead of
+        # reading the page index can be amortized. For FusedScans, we would need to read
+        # the page index for all files, which may be too expensive.
+        row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
+
+        filter_ranges = reader.filter_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
+        filter_chunks = _fetch_byte_ranges(paths, filter_ranges, stream)
+        filter_tbl_w_meta = reader.materialize_filter_columns(
             row_group_indices,
+            filter_chunks,
+            row_mask,
+            plc.io.experimental.UseDataPageMask.YES,
             options,
-            page_index_bytes=page_index_bytes,
-            use_stats_filter=stats_pruning,
-            use_dictionary_filter=stats_pruning,
-            use_bloom_filter=stats_pruning,
-            prune_filter_column_pages=True,
-            prune_payload_column_pages=True,
             stream=stream,
         )
 
-        names = tbl_w_meta.column_names(include_children=False)
-        df = DataFrame.from_table(
-            tbl_w_meta.tbl,
-            names,
-            [schema[n] for n in names],
+        payload_ranges = reader.payload_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
+        payload_chunks = _fetch_byte_ranges(paths, payload_ranges, stream)
+        payload_tbl_w_meta = reader.materialize_payload_columns(
+            row_group_indices,
+            payload_chunks,
+            row_mask,
+            plc.io.experimental.UseDataPageMask.YES,
+            options,
             stream=stream,
         )
+
+        filter_names = filter_tbl_w_meta.column_names(include_children=False)
+        payload_names = payload_tbl_w_meta.column_names(include_children=False)
+        filter_df = DataFrame.from_table(
+            filter_tbl_w_meta.tbl,
+            filter_names,
+            [schema[n] for n in filter_names],
+            stream=stream,
+        )
+        payload_df = DataFrame.from_table(
+            payload_tbl_w_meta.tbl,
+            payload_names,
+            [schema[n] for n in payload_names],
+            stream=stream,
+        )
+        # Ensure the decode kernels are finished before 
+        # filter_chunks and payload_chunks go out of scope
         stream.synchronize()
-        return df.select(list(schema.keys()))
+        return DataFrame(
+            [*filter_df.columns, *payload_df.columns], stream=stream
+        ).select(list(schema.keys()))
 
 
 class SplitScan(IR):
