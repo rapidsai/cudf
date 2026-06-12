@@ -888,6 +888,8 @@
 * Clarify deprecation message for cudf::round by @nirandaperera in https://github.com/rapidsai/cudf/pull/20809
 * Require nvcc 12.9 in contributing guide by @bdice in https://github.com/rapidsai/cudf/pull/21186
 ### 🚀 New Features
+* Add Parquet VARIANT (unshredded) read path as struct of `list<uint8>` (`metadata` / `value`), `cudf::extract_variant_field` for top-level STRING/INT32 keys, and committed test fixtures + generator script.
+* Allow `extract_variant_field` when the VARIANT struct has additional shredded children after the binary `metadata`/`value` lists (only the blob path is used; fields present only in shredded columns still yield null).
 * Expose `cudf::compute_column_jit` to python by @Matt711 in https://github.com/rapidsai/cudf/pull/20697
 * Add configuration option for max-io-threads by @quasiben in https://github.com/rapidsai/cudf/pull/20606
 * Return stats from `lower_ir_graph` by @rjzamora in https://github.com/rapidsai/cudf/pull/20528

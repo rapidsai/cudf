@@ -383,6 +383,10 @@ ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chun
 ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
+# * variant extract benchmark ----------------------------------------------------------------------
+ConfigureNVBench(VARIANT_EXTRACT_NVBENCH io/variant_extract.cu)
+
+# ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
 ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
