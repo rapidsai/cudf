@@ -29,7 +29,11 @@
 set -euo pipefail
 
 CONTAINER_NAME="cudf-ci-repro"
-RAPIDS_VERSION="$(head -1 "$(dirname "$0")/../../VERSION" | cut -d. -f1,2)"
+RAPIDS_VERSION="$(head -1 "$(git rev-parse --show-toplevel)/VERSION" | cut -d. -f1,2)"
+if [[ -z "$RAPIDS_VERSION" ]]; then
+    echo "Error: Could not determine RAPIDS version from VERSION file" >&2
+    exit 1
+fi
 IDLE_TIMEOUT_MINUTES=30
 
 usage() {
@@ -123,10 +127,15 @@ echo ""
 # Run the CI script non-interactively
 echo "Running CI script: ${CI_SCRIPT}"
 echo "---"
-docker exec "$CONTAINER_NAME" bash -c "./${CI_SCRIPT}" || true
+CI_EXIT_CODE=0
+docker exec "$CONTAINER_NAME" bash -c "./${CI_SCRIPT}" || CI_EXIT_CODE=$?
 echo "---"
 echo ""
-echo "CI script finished. Container is still running."
+if [[ $CI_EXIT_CODE -eq 0 ]]; then
+    echo "CI script finished successfully. Container is still running."
+else
+    echo "CI script FAILED (exit code ${CI_EXIT_CODE}). Container is still running."
+fi
 echo "It will be automatically removed after ${IDLE_TIMEOUT_MINUTES} minutes of idle."
 echo ""
 echo "To inspect interactively:"

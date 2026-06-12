@@ -1,6 +1,6 @@
 ---
 name: reproduce-ci
-description: Reproduce cudf CI failures locally by running the same container images and scripts used in GitHub Actions. Use when debugging CI failures from a pull request. Arguments - job name and PR number.
+description: Reproduce cudf CI failures locally by running the same container images and scripts used in GitHub Actions. Use when debugging CI failures from a pull request. Arguments - container image, CI script path, PR number, and optional flags.
 ---
 
 # Reproducing cudf CI Failures Locally
