@@ -37,7 +37,9 @@ endif()
 # Check whether rapidsmpf exports a compile definition for an optional feature.
 function(cudf_streaming_rapidsmpf_exports_feature feature result)
   set(has_feature OFF)
-  get_target_property(rapidsmpf_compile_definitions rapidsmpf::rapidsmpf INTERFACE_COMPILE_DEFINITIONS)
+  get_target_property(
+    rapidsmpf_compile_definitions rapidsmpf::rapidsmpf INTERFACE_COMPILE_DEFINITIONS
+  )
   if(rapidsmpf_compile_definitions)
     foreach(definition IN LISTS rapidsmpf_compile_definitions)
       if(definition STREQUAL "${feature}")
