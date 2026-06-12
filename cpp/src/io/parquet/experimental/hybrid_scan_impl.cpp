@@ -805,12 +805,13 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
-  _options.use_jit_filter       = false;
-  _options.case_sensitive_names = true;
-  _num_sources                  = 0;
-  _input_pass_read_limit        = 0;
-  _output_chunk_read_limit      = 0;
-  _strings_to_categorical       = false;
+  _options.use_jit_filter              = false;
+  _options.case_sensitive_names        = true;
+  _options.prepend_source_index_column = false;
+  _num_sources                         = 0;
+  _input_pass_read_limit               = 0;
+  _output_chunk_read_limit             = 0;
+  _strings_to_categorical              = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
@@ -822,10 +823,11 @@ void hybrid_scan_reader_impl::initialize_column_selection_options(
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
-  _options.timestamp_type       = cudf::data_type{options.get_timestamp_type().id()};
-  _options.decimal_width        = options.get_decimal_width();
-  _options.use_jit_filter       = options.is_enabled_use_jit_filter();
-  _options.case_sensitive_names = options.is_enabled_case_sensitive_names();
+  _options.timestamp_type              = cudf::data_type{options.get_timestamp_type().id()};
+  _options.decimal_width               = options.get_decimal_width();
+  _options.use_jit_filter              = options.is_enabled_use_jit_filter();
+  _options.case_sensitive_names        = options.is_enabled_case_sensitive_names();
+  _options.prepend_source_index_column = options.is_enabled_prepend_source_index_column();
 
   _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 }
@@ -914,12 +916,9 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
-    // Check if number of rows per source should be included in output metadata.
-    if (include_output_num_rows_per_source()) {
-      // Empty dataframe case: Simply initialize to a list of zeros
-      out_metadata.num_rows_per_source =
-        std::vector<std::size_t>(_file_itm_data.num_rows_per_source.size(), 0);
-    }
+    // Empty dataframe case: Simply initialize to a list of zeros
+    out_metadata.num_rows_per_source =
+      std::vector<std::size_t>(_file_itm_data.num_rows_per_source.size(), 0);
 
     // Finalize output
     return finalize_output(read_columns_mode, out_metadata, out_columns, row_mask);
@@ -981,18 +980,13 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
-    }
+  // Compute the output number of rows per source
+  if (mode == read_mode::CHUNKED_READ) {
+    out_metadata.num_rows_per_source =
+      calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+  } else {
+    // Move is okay here as we are reading in one go.
+    out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
@@ -1035,6 +1029,18 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   apply_decimal_width_cast(out_columns);
 
+  // Prepend the source index column to filter columns or all columns
+  if (_options.prepend_source_index_column and
+      read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
+    prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
+  }
+
+  // Offset column references in `_expr_conv` by the number of prepended columns
+  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
+  auto const final_filter =
+    parquet::detail::offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  auto const final_filter_expr = final_filter.get_converted_expr();
+
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
@@ -1050,15 +1056,17 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   _row_mask_offset += read_table->num_rows();
   _output_chunk_produced = true;
 
+  // Clear the number of rows per source as it is not valid after filtering
+  out_metadata.num_rows_per_source.clear();
+
   // For filter columns, apply the filter expression and update the input row mask
   if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::FILTER_COLUMNS, "Invalid read mode");
 
-    auto final_row_mask =
-      cudf::detail::compute_column(*read_table,
-                                   _expr_conv.get_converted_expr().value().get(),
-                                   _stream,
-                                   cudf::get_current_device_resource_ref());
+    auto final_row_mask = cudf::detail::compute_column(*read_table,
+                                                       final_filter_expr.value().get(),
+                                                       _stream,
+                                                       cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
 

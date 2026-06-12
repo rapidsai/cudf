@@ -923,6 +923,148 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
     std::invalid_argument);
 }
 
+TEST_F(HybridScanTest, PrependSourceIndexColumn)
+{
+  using T = uint32_t;
+  using cudf::io::parquet::experimental::use_data_page_mask;
+
+  // Single source parquet file with columns col0 (filter), col1 and col2 (payload)
+  auto constexpr num_concat            = 1;
+  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
+
+  // Filtering AST - col0 < 100
+  auto literal_value     = cudf::numeric_scalar<T>(100);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // Expected table
+  auto const expected = [&]() {
+    auto const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+        .filter(filter_expression)
+        .prepend_source_index_column(true)
+        .build();
+    return cudf::io::read_parquet(options, stream, mr).tbl;
+  }();
+
+  // Hybrid scan reader options
+  auto const options = cudf::io::parquet_reader_options::builder()
+                         .filter(filter_expression)
+                         .prepend_source_index_column(true)
+                         .build();
+
+  auto datasource          = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+
+  auto const all_row_groups = reader->all_row_groups(options);
+
+  auto const current_row_groups = cudf::host_span<cudf::size_type const>(all_row_groups);
+  auto const mid                = current_row_groups.size() / 2;
+  auto const row_group_passes =
+    std::array{current_row_groups.subspan(0, mid),
+               current_row_groups.subspan(mid, current_row_groups.size() - mid)};
+  auto const table_views = [](auto const& tables) {
+    auto views = std::vector<cudf::table_view>{};
+    std::transform(tables.begin(), tables.end(), std::back_inserter(views), [](auto const& t) {
+      return t->view();
+    });
+    return views;
+  };
+
+  // Two-step chunked read
+  {
+    auto filter_tables  = std::vector<std::unique_ptr<cudf::table>>{};
+    auto payload_tables = std::vector<std::unique_ptr<cudf::table>>{};
+
+    auto const read_pass = [&](auto const row_groups) {
+      auto row_mask      = reader->build_all_true_row_mask(row_groups, stream, mr);
+      auto row_mask_view = row_mask->mutable_view();
+
+      auto const filter_byte_ranges = reader->filter_column_chunks_byte_ranges(row_groups, options);
+      auto [filter_bufs, filter_data, filter_tasks] =
+        cudf::io::parquet::fetch_byte_ranges_to_device_async(
+          *datasource, filter_byte_ranges, stream, mr);
+      filter_tasks.get();
+      reader->setup_chunking_for_filter_columns(1024,
+                                                10240,
+                                                row_groups,
+                                                row_mask_view,
+                                                use_data_page_mask::NO,
+                                                filter_data,
+                                                options,
+                                                stream,
+                                                mr);
+      while (reader->has_next_table_chunk()) {
+        filter_tables.push_back(reader->materialize_filter_columns_chunk(row_mask_view).tbl);
+      }
+
+      auto const payload_byte_ranges =
+        reader->payload_column_chunks_byte_ranges(row_groups, options);
+      auto [payload_bufs, payload_data, payload_tasks] =
+        cudf::io::parquet::fetch_byte_ranges_to_device_async(
+          *datasource, payload_byte_ranges, stream, mr);
+      payload_tasks.get();
+
+      reader->setup_chunking_for_payload_columns(1024,
+                                                 10240,
+                                                 row_groups,
+                                                 row_mask_view,
+                                                 use_data_page_mask::NO,
+                                                 payload_data,
+                                                 options,
+                                                 stream,
+                                                 mr);
+      while (reader->has_next_table_chunk()) {
+        payload_tables.push_back(reader->materialize_payload_columns_chunk(row_mask_view).tbl);
+      }
+    };
+
+    for (auto const& pass : row_group_passes) {
+      read_pass(pass);
+    }
+
+    auto const filter_table  = cudf::concatenate(table_views(filter_tables), stream, mr);
+    auto const payload_table = cudf::concatenate(table_views(payload_tables), stream, mr);
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0, 1}), filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({2, 3}), payload_table->view());
+  }
+
+  // Single-step chunked read
+  {
+    auto all_tables = std::vector<std::unique_ptr<cudf::table>>{};
+
+    auto const read_pass = [&](cudf::host_span<cudf::size_type const> row_groups) {
+      auto const chunk_ranges = reader->all_column_chunks_byte_ranges(row_groups, options);
+      auto [bufs, col_data, tasks] =
+        cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, chunk_ranges, stream, mr);
+      tasks.get();
+
+      reader->setup_chunking_for_all_columns(
+        1024, 10240, row_groups, col_data, options, stream, mr);
+      while (reader->has_next_table_chunk()) {
+        all_tables.push_back(reader->materialize_all_columns_chunk().tbl);
+      }
+    };
+
+    for (auto const& pass : row_group_passes) {
+      read_pass(pass);
+    }
+
+    auto const all_columns_table = cudf::concatenate(table_views(all_tables), stream, mr);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), all_columns_table->view());
+  }
+}
+
 TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)
 {
   using T = uint32_t;
