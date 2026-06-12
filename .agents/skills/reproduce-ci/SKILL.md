@@ -15,9 +15,14 @@ Run the reproduction script with the container image, CI script, and PR number:
 
 Examples:
 ```bash
-.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538
-.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu
-.agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:26.08-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
+.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_cmake.sh 22538
+.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_java.sh 22538 --gpu
+.agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:$(head -1 VERSION | cut -d. -f1,2)-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
+```
+
+The container image tag corresponds to the current RAPIDS version. Derive it from the `VERSION` file at the repo root:
+```bash
+RAPIDS_VERSION=$(head -1 VERSION | cut -d. -f1,2)  # e.g., "26.08"
 ```
 
 The script will:

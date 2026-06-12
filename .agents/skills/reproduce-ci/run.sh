@@ -8,10 +8,13 @@
 # Usage:
 #   .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu]
 #
-# Examples:
+# Examples (version tag derived from VERSION file — currently 26.08):
 #   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538
 #   .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu
 #   .agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:26.08-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
+#
+# Determine the current version tag with:
+#   head -1 VERSION | cut -d. -f1,2
 #
 # To find the container image and script for a job, look in .github/workflows/pr.yaml
 # for the job definition's container_image and script fields.
@@ -25,12 +28,12 @@
 set -euo pipefail
 
 CONTAINER_NAME="cudf-ci-repro"
-
+RAPIDS_VERSION="$(head -1 "$(dirname "$0")/../../VERSION" | cut -d. -f1,2)"
 usage() {
     echo "Usage: $0 <container-image> <ci-script> <pr-number> [--gpu]"
     echo ""
     echo "Arguments:"
-    echo "  container-image  Docker image (e.g., rapidsai/ci-conda:26.08-latest)"
+    echo "  container-image  Docker image (e.g., rapidsai/ci-conda:${RAPIDS_VERSION}-latest)"
     echo "  ci-script        CI script to run (e.g., ci/test_cmake.sh)"
     echo "  pr-number        Pull request number"
     echo "  --gpu            Pass --gpus all to docker (for test jobs that need a GPU)"
@@ -38,9 +41,9 @@ usage() {
     echo "Find these values in .github/workflows/pr.yaml under the job's 'with:' block."
     echo ""
     echo "Examples:"
-    echo "  $0 rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538"
-    echo "  $0 rapidsai/ci-conda:26.08-latest ci/test_java.sh 22538 --gpu"
-    echo "  $0 rapidsai/citestwheel:26.08-latest \"ci/cudf_pandas_scripts/pandas-tests/run.sh pr\" 22538 --gpu"
+    echo "  $0 rapidsai/ci-conda:${RAPIDS_VERSION}-latest ci/test_cmake.sh 22538"
+    echo "  $0 rapidsai/ci-conda:${RAPIDS_VERSION}-latest ci/test_java.sh 22538 --gpu"
+    echo "  $0 rapidsai/citestwheel:${RAPIDS_VERSION}-latest \"ci/cudf_pandas_scripts/pandas-tests/run.sh pr\" 22538 --gpu"
     exit 1
 }
 
