@@ -10,13 +10,12 @@ import pytest
 
 from cudf_streaming.integrations.partition import (
     partition_and_pack,
-    spill_partitions,
     split_and_pack,
     unpack_and_concat,
-    unspill_partitions,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.memory.buffer_resource import BufferResource
-from rapidsmpf.testing import assert_eq
+from rapidsmpf.memory.spill import spill_partitions, unspill_partitions
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 if TYPE_CHECKING:

@@ -114,6 +114,14 @@ class alignas(16) reprog_device {
   [[nodiscard]] __device__ inline bool is_empty() const;
 
   /**
+   * @brief Returns true if the instructions in this program can match an empty string
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const
+  {
+    return _empty_match_possible;
+  }
+
+  /**
    * @brief Returns the size needed for working memory for the given thread count.
    *
    * @param num_threads Number of threads to be executed in parallel
@@ -278,6 +286,7 @@ class alignas(16) reprog_device {
   reinst const* _insts{};             // array of regex instructions
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
+  bool _empty_match_possible{};       // true if the regex can match an empty string
 
   std::size_t _prog_size{};  // total size of this instance
   void* _buffer{};           // working memory buffer

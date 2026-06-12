@@ -260,6 +260,7 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
     auto const num_blocks = util::div_rounding_up_safe(threads, block_size);
     substring_from_kernel<IndexIterator>
       <<<num_blocks, block_size, 0, stream.value()>>>(*d_column, starts, stops, results.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   return make_strings_column(results.begin(), results.end(), stream, mr);
 }
