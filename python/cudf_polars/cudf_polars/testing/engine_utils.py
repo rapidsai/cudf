@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.options import StreamingOptions
 
 
 STREAMING_ENGINE_FIXTURE_PARAMS: list[str] = []
@@ -66,7 +66,7 @@ class EngineFixtureParam:
 def is_streaming_engine(obj: Any) -> bool:
     """Return ``True`` if ``obj`` is a :class:`StreamingEngine`."""
     try:
-        from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+        from cudf_polars.engine.core import StreamingEngine
     except ImportError:  # pragma: no cover; only triggered without rapidsmpf
         return False
     return isinstance(obj, StreamingEngine)
@@ -93,11 +93,15 @@ def warns_on_spmd(  # pragma: no cover; rapidsmpf-only path
 
     import pytest
 
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.engine.spmd import SPMDEngine
 
     if when and isinstance(engine, SPMDEngine):
         return pytest.warns(*args, **kwargs)
     return contextlib.nullcontext()
+
+
+SMALL_MAX_ROWS_PER_PARTITION = 4
+SMALL_TARGET_PARTITION_SIZE = 10
 
 
 def create_streaming_options(
@@ -117,7 +121,7 @@ def create_streaming_options(
     -------
     The streaming options for the given block size.
     """
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.utils.config import StreamingFallbackMode
 
     # ``allow_gpu_sharing=True`` is always set so the cached multi-rank
@@ -134,9 +138,9 @@ def create_streaming_options(
             )
         case "small":
             return StreamingOptions(
-                max_rows_per_partition=4,
+                max_rows_per_partition=SMALL_MAX_ROWS_PER_PARTITION,
                 dynamic_planning={},
-                target_partition_size=10,
+                target_partition_size=SMALL_TARGET_PARTITION_SIZE,
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
                 allow_gpu_sharing=True,
@@ -162,7 +166,7 @@ def merge_streaming_options(
     -------
     The merged streaming options with overrides overriding any base options.
     """
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.options import StreamingOptions
 
     return StreamingOptions(**{**base.to_dict(), **overrides.to_dict()})
 

@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,10 +81,6 @@ def test_boolean_function_unary(
     has_nans: bool,
     has_nulls: bool,
 ) -> None:
-    if is_streaming_engine(engine):
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -165,15 +160,26 @@ def test_boolean_isbetween(engine: pl.GPUEngine, closed, bounds):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("closed", ["both", "left", "right", "none"])
+def test_boolean_isbetween_decimal_float(engine: pl.GPUEngine, closed):
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3, 4], dtype=pl.Decimal(scale=2)),
+            "lo": pl.Series([0.5, 1.5, 2.5, 3.5], dtype=pl.Float64),
+            "hi": pl.Series([1.5, 2.5, 3.5, 4.5], dtype=pl.Float64),
+        }
+    )
+
+    q = df.select(pl.col("a").is_between(pl.col("lo"), pl.col("hi"), closed=closed))
+
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
 def test_boolean_horizontal(engine: pl.GPUEngine, expr, has_nulls, wide):
-    if is_streaming_engine(engine):
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],
@@ -234,12 +240,12 @@ def test_boolean_kleene_logic(engine: pl.GPUEngine, expr):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_boolean_is_in_raises_unsupported():
+def test_boolean_is_in_raises_unsupported(engine: pl.GPUEngine):
     # Needs implode agg
     ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
     q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_boolean_is_in_with_nested_list_raises(engine: pl.GPUEngine):
@@ -263,16 +269,16 @@ def test_expr_is_in_empty_list(engine: pl.GPUEngine):
         (pl.Series(["a", "b", "c", "d"]), pl.Series([["a"], ["b"]])),
     ],
 )
-def test_is_in_shape_mismatch_raises(needles, haystack):
+def test_is_in_shape_mismatch_raises(engine: pl.GPUEngine, needles, haystack):
     q = pl.LazyFrame().select(pl.lit(needles).is_in(haystack))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_boolean_is_close():
+def test_boolean_is_close(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -286,3 +292,19 @@ def test_boolean_not_with_integers(engine: pl.GPUEngine, dtype, col):
     ldf = pl.LazyFrame({"a": pl.Series(col, dtype=dtype)})
     q = ldf.select(~pl.col("a"))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.sum_horizontal("a", "b"),
+        pl.mean_horizontal("a", "b"),
+        pl.min_horizontal("a", "b"),
+        pl.max_horizontal("a", "b"),
+    ],
+    ids=["sum_horizontal", "mean_horizontal", "min_horizontal", "max_horizontal"],
+)
+def test_numeric_horizontal_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
@@ -28,7 +27,6 @@ if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
     from types import NotImplementedType
 
-    import numpy as np
     import pyarrow as pa
 
     from cudf._typing import (
@@ -52,11 +50,11 @@ class SingleColumnFrame(Frame, NotIterable):
     def _reduce(
         self,
         op: str,
-        axis=no_default,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
-        if axis not in (None, 0, no_default):
+        if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         if numeric_only and not is_dtype_obj_numeric(self.dtype):
@@ -166,24 +164,6 @@ class SingleColumnFrame(Frame, NotIterable):
             .reshape(len(self), order="F")
         )
 
-    @property  # type: ignore[explicit-override]
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
-        """
-        Return a numpy representation of the data.
-
-        .. deprecated:: 26.04
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
-        """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return self._column.to_numpy()
-
     @classmethod
     @_performance_tracking
     def _from_column(
@@ -212,7 +192,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> import cudf
         >>> sr = cudf.Series(["a", "b", None])
         >>> sr.to_arrow() # doctest: +ELLIPSIS
-        <pyarrow.lib.StringArray object at ...>
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
@@ -220,7 +200,7 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         >>> ind = cudf.Index(["a", "b", None])
         >>> ind.to_arrow() # doctest: +ELLIPSIS
-        <pyarrow.lib.StringArray object at ...>
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
@@ -254,11 +234,22 @@ class SingleColumnFrame(Frame, NotIterable):
     def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
 
+        unnamed_default = False
+        col_name: Hashable
         if name is no_default:
-            col_name = 0 if self.name is None else self.name
+            if self.name is None:
+                col_name = 0
+                unnamed_default = True
+            else:
+                col_name = self.name
         else:
             col_name = name
-        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        ca = ColumnAccessor(
+            {col_name: self._column},
+            multiindex=isinstance(col_name, tuple),
+            rangeindex=unnamed_default,
+            verify=False,
+        )
         # TODO: Avoid accessing DataFrame from the top level namespace
         return cudf.DataFrame._from_data(ca, index=index)
 
@@ -341,14 +332,21 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> codes
         array([0, 0, 1])
         >>> uniques
-        Index(['a', 'c'], dtype='object')
+        Index(['a', 'c'], dtype='str')
         """
-        # TODO: Avoid accessing factorize from the top level namespace
-        return cudf.factorize(
-            self,
-            sort=sort,
-            use_na_sentinel=use_na_sentinel,
+        return self._factorize(sort=sort, use_na_sentinel=use_na_sentinel)
+
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
+    ) -> tuple[cp.ndarray, Index]:
+        """Default factorize implementation for SingleColumnFrame subclasses.
+
+        Subclasses (e.g. ``RangeIndex``) may override to specialize.
+        """
+        labels, cats = self._column.factorize(
+            sort=sort, use_na_sentinel=use_na_sentinel
         )
+        return labels, cudf.Index._from_column(cats)
 
     @_performance_tracking
     def _make_operands_for_binop(

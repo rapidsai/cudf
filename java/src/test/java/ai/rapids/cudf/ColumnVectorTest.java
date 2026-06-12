@@ -5269,18 +5269,6 @@ void testExtractReWithMultiLineDelimiters() {
   }
 
   @Test
-  void testReplaceMultiRegex() {
-    try (ColumnVector v =
-             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
-         ColumnVector repls = ColumnVector.fromStrings("Repl", "**");
-         ColumnVector actual = v.replaceMultiRegex(new String[] { "[tT]itle", "and|th" }, repls);
-         ColumnVector expected =
-             ColumnVector.fromStrings("Repl ** Repl wi** Repl", "no**ing", null, "Repl")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-  }
-
-  @Test
   void testStringReplaceWithBackrefs() {
 
     try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>", null);

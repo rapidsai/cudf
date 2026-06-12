@@ -156,15 +156,34 @@ def test_rank_methods_with_nulls_or_ties(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("seed", [42])
-@pytest.mark.parametrize("method", ["random"])
-def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> None:
-    expr = pl.col("a").rank(method=method, seed=seed)
+def test_rank_unsupported(engine: pl.GPUEngine, ldf: pl.LazyFrame) -> None:
+    expr = pl.col("a").rank(method="random", seed=42)
     q = ldf.select(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
 def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> None:
     q = ldf.select(pl.col("a").sin().round(2, mode=mode))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").sign(),
+        pl.col("a").clip(0, 2),
+        pl.col("a").hash(),
+    ],
+    ids=["sign", "clip", "hash"],
+)
+def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_atan2_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"y": [1.0, 2.0, 3.0], "x": [4.0, 5.0, 6.0]})
+    q = df.select(pl.arctan2("y", "x"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)

@@ -105,7 +105,7 @@ def test_select_native_datetime(engine: pl.GPUEngine):
 
 
 @pytest.mark.parametrize("fmt", ["ndjson", "csv"])
-def test_select_fast_count_unsupported_formats(tmp_path, fmt):
+def test_select_fast_count_unsupported_formats(engine: pl.GPUEngine, tmp_path, fmt):
     df = pl.DataFrame({"a": [1, 2, 3]})
     file = tmp_path / f"test.{fmt}"
     if fmt == "csv":
@@ -118,7 +118,7 @@ def test_select_fast_count_unsupported_formats(tmp_path, fmt):
         if fmt == "csv"
         else pl.scan_ndjson(file).select(pl.len())
     )
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_select_fast_count_parquet(engine: pl.GPUEngine, tmp_path):

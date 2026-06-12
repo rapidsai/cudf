@@ -75,8 +75,9 @@ public final class GroupByAggregation {
    * types are signed integers (INT8/16/32/64) and fixed-point decimal
    * (DECIMAL32/64/128). The sum-child has the same type AND scale as the input
    * column -- e.g. a DECIMAL64 input at scale -4 produces a DECIMAL64 sum-child
-   * at scale -4; cudf does not widen or rescale. Only hash-based groupby is
-   * supported; sort-based groupby will throw.
+   * at scale -4; cudf does not widen or rescale. On overflow the sum value is
+   * unspecified; the boolean flag is the source of truth. Only hash-based
+   * groupby is supported; sort-based groupby will throw.
    */
   public static GroupByAggregation sumWithOverflow() {
     return new GroupByAggregation(Aggregation.sumWithOverflow());

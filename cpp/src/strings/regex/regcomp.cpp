@@ -19,6 +19,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 namespace cudf {
@@ -758,10 +759,10 @@ class regex_parser {
         auto const n = item.d.count.n;  // minimum count
         auto const m = item.d.count.m;  // maximum count
         assert(n >= 0 && "invalid repeat count value n");
+        std::vector<regex_parser::Item> repeat_copy(begin, end);
         // zero-repeat edge-case: need to erase the previous items
         if (n == 0) { out.erase(begin, end); }
 
-        std::vector<regex_parser::Item> repeat_copy(begin, end);
         // special handling for quantified capture groups
         if ((n > 1) && (*begin).type == LBRA) {
           (*begin).type = LBRA_NC;  // change first one to non-capture
@@ -1211,6 +1212,34 @@ void reprog::check_for_errors()
       check_for_errors(id, inst.u1.right_id);
     }
   }
+}
+
+match_flags reprog::compute_match_flags() const
+{
+  static const std::unordered_set<int> non_consuming_inst_types{
+    OR, BOL, EOL, BOW, NBOW, LBRA, RBRA};
+
+  auto check_paths = [this](auto&& self, int id, std::unordered_set<int>& visited) -> bool {
+    if (id < 0 || !std::get<1>(visited.insert(id))) { return false; }
+    auto const& inst = _insts[id];
+    if (inst.type == END) { return false; }
+    if (non_consuming_inst_types.find(inst.type) == non_consuming_inst_types.end()) { return true; }
+    if (inst.type == OR) {
+      return self(self, inst.u2.left_id, visited) && self(self, inst.u1.right_id, visited);
+    }
+    return self(self, inst.u2.next_id, visited);
+  };
+
+  bool found_non_consuming_path = false;
+  for (auto start : _startinst_ids) {
+    if (start == -1) break;
+    std::unordered_set<int> visited;
+    if (!check_paths(check_paths, start, visited)) {
+      found_non_consuming_path = true;
+      break;
+    }
+  }
+  return found_non_consuming_path ? match_flags::EMPTY_MATCH : match_flags::NONE;
 }
 
 #ifndef NDEBUG

@@ -15,11 +15,11 @@ from cudf_polars.testing.asserts import (
 )
 
 
-def test_explode_multiple_raises():
+def test_explode_multiple_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
     q = df.explode("a", "b")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
@@ -37,13 +37,13 @@ def test_explode_single(engine: pl.GPUEngine, column):
 
 
 @pytest.mark.parametrize("mapping", [{"b": "a"}, {"a": "c", "b": "c"}])
-def test_rename_duplicate_raises(mapping):
+def test_rename_duplicate_raises(engine: pl.GPUEngine, mapping):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
 
     q = df.rename(mapping)
 
     with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(

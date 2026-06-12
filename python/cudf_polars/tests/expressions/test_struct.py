@@ -60,11 +60,11 @@ def test_rename_fields(engine: pl.GPUEngine, ldf):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_with_fields(ldf):
+def test_with_fields(engine: pl.GPUEngine, ldf):
     q = ldf.select(
         pl.col("a").struct.with_fields(pl.field("b").str.len_chars()).struct.unnest()
     )
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -77,9 +77,9 @@ def test_prefix_suffix_fields(engine: pl.GPUEngine, ldf, expr):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_map_field_names(ldf):
+def test_map_field_names(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").name.map_fields(lambda x: x.upper()).struct.unnest())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("name", [None, "my_count"])
@@ -96,14 +96,14 @@ def test_value_counts_normalize_div_by_zero(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_groupby_value_counts_notimplemented():
+def test_groupby_value_counts_notimplemented(engine: pl.GPUEngine):
     lgb = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]}).group_by("a")
     value_counts_expr = pl.col("b").value_counts()
     q = lgb.agg(value_counts_expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
     q = lgb.agg(value_counts_expr.first())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_struct(engine: pl.GPUEngine, ldf):

@@ -36,15 +36,15 @@ if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     import distributed
-    from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
+    from cudf_polars.engine.ray import RankActor
 
 
 __all__ = [
@@ -352,12 +352,14 @@ class MemoryResourceConfig:
     Examples
     --------
     Create a memory resource config for a single memory resource:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.CudaAsyncMemoryResource",
     ...     options={"initial_pool_size": 100},
     ... )
 
     Create a memory resource config for a nested memory resource configuration:
+
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.PrefetchResourceAdaptor",
     ...     options={
@@ -462,9 +464,8 @@ class SPMDContext:
         This dataclass is **not picklable** because :class:`Communicator`,
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
-        ``SPMDContext`` locally inside
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`, so
-        pickling is never required. Do not use this class with Dask or any other
+        ``SPMDContext`` locally inside :class:`~cudf_polars.engine.spmd.SPMDEngine`,
+        so pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
     Parameters
@@ -490,16 +491,15 @@ class RayContext:
     .. note::
         This dataclass holds Ray actor handles, which are only valid within the
         Ray session that created them. It is stripped from ``config_options``
-        before pickling for remote actor calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`
-        by :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`.
-        Do not persist or transfer this object across Ray sessions.
+        before pickling for remote actor calls in :func:`~cudf_polars.engine.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.engine.ray.RayEngine`. Do not persist or transfer
+        this object across Ray sessions.
 
     Parameters
     ----------
     rank_actors
-        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
-        handles, one per GPU in the cluster.
+        List of :class:`~cudf_polars.engine.ray.RankActor` handles, one per GPU
+        in the cluster.
     """
 
     rank_actors: list[ActorHandle[RankActor]]
@@ -514,7 +514,7 @@ class DaskContext:
         This dataclass holds a :class:`~distributed.Client` handle, which is
         only valid within the Dask session that created it. It is stripped from
         ``config_options`` before pickling for remote worker calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        :func:`~cudf_polars.engine.dask.evaluate_pipeline_dask_mode`.
         Do not persist or transfer this object across Dask sessions.
 
     Parameters
@@ -525,7 +525,7 @@ class DaskContext:
         Unique identifier for this RapidsMPF bootstrap session.
     owned_client
         Client to close on shutdown, if created internally by
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+        :class:`~cudf_polars.engine.dask.DaskEngine`.
     owned_cluster
         Cluster to close on shutdown, if created internally.
     """
@@ -925,6 +925,8 @@ class ConfigOptions(Generic[ExecutorType]):
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
+                if "min_device_size" not in user_executor_options:
+                    user_executor_options["min_device_size"] = get_total_device_memory()
 
                 # Handle dynamic_planning: check user config, then env var
                 user_dynamic_planning = user_executor_options.get(

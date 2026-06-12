@@ -93,7 +93,7 @@ def assert_gpu_result_equal(
     if (
         engine.config.get("executor_options", {}).get("cluster") == "spmd"
     ):  # pragma: no cover
-        from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+        from cudf_polars.engine.spmd import (
             SPMDEngine,
             allgather_polars_dataframe,
         )
@@ -118,7 +118,9 @@ def assert_gpu_result_equal(
     assert_frame_equal(expect, got, **assert_kwargs_bool, **tol_kwargs)  # type: ignore[arg-type]
 
 
-def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:
+def assert_ir_translation_raises(
+    q: pl.LazyFrame, engine: pl.GPUEngine, *exceptions: type[Exception]
+) -> None:
     """
     Assert that translation of a query raises an exception.
 
@@ -126,6 +128,8 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     ----------
     q
         Query to translate.
+    engine
+        GPU engine configuration to use during translation.
     exceptions
         Exceptions that one expects might be raised.
 
@@ -139,7 +143,7 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
-    translator = Translator(q._ldf.visit(), GPUEngine())
+    translator = Translator(q._ldf.visit(), engine)
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
@@ -231,6 +235,7 @@ def assert_sink_result_equal(
 def assert_sink_ir_translation_raises(
     lazydf: pl.LazyFrame,
     path: str | Path,
+    engine: pl.GPUEngine,
     write_kwargs: dict,
     *exceptions: type[Exception],
 ) -> None:
@@ -243,6 +248,8 @@ def assert_sink_ir_translation_raises(
         The LazyFrame to sink.
     path
         The file path. Must have one of the supported suffixes.
+    engine
+        GPU engine configuration to use during translation.
     write_kwargs
         Keyword arguments to pass to the `sink_*` method.
     *exceptions
@@ -262,7 +269,7 @@ def assert_sink_ir_translation_raises(
     try:
         lazy_sink = getattr(lazydf, f"sink_{fmt}")(
             path,
-            engine="gpu",
+            engine=engine,
             lazy=True,
             **write_kwargs,
         )
@@ -271,4 +278,4 @@ def assert_sink_ir_translation_raises(
             f"Sink function raised an exception before translation: {e}"
         ) from e
 
-    assert_ir_translation_raises(lazy_sink, *exceptions)
+    assert_ir_translation_raises(lazy_sink, engine, *exceptions)

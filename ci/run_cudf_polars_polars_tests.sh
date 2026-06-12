@@ -61,14 +61,17 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # shellcheck disable=SC2086
 echo "Run polars tests with injected in-memory GPU engine"
 python -m pytest \
+       -vv \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -n 8 \
        --dist=worksteal \
-       -vv \
        --tb=native \
+       --timeout=240 \
+       --durations 10 --durations-min 10 \
+       -ra \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
@@ -86,8 +89,10 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        -W ignore::ResourceWarning \
        -n 8 \
        --dist=worksteal \
-       -vv \
        --tb=native \
+       --timeout=240 \
+       --durations 10 --durations-min 10 \
+       -ra \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \

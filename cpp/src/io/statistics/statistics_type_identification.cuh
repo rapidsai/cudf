@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,9 +37,11 @@ struct conversion_map;
 template <is_int96_timestamp INT96>
 struct conversion_map<io_file_format::ORC, INT96> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_ms, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
                            std::pair<cudf::duration_s, cudf::duration_ns>,
+                           std::pair<cudf::duration_ms, cudf::duration_ns>,
                            std::pair<cudf::duration_us, cudf::duration_ns>,
                            std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };

@@ -63,6 +63,16 @@ rapids-telemetry-record build-cudf_kafka.log \
 rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
 
+rapids-logger "Building cudf_streaming"
+
+rapids-telemetry-record build-cudf_streaming.log \
+    rattler-build build --recipe conda/recipes/cudf_streaming \
+                    "${RATTLER_ARGS[@]}" \
+                    "${RATTLER_CHANNELS[@]}"
+
+rapids-telemetry-record sccache-stats-cudf_streaming.txt sccache --show-adv-stats
+sccache --stop-server >/dev/null 2>&1 || true
+
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
 

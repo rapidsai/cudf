@@ -56,6 +56,7 @@ void generate_depth_remappings(
  * @param column_chunk_offsets File offset for all chunks
  * @param chunk_source_map Association between each column chunk and its source
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device buffers
  *
  * @return A future object for reading synchronization
  */
@@ -67,7 +68,8 @@ void generate_depth_remappings(
   size_t end_chunk,
   std::vector<size_t> const& column_chunk_offsets,
   std::vector<size_type> const& chunk_source_map,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return the number of total pages from the given column chunks.

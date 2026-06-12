@@ -130,14 +130,14 @@ struct is_nested_end {
 };
 
 struct checked_token_level_output {
-  bool* depth_out_of_range;
+  int32_t* depth_out_of_range;
 
   __device__ TreeDepthT operator()(size_type level) const
   {
     static_assert(sizeof(TreeDepthT) < sizeof(size_type));
     if (level < static_cast<size_type>(cuda::std::numeric_limits<TreeDepthT>::min()) ||
         level > static_cast<size_type>(cuda::std::numeric_limits<TreeDepthT>::max())) {
-      cuda::atomic_ref<bool, cuda::thread_scope_device> flag{*depth_out_of_range};
+      cuda::atomic_ref<int32_t, cuda::thread_scope_device> flag{*depth_out_of_range};
       if (!flag.load(cuda::std::memory_order_relaxed)) {
         flag.store(true, cuda::std::memory_order_relaxed);
       }
@@ -302,7 +302,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
           return does_push(token) - does_pop(token);
         }));
     auto depth_out_of_range =
-      cudf::detail::device_scalar<bool>(false, stream, cudf::get_current_device_resource_ref());
+      cudf::detail::device_scalar<int32_t>(0, stream, cudf::get_current_device_resource_ref());
     auto const token_level_output_it = thrust::make_transform_output_iterator(
       token_levels.begin(), checked_token_level_output{depth_out_of_range.data()});
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
