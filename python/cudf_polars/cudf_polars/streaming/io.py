@@ -924,6 +924,14 @@ def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
     return max(1, nrows)
 
 
+def _has_exact_decoded_size_floor(dtype: DataType) -> bool:
+    """Return whether the decoded-size floor captures the full data buffer size."""
+    dtype_id = dtype.id()
+    return dtype_id not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
+        plc.traits.is_fixed_width(dtype.plc_type)
+    )
+
+
 class ParquetSourceInfo:
     """Parquet datasource information, fully computed at construction time."""
 
@@ -965,10 +973,15 @@ class ParquetSourceInfo:
             footer_mean = metadata.mean_size_per_file.get(col)
             if footer_mean is None:
                 continue
-            decoded_floor = _decoded_size_floor(schema_map[col], rows_per_file)
+            dtype = schema_map[col]
+            decoded_floor = _decoded_size_floor(dtype, rows_per_file)
             # This is conservative for all-null columns; footer null counts could
             # refine the floor later if the extra partitioning becomes costly.
-            if footer_mean < decoded_floor and max_row_group_samples > 0:
+            if (
+                footer_mean < decoded_floor
+                and max_row_group_samples > 0
+                and not _has_exact_decoded_size_floor(dtype)
+            ):
                 sample_cols.append(col)
             else:
                 per_file_means[col] = max(footer_mean, decoded_floor)

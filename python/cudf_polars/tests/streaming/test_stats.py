@@ -148,7 +148,14 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
             self.paths = paths
             self.max_footer_samples = max_footer_samples
 
-    def fake_sample_rg_sizes(*args: object) -> dict[str, int]:
+    sampled_cols: list[str] = []
+
+    def fake_sample_rg_sizes(
+        _metadata: object,
+        target_cols: list[str],
+        _max_row_group_samples: int,
+    ) -> dict[str, int]:
+        sampled_cols.extend(target_cols)
         return {}
 
     monkeypatch.setattr(streaming_io, "ParquetMetadata", FakeParquetMetadata)
@@ -180,6 +187,7 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
     assert source.column_storage_size("dec32") == rows_per_file * 4 + nullmask
     assert source.column_storage_size("s") == (rows_per_file + 1) * 4 + nullmask
     assert source.column_storage_size("already_large") == 20_000
+    assert sampled_cols == ["s"]
 
 
 def test_dataframescan_stats_pickle(
