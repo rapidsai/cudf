@@ -7,14 +7,14 @@
 
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cuda_runtime_api.h>
+
+#include <mpi.h>
 #include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/communicator/ucxx_utils.hpp>
 #include <rapidsmpf/config.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/progress_thread.hpp>
-
-#include <cuda_runtime_api.h>
-#include <mpi.h>
 #include <ucxx/listener.h>
 
 #include <memory>
@@ -35,9 +35,8 @@ class UCXXEnvironment : public Environment {
     // rapidsmpf::MPI communicator specific conditions
     int provided;
     RAPIDSMPF_MPI(MPI_Init_thread(&argc_, &argv_, MPI_THREAD_MULTIPLE, &provided));
-    RAPIDSMPF_EXPECTS(
-      provided == MPI_THREAD_MULTIPLE,
-      "didn't get the requested thread level support: MPI_THREAD_MULTIPLE");
+    RAPIDSMPF_EXPECTS(provided == MPI_THREAD_MULTIPLE,
+                      "didn't get the requested thread level support: MPI_THREAD_MULTIPLE");
 
     options_ = rapidsmpf::config::Options(rapidsmpf::config::get_environment_variables());
     comm_    = rapidsmpf::ucxx::init_using_mpi(
@@ -53,10 +52,7 @@ class UCXXEnvironment : public Environment {
     RAPIDSMPF_MPI(MPI_Finalize());
   }
 
-  void barrier() override
-  {
-    std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm_)->barrier();
-  }
+  void barrier() override { std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm_)->barrier(); }
 
   std::shared_ptr<rapidsmpf::Communicator> split_comm() override
   {

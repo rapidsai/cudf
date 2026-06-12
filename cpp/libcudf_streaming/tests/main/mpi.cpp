@@ -7,11 +7,10 @@
 
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <mpi.h>
 #include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/config.hpp>
 #include <rapidsmpf/progress_thread.hpp>
-
-#include <mpi.h>
 
 #include <memory>
 
