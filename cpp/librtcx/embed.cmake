@@ -5,12 +5,6 @@
 # cmake-format: on
 # =============================================================================
 
-if(NOT TARGET zstd)
-  message(
-    FATAL_ERROR "zstd library is required for JIT embedding. Please ensure it is found by CMake."
-  )
-endif()
-
 # This function initializes a target for JIT embedding. It must be called before any calls to
 # embed_includes() or embed_blob() for the target. It creates a dedicated INTERFACE library target
 # that is used to track registered files and dependencies via target properties. The TARGET argument
@@ -274,8 +268,14 @@ function(embed TARGET)
 
   set(RUNNER "${TARGET}__jit_embed_run")
   add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
-  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
+  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS})
+  if(NOT ARG_COMPRESSION STREQUAL "none")
+    if(NOT TARGET zstd)
+      message(FATAL_ERROR "embed(): zstd target is required when COMPRESSION is not none.")
+    endif()
+    target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
+    target_link_libraries(${RUNNER} PRIVATE zstd)
+  endif()
   set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
   target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
