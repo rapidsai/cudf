@@ -841,6 +841,9 @@ class RayEngine(StreamingEngine):
         if self._rank_actors is None:
             return  # already shut down; idempotent
         exceptions: list[Exception] = []
+        quent_context: cudf_polars.quent.QuentContext = self.config["executor_options"][
+            "quent_context"
+        ]
         try:
             # If Ray is no longer initialized (for example, if ``ray.shutdown()`` was
             # called before ``RayEngine.shutdown()``), the actors are gone as well.
@@ -872,9 +875,7 @@ class RayEngine(StreamingEngine):
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
-            self.config["executor_options"]["quent_context"].emit_engine_exit_events(
-                self._quent_logger
-            )
+            quent_context._emit_engine_exit_events(self._quent_logger)
             self._rank_actors = None
             super().shutdown()
 

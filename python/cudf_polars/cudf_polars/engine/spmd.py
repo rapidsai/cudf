@@ -754,9 +754,10 @@ class SPMDEngine(StreamingEngine):
         # Clear the references only after shutdown completes.
 
         self._quent_logger.emit(self._quent_worker._exit())
-        self.config["executor_options"]["quent_context"].emit_engine_exit_events(
-            self._quent_logger
-        )
+        quent_context: cudf_polars.quent.QuentContext = self.config["executor_options"][
+            "quent_context"
+        ]
+        quent_context._emit_engine_exit_events(self._quent_logger)
 
         super().shutdown()
 

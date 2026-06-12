@@ -961,6 +961,9 @@ class DaskEngine(StreamingEngine):
         ctx = self._dask_context
         self._dask_context = None
         exceptions: list[Exception] = []
+        quent_context: cudf_polars.quent.QuentContext = self.config["executor_options"][
+            "quent_context"
+        ]
         try:
             # Teardown emits Worker.exit, then we drain all buffered events
             # (including the exit event) from workers.
@@ -974,9 +977,7 @@ class DaskEngine(StreamingEngine):
         except Exception as e:
             exceptions.append(e)
         finally:
-            self.config["executor_options"]["quent_context"].emit_engine_exit_events(
-                self._quent_logger
-            )
+            quent_context._emit_engine_exit_events(self._quent_logger)
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:
