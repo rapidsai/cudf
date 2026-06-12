@@ -139,13 +139,8 @@ void setup_multifile_page_index(
  * @brief Filter input row groups using column chunk dictionaries via the experimental parquet
  * reader for hybrid scan (multi-file)
  *
- * Multi-file counterpart of the single-file `filter_row_groups_with_dictionaries` helper, kept as
- * close to it as possible. The dictionary page byte ranges are flat and source-major, so each
- * source's slice is fetched from its own datasource before filtering.
- *
  * @param inputs Multi-file datasources
  * @param reader Hybrid scan multi-file reader
- * @param input_row_group_indices Input per-source row group indices
  * @param options Parquet reader options
  * @param stream CUDA stream
  * @param mr Device memory resource
@@ -155,11 +150,13 @@ void setup_multifile_page_index(
 auto filter_row_groups_with_dictionaries(
   multifile_inputs& inputs,
   cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
-  std::vector<std::vector<cudf::size_type>> const& input_row_group_indices,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  // Get all row groups from the reader
+  auto const input_row_group_indices = reader.all_row_groups(options);
+
   // Get dictionary page byte ranges from the reader
   auto const dict_page_byte_ranges =
     reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
@@ -444,20 +441,14 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
   EXPECT_TRUE(stats_filtered.back().empty());
 }
 
-// Matched-schema real dictionary pruning across two sources. Both sources share the same schema but
-// `col2` is a per-source constant string ("0100" in source A, "0200" in source B). With an equality
-// predicate `col2 == "0100"` source A keeps all of its row groups while source B is fully pruned.
 TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
 {
-  using T                           = uint32_t;
-  auto constexpr num_sources        = 2;
-  auto constexpr num_row_groups     = 4;
-  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
-  auto stream                       = cudf::get_default_stream();
-  auto mr                           = cudf::get_current_device_resource_ref();
+  using T                    = uint32_t;
+  auto constexpr num_sources = 2;
+  auto stream                = cudf::get_default_stream();
+  auto mr                    = cudf::get_current_device_resource_ref();
 
-  // Each source has 4 row groups (20000 rows / 5000 rows per row group) and is dictionary encoded
-  // under `dictionary_policy::ALWAYS`. `col2` is a per-source constant string.
+  // 2 sources, each `dictionary_policy::ALWAYS` with a per-source constant `col2`
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
   srand(0xd1c7);
@@ -482,13 +473,8 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
   std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
   setup_multifile_page_index(*reader, inputs, page_index_buffers, page_index_byte_spans);
 
-  auto const input_row_group_indices = reader->all_row_groups(options);
-  ASSERT_EQ(input_row_group_indices.size(), num_sources);
-  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices),
-            num_sources * num_row_groups * rows_per_row_group);
-
-  auto const dict_filtered = filter_row_groups_with_dictionaries(
-    inputs, *reader, input_row_group_indices, options, stream, mr);
+  auto const dict_filtered =
+    filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
 
   // Source A keeps all 4 row groups (col2 == "0100"); source B is fully pruned (only "0200")
   ASSERT_EQ(dict_filtered.size(), num_sources);
@@ -496,20 +482,13 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
   EXPECT_TRUE(dict_filtered.back().empty());
 }
 
-// Mismatched-schema regression for the dictionary-page pruning path under
-// `allow_mismatched_pq_schemas`. `get_dictionary_page_bytes` used to resolve column chunks by the
-// raw zeroth-source `schema_idx` (no `map_schema_index`), so a reordered source read the wrong
-// column chunk. Here `price` is schema 2 in source A but schema 3 in source B; the buggy lookup
-// reads source B's int64 `id` (schema 2) instead of its double `price`. With `price == 40` (present
-// only in source B) the correct result keeps source B and prunes source A.
 TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollision)
 {
   auto stream = cudf::get_default_stream();
   auto mr     = cudf::get_current_device_resource_ref();
 
-  // Use enough low-cardinality rows that the writer actually emits dictionary-encoded pages even
-  // under `dictionary_policy::ALWAYS` (a tiny all-unique column falls back to PLAIN because the
-  // dictionary would not save space). `price == 40` is present only in source B's `price` column.
+  // Low-cardinality `price` so the writer emits dictionary pages under ALWAYS; `price == 40` is in
+  // source B only
   auto constexpr num_rows = cudf::size_type{600};
   std::array<double, 3> const price_a_cycle{50.0, 150.0, 75.0};  // no 40
   std::array<double, 3> const price_b_cycle{40.0, 200.0, 99.0};  // has 40
@@ -536,6 +515,8 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   cudf::test::fixed_width_column_wrapper<double> const price_b(price_b_vals.begin(),
                                                                price_b_vals.end());
 
+  // Reordered schemas: `price` is schema 2 in source A but schema 3 in source B, so dictionary
+  // pruning must map schema indices per source
   std::vector<std::vector<char>> file_buffers;
   file_buffers.emplace_back(
     write_mismatched_source(cudf::table_view{{id_a, price_a}}, {"id", "price"}));
@@ -564,11 +545,8 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
   setup_multifile_page_index(*reader, inputs, page_index_buffers, page_index_byte_spans);
 
-  auto const input_row_group_indices = reader->all_row_groups(options);
-  ASSERT_EQ(input_row_group_indices.size(), 2);
-
-  auto const dict_filtered = filter_row_groups_with_dictionaries(
-    inputs, *reader, input_row_group_indices, options, stream, mr);
+  auto const dict_filtered =
+    filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
 
   // Correct behavior: source A is pruned (no price == 40), source B survives (price == 40 present)
   ASSERT_EQ(dict_filtered.size(), 2);
