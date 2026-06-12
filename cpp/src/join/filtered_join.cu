@@ -113,6 +113,7 @@ void filtered_join::insert_right_table(Ref const& insert_ref, rmm::cuda_stream_v
           cuda::counting_iterator<size_type>{0},
           row_is_valid{row_bitmask_ptr},
           insert_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       cuco::detail::open_addressing_ns::insert_if_n<CGSize, cuco::detail::default_block_size()>
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
@@ -121,6 +122,7 @@ void filtered_join::insert_right_table(Ref const& insert_ref, rmm::cuda_stream_v
           cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           insert_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 
@@ -175,6 +177,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
           row_is_valid{row_bitmask_ptr},
           contains_iter,
           query_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       cuco::detail::open_addressing_ns::contains_if_n<CGSize, cuco::detail::default_block_size()>
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
@@ -184,6 +187,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
           cuda::std::identity{},
           contains_iter,
           query_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 

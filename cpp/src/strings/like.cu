@@ -335,6 +335,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
     auto const grid = cudf::detail::grid_1d(input.size() * warp_size, block_size);
     like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
       *d_strings, patterns_itr, d_escape, results->mutable_view().data<bool>());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   results->set_null_count(input.null_count());

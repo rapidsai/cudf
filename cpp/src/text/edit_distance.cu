@@ -274,6 +274,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
   cudf::detail::grid_1d grid{input.size() * tile_size, block_size};
   levenshtein_kernel<tile_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, *d_targets, d_buffer, offsets.data(), d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return results;
 }

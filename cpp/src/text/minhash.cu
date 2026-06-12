@@ -476,6 +476,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto transform_fn = [d_strings = *d_strings] __device__(auto idx) -> cudf::size_type {
     if (d_strings.is_null(idx)) { return 0; }
@@ -496,6 +497,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
     minhash_kernel<offsets_type, hash_value_type, 1>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, width, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // handle the strings above the threshold width
@@ -507,6 +509,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
     minhash_kernel<offsets_type, hash_value_type, blocks_per_row>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, width, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return results;
@@ -564,6 +567,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto sizes_fn = [d_list] __device__(auto idx) -> cudf::size_type {
     if (d_list.is_null(idx)) { return 0; }
@@ -583,6 +587,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
     minhash_kernel<offset_type, hash_value_type, 1>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, ngrams, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // handle the strings above the threshold width
@@ -594,6 +599,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
     minhash_kernel<offset_type, hash_value_type, blocks_per_row>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, ngrams, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return results;

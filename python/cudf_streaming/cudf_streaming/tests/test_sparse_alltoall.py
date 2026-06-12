@@ -14,9 +14,9 @@ from cudf_streaming.integrations.partition import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.memory.buffer_resource import BufferResource
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     import rmm.mr
