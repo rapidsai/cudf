@@ -9,6 +9,7 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -18,6 +19,8 @@
 #include <cuda/iterator>
 
 #include <format>
+#include <string>
+#include <vector>
 
 /**
  * @brief Creates a strings column with a constant stringified value between 0 and 9999
@@ -92,6 +95,11 @@ cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
  *
  * @param str_col_value Value for the constant string column used when IsConstantStrings is true
  * @param compression Compression type
+ * @param column_names Top-level column names assigned in `column_order` order (default
+ *        {"col0", "col1", "col2"})
+ * @param column_order Physical emit order of the base [col0, col1, col2] columns (default
+ *        {0, 1, 2}). Reordering emits the same logical columns at different schema positions, which
+ *        is used to build mismatched per-source schemas for the row-group filtering tests.
  * @param stream CUDA stream
  *
  * @return Tuple of table and Parquet host buffer
@@ -101,9 +109,11 @@ template <typename T,
           bool IsConstantStrings = true,
           bool IsNullable        = false>
 auto create_parquet_with_stats(
-  cudf::size_type str_col_value          = 100,
-  cudf::io::compression_type compression = cudf::io::compression_type::AUTO,
-  rmm::cuda_stream_view stream           = cudf::get_default_stream())
+  cudf::size_type str_col_value             = 100,
+  cudf::io::compression_type compression    = cudf::io::compression_type::AUTO,
+  std::vector<std::string> column_names     = {"col0", "col1", "col2"},
+  std::vector<cudf::size_type> column_order = {0, 1, 2},
+  rmm::cuda_stream_view stream              = cudf::get_default_stream())
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
 
@@ -157,12 +167,23 @@ auto create_parquet_with_stats(
     output = table_view{{columns[0]->view(), columns[1]->view(), columns[2]->view()}};
   }
 
+  // Reorder the base [col0, col1, col2] columns into the requested physical order, naming them in
+  // that new order. Reordering lets callers emit the same logical columns at different schema
+  // positions across sources (a "mismatched schema"), which exercises the per-source schema-index
+  // mapping in the row-group filtering paths. The defaults leave the table and names unchanged.
+  std::vector<cudf::column_view> reordered_columns;
+  reordered_columns.reserve(column_order.size());
+  for (auto const col_idx : column_order) {
+    reordered_columns.emplace_back(output.column(col_idx));
+  }
+  output = table_view{reordered_columns};
+
   auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output));
   output     = table->view();
   cudf::io::table_input_metadata output_metadata(output);
-  output_metadata.column_metadata[0].set_name("col0");
-  output_metadata.column_metadata[1].set_name("col1");
-  output_metadata.column_metadata[2].set_name("col2");
+  for (std::size_t i = 0; i < column_names.size(); ++i) {
+    output_metadata.column_metadata[i].set_name(column_names[i]);
+  }
 
   std::vector<char> buffer;
   cudf::io::parquet_writer_options out_opts =

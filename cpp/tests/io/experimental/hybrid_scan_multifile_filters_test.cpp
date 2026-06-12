@@ -23,7 +23,6 @@
 #include <rmm/device_buffer.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <iterator>
@@ -80,30 +79,6 @@ std::vector<char> create_empty_parquet_with_stats()
       .metadata(std::move(output_metadata))
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .build();
-  cudf::io::write_parquet(out_opts);
-  return buffer;
-}
-
-/**
- * @brief Writes `tbl` to a Parquet host buffer with the given top-level column names, column-chunk
- * statistics + page index (STATISTICS_COLUMN) and ALWAYS dictionary encoding.
- *
- * Used to build reordered/mismatched per-source schemas that exercise the dictionary-page pruning
- * path under `allow_mismatched_pq_schemas`.
- */
-[[nodiscard]] std::vector<char> write_mismatched_source(cudf::table_view const& tbl,
-                                                        std::vector<std::string> const& names)
-{
-  cudf::io::table_input_metadata md{tbl};
-  for (std::size_t i = 0; i < names.size(); ++i) {
-    md.column_metadata[i].set_name(names[i]);
-  }
-  std::vector<char> buffer;
-  auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, tbl)
-                    .metadata(std::move(md))
-                    .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-                    .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-                    .build();
   cudf::io::write_parquet(out_opts);
   return buffer;
 }
@@ -484,63 +459,61 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
   EXPECT_TRUE(dict_filtered.back().empty());
 }
 
+// Mismatched-schema regression for the dictionary-page pruning path under
+// `allow_mismatched_pq_schemas`. `get_dictionary_page_bytes` used to resolve column chunks by the
+// raw zeroth-source `schema_idx` (without `map_schema_index`), so a reordered source read the wrong
+// column chunk.
+//
+// Both sources hold the same three `create_parquet_with_stats` columns (col0: ascending, col1:
+// low-cardinality descending, col2: constant string), but source B emits them physically reordered
+// as {col2, col0, col1}. So the predicate column `col2` is schema index 3 in source A (the zeroth
+// source) yet schema index 1 in source B. The buggy raw-index lookup reads source B's schema index
+// 3 -- `col1`, a duration column -- instead of its `col2` string dictionary, garbling/throwing on
+// the type mismatch. With the fix, `col2` maps per source: source A (col2 == "0200") is pruned and
+// source B (col2 == "0100") survives. A chrono `T` is used so the collided `col1` is itself
+// dictionary-encoded, and hence actually fetched by the buggy path.
 TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollision)
 {
-  auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  using T                    = cudf::duration_ms;
+  auto constexpr num_sources = 2;
+  auto stream                = cudf::get_default_stream();
+  auto mr                    = cudf::get_current_device_resource_ref();
 
-  // Low-cardinality `price` so the writer emits dictionary pages under ALWAYS; `price == 40` is in
-  // source B only
-  auto constexpr num_rows = cudf::size_type{600};
-  std::array<double, 3> const price_a_cycle{50.0, 150.0, 75.0};  // no 40
-  std::array<double, 3> const price_b_cycle{40.0, 200.0, 99.0};  // has 40
-  std::array<std::string, 3> const cat_cycle{"x", "y", "z"};
-
-  std::vector<int64_t> id_a_vals(num_rows);
-  std::vector<int64_t> id_b_vals(num_rows);
-  std::vector<double> price_a_vals(num_rows);
-  std::vector<double> price_b_vals(num_rows);
-  std::vector<std::string> category_b_vals(num_rows);
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    id_a_vals[i]       = (i % 3) + 1;     // {1, 2, 3}
-    id_b_vals[i]       = 1000 + (i % 3);  // {1000, 1001, 1002}
-    price_a_vals[i]    = price_a_cycle[i % 3];
-    price_b_vals[i]    = price_b_cycle[i % 3];
-    category_b_vals[i] = cat_cycle[i % 3];
-  }
-  cudf::test::fixed_width_column_wrapper<int64_t> const id_a(id_a_vals.begin(), id_a_vals.end());
-  cudf::test::fixed_width_column_wrapper<double> const price_a(price_a_vals.begin(),
-                                                               price_a_vals.end());
-  cudf::test::strings_column_wrapper const category_b(category_b_vals.begin(),
-                                                      category_b_vals.end());
-  cudf::test::fixed_width_column_wrapper<int64_t> const id_b(id_b_vals.begin(), id_b_vals.end());
-  cudf::test::fixed_width_column_wrapper<double> const price_b(price_b_vals.begin(),
-                                                               price_b_vals.end());
-
-  // Reordered schemas: `price` is schema 2 in source A but schema 3 in source B, so dictionary
-  // pruning must map schema indices per source
+  // Source A: default column order/names, col2 == "0200" (pruned by the filter).
+  // Source B: same columns emitted as {col2, col0, col1}, col2 == "0100" (survives). The reorder
+  // moves `col2` to a different schema index than in source A, which is what triggers the bug.
   std::vector<std::vector<char>> file_buffers;
-  file_buffers.emplace_back(
-    write_mismatched_source(cudf::table_view{{id_a, price_a}}, {"id", "price"}));
-  file_buffers.emplace_back(write_mismatched_source(cudf::table_view{{category_b, id_b, price_b}},
-                                                    {"category", "id", "price"}));
+  file_buffers.reserve(num_sources);
+  srand(0xd1c7);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>(200)));
+  srand(0xfeed);
+  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>(
+    100, cudf::io::compression_type::AUTO, {"col2", "col0", "col1"}, {2, 0, 1})));
 
   auto inputs = build_multifile_inputs(file_buffers);
 
-  // Filter - price == 40 (dictionary pruning participates for equality predicates)
-  auto literal_value = cudf::numeric_scalar<double>(40.0, true, stream);
+  // Filter - col2 == "0100"
+  auto literal_value = cudf::string_scalar("0100", true, stream);
   auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref       = cudf::ast::column_name_reference("price");
+  auto col_ref       = cudf::ast::column_name_reference("col2");
   auto filter        = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
   auto options = cudf::io::parquet_reader_options::builder()
                    .allow_mismatched_pq_schemas(true)
-                   .column_names({"id", "price"})
+                   .column_names({"col2"})
                    .filter(filter)
                    .build();
 
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
     cudf::host_span<cudf::host_span<uint8_t const> const>{inputs.footer_byte_spans}, options);
+
+  // Guard the premise of the test: the reorder must genuinely differ the per-source schemas
+  // (source A's first column is `col0`, source B's first column is `col2`), otherwise there is no
+  // schema-index mismatch for the dictionary pruning path to get wrong.
+  auto const metadatas = reader->parquet_metadatas();
+  ASSERT_EQ(metadatas.size(), num_sources);
+  EXPECT_EQ(metadatas.front().schema.at(1).name, "col0");
+  EXPECT_EQ(metadatas.back().schema.at(1).name, "col2");
 
   // Page index is needed to detect dictionary-only encoded pages
   setup_multifile_page_index(*reader, inputs);
@@ -548,9 +521,10 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
 
-  // Correct behavior: source A is pruned (no price == 40), source B survives (price == 40 present)
-  ASSERT_EQ(dict_filtered.size(), 2);
-  EXPECT_TRUE(dict_filtered.front().empty()) << "Source A should be pruned (no price == 40)";
-  EXPECT_EQ(dict_filtered.back(), (std::vector<cudf::size_type>{0}))
-    << "Source B should survive (price == 40 present)";
+  // Correct behavior: source A is pruned (col2 == "0200"), source B survives (col2 == "0100"). The
+  // buggy raw-index path instead reads source B's `col1` duration dictionary for `col2`.
+  ASSERT_EQ(dict_filtered.size(), num_sources);
+  EXPECT_TRUE(dict_filtered.front().empty()) << "Source A should be pruned (col2 == \"0200\")";
+  EXPECT_EQ(dict_filtered.back(), (std::vector<cudf::size_type>{0, 1, 2, 3}))
+    << "Source B should survive (col2 == \"0100\")";
 }
