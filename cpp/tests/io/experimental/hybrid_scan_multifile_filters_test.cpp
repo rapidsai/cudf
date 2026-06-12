@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -108,28 +110,30 @@ std::vector<char> create_empty_parquet_with_stats()
 
 /**
  * @brief Fetches and sets up the per-source page index on the reader.
- *
- * The page index buffers and their host spans are stored in the caller-provided vectors so that
- * they outlive subsequent reader calls that rely on the page index.
  */
 void setup_multifile_page_index(
-  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
-  multifile_inputs& inputs,
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>>& page_index_buffers,
-  std::vector<cudf::host_span<uint8_t const>>& page_index_byte_spans)
+  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader, multifile_inputs& inputs)
 {
-  auto const page_index_byte_ranges = reader.page_index_byte_ranges();
-  auto const num_sources            = inputs.datasources.size();
-  page_index_buffers.reserve(num_sources);
-  page_index_byte_spans.reserve(num_sources);
+  // Reference wrappers to the datasources, in source order
+  std::vector<std::reference_wrapper<cudf::io::datasource>> datasource_refs;
+  datasource_refs.reserve(inputs.datasources.size());
+  std::transform(inputs.datasources.begin(),
+                 inputs.datasources.end(),
+                 std::back_inserter(datasource_refs),
+                 [](auto& datasource) { return std::ref(*datasource); });
 
-  auto iter = cuda::zip_iterator(page_index_byte_ranges.begin(), inputs.datasources.begin());
-  std::for_each(iter, iter + num_sources, [&](auto const& pair) {
-    auto const& [pgidx_byte_range, datasource] = pair;
-    page_index_buffers.emplace_back(
-      cudf::io::parquet::fetch_page_index_to_host(*datasource, pgidx_byte_range));
-    page_index_byte_spans.emplace_back(*page_index_buffers.back());
-  });
+  // Fetch all per-source page index buffers in one batch
+  auto const page_index_byte_ranges = reader.page_index_byte_ranges();
+  auto const page_index_buffers =
+    cudf::io::parquet::fetch_page_indexes_to_host(datasource_refs, page_index_byte_ranges);
+
+  // Set up the page index on the reader from the fetched buffers
+  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
+  page_index_byte_spans.reserve(page_index_buffers.size());
+  std::transform(page_index_buffers.begin(),
+                 page_index_buffers.end(),
+                 std::back_inserter(page_index_byte_spans),
+                 [](auto const& buffer) { return cudf::host_span<uint8_t const>{*buffer}; });
 
   reader.setup_page_indexes(
     cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
@@ -469,9 +473,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
     inputs.footer_byte_spans, options);
 
   // Page index is needed to detect dictionary-only encoded pages
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> page_index_buffers;
-  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
-  setup_multifile_page_index(*reader, inputs, page_index_buffers, page_index_byte_spans);
+  setup_multifile_page_index(*reader, inputs);
 
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
@@ -541,9 +543,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
     cudf::host_span<cudf::host_span<uint8_t const> const>{inputs.footer_byte_spans}, options);
 
   // Page index is needed to detect dictionary-only encoded pages
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> page_index_buffers;
-  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
-  setup_multifile_page_index(*reader, inputs, page_index_buffers, page_index_byte_spans);
+  setup_multifile_page_index(*reader, inputs);
 
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
