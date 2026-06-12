@@ -110,10 +110,10 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
-    config_options.executor.quent_context.emit_query_group_events(
+    config_options.executor.quent_context._emit_query_group_events(
         config_options.executor.ray_context.quent_logger
     )
-    config_options.executor.quent_context.emit_query_events(
+    config_options.executor.quent_context._emit_query_events(
         config_options.executor.ray_context.quent_logger
     )
 
@@ -141,7 +141,7 @@ def evaluate_pipeline_ray_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    config_options.executor.quent_context.emit_query_exit_events(
+    config_options.executor.quent_context._emit_query_exit_events(
         config_options.executor.ray_context.quent_logger
     )
     return pl.concat(dfs), metadata_collector or None
@@ -218,7 +218,7 @@ class RankActor:
             engine=engine,
             instance_name=f"RankActor-{worker_id.hex[:8]}",
         )
-        self._quent_logger.emit(self._quent_worker.init())
+        self._quent_logger.emit(self._quent_worker._init())
 
     def setup_root(self) -> bytes:
         """
@@ -311,7 +311,7 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None:
-            self._quent_logger.emit(self._quent_worker.exit())
+            self._quent_logger.emit(self._quent_worker._exit())
             return self._drain_quent_events()
         return []
 
@@ -602,7 +602,7 @@ class RayEngine(StreamingEngine):
             "quent_context", cudf_polars.quent.QuentContext()
         )
         executor_options.setdefault("quent_context", quent_context)
-        quent_context.emit_engine_init_events(self._quent_logger)
+        quent_context._emit_engine_init_events(self._quent_logger)
 
         if num_ranks is not None:
             if num_ranks < 1:

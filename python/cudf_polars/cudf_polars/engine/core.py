@@ -718,7 +718,7 @@ def evaluate_on_rank(
         parent_operators_by_node_id=None,
     )
     if comm.rank == 0:
-        local_quent_context.context.emit_plan_declarations(
+        local_quent_context.context._emit_plan_declarations(
             local_quent_context.logger, plan, ops, ports
         )
 
@@ -727,7 +727,7 @@ def evaluate_on_rank(
     )
 
     log_query_plan(ir, config_options)
-    local_quent_context.context.emit_physical_plan_events(
+    local_quent_context.context._emit_physical_plan_events(
         local_quent_context.logger,
         ir,
         config_options,

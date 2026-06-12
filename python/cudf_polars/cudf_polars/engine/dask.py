@@ -303,7 +303,7 @@ def _setup_worker(
     )
 
     setattr(dask_worker, attr, mp_ctx)
-    mp_ctx.quent_logger.emit(quent_worker.init())
+    mp_ctx.quent_logger.emit(quent_worker._init())
 
 
 def _teardown_worker(
@@ -328,7 +328,7 @@ def _teardown_worker(
     traces = []
     if mp_ctx is not None:
         if mp_ctx.quent_worker is not None:
-            mp_ctx.quent_logger.emit(mp_ctx.quent_worker.exit())
+            mp_ctx.quent_logger.emit(mp_ctx.quent_worker._exit())
 
             traces = mp_ctx.quent_logger.drain()
 
@@ -559,8 +559,8 @@ def evaluate_pipeline_dask_mode(
     dask_context = config_options.executor.dask_context
 
     quent_context = config_options.executor.quent_context
-    quent_context.emit_query_group_events(dask_context.quent_logger)
-    quent_context.emit_query_events(dask_context.quent_logger)
+    quent_context._emit_query_group_events(dask_context.quent_logger)
+    quent_context._emit_query_events(dask_context.quent_logger)
 
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
@@ -584,7 +584,7 @@ def evaluate_pipeline_dask_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    quent_context.emit_query_exit_events(dask_context.quent_logger)
+    quent_context._emit_query_exit_events(dask_context.quent_logger)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -712,7 +712,7 @@ class DaskEngine(StreamingEngine):
             "quent_context", cudf_polars.quent.QuentContext()
         )
         executor_options.setdefault("quent_context", quent_context)
-        quent_context.emit_engine_init_events(self._quent_logger)
+        quent_context._emit_engine_init_events(self._quent_logger)
 
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None

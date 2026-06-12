@@ -390,13 +390,13 @@ def test_engine_lifecycle() -> None:
     impl = Implementation()
     engine = Engine(id=engine_id, implementation=impl)
 
-    init_event = engine.init()
+    init_event = engine._init()
     d = init_event.to_dict()
     init = d["data"]["Engine"]["Init"]
     assert init["implementation"]["name"] == "cudf-polars"
     assert init["instance_name"].startswith("cudf-polars-")
 
-    exit_event = engine.exit()
+    exit_event = engine._exit()
     d = exit_event.to_dict()
     assert d["data"]["Engine"]["Exit"] is None
 
@@ -406,14 +406,14 @@ def test_worker_lifecycle() -> None:
     worker_id = uuid.uuid4()
     worker = Worker(id=worker_id, engine=Engine(id=engine_id), instance_name="rank-0")
 
-    init_event = worker.init()
+    init_event = worker._init()
     d = init_event.to_dict()
     assert d["id"] == str(worker_id)
     init_data = d["data"]["Worker"]["Init"]
     assert init_data["parent_engine_id"] == str(engine_id)
     assert init_data["instance_name"] == "rank-0"
 
-    exit_event = worker.exit()
+    exit_event = worker._exit()
     d = exit_event.to_dict()
     assert d["id"] == str(worker_id)
     assert d["data"]["Worker"]["Exit"] is None
@@ -424,11 +424,11 @@ def test_query_lifecycle() -> None:
     group_id = uuid.uuid4()
     query = Query(id=query_id)
 
-    init_event = query.init(query_group=cudf_polars.quent.QueryGroup(id=group_id))
+    init_event = query._init(query_group=cudf_polars.quent.QueryGroup(id=group_id))
     assert init_event.to_dict()["data"]["Query"]["seq"] == 0
-    assert query.planning().to_dict()["data"]["Query"]["seq"] == 1
-    assert query.executing().to_dict()["data"]["Query"]["seq"] == 2
-    assert query.exit().to_dict()["data"]["Query"]["seq"] == 3
+    assert query._planning().to_dict()["data"]["Query"]["seq"] == 1
+    assert query._executing().to_dict()["data"]["Query"]["seq"] == 2
+    assert query._exit().to_dict()["data"]["Query"]["seq"] == 3
 
 
 def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> None:

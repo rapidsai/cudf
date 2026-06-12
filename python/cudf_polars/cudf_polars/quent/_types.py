@@ -129,7 +129,7 @@ class Engine:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     implementation: Implementation = dataclasses.field(default_factory=Implementation)
 
-    def init(self, timestamp: int | None = None) -> Event:
+    def _init(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent engine init event.
 
@@ -150,7 +150,7 @@ class Engine:
             },
         )
 
-    def exit(self, timestamp: int | None = None) -> Event:
+    def _exit(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent engine exit event.
 
@@ -178,7 +178,7 @@ class Worker:
         """Compatibility accessor for the worker's parent engine UUID."""
         return self.engine.id
 
-    def init(self, timestamp: int | None = None) -> Event:
+    def _init(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent worker init event.
 
@@ -199,7 +199,7 @@ class Worker:
             },
         )
 
-    def exit(self, timestamp: int | None = None) -> Event:
+    def _exit(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent worker exit event.
 
@@ -324,7 +324,7 @@ class Query:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     instance_name: str | None = None
 
-    def init(self, query_group: QueryGroup, timestamp: int | None = None) -> Event:
+    def _init(self, query_group: QueryGroup, timestamp: int | None = None) -> Event:
         """
         Build a Quent Query Init event.
 
@@ -349,7 +349,7 @@ class Query:
             },
         )
 
-    def planning(self, timestamp: int | None = None) -> Event:
+    def _planning(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent Query Planning event.
 
@@ -363,7 +363,7 @@ class Query:
             data={EventName.QUERY.value: {"seq": 1, "state": {"Planning": {}}}},
         )
 
-    def executing(self, timestamp: int | None = None) -> Event:
+    def _executing(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent Query Executing event.
 
@@ -377,7 +377,7 @@ class Query:
             data={EventName.QUERY.value: {"seq": 2, "state": {"Executing": {}}}},
         )
 
-    def exit(self, timestamp: int | None = None) -> Event:
+    def _exit(self, timestamp: int | None = None) -> Event:
         """
         Build a Quent Query Exit event.
 
@@ -399,7 +399,7 @@ class QueryGroup:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     instance_name: str | None = None
 
-    def declare(self, engine: Engine, timestamp: int | None = None) -> Event:
+    def _declare(self, engine: Engine, timestamp: int | None = None) -> Event:
         """Declare a Quent QueryGroup."""
         return Event(
             id=self.id,

@@ -112,10 +112,10 @@ def evaluate_pipeline_spmd_mode(
     py_executor = config_options.executor.spmd_context.py_executor
 
     quent_context = config_options.executor.quent_context
-    quent_context.emit_query_group_events(
+    quent_context._emit_query_group_events(
         config_options.executor.spmd_context.quent_logger
     )
-    quent_context.emit_query_events(config_options.executor.spmd_context.quent_logger)
+    quent_context._emit_query_events(config_options.executor.spmd_context.quent_logger)
 
     # I don't like recreating the Worker here...
     local_quent_context = cudf_polars.quent.LocalQuentContext(
@@ -137,7 +137,7 @@ def evaluate_pipeline_spmd_mode(
         local_quent_context=local_quent_context,
         query_id=query_id,
     )
-    quent_context.emit_query_exit_events(
+    quent_context._emit_query_exit_events(
         config_options.executor.spmd_context.quent_logger
     )
     return df, metadata if collect_metadata else None
@@ -454,7 +454,7 @@ class SPMDEngine(StreamingEngine):
                 )
 
             executor_options["quent_context"] = quent_context
-            quent_context.emit_engine_init_events(self._quent_logger)
+            quent_context._emit_engine_init_events(self._quent_logger)
 
             self._quent_worker = cudf_polars.quent.Worker(
                 id=uuid.uuid4(),
@@ -496,7 +496,7 @@ class SPMDEngine(StreamingEngine):
                 exit_stack=exit_stack,
             )
 
-            self._quent_logger.emit(self._quent_worker.init())
+            self._quent_logger.emit(self._quent_worker._init())
         except Exception:
             exit_stack.close()
             raise
@@ -753,7 +753,7 @@ class SPMDEngine(StreamingEngine):
         # quent traces before that.
         # Clear the references only after shutdown completes.
 
-        self._quent_logger.emit(self._quent_worker.exit())
+        self._quent_logger.emit(self._quent_worker._exit())
         self.config["executor_options"]["quent_context"].emit_engine_exit_events(
             self._quent_logger
         )

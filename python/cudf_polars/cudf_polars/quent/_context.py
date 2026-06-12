@@ -85,6 +85,13 @@ class QuentContext:
 
     @classmethod
     def deserialize(cls, data: bytes) -> Self:
+        """
+        Deserialize a QuentContext from bytes.
+
+        See Also
+        --------
+        QuentContext.serialize
+        """
         payload = json.loads(data)
         return cls(
             engine=Engine(
@@ -111,15 +118,15 @@ class QuentContext:
     def _query_group_cache(self) -> set[uuid.UUID]:
         return self._query_group_cache_  # type: ignore[attr-defined]
 
-    def emit_engine_init_events(self, logger: QuentLogger) -> None:
+    def _emit_engine_init_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine init event."""
-        logger.emit(self.engine.init())
+        logger.emit(self.engine._init())
 
-    def emit_engine_exit_events(self, logger: QuentLogger) -> None:
+    def _emit_engine_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine exit event."""
-        logger.emit(self.engine.exit())
+        logger.emit(self.engine._exit())
 
-    def emit_query_group_events(self, logger: QuentLogger) -> None:
+    def _emit_query_group_events(self, logger: QuentLogger) -> None:
         """
         Emit a Quent QueryGroup declaration event.
 
@@ -129,23 +136,23 @@ class QuentContext:
         if self.query_group.id in self._query_group_cache:
             return
         self._query_group_cache.add(self.query_group.id)
-        logger.emit(self.query_group.declare(engine=self.engine))
+        logger.emit(self.query_group._declare(engine=self.engine))
 
-    def emit_query_events(self, logger: QuentLogger) -> None:
+    def _emit_query_events(self, logger: QuentLogger) -> None:
         """
         Emit Quent Query events.
 
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
-        logger.emit(self.query.init(query_group=self.query_group))
-        logger.emit(self.query.planning())
-        logger.emit(self.query.executing())
+        logger.emit(self.query._init(query_group=self.query_group))
+        logger.emit(self.query._planning())
+        logger.emit(self.query._executing())
 
-    def emit_query_exit_events(self, logger: QuentLogger) -> None:
+    def _emit_query_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Query exit event."""
-        logger.emit(self.query.exit())
+        logger.emit(self.query._exit())
 
-    def emit_plan_declarations(
+    def _emit_plan_declarations(
         self,
         logger: QuentLogger,
         plan: Plan,
@@ -159,7 +166,7 @@ class QuentContext:
         for port in ports:
             logger.emit(port.declare())
 
-    def emit_plan_events(
+    def _emit_plan_events(
         self,
         logger: QuentLogger,
         ir: IR,
@@ -216,10 +223,10 @@ class QuentContext:
             parent_plan=parent_plan,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
-        self.emit_plan_declarations(logger, plan, ops, ports)
+        self._emit_plan_declarations(logger, plan, ops, ports)
         return op_by_id
 
-    def emit_physical_plan_events(
+    def _emit_physical_plan_events(
         self,
         logger: QuentLogger,
         ir: IR,
@@ -267,7 +274,7 @@ class QuentContext:
         parent_operators_by_node_id = build_parent_operators_map(
             node_map, logical_op_by_id
         )
-        return self.emit_plan_events(
+        return self._emit_plan_events(
             logger,
             ir,
             config_options,
