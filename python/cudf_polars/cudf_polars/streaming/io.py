@@ -90,15 +90,19 @@ def scan_partition_plan(
             if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
                     # Split large files
+                    factor = math.ceil(file_size / blocksize)
                     return IOPartitionPlan(
-                        math.ceil(file_size / blocksize),
+                        factor,
                         IOPartitionFlavor.SPLIT_FILES,
+                        estimated_chunk_bytes=file_size // factor,
                     )
                 else:
                     # Fuse small files
+                    factor = max(blocksize // int(file_size), 1)
                     return IOPartitionPlan(
-                        max(blocksize // int(file_size), 1),
+                        factor,
                         IOPartitionFlavor.FUSED_FILES,
+                        estimated_chunk_bytes=file_size * factor,
                     )
 
     # TODO: Use file sizes for csv and json
@@ -112,9 +116,9 @@ def expand_scan_for_rank(
     rank: int,
     nranks: int,
     parquet_options: ParquetOptions,
-) -> list[Scan | SplitScan]:
+) -> list[SplitScan | FusedScan]:
     """
-    Expand a Scan node into rank-local Scan and SplitScan operations.
+    Expand a Scan node into rank-local SplitScan and FusedScan operations.
 
     Parameters
     ----------
@@ -131,10 +135,10 @@ def expand_scan_for_rank(
 
     Returns
     -------
-    list[Scan | SplitScan]
+    list[SplitScan | FusedScan]
         Rank-local scan operations.
     """
-    scans: list[Scan | SplitScan] = []
+    scans: list[SplitScan | FusedScan] = []
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         count = plan.factor * len(ir.paths)
         local_count = math.ceil(count / nranks)
@@ -146,25 +150,12 @@ def expand_scan_for_rank(
         sindex = local_offset % plan.factor
         splits_created = 0
         for path in local_paths:
-            base_scan = Scan(
-                ir.schema,
-                ir.typ,
-                ir.reader_options,
-                ir.cloud_options,
-                [path],
-                ir.with_columns,
-                ir.skip_rows,
-                ir.n_rows,
-                ir.row_index,
-                ir.include_file_paths,
-                ir.predicate,
-                parquet_options,
-            )
             while sindex < plan.factor and splits_created < local_count:
                 scans.append(
                     SplitScan(
                         ir.schema,
-                        base_scan,
+                        ir,
+                        [path],
                         sindex,
                         plan.factor,
                         parquet_options,
@@ -182,23 +173,8 @@ def expand_scan_for_rank(
         paths_offset_end = paths_offset_start + plan.factor * local_count
         for offset in range(paths_offset_start, paths_offset_end, plan.factor):
             local_paths = ir.paths[offset : offset + plan.factor]
-            if len(local_paths) > 0:  # Only add scan if there are paths
-                scans.append(
-                    Scan(
-                        ir.schema,
-                        ir.typ,
-                        ir.reader_options,
-                        ir.cloud_options,
-                        local_paths,
-                        ir.with_columns,
-                        ir.skip_rows,
-                        ir.n_rows,
-                        ir.row_index,
-                        ir.include_file_paths,
-                        ir.predicate,
-                        parquet_options,
-                    )
-                )
+            if len(local_paths) > 0:
+                scans.append(FusedScan(ir.schema, ir, local_paths, parquet_options))
 
     return scans
 
@@ -207,7 +183,7 @@ class SplitScan(IR):
     """
     Input from a split file.
 
-    This class wraps a single-file `Scan` object. At
+    This class wraps a single-file ``Scan`` object. At
     IO/evaluation time, this class will only perform
     a partial read of the underlying file. The range
     (skip_rows and n_rows) is calculated at IO time.
@@ -216,6 +192,7 @@ class SplitScan(IR):
     __slots__ = (
         "base_scan",
         "parquet_options",
+        "paths",
         "schema",
         "split_index",
         "total_splits",
@@ -223,6 +200,7 @@ class SplitScan(IR):
     _non_child = (
         "schema",
         "base_scan",
+        "paths",
         "split_index",
         "total_splits",
         "parquet_options",
@@ -230,6 +208,8 @@ class SplitScan(IR):
     _n_non_child_args = 13
     base_scan: Scan
     """Scan operation this node is based on."""
+    paths: list[str]
+    """File path for this split task."""
     split_index: int
     """Index of the current split."""
     total_splits: int
@@ -241,12 +221,14 @@ class SplitScan(IR):
         self,
         schema: Schema,
         base_scan: Scan,
+        paths: list[str],
         split_index: int,
         total_splits: int,
         parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.base_scan = base_scan
+        self.paths = paths
         self.split_index = split_index
         self.total_splits = total_splits
         self._non_child_args = (
@@ -255,14 +237,14 @@ class SplitScan(IR):
             base_scan.schema,
             base_scan.typ,
             base_scan.reader_options,
-            base_scan.paths,
+            paths,
             base_scan.with_columns,
             base_scan.skip_rows,
             base_scan.n_rows,
             base_scan.row_index,
             base_scan.include_file_paths,
             base_scan.predicate,
-            base_scan.parquet_options,
+            parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -270,6 +252,18 @@ class SplitScan(IR):
             raise NotImplementedError(
                 f"Unhandled Scan type for file splitting: {base_scan.typ}"
             )
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.base_scan.get_hashable(),
+            tuple(self.paths),
+            self.split_index,
+            self.total_splits,
+            self.parquet_options,
+        )
 
     @classmethod
     def do_evaluate(
@@ -337,20 +331,122 @@ class SplitScan(IR):
             n_rows = -1
 
         # Perform the partial read
-        return Scan.do_evaluate(
-            schema,
-            typ,
-            reader_options,
+        with nvtx_annotate_cudf_polars(
+            message=f"SplitScan: {paths[0]} [{split_index + 1}/{total_splits}]"
+        ):
+            return Scan.do_evaluate(
+                schema,
+                typ,
+                reader_options,
+                paths,
+                with_columns,
+                skip_rows,
+                n_rows,
+                row_index,
+                include_file_paths,
+                predicate,
+                parquet_options,
+                context=context,
+            )
+
+
+class FusedScan(IR):
+    """
+    Input from one or more complete files read as a single task.
+
+    Covers both FUSED_FILES (N > 1 small files grouped together) and
+    SINGLE_FILE (N = 1).
+    """
+
+    __slots__ = (
+        "base_scan",
+        "parquet_options",
+        "paths",
+        "schema",
+    )
+    _non_child = (
+        "schema",
+        "base_scan",
+        "paths",
+        "parquet_options",
+    )
+    _n_non_child_args = 11
+    base_scan: Scan
+    """Scan operation this node is based on."""
+    paths: list[str]
+    """File paths assigned to this task."""
+    parquet_options: ParquetOptions
+    """Parquet-specific options."""
+
+    def __init__(
+        self,
+        schema: Schema,
+        base_scan: Scan,
+        paths: list[str],
+        parquet_options: ParquetOptions,
+    ):
+        self.schema = schema
+        self.base_scan = base_scan
+        self.paths = paths
+        self.parquet_options = parquet_options
+        self._non_child_args = (
+            base_scan.schema,
+            base_scan.typ,
+            base_scan.reader_options,
             paths,
-            with_columns,
-            skip_rows,
-            n_rows,
-            row_index,
-            include_file_paths,
-            predicate,
+            base_scan.with_columns,
+            base_scan.skip_rows,
+            base_scan.n_rows,
+            base_scan.row_index,
+            base_scan.include_file_paths,
+            base_scan.predicate,
             parquet_options,
-            context=context,
         )
+        self.children = ()
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.base_scan.get_hashable(),
+            tuple(self.paths),
+            self.parquet_options,
+        )
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        schema: Schema,
+        typ: str,
+        reader_options: dict[str, Any],
+        paths: list[str],
+        with_columns: list[str] | None,
+        skip_rows: int,
+        n_rows: int,
+        row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
+        predicate: NamedExpr | None,
+        parquet_options: ParquetOptions,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        with nvtx_annotate_cudf_polars(message=f"FusedScan: {', '.join(paths)}"):
+            return Scan.do_evaluate(
+                schema,
+                typ,
+                reader_options,
+                paths,
+                with_columns,
+                skip_rows,
+                n_rows,
+                row_index,
+                include_file_paths,
+                predicate,
+                parquet_options,
+                context=context,
+            )
 
 
 @lower_ir_node.register(Empty)
@@ -484,10 +580,10 @@ class StreamingScan(IR):
         "base_scan",
     )
     _n_non_child_args = 2
-    scans: list[Scan | SplitScan]
+    scans: list[SplitScan | FusedScan]
     base_scan: Scan
 
-    def __init__(self, scans: list[Scan | SplitScan], base_scan: Scan):
+    def __init__(self, scans: list[SplitScan | FusedScan], base_scan: Scan):
         self.scans = scans
         self.base_scan = base_scan
         self.schema = base_scan.schema
@@ -502,7 +598,7 @@ class StreamingScan(IR):
     @classmethod
     def do_evaluate(
         cls,
-        scans: list[Scan | SplitScan],
+        scans: list[SplitScan | FusedScan],
         base_scan: Scan,
         *,
         context: IRExecutionContext,

@@ -404,6 +404,42 @@ TEST_F(StringsContainsTests, CountTest)
   }
 }
 
+TEST_F(StringsContainsTests, CountEmptyMatching)
+{
+  auto input    = cudf::test::strings_column_wrapper({"hello", "world", "", "abc"});
+  auto sv       = cudf::strings_column_view(input);
+  auto patterns = std::vector<std::string>{"a*", "X?", "b{0,}", "()", "(?:)", "[A-Z]*"};
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>({6, 6, 1, 4});
+  for (auto pattern : patterns) {
+    auto prog    = cudf::strings::regex_program::create(pattern);
+    auto results = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  // "\\b", "\\B",
+  expected     = cudf::test::fixed_width_column_wrapper<int32_t>({1, 1, 1, 1});
+  auto prog    = cudf::strings::regex_program::create("^");
+  auto results = cudf::strings::count_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  prog    = cudf::strings::regex_program::create("$");
+  results = cudf::strings::count_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0});
+  prog     = cudf::strings::regex_program::create("^$");
+  results  = cudf::strings::count_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<int32_t>({2, 2, 0, 2});
+  prog     = cudf::strings::regex_program::create("\\b");
+  results  = cudf::strings::count_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<int32_t>({4, 4, 1, 2});
+  prog     = cudf::strings::regex_program::create("\\B");
+  results  = cudf::strings::count_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, FixedQuantifier)
 {
   auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
