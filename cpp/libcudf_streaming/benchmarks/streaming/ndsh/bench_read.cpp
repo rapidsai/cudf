@@ -94,7 +94,7 @@ struct ProgramOptions {
   int num_iterations{2};         ///< Number of iterations of query to run
   int num_streams{16};           ///< Number of streams in stream pool
   rapidsmpf::ndsh::CommType comm_type{
-    rapidsmpf::ndsh::CommType::UCXX};               ///< Type of communicator to create
+    rapidsmpf::ndsh::ProgramOptions{}.comm_type};   ///< Type of communicator to create
   cudf::size_type num_rows_per_chunk{100'000'000};  ///< Number of rows to produce per chunk read
   std::size_t num_producers{1};  ///< Number of simultaneous read_parquet chunk producers.
   std::size_t num_consumers{1};  ///< Number of simultaneous chunk consumers.
@@ -107,11 +107,9 @@ ProgramOptions parse_arguments(int argc, char** argv)
 {
   ProgramOptions options;
 
-  static constexpr std::array<std::string_view,
-                              static_cast<std::size_t>(rapidsmpf::ndsh::CommType::MAX)>
-    comm_names{"single", "mpi", "ucxx"};
+  auto const comm_names = rapidsmpf::ndsh::comm_type_names();
 
-  auto print_usage = [&argv, &options]() {
+  auto print_usage = [&argv, &comm_names, &options]() {
     std::cerr << "Usage: " << argv[0] << " [options]\n"
               << "Options:\n"
               << "  --num-streaming-threads <n>  Number of streaming threads (default: "
@@ -128,7 +126,9 @@ ProgramOptions parse_arguments(int argc, char** argv)
               << options.num_producers << ")\n"
               << "  --num-consumers <n>          Number of concurrent consumers (default: "
               << options.num_consumers << ")\n"
-              << "  --comm-type <type>           Communicator type: single, mpi, ucxx "
+              << "  --comm-type <type>           Communicator type: "
+              << rapidsmpf::ndsh::available_comm_types()
+              << " "
                  "(default: "
               << comm_names[static_cast<std::size_t>(options.comm_type)] << ")\n"
               << "  --input-directory <path>     Input directory path (required)\n"
@@ -276,15 +276,15 @@ ProgramOptions parse_arguments(int argc, char** argv)
           std::exit(1);
         }
         std::string_view const s{optarg};
-        auto parsed = std::optional<rapidsmpf::ndsh::CommType>{};
-        for (std::size_t i = 0; i < comm_names.size(); ++i) {
-          if (s == comm_names[i]) {
-            parsed = static_cast<rapidsmpf::ndsh::CommType>(i);
-            break;
-          }
-        }
+        auto parsed = rapidsmpf::ndsh::parse_comm_type(s);
         if (!parsed.has_value()) {
           std::cerr << "Error: invalid --comm-type '" << s << "' (expected: single, mpi, ucxx)\n";
+          std::exit(1);
+        }
+        if (!rapidsmpf::ndsh::is_comm_type_available(*parsed)) {
+          std::cerr << "Error: communicator '" << s
+                    << "' is not available in this build (available: "
+                    << rapidsmpf::ndsh::available_comm_types() << ")\n";
           std::exit(1);
         }
         options.comm_type = *parsed;
