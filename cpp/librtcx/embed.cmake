@@ -271,9 +271,7 @@ function(embed TARGET)
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS})
   if(NOT ARG_COMPRESSION STREQUAL "none")
     if(NOT TARGET zstd)
-      message(
-        FATAL_ERROR "embed(): zstd target is required when COMPRESSION is not none."
-      )
+      message(FATAL_ERROR "embed(): zstd target is required when COMPRESSION is not none.")
     endif()
     target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
     target_link_libraries(${RUNNER} PRIVATE zstd)
