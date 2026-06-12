@@ -7,6 +7,7 @@ import datetime
 import itertools
 import operator
 import warnings
+from collections import Counter
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
@@ -102,6 +103,39 @@ def _get_result_name(
     left_name: Hashable, right_name: Hashable
 ) -> Hashable | None:
     return left_name if _is_same_name(left_name, right_name) else None
+
+
+def _tag_levels(names: list[Hashable]) -> list[tuple[Hashable, int]]:
+    """Tag each level name with its occurrence index.
+
+    Identifying a level by ``(name, occurrence)`` lets duplicate level names be
+    matched by their position among equal names instead of collapsing onto a
+    single join key. The tags are unique by construction.
+    """
+    seen: Counter = Counter()
+    tags = []
+    for name in names:
+        tags.append((name, seen[name]))
+        seen[name] += 1
+    return tags
+
+
+def _join_label(
+    side: str,
+    pos: int,
+    tag: tuple[Hashable, int],
+    overlap_index: dict[tuple[Hashable, int], int],
+    key_labels: list[str],
+) -> str:
+    """Map a level to its merge-key label.
+
+    Shared levels get a stable ``__join_key_<i>`` label so merge keys line up;
+    levels unique to one side get a distinct placeholder so non-key columns
+    never collide.
+    """
+    if tag in overlap_index:
+        return key_labels[overlap_index[tag]]
+    return f"__{side}_{pos}"
 
 
 def _lexsorted_equal_range(
@@ -1209,6 +1243,17 @@ class Index(SingleColumnFrame):
             if not is_scalar(level):
                 raise ValueError("level should be an int or a label only")
 
+        if level is None and self_is_multi and other_is_multi:
+            # Joining two MultiIndexes joins on the levels they have in common
+            # (mirroring pandas' Index._join_multi). When the level names match
+            # exactly the join reduces to a set operation over the full tuples.
+            if list(self.names) == list(other.names):
+                return self._join_same_level_multi(other, how, sort)
+            # pandas ignores ``sort`` for differing-name MultiIndex joins
+            # (its Index._join_multi is invoked without it), sorting only outer
+            # joins, so ``sort`` is intentionally not forwarded here.
+            return self._join_multi(other, how)
+
         if other_is_multi:
             if how == "left":
                 how = "right"
@@ -1256,6 +1301,115 @@ class Index(SingleColumnFrame):
             idx = _index_from_data(output._data)
             idx.name = self.name if same_names else None
             return idx
+
+    @_performance_tracking
+    def _join_same_level_multi(self, other, how: str, sort: bool):
+        """Join two MultiIndexes that share the same level names.
+
+        With identical level names the join behaves like a set operation over
+        the full tuples, matching pandas' ``Index.join`` fast path.
+        """
+        # pandas always sorts the result of an outer join, regardless of
+        # ``sort``; for the other join types ``sort`` controls whether the
+        # join keys are ordered lexicographically.
+        sort = sort or how == "outer"
+        if how == "inner":
+            result = self.intersection(other, sort=False)
+        elif how == "outer":
+            return self.union(other).sort_values()
+        elif how == "left":
+            result = self.copy(deep=False)
+        elif how == "right":
+            result = other.copy(deep=False)
+        else:
+            raise ValueError(f"Invalid join type {how}")
+        return result.sort_values() if sort else result
+
+    @_performance_tracking
+    def _join_multi(self, other, how: str):
+        """Join two MultiIndexes with differing level names.
+
+        The join is performed on the levels the two indexes have in common and
+        the remaining levels are carried through, mirroring pandas'
+        ``Index._join_multi``. The resulting level order is ``self``'s levels
+        followed by ``other``'s unique levels (or the reverse for ``how`` of
+        ``"right"``). Like pandas, the result preserves the driving side's row
+        order except for ``how="outer"``, which is sorted lexicographically.
+        """
+        self_names = list(self.names)
+        other_names = list(other.names)
+
+        self_tags = _tag_levels(self_names)
+        other_tags = _tag_levels(other_names)
+        # ``self_tags`` are unique by construction, so this set only removes
+        # nothing; ``overlap`` stays an ordered list because ``overlap_index``
+        # below relies on self's level order.
+        other_tag_set = set(other_tags)
+        overlap = [tag for tag in self_tags if tag in other_tag_set]
+        if not overlap:
+            raise ValueError("cannot join with no overlapping index names")
+        overlap_index = {tag: i for i, tag in enumerate(overlap)}
+
+        key_labels = [f"__join_key_{i}" for i in range(len(overlap))]
+        left_labels = [
+            _join_label("l", i, tag, overlap_index, key_labels)
+            for i, tag in enumerate(self_tags)
+        ]
+        right_labels = [
+            _join_label("r", j, tag, overlap_index, key_labels)
+            for j, tag in enumerate(other_tags)
+        ]
+
+        left_df = cudf.DataFrame._from_data(
+            dict(zip(left_labels, self._columns, strict=True))
+        )
+        right_df = cudf.DataFrame._from_data(
+            dict(zip(right_labels, other._columns, strict=True))
+        )
+
+        # Preserve the row order of the side that drives the join; pandas only
+        # sorts the result for outer joins.
+        if how != "outer":
+            order_side = right_df if how == "right" else left_df
+            order_side["__join_order"] = cudf.Series(range(len(order_side)))
+
+        merged = left_df.merge(right_df, on=key_labels, how=how, sort=False)
+
+        if how == "outer":
+            merged = merged.sort_values(by=key_labels)
+        else:
+            merged = merged.sort_values(by="__join_order")
+
+        # Reassemble levels: the driving side's levels in full, then the other
+        # side's unique levels. The driving side is ``self`` except for
+        # ``how="right"``, which leads with ``other``.
+        if how == "right":
+            first_labels, first_names = right_labels, other_names
+            second_labels, second_names, second_tags = (
+                left_labels,
+                self_names,
+                self_tags,
+            )
+        else:
+            first_labels, first_names = left_labels, self_names
+            second_labels, second_names, second_tags = (
+                right_labels,
+                other_names,
+                other_tags,
+            )
+        ordered = list(zip(first_labels, first_names, strict=True))
+        ordered += [
+            (lbl, name)
+            for lbl, name, tag in zip(
+                second_labels, second_names, second_tags, strict=True
+            )
+            if tag not in overlap_index
+        ]
+
+        return cudf.MultiIndex.from_arrays(
+            [merged[lbl] for lbl, _ in ordered],
+            names=[name for _, name in ordered],
+        )
 
     def drop_duplicates(
         self,
@@ -1692,8 +1846,12 @@ class Index(SingleColumnFrame):
 
         if not len(self):
             return self._return_get_indexer_result(result.values)
+
+        haystack = self._column
+        if isinstance(haystack.dtype, CategoricalDtype):
+            haystack = haystack._get_decategorized_column()
         try:
-            lcol, rcol = _match_join_keys(needle, self._column, "inner")
+            lcol, rcol = _match_join_keys(needle, haystack, "inner")
         except ValueError:
             return self._return_get_indexer_result(result.values)
 
@@ -1815,7 +1973,7 @@ class Index(SingleColumnFrame):
                 # and generate the repr separately and
                 # merge them.
                 pd_cats = pd.Categorical(
-                    preprocess.astype(preprocess.categories.dtype).to_pandas()
+                    preprocess._column._get_decategorized_column().to_pandas()
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")

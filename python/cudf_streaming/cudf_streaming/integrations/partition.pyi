@@ -29,17 +29,6 @@ def unpack_and_concat(
     stream: Stream,
     br: BufferResource,
 ) -> Table: ...
-def spill_partitions(
-    partitions: Iterable[PackedData],
-    *,
-    br: BufferResource,
-) -> list[PackedData]: ...
-def unspill_partitions(
-    partitions: Iterable[PackedData],
-    *,
-    br: BufferResource,
-    allow_overbooking: bool,
-) -> list[PackedData]: ...
 def packed_data_from_cudf_packed_columns(
     packed_columns: PackedColumns,
     stream: Stream,

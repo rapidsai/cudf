@@ -23,6 +23,7 @@ from cudf_polars.dsl.ir import IR, Empty
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     chunkwise_evaluate,
@@ -219,20 +220,13 @@ async def default_node_multi(
                     context=ir_context,
                 )
                 del dfs
-            if tracer is not None:
-                tracer.add_chunk(table=df.table)
-            await ch_out.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table,
-                        df.stream,
-                        exclusive_view=True,
-                        br=context.br(),
-                    ),
-                ),
+            output_chunk = TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
+                br=context.br(),
             )
+            await send_chunk(context, ch_out, output_chunk, seq_num, tracer=tracer)
             seq_num += 1
             del df
 

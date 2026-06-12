@@ -37,10 +37,24 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Modules/ConfigureCUDA.cmake)
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in site-packages -----------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  include(${rapids-cmake-dir}/cython-core/find_prefix_paths.cmake)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * Build options
 option(BUILD_TESTS "Build tests for libcudf_streaming" OFF)
+option(BUILD_BENCHMARKS "Build benchmarks for libcudf_streaming" OFF)
+option(BUILD_EXAMPLES "Build examples for libcudf_streaming" OFF)
 
 message(VERBOSE "CUDF_STREAMING: Build gtests: ${BUILD_TESTS}")
+message(VERBOSE "CUDF_STREAMING: Build benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF_STREAMING: Build examples: ${BUILD_EXAMPLES}")
 
 # ##################################################################################################
 # * Dependencies
@@ -50,6 +64,25 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
 include(../cmake/thirdparty/get_cucollections.cmake)
+
+if(BUILD_BENCHMARKS)
+  if(RAPIDSMPF_HAVE_UCXX)
+    rapids_find_package(ucxx REQUIRED)
+  else()
+    message(
+      STATUS
+        "CUDF_STREAMING: Skipping UCXX-dependent benchmarks (RAPIDSMPF_HAVE_UCXX=${RAPIDSMPF_HAVE_UCXX})"
+    )
+  endif()
+  if(RAPIDSMPF_HAVE_MPI)
+    rapids_find_package(MPI REQUIRED)
+  else()
+    message(
+      STATUS
+        "CUDF_STREAMING: Skipping MPI-dependent benchmarks (RAPIDSMPF_HAVE_MPI=${RAPIDSMPF_HAVE_MPI})"
+    )
+  endif()
+endif()
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
@@ -113,6 +146,16 @@ if(BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
   add_subdirectory(tests)
+endif()
+
+# Benchmarks if enabled
+if(BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+
+# Examples if enabled
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
 
 # ##################################################################################################
