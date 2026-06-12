@@ -19,6 +19,7 @@ from cudf_streaming.streaming.partition import (
     unpack_and_concat as streaming_unpack_and_concat,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import (
     ShufflerAsync,
@@ -30,7 +31,6 @@ from rapidsmpf.streaming.core.leaf_actor import (
     push_to_channel,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable

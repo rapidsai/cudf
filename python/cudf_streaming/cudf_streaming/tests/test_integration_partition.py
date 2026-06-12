@@ -13,9 +13,9 @@ from cudf_streaming.integrations.partition import (
     split_and_pack,
     unpack_and_concat,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.memory.buffer_resource import BufferResource
 from rapidsmpf.memory.spill import spill_partitions, unspill_partitions
-from rapidsmpf.testing import assert_eq
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 if TYPE_CHECKING:
