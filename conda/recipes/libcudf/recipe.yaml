@@ -223,7 +223,6 @@ outputs:
     build:
       script:
         - cmake --install cpp/libcudf_streaming/build
-        - cmake --install cpp/libcudf_streaming/build --component benchmarking
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
@@ -260,6 +259,58 @@ outputs:
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_streaming.so
+    about:
+      homepage: https://rapids.ai/
+      license: Apache-2.0
+      summary: libcudf-streaming library
+
+  - package:
+      name: libcudf-streaming-tests
+      version: ${{ version }}
+    build:
+      script:
+        - cmake --install cpp/libcudf_streaming/build --component testing
+        - cmake --install cpp/libcudf_streaming/build --component benchmarking
+      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
+    requirements:
+      build:
+        - cmake ${{ cmake_version }}
+        - ${{ stdlib("c") }}
+      host:
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
+        - librmm =${{ minor_version }}
+        - librapidsmpf =${{ minor_version }}
+        - openmpi >=5.0
+        - cuda-version =${{ cuda_version }}
+        - cuda-cudart-dev
+      run:
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
+        - librmm =${{ minor_version }}
+        - librapidsmpf =${{ minor_version }}
+        - openmpi >=5.0
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+      ignore_run_exports:
+        by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
+          - cuda-version
+          - flatbuffers
+          - libcudf
+          - libcufile
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - libzlib
+          - libnvcomp
+    tests:
+      - script:
+        - test -f $PREFIX/bin/gtests/libcudf_streaming/cudf_streaming_single_tests
         - test -f $PREFIX/bin/libcudf_streaming_bench_pack
         - test -f $PREFIX/bin/libcudf_streaming_bench_partition
         - test -f $PREFIX/bin/libcudf_streaming_bench_ndsh_bench_read
@@ -269,7 +320,7 @@ outputs:
     about:
       homepage: https://rapids.ai/
       license: Apache-2.0
-      summary: libcudf-streaming library
+      summary: libcudf-streaming test & benchmark executables
 
   - package:
       name: libcudf-example
@@ -356,7 +407,6 @@ outputs:
       script:
         - cmake --install cpp/build --component testing
         - cmake --install cpp/libcudf_kafka/build --component testing
-        - cmake --install cpp/libcudf_streaming/build --component testing
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
@@ -369,7 +419,6 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
-        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
@@ -378,7 +427,6 @@ outputs:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
-        - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
         - libcurand
         - cuda-sanitizer-api
       ignore_run_exports:
