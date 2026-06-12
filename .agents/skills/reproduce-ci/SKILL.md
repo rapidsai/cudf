@@ -122,8 +122,5 @@ Fetch tags before launching: `git fetch git@github.com:rapidsai/cudf.git --tags`
 ### Interactive GitHub login prompt
 Ensure `GH_TOKEN` is set. The script uses `gh auth token` automatically, but if `gh` isn't authenticated, set `GH_TOKEN` manually.
 
-### Maven 429 errors (Java tests)
-Transient rate limiting from Maven Central. Retry after a few minutes.
-
 ### Artifact download prompts
 Should not happen — the script sets all required env vars. If they do appear, check that the PR number is correct and that CI build jobs have completed for that PR.
