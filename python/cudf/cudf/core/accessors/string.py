@@ -161,7 +161,7 @@ class StringMethods(BaseAccessor):
 
     def _is_empty_pandas_string_input(self) -> bool:
         return len(self._column) == 0 and isinstance(
-            self._column.dtype, (np.dtype, pd.StringDtype)
+            self._column.dtype, pd.StringDtype
         )
 
     def _empty_pandas_string_result(self, dtype) -> Series | Index:
@@ -172,6 +172,8 @@ class StringMethods(BaseAccessor):
         result_col: ColumnBase,
         target_dtype,
     ) -> Series | Index:
+        if not isinstance(self._column.dtype, pd.StringDtype):
+            return self._return_or_inplace(result_col)
         if self._is_empty_pandas_string_input():
             if self._column.dtype == np.dtype("object"):
                 if target_dtype == pd.Int64Dtype():
@@ -222,6 +224,8 @@ class StringMethods(BaseAccessor):
     def _return_pandas_string_object_result(
         self, result_col: ColumnBase | dict[int, StringColumn]
     ) -> Series | Index:
+        if not isinstance(self._column.dtype, pd.StringDtype):
+            return self._return_or_inplace(result_col)
         if isinstance(result_col, dict):
             return self._return_or_inplace(result_col)
         if self._is_empty_pandas_string_input():
@@ -807,7 +811,9 @@ class StringMethods(BaseAccessor):
             )
         elif expand is False and len(data) > 1:
             expand = True
-        if any(isinstance(name, str) for name in group_names):
+        if isinstance(data, dict) and any(
+            isinstance(name, str) for name in group_names
+        ):
             named_data: dict[str | int, ColumnBase] = {
                 group_names[key]: value for key, value in data.items()
             }
