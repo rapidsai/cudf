@@ -6,11 +6,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/export.hpp>
 
 #include <cuda/numeric>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace reduction::detail {
 
 /**
@@ -64,4 +63,4 @@ struct null_replaced_to_sum_overflow {
 };
 
 }  // namespace reduction::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
