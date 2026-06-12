@@ -128,9 +128,9 @@ void launch_transform_kernel(TransformFunction fn,
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
-template <typename SizeAndExecuteFunction>
+template <typename SizeAndExecuteFunction, typename ProgDevice>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
-                           reprog_device& d_prog,
+                           ProgDevice& d_prog,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
