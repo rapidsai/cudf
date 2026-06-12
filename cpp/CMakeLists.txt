@@ -1243,8 +1243,8 @@ foreach(_dep IN LISTS _absorbed_deps)
     )
     foreach(_pkg IN LISTS _pkg_names)
       # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
-      # be installed as separate findable packages.
-      if(_mode STREQUAL "install" AND (_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3"))
+      # be findable as separate packages.
+      if(_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3")
         continue()
       endif()
       rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
