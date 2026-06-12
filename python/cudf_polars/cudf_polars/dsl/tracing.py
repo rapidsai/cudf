@@ -13,12 +13,12 @@ import time
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
-import pynvml
+from cuda.core import system
 
 import rmm
 import rmm.statistics
 
-from cudf_polars.utils.config import _bool_converter, get_device_handle
+from cudf_polars.utils.config import _bool_converter, get_device
 
 try:  # pragma: no cover; requires structlog
     import structlog
@@ -71,7 +71,7 @@ def make_snapshot(
     extra: dict[str, Any] | None = None,
     *,
     pid: int,
-    device_handle: Any | None = None,
+    device: Any | None = None,
     phase: Literal["input", "output"] = "input",
 ) -> dict:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
     """
@@ -90,8 +90,8 @@ def make_snapshot(
         Extra information to log.
     pid
         The ID of the current process. Used for NVML memory usage.
-    device_handle
-        The pynvml device handle. Used for NVML memory usage.
+    device
+        The NVML device object. Used for NVML memory usage.
     phase
         The phase of the evaluation. Either "input" or "output".
     """
@@ -132,12 +132,17 @@ def make_snapshot(
                 }
             )
 
-        if device_handle is not None:
-            processes = pynvml.nvmlDeviceGetComputeRunningProcesses(device_handle)
-            for proc in processes:
-                if proc.pid == pid:
-                    d[f"nvml_current_bytes_{phase}"] = proc.usedGpuMemory
-                    break
+        if device is not None:
+            try:
+                processes = device.compute_running_processes
+            except system.NvmlError:
+                # This can fail if not supported by the device
+                pass
+            else:
+                for proc in processes:
+                    if proc.pid == pid:
+                        d[f"nvml_current_bytes_{phase}"] = proc.used_gpu_memory
+                        break
     if extra:
         d.update(extra)
 
@@ -169,8 +174,7 @@ def log_do_evaluate(
             **kwargs: P.kwargs,
         ) -> cudf_polars.containers.DataFrame:
             # do this just once
-            pynvml.nvmlInit()
-            maybe_handle = get_device_handle()
+            maybe_device = get_device()
             pid = _getpid()
             log = structlog.get_logger()
 
@@ -182,7 +186,7 @@ def log_do_evaluate(
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
-                cls, frames, phase="input", device_handle=maybe_handle, pid=pid
+                cls, frames, phase="input", device=maybe_device, pid=pid
             )
             before_end = time.monotonic_ns()
 
@@ -200,7 +204,7 @@ def log_do_evaluate(
                 [result],
                 phase="output",
                 extra={"start": start, "stop": stop},
-                device_handle=maybe_handle,
+                device=maybe_device,
                 pid=pid,
             )
             after_end = time.monotonic_ns()

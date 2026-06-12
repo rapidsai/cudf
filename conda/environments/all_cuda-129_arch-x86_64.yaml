@@ -16,6 +16,8 @@ dependencies:
 - clang==20.1.8
 - cmake>=4.0
 - cramjam
+- cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*
+- cuda-core>=1.0.0
 - cuda-cudart-dev
 - cuda-cupti-dev
 - cuda-nvcc
@@ -65,7 +67,6 @@ dependencies:
 - numexpr
 - numpy>=1.26,<3.0
 - numpydoc
-- nvidia-ml-py>=12
 - nvtx>=0.2.1
 - openpyxl
 - packaging

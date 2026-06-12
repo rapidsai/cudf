@@ -27,6 +27,7 @@ from statistics import mean
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
+from cuda.core import system
 
 import polars as pl
 
@@ -53,11 +54,6 @@ try:
 except ImportError as e:
     duckdb = None
     duckdb_err = e
-
-try:
-    import pynvml
-except ImportError:
-    pynvml = None
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
@@ -320,23 +316,22 @@ class GPUInfo:
     @classmethod
     def from_index(cls, index: int) -> GPUInfo:
         """Create a GPUInfo from an index."""
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+        device = system.get_device(index=index)
         try:
-            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            memory = device.memory
             return cls(
-                name=pynvml.nvmlDeviceGetName(handle),
+                name=device.name,
                 index=index,
                 free_memory=memory.free,
                 used_memory=memory.used,
                 total_memory=memory.total,
             )
-        except pynvml.NVMLError_NotSupported:
+        except system.NotSupportedError:
             # Happens on systems without traditional GPU memory (e.g., Grace Hopper),
             # where nvmlDeviceGetMemoryInfo is not supported.
             # See: https://github.com/rapidsai/cudf/issues/19427
             return cls(
-                name=pynvml.nvmlDeviceGetName(handle),
+                name=device.name,
                 index=index,
                 free_memory=None,
                 used_memory=None,
@@ -354,12 +349,7 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        if pynvml is not None:
-            pynvml.nvmlInit()
-            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
-        else:
-            # No GPUs -- probably running in CPU mode
-            gpus = []
+        gpus = [GPUInfo.from_index(i) for i in range(system.get_device_count())]
         return cls(gpus=gpus)
 
 

@@ -906,6 +906,8 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rich
+          - cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*
+          - cuda-core>=1.0.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -931,8 +933,6 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # 'nvidia-ml-py' provides the 'pynvml' module
-          - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
           - polars>=1.35,<1.42
           - typing_extensions>=4.0.0
@@ -945,7 +945,6 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - *nvidia_ml_py
           - rapids-dask-dependency==26.8.*,>=0.0.0a0
   run_custreamz:
     common:
