@@ -219,15 +219,6 @@ TEST_F(StringsFindallTests, OneCaptureGroup)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
-TEST_F(StringsFindallTests, Errors)
-{
-  auto input   = cudf::test::strings_column_wrapper({"1 One", "2 Two", "3 Three 4 Four", ""});
-  auto sv      = cudf::strings_column_view(input);
-  auto pattern = std::string("(\\d+)-(\\w+)");
-  auto prog    = cudf::strings::regex_program::create(pattern);
-  EXPECT_THROW(cudf::strings::findall(sv, *prog), cudf::logic_error);
-}
-
 TEST_F(StringsFindallTests, AlternationPriorityFirstWins)
 {
   // Leftmost-first (first-alternative-wins): "foo" is found instead of "foobar" when both
@@ -242,4 +233,35 @@ TEST_F(StringsFindallTests, AlternationPriorityFirstWins)
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"foo"}, LCW{"foo"}, LCW{"foo"}, LCW{}, LCW{"foo"}, LCW{}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, EmptyMatch)
+{
+  auto input = cudf::test::strings_column_wrapper({" ", "hello world", "é\r\ny"});
+  auto sv    = cudf::strings_column_view(input);
+  using LCW  = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  auto expected = LCW({LCW{}, LCW{}, LCW{}});
+  auto prog     = cudf::strings::regex_program::create("^$", cudf::strings::regex_flags::MULTILINE);
+  auto results  = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  expected = LCW({LCW{}, LCW{"", "", "", ""}, LCW{"", "", "", ""}});
+  prog     = cudf::strings::regex_program::create("\\b");
+  results  = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  expected = LCW({LCW{}, LCW{"", "", "", ""}, LCW{"", "", "", ""}});
+  prog     = cudf::strings::regex_program::create("(\\b)");
+  results  = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, Errors)
+{
+  auto input   = cudf::test::strings_column_wrapper({"1 One", "2 Two", "3 Three 4 Four", ""});
+  auto sv      = cudf::strings_column_view(input);
+  auto pattern = std::string("(\\d+)-(\\w+)");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  EXPECT_THROW(cudf::strings::findall(sv, *prog), cudf::logic_error);
 }
