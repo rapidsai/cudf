@@ -66,8 +66,22 @@ include(cmake/thirdparty/get_rapidsmpf.cmake)
 include(../cmake/thirdparty/get_cucollections.cmake)
 
 if(BUILD_BENCHMARKS)
-  rapids_find_package(ucxx REQUIRED)
-  rapids_find_package(MPI REQUIRED)
+  if(RAPIDSMPF_HAVE_UCXX)
+    rapids_find_package(ucxx REQUIRED)
+  else()
+    message(
+      STATUS
+        "CUDF_STREAMING: Skipping UCXX-dependent benchmarks (RAPIDSMPF_HAVE_UCXX=${RAPIDSMPF_HAVE_UCXX})"
+    )
+  endif()
+  if(RAPIDSMPF_HAVE_MPI)
+    rapids_find_package(MPI REQUIRED)
+  else()
+    message(
+      STATUS
+        "CUDF_STREAMING: Skipping MPI-dependent benchmarks (RAPIDSMPF_HAVE_MPI=${RAPIDSMPF_HAVE_MPI})"
+    )
+  endif()
 endif()
 
 # ##################################################################################################
