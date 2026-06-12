@@ -23,12 +23,16 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import SMALL_MAX_ROWS_PER_PARTITION
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
     from pathlib import Path
+    from typing import Any, Literal
+
+    import cudf_polars.engine.core
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +55,20 @@ def df():
     ],
 )
 @pytest.mark.timeout(90)
-def test_parallel_scan(tmp_path, df, fmt, scan_fn, streaming_engine):
+def test_parallel_scan(
+    tmp_path: Path,
+    df: pl.DataFrame,
+    fmt: Literal["csv", "ndjson", "parquet", "chunked_parquet"],
+    scan_fn: Any,
+    streaming_engine: cudf_polars.engine.core.StreamingEngine,
+) -> None:
+    # The spmd-small case creates *many* partitions with the length-3000 df.
+    # A smaller dataframe gives us sufficient test coverage, and runs much faster.
+    if (
+        streaming_engine.config["executor_options"]["max_rows_per_partition"]
+        == SMALL_MAX_ROWS_PER_PARTITION
+    ):
+        df = df.head(40)
     make_partitioned_source(df, tmp_path, fmt, n_files=3)
     q = scan_fn(tmp_path)
     assert_gpu_result_equal(q, engine=streaming_engine)
