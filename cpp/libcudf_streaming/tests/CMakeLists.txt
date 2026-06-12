@@ -69,8 +69,7 @@ target_link_libraries(
 # compiled into this object library. Those sources use device lambdas, so they require the same CUDA
 # flags cudf builds them with (notably --expt-extended-lambda from CUDF_CUDA_FLAGS).
 target_compile_options(
-  cudf_streaming_test_sources
-  PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+  cudf_streaming_test_sources PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 target_sources(
   cudf_streaming_test_sources
@@ -160,8 +159,13 @@ if(CUDF_STREAMING_HAVE_MPI)
     )
     target_link_libraries(
       cudf_streaming_ucxx_tests
-      PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication
-              GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
+      PRIVATE cudf_streaming
+              rapidsmpf::rapidsmpf
+              cudf_streaming::optional_communication
+              ucxx::ucxx
+              GTest::gmock
+              GTest::gtest
+              $<TARGET_NAME_IF_EXISTS:conda_env>
               cudf_streaming_test_sources
     )
     cudf_streaming_mpirun_test_add(TEST_TARGET cudf_streaming_ucxx_tests)
