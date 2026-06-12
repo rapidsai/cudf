@@ -973,6 +973,7 @@ dependencies:
           - libcudf-example==26.8.*,>=0.0.0a0
           - libcudf_kafka==26.8.*,>=0.0.0a0
           - libcudf-tests==26.8.*,>=0.0.0a0
+          - libcudf-streaming-tests==26.8.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
