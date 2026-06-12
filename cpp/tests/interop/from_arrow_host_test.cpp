@@ -151,8 +151,6 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col_view.child_begin(), got_cudf_col_view.child_end())};
-  std::cout << "from_struct " << (int)from_struct.column(0).nullable() << std::endl;
-  cudf::test::print(from_struct.column(0));
   CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
 }
 

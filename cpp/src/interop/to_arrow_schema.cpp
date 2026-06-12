@@ -169,9 +169,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                       ? column_metadata{"element"}
                       : metadata.children_meta[cudf::lists_column_view::child_column_index];
 
-  out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  out->flags = input.nullable() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
-  out->children[0]->flags = child.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  out->children[0]->flags = child.nullable() ? ARROW_FLAG_NULLABLE : 0;
   if (child.type().id() == cudf::type_id::EMPTY) {
     return ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA);
   }
