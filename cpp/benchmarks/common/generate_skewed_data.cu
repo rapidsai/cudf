@@ -153,6 +153,9 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
                                                           int32_t short_string_pct,
                                                           int32_t hit_rate)
 {
+  CUDF_EXPECTS(num_rows >= 0, "num_rows must be non-negative");
+  CUDF_EXPECTS(max_width >= 0, "max_width must be non-negative");
+  CUDF_EXPECTS(long_tail_length >= 0, "long_tail_length must be non-negative");
   CUDF_EXPECTS(short_string_pct >= 0 && short_string_pct <= 100,
                "short_string_pct must be in the range [0, 100]");
   CUDF_EXPECTS(hit_rate >= 0 && hit_rate <= 100, "hit_rate must be in the range [0, 100]");
