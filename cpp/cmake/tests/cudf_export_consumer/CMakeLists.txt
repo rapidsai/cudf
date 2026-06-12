@@ -34,9 +34,9 @@ add_custom_target(
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=${CUDF_TEST_CUDA_ARCHITECTURES}
     -DBUILD_SHARED_LIBS=ON -DCUDF_BUILD_STATIC_DEPS=FORCE -DBUILD_TESTS=OFF -DBUILD_BENCHMARKS=OFF
     -DCUDF_BUILD_TESTUTIL=OFF -DCUDF_BUILD_STREAMS_TEST_UTIL=OFF
-  COMMAND ${CMAKE_COMMAND} -DCUDF_BUILD_DIR="${cudf_build_dir}" -P "${verify_script}"
+  COMMAND ${CMAKE_COMMAND} "-DCUDF_BUILD_DIR=${cudf_build_dir}" -P "${verify_script}"
   COMMAND ${CMAKE_COMMAND} -S "${consumer_source_dir}" -B "${consumer_build_dir}" -G
-          "${CMAKE_GENERATOR}" -Dcudf_DIR="${cudf_build_dir}"
+          "${CMAKE_GENERATOR}" "-Dcudf_DIR=${cudf_build_dir}"
   COMMAND ${CMAKE_COMMAND} --build "${consumer_build_dir}"
   COMMENT "Verifying cuDF build-tree CMake exports"
   VERBATIM
