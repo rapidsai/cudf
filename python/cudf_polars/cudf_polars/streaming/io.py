@@ -97,15 +97,19 @@ def scan_partition_plan(
                 if file_size > blocksize or single_file:
                     # A single file always uses SplitScan even if it is smaller than
                     # the blocksize, so that hybrid scan can be used on it.
+                    factor = math.ceil(file_size / blocksize)
                     return IOPartitionPlan(
-                        math.ceil(file_size / blocksize),
+                        factor,
                         IOPartitionFlavor.SPLIT_FILES,
+                        estimated_chunk_bytes=file_size // factor,
                     )
                 else:
                     # Fuse small files
+                    factor = max(blocksize // int(file_size), 1)
                     return IOPartitionPlan(
-                        max(blocksize // int(file_size), 1),
+                        factor,
                         IOPartitionFlavor.FUSED_FILES,
+                        estimated_chunk_bytes=file_size * factor,
                     )
 
         if single_file:
