@@ -1211,6 +1211,13 @@ foreach(_dep IN LISTS _absorbed_deps)
     target_link_libraries(cudf PUBLIC ${_iface_libs})
   endif()
 
+  # Promote the absorbed library's public include directories into cudf's public interface so that
+  # in-tree consumers (tests, Python bindings) can find the absorbed library's headers.
+  get_target_property(_dep_includes ${_dep_link} INTERFACE_INCLUDE_DIRECTORIES)
+  if(_dep_includes)
+    target_include_directories(cudf PUBLIC ${_dep_includes})
+  endif()
+
   # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
   # hidden from the installed interface.
   target_link_libraries(
