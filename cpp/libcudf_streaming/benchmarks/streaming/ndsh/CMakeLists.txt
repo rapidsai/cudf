@@ -22,8 +22,9 @@ set_target_properties(
 )
 
 target_link_libraries(
-  cudf_streaming_ndsh PRIVATE cudf_streaming rapidsmpf::rapidsmpf cuco::cuco MPI::MPI_CXX
-                              $<TARGET_NAME_IF_EXISTS:conda_env>
+  cudf_streaming_ndsh
+  PRIVATE cudf_streaming rapidsmpf::rapidsmpf cuco::cuco cudf_streaming::optional_communication
+          $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 set(CUDF_STREAMING_NDSH_QUERIES q01 q03 q04 q09 q21 bench_read)
@@ -39,8 +40,8 @@ foreach(query IN ITEMS ${CUDF_STREAMING_NDSH_QUERIES})
                CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
-    ${query} PRIVATE cudf_streaming_ndsh cudf_streaming rapidsmpf::rapidsmpf MPI::MPI_CXX
-                     $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${query} PRIVATE cudf_streaming_ndsh cudf_streaming rapidsmpf::rapidsmpf
+                     cudf_streaming::optional_communication $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 endforeach()
 
