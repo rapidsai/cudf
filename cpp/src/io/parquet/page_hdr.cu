@@ -930,6 +930,7 @@ void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
   dim3 dim_grid(num_blocks, 1);
 
   count_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, error_code);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
@@ -950,6 +951,7 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
 
   decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, error_code);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chunks,
@@ -986,6 +988,7 @@ void build_string_dictionary_index(ColumnChunkDesc* chunks,
 
   build_string_dictionary_index_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, num_chunks, error_code);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::parquet::detail
