@@ -23,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <format>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -157,7 +158,12 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
       if (cached_offset < 0 or cached_offset >= num_col_chunks or
           row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
         auto const it = find_colchunk(row_group, mapped_schema_idx);
-        if (it == row_group.columns.end()) { continue; }
+        CUDF_EXPECTS(it != row_group.columns.end(),
+                     std::format("Column chunk with schema index {} not found in row group for "
+                                 "source {}",
+                                 mapped_schema_idx,
+                                 src_idx),
+                     std::invalid_argument);
         colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
       }
 
