@@ -260,12 +260,12 @@ outputs:
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_streaming.so
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_pack
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_partition
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_read
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_shuffle
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/bench_streaming_shuffle
-        - test -f $PREFIX/bin/benchmarks/libcudf_streaming/q01
+        - test -f $PREFIX/bin/libcudf_streaming_bench_pack
+        - test -f $PREFIX/bin/libcudf_streaming_bench_partition
+        - test -f $PREFIX/bin/libcudf_streaming_bench_read
+        - test -f $PREFIX/bin/libcudf_streaming_bench_shuffle
+        - test -f $PREFIX/bin/libcudf_streaming_bench_streaming_shuffle
+        - test -f $PREFIX/bin/libcudf_streaming_q01
     about:
       homepage: https://rapids.ai/
       license: Apache-2.0
