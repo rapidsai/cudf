@@ -12,6 +12,14 @@ set(CUDF_STREAMING_MIN_VERSION
 )
 find_and_configure_cudf(${CUDF_STREAMING_MIN_VERSION} cudf_streaming-exports)
 
+# The cudf-dependent tests link against cudf::cudftestutil{,_impl}, which live in cudf's optional
+# `testing` component. The transitive find_dependency(cudf) triggered by find_and_configure_cudf
+# does not request it, so request it explicitly here when building tests. This avoids having to
+# build cudf from source: the component is provided by the installed (e.g. conda) cudf package.
+if(BUILD_TESTS AND NOT TARGET cudf::cudftestutil)
+  find_package(cudf ${CUDF_STREAMING_MIN_VERSION} REQUIRED COMPONENTS testing)
+endif()
+
 if(cudf_REQUIRES_CUDA)
   rapids_cuda_init_architectures(CUDF_STREAMING)
 
