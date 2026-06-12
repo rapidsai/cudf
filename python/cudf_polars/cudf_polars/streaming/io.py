@@ -189,16 +189,28 @@ def expand_scan_for_rank(
     return scans
 
 
-def _fetch_byte_ranges(
-    paths: list[str],
-    byte_ranges: list[plc.io.text.ByteRangeInfo],
-    stream: Stream,
-) -> list[plc.gpumemoryview]:
-    # TODO: Accept a pinned-host Datasource pre-fetched by the caller so the
-    # storage I/O overlaps with GPU work for better pipelining.
-    return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-        plc.io.SourceInfo(paths), byte_ranges, stream=stream
+@functools.lru_cache(maxsize=256)
+def _fetch_page_index_bytes(path: str, offset: int, size: int) -> bytes:
+    """Fetch parquet page index bytes, cached per (path, offset, size).
+
+    Multiple splits of the same file share an identical page index byte range,
+    so caching here avoids a redundant host-side file read per extra split.
+    """
+    return plc.io.parquet_io_utils.fetch_page_index_to_host(
+        plc.io.SourceInfo([path]),
+        plc.io.text.ByteRangeInfo(offset=offset, size=size),
     )
+
+
+# Per-file cache: row-group row counts, keyed by file path.
+# Avoids a redundant read_parquet_metadata call for every split of the same
+# file in SplitScan.do_evaluate; populated on first encounter.
+_row_group_num_rows_cache: dict[str, list[int]] = {}
+
+# Per-file cache: plain FileMetaData (footer only, no page index).
+# Avoids a redundant read_parquet_footers call for every split of the same
+# file; populated on first encounter.
+_parquet_footer_cache: dict[str, Any] = {}
 
 
 def _read_with_hybrid_scan(
@@ -209,13 +221,18 @@ def _read_with_hybrid_scan(
     row_group_indices: list[int],
     stream: Stream,
     file_metadata: plc.io.parquet_metadata.FileMetaData,
+    split_index: int = 0,
+    total_splits: int = 1,
+    stats_pruning: bool = True,
 ) -> DataFrame:
     """Two-pass parquet read via HybridScanReader for a row-group-aligned split."""
     assert plc_filter is not None
     assert len(paths) == 1, (
         "hybrid scan only supported for SplitScan; one physical file"
     )
-    with nvtx_annotate_cudf_polars(message=f"HybridScan: {paths[0]}"):
+    with nvtx_annotate_cudf_polars(
+        message=f"HybridScan: {paths[0]} [{split_index + 1}/{total_splits}]"
+    ):
         options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
             .decimal_width(plc.TypeId.DECIMAL128)
@@ -226,98 +243,42 @@ def _read_with_hybrid_scan(
         options.set_filter(plc_filter)
 
         reader = plc.io.experimental.HybridScanReader.from_parquet_metadata(
-            file_metadata, options
+            file_metadata,
+            options,
         )
 
-        row_group_indices = reader.filter_row_groups_with_stats(
-            row_group_indices, options, stream=stream
-        )
-
-        if row_group_indices:
-            bloom_ranges, _dict_ranges = reader.secondary_filters_byte_ranges(
-                row_group_indices, options
-            )
-            if bloom_ranges:
-                bloom_chunks = _fetch_byte_ranges(paths, bloom_ranges, stream)
-                row_group_indices = reader.filter_row_groups_with_bloom_filters(
-                    bloom_chunks, row_group_indices, options, stream=stream
-                )
-
-        if not row_group_indices:
-            col_names = with_columns if with_columns is not None else list(schema)
-            return DataFrame(
-                [
-                    Column(
-                        plc.column_factories.make_empty_column(
-                            schema[name].plc_type, stream=stream
-                        ),
-                        dtype=schema[name],
-                        name=name,
-                    )
-                    for name in col_names
-                ],
-                stream=stream,
-            )
-
+        # Pass the (cached) page index bytes so ``read`` does not re-read them per split.
         pi_range = reader.page_index_byte_range()
-        if pi_range.size > 0:
-            page_index_bytes = plc.io.parquet_io_utils.fetch_page_index_to_host(
-                plc.io.SourceInfo(paths), pi_range
-            )
-            reader.setup_page_index(page_index_bytes)
-            row_mask = reader.build_row_mask_with_page_index_stats(
-                row_group_indices, options, stream=stream
-            )
-        else:
-            row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
-
-        filter_ranges = reader.filter_column_chunks_byte_ranges(
-            row_group_indices, options
+        page_index_bytes = (
+            _fetch_page_index_bytes(paths[0], pi_range.offset, pi_range.size)
+            if pi_range.size > 0
+            else None
         )
-        filter_chunks = _fetch_byte_ranges(paths, filter_ranges, stream)
-        filter_tbl_w_meta = reader.materialize_filter_columns(
+
+        # One fused C++ call performs pruning, row-mask construction, and the two-pass
+        # read, crossing into C++ (and the GIL) once per split rather than once per step.
+        tbl_w_meta = reader.read(
+            plc.io.SourceInfo(paths),
             row_group_indices,
-            filter_chunks,
-            row_mask,
-            plc.io.experimental.UseDataPageMask.YES,
             options,
+            page_index_bytes=page_index_bytes,
+            use_stats_filter=stats_pruning,
+            use_dictionary_filter=stats_pruning,
+            use_bloom_filter=stats_pruning,
+            prune_filter_column_pages=True,
+            prune_payload_column_pages=True,
             stream=stream,
         )
 
-        payload_ranges = reader.payload_column_chunks_byte_ranges(
-            row_group_indices, options
-        )
-        # PERFORMANCE: payload_column_chunks_byte_ranges does not need the row mask,
-        # so with async prefetch this fetch could be submitted concurrently with
-        # materialize_filter_columns to overlap I/O with GPU decode.
-        payload_chunks = _fetch_byte_ranges(paths, payload_ranges, stream)
-        payload_tbl_w_meta = reader.materialize_payload_columns(
-            row_group_indices,
-            payload_chunks,
-            row_mask,
-            plc.io.experimental.UseDataPageMask.YES,
-            options,
-            stream=stream,
-        )
-
-        filter_names = filter_tbl_w_meta.column_names(include_children=False)
-        payload_names = payload_tbl_w_meta.column_names(include_children=False)
-        filter_df = DataFrame.from_table(
-            filter_tbl_w_meta.tbl,
-            filter_names,
-            [schema[n] for n in filter_names],
-            stream=stream,
-        )
-        payload_df = DataFrame.from_table(
-            payload_tbl_w_meta.tbl,
-            payload_names,
-            [schema[n] for n in payload_names],
+        names = tbl_w_meta.column_names(include_children=False)
+        df = DataFrame.from_table(
+            tbl_w_meta.tbl,
+            names,
+            [schema[n] for n in names],
             stream=stream,
         )
         stream.synchronize()
-        return DataFrame(
-            [*filter_df.columns, *payload_df.columns], stream=stream
-        ).select(list(schema.keys()))
+        return df.select(list(schema.keys()))
 
 
 class SplitScan(IR):
@@ -441,12 +402,15 @@ class SplitScan(IR):
         # - We can use all this information to calculate the
         #   "skip_rows" and "n_rows" options to use locally.
 
-        row_group_num_rows = [
-            rg["num_rows"]
-            for rg in plc.io.parquet_metadata.read_parquet_metadata(
-                plc.io.SourceInfo(paths)
-            ).rowgroup_metadata()
-        ]
+        row_group_num_rows = _row_group_num_rows_cache.get(paths[0])
+        if row_group_num_rows is None:
+            row_group_num_rows = [
+                rg["num_rows"]
+                for rg in plc.io.parquet_metadata.read_parquet_metadata(
+                    plc.io.SourceInfo(paths)
+                ).rowgroup_metadata()
+            ]
+            _row_group_num_rows_cache[paths[0]] = row_group_num_rows
 
         total_row_groups = len(row_group_num_rows)
         if total_splits <= total_row_groups:
@@ -480,9 +444,14 @@ class SplitScan(IR):
                         if split_index == total_splits - 1
                         else skip_rgs + rg_stride
                     )
-                    [file_metadata] = plc.io.parquet_metadata.read_parquet_footers(
-                        plc.io.SourceInfo(paths)
-                    )
+                    # Reuse the cached plain footer, reading from disk only on
+                    # the first split that encounters this file.
+                    file_metadata = _parquet_footer_cache.get(paths[0])
+                    if file_metadata is None:
+                        [file_metadata] = plc.io.parquet_metadata.read_parquet_footers(
+                            plc.io.SourceInfo(paths)
+                        )
+                        _parquet_footer_cache[paths[0]] = file_metadata
                     return _read_with_hybrid_scan(
                         schema,
                         paths,
@@ -491,6 +460,9 @@ class SplitScan(IR):
                         list(range(skip_rgs, end_rg)),
                         stream,
                         file_metadata,
+                        split_index=split_index,
+                        total_splits=total_splits,
+                        stats_pruning=parquet_options.hybrid_scan_stats_pruning,
                     )
 
         else:

@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
+from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.parquet cimport parquet_reader_options
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
@@ -29,10 +30,28 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         YES
         NO
 
+    cdef cppclass hybrid_scan_read_options:
+        hybrid_scan_read_options() except +libcudf_exception_handler
+        bool use_stats_filter
+        bool use_dictionary_filter
+        bool use_bloom_filter
+        use_data_page_mask prune_filter_column_pages
+        use_data_page_mask prune_payload_column_pages
+        host_span[const_uint8_t] page_index_bytes
+
     cdef cppclass hybrid_scan_reader:
         hybrid_scan_reader(
             host_span[const_uint8_t] footer_bytes,
             const parquet_reader_options& options
+        ) except +libcudf_exception_handler
+
+        table_with_metadata read(
+            datasource& source,
+            host_span[const_size_type] row_group_indices,
+            const parquet_reader_options& options,
+            const hybrid_scan_read_options& read_options,
+            cudaStream_t stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
         hybrid_scan_reader(

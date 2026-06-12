@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -45,6 +46,27 @@ namespace io::parquet::experimental {
 enum class use_data_page_mask : bool {
   YES = true,  ///< Compute and use a data page mask
   NO  = false  ///< Do not compute or use a data page mask
+};
+
+/**
+ * @brief Options controlling a fused hybrid scan read via `hybrid_scan_reader::read`
+ *
+ * Each row-group pruning stage is optional and is additionally skipped at runtime when the
+ * parquet file does not contain the corresponding structure (e.g. no bloom filters) or when a
+ * prior stage has already pruned all row groups.
+ */
+struct hybrid_scan_read_options {
+  bool use_stats_filter = true;       ///< Prune row groups using column chunk statistics
+  bool use_dictionary_filter = true;  ///< Prune row groups using column chunk dictionary pages
+  bool use_bloom_filter = true;       ///< Prune row groups using column chunk bloom filters
+  /// Whether to build and use a data page mask to prune filter column pages
+  use_data_page_mask prune_filter_column_pages = use_data_page_mask::NO;
+  /// Whether to build and use a data page mask to prune payload column pages
+  use_data_page_mask prune_payload_column_pages = use_data_page_mask::YES;
+  /// Host span of page index bytes. If empty and the file contains a page index, the bytes are
+  /// fetched from the data source. Pass cached bytes to avoid a redundant read across reads of the
+  /// same file.
+  cudf::host_span<uint8_t const> page_index_bytes = {};
 };
 
 /**
@@ -299,6 +321,47 @@ class hybrid_scan_reader {
    * @brief Destructor for the experimental parquet reader class
    */
   ~hybrid_scan_reader();
+
+  /**
+   * @brief Reads the Parquet file in a single fused operation
+   *
+   * Performs the complete hybrid scan in one call: optional row group pruning (statistics,
+   * dictionary pages and bloom filters), row mask construction, and the two-pass filter then
+   * payload column materialization. When `options` carries no filter expression, all selected
+   * columns are read in a single pass instead.
+   *
+   * This is equivalent in result to constructing the reader and invoking the individual step
+   * methods in sequence (see the class documentation), but issues all byte range fetches and GPU
+   * work from within this call. Callers that drive the reader from a managed runtime therefore
+   * cross the language boundary once per read rather than once per step, which avoids repeated
+   * lock acquisition (e.g. the Python GIL) between steps.
+   *
+   * The page index required for the row mask is taken from `read_options.page_index_bytes` when
+   * provided, and otherwise fetched from `source`. The row mask is built from page-level
+   * statistics when a page index is available and all-true otherwise.
+   *
+   * Output columns are returned in the projection order given by `options.get_column_names()`,
+   * or in Parquet file schema order when no column selection is set, matching
+   * `cudf::io::read_parquet`.
+   *
+   * @note `read` reads from a single data source. The reader holds per-read state, so a single
+   * reader instance must not be driven concurrently from multiple threads.
+   *
+   * @param source Data source for the Parquet file backing this reader
+   * @param row_group_indices Candidate row group indices to read, before pruning
+   * @param options Parquet reader options, including the optional filter expression and column
+   *                selection
+   * @param read_options Options controlling row group pruning, data page masking and the page index
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
+   * @return Table of materialized columns and metadata, in projection order
+   */
+  [[nodiscard]] table_with_metadata read(cudf::io::datasource& source,
+                                         cudf::host_span<size_type const> row_group_indices,
+                                         parquet_reader_options const& options,
+                                         hybrid_scan_read_options const& read_options,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get the Parquet file footer metadata

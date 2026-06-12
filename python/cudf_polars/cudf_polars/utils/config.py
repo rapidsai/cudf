@@ -210,6 +210,15 @@ class ParquetOptions:
         Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
         tasks when a predicate can be pushed down to a parquet filter.
         Default is False.
+    hybrid_scan_stats_pruning
+        Whether to apply row-group stats and bloom-filter pruning before the
+        first pass of a hybrid scan. When ``True`` (default), row groups are
+        filtered via ``filter_row_groups_with_stats`` and
+        ``filter_row_groups_with_bloom_filters`` before any data is read.
+        Set to ``False`` to skip all pre-first-pass pruning and read every
+        row group assigned to this split, which is useful for benchmarking
+        the two-pass read overhead in isolation.
+        Only has effect when ``use_hybrid_scan`` is ``True``.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -258,6 +267,13 @@ class ParquetOptions:
             default=False,
         )
     )
+    hybrid_scan_stats_pruning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__HYBRID_SCAN_STATS_PRUNING",
+            _bool_converter,
+            default=True,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -276,6 +292,8 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
         if not isinstance(self.use_hybrid_scan, bool):
             raise TypeError("use_hybrid_scan must be a bool")
+        if not isinstance(self.hybrid_scan_stats_pruning, bool):
+            raise TypeError("hybrid_scan_stats_pruning must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:

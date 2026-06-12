@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint8_t, uintptr_t
 from libc.stddef cimport size_t
+from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -14,18 +16,22 @@ from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.column cimport Column
 from pylibcudf.io.parquet cimport ParquetReaderOptions
 from pylibcudf.io.parquet_metadata cimport FileMetaData as c_FileMetaData
+from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
+from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
 from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_device_span_const_uint8_t,
     const_size_type,
     const_uint8_t,
+    hybrid_scan_read_options as cpp_hybrid_scan_read_options,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
 from pylibcudf.libcudf.io.text cimport byte_range_info
+from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
@@ -81,10 +87,11 @@ cdef class HybridScanReader:
     """
 
     def __init__(self, const uint8_t[::1] footer_bytes, ParquetReaderOptions options):
-        self.c_obj = make_unique[cpp_hybrid_scan_reader](
-            host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
-            options.c_obj
-        )
+        with nogil:
+            self.c_obj = make_unique[cpp_hybrid_scan_reader](
+                host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
+                options.c_obj
+            )
 
     @staticmethod
     def from_parquet_metadata(c_FileMetaData metadata, ParquetReaderOptions options):
@@ -102,10 +109,11 @@ cdef class HybridScanReader:
         HybridScanReader
         """
         cdef HybridScanReader reader = HybridScanReader.__new__(HybridScanReader)
-        reader.c_obj = make_unique[cpp_hybrid_scan_reader](
-            metadata.c_obj,
-            options.c_obj
-        )
+        with nogil:
+            reader.c_obj = make_unique[cpp_hybrid_scan_reader](
+                metadata.c_obj,
+                options.c_obj
+            )
         return reader
 
     def parquet_metadata(self):
@@ -116,7 +124,10 @@ cdef class HybridScanReader:
         FileMetaData
             Parquet file footer metadata
         """
-        return c_FileMetaData.from_cpp(self.c_obj.get()[0].parquet_metadata())
+        cdef cpp_FileMetaData c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].parquet_metadata()
+        return c_FileMetaData.from_cpp(c_result)
 
     def page_index_byte_range(self):
         """Get the byte range of the page index.
@@ -126,7 +137,9 @@ cdef class HybridScanReader:
         ByteRangeInfo
             Byte range of the page index
         """
-        cdef byte_range_info info = self.c_obj.get()[0].page_index_byte_range()
+        cdef byte_range_info info
+        with nogil:
+            info = self.c_obj.get()[0].page_index_byte_range()
         return ByteRangeInfo(info.offset(), info.size())
 
     def setup_page_index(self, const uint8_t[::1] page_index_bytes):
@@ -155,9 +168,9 @@ cdef class HybridScanReader:
         list[int]
             List of row group indices
         """
-        cdef vector[size_type] row_groups = self.c_obj.get()[0].all_row_groups(
-            options.c_obj
-        )
+        cdef vector[size_type] row_groups
+        with nogil:
+            row_groups = self.c_obj.get()[0].all_row_groups(options.c_obj)
         return list(row_groups)
 
     def total_rows_in_row_groups(self, list row_group_indices):
@@ -174,9 +187,12 @@ cdef class HybridScanReader:
             Total number of top-level rows
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        return self.c_obj.get()[0].total_rows_in_row_groups(
-            host_span[const_size_type](indices_vec.data(), indices_vec.size())
-        )
+        cdef size_type result
+        with nogil:
+            result = self.c_obj.get()[0].total_rows_in_row_groups(
+                host_span[const_size_type](indices_vec.data(), indices_vec.size())
+            )
+        return result
 
     def reset_column_selection(self):
         """Reset the column selection state.
@@ -184,7 +200,98 @@ cdef class HybridScanReader:
         Resets the internal column selection state forcing re-selection of columns in
         subsequent filter and read operations
         """
-        self.c_obj.get()[0].reset_column_selection()
+        with nogil:
+            self.c_obj.get()[0].reset_column_selection()
+
+    def read(
+        self,
+        SourceInfo source_info,
+        list row_group_indices,
+        ParquetReaderOptions options,
+        const uint8_t[::1] page_index_bytes=None,
+        bool use_stats_filter=True,
+        bool use_dictionary_filter=True,
+        bool use_bloom_filter=True,
+        bool prune_filter_column_pages=False,
+        bool prune_payload_column_pages=True,
+        object stream=None,
+        DeviceMemoryResource mr=None,
+    ):
+        """Read the Parquet file in a single fused hybrid scan operation.
+
+        Performs row group pruning, row mask construction, and the two-pass
+        filter/payload materialization in one C++ call, so the entire per-chunk
+        read crosses into C++ (and acquires the GIL) once rather than once per
+        step.
+
+        Parameters
+        ----------
+        source_info : SourceInfo
+            Source describing the single Parquet file backing this reader.
+        row_group_indices : list[int]
+            Candidate row group indices to read, before pruning.
+        options : ParquetReaderOptions
+            Parquet reader options, including the optional filter expression and
+            column selection.
+        page_index_bytes : memoryview, optional
+            Host bytes of the page index. If ``None`` and the file contains a
+            page index, the bytes are fetched from the source. Pass cached bytes
+            to avoid a redundant read across reads of the same file.
+        use_stats_filter : bool, default True
+            Prune row groups using column chunk statistics.
+        use_dictionary_filter : bool, default True
+            Prune row groups using column chunk dictionary pages.
+        use_bloom_filter : bool, default True
+            Prune row groups using column chunk bloom filters.
+        prune_filter_column_pages : bool, default False
+            Whether to build and use a data page mask to prune filter column pages.
+        prune_payload_column_pages : bool, default True
+            Whether to build and use a data page mask to prune payload column pages.
+        stream : Stream, optional
+            CUDA stream.
+        mr : DeviceMemoryResource, optional
+            Device memory resource.
+
+        Returns
+        -------
+        TableWithMetadata
+            Materialized columns and metadata, in projection order.
+        """
+        cdef Stream _stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+
+        cdef vector[unique_ptr[datasource]] sources = make_datasources(source_info.c_obj)
+        cdef vector[size_type] indices_vec = row_group_indices
+
+        cdef cpp_hybrid_scan_read_options read_options
+        read_options.use_stats_filter = use_stats_filter
+        read_options.use_dictionary_filter = use_dictionary_filter
+        read_options.use_bloom_filter = use_bloom_filter
+        read_options.prune_filter_column_pages = (
+            cpp_use_data_page_mask.YES if prune_filter_column_pages
+            else cpp_use_data_page_mask.NO
+        )
+        read_options.prune_payload_column_pages = (
+            cpp_use_data_page_mask.YES if prune_payload_column_pages
+            else cpp_use_data_page_mask.NO
+        )
+        if page_index_bytes is not None and page_index_bytes.shape[0] > 0:
+            read_options.page_index_bytes = host_span[const_uint8_t](
+                &page_index_bytes[0], page_index_bytes.shape[0]
+            )
+
+        cdef datasource* source_ptr = sources[0].get()
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = move(self.c_obj.get()[0].read(
+                dereference(source_ptr),
+                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                options.c_obj,
+                read_options,
+                _stream.view().value(),
+                mr.get_mr(),
+            ))
+        return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
     def filter_row_groups_with_stats(
         self,
@@ -883,7 +990,10 @@ cdef class HybridScanReader:
         bool
             True if there is data left to read
         """
-        return self.c_obj.get()[0].has_next_table_chunk()
+        cdef bool result
+        with nogil:
+            result = self.c_obj.get()[0].has_next_table_chunk()
+        return result
 
 
 UseDataPageMask.__str__ = UseDataPageMask.__repr__

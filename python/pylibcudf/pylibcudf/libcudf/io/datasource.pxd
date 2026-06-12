@@ -12,9 +12,9 @@ cdef extern from "cudf/io/datasource.hpp" \
         namespace "cudf::io" nogil:
 
     cdef cppclass datasource:
-        cdef cppclass buffer:
-            size_t size() const nogil
-            const uint8_t* data() const nogil
+        cppclass buffer:
+            size_t size() const
+            const uint8_t* data() const
 
     cdef vector[unique_ptr[datasource]] make_datasources(
         source_info info
