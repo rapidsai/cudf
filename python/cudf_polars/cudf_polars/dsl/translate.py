@@ -294,7 +294,7 @@ def _drop_dyn_pred_hints(
     except Exception as e:
         if str(e) == "dynamic_pred":
             return None
-        raise
+        raise  # pragma: no cover
     if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op in (
         plrs._expr_nodes.Operator.And,
         plrs._expr_nodes.Operator.LogicalAnd,
