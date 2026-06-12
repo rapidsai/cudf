@@ -14,8 +14,8 @@ from cudf_streaming.integrations.partition import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
