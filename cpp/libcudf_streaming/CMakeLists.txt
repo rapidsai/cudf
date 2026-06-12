@@ -61,28 +61,11 @@ message(VERBOSE "CUDF_STREAMING: Build examples: ${BUILD_EXAMPLES}")
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+include(cmake/ConfigureOptionalCommunication.cmake)
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
+cudf_streaming_configure_optional_communication()
 include(../cmake/thirdparty/get_cucollections.cmake)
-
-if(BUILD_BENCHMARKS)
-  if(RAPIDSMPF_HAVE_UCXX)
-    rapids_find_package(ucxx REQUIRED)
-  else()
-    message(
-      STATUS
-        "CUDF_STREAMING: Skipping UCXX-dependent benchmarks (RAPIDSMPF_HAVE_UCXX=${RAPIDSMPF_HAVE_UCXX})"
-    )
-  endif()
-  if(RAPIDSMPF_HAVE_MPI)
-    rapids_find_package(MPI REQUIRED)
-  else()
-    message(
-      STATUS
-        "CUDF_STREAMING: Skipping MPI-dependent benchmarks (RAPIDSMPF_HAVE_MPI=${RAPIDSMPF_HAVE_MPI})"
-    )
-  endif()
-endif()
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
