@@ -4774,7 +4774,6 @@ NODEIDS_THAT_FAIL = {
     "tests/series/indexing/test_getitem.py::TestGetitemDeprecatedIndexers::test_setitem_dict_and_set_disallowed[key0]": "TODO: Add a reason for failure",
     "tests/series/indexing/test_getitem.py::TestGetitemDeprecatedIndexers::test_setitem_dict_and_set_disallowed[key1]": "TODO: Add a reason for failure",
     "tests/series/indexing/test_getitem.py::TestSeriesGetitemScalars::test_getitem_float_keys_tuple_values": "TODO: Add a reason for failure",
-    "tests/series/indexing/test_getitem.py::TestSeriesGetitemSlices::test_getitem_partial_str_slice_with_datetimeindex": "TODO: Add a reason for failure",
     "tests/series/indexing/test_getitem.py::test_getitem_1tuple_slice_without_multiindex": "TODO: Add a reason for failure",
     "tests/series/indexing/test_indexing.py::TestDeprecatedIndexers::test_getitem_dict_and_set_deprecated[key0]": "TODO: Add a reason for failure",
     "tests/series/indexing/test_indexing.py::TestDeprecatedIndexers::test_getitem_dict_and_set_deprecated[key1]": "TODO: Add a reason for failure",
