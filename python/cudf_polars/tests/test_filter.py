@@ -56,7 +56,7 @@ def test_filter_drops_dynamic_predicate_hint():
         {"a": [1, 2, 3, 4, 5], "b": [5, 4, 3, 2, 1], "c": [1, 1, 3, 3, 5]}
     )
     query = ldf.filter(
-        (pl.col("b") < 5) & (pl.col("a") > 1) & (pl.col("c") == 3) & (pl.col("b") < 3)
+        ((pl.col("b") < 5) & (pl.col("a") > 1)) & ((pl.col("c") == 3) & (pl.col("b") < 3))
     )
 
     visitor = DynamicPredVisitor(query._ldf.visit(), plrs._expr_nodes.Operator.Lt)
