@@ -4,7 +4,6 @@
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pytest
 
 import cudf
 from cudf.testing import assert_eq
@@ -39,13 +38,6 @@ def test_monotonic_increasing_coarse_key_returns_slice():
     _assert_scalar_or_slice_get_loc_eq(pi, "2020-01-01")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "DatetimeIndex.get_loc currently falls through to superclass string "
-        "lookup for exact-resolution datetime strings"
-    ),
-    strict=True,
-)
 def test_monotonic_increasing_exact_key_returns_int():
     pi = pd.DatetimeIndex(["2020-01-01", "2020-01-01 00:00:01", "2020-01-02"])
 
@@ -64,10 +56,6 @@ def test_monotonic_increasing_month_key_on_day_index():
     _assert_scalar_or_slice_get_loc_eq(pi, "2020-01")
 
 
-@pytest.mark.xfail(
-    reason="Missing coarse partial datetime keys currently return an empty slice",
-    strict=True,
-)
 def test_monotonic_increasing_key_not_found():
     pi = pd.date_range("2020-01-01", "2020-12-31", freq="D")
     gi = cudf.from_pandas(pi)
@@ -86,14 +74,7 @@ def test_monotonic_decreasing_coarse_key_returns_ndarray():
     _assert_array_get_loc_eq(pi, "2020-01-01")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Non-monotonic partial-string get_loc currently takes the wrong cudf "
-        "path after resolution inference"
-    ),
-    strict=True,
-)
-def test_non_monotonic_coarse_key_raises_keyerror():
+def test_non_monotonic_coarse_key_returns_ndarray():
     pi = pd.DatetimeIndex(["2020-01-02", "2020-01-01 00:00:01", "2020-01-03"])
 
     _assert_array_get_loc_eq(pi, "2020-01-01")
@@ -105,13 +86,6 @@ def test_resolution_inference_interior_seconds():
     _assert_scalar_or_slice_get_loc_eq(pi, "2020-01-01")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "DatetimeIndex.get_loc currently falls through to superclass string "
-        "lookup for duplicate exact-resolution datetime strings"
-    ),
-    strict=True,
-)
 def test_monotonic_increasing_duplicates_return_slice():
     pi = pd.DatetimeIndex(["2020-01-01", "2020-01-01", "2020-01-02"])
 

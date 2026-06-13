@@ -3586,11 +3586,27 @@ class DatetimeIndex(Index):
                     resolution,
                     cast(Literal["s", "ms", "us", "ns"], self.unit),
                 )
+                if (
+                    not self.is_monotonic_increasing
+                    and not self.is_monotonic_decreasing
+                ):
+                    mask = (self._column >= start) & (self._column <= end)
+                    positions = cupy.where(mask.values)[0]
+                    if len(positions) == 0:
+                        raise KeyError(key)
+                    return positions
                 if self.is_monotonic_decreasing:
                     mask = (self._column >= start) & (self._column <= end)
                     return cupy.where(mask.values)[0]
                 result = self.find_label_range(slice(start, end))
+                if result.start >= result.stop:
+                    raise KeyError(key)
                 return slice(result.start, result.stop, None)
+            elif (
+                _DATETIME_RESOLUTION_ORDER[resolution]
+                == _DATETIME_RESOLUTION_ORDER[_datetime_index_resolution(self)]
+            ):
+                return super().get_loc(pd.Timestamp(parsed))
         return super().get_loc(key)
 
     def find_label_range(self, loc: slice) -> slice:
