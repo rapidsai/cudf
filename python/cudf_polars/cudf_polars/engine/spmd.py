@@ -10,21 +10,22 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
+import pylibcudf as plc
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
+from pylibcudf.contiguous_split import pack
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
 from rapidsmpf.communicator.ucxx import barrier
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
@@ -51,11 +52,11 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
+    import polars as pl
+
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -162,12 +163,11 @@ def allgather_polars_dataframe(
 
     plc_table = plc.Table.from_arrow(local_df, stream=stream)
 
-    packed_data = PackedData.from_cudf_packed_columns(
+    packed_data = packed_data_from_cudf_packed_columns(
         pack(plc_table, stream),
         stream,
         ctx.br(),
     )
-
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
     try:

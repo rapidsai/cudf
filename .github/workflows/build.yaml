@@ -257,6 +257,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: cudf_streaming
       package-type: python
+      publish-wheel-search-key: cudf_streaming_wheel_python_abi3
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
     permissions:

@@ -337,6 +337,8 @@ public final class Table implements AutoCloseable {
    * @param compression       native compression codec ID
    * @param rowGroupSizeRows  max #rows in a row group
    * @param rowGroupSizeBytes max #bytes in a row group
+   * @param maxDictionarySize maximum dictionary size in bytes (cuDF default 1 MiB)
+   * @param dictionaryPolicy  native dictionary policy ID
    * @param statsFreq         native statistics frequency ID
    * @param isInt96           true if timestamp type is int96
    * @param precisions        precision list containing all the precisions of the decimal types in
@@ -355,6 +357,8 @@ public final class Table implements AutoCloseable {
                                                    int compression,
                                                    int rowGroupSizeRows,
                                                    long rowGroupSizeBytes,
+                                                   long maxDictionarySize,
+                                                   int dictionaryPolicy,
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
@@ -375,6 +379,8 @@ public final class Table implements AutoCloseable {
    * @param compression       native compression codec ID
    * @param rowGroupSizeRows  max #rows in a row group
    * @param rowGroupSizeBytes max #bytes in a row group
+   * @param maxDictionarySize maximum dictionary size in bytes (cuDF default 1 MiB)
+   * @param dictionaryPolicy  native dictionary policy ID
    * @param statsFreq         native statistics frequency ID
    * @param isInt96           true if timestamp type is int96
    * @param precisions        precision list containing all the precisions of the decimal types in
@@ -393,6 +399,8 @@ public final class Table implements AutoCloseable {
                                                      int compression,
                                                      int rowGroupSizeRows,
                                                      long rowGroupSizeBytes,
+                                                     long maxDictionarySize,
+                                                     int dictionaryPolicy,
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
@@ -1672,6 +1680,8 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getRowGroupSizeRows(),
           options.getRowGroupSizeBytes(),
+          options.getMaxDictionarySize(),
+          options.getDictionaryPolicy().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -1694,6 +1704,8 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getRowGroupSizeRows(),
           options.getRowGroupSizeBytes(),
+          options.getMaxDictionarySize(),
+          options.getDictionaryPolicy().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
