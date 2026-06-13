@@ -168,6 +168,67 @@ class hybrid_scan_multifile {
                                 parquet_reader_options const& options) const;
 
   /**
+   * @brief Builds a boolean survival column of size equal to the total number of rows in the row
+   * groups containing all `true` values
+   *
+   * @param row_group_indices Input per-source row group indices (one inner vector per source)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return An all-true boolean (survival) column spanning all selected rows across all sources
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
+   * page index
+   *
+   * @param row_group_indices Input per-source row group indices (one inner vector per source)
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return A boolean column spanning all selected rows across all sources and indicating which
+   * filter column rows survive the statistics in the page index
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Get byte ranges of column chunks of all (or selected) columns
+   *
+   * @param row_group_indices Input row group indices, one inner vector per source
+   * @param options Parquet reader options
+   * @return Pair of flattened byte ranges to column chunks of all (or selected) columns and their
+   *         corresponding source indices
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
+  all_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @param row_group_indices Input row group indices, one inner vector per source
+   * @param column_chunk_data Flattened device spans of column chunk data returned in the same order
+   *        as `all_column_chunks_byte_ranges`
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
+   * @return Table of all materialized columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+  
+  /*
    * @brief Partition row groups into passes such that the amount of GPU memory required to read,
    * decompress and decode a pass is bounded by the specified limit
    *
