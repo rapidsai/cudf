@@ -126,7 +126,13 @@ def to_numeric(
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
-            col = col.astype(cat_dtype)
+            if cat_dtype.kind in "iub" and col.has_nulls():
+                # pandas promotes a null-containing categorical with
+                # integer/bool categories to float, since those categories
+                # cannot represent the missing value.
+                col = col.astype(np.dtype(np.float64))
+            else:
+                col = col.astype(cat_dtype)
         else:
             col = _convert_str_col(
                 col._get_decategorized_column(),  # type: ignore[attr-defined]

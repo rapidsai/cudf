@@ -13,13 +13,13 @@ from cudf_streaming.streaming.partition import (
     unpack_and_concat,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.leaf_actor import (
     pull_from_channel,
     push_to_channel,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.chunks.partition import PartitionMapChunk
