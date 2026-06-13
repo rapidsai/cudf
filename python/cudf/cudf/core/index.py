@@ -154,18 +154,29 @@ def _datetime_index_resolution(index: DatetimeIndex) -> str:
     if len(index) == 0:
         return "day"
 
-    min_value, max_value = index._column.minmax()
-    for resolution, attr, divisor in (
-        ("nanosecond", "nanosecond", 1),
-        ("microsecond", "nanosecond", 1_000),
-        ("millisecond", "microsecond", 1_000),
-        ("second", "second", 1),
-        ("minute", "minute", 1),
-        ("hour", "hour", 1),
+    time_unit_to_ns = {
+        "s": 1_000_000_000,
+        "ms": 1_000_000,
+        "us": 1_000,
+        "ns": 1,
+    }
+    unit_ns = time_unit_to_ns[index._column.time_unit]
+    values = index._column.astype(np.dtype(np.int64))
+
+    # Uses a full column scan to detect the finest timestamp resolution,
+    # unlike checking only min/max which misses interior high-resolution
+    # values. Test divisibility by the next coarser unit with column-level
+    # modular arithmetic so the scan stays on the GPU.
+    for resolution, next_coarser_unit_ns in (
+        ("nanosecond", 1_000),
+        ("microsecond", 1_000_000),
+        ("millisecond", 1_000_000_000),
+        ("second", 60_000_000_000),
+        ("minute", 3_600_000_000_000),
+        ("hour", 86_400_000_000_000),
     ):
-        if any(
-            getattr(value, attr) // divisor for value in (min_value, max_value)
-        ):
+        divisor = next_coarser_unit_ns // unit_ns
+        if divisor > 1 and (values % divisor).any():
             return resolution
     return "day"
 
@@ -3577,7 +3588,7 @@ class DatetimeIndex(Index):
                 )
                 if self.is_monotonic_decreasing:
                     mask = (self._column >= start) & (self._column <= end)
-                    return mask.values
+                    return cupy.where(mask.values)[0]
                 result = self.find_label_range(slice(start, end))
                 return slice(result.start, result.stop, None)
         return super().get_loc(key)

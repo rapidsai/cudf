@@ -33,13 +33,6 @@ def _assert_array_get_loc_eq(pi, key):
     assert_eq(expected, got)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "_datetime_index_resolution only checks min/max and misses interior "
-        "seconds, so get_loc falls through instead of partial-string matching"
-    ),
-    strict=True,
-)
 def test_monotonic_increasing_coarse_key_returns_slice():
     pi = pd.DatetimeIndex(["2020-01-01", "2020-01-01 00:00:01", "2020-01-02"])
 
@@ -87,13 +80,6 @@ def test_monotonic_increasing_key_not_found():
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "_datetime_index_resolution only checks min/max and misses interior "
-        "seconds on decreasing indexes"
-    ),
-    strict=True,
-)
 def test_monotonic_decreasing_coarse_key_returns_ndarray():
     pi = pd.DatetimeIndex(["2020-01-02", "2020-01-01 00:00:01", "2020-01-01"])
 
@@ -113,13 +99,6 @@ def test_non_monotonic_coarse_key_raises_keyerror():
     _assert_array_get_loc_eq(pi, "2020-01-01")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "_datetime_index_resolution only checks min/max and misses finer "
-        "interior timestamp resolution"
-    ),
-    strict=True,
-)
 def test_resolution_inference_interior_seconds():
     pi = pd.DatetimeIndex(["2020-01-01", "2020-01-01 12:00:00", "2020-01-02"])
 
