@@ -16,6 +16,7 @@ from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.cuda_stream import is_equal_streams
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.content_description import ContentDescription
@@ -23,7 +24,6 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
