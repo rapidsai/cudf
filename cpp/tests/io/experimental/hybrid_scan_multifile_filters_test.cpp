@@ -10,8 +10,8 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>

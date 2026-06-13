@@ -227,7 +227,7 @@ class hybrid_scan_multifile {
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
-  
+
   /*
    * @brief Partition row groups into passes such that the amount of GPU memory required to read,
    * decompress and decode a pass is bounded by the specified limit
