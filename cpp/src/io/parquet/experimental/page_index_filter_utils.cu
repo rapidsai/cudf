@@ -18,6 +18,7 @@
 #include <thrust/gather.h>
 
 #include <algorithm>
+#include <format>
 #include <numeric>
 #include <vector>
 
@@ -29,10 +30,9 @@ size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
       return col.schema_idx == schema_idx;
     });
-  CUDF_EXPECTS(
-    colchunk_iter != row_group.columns.end(),
-    "Column chunk with schema index " + std::to_string(schema_idx) + " not found in row group",
-    std::invalid_argument);
+  CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+               std::format("Column chunk with schema index {} not found in row group", schema_idx),
+               std::invalid_argument);
   return std::distance(row_group.columns.begin(), colchunk_iter);
 }
 

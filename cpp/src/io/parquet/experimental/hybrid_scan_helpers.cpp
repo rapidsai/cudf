@@ -9,6 +9,7 @@
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
+#include "page_index_filter_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
@@ -503,16 +504,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             auto const cached_offset = colchunk_offset.value_or(-1);
             if (cached_offset < 0 or cached_offset >= num_col_chunks or
                 row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
-              auto const it = std::find_if(
-                row_group.columns.begin(),
-                row_group.columns.end(),
-                [mapped_schema_idx](auto const& c) { return c.schema_idx == mapped_schema_idx; });
-              CUDF_EXPECTS(it != row_group.columns.end(),
-                           "Column chunk with schema index " + std::to_string(mapped_schema_idx) +
-                             " not found in row group",
-                           std::invalid_argument);
-              colchunk_offset =
-                static_cast<size_type>(std::distance(row_group.columns.begin(), it));
+              colchunk_offset = find_colchunk_iter_offset(row_group, mapped_schema_idx);
             }
 
             auto const& col_chunk = row_group.columns[colchunk_offset.value()];
