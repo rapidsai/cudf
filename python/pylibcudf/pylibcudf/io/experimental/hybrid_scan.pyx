@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint8_t, uintptr_t
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -24,6 +25,7 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_device_span_const_uint8_t,
     const_size_type,
     const_uint8_t,
+    hybrid_scan_metadata as cpp_hybrid_scan_metadata,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
@@ -40,7 +42,7 @@ import pylibcudf.libcudf.io.hybrid_scan
 
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
-__all__ = ["FileMetaData", "HybridScanReader", "UseDataPageMask"]
+__all__ = ["FileMetaData", "HybridScanMetadata", "HybridScanReader", "UseDataPageMask"]
 
 
 cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
@@ -52,6 +54,73 @@ cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
     return device_span[const_uint8_t](<const_uint8_t*>
                                       <uintptr_t>obj.ptr,
                                       <size_t>obj.size)
+
+
+cdef class HybridScanMetadata:
+    """Shareable, pre-parsed Parquet file metadata for the hybrid scan reader.
+
+    Parse the metadata of a single Parquet file once, then construct multiple
+    :class:`HybridScanReader` instances that share it (one per row-group range of the
+    file) instead of each re-parsing and copying the metadata.
+
+    For details, see :cpp:class:`cudf::io::parquet::experimental::hybrid_scan_metadata`
+
+    Examples
+    --------
+    >>> import pylibcudf as plc
+    >>> metadata = plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+    ...     file_metadata, options)
+    >>> reader = plc.io.experimental.HybridScanReader.from_metadata(metadata)
+    """
+
+    @staticmethod
+    def from_footer_bytes(
+        const uint8_t[::1] footer_bytes,
+        ParquetReaderOptions options
+    ):
+        """Parse shareable metadata from Parquet footer bytes.
+
+        Parameters
+        ----------
+        footer_bytes : Buffer
+            Parquet file footer bytes
+        options : ParquetReaderOptions
+            Parquet reader options
+
+        Returns
+        -------
+        HybridScanMetadata
+        """
+        cdef HybridScanMetadata self = HybridScanMetadata.__new__(HybridScanMetadata)
+        with nogil:
+            self.c_obj = make_unique[cpp_hybrid_scan_metadata](
+                host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
+                options.c_obj
+            )
+        return self
+
+    @staticmethod
+    def from_parquet_metadata(c_FileMetaData metadata, ParquetReaderOptions options):
+        """Build shareable metadata from a pre-populated ``FileMetaData``.
+
+        Parameters
+        ----------
+        metadata : FileMetaData
+            Pre-populated Parquet file metadata
+        options : ParquetReaderOptions
+            Parquet reader options
+
+        Returns
+        -------
+        HybridScanMetadata
+        """
+        cdef HybridScanMetadata self = HybridScanMetadata.__new__(HybridScanMetadata)
+        with nogil:
+            self.c_obj = make_unique[cpp_hybrid_scan_metadata](
+                metadata.c_obj,
+                options.c_obj
+            )
+        return self
 
 
 cdef class HybridScanReader:
@@ -109,6 +178,30 @@ cdef class HybridScanReader:
             reader.c_obj = make_unique[cpp_hybrid_scan_reader](
                 metadata.c_obj,
                 options.c_obj
+            )
+        return reader
+
+    @staticmethod
+    def from_metadata(HybridScanMetadata metadata):
+        """Create a HybridScanReader that shares pre-parsed metadata.
+
+        Constructs a lightweight reader that borrows ``metadata`` instead of
+        re-parsing and copying the file metadata. Use one shared
+        :class:`HybridScanMetadata` to read disjoint row-group ranges of a single file.
+
+        Parameters
+        ----------
+        metadata : HybridScanMetadata
+            Shared, pre-parsed Parquet file metadata
+
+        Returns
+        -------
+        HybridScanReader
+        """
+        cdef HybridScanReader reader = HybridScanReader.__new__(HybridScanReader)
+        with nogil:
+            reader.c_obj = make_unique[cpp_hybrid_scan_reader](
+                dereference(metadata.c_obj.get())
             )
         return reader
 

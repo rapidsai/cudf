@@ -520,12 +520,12 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
-  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
+  _metadata = file_metadatas.empty() ? std::make_shared<aggregate_reader_metadata>(
                                          _sources,
                                          options.is_enabled_use_arrow_schema(),
                                          options.get_column_names().has_value() and
                                            options.is_enabled_allow_mismatched_pq_schemas())
-                                     : std::make_unique<aggregate_reader_metadata>(
+                                     : std::make_shared<aggregate_reader_metadata>(
                                          std::forward<std::vector<FileMetaData>>(file_metadatas),
                                          options.is_enabled_use_arrow_schema(),
                                          options.get_column_names().has_value() and

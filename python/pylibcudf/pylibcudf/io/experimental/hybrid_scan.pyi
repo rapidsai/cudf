@@ -23,6 +23,16 @@ class UseDataPageMask(IntEnum):
     YES: int
     NO: int
 
+class HybridScanMetadata:
+    @staticmethod
+    def from_footer_bytes(
+        footer_bytes: Buffer, options: ParquetReaderOptions
+    ) -> HybridScanMetadata: ...
+    @staticmethod
+    def from_parquet_metadata(
+        metadata: FileMetaData, options: ParquetReaderOptions
+    ) -> HybridScanMetadata: ...
+
 class HybridScanReader:
     def __init__(
         self, footer_bytes: Buffer, options: ParquetReaderOptions
@@ -31,6 +41,8 @@ class HybridScanReader:
     def from_parquet_metadata(
         metadata: FileMetaData, options: ParquetReaderOptions
     ) -> HybridScanReader: ...
+    @staticmethod
+    def from_metadata(metadata: HybridScanMetadata) -> HybridScanReader: ...
     def parquet_metadata(self) -> FileMetaData: ...
     def page_index_byte_range(self) -> ByteRangeInfo: ...
     def setup_page_index(self, page_index_bytes: Buffer) -> None: ...

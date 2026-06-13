@@ -189,7 +189,6 @@ def expand_scan_for_rank(
     return scans
 
 
-
 # Per-file cache: row-group row counts, keyed by file path.
 # Avoids a redundant read_parquet_metadata call for every split of the same
 # file in SplitScan.do_evaluate; populated on first encounter.
@@ -199,6 +198,10 @@ _row_group_num_rows_cache: dict[str, list[int]] = {}
 # Avoids a redundant read_parquet_footers call for every split of the same
 # file; populated on first encounter.
 _parquet_footer_cache: dict[str, Any] = {}
+
+# TODO: Once footer prefetch (#22700) lands, we'll get
+# the metadata from IRExecutionContext footer cache
+_hybrid_scan_metadata_cache: dict[str, Any] = {}
 
 
 def _fetch_byte_ranges(
@@ -221,6 +224,7 @@ def _read_with_hybrid_scan(
     row_group_indices: list[int],
     stream: Stream,
     file_metadata: plc.io.parquet_metadata.FileMetaData,
+    *,
     split_index: int = 0,
     total_splits: int = 1,
     stats_pruning: bool = True,
@@ -242,10 +246,15 @@ def _read_with_hybrid_scan(
             options.set_column_names(with_columns)
         options.set_filter(plc_filter)
 
-        reader = plc.io.experimental.HybridScanReader.from_parquet_metadata(
-            file_metadata,
-            options,
-        )
+        # Parse the file metadata once per file and share it across the file's
+        # splits, rather than re-parsing and copying it per split.
+        metadata = _hybrid_scan_metadata_cache.get(paths[0])
+        if metadata is None:
+            metadata = plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+                file_metadata, options
+            )
+            _hybrid_scan_metadata_cache[paths[0]] = metadata
+        reader = plc.io.experimental.HybridScanReader.from_metadata(metadata)
 
         if stats_pruning:
             row_group_indices = reader.filter_row_groups_with_stats(
@@ -324,7 +333,7 @@ def _read_with_hybrid_scan(
             [schema[n] for n in payload_names],
             stream=stream,
         )
-        # Ensure the decode kernels are finished before 
+        # Ensure the decode kernels are finished before
         # filter_chunks and payload_chunks go out of scope
         stream.synchronize()
         return DataFrame(
