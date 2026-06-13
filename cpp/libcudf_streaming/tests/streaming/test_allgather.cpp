@@ -5,10 +5,11 @@
 
 #include "base_streaming_fixture.hpp"
 
+#include <cudf_streaming/integrations/partition.hpp>
+
 #include <cuda_runtime_api.h>
 
 #include <coro/latch.hpp>
-#include <cudf_streaming/integrations/partition.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <rapidsmpf/communicator/single.hpp>
