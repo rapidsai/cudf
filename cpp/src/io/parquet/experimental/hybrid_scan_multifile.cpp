@@ -8,6 +8,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 
+#include <numeric>
+
 namespace cudf::io::parquet::experimental {
 
 hybrid_scan_multifile::hybrid_scan_multifile(
@@ -74,7 +76,8 @@ std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_wit
   return _impl->filter_row_groups_with_stats(row_group_indices, options, stream);
 }
 
-std::vector<text::byte_range_info> hybrid_scan_multifile::bloom_filters_byte_ranges(
+std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
+hybrid_scan_multifile::bloom_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options) const
 {
@@ -83,14 +86,30 @@ std::vector<text::byte_range_info> hybrid_scan_multifile::bloom_filters_byte_ran
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_with_bloom_filters(
-  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
+  cudf::host_span<std::vector<cudf::device_span<uint8_t const>> const> bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
+
+  // Concatenate the per-source spans in source order
+  auto const num_chunks =
+    std::accumulate(bloom_filter_data.begin(),
+                    bloom_filter_data.end(),
+                    std::size_t{0},
+                    [](auto sum, auto const& source_data) { return sum + source_data.size(); });
+
+  std::vector<cudf::device_span<uint8_t const>> flattened_bloom_filter_data;
+  flattened_bloom_filter_data.reserve(num_chunks);
+  for (auto const& source_bloom_filter_data : bloom_filter_data) {
+    flattened_bloom_filter_data.insert(flattened_bloom_filter_data.end(),
+                                       source_bloom_filter_data.begin(),
+                                       source_bloom_filter_data.end());
+  }
+
   return _impl->filter_row_groups_with_bloom_filters(
-    bloom_filter_data, row_group_indices, options, stream);
+    flattened_bloom_filter_data, row_group_indices, options, stream);
 }
 
 }  // namespace cudf::io::parquet::experimental

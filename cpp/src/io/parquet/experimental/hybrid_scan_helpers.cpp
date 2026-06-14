@@ -377,7 +377,8 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
-std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+aggregate_reader_metadata::get_bloom_filter_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -411,6 +412,10 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   std::vector<byte_range_info> bloom_filter_bytes;
   bloom_filter_bytes.reserve(num_chunks);
 
+  // Parallel map identifying the source each emitted byte range must be fetched from
+  std::vector<cudf::size_type> chunk_source_map;
+  chunk_source_map.reserve(num_chunks);
+
   // Flag to check if we have at least one valid bloom filter offset
   auto have_bloom_filters = false;
 
@@ -431,6 +436,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
                         // Get bloom filter offsets and sizes
                         bloom_filter_bytes.emplace_back(col_meta.bloom_filter_offset.value_or(0),
                                                         col_meta.bloom_filter_length.value_or(0));
+                        chunk_source_map.emplace_back(static_cast<cudf::size_type>(src_index));
 
                         // Set `have_bloom_filters` if `bloom_filter_offset` is valid
                         if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
@@ -440,7 +446,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
 
   if (not have_bloom_filters) { return {}; }
 
-  return bloom_filter_bytes;
+  return {std::move(bloom_filter_bytes), std::move(chunk_source_map)};
 }
 
 std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
