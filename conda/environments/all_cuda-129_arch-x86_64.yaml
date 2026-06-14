@@ -75,14 +75,14 @@ dependencies:
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4
-- pytest
 - pytest-benchmark
-- pytest-cases>=3.10.1
+- pytest-cases>=3.8.2
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
 - pytest-timeout
 - pytest-xdist
+- pytest<9.1.0
 - python-confluent-kafka
 - python-xxhash
 - python>=3.11
