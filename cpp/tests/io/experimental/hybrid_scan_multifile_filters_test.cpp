@@ -515,7 +515,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
     0x30, 0x20, 0x28, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x20, 0x37, 0x31, 0x63, 0x35, 0x63, 0x30, 0x37,
     0x63, 0x64, 0x64, 0x29, 0x00, 0xd8, 0x01, 0x00, 0x00, 0x50, 0x41, 0x52, 0x31,
   };
-  // Two sources backed by the embedded bloom-filter fixture
+  // Sources backed by the embedded bloom-filter fixture
   std::vector<char> const fixture(bloom_filter_alignment_parquet.begin(),
                                   bloom_filter_alignment_parquet.end());
   std::vector<std::vector<char>> file_buffers(num_sources, fixture);
