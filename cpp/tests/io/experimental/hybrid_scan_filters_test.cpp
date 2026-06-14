@@ -19,11 +19,15 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <rmm/aligned.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace {
@@ -1329,6 +1333,54 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto const expected = std::vector<cudf::size_type>{0, 2, 3};
     EXPECT_EQ(result, expected);
   }
+}
+
+TEST_F(HybridScanFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
+{
+  auto const stream = cudf::get_default_stream();
+  auto aligned_mr   = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                        rmm::CUDA_ALLOCATION_ALIGNMENT);
+
+  auto literal_value = cudf::string_scalar("Did not like the color", true, stream);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto column_ref    = cudf::ast::column_name_reference("r_reason_desc");
+  auto filter        = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_ref, literal);
+  auto options       = cudf::io::parquet_reader_options::builder().filter(filter).build();
+
+  auto const parquet_filepath =
+    std::filesystem::path{__FILE__}
+      .parent_path()
+      .parent_path()
+      .parent_path()
+      .parent_path()
+      .parent_path() /
+    "python/cudf/cudf/tests/data/parquet/bloom_filter_alignment.parquet";
+  auto const datasource_ptr = cudf::io::datasource::create(parquet_filepath.string());
+  auto datasource           = std::ref(*datasource_ptr);
+  auto const footer         = cudf::io::parquet::fetch_footer_to_host(datasource);
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer, options);
+
+  auto row_group_indices         = reader->all_row_groups(options);
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>{row_group_indices};
+  auto const expected_row_groups = std::vector<cudf::size_type>{0};
+  ASSERT_EQ(row_group_indices, expected_row_groups);
+
+  auto const bloom_filter_byte_ranges =
+    std::get<0>(reader->secondary_filters_byte_ranges(current_row_group_indices, options));
+  ASSERT_FALSE(bloom_filter_byte_ranges.empty());
+
+  auto [bloom_filter_buffers, bloom_filter_data, bloom_filter_tasks] =
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      datasource, bloom_filter_byte_ranges, stream, aligned_mr);
+  bloom_filter_tasks.get();
+
+  auto const surviving_row_groups =
+    reader->filter_row_groups_with_bloom_filters(
+      bloom_filter_data, current_row_group_indices, options, stream);
+
+  EXPECT_EQ(surviving_row_groups, expected_row_groups)
+    << "BUG: hybrid scan bloom filtering pruned a row group containing the queried value.";
 }
 
 template <typename T>
