@@ -77,7 +77,7 @@ dependencies:
 - pydata-sphinx-theme>=0.15.4
 - pytest
 - pytest-benchmark
-- pytest-cases>=3.8.2,<3.10.1
+- pytest-cases>=3.10.1
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0

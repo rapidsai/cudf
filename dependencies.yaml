@@ -1085,7 +1085,7 @@ dependencies:
           - *fastavro
           - hypothesis>=6.131.7
           - pytest-benchmark
-          - pytest-cases>=3.8.2,<3.10.1
+          - pytest-cases>=3.10.1
           - scipy
           - zstandard
       - output_types: conda
