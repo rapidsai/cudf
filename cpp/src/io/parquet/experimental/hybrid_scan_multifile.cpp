@@ -83,4 +83,43 @@ hybrid_scan_multifile::secondary_filters_byte_ranges(
   return _impl->secondary_filters_byte_ranges(row_group_indices, options);
 }
 
+std::unique_ptr<cudf::column> hybrid_scan_multifile::build_all_true_row_mask(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->build_all_true_row_mask(row_group_indices, stream, mr);
+}
+
+std::unique_ptr<cudf::column> hybrid_scan_multifile::build_row_mask_with_page_index_stats(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->build_row_mask_with_page_index_stats(row_group_indices, options, stream, mr);
+}
+
+std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
+hybrid_scan_multifile::all_column_chunks_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->all_column_chunks_byte_ranges(row_group_indices, options);
+}
+
+table_with_metadata hybrid_scan_multifile::materialize_all_columns(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->materialize_all_columns(row_group_indices, column_chunk_data, options, stream, mr);
+}
+
 }  // namespace cudf::io::parquet::experimental
