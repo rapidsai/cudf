@@ -857,7 +857,12 @@ class ParquetMetadata:
         self.mean_size_per_file = {}
         self.column_names = ()
         self.file_metadata = None
-        max_footer_samples = max(1, max_footer_samples)
+        self.total_file_count = len(self.paths)
+        self.sampled_file_count = 0
+        if max_footer_samples <= 0:
+            self.sample_paths = ()
+            return
+
         stride = max(1, int(len(paths) / max_footer_samples))
         self.sample_paths = paths[: stride * max_footer_samples : stride]
 
@@ -866,7 +871,6 @@ class ParquetMetadata:
             # TODO: This requires row_count to be nullable. Why do we allow empty paths?
             return
 
-        total_file_count = len(self.paths)
         sampled_file_count = len(self.sample_paths)
         sample_footers = plc.io.parquet_metadata.read_parquet_footers(
             plc.io.SourceInfo(list(self.sample_paths))
@@ -874,11 +878,11 @@ class ParquetMetadata:
         self.file_metadata = tuple(sample_footers)
 
         sampled_row_count = sum(fmd.num_rows for fmd in sample_footers)
-        if total_file_count == sampled_file_count:
+        if self.total_file_count == sampled_file_count:
             row_count = sampled_row_count
         else:
             num_rows_per_sampled_file = int(sampled_row_count / sampled_file_count)
-            row_count = num_rows_per_sampled_file * total_file_count
+            row_count = num_rows_per_sampled_file * self.total_file_count
 
         num_row_groups_per_sampled_file = [
             len(fmd.row_groups) for fmd in sample_footers
@@ -904,7 +908,6 @@ class ParquetMetadata:
         }
         self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
         self.row_count = row_count
-        self.total_file_count = total_file_count
         self.sampled_file_count = sampled_file_count
 
 
