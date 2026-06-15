@@ -385,14 +385,23 @@ def test_string_index_append_multiindex_returns_object_index():
     assert_eq(expected, actual)
 
 
-def test_index_append_multiindex_same_name_preserved():
-    pd_data = pd.Index([1, 2], name="x")
-    pd_other = pd.MultiIndex.from_tuples([(3, 4)], names=["x", "y"])
+def test_index_append_multiindex_name_propagation():
+    # When both operands are unnamed, the result name is None (preserved).
+    # When either operand is named, the result name is also None because
+    # cross-type append (Index + MultiIndex) never preserves a non-None name.
+    pd_data_named = pd.Index([1, 2], name="x")
+    pd_other_named = pd.MultiIndex.from_tuples([(3, 4)], names=["x", "y"])
+    pd_data_unnamed = pd.Index([1, 2])
+    pd_other_unnamed = pd.MultiIndex.from_tuples([(3, 4)])
 
-    gd_data = cudf.from_pandas(pd_data)
-    gd_other = cudf.from_pandas(pd_other)
-
-    expected = pd_data.append(pd_other)
-    actual = gd_data.append(gd_other)
-    # pandas returns None name when Index.name != MultiIndex.names[0] structure
-    assert_eq(expected, actual)
+    for pd_data, pd_other in [
+        (pd_data_named, pd_other_named),
+        (pd_data_named, pd_other_unnamed),
+        (pd_data_unnamed, pd_other_named),
+        (pd_data_unnamed, pd_other_unnamed),
+    ]:
+        gd_data = cudf.from_pandas(pd_data)
+        gd_other = cudf.from_pandas(pd_other)
+        expected = pd_data.append(pd_other)
+        actual = gd_data.append(gd_other)
+        assert_eq(expected, actual)
