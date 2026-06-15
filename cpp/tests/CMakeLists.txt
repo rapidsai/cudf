@@ -692,6 +692,8 @@ add_embed(cudf_test_fragments)
 
 add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
 
+add_fragment(cudf_test_fragments FRAGMENT to_lower SOURCE transform/fragments/to_lower.cu)
+
 add_fragment(
   cudf_test_fragments FRAGMENT sum_of_squares SOURCE transform/fragments/sum_of_squares.cu
 )

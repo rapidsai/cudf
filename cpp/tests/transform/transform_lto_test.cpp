@@ -49,6 +49,32 @@ TEST_F(TransformLTOTest, InvSqrt)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
 }
 
+TEST_F(TransformLTOTest, ToLower)
+{
+  column_wrapper<uint8_t> input{{65, 66, 97, 98, 48, 49, 32, 33, 127, 255}};
+
+  cudf::transform_input inputs[]   = {input};
+  cudf::transform_output outputs[] = {
+    {cudf::data_type{cudf::type_id::UINT8}, cudf::output_nullability::ALL_VALID}};
+
+  auto const range = cudf_test_fragments::file_ranges[cudf_test_fragments::to_lower];
+  std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
+
+  auto result = cudf::transform_lto(udf,
+                                    cudf::lto_binary_type::FATBIN,
+                                    cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt,
+                                    cudf::test::get_default_stream());
+
+  column_wrapper<uint8_t> expected{{65, 66, 65, 66, 48, 49, 32, 33, 127, 255}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+}
+
 TEST_F(TransformLTOTest, SumOfSquares)
 {
   column_wrapper<float> lhs{{1.0f, 4.0f, 9.0f, 16.0f}};

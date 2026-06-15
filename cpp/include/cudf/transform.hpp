@@ -207,7 +207,8 @@ enum class lto_binary_type : uint8_t {
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param udf The LTO-IR string of the transform function to apply
+ * @param udf The LTO-IR string of the transform function to apply. The UDF must be named
+ * `transform` and follow the CUDF UDF ABI.
  * @param binary_type   The type of the LTO binary provided in `udf`
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param user_data     User-defined device data to pass to the UDF.

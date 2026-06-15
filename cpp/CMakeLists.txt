@@ -569,9 +569,35 @@ endmacro()
 
 add_embed(cudf_fragments)
 
-foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t float
-                      double numeric::decimal32 numeric::decimal64 numeric::decimal128
+list(
+  APPEND
+  CUDF_PRECOMPILE_TYPES
+  uint8_t
+  uint16_t
+  uint32_t
+  uint64_t
+  int8_t
+  int16_t
+  int32_t
+  int64_t
+  float
+  double
+  numeric::decimal32
+  numeric::decimal64
+  numeric::decimal128
+  cudf::timestamp_D
+  cudf::timestamp_s
+  cudf::timestamp_ms
+  cudf::timestamp_us
+  cudf::timestamp_ns
+  cudf::duration_D
+  cudf::duration_s
+  cudf::duration_ms
+  cudf::duration_us
+  cudf::duration_ns
 )
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
   set(FRAGMENT_NAME transform_kernel)
   get_property(
     FILE_INDEX
@@ -603,9 +629,7 @@ foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t 
   )
 endforeach()
 
-foreach(TYPE IN ITEMS uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t float
-                      double numeric::decimal32 numeric::decimal64 numeric::decimal128
-)
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
   foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
     set(FRAGMENT_NAME transform_kernel)
     get_property(

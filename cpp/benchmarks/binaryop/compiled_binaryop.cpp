@@ -106,9 +106,22 @@ BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  NULL_MIN,             time
 
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
-void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
+void BM_jit_binaryop(nvbench::state& state, cudf::binary_operator binop)
 {
+  constexpr auto const jit_mul_cuda = R"***(
+__device__ void transform(float* out, float a, float b) {
+  *out = a * b;
+}
+)***";
+
+constexpr auto const jit_add_cuda = R"***(
+__device__ void transform(float* out, float a, float b) {
+  *out = a + b;
+}
+)***";
+
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const use_lto  = state.get_string("use_lto") == "true";
   static_assert(std::is_same_v<TypeLhs, TypeRhs> && std::is_same_v<TypeRhs, TypeOut>);
   static_assert(std::is_same_v<TypeLhs, float>);
 
@@ -119,18 +132,18 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
   auto rhs = cudf::column_view(source_table->get_column(1));
 
   size_t fragment_id = 0;
-  bool null_aware    = false;
+  char const * cuda = nullptr;
 
   switch (binop) {
     case cudf::binary_operator::ADD: {
       fragment_id = cudf_benchmark_fragments::add_f32;
-      null_aware  = false;
+      cuda = jit_add_cuda;
     } break;
     case cudf::binary_operator::MUL: {
       fragment_id = cudf_benchmark_fragments::mul_f32;
-      null_aware  = false;
+      cuda = jit_mul_cuda;
     } break;
-    default: throw std::runtime_error("Unsupported binary operator for LTO benchmark");
+    default: throw std::runtime_error("Unsupported binary operator for JIT benchmark");
   }
 
   // Call once for hot cache.
@@ -141,9 +154,18 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
   auto const range = cudf_benchmark_fragments::file_ranges[fragment_id];
   std::span<uint8_t const> udf{cudf_benchmark_fragments::files.subspan(range[0], range[1])};
 
- auto result  =  cudf::transform_lto(udf,
+ auto result  = use_lto ?
+ cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
-                                     null_aware ? cudf::null_aware::YES : cudf::null_aware::NO,
+                                    cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt):
+                                    cudf::multi_transform(cuda,
+                                      cudf::udf_source_type::CUDA,
+                                    cudf::null_aware::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -157,9 +179,16 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
   state.add_global_memory_writes<TypeOut>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-   cudf::transform_lto(udf,
+ [[maybe_unused]] auto result = use_lto ?   cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
-                                     null_aware ? cudf::null_aware::YES : cudf::null_aware::NO,
+                                     cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt):   cudf::multi_transform(cuda,
+                                      cudf::udf_source_type::CUDA,
+                                    cudf::null_aware::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -169,22 +198,23 @@ void BM_lto_binaryop(nvbench::state& state, cudf::binary_operator binop)
 }
 
 
-#define BM_LTO_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)      \
+#define BM_JIT_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)      \
   static void name(::nvbench::state& st)                                 \
   {                                                                      \
-    ::BM_lto_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); \
+    ::BM_jit_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); \
   }                                                                      \
   NVBENCH_BENCH(name)                                                    \
-    .set_name("lto_binary_op_" BM_STRINGIFY(name))                       \
-    .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
+    .set_name("jit_binary_op_" BM_STRINGIFY(name))                       \
+    .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})\
+    .add_string_axis("use_lto", {"true", "false"})
 
 
-#define build_name_lto(a, b, c, d) a##_##b##_##c##_##d##_lto
+#define build_name_jit(a, b, c, d) a##_##b##_##c##_##d##_jit
 
 
-#define LTO_BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
-  BM_LTO_BINARYOP_BENCHMARK_DEFINE(build_name_lto(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
+#define JIT_BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
+  BM_JIT_BINARYOP_BENCHMARK_DEFINE(build_name_jit(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
 
 
-LTO_BINARYOP_BENCHMARK_DEFINE(float,        float,      ADD,                  float);
-LTO_BINARYOP_BENCHMARK_DEFINE(float,        float,      MUL,                  float);
+JIT_BINARYOP_BENCHMARK_DEFINE(float,        float,      ADD,                  float);
+JIT_BINARYOP_BENCHMARK_DEFINE(float,        float,      MUL,                  float);
