@@ -4,6 +4,7 @@
  */
 
 #include <cudf_streaming/integrations/partition.hpp>
+
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
