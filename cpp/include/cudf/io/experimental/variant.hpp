@@ -57,7 +57,7 @@ namespace io::parquet::experimental {
  * @return `list<uint8>` column with the extracted value's encoded bytes
  *
  * @throws std::invalid_argument on empty path or malformed syntax (`[*]` wildcards, negative
- *         indices, out-of-range indices, and quoted names inside `[...]` are not supported)
+ *         indices, and quoted names inside `[...]` are not supported)
  */
 [[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,

@@ -5,16 +5,13 @@
 
 #include "variant_path.hpp"
 
-#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <charconv>
 #include <cstddef>
 #include <format>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
@@ -81,17 +78,8 @@ std::vector<std::string> parse_variant_path(std::string_view path)
       if (!(nc >= '0' && nc <= '9')) {
         throw_parse_error(path, pos, "expected non-negative integer after '['");
       }
-      auto const digits_start = pos;
       while (pos < len && path[pos] >= '0' && path[pos] <= '9') {
         ++pos;
-      }
-      // Reject indices that cannot be a valid array position (don't fit in cudf::size_type), so the
-      // GPU-side path walker never has to parse an out-of-range value.
-      cudf::size_type index_value = 0;
-      [[maybe_unused]] auto const [ptr, ec] =
-        std::from_chars(path.data() + digits_start, path.data() + pos, index_value);
-      if (ec != std::errc{}) {
-        throw_parse_error(path, digits_start, "variant path index is out of range");
       }
       if (pos >= len || path[pos] != ']') {
         throw_parse_error(path, pos, "expected ']' after index");

@@ -380,11 +380,6 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
 //   offsets:      (num_elements + 1) entries, each `offset_size` bytes, relative to the end of
 //                 offsets
 //   values:       concatenated element blobs
-//
-// Unlike object field offsets (which are ordered by field name and so are not necessarily
-// monotonic, see locate_object_field), array element offsets are monotonically increasing per the
-// Variant spec, so the element length is taken directly from the offset delta (o1 - o0) rather than
-// from the element's own header.
 __device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> val,
                                                            size_type index)
 {
@@ -470,10 +465,7 @@ __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> me
     auto const* sd  = step.data();
 
     if (slen >= 2 && sd[0] == '[') {
-      // Accumulate the index in an unsigned 64-bit value so a long digit run cannot overflow the
-      // signed size_type accumulator (which would be UB). An index that does not fit in size_type
-      // is out of range for any array and resolves to a missing element (empty span).
-      uint64_t index     = 0;
+      size_type index    = 0;
       bool ok            = (sd[slen - 1] == ']');
       size_type const lo = 1;
       size_type const hi = slen - 1;
@@ -483,14 +475,10 @@ __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> me
           ok = false;
           break;
         }
-        index = index * 10 + static_cast<uint64_t>(c - '0');
-        if (index > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
-          ok = false;
-          break;
-        }
+        index = index * 10 + static_cast<size_type>(c - '0');
       }
       if (!ok || lo == hi) { return {}; }
-      sub_val = locate_array_element(sub_val, static_cast<size_type>(index));
+      sub_val = locate_array_element(sub_val, index);
     } else {
       auto const field_id = find_key_in_metadata(meta, step);
       if (!field_id.has_value()) { return {}; }

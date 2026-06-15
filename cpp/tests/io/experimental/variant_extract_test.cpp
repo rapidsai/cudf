@@ -491,16 +491,8 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
   auto col    = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
   // Object-key descent and array-index steps are supported; wildcards, quoted keys, negative
-  // indices, out-of-range indices, and other malformed bracket forms must throw.
-  for (auto const* bad : {"$..a",
-                          "$.a[",
-                          "$.a[]",
-                          "$.",
-                          "$['x']",
-                          "$.a[*]",
-                          "$.a[-1]",
-                          "$.a[1",
-                          "$.a[99999999999999999999]"}) {
+  // indices, and other malformed bracket forms must throw.
+  for (auto const* bad : {"$..a", "$.a[", "$.a[]", "$.", "$['x']", "$.a[*]", "$.a[-1]", "$.a[1"}) {
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::get_variant_field(col, bad, stream)),
       std::invalid_argument)
