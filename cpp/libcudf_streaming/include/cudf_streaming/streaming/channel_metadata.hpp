@@ -60,7 +60,7 @@ struct OrderKey {
 };
 
 /**
- * @brief One valid ordering for sorted/range-partitioned data.
+ * @brief A valid ordering description for sorted/range-partitioned data.
  *
  * Data is partitioned by value ranges based on predetermined boundaries.
  * For N partitions, there are N-1 boundary rows:
@@ -113,14 +113,26 @@ struct Ordering {
    * boundaries.
    */
   [[nodiscard]] Ordering with_keys(std::vector<OrderKey> new_keys) const;
+
+  /**
+   * @brief Check whether boundary values are aligned with another ordering.
+   *
+   * @param other The ordering to compare against.
+   * @param br Buffer resource used for temporary allocations during comparison.
+   * @return True when both orderings have matching boundary values and
+   * strict_boundaries attributes, and are otherwise compatible (same order and
+   * null_order).
+   */
+  [[nodiscard]] bool boundaries_aligned_with(Ordering const& other,
+                                             rapidsmpf::BufferResource& br) const;
 };
 
 /**
  * @brief Order-based partitioning scheme for sorted/range-partitioned data.
  *
- * An OrderScheme may contain multiple valid orderings for the same stream. The
- * orderings are stored in descending preference order; `orderings.front()` is
- * the default ordering used by existing consumers.
+ * An OrderScheme may contain multiple ordering descriptions for the same
+ * stream. The orderings are stored in descending preference order;
+ * `orderings.front()` is the default ordering used by existing consumers.
  */
 struct OrderScheme {
   std::vector<Ordering> orderings;  ///< Valid orderings in descending preference order.
@@ -143,20 +155,6 @@ struct OrderScheme {
    * @param orderings Non-empty orderings in descending preference order.
    */
   explicit OrderScheme(std::vector<Ordering> orderings);
-
-  /// @brief Return a new scheme with updated keys for the preferred ordering.
-  [[nodiscard]] OrderScheme with_keys(std::vector<OrderKey> new_keys) const;
-
-  /**
-   * @brief Check whether boundary values are aligned with another scheme.
-   *
-   * @param other The OrderScheme to compare against.
-   * @param br Buffer resource used for temporary allocations during comparison.
-   * @return True when both schemes have matching boundary values and strict_boundaries
-   * attributes, and the schemes are otherwise compatible (same order and null_order).
-   */
-  [[nodiscard]] bool boundaries_aligned_with(OrderScheme const& other,
-                                             rapidsmpf::BufferResource& br) const;
 };
 
 /**

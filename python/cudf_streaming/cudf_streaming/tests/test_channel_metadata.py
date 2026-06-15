@@ -112,15 +112,18 @@ def test_order_scheme(context: Context) -> None:
     assert ordering.num_boundaries == 1
     assert "OrderScheme" in repr(o1)
 
-    assert o1.boundaries_aligned_with(
-        _two_key_order_scheme(context), context.br()
+    assert o1.orderings[0].boundaries_aligned_with(
+        _two_key_order_scheme(context).orderings[0], context.br()
     )
 
     o_strict = _two_key_order_scheme(context, strict_boundaries=True)
     assert o_strict.orderings[0].strict_boundaries
-    assert not o1.boundaries_aligned_with(o_strict, context.br())
-    assert o_strict.boundaries_aligned_with(
-        _two_key_order_scheme(context, strict_boundaries=True), context.br()
+    assert not o1.orderings[0].boundaries_aligned_with(
+        o_strict.orderings[0], context.br()
+    )
+    assert o_strict.orderings[0].boundaries_aligned_with(
+        _two_key_order_scheme(context, strict_boundaries=True).orderings[0],
+        context.br(),
     )
 
     with pytest.raises(TypeError, match="OrderKey"):
@@ -205,7 +208,9 @@ def test_order_scheme_get_boundaries(context: Context) -> None:
             )
         ]
     )
-    assert scheme2.boundaries_aligned_with(scheme, context.br())
+    assert scheme2.orderings[0].boundaries_aligned_with(
+        scheme.orderings[0], context.br()
+    )
 
 
 def test_ordering_with_keys(context: Context) -> None:
@@ -222,11 +227,11 @@ def test_ordering_with_keys(context: Context) -> None:
     assert ordering2.num_boundaries == ordering.num_boundaries
     assert ordering2.strict_boundaries == ordering.strict_boundaries
     # Schemes with different key indices but shared boundaries are boundary-aligned
-    assert o1.boundaries_aligned_with(OrderScheme([ordering2]), context.br())
+    assert ordering.boundaries_aligned_with(ordering2, context.br())
 
 
-def test_order_scheme_boundaries_aligned_with(context: Context) -> None:
-    """boundaries_aligned_with performs value-level boundary comparison, ignoring key indices."""
+def test_ordering_boundaries_aligned_with(context: Context) -> None:
+    """Boundary comparison ignores key indices but checks values and ordering."""
     df = plc.Table(
         [
             plc.Column.from_iterable_of_py(
@@ -241,8 +246,8 @@ def test_order_scheme_boundaries_aligned_with(context: Context) -> None:
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     ]
-    o1 = OrderScheme([Ordering(keys, _make_boundaries(context, df))])
-    o2 = OrderScheme([Ordering(keys, _make_boundaries(context, df))])
+    o1 = Ordering(keys, _make_boundaries(context, df))
+    o2 = Ordering(keys, _make_boundaries(context, df))
     assert o1.boundaries_aligned_with(o2, context.br())
 
     # Different key column indices but same boundary values → still aligned
@@ -250,9 +255,7 @@ def test_order_scheme_boundaries_aligned_with(context: Context) -> None:
         OrderKey(2, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(3, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     ]
-    o_shifted = OrderScheme(
-        [Ordering(shifted_keys, _make_boundaries(context, df))]
-    )
+    o_shifted = Ordering(shifted_keys, _make_boundaries(context, df))
     assert o1.boundaries_aligned_with(o_shifted, context.br())
 
     # Different boundary values → not aligned (shape matches, values differ)
@@ -266,18 +269,14 @@ def test_order_scheme_boundaries_aligned_with(context: Context) -> None:
             ),
         ]
     )
-    o3 = OrderScheme([Ordering(keys, _make_boundaries(context, df_diff))])
+    o3 = Ordering(keys, _make_boundaries(context, df_diff))
     assert not o1.boundaries_aligned_with(o3, context.br())
 
     # Different strict_boundaries → not aligned
-    o_strict = OrderScheme(
-        [
-            Ordering(
-                keys,
-                _make_boundaries(context, df),
-                strict_boundaries=True,
-            )
-        ]
+    o_strict = Ordering(
+        keys,
+        _make_boundaries(context, df),
+        strict_boundaries=True,
     )
     assert not o1.boundaries_aligned_with(o_strict, context.br())
 
@@ -339,8 +338,8 @@ def test_partitioning_scenarios(context: Context) -> None:
     order_scheme = _two_key_order_scheme(context)
     p_ordered = Partitioning(order_scheme, "inherit")
     assert isinstance(p_ordered.inter_rank, OrderScheme)
-    assert p_ordered.inter_rank.boundaries_aligned_with(
-        order_scheme, context.br()
+    assert p_ordered.inter_rank.orderings[0].boundaries_aligned_with(
+        order_scheme.orderings[0], context.br()
     )
     assert p_ordered.local == "inherit"
 
@@ -455,8 +454,8 @@ def test_message_roundtrip_with_order_scheme(context: Context) -> None:
     assert got_m.partitioning.local == "inherit"
     assert ordering.strict_boundaries
     assert ordering.num_boundaries == 2
-    assert got_m.partitioning.inter_rank.boundaries_aligned_with(
-        order_scheme, context.br()
+    assert got_m.partitioning.inter_rank.orderings[0].boundaries_aligned_with(
+        order_scheme.orderings[0], context.br()
     )
     assert msg_m.empty()
 
@@ -472,8 +471,8 @@ def test_order_scheme_roundtrip_from_metadata(context: Context) -> None:
 
     p2 = Partitioning(scheme, None)
     assert isinstance(p2.inter_rank, OrderScheme)
-    assert p2.inter_rank.boundaries_aligned_with(
-        _two_key_order_scheme(context), context.br()
+    assert p2.inter_rank.orderings[0].boundaries_aligned_with(
+        _two_key_order_scheme(context).orderings[0], context.br()
     )
 
 

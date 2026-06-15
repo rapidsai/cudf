@@ -45,6 +45,9 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
         shared_ptr[cpp_TableChunk] boundaries
         bool_t strict_boundaries
         cpp_Ordering with_keys(vector[cpp_OrderKey]) except +ex_handler
+        bool_t boundaries_aligned_with(
+            const cpp_Ordering&, const cpp_BufferResource&
+        ) except +ex_handler
 
     cdef cppclass cpp_OrderScheme "cudf_streaming::streaming::OrderScheme":
         cpp_OrderScheme() noexcept
@@ -53,9 +56,6 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
         ) except +ex_handler
         cpp_OrderScheme(vector[cpp_Ordering]) except +ex_handler
         vector[cpp_Ordering] orderings
-        bool_t boundaries_aligned_with(
-            const cpp_OrderScheme&, const cpp_BufferResource&
-        ) except +ex_handler
 
     cdef cppclass cpp_PartitioningSpec "cudf_streaming::streaming::PartitioningSpec":
         enum cpp_Type "cudf_streaming::streaming::PartitioningSpec::Type":

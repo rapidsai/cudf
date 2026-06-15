@@ -490,7 +490,7 @@ def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None
     assert result.inter_rank.modulus == 8
 
 
-def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=False):
+def _make_ordering(context, *, key_indices=(0,), values=(100, 200), strict=False):
     stream = context.get_stream_from_pool()
     df = DataFrame.from_polars(
         pl.DataFrame({f"k{i}": list(values) for i in key_indices}), stream
@@ -500,7 +500,13 @@ def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=F
     )
     asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
     keys = [OrderKey(i, asc, before) for i in key_indices]
-    return OrderScheme([Ordering(keys, chunk, strict_boundaries=strict)])
+    return Ordering(keys, chunk, strict_boundaries=strict)
+
+
+def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=False):
+    return OrderScheme(
+        [_make_ordering(context, key_indices=key_indices, values=values, strict=strict)]
+    )
 
 
 @pytest.mark.parametrize(
@@ -588,6 +594,24 @@ def test_from_keys_order_scheme_single_rank(spmd_engine):
     assert result_rev_int.inter_rank_scheme is None
 
 
+def test_from_keys_order_scheme_selects_matching_ordering(spmd_engine):
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    scheme = OrderScheme(
+        [
+            _make_ordering(spmd_engine.context, key_indices=(0,), strict=True),
+            _make_ordering(spmd_engine.context, key_indices=(1,), strict=True),
+        ]
+    )
+    part = Partitioning(inter_rank=scheme, local="inherit")
+
+    result = NormalizedPartitioning.from_keys(
+        part, nranks=4, keys=(OrderKey(1, asc, before),)
+    )
+
+    assert isinstance(result.inter_rank_scheme, OrderScheme)
+    assert result.inter_rank_scheme.orderings[0].keys[0].column_index == 1
+
+
 def test_remap_partitioning_order_scheme_select(spmd_engine):
     part = Partitioning(
         inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
@@ -598,6 +622,25 @@ def test_remap_partitioning_order_scheme_select(spmd_engine):
     assert result is not None
     assert isinstance(result.inter_rank, OrderScheme)
     assert result.inter_rank.orderings[0].keys[0].column_index == 1
+
+
+def test_remap_partitioning_order_scheme_updates_all_orderings(spmd_engine):
+    part = Partitioning(
+        inter_rank=OrderScheme(
+            [
+                _make_ordering(spmd_engine.context, key_indices=(0,)),
+                _make_ordering(spmd_engine.context, key_indices=(1,)),
+            ]
+        ),
+        local="inherit",
+    )
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    assert [o.keys[0].column_index for o in result.inter_rank.orderings] == [1, 0]
 
 
 def test_remap_partitioning_order_scheme_drops_key(spmd_engine):

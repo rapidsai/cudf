@@ -128,7 +128,7 @@ cdef class OrderKey:
 
 
 cdef class Ordering:
-    """One valid ordering for sorted/range-partitioned data."""
+    """A valid ordering description for sorted/range-partitioned data."""
 
     def __init__(
         self,
@@ -194,6 +194,21 @@ cdef class Ordering:
             cpp_keys.push_back((<OrderKey?>key)._handle)
         return Ordering.from_cpp(self._handle.with_keys(move(cpp_keys)))
 
+    def boundaries_aligned_with(
+        self, Ordering other not None, BufferResource br not None
+    ) -> bool:
+        """
+        Check whether boundary values are aligned with another ordering.
+
+        Parameters
+        ----------
+        other
+            The ordering to compare against.
+        br
+            Buffer resource for temporary allocations during comparison.
+        """
+        return self._handle.boundaries_aligned_with(other._handle, deref(br.ptr()))
+
     def __repr__(self):
         return (
             f"Ordering({self.keys!r}, "
@@ -204,9 +219,9 @@ cdef class Ordering:
 cdef class OrderScheme:
     """Order-based partitioning scheme for sorted/range-partitioned data.
 
-    An OrderScheme contains one or more valid orderings, stored in descending
-    preference order. Consumers should inspect the ``Ordering`` they intend to
-    use for keys, boundaries, and strictness.
+    An OrderScheme contains one or more ordering descriptions, stored in
+    descending preference order. Consumers should inspect the ``Ordering`` they
+    intend to use for keys, boundaries, and strictness.
 
     Parameters
     ----------
@@ -237,21 +252,6 @@ cdef class OrderScheme:
         return tuple(
             Ordering.from_cpp(self._handle.orderings[i]) for i in range(n)
         )
-
-    def boundaries_aligned_with(
-        self, OrderScheme other not None, BufferResource br not None
-    ) -> bool:
-        """
-        Check whether boundary values are aligned with another scheme.
-
-        Parameters
-        ----------
-        other
-            The scheme to compare against.
-        br
-            Buffer resource for temporary allocations during comparison.
-        """
-        return self._handle.boundaries_aligned_with(other._handle, deref(br.ptr()))
 
     def __repr__(self):
         return f"OrderScheme({self.orderings!r})"
