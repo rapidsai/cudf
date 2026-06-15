@@ -490,14 +490,64 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
 {
   auto col    = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
-  // Only object-key descent is supported — array indexing, bracket steps, and quoted keys should
-  // throw, alongside malformed paths.
-  for (auto const* bad : {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.", "$['x']", "$.a[*]"}) {
+  // Object-key descent and array-index steps are supported; wildcards, quoted keys, negative
+  // indices, out-of-range indices, and other malformed bracket forms must throw.
+  for (auto const* bad : {"$..a",
+                          "$.a[",
+                          "$.a[]",
+                          "$.",
+                          "$['x']",
+                          "$.a[*]",
+                          "$.a[-1]",
+                          "$.a[1",
+                          "$.a[99999999999999999999]"}) {
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::get_variant_field(col, bad, stream)),
       std::invalid_argument)
       << "path that should have thrown: " << bad;
   }
+}
+
+TEST_F(ExtractVariantFieldTest, ApacheArrayPrimitiveIndexing)
+{
+  // array_primitive encodes the int8 array [2, 1, 5, 9]; index into it via "[N]" steps.
+  auto col       = make_apache_variant(avf::array_primitive);
+  auto stream    = cudf::test::get_default_stream();
+  auto const i8  = cudf::data_type{cudf::type_id::INT8};
+  auto const get = [&](char const* path) {
+    return cudf::io::parquet::experimental::extract_variant_field(col, path, i8, stream);
+  };
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[0]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[2]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{5}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[3]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{9}});
+
+  // Out-of-bounds index resolves to null.
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[4]"), null_expected);
+}
+
+TEST_F(ExtractVariantFieldTest, ArrayIndexingTypeMismatchAndBounds)
+{
+  // array_primitive is the int8 array [2, 1, 5, 9]. An object-key step against an array, an
+  // out-of-bounds index, and an index step against a non-array element all resolve to null.
+  auto col      = make_apache_variant(avf::array_primitive);
+  auto stream   = cudf::test::get_default_stream();
+  auto const i8 = cudf::data_type{cudf::type_id::INT8};
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+
+  // Object-key descent into an array value: no such key -> null.
+  auto key_on_array =
+    cudf::io::parquet::experimental::extract_variant_field(col, "$.foo", i8, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*key_on_array, null_expected);
+
+  // Index step against a primitive element (after first descending into it): non-array -> null.
+  auto index_on_primitive =
+    cudf::io::parquet::experimental::extract_variant_field(col, "$[0][0]", i8, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*index_on_primitive, null_expected);
 }
 
 TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)

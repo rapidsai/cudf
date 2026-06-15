@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import pytest
@@ -231,14 +232,18 @@ def test_expand_scan_for_rank_fused_and_single_read(
     nranks: int,
     expected_path_groups: list[list[str]],
 ) -> None:
-    scans = expand_scan_for_rank(
+    partition_count = math.ceil(len(paths) / plan.factor)
+    streaming_scan = expand_scan_for_rank(
         _make_parquet_scan(paths),
         plan,
+        partition_count,
         rank=rank,
         nranks=nranks,
         parquet_options=ParquetOptions(),
     )
-    for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
+    for scan, expected_paths in zip(
+        streaming_scan.scans, expected_path_groups, strict=True
+    ):
         assert isinstance(scan, FusedScan)
         assert scan.paths == expected_paths
 
@@ -255,15 +260,20 @@ def test_expand_scan_for_rank_split_files(
     expected_splits: list[tuple[int, int]],
 ) -> None:
     plan = IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES)
-    scans = expand_scan_for_rank(
-        _make_parquet_scan(["file.parquet"]),
+    paths = ["file.parquet"]
+    partition_count = plan.factor * len(paths)
+    streaming_scan = expand_scan_for_rank(
+        _make_parquet_scan(paths),
         plan,
+        partition_count,
         rank=rank,
         nranks=2,
         parquet_options=ParquetOptions(),
     )
-    assert len(scans) == len(expected_splits)
-    for scan, (split_index, total_splits) in zip(scans, expected_splits, strict=True):
+    assert len(streaming_scan.scans) == len(expected_splits)
+    for scan, (split_index, total_splits) in zip(
+        streaming_scan.scans, expected_splits, strict=True
+    ):
         assert isinstance(scan, SplitScan)
         assert scan.split_index == split_index
         assert scan.total_splits == total_splits
