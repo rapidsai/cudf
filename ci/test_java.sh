@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -45,7 +45,7 @@ export LIBCUDF_LARGE_STRINGS_ENABLED=0
 
 rapids-logger "Run Java tests"
 pushd java
-timeout 30m mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF
+timeout 30m mvn test -B -s ci/test_java_settings.xml -DCUDF_JNI_ENABLE_PROFILING=OFF
 popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"
