@@ -378,7 +378,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-aggregate_reader_metadata::get_bloom_filter_bytes(
+aggregate_reader_metadata::bloom_filters_byte_ranges(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -413,40 +413,41 @@ aggregate_reader_metadata::get_bloom_filter_bytes(
   bloom_filter_bytes.reserve(num_chunks);
 
   // Parallel map identifying the source each emitted byte range must be fetched from
-  std::vector<cudf::size_type> chunk_source_map;
-  chunk_source_map.reserve(num_chunks);
+  std::vector<cudf::size_type> bloom_filter_source_map;
+  bloom_filter_source_map.reserve(num_chunks);
 
   // Flag to check if we have at least one valid bloom filter offset
   auto have_bloom_filters = false;
 
   // For all sources
-  std::for_each(cuda::counting_iterator<std::size_t>{0},
-                cuda::counting_iterator{row_group_indices.size()},
-                [&](auto const src_index) {
-                  // Get all row group indices in the data source
-                  auto const& rg_indices = row_group_indices[src_index];
-                  // For all row groups
-                  std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-                    // For all column chunks
-                    std::for_each(
-                      bloom_filter_col_schemas.begin(),
-                      bloom_filter_col_schemas.end(),
-                      [&](auto const schema_idx) {
-                        auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
-                        // Get bloom filter offsets and sizes
-                        bloom_filter_bytes.emplace_back(col_meta.bloom_filter_offset.value_or(0),
-                                                        col_meta.bloom_filter_length.value_or(0));
-                        chunk_source_map.emplace_back(static_cast<cudf::size_type>(src_index));
+  std::for_each(
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
+    [&](auto const src_index) {
+      // Get all row group indices in the data source
+      auto const& rg_indices = row_group_indices[src_index];
+      // For all row groups
+      std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
+        // For all column chunks
+        std::for_each(
+          bloom_filter_col_schemas.begin(),
+          bloom_filter_col_schemas.end(),
+          [&](auto const schema_idx) {
+            auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
+            // Get bloom filter offsets and sizes
+            bloom_filter_bytes.emplace_back(col_meta.bloom_filter_offset.value_or(0),
+                                            col_meta.bloom_filter_length.value_or(0));
+            bloom_filter_source_map.emplace_back(static_cast<cudf::size_type>(src_index));
 
-                        // Set `have_bloom_filters` if `bloom_filter_offset` is valid
-                        if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
-                      });
-                  });
-                });
+            // Set `have_bloom_filters` if `bloom_filter_offset` is valid
+            if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
+          });
+      });
+    });
 
   if (not have_bloom_filters) { return {}; }
 
-  return {std::move(bloom_filter_bytes), std::move(chunk_source_map)};
+  return {std::move(bloom_filter_bytes), std::move(bloom_filter_source_map)};
 }
 
 std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(

@@ -160,9 +160,7 @@ class hybrid_scan_multifile {
    *
    * @param row_group_indices Input row group indices, one per source
    * @param options Parquet reader options
-   * @return A pair of (1) a flat vector of byte ranges of column chunk bloom filters subject to the
-   *         filter predicate and (2) a parallel source-index map identifying the source each byte
-   *         range must be fetched from
+   * @return A pair of vectors containing bloom filter byte ranges and corresponding source indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
   bloom_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -173,14 +171,15 @@ class hybrid_scan_multifile {
    *
    * @note The `bloom_filter_data` device spans must point to 32-byte aligned addresses
    *
-   * @param bloom_filter_data Device spans of bloom filters, one inner vector per source
+   * @param bloom_filter_data Flattened device spans of bloom filters returned in the same order as
+   *        `bloom_filters_byte_ranges`
    * @param row_group_indices Input row group indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered per-source row group indices (one inner vector per source)
+   * @return Vectors of filtered per-source row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<std::vector<cudf::device_span<uint8_t const>> const> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;

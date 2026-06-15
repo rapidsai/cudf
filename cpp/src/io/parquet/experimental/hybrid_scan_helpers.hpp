@@ -222,16 +222,14 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filters
    *
-   * @return A pair of (1) byte ranges of bloom filters, one per column chunk with equality
-   *         predicate, and (2) a parallel source-index map identifying the source each byte range
-   *         must be fetched from
+   * @return A pair of vectors containing bloom filter byte ranges and corresponding source indices
    */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
-  get_bloom_filter_bytes(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                         cudf::host_span<data_type const> output_dtypes,
-                         cudf::host_span<cudf::size_type const> output_column_schemas,
-                         std::reference_wrapper<ast::expression const> filter);
+  bloom_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                            cudf::host_span<data_type const> output_dtypes,
+                            cudf::host_span<cudf::size_type const> output_column_schemas,
+                            std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Get the dictionary page byte ranges, one per column chunk with (in)equality predicate

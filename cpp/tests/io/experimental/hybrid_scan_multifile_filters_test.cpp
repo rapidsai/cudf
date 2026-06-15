@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -33,9 +32,7 @@
 
 namespace {
 
-// 32-byte alignment required for bloom filter device buffers
 auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
-
 
 /**
  * @brief Copy fixed-width column data to a host vector
@@ -352,7 +349,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFilters)
     file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
   }
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // An equality predicate makes col0 eligible for bloom filtering. cuDF's Parquet writer does not
   // emit bloom filters, so the per-source bloom byte ranges come back empty (same as single-file).
@@ -393,9 +390,8 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFilters)
     auto const input_row_group_indices = reader->all_row_groups(options);
     ASSERT_EQ(input_row_group_indices.size(), num_sources);
 
-    auto const empty_bloom_data =
-      std::vector<std::vector<cudf::device_span<uint8_t const>>>(num_sources);
-    auto const bloom_filtered = reader->filter_row_groups_with_bloom_filters(
+    auto const empty_bloom_data = std::vector<cudf::device_span<uint8_t const>>{};
+    auto const bloom_filtered   = reader->filter_row_groups_with_bloom_filters(
       empty_bloom_data, input_row_group_indices, options, stream);
     EXPECT_EQ(bloom_filtered, input_row_group_indices);
   }
@@ -532,13 +528,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
                                   bloom_filter_alignment_parquet.end());
   std::vector<std::vector<char>> file_buffers(num_sources, fixture);
 
-  auto inputs = build_multifile_inputs(file_buffers);
-
-  std::vector<std::reference_wrapper<cudf::io::datasource>> datasource_refs;
-  datasource_refs.reserve(num_sources);
-  for (auto& ds : inputs.datasources) {
-    datasource_refs.emplace_back(*ds);
-  }
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // An equality predicate makes the "r_reason_desc" column bloom-eligible
   auto literal_value = cudf::string_scalar("Did not like the color", true, stream);
@@ -571,14 +561,19 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
   }
   auto [bloom_buffers, bloom_data_per_source, bloom_tasks] =
     cudf::io::parquet::fetch_byte_ranges_to_device_async(
-      datasource_refs, ranges_per_source, stream, aligned_mr);
+      inputs.datasource_refs, ranges_per_source, stream, aligned_mr);
   bloom_tasks.get();
   for (auto const& per_source : bloom_data_per_source) {
     ASSERT_EQ(per_source.size(), 1);
   }
 
+  // Flatten the per-source bloom filter data in source order
+  std::vector<cudf::device_span<uint8_t const>> bloom_filter_data;
+  for (auto const& per_source : bloom_data_per_source) {
+    bloom_filter_data.insert(bloom_filter_data.end(), per_source.begin(), per_source.end());
+  }
   auto const bloom_filtered = reader->filter_row_groups_with_bloom_filters(
-    bloom_data_per_source, input_row_group_indices, options, stream);
+    bloom_filter_data, input_row_group_indices, options, stream);
 
   // Shouldn't filter out any RG, since the queried value is present in every source.
   EXPECT_EQ(bloom_filtered, input_row_group_indices);
