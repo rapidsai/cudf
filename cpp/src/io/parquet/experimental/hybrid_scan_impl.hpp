@@ -131,7 +131,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::build_all_true_row_mask
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::build_all_true_row_mask
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -139,7 +139,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::build_row_mask_with_page_index_stats
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::build_row_mask_with_page_index_stats
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -196,19 +196,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Fetches byte ranges for all (or selected) column chunks
-   *
-   * @param row_group_indices Input row groups indices
-   * @param options Parquet reader options
-   * @return Pair of a vector of byte ranges to column chunks of all (or selected) columns and a
-   * vector of their corresponding input source file indices
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::all_column_chunks_byte_ranges
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   all_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                 parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_all_columns
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,

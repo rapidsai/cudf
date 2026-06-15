@@ -32,13 +32,14 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cudf_streaming/integrations/bloom_filter.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_transform.cuh>
 #include <cuda/std/tuple>
 
-#include <cudf_streaming/integrations/bloom_filter.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/buffer.hpp>

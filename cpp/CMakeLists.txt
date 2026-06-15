@@ -76,10 +76,26 @@ if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
       ON
       CACHE BOOL "Statically link the CUDA runtime" FORCE
   )
+  set(RTCX_STATIC_LINK_NVRTC
+      ON
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      ON
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
+  )
 else()
   set(CUDA_STATIC_RUNTIME
       OFF
       CACHE BOOL "Statically link the CUDA runtime" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVRTC
+      OFF
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      OFF
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
   )
 endif()
 
@@ -695,6 +711,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/experimental/variant_extract.cu
+  src/io/parquet/experimental/variant_path.cpp
   src/io/parquet/expression_transform_helpers.cpp
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
@@ -740,11 +758,16 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
-  src/join/filter_join_indices.cu
-  src/join/filter_join_indices_kernel_complex.cu
-  src/join/filter_join_indices_kernel_null_complex.cu
-  src/join/filter_join_indices_kernel_null_primitive.cu
-  src/join/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices.cu
+  src/join/filter_join_indices/filter_join_indices_jit.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
@@ -767,11 +790,10 @@ add_library(
   src/join/hash_join/partitioned_left_join.cu
   src/join/hash_join/partitioned_retrieve.cu
   src/join/hash_join/partitioned_retrieve_outer.cu
-  src/join/mark_join.cu
-  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
+  src/join/mark_join.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
