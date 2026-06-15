@@ -269,8 +269,9 @@ void reader_impl::assemble_dict_transcoded_columns(
                        return size_type{0};
                      });
 
-      // Grab ownership of the decoded INT32 indices column; we slice it into zero-copy
-      // per-chunk views to feed into the per-segment dictionary column builders.
+      // Grab ownership of the decoded INT32 indices column. Its buffer is shared (aliased) by
+      // every per-chunk DICTIONARY32 view below via the parent view's offset/size, so it must
+      // stay alive until the per-column concatenate/assembly completes.
       auto& indices_col = out_columns[i];
       CUDF_EXPECTS(indices_col != nullptr and indices_col->type().id() == type_id::INT32,
                    "Expected INT32 indices column for dict-transcoded flat string column");
@@ -290,44 +291,45 @@ void reader_impl::assemble_dict_transcoded_columns(
       CUDF_EXPECTS(chunk_row_offsets.back() == indices_view.size(),
                    "Row counts on pass chunks must sum to the indices column size");
 
-      // Build a DICTIONARY32 segment for every chunk. Each segment carries row-group-local
-      // indices into its own keys child; `cudf::detail::concatenate` rewrites the indices
-      // against the unified, deduplicated keys. We deep-copy each sliced view into a fresh
-      // offset-zero indices column before handing it to `make_dictionary_column`: the
-      // `make_dictionary_column(column_view, column_view, ...)` path would otherwise
-      // double-apply the slice's offset when constructing the internal indices child.
-      // TODO: Make it a viewable instead of reconstructing.
-      std::vector<std::unique_ptr<column>> dict_segments(chunk_indices.size());
+      // Build a DICTIONARY32 *view* for every chunk without copying the decoded indices. Each
+      // view's keys child is this chunk's own STRING keys column (which must be materialized from
+      // the parquet dictionary page), while its indices child aliases the shared, already-decoded
+      // INT32 buffer. We select each chunk's row range via the parent dictionary view's
+      // `offset`/`size` rather than slicing the indices child: `get_indices_annotated()` rebuilds
+      // the indices view from the child's `head()` plus the parent's offset/size, so a sliced
+      // child (carrying its own offset) would be ignored. `cudf::detail::concatenate` then
+      // rewrites the row-group-local indices against the unified, deduplicated keys.
+      std::vector<std::unique_ptr<column>> seg_keys_owners(chunk_indices.size());
+      std::vector<column_view> dict_segment_views(chunk_indices.size());
       std::transform(cuda::counting_iterator<size_t>{0},
                      cuda::counting_iterator{chunk_indices.size()},
-                     dict_segments.begin(),
+                     dict_segment_views.begin(),
                      [&](size_t k) {
                        auto const chunk_idx = chunk_indices[k];
                        auto const& chunk    = pass.chunks[chunk_idx];
 
-                       auto const seg_view = cudf::detail::slice(
-                         indices_view, chunk_row_offsets[k], chunk_row_offsets[k + 1], _stream);
-                       auto seg_indices = std::make_unique<column>(seg_view, _stream, _mr);
-
-                       auto seg_keys = make_keys_column_from_index_pairs(
+                       seg_keys_owners[k] = make_keys_column_from_index_pairs(
                          chunk.str_dict_index, chunk_key_counts[k], _stream, _mr);
 
-                       return cudf::make_dictionary_column(
-                         std::move(seg_keys), std::move(seg_indices), _stream, _mr);
+                       auto const seg_rows = chunk_row_offsets[k + 1] - chunk_row_offsets[k];
+                       return column_view{data_type{type_id::DICTIONARY32},
+                                          seg_rows,
+                                          nullptr,               // dictionary parent holds no data
+                                          nullptr,               // non-nullable transcode path
+                                          0,                     // null count
+                                          chunk_row_offsets[k],  // reslices shared indices child
+                                          {indices_view, seg_keys_owners[k]->view()}};
                      });
 
-      // TODO: For one row group, we can handle all of them at once.
-      // Concatenate all segments into the final DICTIONARY32 column for this input column.
-      // `cudf::dictionary::detail::concatenate` deduplicates + sorts keys and recomputes indices.
-      if (dict_segments.size() == 1) {
-        out_columns[i] = std::move(dict_segments.front());
+      // Materialize the final DICTIONARY32 column for this input column.
+      if (dict_segment_views.size() == 1) {
+        // Single row group: the parquet dictionary page keys are already unique, so no dedup is
+        // needed. Take ownership of the decoded INT32 indices buffer directly (zero copy).
+        out_columns[i] = cudf::make_dictionary_column(
+          std::move(seg_keys_owners.front()), std::move(indices_owner), _stream, _mr);
       } else {
-        std::vector<cudf::column_view> segment_views(dict_segments.size());
-        std::transform(
-          dict_segments.begin(), dict_segments.end(), segment_views.begin(), [](auto const& seg) {
-            return seg->view();
-          });
-        out_columns[i] = cudf::detail::concatenate(segment_views, _stream, _mr);
+        // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices.
+        out_columns[i] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
       }
     });
 }
