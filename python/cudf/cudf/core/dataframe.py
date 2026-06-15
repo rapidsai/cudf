@@ -945,7 +945,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
                 cols = {
-                    i: as_column(col_value.array, nan_as_null=nan_as_null)
+                    # Pass the Series (not ``col_value.array``) so that
+                    # ``as_column`` sees the column's explicit dtype. For an
+                    # object-dtype string column with nulls this preserves
+                    # ``object`` rather than inferring ``str`` in
+                    # pandas-compatible mode, matching ``cudf.Series(col)``.
+                    i: as_column(col_value, nan_as_null=nan_as_null)
                     for i, (_, col_value) in enumerate(data.items())
                 }
                 new_idx = from_pandas(data.index, nan_as_null=nan_as_null)

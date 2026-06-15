@@ -87,7 +87,7 @@ for version in "${VERSIONS[@]}"; do
     ./ci/run_cudf_polars_pytests.sh \
         -vv \
         "${COVERAGE_ARGS[@]}" \
-        --numprocesses=8 \
+        --numprocesses=4 \
         --dist=worksteal \
         --durations 10 --durations-min 10 \
         -ra \
