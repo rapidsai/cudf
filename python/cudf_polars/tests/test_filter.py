@@ -5,11 +5,7 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
-from polars import polars as plrs  # type: ignore[attr-defined]
 
-from cudf_polars import Translator
-from cudf_polars.dsl import expr, ir
-from cudf_polars.dsl.traversal import traversal
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -34,37 +30,13 @@ def test_filter(engine: pl.GPUEngine, expr, predicate_pushdown):
     )
 
 
-def test_filter_drops_dynamic_predicate_hint():
-    class DynamicPredHint(Exception):
-        pass
-
-    class DynamicPredVisitor:
-        def __init__(self, inner, op):
-            self.inner = inner
-            self.op = op
-
-        def __getattr__(self, name):
-            return getattr(self.inner, name)
-
-        def view_expression(self, n):
-            node = self.inner.view_expression(n)
-            if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op == self.op:
-                raise DynamicPredHint("dynamic_pred")
-            return node
-
+def test_filter_drops_dynamic_predicate_hint(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {"a": [1, 2, 3, 4, 5], "b": [5, 4, 3, 2, 1], "c": [1, 1, 3, 3, 5]}
     )
-    query = ldf.filter(
-        ((pl.col("b") < 5) & (pl.col("a") > 1))
-        & ((pl.col("c") == 3) & (pl.col("b") < 3))
-    )
-
-    visitor = DynamicPredVisitor(query._ldf.visit(), plrs._expr_nodes.Operator.Lt)
-    translator = Translator(visitor, pl.GPUEngine())
-    node = translator.translate_ir()
-
-    assert translator.errors == []
-    assert isinstance(node, ir.Filter)
-    columns = {n.name for n in traversal([node.mask.value]) if isinstance(n, expr.Col)}
-    assert columns == {"a", "c"}
+    # sort("b").head(3) causes Polars to inject a dynamic predicate hint into
+    # the filter below: FILTER (a > 1) & (c == 3) & col("b").dynamic_predicate()
+    # This test ensures we drop these dynamic predicate hints from the filter
+    # before executing on the GPU.
+    q = ldf.filter((pl.col("a") > 1) & (pl.col("c") == 3)).sort("b").head(3)
+    assert_gpu_result_equal(q, engine=engine)
