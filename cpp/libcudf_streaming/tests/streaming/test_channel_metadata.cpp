@@ -9,11 +9,12 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cudf_streaming/streaming/channel_metadata.hpp>
+#include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <cudf_streaming/streaming/channel_metadata.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 
 #include <memory>

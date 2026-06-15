@@ -9,6 +9,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <cudf_streaming/streaming/channel_metadata.hpp>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/memory_reservation.hpp>

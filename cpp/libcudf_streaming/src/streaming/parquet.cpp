@@ -9,10 +9,11 @@
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/types.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf_streaming/streaming/parquet.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/memory/memory_type.hpp>
 #include <rapidsmpf/statistics.hpp>
