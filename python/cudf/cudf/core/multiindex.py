@@ -1864,13 +1864,8 @@ class MultiIndex(Index):
         else:
             to_concat = [self, other]
 
-        for obj in to_concat:
-            if not isinstance(obj, MultiIndex):
-                raise TypeError(
-                    f"all objects should be of type "
-                    f"MultiIndex for MultiIndex.append, "
-                    f"found object of type: {type(obj)}"
-                )
+        if any(not isinstance(obj, MultiIndex) for obj in to_concat):
+            return Index._concat(to_concat)
 
         return type(self)._concat(to_concat)
 

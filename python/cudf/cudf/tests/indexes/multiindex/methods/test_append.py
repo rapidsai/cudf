@@ -53,10 +53,6 @@ def test_multiindex_append(data, other):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="MultiIndex.append(Index) raises TypeError instead of returning object Index",
-)
 def test_multiindex_append_index_returns_object_index():
     pdi = pd.MultiIndex.from_tuples([(1, "a"), (2, "b")])
     other_pd = pd.Index([3, 4])
@@ -70,10 +66,6 @@ def test_multiindex_append_index_returns_object_index():
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="MultiIndex.append(list[Index]) raises TypeError instead of returning object Index",
-)
 def test_multiindex_append_index_list_returns_object_index():
     pdi = pd.MultiIndex.from_tuples([(0, "a")])
     other_pd = [pd.Index([1, 2]), pd.Index([3, 4])]
