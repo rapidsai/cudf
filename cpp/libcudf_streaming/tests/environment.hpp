@@ -19,8 +19,8 @@ enum class TestEnvironmentType : int {
 /**
  * Base test environment that exposes a communicator to the test suite. Concrete,
  * communicator-specific environments (single/MPI/UCXX) derive from this class and are defined in
- * the corresponding main/*.cpp, where the communicator-specific state (e.g. the MPI communicator)
- * and headers live. Exactly one of them is linked into each test executable.
+ * the corresponding file in main dir, where the communicator-specific state (e.g. the MPI 
+ * communicator) and headers live. Exactly one of them is linked into each test executable.
  */
 class Environment : public ::testing::Environment {
  public:
