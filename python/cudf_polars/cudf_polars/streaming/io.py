@@ -11,7 +11,7 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, overload
 
 import polars as pl
 
@@ -626,7 +626,7 @@ class StreamingScan(IR):
         rank: int,
         nranks: int,
         parquet_options: ParquetOptions,
-    ) -> StreamingScan:
+    ) -> Self:
         """Construct a StreamingScan where factor files are grouped into one partition."""
         local_offset, local_count = _rank_slice(partition_count, rank, nranks)
         paths_start = local_offset * plan.factor
