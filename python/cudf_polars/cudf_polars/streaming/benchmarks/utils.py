@@ -47,6 +47,11 @@ HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
 COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 try:
+    import psutil
+except ImportError:
+    psutil = None
+
+try:
     import duckdb
 
     duckdb_err = None
@@ -346,22 +351,65 @@ class GPUInfo:
 
 
 @dataclasses.dataclass
+class CPUInfo:
+    """Information about the host CPU."""
+
+    model: str | None
+    physical_cores: int | None
+    logical_cores: int | None
+
+    @classmethod
+    def collect(cls) -> CPUInfo:
+        """Collect CPU information."""
+        model: str | None = None
+        try:
+            with Path("/proc/cpuinfo").open() as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        model = line.split(":", 1)[1].strip()
+                        break
+        except OSError:
+            pass
+        physical_cores: int | None = None
+        logical_cores: int | None = None
+        if psutil is not None:
+            physical_cores = psutil.cpu_count(logical=False)
+            logical_cores = psutil.cpu_count(logical=True)
+        return cls(
+            model=model, physical_cores=physical_cores, logical_cores=logical_cores
+        )
+
+
+@dataclasses.dataclass
 class HardwareInfo:
     """Information about the hardware used to run the query."""
 
     gpus: list[GPUInfo]
+    cpu: CPUInfo
     # TODO: ucx
 
     @classmethod
-    def collect(cls) -> HardwareInfo:
-        """Collect the hardware information."""
-        if pynvml is not None:
+    def collect(cls, *, collect_gpus: bool = True) -> HardwareInfo:
+        """
+        Collect the hardware information.
+
+        Parameters
+        ----------
+        collect_gpus : bool, optional
+            Whether to collect GPU information.
+
+        Returns
+        -------
+        HardwareInfo
+            The hardware information.
+        """
+        if collect_gpus and pynvml is not None:
             pynvml.nvmlInit()
             gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
         else:
-            # No GPUs -- probably running in CPU mode
+            # No GPUs -- CPU-only frontend or NVML unavailable
             gpus = []
-        return cls(gpus=gpus)
+        return cls(gpus=gpus, cpu=CPUInfo.collect())
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -571,6 +619,9 @@ class RunConfig:
             duckdb_temp_dir=args.duckdb_temp_dir,
             command_line=shlex.join(sys.argv),
             capture_env_vars=args.capture_env_vars,
+            hardware=HardwareInfo.collect(
+                collect_gpus=args.frontend not in _CPU_ENGINES
+            ),
         )
 
     def serialize(self, engine: StreamingEngine | None) -> dict:
