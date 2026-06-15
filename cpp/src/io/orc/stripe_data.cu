@@ -2072,6 +2072,7 @@ void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
   decode_nulls_and_string_dictionaries_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(
       chunks, global_dictionary, num_columns, num_stripes, first_row);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -2106,6 +2107,7 @@ void __host__ decode_column_data(column_desc* chunks,
   auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
   decode_column_data_kernel<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

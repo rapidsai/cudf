@@ -24,11 +24,13 @@ files:
       - depends_on_librmm
       - depends_on_libnvcomp
       - depends_on_librapidsmpf
+      - depends_on_libucxx
       - depends_on_numba_cuda
       - depends_on_rapids_logger
       - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
+      - depends_on_ucxx
       - develop
       - docs
       - iwyu
@@ -492,6 +494,7 @@ files:
       - depends_on_libcudf
       - depends_on_librmm
       - depends_on_librapidsmpf
+      - depends_on_libucxx
   py_run_libcudf_streaming:
     output: pyproject
     pyproject_dir: python/libcudf_streaming
@@ -520,10 +523,12 @@ files:
       - build_python_common
       - depends_on_libcudf_streaming
       - depends_on_librapidsmpf
+      - depends_on_libucxx
       - depends_on_librmm
       - depends_on_pylibcudf
       - depends_on_rapidsmpf
       - depends_on_rmm
+      - depends_on_ucxx
   py_run_cudf_streaming:
     output: pyproject
     pyproject_dir: python/cudf_streaming
@@ -757,6 +762,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - cuda-cudart-dev
+          - cuda-cupti-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
@@ -980,7 +986,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<9.1.0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
@@ -1338,6 +1344,56 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_libucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &libucxx_unsuffixed libucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libucxx_unsuffixed
+  depends_on_ucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &ucxx_unsuffixed ucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *ucxx_unsuffixed
   depends_on_rapidsmpf:
     common:
       - output_types: conda
@@ -1465,6 +1521,9 @@ dependencies:
           # Intentionally excluding `postgresql` because of
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - pytest-reportlog
           - ipython
           - hypothesis>=6.131.7
