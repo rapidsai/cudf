@@ -339,7 +339,7 @@ class StringMethods(BaseAccessor):
         1       0
         2       1
         3    <NA>
-        dtype: int32
+        dtype: ...
         """
         return self._return_pandas_string_int_result(
             self._column.count_characters()
@@ -364,13 +364,13 @@ class StringMethods(BaseAccessor):
         0    3
         1    1
         2    2
-        dtype: int32
+        dtype: ...
         >>> s = cudf.Series(["Hello", "Bye", "Thanks 😊"])
         >>> s.str.byte_count()
         0     5
         1     3
         2    11
-        dtype: int32
+        dtype: ...
         """
         return self._return_or_inplace(self._column.count_bytes())
 
@@ -3809,7 +3809,7 @@ class StringMethods(BaseAccessor):
         4    <NA>
         5       0
         6       1
-        dtype: int32
+        dtype: ...
 
         Escape ``'$'`` to find the literal dollar sign.
 
@@ -3821,13 +3821,13 @@ class StringMethods(BaseAccessor):
         3    2
         4    2
         5    0
-        dtype: int32
+        dtype: ...
 
         This is also available on Index.
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Index([0, 0, 2, 1], dtype='int32')
+        Index([0, 0, 2, 1], dtype='...')
 
         .. pandas-compat::
             :meth:`pandas.Series.str.count`
@@ -3965,7 +3965,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2    4
         3    2
-        dtype: int32
+        dtype: ...
         """
         return self._findall(plc.strings.findall.find_re, pat, flags)
 
@@ -4352,7 +4352,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2    0
         3    2
-        dtype: int64
+        dtype: ...
 
         Parameters such as `start` and `end` can also be used.
 
@@ -4361,7 +4361,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2   -1
         3    2
-        dtype: int64
+        dtype: ...
         """
         return self._find(plc.strings.find.find, sub, start, end)
 
@@ -4402,7 +4402,7 @@ class StringMethods(BaseAccessor):
         0    0
         1   -1
         2    7
-        dtype: int64
+        dtype: ...
 
         Using `start` and `end` parameters.
 
@@ -4410,7 +4410,7 @@ class StringMethods(BaseAccessor):
         0   -1
         1   -1
         2   -1
-        dtype: int64
+        dtype: ...
         """
         return self._find(plc.strings.find.rfind, sub, start, end)
 
