@@ -217,7 +217,7 @@ def _update_ordering_indices(
     return ordering.with_keys(
         (
             OrderKey(idx, k.order, k.null_order)
-            for k, idx in zip(ordering.keys, new_indices, strict=False)
+            for k, idx in zip(ordering.keys, new_indices, strict=True)
         )
     )
 

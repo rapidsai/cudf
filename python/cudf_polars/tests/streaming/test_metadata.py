@@ -610,6 +610,10 @@ def test_from_keys_order_scheme_selects_matching_ordering(spmd_engine):
 
     assert isinstance(result.inter_rank_scheme, OrderScheme)
     assert result.inter_rank_scheme.orderings[0].keys[0].column_index == 1
+    assert [o.keys[0].column_index for o in result.inter_rank_scheme.orderings] == [
+        1,
+        0,
+    ]
 
 
 def test_remap_partitioning_order_scheme_select(spmd_engine):
@@ -641,6 +645,25 @@ def test_remap_partitioning_order_scheme_updates_all_orderings(spmd_engine):
     assert result is not None
     assert isinstance(result.inter_rank, OrderScheme)
     assert [o.keys[0].column_index for o in result.inter_rank.orderings] == [1, 0]
+
+
+def test_remap_partitioning_order_scheme_drops_only_lost_orderings(spmd_engine):
+    part = Partitioning(
+        inter_rank=OrderScheme(
+            [
+                _make_ordering(spmd_engine.context, key_indices=(0,)),
+                _make_ordering(spmd_engine.context, key_indices=(2,)),
+            ]
+        ),
+        local="inherit",
+    )
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    assert [o.keys[0].column_index for o in result.inter_rank.orderings] == [1]
 
 
 def test_remap_partitioning_order_scheme_drops_key(spmd_engine):

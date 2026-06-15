@@ -130,12 +130,12 @@ struct Ordering {
 /**
  * @brief Order-based partitioning scheme for sorted/range-partitioned data.
  *
- * An OrderScheme may contain multiple ordering descriptions for the same
- * stream. The orderings are stored in descending preference order;
- * `orderings.front()` is the default ordering used by existing consumers.
+ * An OrderScheme may contain multiple alternative ordering descriptions for
+ * the same stream. Consumers are responsible for selecting the ordering that is
+ * relevant to a particular operation.
  */
 struct OrderScheme {
-  std::vector<Ordering> orderings;  ///< Valid orderings in descending preference order.
+  std::vector<Ordering> orderings;  ///< Alternative ordering descriptions.
 
   /// @brief Default constructor. Produces an invalid (empty) scheme.
   OrderScheme() = default;
@@ -152,7 +152,7 @@ struct OrderScheme {
   /**
    * @brief Construct a validated multi-ordering OrderScheme.
    *
-   * @param orderings Non-empty orderings in descending preference order.
+   * @param orderings Non-empty alternative ordering descriptions.
    */
   explicit OrderScheme(std::vector<Ordering> orderings);
 };

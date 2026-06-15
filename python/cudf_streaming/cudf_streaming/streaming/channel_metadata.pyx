@@ -219,15 +219,14 @@ cdef class Ordering:
 cdef class OrderScheme:
     """Order-based partitioning scheme for sorted/range-partitioned data.
 
-    An OrderScheme contains one or more ordering descriptions, stored in
-    descending preference order. Consumers should inspect the ``Ordering`` they
-    intend to use for keys, boundaries, and strictness.
+    An OrderScheme contains one or more alternative ordering descriptions.
+    Consumers should inspect the ``Ordering`` they intend to use for keys,
+    boundaries, and strictness.
 
     Parameters
     ----------
     orderings
-        Non-empty sequence of ``Ordering`` objects in descending preference
-        order.
+        Non-empty sequence of alternative ``Ordering`` objects.
     """
 
     def __init__(self, object orderings):
@@ -246,7 +245,7 @@ cdef class OrderScheme:
 
     @property
     def orderings(self) -> tuple:
-        """Valid orderings in descending preference order."""
+        """Alternative ordering descriptions."""
         cdef int i
         cdef int n = self._handle.orderings.size()
         return tuple(
