@@ -11,6 +11,7 @@
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>

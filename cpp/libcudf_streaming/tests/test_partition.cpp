@@ -16,6 +16,7 @@
 
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/integrations/utils.hpp>
+
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
