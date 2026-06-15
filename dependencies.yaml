@@ -987,7 +987,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<9.1.0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
@@ -1522,6 +1522,9 @@ dependencies:
           # Intentionally excluding `postgresql` because of
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - pytest-reportlog
           - ipython
           - hypothesis>=6.131.7
