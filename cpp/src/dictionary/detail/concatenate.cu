@@ -153,6 +153,7 @@ struct map_indices_fn {
 
 }  // namespace
 
+//TODO: Overload function to accept multiple vectors to do the concatenate at once, with a 2D kernel.
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
