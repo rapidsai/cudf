@@ -8,11 +8,12 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 
+#include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/per_device_resource.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <getopt.h>
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
