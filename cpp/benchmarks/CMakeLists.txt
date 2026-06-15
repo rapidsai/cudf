@@ -499,7 +499,7 @@ ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.c
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
-  rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+  rolling/multi_orderby_range_rolling_sum.cpp rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
 )
 
 # ##################################################################################################

@@ -25,18 +25,17 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <rmm/mr/cuda_async_memory_resource.hpp>
-
-#include <cuda_runtime_api.h>
-
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/bloom_filter.hpp>
 #include <cudf_streaming/streaming/parquet.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+
+#include <cuda_runtime_api.h>
+
 #include <driver_types.h>
-#include <mpi.h>
 #include <rapidsmpf/communicator/communicator.hpp>
-#include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/cuda_event.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
