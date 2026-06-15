@@ -320,10 +320,6 @@ def test_categorical_index_append_multiindex_returns_object_index():
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Index.append(MultiIndex) with empty left returns MultiIndex",
-)
 def test_empty_index_append_multiindex_returns_object_index():
     pd_data = pd.Index([])
     pd_other = pd.MultiIndex.from_tuples([(1, 2)])
@@ -337,10 +333,6 @@ def test_empty_index_append_multiindex_returns_object_index():
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Index.append(empty MultiIndex) returns object dtype instead of pandas dtype",
-)
 def test_index_append_empty_multiindex_preserves_pandas_result():
     pd_data = pd.Index([1, 2])
     pd_other = pd.MultiIndex.from_arrays([[], []])

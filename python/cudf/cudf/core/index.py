@@ -5670,6 +5670,15 @@ def _concat_range_index(indexes: list[RangeIndex]) -> Index:
 
 @_performance_tracking
 def _concat_indexes_with_multiindex(indexes: list[Index]) -> Index:
+    if not any(
+        isinstance(obj, cudf.MultiIndex) and len(obj) != 0 for obj in indexes
+    ):
+        scalar_indexes = [
+            obj for obj in indexes if not isinstance(obj, cudf.MultiIndex)
+        ]
+        if scalar_indexes:
+            return Index._concat(scalar_indexes)
+
     nlevels = max(
         obj.nlevels if isinstance(obj, cudf.MultiIndex) else 1
         for obj in indexes
@@ -5818,7 +5827,7 @@ def _flattened_label_column_to_pandas_index(
                     if field.startswith(_FLATTENED_LABEL_LEVEL_FIELD_PREFIX)
                 )
             )
-    result = pd.Index(values, dtype="object")
+    result = pd.Index(values, dtype="object", tupleize_cols=False)
     result.name = name
     return result
 
