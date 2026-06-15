@@ -36,14 +36,22 @@ cdef extern from "<cudf_streaming/streaming/channel_metadata.hpp>" \
         cpp_null_order null_order
         bool_t operator==(const cpp_OrderKey&) noexcept
 
-    cdef cppclass cpp_OrderScheme "cudf_streaming::streaming::OrderScheme":
-        cpp_OrderScheme() noexcept
-        cpp_OrderScheme(
+    cdef cppclass cpp_Ordering "cudf_streaming::streaming::Ordering":
+        cpp_Ordering() noexcept
+        cpp_Ordering(
             vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
         ) except +ex_handler
         vector[cpp_OrderKey] keys
         shared_ptr[cpp_TableChunk] boundaries
         bool_t strict_boundaries
+
+    cdef cppclass cpp_OrderScheme "cudf_streaming::streaming::OrderScheme":
+        cpp_OrderScheme() noexcept
+        cpp_OrderScheme(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_OrderScheme(vector[cpp_Ordering]) except +ex_handler
+        vector[cpp_Ordering] orderings
         cpp_OrderScheme with_keys(vector[cpp_OrderKey]) except +ex_handler
         bool_t boundaries_aligned_with(
             const cpp_OrderScheme&, const cpp_BufferResource&
@@ -106,6 +114,13 @@ cdef class OrderKey:
 
     @staticmethod
     cdef OrderKey from_cpp(cpp_OrderKey key)
+
+
+cdef class Ordering:
+    cdef cpp_Ordering _handle
+
+    @staticmethod
+    cdef Ordering from_cpp(cpp_Ordering ordering)
 
 
 cdef class OrderScheme:

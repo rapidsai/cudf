@@ -59,7 +59,7 @@ struct OrderKey {
 };
 
 /**
- * @brief Order-based partitioning scheme for sorted/range-partitioned data.
+ * @brief One valid ordering for sorted/range-partitioned data.
  *
  * Data is partitioned by value ranges based on predetermined boundaries.
  * For N partitions, there are N-1 boundary rows:
@@ -77,17 +77,17 @@ struct OrderKey {
  * half-open key range (partition keys do not straddle chunk interiors). When false,
  * a chunk may contain keys spanning multiple partitions.
  */
-struct OrderScheme {
+struct Ordering {
   std::vector<OrderKey> keys;              ///< Sort keys (column, order, null_order per entry).
   std::shared_ptr<TableChunk> boundaries;  ///< N-1 boundary rows for N partitions.
   /// See struct-level note on `strict_boundaries` semantics.
   bool strict_boundaries{false};
 
-  /// @brief Default constructor. Produces an invalid (empty) scheme.
-  OrderScheme() = default;
+  /// @brief Default constructor. Produces an invalid (empty) ordering.
+  Ordering() = default;
 
   /**
-   * @brief Construct a validated OrderScheme.
+   * @brief Construct a validated Ordering.
    *
    * @param keys Non-empty sort keys; size must equal `boundaries->shape().second`.
    * @param boundaries Non-null, device-resident boundary table (N-1 rows for N
@@ -96,20 +96,49 @@ struct OrderScheme {
    * @throws std::invalid_argument if `keys` is empty, `boundaries` is null or not
    * device-resident, or `keys.size() != boundaries->shape().second`.
    */
+  Ordering(std::vector<OrderKey> keys,
+           std::shared_ptr<TableChunk> boundaries,
+           bool strict_boundaries = false);
+};
+
+/**
+ * @brief Order-based partitioning scheme for sorted/range-partitioned data.
+ *
+ * An OrderScheme may contain multiple valid orderings for the same stream. The
+ * orderings are stored in descending preference order; `orderings.front()` is
+ * the default ordering used by existing consumers.
+ */
+struct OrderScheme {
+  std::vector<Ordering> orderings;  ///< Valid orderings in descending preference order.
+
+  /// @brief Default constructor. Produces an invalid (empty) scheme.
+  OrderScheme() = default;
+
+  /**
+   * @brief Construct a validated single-ordering OrderScheme.
+   *
+   * See `Ordering` for parameter semantics.
+   */
   OrderScheme(std::vector<OrderKey> keys,
               std::shared_ptr<TableChunk> boundaries,
               bool strict_boundaries = false);
 
   /**
-   * @brief Return a new OrderScheme with updated key column indices, sharing
-   * boundaries.
+   * @brief Construct a validated multi-ordering OrderScheme.
    *
-   * The new key count must match the existing boundary column count.
+   * @param orderings Non-empty orderings in descending preference order.
+   */
+  explicit OrderScheme(std::vector<Ordering> orderings);
+
+  /**
+   * @brief Return a new OrderScheme with updated key column indices, sharing
+   * boundaries for the preferred ordering.
+   *
+   * Alternative orderings are preserved unchanged.
    *
    * @param new_keys Replacement sort keys; size must equal
-   * `boundaries->shape().second`.
-   * @return A new OrderScheme with `new_keys` and the same `boundaries` and
-   *         `strict_boundaries`.
+   * `orderings.front().boundaries->shape().second`.
+   * @return A new OrderScheme with `new_keys` applied to the preferred ordering.
    * @throws std::invalid_argument if `new_keys` is empty or size mismatches boundaries.
    */
   [[nodiscard]] OrderScheme with_keys(std::vector<OrderKey> new_keys) const;
@@ -179,7 +208,7 @@ struct PartitioningSpec {
 
   /**
    * @brief Create a spec for order/range partitioning.
-   * @param o The order scheme to use. `o.keys` must be non-empty; otherwise
+   * @param o The order scheme to use. `o.orderings` must be non-empty; otherwise
    * throws `std::invalid_argument`.
    * @return A PartitioningSpec with type ORDER.
    */

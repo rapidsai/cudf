@@ -49,6 +49,11 @@ TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsNullBoundaries)
                std::invalid_argument);
 }
 
+TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsEmptyOrderings)
+{
+  EXPECT_THROW(static_cast<void>(OrderScheme(std::vector<Ordering>{})), std::invalid_argument);
+}
+
 TEST_F(StreamingChannelMetadata, PartitioningSpec)
 {
   // None
@@ -180,14 +185,32 @@ TEST_F(StreamingChannelMetadataGPU, OrderSchemeReplaceKeys)
   OrderScheme o1({k0}, b);
   auto o2 = o1.with_keys({k5});
 
-  EXPECT_EQ(o2.keys[0].column_index, 5);
-  EXPECT_EQ(o2.keys[0].order, cudf::order::DESCENDING);
-  EXPECT_EQ(o2.strict_boundaries, o1.strict_boundaries);
-  EXPECT_EQ(o2.boundaries->shape(), o1.boundaries->shape());
-  EXPECT_EQ(o2.boundaries.get(), b.get());
-  EXPECT_NE(o1.keys[0].column_index, o2.keys[0].column_index);
+  EXPECT_EQ(o2.orderings[0].keys[0].column_index, 5);
+  EXPECT_EQ(o2.orderings[0].keys[0].order, cudf::order::DESCENDING);
+  EXPECT_EQ(o2.orderings[0].strict_boundaries, o1.orderings[0].strict_boundaries);
+  EXPECT_EQ(o2.orderings[0].boundaries->shape(), o1.orderings[0].boundaries->shape());
+  EXPECT_EQ(o2.orderings[0].boundaries.get(), b.get());
+  EXPECT_NE(o1.orderings[0].keys[0].column_index, o2.orderings[0].keys[0].column_index);
 
   EXPECT_THROW(static_cast<void>(o1.with_keys({k0, k5})), std::invalid_argument);
+}
+
+TEST_F(StreamingChannelMetadataGPU, OrderSchemeMultipleOrderings)
+{
+  OrderKey k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
+  OrderKey k2{2, cudf::order::DESCENDING, cudf::null_order::AFTER};
+
+  auto b0 = make_chunk({100, 200});
+  auto b1 = make_chunk({300, 400});
+  OrderScheme o({Ordering{{k0}, b0, true}, Ordering{{k2}, b1, false}});
+
+  ASSERT_EQ(o.orderings.size(), 2);
+  EXPECT_EQ(o.orderings[0].keys[0], k0);
+  EXPECT_EQ(o.orderings[0].boundaries.get(), b0.get());
+  EXPECT_TRUE(o.orderings[0].strict_boundaries);
+  EXPECT_EQ(o.orderings[1].keys[0], k2);
+  EXPECT_EQ(o.orderings[1].boundaries.get(), b1.get());
+  EXPECT_FALSE(o.orderings[1].strict_boundaries);
 }
 
 TEST_F(StreamingChannelMetadataGPU, OrderSchemeBoundariesAlignedWith)
@@ -217,7 +240,7 @@ TEST_F(StreamingChannelMetadataGPU, PartitioningSpecOrder)
   auto spec = PartitioningSpec::from_order(o);
   EXPECT_EQ(spec.type, PartitioningSpec::Type::ORDER);
   EXPECT_TRUE(spec.order.has_value());
-  EXPECT_EQ(spec.order->keys[0].column_index, 0);
+  EXPECT_EQ(spec.order->orderings[0].keys[0].column_index, 0);
 
   // Type checks only (PartitioningSpec::operator== removed; ORDER value comparison
   // requires boundaries_aligned_with on the OrderScheme directly)

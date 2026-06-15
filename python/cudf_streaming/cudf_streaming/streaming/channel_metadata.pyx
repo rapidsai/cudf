@@ -127,11 +127,80 @@ cdef class OrderKey:
         return f"OrderKey({self.column_index}, {self.order!r}, {self.null_order!r})"
 
 
+cdef class Ordering:
+    """One valid ordering for sorted/range-partitioned data."""
+
+    def __init__(
+        self,
+        object keys,
+        TableChunk boundaries not None,
+        *,
+        bint strict_boundaries = False,
+    ):
+        cdef vector[cpp_OrderKey] cpp_keys
+        for key in keys:
+            cpp_keys.push_back((<OrderKey?>key)._handle)
+        if cpp_keys.empty():
+            raise ValueError("Ordering: keys must not be empty")
+        self._handle = cpp_Ordering(
+            move(cpp_keys), move(boundaries.release_handle()), strict_boundaries
+        )
+
+    @staticmethod
+    cdef Ordering from_cpp(cpp_Ordering ordering):
+        cdef Ordering ret = Ordering.__new__(Ordering)
+        ret._handle = move(ordering)
+        return ret
+
+    @property
+    def keys(self) -> tuple:
+        """Sort keys, one per sort column."""
+        cdef int i
+        cdef int n = self._handle.keys.size()
+        return tuple(OrderKey.from_cpp(self._handle.keys[i]) for i in range(n))
+
+    @property
+    def strict_boundaries(self) -> bool:
+        """Whether chunks are strictly aligned to boundary ranges."""
+        return self._handle.strict_boundaries
+
+    @property
+    def num_boundaries(self) -> int:
+        """Number of boundary rows (N-1 for N partitions)."""
+        return self._handle.boundaries.get().shape().first
+
+    def get_boundaries(self, BufferResource br not None) -> TableChunk:
+        """
+        Return the boundary rows.
+
+        Parameters
+        ----------
+        br
+            Buffer resource to associate with the returned table chunk.
+        """
+        cdef const cpp_TableChunk* chunk = self._handle.boundaries.get()
+        cdef Stream stream = Stream._from_cudaStream_t(chunk.stream().value())
+        tbl = Table.from_table_view_of_arbitrary(
+            chunk.table_view(), owner=self, stream=stream
+        )
+        return TableChunk.from_pylibcudf_table(
+            tbl, stream, exclusive_view=False, br=br
+        )
+
+    def __repr__(self):
+        return (
+            f"Ordering({self.keys!r}, "
+            f"strict_boundaries={self.strict_boundaries})"
+        )
+
+
 cdef class OrderScheme:
     """Order-based partitioning scheme for sorted/range-partitioned data.
 
     Data is partitioned by value ranges based on predetermined boundaries.
-    For N partitions, there are N-1 boundary rows.
+    For N partitions, there are N-1 boundary rows. An OrderScheme may contain
+    multiple valid orderings, stored in descending preference order. Existing
+    properties expose the first ordering.
 
     Parameters
     ----------
@@ -161,6 +230,16 @@ cdef class OrderScheme:
             move(cpp_keys), move(boundaries.release_handle()), strict_boundaries
         )
 
+    @classmethod
+    def from_orderings(cls, object orderings) -> OrderScheme:
+        """Construct an ``OrderScheme`` from orderings in preference order."""
+        cdef vector[cpp_Ordering] cpp_orderings
+        for ordering in orderings:
+            cpp_orderings.push_back((<Ordering?>ordering)._handle)
+        if cpp_orderings.empty():
+            raise ValueError("OrderScheme: orderings must not be empty")
+        return OrderScheme.from_cpp(cpp_OrderScheme(move(cpp_orderings)))
+
     @staticmethod
     cdef OrderScheme from_cpp(cpp_OrderScheme scheme):
         cdef OrderScheme ret = OrderScheme.__new__(OrderScheme)
@@ -168,21 +247,33 @@ cdef class OrderScheme:
         return ret
 
     @property
-    def keys(self) -> tuple:
-        """Sort keys, one per sort column."""
+    def orderings(self) -> tuple:
+        """Valid orderings in descending preference order."""
         cdef int i
-        cdef int n = self._handle.keys.size()
-        return tuple(OrderKey.from_cpp(self._handle.keys[i]) for i in range(n))
+        cdef int n = self._handle.orderings.size()
+        return tuple(
+            Ordering.from_cpp(self._handle.orderings[i]) for i in range(n)
+        )
+
+    @property
+    def keys(self) -> tuple:
+        """Sort keys for the preferred ordering."""
+        cdef int i
+        cdef int n = self._handle.orderings[0].keys.size()
+        return tuple(
+            OrderKey.from_cpp(self._handle.orderings[0].keys[i])
+            for i in range(n)
+        )
 
     @property
     def strict_boundaries(self) -> bool:
-        """Same semantics as the C++ ``OrderScheme::strict_boundaries`` field."""
-        return self._handle.strict_boundaries
+        """Strict-boundary flag for the preferred ordering."""
+        return self._handle.orderings[0].strict_boundaries
 
     @property
     def num_boundaries(self) -> int:
         """Number of boundary rows (N-1 for N partitions)."""
-        return self._handle.boundaries.get().shape().first
+        return self._handle.orderings[0].boundaries.get().shape().first
 
     def get_boundaries(self, BufferResource br not None) -> TableChunk:
         """
@@ -198,7 +289,7 @@ cdef class OrderScheme:
         TableChunk
             A non-exclusive view of the boundary rows owned by this scheme.
         """
-        cdef const cpp_TableChunk* chunk = self._handle.boundaries.get()
+        cdef const cpp_TableChunk* chunk = self._handle.orderings[0].boundaries.get()
         cdef Stream stream = Stream._from_cudaStream_t(chunk.stream().value())
         tbl = Table.from_table_view_of_arbitrary(
             chunk.table_view(), owner=self, stream=stream

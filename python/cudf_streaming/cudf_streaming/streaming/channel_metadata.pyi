@@ -33,6 +33,22 @@ class OrderKey:
     order: plc.types.Order
     null_order: plc.types.NullOrder
 
+class Ordering:
+    def __init__(
+        self,
+        keys: Sequence[OrderKey],
+        boundaries: TableChunk,
+        *,
+        strict_boundaries: bool = False,
+    ) -> None: ...
+    @property
+    def keys(self) -> tuple[OrderKey, ...]: ...
+    @property
+    def strict_boundaries(self) -> bool: ...
+    @property
+    def num_boundaries(self) -> int: ...
+    def get_boundaries(self, br: BufferResource) -> TableChunk: ...
+
 class OrderScheme:
     def __init__(
         self,
@@ -41,6 +57,10 @@ class OrderScheme:
         *,
         strict_boundaries: bool = False,
     ) -> None: ...
+    @classmethod
+    def from_orderings(cls, orderings: Sequence[Ordering]) -> OrderScheme: ...
+    @property
+    def orderings(self) -> tuple[Ordering, ...]: ...
     @property
     def keys(self) -> tuple[OrderKey, ...]: ...
     @property

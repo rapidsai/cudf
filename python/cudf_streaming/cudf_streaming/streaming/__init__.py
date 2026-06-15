@@ -6,6 +6,7 @@ from cudf_streaming.streaming.bloom_filter import BloomFilter
 from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
+    Ordering,
     OrderKey,
     OrderScheme,
     Partitioning,
@@ -27,6 +28,7 @@ __all__ = [
     "HashScheme",
     "OrderKey",
     "OrderScheme",
+    "Ordering",
     "Partitioning",
     "TableChunk",
     "make_table_chunks_available_or_wait",

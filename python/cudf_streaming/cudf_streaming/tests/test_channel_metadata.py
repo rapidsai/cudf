@@ -12,6 +12,7 @@ import pytest
 from cudf_streaming.streaming import (
     ChannelMetadata,
     HashScheme,
+    Ordering,
     OrderKey,
     OrderScheme,
     Partitioning,
@@ -140,6 +141,44 @@ def test_order_scheme(context: Context) -> None:
                 ),
             ),
         )
+
+
+def test_order_scheme_multiple_orderings(context: Context) -> None:
+    """OrderScheme stores orderings in descending preference order."""
+    first = Ordering(
+        [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)],
+        _make_boundaries(
+            context,
+            plc.Table(
+                [
+                    plc.Column.from_iterable_of_py(
+                        [100], plc.DataType(plc.TypeId.INT64)
+                    )
+                ]
+            ),
+        ),
+        strict_boundaries=True,
+    )
+    second = Ordering(
+        [OrderKey(2, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER)],
+        _make_boundaries(
+            context,
+            plc.Table(
+                [
+                    plc.Column.from_iterable_of_py(
+                        [200], plc.DataType(plc.TypeId.INT64)
+                    )
+                ]
+            ),
+        ),
+    )
+    scheme = OrderScheme.from_orderings([first, second])
+
+    assert len(scheme.orderings) == 2
+    assert scheme.keys == first.keys
+    assert scheme.strict_boundaries == first.strict_boundaries
+    assert scheme.num_boundaries == first.num_boundaries
+    assert scheme.orderings[1].keys == second.keys
 
 
 def test_order_scheme_get_boundaries(context: Context) -> None:
