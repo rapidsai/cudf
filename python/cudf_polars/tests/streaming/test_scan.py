@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     import cudf_polars.engine.core
-
     from cudf_polars.engine.core import StreamingEngine
 
 
