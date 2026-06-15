@@ -76,3 +76,15 @@ def test_multiindex_append_index_list_returns_object_index():
     expected = pdi.append(other_pd)
     actual = gdi.append(other_gd)
     assert_eq(expected, actual)
+
+
+def test_multiindex_append_empty_index_returns_object_index():
+    pdi = pd.MultiIndex.from_tuples([(1, "a"), (2, "b")])
+    other_pd = pd.Index([], dtype="int64")
+
+    gdi = cudf.from_pandas(pdi)
+    other_gd = cudf.from_pandas(other_pd)
+
+    expected = pdi.append(other_pd)
+    actual = gdi.append(other_gd)
+    assert_eq(expected, actual)

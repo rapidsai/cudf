@@ -383,3 +383,16 @@ def test_string_index_append_multiindex_returns_object_index():
     actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
+
+
+def test_index_append_multiindex_same_name_preserved():
+    pd_data = pd.Index([1, 2], name="x")
+    pd_other = pd.MultiIndex.from_tuples([(3, 4)], names=["x", "y"])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+    # pandas returns None name when Index.name != MultiIndex.names[0] structure
+    assert_eq(expected, actual)
