@@ -4,11 +4,13 @@
  */
 
 #include "hybrid_scan_common.hpp"
+#include "hybrid_scan_multifile_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
@@ -31,30 +33,18 @@
 
 namespace {
 
-/**
- * @brief Struct to hold multifile datasources, and footer buffers along with their byte spans
- */
-struct multifile_inputs {
-  std::vector<std::unique_ptr<cudf::io::datasource>> datasources;
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> footer_buffers;
-  std::vector<cudf::host_span<uint8_t const>> footer_byte_spans;
-};
+// 32-byte alignment required for bloom filter device buffers
+auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
-template <typename Buffers>
-multifile_inputs build_multifile_inputs(Buffers const& file_buffers)
+
+/**
+ * @brief Copy fixed-width column data to a host vector
+ */
+template <typename T>
+auto host_row_mask_data(cudf::column_view const& column, rmm::cuda_stream_view stream)
 {
-  multifile_inputs out;
-  out.datasources.reserve(file_buffers.size());
-  out.footer_buffers.reserve(file_buffers.size());
-  out.footer_byte_spans.reserve(file_buffers.size());
-  for (auto const& buf : file_buffers) {
-    out.datasources.emplace_back(cudf::io::datasource::create(cudf::host_span<std::byte const>(
-      reinterpret_cast<std::byte const*>(buf.data()), buf.size())));
-    out.footer_buffers.emplace_back(
-      cudf::io::parquet::fetch_footer_to_host(*out.datasources.back()));
-    out.footer_byte_spans.emplace_back(*out.footer_buffers.back());
-  }
-  return out;
+  return cudf::detail::make_host_vector<T>(
+    cudf::device_span<T const>(column.data<T>(), static_cast<size_t>(column.size())), stream);
 }
 
 /**
@@ -82,8 +72,20 @@ std::vector<char> create_empty_parquet_with_stats()
   return buffer;
 }
 
-//! 32-byte alignment required for bloom filter device buffers
-auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
+/**
+ * @brief Build a scalar literal matching a filter column type
+ */
+template <typename T>
+auto make_scalar(cudf::size_type value, rmm::cuda_stream_view stream)
+{
+  if constexpr (cudf::is_timestamp<T>()) {
+    return cudf::timestamp_scalar<T>(T(typename T::duration(value)), true, stream);
+  } else if constexpr (cudf::is_duration<T>()) {
+    return cudf::duration_scalar<T>(T(value), true, stream);
+  } else {
+    return cudf::numeric_scalar<T>(static_cast<T>(value), true, stream);
+  }
+}
 
 }  // namespace
 
@@ -102,20 +104,23 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
   auto constexpr num_concat = 1;
-  srand(0xbad);
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, num_concat>()));
-  srand(0xf00d);
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, num_concat>()));
+  auto constexpr seed       = 0xbad;
+  std::transform(cuda::counting_iterator{seed},
+                 cuda::counting_iterator{seed + num_sources},
+                 std::back_inserter(file_buffers),
+                 [](auto const src_seed) {
+                   srand(src_seed);
+                   return std::get<1>(create_parquet_with_stats<T, num_concat>());
+                 });
 
   // Filtering AST - col0 < 100
-  auto literal_value =
-    cudf::timestamp_scalar<T>(T(typename T::duration(100)), true, cudf::get_default_stream());
+  auto literal_value     = make_scalar<T>(100, cudf::get_default_stream());
   auto literal           = cudf::ast::literal(literal_value);
   auto col_ref_0         = cudf::ast::column_name_reference("col0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Construct reader from footer bytes
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   cudf::io::parquet_reader_options options =
     cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
@@ -197,8 +202,6 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
 {
   using T = uint32_t;
 
-  srand(0xc0ffee);
-
   // Create two parquet source. First one with non-zero rows and the second one with zero rows.
   auto constexpr num_sources = 2;
   std::vector<std::vector<char>> file_buffers;
@@ -206,7 +209,7 @@ TEST_F(HybridScanMultifileFiltersTest, EmptySource)
   file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
   file_buffers.emplace_back(create_empty_parquet_with_stats<T>());
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
@@ -235,14 +238,19 @@ TEST_F(HybridScanMultifileFiltersTest, ErrorFilterRowGroupsWithByteRanges)
 {
   using T                    = uint32_t;
   auto constexpr num_sources = 2;
-  srand(0xb47e);
 
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
+  auto constexpr seed = 0xb47e;
+  std::transform(cuda::counting_iterator{seed},
+                 cuda::counting_iterator{seed + num_sources},
+                 std::back_inserter(file_buffers),
+                 [](auto const src_seed) {
+                   srand(src_seed);
+                   return std::get<1>(create_parquet_with_stats<T, 1>());
+                 });
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // Setting `skip_bytes` or `num_bytes` is ambiguous when reading multiple sources. The reader is
   // expected to throw an exception if row groups are filtered using byte range in this case.
@@ -277,15 +285,19 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithStats)
   // Two sources, each with 4 row groups and ascending strings in col2
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
-  srand(0xc001);
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1, false>()));
-  srand(0xbeef);
-  file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1, false>()));
+  auto constexpr seed = 0xc001;
+  std::transform(cuda::counting_iterator{seed},
+                 cuda::counting_iterator{seed + num_sources},
+                 std::back_inserter(file_buffers),
+                 [](auto const src_seed) {
+                   srand(src_seed);
+                   return std::get<1>(create_parquet_with_stats<T, 1, false>());
+                 });
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // Filter - col0 < 50 and col2 > "000010000"
-  auto literal_value0 = cudf::duration_scalar<T>(T::rep(50), true, cudf::get_default_stream());
+  auto literal_value0 = make_scalar<T>(50, cudf::get_default_stream());
   auto literal0       = cudf::ast::literal(literal_value0);
   auto col_ref0       = cudf::ast::column_reference(0);
   auto filter1        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal0);
@@ -570,4 +582,182 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
 
   // Shouldn't filter out any RG, since the queried value is present in every source.
   EXPECT_EQ(bloom_filtered, input_row_group_indices);
+}
+
+TEST_F(HybridScanMultifileFiltersTest, BuildAllTrueRowMask)
+{
+  using T                    = uint64_t;
+  auto constexpr num_sources = 2;
+
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  auto constexpr seed = 0xa11;
+  std::transform(cuda::counting_iterator{seed},
+                 cuda::counting_iterator{seed + num_sources},
+                 std::back_inserter(file_buffers),
+                 [](auto const src_seed) {
+                   srand(src_seed);
+                   return std::get<1>(create_parquet_with_stats<T, 1>());
+                 });
+
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
+
+  auto const options = cudf::io::parquet_reader_options::builder().build();
+  auto const reader  = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+    inputs.footer_byte_spans, options);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto test_all_true_row_mask =
+    [&](cudf::host_span<std::vector<cudf::size_type> const> row_group_indices) {
+      auto const row_mask = reader->build_all_true_row_mask(row_group_indices, stream, mr);
+
+      EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(row_mask->size(), reader->total_rows_in_row_groups(row_group_indices));
+      EXPECT_EQ(row_mask->null_count(), 0);
+    };
+
+  auto row_group_indices = std::vector<std::vector<cudf::size_type>>{{0, 2}, {1, 3}};
+  test_all_true_row_mask(row_group_indices);
+
+  row_group_indices = reader->all_row_groups(options);
+  test_all_true_row_mask(row_group_indices);
+}
+
+template <typename T>
+struct HybridScanMultifilePageIndexRowMaskTest : public HybridScanMultifileFiltersTest {};
+
+// Unsigned numeric types except booleans for page index stats tests
+using SignedIntegralTypesNotBool =
+  cudf::test::ContainedIn<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>>;
+using PageIndexRowMaskTestTypes =
+  cudf::test::RemoveIf<SignedIntegralTypesNotBool,
+                       cudf::test::Concat<cudf::test::IntegralTypesNotBool>>;
+
+TYPED_TEST_SUITE(HybridScanMultifilePageIndexRowMaskTest, PageIndexRowMaskTestTypes);
+
+TYPED_TEST(HybridScanMultifilePageIndexRowMaskTest, BuildRowMaskWithPageIndexStats)
+{
+  using T                    = TypeParam;
+  auto constexpr num_sources = 4;
+
+  std::vector<std::vector<char>> file_buffers;
+  file_buffers.reserve(num_sources);
+  auto constexpr seed = 0xa11b;
+  std::transform(cuda::counting_iterator{seed},
+                 cuda::counting_iterator{seed + num_sources},
+                 std::back_inserter(file_buffers),
+                 [](auto const src_seed) {
+                   srand(src_seed);
+                   return std::get<1>(create_parquet_with_stats<T, 1, false>());
+                 });
+
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
+
+  auto options      = cudf::io::parquet_reader_options::builder().build();
+  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+    inputs.footer_byte_spans, options);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const input_row_group_indices = reader->all_row_groups(options);
+
+  auto const test_filter_data_pages_with_stats = [&](
+                                                   cudf::ast::operation const& filter_expression,
+                                                   cudf::size_type const expected_surviving_rows) {
+    options.set_filter(filter_expression);
+    reader->reset_column_selection();
+
+    auto const row_mask =
+      reader->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
+
+    auto const expected_num_rows = reader->total_rows_in_row_groups(input_row_group_indices);
+    EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+    EXPECT_EQ(row_mask->size(), expected_num_rows);
+    EXPECT_EQ(row_mask->null_count(), 0);
+
+    auto const host_row_mask = host_row_mask_data<bool>(row_mask->view(), stream);
+    EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
+              expected_surviving_rows);
+  };
+
+  // Calling the page-index row mask builder before setting up the page index should raise an error.
+  {
+    auto literal_value     = make_scalar<T>(100, stream);
+    auto const literal     = cudf::ast::literal(literal_value);
+    auto const col_ref     = cudf::ast::column_name_reference("col0");
+    auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+    options.set_filter(filter_expression);
+    EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
+                   input_row_group_indices, options, stream, mr),
+                 std::runtime_error);
+  }
+
+  setup_page_indexes(*reader, inputs);
+
+  // Filtering AST - table[0] < 100
+  {
+    auto literal_value = make_scalar<T>(100, stream);
+    auto const literal = cudf::ast::literal(literal_value);
+    auto const col_ref = cudf::ast::column_name_reference("col0");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref);
+    auto constexpr expected_surviving_rows =
+      num_sources * num_ordered_rows / (std::is_signed_v<T> ? 4 : 2);
+    test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
+  }
+
+  // Filtering AST - table[2] >= 10000
+  {
+    auto literal_value = cudf::string_scalar("000010000", true, stream);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref       = cudf::ast::column_name_reference("col2");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
+    auto constexpr expected_surviving_rows =
+      num_sources * num_ordered_rows / (std::is_signed_v<T> ? 4 : 2);
+    test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
+  }
+
+  // Filtering AST - table[0] < 50 AND table[2] < "000010000"
+  {
+    auto literal_value1 = make_scalar<T>(50, stream);
+    auto const literal1 = cudf::ast::literal(literal_value1);
+    auto const col_ref1 = cudf::ast::column_name_reference("col0");
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref1, literal1);
+
+    auto literal_value2 = cudf::string_scalar("000010000", true, stream);
+    auto literal2       = cudf::ast::literal(literal_value2);
+    auto col_ref2       = cudf::ast::column_name_reference("col2");
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+    auto constexpr expected_surviving_rows = num_sources * page_size_for_ordered_tests;
+    test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
+  }
+
+  // Filtering AST - table[0] > 150 OR table[2] < "000005000"
+  {
+    auto literal_value1 = make_scalar<T>(150, stream);
+    auto const literal1 = cudf::ast::literal(literal_value1);
+    auto const col_ref1 = cudf::ast::column_name_reference("col0");
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref1, literal1);
+
+    auto literal_value2 = cudf::string_scalar("000005000", true, stream);
+    auto literal2       = cudf::ast::literal(literal_value2);
+    auto col_ref2       = cudf::ast::column_name_reference("col2");
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
+    auto constexpr expected_surviving_rows = 2 * num_sources * page_size_for_ordered_tests;
+    test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
+  }
 }

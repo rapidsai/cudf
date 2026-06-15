@@ -7,9 +7,10 @@
 
 #include <cudf/types.hpp>
 
+#include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <cuda_runtime_api.h>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/content_description.hpp>
 #include <rapidsmpf/streaming/core/message.hpp>
