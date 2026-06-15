@@ -444,7 +444,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   return bloom_filter_bytes;
 }
 
-std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+aggregate_reader_metadata::dictionary_pages_byte_ranges(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -462,7 +463,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
 
-  // No (in)equality literals found, return empty vector
+  // No (in)equality literals found, return empty vectors
   if (dictionary_col_schemas.empty()) { return {}; }
 
   // Compute total number of input row groups
@@ -474,6 +475,10 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
 
   std::vector<byte_range_info> dictionary_page_bytes;
   dictionary_page_bytes.reserve(num_chunks);
+
+  // Association between each dictionary page byte range and its source
+  std::vector<cudf::size_type> dictionary_page_source_map;
+  dictionary_page_source_map.reserve(num_chunks);
 
   // Flag to check if we have at least one valid dictionary page
   auto have_dictionary_pages = false;
@@ -564,13 +569,14 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             }
 
             dictionary_page_bytes.emplace_back(dictionary_offset, dictionary_size);
+            dictionary_page_source_map.emplace_back(static_cast<size_type>(src_index));
           });
       });
     });
 
   if (not have_dictionary_pages) { return {}; }
 
-  return dictionary_page_bytes;
+  return {std::move(dictionary_page_bytes), std::move(dictionary_page_source_map)};
 }
 
 std::vector<std::vector<cudf::size_type>>

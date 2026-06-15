@@ -137,33 +137,23 @@ auto filter_row_groups_with_dictionaries(
   // Get all row groups from the reader
   auto const input_row_group_indices = reader.all_row_groups(options);
 
-  // Get dictionary page byte ranges from the reader
-  auto const dict_page_byte_ranges =
+  // Get dictionary page byte ranges and their corresponding source indices from the reader
+  auto const [dict_page_byte_ranges, dict_page_source_map] =
     reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
-
-  // If we have dictionary page byte ranges, filter row groups with dictionary pages
-  std::vector<std::vector<cudf::size_type>> dict_page_filtered_row_group_indices;
-  dict_page_filtered_row_group_indices.reserve(input_row_group_indices.size());
-
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
-  // Dictionary page byte ranges are flat and source-major, so derive the dictionary column count
-  // and fetch each source's slice from its own datasource
-  std::size_t total_row_groups = 0;
-  for (auto const& rgs : input_row_group_indices) {
-    total_row_groups += rgs.size();
-  }
-  auto const num_dictionary_columns = dict_page_byte_ranges.size() / total_row_groups;
-
-  // Fetch dictionary page buffers from the input file buffers
+  // Fetch each source's dictionary page byte ranges from its own datasource, grouping the flat
+  // byte ranges by the parallel source map
   std::vector<rmm::device_buffer> dict_page_buffers;
   std::vector<cudf::device_span<uint8_t const>> dict_page_data;
-  std::size_t offset = 0;
-  for (std::size_t src = 0; src < input_row_group_indices.size(); ++src) {
-    auto const count = input_row_group_indices[src].size() * num_dictionary_columns;
-    std::vector<cudf::io::text::byte_range_info> const src_ranges(
-      dict_page_byte_ranges.begin() + offset, dict_page_byte_ranges.begin() + offset + count);
-    offset += count;
+  std::size_t range_idx = 0;
+  while (range_idx < dict_page_byte_ranges.size()) {
+    auto const src = dict_page_source_map[range_idx];
+    std::vector<cudf::io::text::byte_range_info> src_ranges;
+    for (; range_idx < dict_page_byte_ranges.size() and dict_page_source_map[range_idx] == src;
+         ++range_idx) {
+      src_ranges.emplace_back(dict_page_byte_ranges[range_idx]);
+    }
 
     auto [buffers, data, task] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
       *inputs.datasources[src], src_ranges, stream, mr);
@@ -174,10 +164,8 @@ auto filter_row_groups_with_dictionaries(
     dict_page_data.insert(dict_page_data.end(), data.begin(), data.end());
   }
 
-  dict_page_filtered_row_group_indices = reader.filter_row_groups_with_dictionary_pages(
+  return reader.filter_row_groups_with_dictionary_pages(
     dict_page_data, input_row_group_indices, options, stream);
-
-  return dict_page_filtered_row_group_indices;
 }
 
 }  // namespace
@@ -624,7 +612,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
   srand(0xfeed);
   file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>(200)));  // col2 == "0200"
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // Filter - col2 == "0100" (present only in source A's dictionary)
   auto literal_value = cudf::string_scalar("0100", true, stream);
@@ -679,7 +667,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>(
     100, cudf::io::compression_type::AUTO, {"col2", "col0", "col1"}, {2, 0, 1})));
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   // Filter - col2 == "0100"
   auto literal_value = cudf::string_scalar("0100", true, stream);

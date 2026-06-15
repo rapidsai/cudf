@@ -122,7 +122,8 @@ table_with_metadata hybrid_scan_multifile::materialize_all_columns(
   return _impl->materialize_all_columns(row_group_indices, column_chunk_data, options, stream, mr);
 }
 
-std::vector<text::byte_range_info> hybrid_scan_multifile::dictionary_pages_byte_ranges(
+std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
+hybrid_scan_multifile::dictionary_pages_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options) const
 {
