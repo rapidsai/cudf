@@ -35,8 +35,7 @@ class MPIEnvironment : public Environment {
 
   void TearDown() override
   {
-    split_comm_ = nullptr;  // Clean up the split communicator.
-    comm_       = nullptr;  // Clean up the communicator.
+    comm_ = nullptr;  // Clean up the communicator.
 
     RAPIDSMPF_MPI(MPI_Comm_free(&mpi_comm_));
     RAPIDSMPF_MPI(MPI_Finalize());
@@ -46,9 +45,6 @@ class MPIEnvironment : public Environment {
 
   std::shared_ptr<rapidsmpf::Communicator> split_comm() override
   {
-    // Return cached split communicator if it exists
-    if (split_comm_ != nullptr) { return split_comm_; }
-
     // Initialize configuration options from environment variables.
     rapidsmpf::config::Options options{rapidsmpf::config::get_environment_variables()};
 

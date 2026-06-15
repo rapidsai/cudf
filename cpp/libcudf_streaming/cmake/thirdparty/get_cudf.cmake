@@ -18,6 +18,12 @@ find_and_configure_cudf(${CUDF_STREAMING_MIN_VERSION} cudf_streaming-exports)
 # build cudf from source: the component is provided by the installed (e.g. conda) cudf package.
 if(BUILD_TESTS AND NOT TARGET cudf::cudftestutil)
   find_package(cudf ${CUDF_STREAMING_MIN_VERSION} REQUIRED COMPONENTS testing)
+
+  foreach(_target cudf::cudftestutil cudf::cudftestutil_impl)
+    if(NOT TARGET ${_target})
+      message(WARNING "cudf testing target NOT available: ${_target}")
+    endif()
+  endforeach()
 endif()
 
 if(cudf_REQUIRES_CUDA)

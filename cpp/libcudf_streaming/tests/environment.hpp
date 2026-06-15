@@ -44,7 +44,6 @@ class Environment : public ::testing::Environment {
  protected:
   int argc_;
   char** argv_;
-  std::shared_ptr<rapidsmpf::Communicator> split_comm_{nullptr};
   rapidsmpf::config::Options options_;
 };
 

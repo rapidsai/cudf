@@ -25,18 +25,13 @@ class SingleEnvironment : public Environment {
     options_ = rapidsmpf::config::Options(rapidsmpf::config::get_environment_variables());
     comm_ =
       std::make_shared<rapidsmpf::Single>(options_, std::make_shared<rapidsmpf::ProgressThread>());
-    split_comm_ = comm_;
   }
 
-  void TearDown() override
-  {
-    split_comm_ = nullptr;
-    comm_       = nullptr;
-  }
+  void TearDown() override { comm_ = nullptr; }
 
   void barrier() override {}
 
-  std::shared_ptr<rapidsmpf::Communicator> split_comm() override { return split_comm_; }
+  std::shared_ptr<rapidsmpf::Communicator> split_comm() override { return comm_; }
 };
 }  // namespace
 
