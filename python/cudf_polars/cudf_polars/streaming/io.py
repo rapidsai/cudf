@@ -590,7 +590,7 @@ class StreamingScan(IR):
         rank: int,
         nranks: int,
         parquet_options: ParquetOptions,
-    ) -> StreamingScan:
+    ) -> Self:
         """Construct a StreamingScan where each file is split into factor partitions."""
         local_offset, local_count = _rank_slice(partition_count, rank, nranks)
         path_offset = local_offset // plan.factor
