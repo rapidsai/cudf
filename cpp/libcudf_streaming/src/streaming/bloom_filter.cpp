@@ -5,11 +5,12 @@
 
 #include <cudf/stream_compaction.hpp>
 
-#include <cuda_runtime_api.h>
-
 #include <cudf_streaming/integrations/bloom_filter.hpp>
 #include <cudf_streaming/streaming/bloom_filter.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <cuda_runtime_api.h>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
