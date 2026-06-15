@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
@@ -50,4 +50,37 @@ def test_multiindex_append(data, other):
     expected = pdi.append(other_pd)
     actual = gdi.append(other_gd)
 
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="MultiIndex.append(Index) raises TypeError instead of returning object Index",
+)
+def test_multiindex_append_index_returns_object_index():
+    pdi = pd.MultiIndex.from_tuples([(1, "a"), (2, "b")])
+    other_pd = pd.Index([3, 4])
+
+    gdi = cudf.from_pandas(pdi)
+    other_gd = cudf.from_pandas(other_pd)
+
+    expected = pdi.append(other_pd)
+    actual = gdi.append(other_gd)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="MultiIndex.append(list[Index]) raises TypeError instead of returning object Index",
+)
+def test_multiindex_append_index_list_returns_object_index():
+    pdi = pd.MultiIndex.from_tuples([(0, "a")])
+    other_pd = [pd.Index([1, 2]), pd.Index([3, 4])]
+
+    gdi = cudf.from_pandas(pdi)
+    other_gd = [cudf.from_pandas(other) for other in other_pd]
+
+    expected = pdi.append(other_pd)
+    actual = gdi.append(other_gd)
     assert_eq(expected, actual)
