@@ -13,6 +13,7 @@ from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
@@ -504,10 +505,11 @@ def _is_already_sorted(
     scheme = np.inter_rank_scheme
     if not isinstance(scheme, OrderScheme):
         return False
-    elif len(scheme.keys) < len(order_keys):
+    ordering = scheme.orderings[0]
+    if len(ordering.keys) < len(order_keys):
         # If we are only sorted on a subset of the keys,
         # we need to check if the boundaries are strict.
-        return scheme.strict_boundaries
+        return ordering.strict_boundaries
     return True
 
 
@@ -541,7 +543,7 @@ def _build_order_scheme(
         by_table, stream, exclusive_view=False, br=context.br()
     )
     return OrderScheme(
-        order_keys, boundaries_chunk, strict_boundaries=strict_boundaries
+        [Ordering(order_keys, boundaries_chunk, strict_boundaries=strict_boundaries)]
     )
 
 

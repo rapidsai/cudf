@@ -15,6 +15,7 @@ from cudf_streaming.streaming.channel_metadata import (
     HashScheme,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
 from cudf_streaming.streaming.table_chunk import TableChunk
@@ -499,7 +500,7 @@ def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=F
     )
     asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
     keys = [OrderKey(i, asc, before) for i in key_indices]
-    return OrderScheme(keys, chunk, strict_boundaries=strict)
+    return OrderScheme([Ordering(keys, chunk, strict_boundaries=strict)])
 
 
 @pytest.mark.parametrize(
@@ -596,7 +597,7 @@ def test_remap_partitioning_order_scheme_select(spmd_engine):
     result = maybe_remap_partitioning(_make_select_ir(engine, ("b", "a")), part)
     assert result is not None
     assert isinstance(result.inter_rank, OrderScheme)
-    assert result.inter_rank.keys[0].column_index == 1
+    assert result.inter_rank.orderings[0].keys[0].column_index == 1
 
 
 def test_remap_partitioning_order_scheme_drops_key(spmd_engine):
@@ -644,10 +645,11 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
     assert metadata.partitioning.local == "inherit"
 
     output_cols = list(ir.schema.keys())
-    assert len(scheme.keys) == len(by)
+    ordering = scheme.orderings[0]
+    assert len(ordering.keys) == len(by)
     for i, col in enumerate(by):
-        assert scheme.keys[i].column_index == output_cols.index(col)
-    assert scheme.strict_boundaries is True
+        assert ordering.keys[i].column_index == output_cols.index(col)
+    assert ordering.strict_boundaries is True
 
 
 @pytest.mark.parametrize(
@@ -689,7 +691,7 @@ def test_is_already_sorted(spmd_engine, scheme_key_count, strict, expected) -> N
         exclusive_view=False,
         br=ctx.br(),
     )
-    scheme = OrderScheme(keys, boundary_chunk, strict_boundaries=strict)
+    scheme = OrderScheme([Ordering(keys, boundary_chunk, strict_boundaries=strict)])
     meta = ChannelMetadata(
         3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
     )

@@ -100,6 +100,19 @@ struct Ordering {
   Ordering(std::vector<OrderKey> keys,
            std::shared_ptr<TableChunk> boundaries,
            bool strict_boundaries = false);
+
+  /**
+   * @brief Return a new Ordering with updated key column indices, sharing
+   * boundary rows.
+   *
+   * @param new_keys Replacement sort keys; size must equal
+   * `boundaries->shape().second`.
+   * @return A new Ordering with `new_keys` and the same boundaries and
+   * strictness.
+   * @throws std::invalid_argument if `new_keys` is empty or size mismatches
+   * boundaries.
+   */
+  [[nodiscard]] Ordering with_keys(std::vector<OrderKey> new_keys) const;
 };
 
 /**
@@ -131,17 +144,7 @@ struct OrderScheme {
    */
   explicit OrderScheme(std::vector<Ordering> orderings);
 
-  /**
-   * @brief Return a new OrderScheme with updated key column indices, sharing
-   * boundaries for the preferred ordering.
-   *
-   * Alternative orderings are preserved unchanged.
-   *
-   * @param new_keys Replacement sort keys; size must equal
-   * `orderings.front().boundaries->shape().second`.
-   * @return A new OrderScheme with `new_keys` applied to the preferred ordering.
-   * @throws std::invalid_argument if `new_keys` is empty or size mismatches boundaries.
-   */
+  /// @brief Return a new scheme with updated keys for the preferred ordering.
   [[nodiscard]] OrderScheme with_keys(std::vector<OrderKey> new_keys) const;
 
   /**

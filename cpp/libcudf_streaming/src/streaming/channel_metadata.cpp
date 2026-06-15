@@ -48,6 +48,11 @@ Ordering::Ordering(std::vector<OrderKey> keys,
   validate_ordering(*this);
 }
 
+Ordering Ordering::with_keys(std::vector<OrderKey> new_keys) const
+{
+  return Ordering{std::move(new_keys), boundaries, strict_boundaries};
+}
+
 OrderScheme::OrderScheme(std::vector<OrderKey> keys,
                          std::shared_ptr<TableChunk> boundaries,
                          bool strict_boundaries)
@@ -76,7 +81,7 @@ OrderScheme OrderScheme::with_keys(std::vector<OrderKey> new_keys) const
     !orderings.empty(), "OrderScheme: orderings must not be empty", std::invalid_argument);
   auto result     = orderings;
   auto& preferred = result.front();
-  preferred = Ordering{std::move(new_keys), preferred.boundaries, preferred.strict_boundaries};
+  preferred       = preferred.with_keys(std::move(new_keys));
   return OrderScheme(std::move(result));
 }
 

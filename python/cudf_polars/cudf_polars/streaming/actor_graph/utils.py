@@ -209,7 +209,7 @@ async def shutdown_on_error(
 def _scheme_column_indices(scheme: HashScheme | OrderScheme) -> tuple[int, ...]:
     if isinstance(scheme, HashScheme):
         return scheme.column_indices
-    return tuple(k.column_index for k in scheme.keys)
+    return tuple(k.column_index for k in scheme.orderings[0].keys)
 
 
 def _update_scheme_indices(
@@ -217,12 +217,14 @@ def _update_scheme_indices(
 ) -> HashScheme | OrderScheme:
     if isinstance(scheme, HashScheme):
         return HashScheme(new_indices, scheme.modulus)
-    return scheme.with_keys(
-        [
+    ordering = scheme.orderings[0]
+    new_ordering = ordering.with_keys(
+        (
             OrderKey(idx, k.order, k.null_order)
-            for k, idx in zip(scheme.keys, new_indices, strict=False)
-        ]
+            for k, idx in zip(ordering.keys, new_indices, strict=False)
+        )
     )
+    return OrderScheme((new_ordering, *scheme.orderings[1:]))
 
 
 def _remap_scheme_select(
@@ -856,7 +858,10 @@ class NormalizedPartitioning:
         if not self:
             return False
         for scheme in [self.inter_rank_scheme, self.local_scheme]:
-            if isinstance(scheme, OrderScheme) and not scheme.strict_boundaries:
+            if (
+                isinstance(scheme, OrderScheme)
+                and not scheme.orderings[0].strict_boundaries
+            ):
                 return False
         return True
 
@@ -968,19 +973,22 @@ class NormalizedPartitioning:
             return target == current
 
         def _order_keys_match(scheme: OrderScheme) -> bool:
+            ordering = scheme.orderings[0]
             if allow_subset:
-                n = len(scheme.keys)
+                n = len(ordering.keys)
                 if n > len(key_indices):
                     return False
             else:
-                if len(scheme.keys) != len(key_indices):
+                if len(ordering.keys) != len(key_indices):
                     return False
                 n = len(key_indices)
             if order_based:
-                return all(ok == k for ok, k in zip(scheme.keys, keys[:n], strict=True))
+                return all(
+                    ok == k for ok, k in zip(ordering.keys, keys[:n], strict=True)
+                )
             return all(
                 k.column_index == k_idx
-                for k, k_idx in zip(scheme.keys, key_indices[:n], strict=True)
+                for k, k_idx in zip(ordering.keys, key_indices[:n], strict=True)
             )
 
         def _keys_match(
