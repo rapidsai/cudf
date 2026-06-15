@@ -10,6 +10,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rapidsmpf/cuda_event.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/streaming/core/channel.hpp>
