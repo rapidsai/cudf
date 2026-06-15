@@ -602,8 +602,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             pos_offsets, _, (positions,) = self._groups(
                 [self._range_column_from_obj]
             )
-            first_pos = positions.to_numpy()[np.asarray(pos_offsets[:-1])]
-            order = np.argsort(first_pos, kind="stable")
+            # Gather the earliest original row position of each group and sort
+            # the groups by it entirely on the device; only the small ``order``
+            # array (one entry per group) is copied back to the host.
+            first_pos = positions.take(as_column(pos_offsets[:-1]))
+            order = first_pos.argsort().to_numpy()
         for i in order:
             name = group_names[i]
             yield (
@@ -1786,32 +1789,39 @@ class GroupBy(Serializable, Reducible, Scannable):
             index = index.sort_values()
         num_groups = len(index)
 
-        # A group that contains a null in any key is the "null group". When
-        # ``dropna=True`` pandas labels those rows with NA and excludes the
-        # group from the numbering; when ``dropna=False`` the null group is a
-        # regular group and is numbered like any other.
-        null_group_col = functools.reduce(
-            lambda a, b: a | b,
-            (col.isnull() for col in index._columns),
-        )
-        null_group_mask = Series._from_column(null_group_col).to_numpy()
-        skip_null = self._dropna
-
-        num_labeled = num_groups
-        if skip_null:
-            num_labeled -= int(null_group_mask.sum())
-        seq = range(num_labeled)
-        if not ascending:
-            seq = reversed(seq)
-        seq_iter = iter(seq)
-        ids: list[int | None] = [
-            None if (skip_null and is_null) else next(seq_iter)
-            for is_null in null_group_mask
-        ]
-
-        group_ids = Series._from_column(
-            as_column(pa.array(ids, type=pa.int64()))
-        )
+        if not self._dropna:
+            # ``dropna=False``: a group whose key contains a null is a regular
+            # group numbered like any other, so the labels are simply the
+            # group positions in iteration order.
+            seq = (
+                range(num_groups)
+                if ascending
+                else range(num_groups - 1, -1, -1)
+            )
+            group_ids = Series._from_column(
+                as_column(seq, dtype=np.dtype(np.int64))
+            )
+        else:
+            # ``dropna=True``: pandas labels rows whose key contains a null
+            # with NA and excludes those groups from the numbering. A group is
+            # a "null group" when any of its key columns is null there.
+            null_group_col = functools.reduce(
+                lambda a, b: a | b,
+                (col.isnull() for col in index._columns),
+            )
+            non_null_mask = ~null_group_col
+            non_null = non_null_mask.astype(SIZE_TYPE_DTYPE)
+            # 0-based position of each labeled (non-null) group; the value at
+            # null positions is irrelevant as it is replaced with NA below.
+            rank = non_null.cumsum() - non_null
+            if not ascending:
+                rank = (int(non_null.sum()) - 1) - rank
+            group_ids = Series._from_column(
+                rank.astype(np.dtype(np.int64)).copy_if_else(
+                    pa_scalar_to_plc_scalar(pa.scalar(None, type=pa.int64())),
+                    non_null_mask,
+                )
+            )
         group_ids.index = index
         return self._broadcast(group_ids)
 
