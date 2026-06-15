@@ -78,7 +78,7 @@ def test_multiindex_append_index_list_returns_object_index():
     assert_eq(expected, actual)
 
 
-def test_multiindex_append_empty_index_returns_object_index():
+def test_multiindex_append_empty_index_preserves_multiindex():
     pdi = pd.MultiIndex.from_tuples([(1, "a"), (2, "b")])
     other_pd = pd.Index([], dtype="int64")
 
