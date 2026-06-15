@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn
+    from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -284,6 +285,39 @@ def prefetch_parquet_file_metadata_for_ir(
             for future in concurrent.futures.as_completed(futures):
                 paths, metadata = future.result()
                 context.parquet_file_metadata.setdefault(paths, metadata)
+
+
+def seed_parquet_file_metadata_from_stats(
+    stats: StatsCollector,
+    context: IRExecutionContext,
+) -> None:
+    """
+    Seed prefetched parquet footers from stats collection when available.
+
+    Stats collection reads parquet footers for sampled paths. When the sample
+    covers all paths in a scan, those footers can be reused during metadata
+    prefetch to avoid rereading file footers.
+
+    Parameters
+    ----------
+    stats: StatsCollector
+        The stats collector.
+    context: IRExecutionContext
+        The execution context. Its ``parquet_file_metadata`` is mutated to
+        cache the parquet file metadata read during stats collection.
+    """
+    from cudf_polars.streaming.io import ParquetSourceInfo
+
+    for node, info in stats.scan_stats.items():
+        if (
+            isinstance(node, Scan)
+            and node.typ == "parquet"
+            and isinstance(info, ParquetSourceInfo)
+            and info.file_metadata is not None
+        ):
+            context.parquet_file_metadata.setdefault(
+                tuple(node.paths), info.file_metadata
+            )
 
 
 _BINOPS = {

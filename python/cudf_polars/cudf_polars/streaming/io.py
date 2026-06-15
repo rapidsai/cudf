@@ -792,6 +792,20 @@ def _sink_to_file(
     return True
 
 
+def _columnchunk_metadata_from_footers(
+    footers: list[plc.io.parquet_metadata.FileMetaData],
+) -> dict[str, list[int]]:
+    columnchunk_metadata: dict[str, list[int]] = {}
+    for fmd in footers:
+        for rg in fmd.row_groups:
+            for col in rg.columns:
+                name = ".".join(col.meta_data.path_in_schema)
+                columnchunk_metadata.setdefault(name, []).append(
+                    col.meta_data.total_uncompressed_size
+                )
+    return columnchunk_metadata
+
+
 class ParquetMetadata:
     """
     Parquet metadata container.
@@ -806,12 +820,15 @@ class ParquetMetadata:
 
     __slots__ = (
         "column_names",
+        "file_metadata",
         "max_footer_samples",
         "mean_size_per_file",
         "num_row_groups_per_file",
         "paths",
         "row_count",
         "sample_paths",
+        "sampled_file_count",
+        "total_file_count",
     )
 
     paths: tuple[str, ...]
@@ -828,6 +845,8 @@ class ParquetMetadata:
     """All column names found it the dataset."""
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
+    file_metadata: tuple[plc.io.parquet_metadata.FileMetaData, ...] | None
+    """Parquet footers read for ``sample_paths``. Populated only if all files were sampled."""
 
     @nvtx_annotate_cudf_polars(message="ParquetMetadata")
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
@@ -837,9 +856,9 @@ class ParquetMetadata:
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
         self.column_names = ()
-        stride = (
-            max(1, int(len(paths) / max_footer_samples)) if max_footer_samples else 1
-        )
+        self.file_metadata = None
+        max_footer_samples = max(1, max_footer_samples)
+        stride = max(1, int(len(paths) / max_footer_samples))
         self.sample_paths = paths[: stride * max_footer_samples : stride]
 
         if not self.sample_paths:
@@ -849,19 +868,21 @@ class ParquetMetadata:
 
         total_file_count = len(self.paths)
         sampled_file_count = len(self.sample_paths)
-        sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        sample_footers = plc.io.parquet_metadata.read_parquet_footers(
             plc.io.SourceInfo(list(self.sample_paths))
         )
+        self.file_metadata = tuple(sample_footers)
 
+        sampled_row_count = sum(fmd.num_rows for fmd in sample_footers)
         if total_file_count == sampled_file_count:
-            row_count = sample_metadata.num_rows()
+            row_count = sampled_row_count
         else:
-            num_rows_per_sampled_file = int(
-                sample_metadata.num_rows() / sampled_file_count
-            )
+            num_rows_per_sampled_file = int(sampled_row_count / sampled_file_count)
             row_count = num_rows_per_sampled_file * total_file_count
 
-        num_row_groups_per_sampled_file = sample_metadata.num_rowgroups_per_file()
+        num_row_groups_per_sampled_file = [
+            len(fmd.row_groups) for fmd in sample_footers
+        ]
         rowgroup_offsets_per_file = list(
             itertools.accumulate(num_row_groups_per_sampled_file, initial=0)
         )
@@ -871,7 +892,9 @@ class ParquetMetadata:
                 sum(uncompressed_sizes[start:end])
                 for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
             ]
-            for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
+            for name, uncompressed_sizes in _columnchunk_metadata_from_footers(
+                sample_footers
+            ).items()
         }
 
         self.column_names = tuple(column_sizes_per_file)
@@ -881,6 +904,8 @@ class ParquetMetadata:
         }
         self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
         self.row_count = row_count
+        self.total_file_count = total_file_count
+        self.sampled_file_count = sampled_file_count
 
 
 @nvtx_annotate_cudf_polars(message="_sample_rg_sizes")
@@ -934,13 +959,18 @@ class ParquetSourceInfo:
     type: Literal["parquet"] = "parquet"
 
     def __init__(
-        self, row_count: int | None, per_file_means: dict[str, int] | None = None
+        self,
+        row_count: int | None,
+        per_file_means: dict[str, int] | None = None,
+        *,
+        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None = None,
     ):
         if per_file_means is None:
             per_file_means = {}
 
         self.row_count = row_count
         self.per_file_means = per_file_means
+        self.file_metadata = file_metadata
 
     @classmethod
     def from_paths(
@@ -992,7 +1022,15 @@ class ParquetSourceInfo:
             for col in suspicious:
                 per_file_means[col] = min_floor
 
-        return cls(row_count, per_file_means)
+        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None
+        if (
+            metadata.sampled_file_count == metadata.total_file_count
+            and metadata.file_metadata is not None
+        ):
+            file_metadata = list(metadata.file_metadata)
+        else:
+            file_metadata = None
+        return cls(row_count, per_file_means, file_metadata=file_metadata)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
