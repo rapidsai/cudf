@@ -1017,15 +1017,22 @@ class NormalizedPartitioning:
             )
 
         def _matching_order_scheme(scheme: OrderScheme) -> OrderScheme | None:
-            for i, ordering in enumerate(scheme.orderings):
-                if _ordering_keys_match(ordering):
-                    return OrderScheme(
-                        (
-                            ordering,
-                            *scheme.orderings[:i],
-                            *scheme.orderings[i + 1 :],
-                        )
+            matches = [
+                (i, ordering)
+                for i, ordering in enumerate(scheme.orderings)
+                if _ordering_keys_match(ordering)
+            ]
+            if matches:
+                # Prefer the most specific matching ordering; equal-length ties
+                # keep the original metadata order.
+                i, ordering = max(matches, key=lambda match: len(match[1].keys))
+                return OrderScheme(
+                    (
+                        ordering,
+                        *scheme.orderings[:i],
+                        *scheme.orderings[i + 1 :],
                     )
+                )
             return None
 
         def _keys_match(

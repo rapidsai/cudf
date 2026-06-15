@@ -156,7 +156,7 @@ def test_order_scheme(context: Context) -> None:
 
 
 def test_order_scheme_multiple_orderings(context: Context) -> None:
-    """OrderScheme stores orderings in descending preference order."""
+    """OrderScheme stores alternative ordering descriptions."""
     first = Ordering(
         [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)],
         _make_boundaries(

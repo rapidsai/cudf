@@ -347,7 +347,7 @@ def test_get_partitioning_moduli_allow_subset(
     ],
 )
 def test_is_aligned_with(spmd_engine, left, right, expected) -> None:
-    """is_aligned_with checks compatible hash layout for chunkwise operations."""
+    """is_aligned_with checks compatible partitioning layouts."""
     br = spmd_engine.context.br()
     assert left.is_aligned_with(right, br) is expected
     assert right.is_aligned_with(left, br) is expected
@@ -614,6 +614,29 @@ def test_from_keys_order_scheme_selects_matching_ordering(spmd_engine):
         1,
         0,
     ]
+
+
+def test_from_keys_order_scheme_selects_longest_matching_ordering(spmd_engine):
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    scheme = OrderScheme(
+        [
+            _make_ordering(spmd_engine.context, key_indices=(0,), strict=True),
+            _make_ordering(spmd_engine.context, key_indices=(0, 1), strict=True),
+        ]
+    )
+    part = Partitioning(inter_rank=scheme, local="inherit")
+
+    result = NormalizedPartitioning.from_keys(
+        part,
+        nranks=4,
+        keys=(OrderKey(0, asc, before), OrderKey(1, asc, before)),
+    )
+
+    assert isinstance(result.inter_rank_scheme, OrderScheme)
+    assert [
+        tuple(k.column_index for k in ordering.keys)
+        for ordering in result.inter_rank_scheme.orderings
+    ] == [(0, 1), (0,)]
 
 
 def test_remap_partitioning_order_scheme_select(spmd_engine):

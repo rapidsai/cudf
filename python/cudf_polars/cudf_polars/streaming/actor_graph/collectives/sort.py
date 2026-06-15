@@ -497,8 +497,8 @@ def _is_already_sorted(
         metadata_in.partitioning, nranks, keys=order_keys
     )
     if not np:
-        # np is falsy if `order_keys` does not match
-        # any prefix of keys in `metadata_in.partitioning`.
+        # np is falsy if `metadata_in.partitioning` does not contain
+        # ordering keys that match `order_keys` or a prefix of `order_keys`.
         # If `order_keys` is Sequence[OrderKey], the order
         # and null_order attributes must also match.
         return False
