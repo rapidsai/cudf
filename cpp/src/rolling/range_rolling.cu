@@ -160,30 +160,99 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 namespace {
 
 /**
- * @brief Writes the preceding and following offsets for unbounded/current-row range windows.
+ * @brief Computes preceding and following offsets from one group lookup
+ */
+template <typename Grouping>
+struct unbounded_distance_fn {
+  Grouping const groups;
+
+  [[nodiscard]] __device__ cuda::std::tuple<size_type, size_type> operator()(
+    size_type i) const noexcept
+  {
+    auto const row_info = groups.row_info(i);
+    return cuda::std::tuple<size_type, size_type>{i - row_info.group_start() + 1,
+                                                  row_info.group_end() - i - 1};
+  }
+};
+
+/**
+ * @brief Computes preceding and following offsets from different groupings.
  */
 template <typename Preceding, typename Following>
-void write_offsets(Preceding preceding,
-                   Following following,
-                   mutable_column_view preceding_view,
-                   mutable_column_view following_view,
-                   size_type num_rows,
-                   rmm::cuda_stream_view stream)
-{
-  auto const src_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0},
-    cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(
-      [preceding_fn = rolling::unbounded_distance_functor{preceding, rolling::direction::PRECEDING},
-       following_fn = rolling::unbounded_distance_functor{
-         following, rolling::direction::FOLLOWING}] __device__(size_type i) {
-        return cuda::std::tuple<size_type, size_type>{preceding_fn(i), following_fn(i)};
-      }));
+struct mixed_unbounded_distance_fn {
+  rolling::unbounded_distance_functor<Preceding> const preceding_fn;
+  rolling::unbounded_distance_functor<Following> const following_fn;
 
-  thrust::copy_n(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    src_iter,
-    num_rows,
-    cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
+  [[nodiscard]] __device__ cuda::std::tuple<size_type, size_type> operator()(
+    size_type i) const noexcept
+  {
+    return cuda::std::tuple<size_type, size_type>{preceding_fn(i), following_fn(i)};
+  }
+};
+
+/**
+ * @brief Selects grouping and writes preceding and following offsets.
+ */
+template <typename GroupHelper>
+void select_and_write_offsets(range_window_type const& preceding,
+                              range_window_type const& following,
+                              rolling::grouped peers,
+                              std::optional<GroupHelper>& group_helper,
+                              mutable_column_view preceding_view,
+                              mutable_column_view following_view,
+                              size_type num_rows,
+                              rmm::cuda_stream_view stream)
+{
+  // Write the offsets to the output columns
+  auto const write_offsets = [&](auto offset_fn) {
+    auto const src_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0}, cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(offset_fn));
+    thrust::copy_n(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      src_iter,
+      num_rows,
+      cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
+  };
+
+  // Write offsets for the current row case
+  if (std::holds_alternative<current_row>(preceding) &&
+      std::holds_alternative<current_row>(following)) {
+    write_offsets(unbounded_distance_fn<rolling::grouped>{peers});
+    // Write offsets for the unbounded case
+  } else if (std::holds_alternative<unbounded>(preceding) &&
+             std::holds_alternative<unbounded>(following)) {
+    if (group_helper.has_value()) {
+      write_offsets(unbounded_distance_fn<rolling::grouped>{
+        {group_helper->group_labels(stream).data(), group_helper->group_offsets(stream).data()}});
+    } else {
+      write_offsets(unbounded_distance_fn<rolling::ungrouped>{{num_rows}});
+    }
+  } else {
+    // Select groupings for preceding and following windows
+    auto const select_grouping =
+      [&](range_window_type const& window) -> std::variant<rolling::grouped, rolling::ungrouped> {
+      if (std::holds_alternative<current_row>(window)) {
+        return peers;
+      } else if (group_helper.has_value()) {
+        return rolling::grouped{group_helper->group_labels(stream).data(),
+                                group_helper->group_offsets(stream).data()};
+      } else {
+        return rolling::ungrouped{num_rows};
+      }
+    };
+
+    auto preceding_grouping = select_grouping(preceding);
+    auto following_grouping = select_grouping(following);
+    std::visit(
+      [&](auto preceding_grouping, auto following_grouping) {
+        write_offsets(
+          mixed_unbounded_distance_fn<decltype(preceding_grouping), decltype(following_grouping)>{
+            {preceding_grouping, rolling::direction::PRECEDING},
+            {following_grouping, rolling::direction::FOLLOWING}});
+      },
+      preceding_grouping,
+      following_grouping);
+  }
 }
 
 }  // namespace
@@ -244,31 +313,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   auto following_result = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-  using offset_grouping      = std::variant<rolling::grouped, rolling::ungrouped>;
-  auto const select_grouping = [&](range_window_type const& window) -> offset_grouping {
-    if (std::holds_alternative<current_row>(window)) {
-      return peers;
-    } else if (group_helper.has_value()) {
-      return rolling::grouped{group_helper->group_labels(stream).data(),
-                              group_helper->group_offsets(stream).data()};
-    } else {
-      return rolling::ungrouped{num_rows};
-    }
-  };
-
-  auto preceding_grouping = select_grouping(preceding);
-  auto following_grouping = select_grouping(following);
-  std::visit(
-    [&](auto preceding_grouping, auto following_grouping) {
-      write_offsets(preceding_grouping,
-                    following_grouping,
-                    preceding_result->mutable_view(),
-                    following_result->mutable_view(),
-                    num_rows,
-                    stream);
-    },
-    preceding_grouping,
-    following_grouping);
+  select_and_write_offsets(preceding,
+                           following,
+                           peers,
+                           group_helper,
+                           preceding_result->mutable_view(),
+                           following_result->mutable_view(),
+                           num_rows,
+                           stream);
 
   return std::pair{std::move(preceding_result), std::move(following_result)};
 }
