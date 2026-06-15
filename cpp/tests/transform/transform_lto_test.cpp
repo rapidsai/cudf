@@ -49,7 +49,7 @@ TEST_F(TransformLTOTest, InvSqrt)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
 }
 
-TEST_F(TransformLTOTest, ToLower)
+TEST_F(TransformLTOTest, ToUpper)
 {
   column_wrapper<uint8_t> input{{65, 66, 97, 98, 48, 49, 32, 33, 127, 255}};
 
@@ -57,7 +57,7 @@ TEST_F(TransformLTOTest, ToLower)
   cudf::transform_output outputs[] = {
     {cudf::data_type{cudf::type_id::UINT8}, cudf::output_nullability::ALL_VALID}};
 
-  auto const range = cudf_test_fragments::file_ranges[cudf_test_fragments::to_lower];
+  auto const range = cudf_test_fragments::file_ranges[cudf_test_fragments::to_upper];
   std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
 
   auto result = cudf::transform_lto(udf,
