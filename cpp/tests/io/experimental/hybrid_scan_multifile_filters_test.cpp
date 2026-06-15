@@ -249,7 +249,7 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPasses)
                    srand(0xced + i);
                    return std::get<1>(create_parquet_with_stats<T, 1>());
                  });
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
@@ -347,7 +347,7 @@ TEST_F(HybridScanMultifileFiltersTest, RowGroupPassesSingleSourceParity)
   std::vector<std::vector<char>> file_buffers;
   file_buffers.emplace_back(std::get<1>(create_parquet_with_stats<T, 1>()));
 
-  auto inputs = build_multifile_inputs(file_buffers);
+  auto inputs = multifile_inputs(build_source_info(file_buffers));
 
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
   auto const multifile_reader =
