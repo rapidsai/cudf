@@ -3103,7 +3103,6 @@ NODEIDS_THAT_FAIL = {
     "tests/indexes/multi/test_names.py::test_copy_names": "TODO: Add a reason for failure",
     "tests/indexes/multi/test_names.py::test_setting_names_from_levels_raises": "TODO: Add a reason for failure",
     "tests/indexes/multi/test_reindex.py::test_reindex_base": "TODO: Add a reason for failure",
-    "tests/indexes/multi/test_reshape.py::test_append_names_match[c-None]": "TODO: Add a reason for failure",
     "tests/indexes/multi/test_setops.py::test_difference[False]": "TODO: Add a reason for failure",
     "tests/indexes/multi/test_setops.py::test_difference[None]": "TODO: Add a reason for failure",
     "tests/indexes/multi/test_setops.py::test_intersection_non_object[False]": "TODO: Add a reason for failure",
