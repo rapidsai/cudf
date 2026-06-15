@@ -395,6 +395,16 @@ class reader_impl {
     return _file_itm_data._output_chunk_count == 0;
   }
 
+  /**
+   * @brief Check if number of rows per source should be included in output metadata.
+   *
+   * @return True if AST filter is not present
+   */
+  [[nodiscard]] bool include_output_num_rows_per_source() const
+  {
+    return not _expr_conv.get_converted_expr().has_value();
+  }
+
   [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
   {
     return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
