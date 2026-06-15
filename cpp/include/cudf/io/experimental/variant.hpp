@@ -26,34 +26,38 @@ namespace io::parquet::experimental {
  */
 
 /**
- * @brief Extract the raw VARIANT-encoded bytes of a nested object field by JSONPath-like path.
+ * @brief Extract the raw VARIANT-encoded bytes of a nested field by JSONPath-like path.
  *
- * Walks `path` step by step, descending into object values (`basic_type == 2`) at each name step.
- * Returns a `list<uint8>` column containing the raw encoded bytes of the value at the end of
- * the path for each row.
+ * Walks `path` step by step, descending into object values (`basic_type == 2`) at each name step
+ * and into array values (`basic_type == 3`) at each `[N]` index step. Returns a `list<uint8>`
+ * column containing the raw encoded bytes of the value at the end of the path for each row.
  *
  * Null is produced when the struct row is null, a name step's key is absent from the dictionary,
- * or the current value is not an object (`basic_type != 2`).
+ * an index step is out of bounds, or the current value's basic type does not match the step kind.
  *
  * Path grammar:
- *   path  := "$"? first_step ("." name)*
- *   first := name | "." name
- *   name  := [^.\[]+   // any byte except '.' (step separator) and '[' (reserved)
+ *   path  := "$"? first_step step*
+ *   first := name | "." name | "[" index "]"
+ *   step  := "." name | "[" index "]"
+ *   name  := any sequence of bytes other than '.' or '['
+ *   index := non-negative base-10 integer
  *
  * Examples:
- *   "x"          -> top-level field "x" (leading $ optional)
- *   "$.foo"      -> top-level field "foo"
- *   "$.foo.bar"  -> object descent foo -> bar
+ *   "x"            -> top-level field "x" (leading $ optional)
+ *   "$.foo"        -> top-level field "foo"
+ *   "$.foo.bar"    -> object descent foo -> bar
+ *   "$[0]"         -> first element of a top-level array
+ *   "$.a[0].b"     -> object key "a" -> first array element -> object key "b"
  *
  * @param variant_column Struct column (VARIANT materialization) with `list<uint8>` children
  *                       (`metadata`, `value`), plus optional shredded siblings
- * @param path JSONPath-like path string identifying the target object field
+ * @param path JSONPath-like path string identifying the target field
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @return `list<uint8>` column with the extracted field's encoded bytes
+ * @return `list<uint8>` column with the extracted value's encoded bytes
  *
- * @throws std::invalid_argument on empty path or malformed syntax (including bracket steps,
- *         which require array-indexing support that is not yet implemented)
+ * @throws std::invalid_argument on empty path or malformed syntax (`[*]` wildcards, negative
+ *         indices, out-of-range indices, and quoted names inside `[...]` are not supported)
  */
 [[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,
