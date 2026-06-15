@@ -16,15 +16,17 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <rapidsmpf/communicator/communicator.hpp>
 #include <rapidsmpf/cuda_event.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
+#include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/shuffler/chunk.hpp>
 #include <rapidsmpf/streaming/coll/allgather.hpp>
 #include <rapidsmpf/streaming/coll/shuffler.hpp>
@@ -40,7 +42,6 @@ namespace rapidsmpf::ndsh {
 using cudf_streaming::integrations::partition_and_pack;
 using cudf_streaming::integrations::partition_and_split;
 using cudf_streaming::integrations::unpack_and_concat;
-using cudf_streaming::integrations::unspill_partitions;
 using cudf_streaming::streaming::TableChunk;
 using cudf_streaming::streaming::to_message;
 
@@ -106,10 +107,10 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
       co_return to_message(
         0,
         std::make_unique<cudf_streaming::streaming::TableChunk>(
-          unpack_and_concat(
-            unspill_partitions(std::move(result), ctx->br().get(), AllowOverbooking::YES),
-            stream,
-            ctx->br().get()),
+          unpack_and_concat(rapidsmpf::unspill_partitions(
+                              std::move(result), ctx->br().get(), AllowOverbooking::YES),
+                            stream,
+                            ctx->br().get()),
           stream));
     }
   }
@@ -505,10 +506,10 @@ streaming::Actor shuffle(std::shared_ptr<streaming::Context> ctx,
     co_await ch_out->send(to_message(
       pid,
       std::make_unique<cudf_streaming::streaming::TableChunk>(
-        unpack_and_concat(
-          unspill_partitions(std::move(packed_data), ctx->br().get(), AllowOverbooking::YES),
-          stream,
-          ctx->br().get()),
+        unpack_and_concat(rapidsmpf::unspill_partitions(
+                            std::move(packed_data), ctx->br().get(), AllowOverbooking::YES),
+                          stream,
+                          ctx->br().get()),
         stream)));
   }
   co_await ch_out->drain(ctx->executor());

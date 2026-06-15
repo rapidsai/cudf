@@ -561,6 +561,7 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   tokenize_all_kernel<decltype(map_ref), decltype(sub_map_ref)>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       d_all_edges, d_input_chars, map_ref, sub_map_ref, unk_id, d_tokens.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return d_tokens;
 }
@@ -791,6 +792,7 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
   find_words_kernel<warp_size>
     <<<grid_find.num_blocks, grid_find.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_input_chars, max_word_offsets.data(), start_words.data(), word_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // remove the non-words
   auto const end =
@@ -826,6 +828,7 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
   tokenize_kernel<decltype(map_ref), decltype(sub_map_ref)>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       start_words, word_sizes, d_input_chars, map_ref, sub_map_ref, unk_id, d_tokens.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return d_tokens;
 }

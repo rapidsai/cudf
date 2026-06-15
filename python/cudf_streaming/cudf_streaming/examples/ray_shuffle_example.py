@@ -15,12 +15,12 @@ import rmm
 from cudf_streaming.integrations.partition import (
     partition_and_pack,
     unpack_and_concat,
-    unspill_partitions,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.integrations.ray import RapidsMPFActor, setup_ray_ucxx_cluster
 from rapidsmpf.memory.buffer_resource import BufferResource
+from rapidsmpf.memory.spill import unspill_partitions
 from rapidsmpf.shuffler import Shuffler
-from rapidsmpf.testing import assert_eq
 
 
 class ShufflingActor(RapidsMPFActor):

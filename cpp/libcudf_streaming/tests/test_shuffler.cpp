@@ -12,10 +12,12 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf_streaming/integrations/partition.hpp>
+
 #include <gtest/gtest.h>
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
+#include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/shuffler/finish_counter.hpp>
 #include <rapidsmpf/shuffler/shuffler.hpp>
 #include <rapidsmpf/utils/misc.hpp>
@@ -194,8 +196,7 @@ void test_shuffler(std::shared_ptr<rapidsmpf::Communicator> const& comm,
   for (auto finished_partition : shuffler.local_partitions()) {
     auto packed_chunks = shuffler.extract(finished_partition);
     auto result        = cudf_streaming::integrations::unpack_and_concat(
-      cudf_streaming::integrations::unspill_partitions(
-        std::move(packed_chunks), br, rapidsmpf::AllowOverbooking::YES),
+      rapidsmpf::unspill_partitions(std::move(packed_chunks), br, rapidsmpf::AllowOverbooking::YES),
       stream,
       br,
       rapidsmpf::AllowOverbooking::YES);
@@ -413,9 +414,8 @@ TEST(Shuffler, SpillOnInsertAndExtraction)
 
   {
     // Now extract triggers spilling of the partition not being extracted.
-    std::vector<rapidsmpf::PackedData> output_chunks =
-      cudf_streaming::integrations::unspill_partitions(
-        shuffler.extract(0), br.get(), rapidsmpf::AllowOverbooking::YES);
+    std::vector<rapidsmpf::PackedData> output_chunks = rapidsmpf::unspill_partitions(
+      shuffler.extract(0), br.get(), rapidsmpf::AllowOverbooking::YES);
     EXPECT_EQ(mr.get_main_record().num_current_allocs(), 1);
 
     // And insert also triggers spilling. We end up with zero device allocations.
@@ -426,11 +426,11 @@ TEST(Shuffler, SpillOnInsertAndExtraction)
   }
 
   // Extract and unspill both partitions.
-  std::vector<rapidsmpf::PackedData> out0 = cudf_streaming::integrations::unspill_partitions(
-    shuffler.extract(0), br.get(), rapidsmpf::AllowOverbooking::YES);
+  std::vector<rapidsmpf::PackedData> out0 =
+    rapidsmpf::unspill_partitions(shuffler.extract(0), br.get(), rapidsmpf::AllowOverbooking::YES);
   EXPECT_EQ(mr.get_main_record().num_current_allocs(), 1);
-  std::vector<rapidsmpf::PackedData> out1 = cudf_streaming::integrations::unspill_partitions(
-    shuffler.extract(1), br.get(), rapidsmpf::AllowOverbooking::YES);
+  std::vector<rapidsmpf::PackedData> out1 =
+    rapidsmpf::unspill_partitions(shuffler.extract(1), br.get(), rapidsmpf::AllowOverbooking::YES);
   EXPECT_EQ(mr.get_main_record().num_current_allocs(), 2);
 
   // Disable spilling and insert the first partition.
@@ -842,7 +842,7 @@ TEST(Shuffler, concurrent_wait)
       EXPECT_NO_THROW(shuffler.wait(wait_timeout));
       auto chunks = shuffler.extract(pid);
       auto result = cudf_streaming::integrations::unpack_and_concat(
-        cudf_streaming::integrations::unspill_partitions(
+        rapidsmpf::unspill_partitions(
           std::move(chunks), br.get(), rapidsmpf::AllowOverbooking::YES),
         stream,
         br.get(),
@@ -926,7 +926,7 @@ TEST(Shuffler, opid_reuse)
     for (auto pid : shuffler.local_partitions()) {
       auto chunks = shuffler.extract(pid);
       auto result = cudf_streaming::integrations::unpack_and_concat(
-        cudf_streaming::integrations::unspill_partitions(
+        rapidsmpf::unspill_partitions(
           std::move(chunks), br.get(), rapidsmpf::AllowOverbooking::YES),
         stream,
         br.get(),
@@ -1008,7 +1008,7 @@ TEST(Shuffler, opid_reuse_with_empty_partitions)
     for (auto pid : shuffler.local_partitions()) {
       auto chunks = shuffler.extract(pid);
       auto result = cudf_streaming::integrations::unpack_and_concat(
-        cudf_streaming::integrations::unspill_partitions(
+        rapidsmpf::unspill_partitions(
           std::move(chunks), br.get(), rapidsmpf::AllowOverbooking::YES),
         stream,
         br.get(),

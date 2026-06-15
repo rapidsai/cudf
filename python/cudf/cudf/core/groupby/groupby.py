@@ -1178,7 +1178,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         # Preserve the column axis label-dtype/level_names from the source
         # DataFrame so that aggregations such as ``nunique`` keep the column
         # axis name (matching pandas behavior).
-        if (
+        if len(data) == 0 and not multilevel and self.obj.ndim == 2:
+            # No columns were aggregated (e.g. a frame with no value
+            # columns): mirror the source column axis so its dtype and
+            # RangeIndex-ness are preserved. Otherwise an empty
+            # ColumnAccessor reconstructs its columns as a string/object
+            # Index, whereas pandas keeps the original (e.g. empty
+            # RangeIndex) columns.
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                rangeindex=self.obj._data.rangeindex,
+                label_dtype=self.obj._data.label_dtype,
+                level_dtypes=self.obj._data.level_dtypes,
+            )
+        elif (
             not multilevel
             and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
@@ -1191,7 +1206,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         else:
             data = ColumnAccessor(data, multiindex=multilevel)
-        if not multilevel:
+        if not multilevel and len(data) > 0:
+            # Skip when there are no columns: there is nothing to rename, and
+            # rebuilding the ColumnAccessor would discard column-axis metadata
+            # (e.g. the preserved RangeIndex/dtype set above).
             data = data.rename_levels({np.nan: None}, level=0)
 
         result = DataFrame._from_data(data, index=result_index)
@@ -3351,7 +3369,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(result, Series):
             result = result.fillna(fill_value).astype(bool_np)
         else:
+            # With ``as_index=False`` the group-key columns are present in the
+            # result; only the aggregated value columns must be coerced to
+            # bool (casting a key column would corrupt it, e.g. a categorical
+            # key turning into ``[False, True]``).
+            key_names = set(self.grouping.names)
             for col_name in result._column_names:
+                if col_name in key_names:
+                    continue
                 result[col_name] = (
                     result[col_name].fillna(fill_value).astype(bool_np)
                 )
@@ -3698,9 +3723,17 @@ class SeriesGroupBy(GroupBy):
             if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 
-        # drop the first level if we have a multiindex
+        # Collapse the column MultiIndex produced by a list aggregation down to
+        # the aggregation names. With ``as_index=False`` the group-key columns
+        # have already been inserted (as ``(key, "")`` tuples by
+        # ``reset_index``); blindly dropping level 0 would replace each key
+        # name with the empty padding level, so keep the name for those.
         if result._data.nlevels > 1:
-            result.columns = result._data.to_pandas_index.droplevel(0)
+            key_names = set(self.grouping.names)
+            result.columns = [
+                top if (second == "" and top in key_names) else second
+                for top, second in result._data.to_pandas_index
+            ]
 
         return result
 
