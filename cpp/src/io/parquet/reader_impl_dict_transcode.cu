@@ -296,6 +296,7 @@ void reader_impl::assemble_dict_transcoded_columns(
       // offset-zero indices column before handing it to `make_dictionary_column`: the
       // `make_dictionary_column(column_view, column_view, ...)` path would otherwise
       // double-apply the slice's offset when constructing the internal indices child.
+      // TODO: Make it a viewable instead of reconstructing.
       std::vector<std::unique_ptr<column>> dict_segments(chunk_indices.size());
       std::transform(cuda::counting_iterator<size_t>{0},
                      cuda::counting_iterator{chunk_indices.size()},
@@ -315,6 +316,7 @@ void reader_impl::assemble_dict_transcoded_columns(
                          std::move(seg_keys), std::move(seg_indices), _stream, _mr);
                      });
 
+      // TODO: For one row group, we can handle all of them at once.
       // Concatenate all segments into the final DICTIONARY32 column for this input column.
       // `cudf::dictionary::detail::concatenate` deduplicates + sorts keys and recomputes indices.
       if (dict_segments.size() == 1) {

@@ -682,6 +682,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
 
 table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 {
+  //TODO: Having local views instead of offsets for the segments/
   CUDF_FUNC_RANGE();
 
   // If `_output_metadata` has been constructed, just copy it over.
