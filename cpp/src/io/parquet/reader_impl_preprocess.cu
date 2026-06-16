@@ -611,7 +611,7 @@ void reader_impl::preprocess_file(read_mode mode)
     std::overflow_error);
 
   // Inclusive scan the number of rows per source
-  if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
+  if (mode == read_mode::CHUNKED_READ) {
     _file_itm_data.exclusive_sum_num_rows_per_source.resize(
       _file_itm_data.num_rows_per_source.size());
     thrust::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),

@@ -1859,6 +1859,42 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected_src_index);
   }
 
+  // Filtered chunked-read from multiple data sources
+  {
+    auto const num_sources           = 6;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
+    auto const max_value             = int64_data[int64_data.size() / 2];
+    auto literal_value               = cudf::numeric_scalar<int64_t>{max_value};
+    auto literal                     = cudf::ast::literal{literal_value};
+    auto col_ref                     = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, literal);
+    auto source_info = cudf::io::source_info{std::vector<std::string>(num_sources, filepath)};
+    auto const options =
+      cudf::io::parquet_reader_options_builder(source_info).filter(filter_expression).build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+    EXPECT_TRUE(num_rows_per_source.empty());
+
+    std::vector<int64_t> int64_data_filtered;
+    int64_data_filtered.reserve(num_sources * num_rows);
+    std::for_each(cuda::counting_iterator<int>(0),
+                  cuda::counting_iterator<int>(num_sources),
+                  [&](auto const i) {
+                    std::copy_if(int64_data.begin(),
+                                 int64_data.end(),
+                                 std::back_inserter(int64_data_filtered),
+                                 [=](auto val) { return val <= max_value; });
+                  });
+    auto const int64_col_filtered =
+      int64s_col(int64_data_filtered.begin(), int64_data_filtered.end()).release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(int64_col_filtered->view(), result->view().column(0));
+  }
+
   // Chunked-read rows_to_read rows skipping rows_to_skip from eight data sources
   {
     auto const rows_to_skip          = 25'571;
