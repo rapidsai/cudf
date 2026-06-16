@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -356,9 +357,13 @@ TEST_F(HybridScanMultifileFiltersTest, BuildAllTrueRowMask)
     [&](cudf::host_span<std::vector<cudf::size_type> const> row_group_indices) {
       auto const row_mask = reader->build_all_true_row_mask(row_group_indices, stream, mr);
 
+      auto const expected_num_rows = reader->total_rows_in_row_groups(row_group_indices);
+
       EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
-      EXPECT_EQ(row_mask->size(), reader->total_rows_in_row_groups(row_group_indices));
+      EXPECT_EQ(row_mask->size(), expected_num_rows);
       EXPECT_EQ(row_mask->null_count(), 0);
+      auto const host_row_mask = host_row_mask_data<bool>(row_mask->view(), stream);
+      EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true), expected_num_rows);
     };
 
   auto row_group_indices = std::vector<std::vector<cudf::size_type>>{{0, 2}, {1, 3}};
