@@ -88,6 +88,7 @@ void scatter_scalar_bitmask_inplace(std::reference_wrapper<scalar const> const& 
                                           : marking_bitmask_kernel<false, decltype(scatter_map)>;
     bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       *target_view, scatter_map, num_scatter_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     target.set_null_count(
       cudf::detail::null_count(target.view().null_mask(), 0, target.size(), stream));

@@ -286,15 +286,42 @@ class set_expr_context(AbstractContextManager[None]):
         self.translator._expr_context = self._prev
 
 
-def _is_dynamic_pred(visitor: Any, expr_ir: Any) -> bool:
+def _drop_dyn_pred_hints(
+    translator: Translator, n: int, schema: Schema
+) -> expr.Expr | None:
     try:
-        visitor.view_expression(expr_ir.node)
+        node = translator.visitor.view_expression(n)
     except Exception as e:
         if str(e) == "dynamic_pred":
-            return True
+            return None
         raise  # pragma: no cover
-    else:
-        return False
+    if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op in (
+        plrs._expr_nodes.Operator.And,
+        plrs._expr_nodes.Operator.LogicalAnd,
+    ):
+        left = _drop_dyn_pred_hints(translator, node.left, schema)
+        right = _drop_dyn_pred_hints(translator, node.right, schema)
+        if left is None:
+            return right
+        if right is None:
+            return left
+        return expr.BinOp(
+            DataType(translator.visitor.get_dtype(n)),
+            expr.BinOp._MAPPING[node.op],
+            left,
+            right,
+        )
+    return translator.translate_expr(n=n, schema=schema)
+
+
+def translate_predicate(
+    translator: Translator, *, n: Any, schema: Schema
+) -> expr.NamedExpr | None:
+    """Translate predicate, dropping Polars' dynamic predicate hints."""
+    mask = _drop_dyn_pred_hints(translator, n.node, schema)
+    if mask is None:
+        return None
+    return expr.NamedExpr(n.output_name, mask)
 
 
 class set_internal_name_gen(AbstractContextManager[None]):
@@ -397,8 +424,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         (
             None
             if node.predicate is None
-            or _is_dynamic_pred(translator.visitor, node.predicate)
-            else translate_named_expr(translator, n=node.predicate, schema=schema)
+            else translate_predicate(translator, n=node.predicate, schema=schema)
         ),
         parquet_options,
     )
@@ -615,9 +641,9 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        if _is_dynamic_pred(translator.visitor, node.predicate):
+        mask = translate_predicate(translator, n=node.predicate, schema=inp.schema)
+        if mask is None:
             return inp
-        mask = translate_named_expr(translator, n=node.predicate, schema=inp.schema)
     return ir.Filter(schema, mask, inp)
 
 

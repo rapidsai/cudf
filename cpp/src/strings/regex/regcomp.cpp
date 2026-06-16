@@ -19,6 +19,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 namespace cudf {
@@ -358,19 +359,22 @@ class regex_parser {
       if (!is_quoted && chr == '-' && !literals.empty()) {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
-
-        if (!q && n_chr == ']') {  // handles: '[x-]'
+        if (!q && n_chr == ']') {      // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);  // add '-' as literal
+          literals.push_back(0);
           break;
         }
-        // normal case: '[a-z]'
-        // update end-range character
-        literals.back() = n_chr;
+        if (0 == literals.back()) {
+          literals.back() = n_chr;  // normal case: '[a-z]' update end-range character
+        } else {
+          literals.push_back(chr);  // adds '-'
+          literals.push_back(chr);
+          literals.push_back(n_chr);  // adds new character
+          literals.push_back(0);
+        }
       } else {
-        // add single literal
         literals.push_back(chr);
-        literals.push_back(chr);
+        literals.push_back(0);
       }
       std::tie(is_quoted, chr) = next_char();
     }
@@ -381,8 +385,9 @@ class regex_parser {
                    counter + (literals.size() / 2),
                    std::back_inserter(ranges),
                    [&literals, this](auto idx) {
-                     auto const lhs = literals[idx * 2];
-                     auto const rhs = literals[idx * 2 + 1];
+                     auto const lhs  = literals[idx * 2];
+                     auto const next = literals[idx * 2 + 1];
+                     auto const rhs  = next == 0 ? lhs : next;
                      CUDF_EXPECTS(lhs <= rhs,
                                   "invalid character range in class at " +
                                     std::to_string(std::distance(_pattern_begin, _expr_ptr)));
@@ -1211,6 +1216,34 @@ void reprog::check_for_errors()
       check_for_errors(id, inst.u1.right_id);
     }
   }
+}
+
+match_flags reprog::compute_match_flags() const
+{
+  static const std::unordered_set<int> non_consuming_inst_types{
+    OR, BOL, EOL, BOW, NBOW, LBRA, RBRA};
+
+  auto check_paths = [this](auto&& self, int id, std::unordered_set<int>& visited) -> bool {
+    if (id < 0 || !std::get<1>(visited.insert(id))) { return false; }
+    auto const& inst = _insts[id];
+    if (inst.type == END) { return false; }
+    if (non_consuming_inst_types.find(inst.type) == non_consuming_inst_types.end()) { return true; }
+    if (inst.type == OR) {
+      return self(self, inst.u2.left_id, visited) && self(self, inst.u1.right_id, visited);
+    }
+    return self(self, inst.u2.next_id, visited);
+  };
+
+  bool found_non_consuming_path = false;
+  for (auto start : _startinst_ids) {
+    if (start == -1) break;
+    std::unordered_set<int> visited;
+    if (!check_paths(check_paths, start, visited)) {
+      found_non_consuming_path = true;
+      break;
+    }
+  }
+  return found_non_consuming_path ? match_flags::EMPTY_MATCH : match_flags::NONE;
 }
 
 #ifndef NDEBUG

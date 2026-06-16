@@ -1370,6 +1370,7 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
   if (inputs.size() > 0) {
     inflate_kernel_no_racecheck<block_size>
       <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, results, parse_hdr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -1380,6 +1381,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   constexpr auto block_size = 1024;
   if (inputs.size() > 0) {
     copy_uncompressed_kernel<<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

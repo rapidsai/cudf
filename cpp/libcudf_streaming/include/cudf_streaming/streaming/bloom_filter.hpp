@@ -99,6 +99,18 @@ struct BloomFilter {
     std::shared_ptr<rapidsmpf::streaming::Channel> ch_out,
     std::vector<cudf::size_type> keys);
 
+  /**
+   * @brief Compute number of filter blocks that fit in the given L2 cache size.
+   *
+   * @param l2size L2 cache size in bytes.
+   * @return Number of filter blocks that fit.
+   */
+  [[nodiscard]] static std::size_t fitting_num_blocks(std::size_t l2size) noexcept
+  {
+    using StorageType = std::uint32_t;
+    return (l2size * 2) / (3 * sizeof(StorageType));
+  }
+
  private:
   std::shared_ptr<rapidsmpf::streaming::Context> ctx_{};
   std::shared_ptr<rapidsmpf::Communicator> comm_{};
