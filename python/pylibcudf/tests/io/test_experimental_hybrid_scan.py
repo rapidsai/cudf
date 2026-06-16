@@ -679,7 +679,9 @@ def test_hybrid_scan_construct_row_group_passes(
     assert all(passes)
 
     # Empty input row groups raise an error
-    with pytest.raises(RuntimeError):
+    with pytest.raises(
+        ValueError, match="Empty input row group indices encountered"
+    ):
         simple_hybrid_scan_reader.construct_row_group_passes(
             [], pass_read_limit
         )
