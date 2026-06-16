@@ -38,6 +38,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+      package_name: libcudf
   conda-cpp-tests:
     permissions:
       actions: read
