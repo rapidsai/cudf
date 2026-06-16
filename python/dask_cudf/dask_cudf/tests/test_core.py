@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import random
@@ -136,7 +136,7 @@ def _fragmented_gdf(df, nsplit):
     # Split dataframe in *nsplit*
     subdivsize = n // nsplit
     starts = [i * subdivsize for i in range(nsplit)]
-    ends = starts[1:] + [None]
+    ends = [*starts[1:], None]
     frags = [df[s:e] for s, e in zip(starts, ends, strict=True)]
     return frags
 
