@@ -12,6 +12,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -76,6 +77,8 @@ class Filter(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, mask = (child.evaluate(df, context=context) for child in self.children)
+        # polars type-puns length-1 columns as scalars.
+        values, mask = broadcast(values, mask, stream=df.stream)
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj, stream=df.stream
         )

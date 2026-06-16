@@ -3506,19 +3506,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * For each string, replaces any character sequence matching any of the regular expression
-   * patterns with the corresponding replacement strings.
-   *
-   * @param patterns The regular expression patterns to search within each string.
-   * @param repls The string scalars to replace for each corresponding pattern match.
-   * @return A new column vector containing the string results.
-   */
-  public final ColumnVector replaceMultiRegex(String[] patterns, ColumnView repls) {
-    return new ColumnVector(replaceMultiRegex(getNativeView(), patterns,
-        repls.getNativeView()));
-  }
-
-  /**
    * For each string, replaces any character sequence matching the given pattern
    * using the replace template for back-references.
    *
@@ -4805,16 +4792,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long replaceRegex(long columnView, String pattern, int flags, int capture,
                                           long repl, long maxRepl) throws CudfException;
-
-  /**
-   * Native method for multiple instance regular expression replacement.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param patterns native handle of the cudf::column_view containing the regex patterns.
-   * @param repls The replacement template for creating the output string.
-   * @return native handle of the resulting cudf column containing the string results.
-   */
-  private static native long replaceMultiRegex(long columnView, String[] patterns,
-                                               long repls) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given regex program

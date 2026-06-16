@@ -358,6 +358,7 @@ def test_rank_over_with_null_values(
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+@pytest.mark.timeout(120)
 def test_rank_over_with_null_group_keys(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,

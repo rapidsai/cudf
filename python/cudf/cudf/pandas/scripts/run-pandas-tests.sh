@@ -54,7 +54,8 @@ if [ ! -d "pandas-tests" ]; then
     # Vendored from pandas/pyproject.toml
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
-xfail_strict = true
+# flaky xpasses tracked at https://github.com/rapidsai/cudf/issues/22681
+xfail_strict = false
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",

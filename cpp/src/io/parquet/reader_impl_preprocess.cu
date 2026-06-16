@@ -539,7 +539,8 @@ std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
                                    chunks.size(),
                                    column_chunk_offsets,
                                    chunk_source_map,
-                                   _stream)};
+                                   _stream,
+                                   cudf::get_current_device_resource_ref())};
 }
 
 void reader_impl::read_compressed_data()

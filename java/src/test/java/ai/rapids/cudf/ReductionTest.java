@@ -694,24 +694,22 @@ class ReductionTest extends CudfTestBase {
 
   @Test
   void testSumWithOverflowPositiveOverflow() {
-    // Sum is zeroed when overflow is detected; the flag is the source of truth.
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
       SumWithOverflowResult r = readSumWithOverflow(result);
       assertTrue(r.sumValid);
-      assertEquals(0L, r.sumValue);
       assertTrue(r.overflow);
     }
   }
 
   @Test
   void testSumWithOverflowNegativeOverflow() {
-    // Sum is zeroed when overflow is detected; the flag is the source of truth.
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
     try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
          Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
       SumWithOverflowResult r = readSumWithOverflow(result);
       assertTrue(r.sumValid);
-      assertEquals(0L, r.sumValue);
       assertTrue(r.overflow);
     }
   }

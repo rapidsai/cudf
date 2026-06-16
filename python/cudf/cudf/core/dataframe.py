@@ -165,89 +165,6 @@ class _DataFrameIndexer(_FrameIndexer):
             key = (key, slice(None))
         return self._setitem_tuple_arg(key, value)
 
-    @_performance_tracking
-    def _can_downcast_to_series(self, df: DataFrame, arg):
-        """
-        This method encapsulates the logic used
-        to determine whether or not the result of a loc/iloc
-        operation should be "downcasted" from a DataFrame to a
-        Series
-        """
-        if isinstance(df, Series):
-            return False
-        nrows, ncols = df.shape
-        if nrows == 1:
-            if type(arg[0]) is slice:
-                if not is_scalar(arg[1]):
-                    return False
-            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
-                is_list_like(arg[1])
-                or is_column_like(arg[0])
-                or type(arg[1]) is slice
-            ):
-                return False
-            else:
-                if as_column(arg[0]).dtype.kind == "b" and not isinstance(
-                    arg[1], slice
-                ):
-                    return True
-            if df._num_columns == 0:
-                return True
-            first_dtype = df._columns[0].dtype
-            if all(
-                is_dtype_obj_numeric(dtype) or dtype == first_dtype
-                for _, dtype in df._dtypes
-            ):
-                return True
-            if isinstance(arg[1], tuple):
-                return True
-        if ncols == 1:
-            if type(arg[1]) is slice:
-                return False
-            if isinstance(arg[1], tuple):
-                return len(arg[1]) == df._data.nlevels
-            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
-                return True
-        return False
-
-    @_performance_tracking
-    def _downcast_to_series(self, df: DataFrame, arg):
-        """
-        "Downcast" from a DataFrame to a Series
-        based on Pandas indexing rules
-        """
-        nrows, ncols = df.shape
-        # determine the axis along which the Series is taken:
-        if nrows == 1 and ncols == 1:
-            if is_scalar(arg[0]) and (
-                is_scalar(arg[1])
-                or (df._data.multiindex and arg[1] in df._column_names)
-            ):
-                return df[df._column_names[0]].iloc[0]
-            elif not is_scalar(arg[0]):
-                axis = 1
-            else:
-                axis = 0
-
-        elif nrows == 1:
-            axis = 0
-        elif ncols == 1:
-            axis = 1
-        else:
-            raise ValueError("Cannot downcast DataFrame selection to Series")
-
-        # take series along the axis:
-        if axis == 1:
-            return df[df._column_names[0]]
-        else:
-            if df._num_columns > 0:
-                normalized_dtype = find_common_type(
-                    [dtype for _, dtype in df._dtypes]
-                )
-                df = df.astype(normalized_dtype)
-            sr = df.T
-            return sr[sr._column_names[0]]
-
 
 class _DataFrameLocIndexer(_DataFrameIndexer):
     """
@@ -536,6 +453,18 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
             key, "iAt based indexing can only have integer indexers"
         )
         return super().__setitem__(key, value)
+
+
+def _pd_index_level_dtypes(idx) -> tuple | None:
+    """Per-level dtypes of a pandas MultiIndex, else ``None``.
+
+    Used to preserve the dtype of each level when the column axis is an empty
+    MultiIndex, whose levels would otherwise reconstruct as object (their
+    dtype cannot be inferred from zero entries).
+    """
+    if isinstance(idx, pd.MultiIndex):
+        return tuple(idx.get_level_values(i).dtype for i in range(idx.nlevels))
+    return None
 
 
 @_performance_tracking
@@ -1016,7 +945,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
                 cols = {
-                    i: as_column(col_value.array, nan_as_null=nan_as_null)
+                    # Pass the Series (not ``col_value.array``) so that
+                    # ``as_column`` sees the column's explicit dtype. For an
+                    # object-dtype string column with nulls this preserves
+                    # ``object`` rather than inferring ``str`` in
+                    # pandas-compatible mode, matching ``cudf.Series(col)``.
+                    i: as_column(col_value, nan_as_null=nan_as_null)
                     for i, (_, col_value) in enumerate(data.items())
                 }
                 new_idx = from_pandas(data.index, nan_as_null=nan_as_null)
@@ -1089,6 +1023,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     multiindex=isinstance(columns, pd.MultiIndex),
                     rangeindex=isinstance(columns, pd.RangeIndex),
                     label_dtype=columns.dtype,
+                    level_dtypes=_pd_index_level_dtypes(columns),
                 )
             else:
                 col_accessor = ColumnAccessor(
@@ -1173,6 +1108,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(columns, pd.MultiIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         elif is_list_like(data):
             col_dict, index, columns = _listlike_to_column_accessor(
@@ -1185,6 +1121,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(columns, pd.MultiIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         else:
             raise TypeError(
@@ -1207,6 +1144,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 multiindex=isinstance(second_columns, pd.MultiIndex),
                 level_names=tuple(second_columns.names),
                 label_dtype=second_columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(second_columns),
             )
 
         super().__init__(
@@ -3448,7 +3386,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self._data._from_columns_like_self(
                     itertools.repeat(cond._column, self._num_columns),
                     verify=False,
-                )
+                ),
+                index=cond.index,
             )
         elif hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
@@ -5695,7 +5634,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col in data_to_describe._column_names
         ]
         if len(describe_series_list) == 1:
-            return describe_series_list[0].to_frame()
+            result = describe_series_list[0].to_frame()
         else:
             ldesc_indexes = sorted(
                 (x.index for x in describe_series_list), key=len
@@ -5709,7 +5648,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 None,
             )
 
-            return cudf.concat(
+            result = cudf.concat(
                 [
                     series.reindex(names, copy=False)
                     for series in describe_series_list
@@ -5717,6 +5656,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 axis=1,
                 sort=False,
             )
+        # ``describe`` produces one column per described column in the same
+        # order, so preserve the source column index (incl. its dtype/name,
+        # e.g. a ``CategoricalIndex``), which ``concat``/``to_frame`` drop.
+        result.columns = data_to_describe._data.to_pandas_index
+        return result
 
     @_performance_tracking
     def to_pandas(
@@ -6140,107 +6084,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if is_scalar(index) and index is not None:
             df = df.set_index(index)
         return df
-
-    @classmethod
-    @_performance_tracking
-    def _from_arrays(
-        cls,
-        data,
-        index=None,
-        columns=None,
-        nan_as_null=False,
-    ) -> Self:
-        """
-        Convert an object implementing an array interface to DataFrame.
-
-        Parameters
-        ----------
-        data : object of ndim 1 or 2,
-            Object implementing ``__array_interface__`` or ``__cuda_array_interface__``
-        index : Index or array-like
-            Index to use for resulting frame. Will default to
-            RangeIndex if no indexing information part of input data and
-            no index provided.
-        columns : list of str
-            List of column names to include.
-
-        Returns
-        -------
-        DataFrame
-        """
-        array_data: np.ndarray | cupy.ndarray
-        if hasattr(data, "__cuda_array_interface__"):
-            array_data = cupy.asarray(data, order="F")
-        elif hasattr(data, "__array_interface__"):
-            array_data = np.asarray(data, order="F")
-        else:
-            raise ValueError(
-                "data must be an object implementing __cuda_array_interface__ or __array_interface__"
-            )
-
-        if array_data.ndim not in {1, 2}:
-            raise ValueError(
-                f"records dimension expected 1 or 2 but found: {array_data.ndim}"
-            )
-
-        if array_data.ndim == 2:
-            num_cols = array_data.shape[1]
-        else:
-            # Since we validate ndim to be either 1 or 2 above,
-            # this case can be assumed to be ndim == 1.
-            num_cols = 1
-
-        if columns is None:
-            names = range(num_cols)
-        else:
-            if len(columns) != num_cols:
-                raise ValueError(
-                    f"columns length expected {num_cols} but "
-                    f"found {len(columns)}"
-                )
-            elif len(columns) != len(set(columns)):
-                raise ValueError("Duplicate column names are not allowed")
-            names = columns
-
-        # Mapping/MutableMapping are invariant in the key type, so
-        # dict[int, ColumnBase] (the inferred type of ca_data) is not
-        # a valid type to pass to a function accepting
-        # Mapping[Hashable, ColumnBase] even though int is Hashable.
-        # See: https://github.com/python/typing/issues/445
-        ca_data: dict[Hashable, ColumnBase]
-        if array_data.ndim == 2:
-            ca_data = {
-                k: as_column(array_data[:, i], nan_as_null=nan_as_null)
-                for i, k in enumerate(names)
-            }
-        elif array_data.ndim == 1:
-            ca_data = {
-                names[0]: as_column(array_data, nan_as_null=nan_as_null)
-            }
-
-        if index is not None:
-            index = ensure_index(index)
-
-        if isinstance(columns, (pd.Index, Index)):
-            level_names = tuple(columns.names)
-        else:
-            level_names = None
-
-        return cls._from_data(
-            ColumnAccessor(
-                data=ca_data,
-                multiindex=isinstance(
-                    columns, (pd.MultiIndex, cudf.MultiIndex)
-                ),
-                rangeindex=isinstance(
-                    columns, (range, pd.RangeIndex, cudf.RangeIndex)
-                ),
-                level_names=level_names,
-                label_dtype=getattr(columns, "dtype", None),
-                verify=False,
-            ),
-            index=index,
-        )
 
     @_performance_tracking
     def quantile(

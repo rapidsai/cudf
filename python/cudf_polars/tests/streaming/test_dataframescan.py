@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pickle
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -16,6 +17,9 @@ from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 
 def _assert_stable_ids_match(orig, loaded) -> None:
@@ -35,7 +39,12 @@ def df():
 
 
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
-def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_partition):
+def test_parallel_dataframescan(
+    df,
+    streaming_engine_factory,
+    max_rows_per_partition,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=max_rows_per_partition),
     )
@@ -51,7 +60,13 @@ def test_parallel_dataframescan(df, streaming_engine_factory, max_rows_per_parti
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
     ir, info = lower_ir_graph(
-        qir, config_options, collect_statistics(qir, config_options)
+        qir,
+        config_options,
+        collect_statistics(
+            qir,
+            config_options,
+            parquet_stats_executor,
+        ),
     )
     count = info[ir].count
     if max_rows_per_partition < total_row_count:
@@ -78,7 +93,10 @@ def test_dataframescan_concat(request, df, streaming_engine_factory):
     assert_gpu_result_equal(df2, engine=streaming_engine)
 
 
-def test_join_in_memory_lazy_stable_id_pickle(streaming_engine_factory):
+def test_join_in_memory_lazy_stable_id_pickle(
+    streaming_engine_factory,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=1_000, raise_on_fail=True),
     )
@@ -88,11 +106,21 @@ def test_join_in_memory_lazy_stable_id_pickle(streaming_engine_factory):
     right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect(engine=engine).lazy()
     qir = Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(engine)
-    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
+    ir, _ = lower_ir_graph(
+        qir,
+        config_options,
+        collect_statistics(
+            qir,
+            config_options,
+            parquet_stats_executor,
+        ),
+    )
     _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
-def test_dataframescan_pickle(df):
+def test_dataframescan_pickle(
+    df, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
+):
     _engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -100,7 +128,15 @@ def test_dataframescan_pickle(df):
     )
     qir = Translator(df._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
-    ir, _ = lower_ir_graph(qir, config_options, collect_statistics(qir, config_options))
+    ir, _ = lower_ir_graph(
+        qir,
+        config_options,
+        collect_statistics(
+            qir,
+            config_options,
+            parquet_stats_executor,
+        ),
+    )
 
     # Pickle and unpickle the IR (which contains DataFrameScan)
     pickled = pickle.dumps(ir)

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import itertools
 import re
-import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -55,7 +54,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.decimal import DecimalBaseColumn
+    from cudf.core.column.decimal import DecimalColumn
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
@@ -367,7 +366,7 @@ class StringColumn(ColumnBase, Scannable):
         format = _infer_timedelta_format(self)
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         with self.access(mode="read", scope="internal"):
             plc_column = (
                 plc.strings.convert.convert_fixed_point.to_fixed_point(
@@ -376,7 +375,7 @@ class StringColumn(ColumnBase, Scannable):
                 )
             )
             return cast(
-                "cudf.core.column.decimal.DecimalBaseColumn",
+                "cudf.core.column.decimal.DecimalColumn",
                 ColumnBase.create(plc_column, dtype),
             )
 
@@ -751,25 +750,6 @@ class StringColumn(ColumnBase, Scannable):
                 ),
             )
 
-    def edit_distance_matrix(self) -> ListColumn:
-        warnings.warn(
-            "edit_distance_matrix is deprecated. Use edit_distance instead.",
-            FutureWarning,
-        )
-        with self.access(mode="read", scope="internal"):
-            result = plc.nvtext.edit_distance.edit_distance_matrix(
-                self.plc_column
-            )
-            return cast(
-                cudf.core.column.lists.ListColumn,
-                ColumnBase.create(
-                    result,
-                    cudf.ListDtype(
-                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
-                    ),
-                ),
-            )
-
     def byte_pair_encoding(
         self,
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
@@ -994,14 +974,6 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(plc_column, self.dtype),
             )
-
-    def _modify_characters(
-        self, method: Callable[[plc.Column], plc.Column]
-    ) -> Self:
-        """Helper function for methods that modify characters e.g. to_lower"""
-        with self.access(mode="read", scope="internal"):
-            plc_column = method(self.plc_column)
-            return cast(Self, ColumnBase.create(plc_column, self.dtype))
 
     def to_lower(self) -> Self:
         result = cast(
@@ -1523,34 +1495,22 @@ class StringColumn(ColumnBase, Scannable):
 
     def replace_re(
         self,
-        pattern: list[str] | str,
-        replacement: Self | str,
+        pattern: str,
+        replacement: str,
         max_replace_count: int = -1,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            if isinstance(pattern, list) and isinstance(
-                replacement, type(self)
-            ):
-                plc_column = plc.strings.replace_re.replace_re(
-                    self.plc_column,
+            plc_column = plc.strings.replace_re.replace_re(
+                self.plc_column,
+                plc.strings.regex_program.RegexProgram.create(
                     pattern,
-                    replacement.plc_column,
-                    max_replace_count,
-                )
-            elif isinstance(pattern, str) and isinstance(replacement, str):
-                plc_column = plc.strings.replace_re.replace_re(
-                    self.plc_column,
-                    plc.strings.regex_program.RegexProgram.create(
-                        pattern,
-                        plc.strings.regex_flags.RegexFlags.DEFAULT,
-                    ),
-                    plc.Scalar.from_py(
-                        replacement, dtype=plc.DataType(plc.TypeId.STRING)
-                    ),
-                    max_replace_count,
-                )
-            else:
-                raise ValueError("Invalid pattern and replacement types")
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                plc.Scalar.from_py(
+                    replacement, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                max_replace_count,
+            )
             return cast(
                 Self,
                 ColumnBase.create(plc_column, self.dtype),
