@@ -141,6 +141,13 @@ def test_groupby_sorted_keys(
     exprs,
     request,
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            is_streaming_engine(engine),
+            strict=False,
+            reason="https://github.com/rapidsai/cudf/issues/21642 - streaming groupby correctness",
+        )
+    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))
