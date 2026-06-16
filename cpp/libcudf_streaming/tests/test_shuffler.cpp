@@ -10,6 +10,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf_streaming/integrations/partition.hpp>
+
 #include <gtest/gtest.h>
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>

@@ -9,6 +9,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <rapidsmpf/communicator/single.hpp>

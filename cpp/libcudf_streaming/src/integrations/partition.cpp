@@ -9,11 +9,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cudf_streaming/integrations/partition.hpp>
+#include <cudf_streaming/integrations/utils.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/integrations/utils.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/buffer.hpp>

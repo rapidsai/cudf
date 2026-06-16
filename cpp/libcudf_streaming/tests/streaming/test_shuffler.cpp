@@ -13,6 +13,7 @@
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <rapidsmpf/communicator/single.hpp>

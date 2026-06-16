@@ -383,6 +383,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@main
     with:
       build_type: pull-request
+      package_name: libcudf
   conda-cpp-tests:
     needs: [conda-cpp-build, changed-files]
     permissions:
@@ -735,9 +736,7 @@ jobs:
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
       build_command: |
         sccache --zero-stats;
-        configure-cudf-cpp -DBUILD_BENCHMARKS=ON;
-        configure-cudf_streaming-cpp -DBUILD_BENCHMARKS=OFF;
-        build-all -j0 --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        build-all -j0 --verbose -DBUILD_BENCHMARKS=ON 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
