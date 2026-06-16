@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -176,7 +176,9 @@ def read_csv(
             else:
                 dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
-            cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
+            cast("list", plc_dtypes).append(
+                _get_plc_data_type_from_dtype(dtype)
+            )
         elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (

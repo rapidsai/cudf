@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -327,7 +327,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             children=[],
         )
         return cast(
-            cudf.core.column.numerical.NumericalColumn,
+            "cudf.core.column.numerical.NumericalColumn",
             ColumnBase.create(new_plc_column, self._UNDERLYING_DTYPE).astype(
                 dtype
             ),

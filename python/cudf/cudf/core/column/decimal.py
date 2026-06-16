@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -131,12 +131,12 @@ class DecimalColumn(NumericalBaseColumn):
                     )
                 )
                 return cast(
-                    cudf.core.column.string.StringColumn,
+                    "cudf.core.column.string.StringColumn",
                     ColumnBase.create(plc_column, dtype),
                 )
         else:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 cudf.core.column.column_empty(0, dtype=dtype),
             )
 

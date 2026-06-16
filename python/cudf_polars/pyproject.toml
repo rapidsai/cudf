@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 [build-system]
@@ -127,7 +127,7 @@ select = [
   "ISC", # flake8-implicit-str-concat
   "INP", # flake8-no-pep420 (namespace packages)
   "SIM", # flake8-simplify
-  "TCH", # flake8-type-checking
+  "TC", # flake8-type-checking
   "TID", # flake8-tidy-imports
   "PLC", # pylint-convention
   "PLE", # pylint-error
@@ -164,7 +164,6 @@ ignore = [
   # tryceratops
   "TRY003", # Avoid specifying long messages outside the exception class
   # pyupgrade
-  "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
   # Lints below are turned off because of conflicts with the ruff
   # formatter
   # See https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
@@ -182,6 +181,7 @@ ignore = [
   "COM819", # prohibited-trailing-comma
   "ISC001", # single-line-implicit-string-concatenation
   "ISC002", # multi-line-implicit-string-concatenation
+  "PLC0415", # import not at top of file (deferred/conditional imports are intentional)
 ]
 fixable = ["ALL"]
 typing-modules = ["cudf_polars.typing"]

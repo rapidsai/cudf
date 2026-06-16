@@ -160,10 +160,10 @@ def main():
     melted = melt_pivot_back(revenue_pivot)
 
     # Stack / Unstack
-    unstacked, stacked = stack_unstack_demo(df)
+    _unstacked, _stacked = stack_unstack_demo(df)
 
     # Cross-tabulation
-    ct_count, ct_sat, ct_norm = crosstab_analysis(df)
+    _ct_count, _ct_sat, _ct_norm = crosstab_analysis(df)
 
     # Year-over-year pivot
     yoy = year_over_year_pivot(df)

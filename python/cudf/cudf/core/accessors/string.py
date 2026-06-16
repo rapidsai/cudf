@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -3851,7 +3851,7 @@ class StringMethods(BaseAccessor):
             # mypy can't deduce that the return value of
             # StringColumn.__eq__ is ColumnBase because the binops are
             # dynamically added by a mixin class
-            cast(ColumnBase, self._column == "").fillna(False)
+            cast("ColumnBase", self._column == "").fillna(False)
         )
 
     def isspace(self) -> Series | Index:
