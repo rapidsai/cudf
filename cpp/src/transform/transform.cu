@@ -472,7 +472,7 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
     {
       .data = udf_binary,
       .type = as_rtcx_binary_type(source_type),
-      .name = nullptr  // unnamed fragment: hash of the binary will be used as the fragment name
+      .name = nullptr  // unnamed fragment: the binary will be used to hash the UDF
     }};
 
   auto kernel = get_lto_linked_kernel("cudf/cpp/src/transform/jit/kernel.cu", {}, memory_fragments);
