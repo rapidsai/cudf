@@ -30,7 +30,7 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.18.1
+    rev: v0.19.0
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
