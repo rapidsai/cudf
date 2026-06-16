@@ -171,13 +171,9 @@ def test_unique_count_exclude_nulls():
 
 
 def test_count_nulls_unequal():
-    table = plc.Table(
-        [
-            plc.Column.from_iterable_of_py(
-                [1, 1, None, None, 2, 2], dtype=plc.DataType(plc.TypeId.INT64)
-            )
-        ]
-    )
+    arr = pa.array([1, 1, None, None, 2, 2], type=pa.int64())
+    col = plc.Column.from_arrow(arr)
+    table = plc.Table([col])
     result = plc.reduce.unique_count_table(
         table, plc.types.NullEquality.UNEQUAL
     )
@@ -185,13 +181,9 @@ def test_count_nulls_unequal():
 
 
 def test_distinct_count_nulls_unequal():
-    table = plc.Table(
-        [
-            plc.Column.from_iterable_of_py(
-                [1, None, 1, 2, None, 2], dtype=plc.DataType(plc.TypeId.INT64)
-            )
-        ]
-    )
+    arr = pa.array([1, None, 1, 2, None, 2], type=pa.int64())
+    col = plc.Column.from_arrow(arr)
+    table = plc.Table([col])
     result = plc.reduce.distinct_count_table(
         table, plc.types.NullEquality.UNEQUAL
     )
