@@ -517,9 +517,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                              static_cast<std::size_t>(total_row_groups),
                                              bloom_filter_col_schemas.size()};
 
-  // [bloom-dbg] dev-only: remove before merge. Hexdump the exact bytes each path feeds bloom filter
-  // construction. read_parquet strips the BloomFilterHeader; hybrid scan currently does not, so its
-  // spans are 16 bytes longer (header + bitset) and the caster misreads the header as a filter block.
+  // [bloom-dbg] dev-only: remove before merge. Hexdump the exact bytes each path feeds bloom
+  // filter construction. read_parquet strips the BloomFilterHeader; hybrid scan currently does not,
+  // so its spans are 16 bytes longer (header + bitset) and the caster misreads the header as a
+  // filter block.
   for (std::size_t dbg_i = 0; dbg_i < bloom_filter_data.size(); ++dbg_i) {
     auto const& dbg_span = bloom_filter_data[dbg_i];
     std::vector<std::uint8_t> dbg_host(dbg_span.size());

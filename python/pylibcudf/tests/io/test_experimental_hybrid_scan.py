@@ -257,12 +257,12 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     strict=True,
 )
 def test_hybrid_scan_bloom_filter_matches_read_parquet():
-    """Hybrid-scan bloom filtering must keep the same row group as ``read_parquet``.
+    """A/B test hybrid scan bloom filtering vs read_parquet.
 
-    pyarrow cannot write bloom filters, so this reads the committed DuckDB-written fixture
-    (bloom filter on ``r_reason_desc``; the value "Did not like the color" is present). The
-    hybrid-scan path forwards the fetched bytes (``BloomFilterHeader`` + bitset) to the filter
-    without stripping the header, so it wrongly prunes the matching row group.
+    A: read_parquet path (libcudf strips the BloomFilterHeader before probing)
+    B: hybrid-scan path (fetches BloomFilterHeader + bitset from secondary_filters_byte_ranges)
+
+    The hybrid path must keep the same row groups as read_parquet.
     """
     fixture = (
         Path(__file__).parents[4]
@@ -271,12 +271,14 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet():
     if not fixture.exists():
         pytest.skip(f"bloom fixture not found: {fixture}")
     data = fixture.read_bytes()
+    column_name = "r_reason_desc"
+    query_value = "Did not like the color"
+    expected_row_groups = list(range(pq.ParquetFile(fixture).metadata.num_row_groups))
 
-    bloom_filter = Operation(
-        ASTOperator.EQUAL,
-        ColumnNameReference("r_reason_desc"),
-        Literal(plc.Scalar.from_arrow(pa.scalar("Did not like the color"))),
-    )
+    literal_value = plc.Scalar.from_arrow(pa.scalar(query_value))
+    literal = Literal(literal_value)
+    column_ref = ColumnNameReference(column_name)
+    bloom_filter = Operation(ASTOperator.EQUAL, column_ref, literal)
 
     def make_options():
         options = plc.io.parquet.ParquetReaderOptions.builder(
@@ -285,12 +287,43 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet():
         options.set_filter(bloom_filter)
         return options
 
+    def make_path_options():
+        options = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([fixture])
+        ).build()
+        options.set_filter(bloom_filter)
+        return options
+
     # A: standard read_parquet keeps the only row group after bloom filtering.
-    table_w_meta = plc.io.parquet.read_parquet(make_options())
-    assert table_w_meta.num_input_row_groups == 1
-    assert table_w_meta.num_row_groups_after_bloom_filter == 1
+    print(
+        f"\n[bloom-demo] fixture={fixture.name} predicate={column_name} == {query_value!r}\n",
+        flush=True,
+    )
+    print(
+        "[bloom-demo] A: read_parquet path (libcudf strips the "
+        "BloomFilterHeader before probing)",
+        flush=True,
+    )
+    table_w_meta = plc.io.parquet.read_parquet(make_path_options())
+    print(
+        "[bloom-demo] A result: "
+        f"rows={table_w_meta.tbl.num_rows()} "
+        f"num_input_row_groups={table_w_meta.num_input_row_groups} "
+        f"num_row_groups_after_bloom_filter="
+        f"{table_w_meta.num_row_groups_after_bloom_filter}\n",
+        flush=True,
+    )
+    assert table_w_meta.num_input_row_groups == len(expected_row_groups)
+    assert table_w_meta.num_row_groups_after_bloom_filter == len(
+        expected_row_groups
+    )
 
     # B: hybrid scan should keep the same row group.
+    print(
+        "[bloom-demo] B: hybrid-scan path (fetches "
+        "BloomFilterHeader + bitset from secondary_filters_byte_ranges)",
+        flush=True,
+    )
     options = make_options()
     suffix = 8  # 4-byte footer length + "PAR1"
     mv = memoryview(data)
@@ -300,6 +333,13 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet():
     row_groups = reader.all_row_groups(options)
     bloom_ranges, _ = reader.secondary_filters_byte_ranges(row_groups, options)
     assert bloom_ranges  # the equality predicate makes r_reason_desc bloom-eligible
+    for idx, r in enumerate(bloom_ranges):
+        raw = data[r.offset : r.offset + r.size]
+        print(
+            f"[bloom-demo] B fetched range[{idx}]: "
+            f"offset={r.offset} size={r.size} raw={raw.hex()}",
+            flush=True,
+        )
 
     stream = plc.utils._get_stream(None)
     bloom_data = [
@@ -312,9 +352,10 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet():
     surviving = reader.filter_row_groups_with_bloom_filters(
         bloom_data, row_groups, options
     )
+    print(f"[bloom-demo] B result: surviving_row_groups={surviving}", flush=True)
 
-    # The queried value is present, so the hybrid path must match read_parquet (row group kept).
-    assert surviving == row_groups == [0]
+    # The queried value is present, so the hybrid path must match read_parquet.
+    assert surviving == row_groups == expected_row_groups
 
 
 def test_hybrid_scan_column_chunk_byte_ranges(
