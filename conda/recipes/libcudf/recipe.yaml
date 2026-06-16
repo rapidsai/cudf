@@ -426,8 +426,10 @@ outputs:
       ignore_run_exports:
         by_name:
           - cuda-cudart
+          - cuda-nvtx
           - cuda-version
           - libcudf
+          - libcurand
           - librmm
     tests:
       - script:
