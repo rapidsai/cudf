@@ -10,6 +10,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.expressions cimport Expression
+from pylibcudf.io.parquet_metadata cimport FileMetaData
 
 from pylibcudf.io.types cimport (
     compression_type,
@@ -83,7 +84,10 @@ cdef class ChunkedParquetReader:
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, object stream = *, DeviceMemoryResource mr=*
+    ParquetReaderOptions options,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+    object parquet_metadatas=*,
 )
 
 

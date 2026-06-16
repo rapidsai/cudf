@@ -16,7 +16,6 @@ from cudf_polars.dsl import expr as ir_expr
 from cudf_polars.dsl.ir import ConditionalJoin
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.engine_utils import is_streaming_engine
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -181,10 +180,7 @@ def test_join_where(engine: pl.GPUEngine, left, right, conditions, zlice):
         assert_gpu_result_equal(q_len, engine=engine)
 
 
-def test_cross_join_empty_right_table(engine: pl.GPUEngine, request):
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
-    )
+def test_cross_join_empty_right_table(engine: pl.GPUEngine):
     a = pl.LazyFrame({"a": [1, 2, 3], "x": [7, 2, 1]})
     b = pl.LazyFrame({"b": [2, 2, 2], "x": [7, 1, 3]})
 
@@ -280,7 +276,7 @@ def test_join_maintain_order_with_slice(
     assert_gpu_result_equal(
         q,
         engine=engine,
-        polars_collect_kwargs={"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
+        collect_kwargs={"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
     )
 
 
@@ -312,17 +308,8 @@ def test_join_maintain_order_with_slice(
     "ConditionalJoin not supported for multiple partitions"
 )
 def test_cross_join_filter_with_decimals(
-    engine: pl.GPUEngine, request, expr, left_dtype, right_dtype
+    engine: pl.GPUEngine, expr, left_dtype, right_dtype
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            POLARS_VERSION_LT_132
-            and isinstance(left_dtype, pl.Decimal)
-            and isinstance(right_dtype, pl.Decimal)
-            and "==" in repr(expr),
-            reason="Hash Inner Join between i128 and i128",
-        )
-    )
     left = pl.LazyFrame(
         {
             "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],

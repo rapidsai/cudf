@@ -13,7 +13,10 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import contextvars
+import functools
 import itertools
 import json
 import random
@@ -22,7 +25,15 @@ import uuid
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    ParamSpec,
+    TypeVar,
+    assert_never,
+    overload,
+)
 
 import polars as pl
 
@@ -35,7 +46,7 @@ from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
-from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
@@ -45,12 +56,9 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
-    get_joined_cuda_stream,
-    join_cuda_streams,
+    stream_ordered_after,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
     POLARS_VERSION_LT_138,
@@ -58,6 +66,7 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+    from concurrent.futures import ThreadPoolExecutor
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -68,6 +77,9 @@ if TYPE_CHECKING:
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
+
+    P = ParamSpec("P")
+    T = TypeVar("T")
 
 __all__ = [
     "IR",
@@ -108,12 +120,50 @@ class IRExecutionContext:
 
     Parameters
     ----------
+    py_executor
+       Thread pool for thread offload in async execution, only used by
+       streaming engine.
     get_cuda_stream
         A zero-argument callable that returns a CUDA stream.
+    query_id
+        Identifier for the query being executed.
     """
 
+    py_executor: ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    async def to_thread(
+        self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
+    ) -> T:
+        """
+        Run a function asynchronously in a thread.
+
+        Parameters
+        ----------
+        func
+            The function to run.
+        args
+            Arguments.
+        kwargs
+            Keyword arguments.
+
+        Returns
+        -------
+        Awaitable to obtain the result of calling ``func``.
+
+        Notes
+        -----
+        This offloads the function to run in the thread pool attached to
+        this execution context.
+        """
+        assert self.py_executor is not None, (
+            "Execution context must have a thread pool for offload"
+        )
+        loop = asyncio.get_running_loop()
+        ctx = contextvars.copy_context()
+        func_call = functools.partial(ctx.run, func, *args, **kwargs)
+        return await loop.run_in_executor(self.py_executor, func_call)
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -128,36 +178,11 @@ class IRExecutionContext:
         Yields
         ------
         A CUDA stream that is downstream of the given dataframes.
-
-        Notes
-        -----
-        This context manager provides two useful guarantees when working with
-        objects holding references to stream-ordered objects:
-
-        1. The stream yield upon entering the context manager is *downstream* of
-           all the input dataframes.  This ensures that you can safely perform
-           stream-ordered operations on any input using the yielded stream.
-        2. The stream-ordered CUDA deallocation of the inputs happens *after* the
-           context manager exits. This ensures that all stream-ordered operations
-           submitted inside the context manager can complete before the memory
-           referenced by the inputs is deallocated.
-
-        Note that this does (deliberately) disconnect the dropping of the Python
-        object (by its refcount dropping to 0) from the actual stream-ordered
-        deallocation of the CUDA memory. This is precisely what we need to ensure
-        that the inputs are valid long enough for the stream-ordered operations to
-        complete.
         """
-        result_stream = get_joined_cuda_stream(
+        with stream_ordered_after(
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
-
-        yield result_stream
-
-        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
-        )
+        ) as result_stream:
+            yield result_stream
 
 
 _BINOPS = {
@@ -313,8 +338,6 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
-_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
-
 _COMPARISON_BINOPS = {
     plc.binaryop.BinaryOperator.EQUAL,
     plc.binaryop.BinaryOperator.NOT_EQUAL,
@@ -325,6 +348,7 @@ _COMPARISON_BINOPS = {
 }
 
 
+@nvtx_annotate_cudf_polars(message="_parquet_physical_types")
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
@@ -505,17 +529,6 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if (
-            any(str(p).startswith("https:/") for p in self.paths)
-            and POLARS_VERSION_LT_131
-        ):  # pragma: no cover; polars passed us the wrong URI
-            # https://github.com/pola-rs/polars/issues/22766
-            raise NotImplementedError("Read from https")
-        if any(
-            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
-            for p in self.paths
-        ):
-            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
@@ -632,17 +645,8 @@ class Scan(IR):
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
 
-    def fast_count(self) -> int:  # pragma: no cover
-        """Get the number of rows in a Parquet Scan."""
-        meta = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(self.paths)
-        )
-        total_rows = meta.num_rows() - self.skip_rows
-        if self.n_rows != -1:
-            total_rows = min(total_rows, self.n_rows)
-        return max(total_rows, 0)
-
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
     def _get_parquet_row_count_from_metadata(
         paths: list[str], skip_rows: int, n_rows: int
     ) -> int:
@@ -819,13 +823,11 @@ class Scan(IR):
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = chunk.tbl.columns()
-                while reader.has_next():  # pragma: no cover
+                while reader.has_next():
                     columns = reader.read_chunk().tbl.columns()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
-                    for i in range(  # pragma: no cover
-                        len(concatenated_columns) - 1, -1, -1
-                    ):
+                    for i in reversed(range(len(concatenated_columns))):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
@@ -914,8 +916,8 @@ class Scan(IR):
                 dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns], stream=df.stream)
-            if next(iter(schema)) != name:
-                df = df.select(schema)
+            # Reorder to the row-index column is always first.
+            df = df.select(schema) if next(iter(schema)) != name else df
         assert all(
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
@@ -1529,7 +1531,9 @@ class Select(IR):
         ):  # pragma: no cover
             stream = context.get_cuda_stream()
             scan = self.children[0]
-            effective_rows = scan.fast_count()
+            effective_rows = Scan._get_parquet_row_count_from_metadata(
+                scan.paths, scan.skip_rows, scan.n_rows
+            )
             dtype = DataType(pl.UInt32())
             col = Column(
                 plc.Column.from_scalar(
@@ -1980,19 +1984,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child
@@ -2007,7 +2007,7 @@ def _add_cast(
     side: expr.ColRef,
     left_casts: dict[str, DataType],
     right_casts: dict[str, DataType],
-) -> None:
+) -> None:  # pragma: no cover
     (col,) = side.children
     assert isinstance(col, expr.Col)
     casts = (
@@ -2029,7 +2029,9 @@ def _align_decimal_binop_types(
     ):
         target = DataType.common_decimal_dtype(left_type, right_type)
 
-        if left_type.id() != target.id() or left_type.scale() != target.scale():
+        if (
+            left_type.id() != target.id() or left_type.scale() != target.scale()
+        ):  # pragma: no cover
             _add_cast(target, left_expr, left_casts, right_casts)
 
         if right_type.id() != target.id() or right_type.scale() != target.scale():
@@ -2041,7 +2043,7 @@ def _align_decimal_binop_types(
     ) or (
         plc.traits.is_fixed_point(right_type.plc_type)
         and plc.traits.is_floating_point(left_type.plc_type)
-    ):
+    ):  # pragma: no cover
         is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
         decimal_expr, float_expr = (
             (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
@@ -2071,7 +2073,9 @@ def _collect_decimal_binop_casts(
     return left_casts, right_casts
 
 
-def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
+def _apply_casts(
+    df: DataFrame, casts: dict[str, DataType]
+) -> DataFrame:  # pragma: no cover
     if not casts:
         return df
 
@@ -2479,9 +2483,11 @@ class Join(IR):
                         right.columns,
                         left=False,
                         empty=True,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         stream=stream,
                     )
                     result = DataFrame([*left_cols, *right_cols], stream=stream)
@@ -2495,9 +2501,11 @@ class Join(IR):
                     right_cols = Join._build_columns(
                         columns[left.num_columns :],
                         right.columns,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         left=False,
                         stream=stream,
                     )
@@ -3040,16 +3048,6 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR
-            old, new, strict = self.options
-            if len(new) != len(set(new)) or (
-                set(new) & (set(df.schema.keys()) - set(old))
-            ):
-                raise NotImplementedError(
-                    "Duplicate new names in rename."
-                )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -3123,11 +3121,6 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
-            # final tag is "swapping" which is useful for the
-            # optimiser (it blocks some pushdown operations)
-            old, new, _ = options
-            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif name == "explode":
             ((to_explode,),) = options
             index = df.column_names.index(to_explode)
@@ -3210,15 +3203,24 @@ class MapFunction(IR):
 class Union(IR):
     """Concatenate dataframes vertically."""
 
-    __slots__ = ("zlice",)
-    _non_child = ("schema", "zlice")
+    __slots__ = ("maintain_order", "zlice")
+    _non_child = ("schema", "zlice", "maintain_order")
     _n_non_child_args = 1
+    maintain_order: bool
+    """Whether row order must be preserved."""
     zlice: Zlice | None
     """Optional slice to apply to the result."""
 
-    def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
+    def __init__(
+        self,
+        schema: Schema,
+        zlice: Zlice | None,
+        maintain_order: bool,  # noqa: FBT001
+        *children: IR,
+    ):
         self.schema = schema
         self.zlice = zlice
+        self.maintain_order = maintain_order
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
@@ -3243,19 +3245,21 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ("should_broadcast",)
-    _non_child = ("schema", "should_broadcast")
-    _n_non_child_args = 2
+    __slots__ = ("should_broadcast", "strict")
+    _non_child = ("schema", "should_broadcast", "strict")
+    _n_non_child_args = 3
 
     def __init__(
         self,
         schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
+        strict: bool,  # noqa: FBT001
         *children: IR,
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (schema, should_broadcast)
+        self.strict = strict
+        self._non_child_args = (schema, should_broadcast, strict)
         self.children = children
 
     @staticmethod
@@ -3298,6 +3302,7 @@ class HConcat(IR):
         cls,
         schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
+        strict: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -3315,6 +3320,13 @@ class HConcat(IR):
                 result = DataFrame(ordered, stream=stream)
             else:
                 max_rows = max(df.num_rows for df in dfs)
+                if strict and any(df.num_rows != max_rows for df in dfs):
+                    heights = [df.num_rows for df in dfs]
+                    msg = (
+                        f"cannot concat DataFrames horizontally"
+                        f" with strict=True: height mismatch {heights}"
+                    )
+                    raise pl.exceptions.ShapeError(msg)
                 # Horizontal concatenation extends shorter tables with nulls
                 result = DataFrame(
                     itertools.chain.from_iterable(

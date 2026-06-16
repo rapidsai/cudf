@@ -6,7 +6,6 @@ from __future__ import annotations
 import functools
 import inspect
 import textwrap
-import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
@@ -28,7 +27,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core import indexing_utils
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.accessors import (
     CategoricalAccessor,
     ListMethods,
@@ -41,7 +39,10 @@ from cudf.core.column import (
 )
 from cudf.core.column.column import _normalize_types_column, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -62,7 +63,7 @@ from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     _get_nan_for_dtype,
     dtype_from_pylibcudf_column,
     find_common_type,
@@ -122,10 +123,7 @@ def _describe_timetype(
         **dict(
             zip(
                 _format_percentile_names(percentiles),
-                obj.quantile(percentiles)
-                .astype(CUDF_STRING_DTYPE)
-                .to_numpy(na_value=np.nan)
-                .tolist(),
+                [str(typ(x)) for x in obj.quantile(percentiles).to_pandas()],
                 strict=True,
             )
         ),
@@ -205,9 +203,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if isinstance(key, tuple):
             key = list(key)
 
-        if (
-            self._frame.dtype.kind in "uifb"
-            or self._frame.dtype == CUDF_STRING_DTYPE
+        if self._frame.dtype.kind in "uifb" or is_dtype_obj_string(
+            self._frame.dtype
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to
@@ -215,6 +212,14 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # larger data type mimicking pandas
             if not (value is None or value is cudf.NA or value is np.nan):
                 tmp_value = as_column(value)
+                if (
+                    self._frame.dtype.kind in "uifb"
+                    and tmp_value.dtype.kind == "O"
+                ):
+                    raise TypeError(
+                        f"Invalid value '{value!s}' for dtype "
+                        f"'{self._frame.dtype}'"
+                    )
                 if (
                     not tmp_value.can_cast_safely(self._frame.dtype)
                     and not is_pandas_nullable_extension_dtype(
@@ -243,24 +248,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         to_dtype = find_common_type(
                             (tmp_value.dtype, self._frame.dtype)
                         )
-                    tmp_value = tmp_value.astype(to_dtype)
                     if to_dtype != self._frame.dtype:
-                        # Do not remove until pandas-3.0 support is added.
-                        assert PANDAS_LT_300, (
-                            "Need to drop after pandas-3.0 support is added."
-                        )
-                        warnings.warn(
-                            f"Setting an item of incompatible dtype is deprecated "
-                            "and will raise in a future error of pandas. "
-                            f"Value '{value}' has dtype incompatible with "
-                            f"{self._frame.dtype}, "
-                            "please explicitly cast to a compatible dtype first.",
-                            FutureWarning,
-                        )
-                        self._frame._column._mimic_inplace(
-                            self._frame._column.astype(to_dtype), inplace=True
+                        raise TypeError(
+                            f"Invalid value '{value}' for dtype '{self._frame.dtype}'"
                         )
                     if is_scalar(value):
+                        tmp_value = tmp_value.astype(to_dtype)
                         value = tmp_value.element_indexing(0)
 
         self._frame._column[key] = value
@@ -354,26 +347,6 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise NotImplementedError(
                     "Interval indexing is not supported."
                 )
-            if not is_dtype_obj_numeric(
-                index_dtype, include_decimal=False
-            ) and not (
-                isinstance(index_dtype, CategoricalDtype)
-                and index_dtype.categories.dtype.kind in "iu"
-            ):
-                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if is_integer(arg):
-                    # Do not remove until pandas 3.0 support is added.
-                    assert PANDAS_LT_300, (
-                        "Need to drop after pandas-3.0 support is added."
-                    )
-                    warn_msg = (
-                        "Series.__getitem__ treating keys as positions is deprecated. "
-                        "In a future version, integer keys will always be treated "
-                        "as labels (consistent with DataFrame behavior). To access "
-                        "a value by position, use `ser.iloc[pos]`"
-                    )
-                    warnings.warn(warn_msg, FutureWarning)
-                    return arg
             try:
                 if isinstance(self._frame.index, RangeIndex):
                     indices = self._frame.index._indices_of(arg)
@@ -531,8 +504,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
-        2    None
-        dtype: object
+        2     NaN
+        dtype: str
         """
         return cls._from_column(ColumnBase.from_arrow(array))
 
@@ -552,15 +525,24 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
+            if dtype is None and index is not None and len(index) > 0:
+                dtype = np.dtype("float64")
         if dtype is not None:
             dtype = cudf.dtype(dtype)
         attrs = None
+        allows_duplicate_labels = True
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             attrs = deepcopy(getattr(data, "attrs", None))
-            if copy and not isinstance(data, (pd.Series, pd.Index)):
-                data = data.copy(deep=True)
+            if isinstance(data, (pd.Series, Series)):
+                allows_duplicate_labels = data.flags.allows_duplicate_labels
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            if not isinstance(data, (pd.Series, pd.Index)):
+                # Shallow copy so the new column gets its own Buffer
+                # reference in the BufferOwner's _slices WeakSet.
+                # This enables CoW: writes trigger
+                # make_single_owner_inplace() when len(_slices) > 1.
+                column = column.copy(deep=copy)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
         elif isinstance(data, ColumnAccessor):
@@ -627,7 +609,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             first_index = index
             second_index = None
 
-        super().__init__({name: column}, index=first_index, attrs=attrs)
+        super().__init__(
+            {name: column},
+            index=first_index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -654,8 +641,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         index: Index | None = None,
         name: Any = no_default,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ) -> Series:
-        out = super()._from_data(data=data, index=index, attrs=attrs)
+        out = super()._from_data(
+            data=data,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if name is not no_default:
             out.name = name
         return out
@@ -706,7 +699,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s = cudf.Series(cudf.date_range(
         ...   start='2001-02-03 12:00:00',
         ...   end='2001-02-03 14:00:00',
-        ...   freq='1H'))
+        ...   freq='1h'))
         >>> s.dt.hour
         0    12
         1    13
@@ -946,7 +939,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         11    b
         12    c
         13    d
-        dtype: object
+        dtype: str
         >>> series.reset_index()
            index  0
         0     10  a
@@ -958,7 +951,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1    b
         2    c
         3    d
-        dtype: object
+        dtype: str
 
         You can also use ``reset_index`` with MultiIndex.
 
@@ -1038,19 +1031,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13    None
+        13     NaN
         15       d
-        Name: sample, dtype: object
+        Name: sample, dtype: str
         >>> series.to_frame()
            sample
         10      a
         11      b
         12      c
-        13   None
+        13    NaN
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
-        res._attrs = self.attrs  # type: ignore[has-type]
+        self._propagate_metadata(res)
         return res
 
     @_performance_tracking
@@ -1177,9 +1170,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2     None
+        2      NaN
         3   rabbit
-        dtype: object
+        dtype: str
 
         ``map`` accepts a ``dict`` or a ``Series``. Values that are not found
         in the ``dict`` are converted to ``NaN``, default values in dicts are
@@ -1188,9 +1181,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2     None
-        3     None
-        dtype: object
+        2      NaN
+        3      NaN
+        dtype: str
 
         It also accepts numeric functions:
 
@@ -1335,18 +1328,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             or self.index.dtype.kind in {"i", "u", "f"}
             or isinstance(self.index.dtype, IntervalDtype)
         ):
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "Series.__getitem__ treating keys as positions is deprecated "
-                "In a future version, integer keys will always be treated as labels "
-                "(consistent with DataFrame behavior) To access a value by position, "
-                "use `ser.iloc[pos]`",
-                FutureWarning,
-            )
-            return self.iloc[arg]
+            raise KeyError(arg)
         else:
             return self.loc[arg]
 
@@ -1371,9 +1353,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                preprocess = cudf.concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
         if isinstance(preprocess.dtype, CategoricalDtype):
@@ -1385,22 +1365,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             show_dimensions = pd.get_option("display.show_dimensions")
             preprocess = preprocess.copy(deep=False)
             preprocess.index = preprocess.index._pandas_repr_compatible()
-            if preprocess.dtype.categories.dtype.kind == "f":
-                pd_series = (
-                    preprocess.astype(CUDF_STRING_DTYPE)
-                    .to_pandas()
-                    .astype(
-                        dtype=pd.CategoricalDtype(
-                            categories=preprocess.dtype.categories.astype(
-                                CUDF_STRING_DTYPE
-                            ).to_pandas(),
-                            ordered=preprocess.dtype.ordered,
-                        )
-                    )
-                )
-            else:
-                pd_series = preprocess.to_pandas()
-            output = pd_series.to_string(
+            output = preprocess.to_pandas().to_string(
                 name=self.name,
                 dtype=self.dtype,
                 min_rows=min_rows,
@@ -1413,17 +1378,16 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, CategoricalDtype):
-            category_memory = lines[-1]
-            if preprocess.dtype.categories.dtype.kind == "f":
-                category_memory = category_memory.replace("'", "").split(": ")
-                category_memory = (
-                    category_memory[0].replace(
-                        "object", preprocess.dtype.categories.dtype.name
-                    )
-                    + ": "
-                    + category_memory[1]
-                )
-            lines = lines[:-1]
+            # The trailing "Categories (...): [...]" block can wrap across
+            # multiple lines (e.g. for datetime categories), so capture every
+            # line from "Categories" onwards instead of just the last line.
+            for cat_start in range(len(lines) - 1, -1, -1):
+                if lines[cat_start].startswith("Categories"):
+                    break
+            else:
+                cat_start = len(lines) - 1
+            category_memory = "\n".join(lines[cat_start:])
+            lines = lines[:cat_start]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
                 lines = lines[:-1]
@@ -1470,7 +1434,13 @@ class Series(SingleColumnFrame, IndexedFrame):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
                 )
+            indices_differ = not self.index.equals(other.index)
             lhs, other = _align_indices([self, other], allow_non_unique=True)
+            # When indices differ, pandas returns freq=None for the result
+            # (the aligned union index may be regular but pandas doesn't infer
+            # it in this case). Clear freq to match pandas behaviour.
+            if indices_differ and isinstance(lhs.index, DatetimeIndex):
+                lhs.index._freq = None
         else:
             lhs = self
 
@@ -1522,9 +1492,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 result_index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result_index = Index._concat([o.index for o in objs])
+                result_index = Index._concat([o.index for o in objs])
         elif index is False:
             result_index = None
         else:
@@ -1570,7 +1538,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
+            local_time = col.__dict__.get("_local_time")
             col = ColumnBase.create(col.plc_column, objs[0].dtype)
+            if local_time is not None and isinstance(
+                col, cudf.core.column.datetime.DatetimeTZColumn
+            ):
+                col._local_time = local_time
 
         result = cls._from_column(col, name=name, index=result_index)
         if isinstance(result.index, DatetimeIndex):
@@ -1699,13 +1672,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    None
+        1     NaN
         2     abc
-        dtype: object
+        dtype: str
         >>> ser.dropna()
         0
         2    abc
-        dtype: object
+        dtype: str
         """
         if axis not in (0, "index"):
             raise ValueError(
@@ -1757,7 +1730,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    beetle
         4      lama
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         With the `keep` parameter, the selection behavior of duplicated
         values can be changed. The value 'first' keeps the first
@@ -1771,7 +1744,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1       cow
         3    beetle
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
@@ -1781,7 +1754,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    beetle
         4      lama
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
 
         The value `False` for parameter `keep` discards all sets
         of duplicated entries. Setting the value of 'inplace' to
@@ -1792,7 +1765,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         1       cow
         3    beetle
         5     hippo
-        Name: animal, dtype: object
+        Name: animal, dtype: str
         """
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
@@ -1801,20 +1774,62 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill"] | None = None,
+        value: None | ScalarLike | Series,
+        *,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
     ) -> Self | None:
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(['a', 'b', None, 'c'])
+        >>> ser
+        0       a
+        1       b
+        2     NaN
+        3       c
+        dtype: str
+        >>> ser.fillna('z')
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: str
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> ser.fillna('z', inplace=True)
+        >>> ser
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: str
+        """
         if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
             value = {self.name: value._column}
-        return super().fillna(
-            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        return super()._fillna(
+            value=value, axis=axis, inplace=inplace, limit=limit
         )
 
     def between(
@@ -1916,7 +1931,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def all(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
@@ -1999,7 +2014,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         2    0
         dtype: int64
         >>> type(pds)
-        <class 'pandas.core.series.Series'>
+        <class 'pandas.Series'>
 
         ``nullable=True`` converts the result to pandas nullable types:
 
@@ -2042,6 +2057,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             name=self.name,
         )
         res.attrs = self.attrs
+        res.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels  # type: ignore[has-type]
+        )
         return res
 
     @_performance_tracking
@@ -2354,10 +2372,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         to_replace=None,
         value=no_default,
+        *,
         inplace: bool = False,
-        limit=None,
         regex: bool = False,
-        method=no_default,
     ) -> Self | None:
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
@@ -2369,9 +2386,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             to_replace,
             value,
             inplace=inplace,
-            limit=limit,
             regex=regex,
-            method=method,
         )
 
     @_performance_tracking
@@ -2405,13 +2420,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    a
         1    b
         2    c
-        dtype: object
+        dtype: str
         >>> s.update(cudf.Series(['d', 'e'], index=[0, 2]))
         >>> s
         0    d
         1    b
         2    e
-        dtype: object
+        dtype: str
         >>> s = cudf.Series([1, 2, 3])
         >>> s
         0    1
@@ -2498,7 +2513,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         supported by the CUDA Python Numba target
         <https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html>`__.
         For more information, see the `cuDF guide to user defined functions
-        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
+        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>`__.
 
         Some string functions and methods are supported. Refer to the guide
         to UDFs for details.
@@ -2593,7 +2608,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         ...     return x + 1.5
         >>> sr.apply(f)
         0     2.5
-        1    <NA>
+        1     NaN
         2     4.5
         dtype: float64
 
@@ -2631,7 +2646,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         For a complete list of supported functions and methods that may be
         used to manipulate string data, see the UDF guide,
-        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
+        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>
 
         """
         if convert_dtype is not True:
@@ -3053,17 +3068,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3    None
+        3     NaN
         4       b
-        5    None
+        5     NaN
         6       c
-        dtype: object
+        dtype: str
         >>> series.unique()
         0       a
         1       b
-        2    None
+        2     NaN
         3       c
-        dtype: object
+        dtype: str
         """
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
@@ -3135,7 +3150,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3     3.0
         4     3.0
         5     3.0
-        6    <NA>
+        6     NaN
         dtype: float64
         >>> sr.value_counts()
         3.0    3
@@ -3168,16 +3183,16 @@ class Series(SingleColumnFrame, IndexedFrame):
         1     2.0
         2     2.0
         3     3.0
-        4    <NA>
+        4     NaN
         5     3.0
         6     3.0
-        7    <NA>
+        7     NaN
         dtype: float64
         >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
         2.0     2
         3.0     3
-        <NA>    2
+        NaN     2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
@@ -3191,9 +3206,13 @@ class Series(SingleColumnFrame, IndexedFrame):
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
         if dropna and self._is_all_null:
+            count_dtype = get_dtype_of_same_kind(
+                self.dtype,
+                np.dtype(np.float64) if normalize else np.dtype(np.int64),
+            )
             return Series(
                 [],
-                dtype=np.int64,
+                dtype=count_dtype,
                 name=result_name,
                 index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
@@ -3215,8 +3234,25 @@ class Series(SingleColumnFrame, IndexedFrame):
                 # their occurrences as 0.
                 # TODO: Remove this workaround once `observed`
                 # parameter support is added to `groupby`
+                #
+                # When ``dropna=False`` and the column contains nulls,
+                # ``res`` includes a ``NaN`` group that we must preserve;
+                # only the existing categories should be reindexed/filled
+                # with 0.
+                nan_count = (
+                    res[res.index.isna()]
+                    if not dropna and res.index.isna().any()
+                    else None
+                )
+                res = res[res.index.notna()]
                 res = res.reindex(self.dtype.categories).fillna(0)
                 res.index = res.index.astype(self.dtype)
+                if nan_count is not None:
+                    res = cudf.concat([res, nan_count])
+                    # ``cudf.concat`` does not always preserve the
+                    # ``ordered`` flag of the categorical index dtype, so
+                    # restore it here.
+                    res.index = res.index.astype(self.dtype)
 
         res.index.name = self.name
 
@@ -3342,12 +3378,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "All percentiles must be between 0 and 1, inclusive."
                 )
 
-            # describe always includes 50th percentile
-            percentiles = list(percentiles)
-            if 0.5 not in percentiles:
-                percentiles.append(0.5)
-
-            percentiles = np.sort(percentiles)
+            percentiles = np.sort(list(percentiles))
         else:
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
@@ -3509,7 +3540,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         level=None,
         as_index=True,
         sort=no_default,
-        group_keys=False,
+        group_keys=no_default,
         observed=True,
         dropna=True,
     ):
@@ -3598,17 +3629,16 @@ class Series(SingleColumnFrame, IndexedFrame):
                 ".rename does not currently support relabeling the index."
             )
         out_data = self._data.copy(deep=copy)
-        return Series._from_data(
-            out_data, self.index, name=index, attrs=self.attrs
-        )
+        out = Series._from_data(out_data, self.index, name=index)
+        self._propagate_metadata(out)
+        return out
 
     @_performance_tracking
     def add_prefix(self, prefix, axis=None):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
-            # TODO: Change to deep=False when copy-on-write is default
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=prefix + self.index.astype(str),
             attrs=self.attrs,
         )
@@ -3618,8 +3648,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
-            # TODO: Change to deep=False when copy-on-write is default
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=self.index.astype(str) + suffix,
             attrs=self.attrs,
         )
@@ -3654,7 +3683,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    a
         1    b
         2    c
-        dtype: object
+        dtype: str
         >>> sr.keys()
         RangeIndex(start=0, stop=3, step=1)
         >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
@@ -3664,7 +3693,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         c    3
         dtype: int64
         >>> sr.keys()
-        Index(['a', 'b', 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='str')
         """
         return self.index
 
@@ -3704,88 +3733,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype: int64
         """
         return super()._explode(self.name, ignore_index)
-
-    @_performance_tracking
-    def pct_change(
-        self,
-        periods=1,
-        fill_method=no_default,
-        limit=no_default,
-        freq=None,
-        **kwargs,
-    ):
-        """
-        Calculates the percent change between sequential elements
-        in the Series.
-
-        Parameters
-        ----------
-        periods : int, default 1
-            Periods to shift for forming percent change.
-        fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
-        freq : str, optional
-            Increment to use from time series API.
-            Not yet implemented.
-        **kwargs
-            Additional keyword arguments are passed into
-            `Series.shift`.
-
-        Returns
-        -------
-        Series
-        """
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
-        if freq is not None:
-            raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {
-            no_default,
-            None,
-            "ffill",
-            "pad",
-            "bfill",
-            "backfill",
-        }:
-            raise ValueError(
-                "fill_method must be one of None, 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
-            )
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' and 'limit' keywords in "
-                f"{type(self).__name__}.pct_change are deprecated and will be "
-                "removed in a future version. Either fill in any non-leading "
-                "NA values prior to calling pct_change or specify "
-                "'fill_method=None' to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method is no_default:
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            data = self.fillna(method=fill_method, limit=limit)
-        diff = data.diff(periods=periods)
-        change = diff / data.shift(periods=periods, freq=freq, **kwargs)
-        return change
 
     @_performance_tracking
     def where(
@@ -3959,6 +3906,36 @@ class BaseDatelikeProperties:
         """Return the method result like self.series"""
         data = ColumnAccessor({self.series.name: column}, verify=False)
         return self.series._from_data_like_self(data)
+
+
+def _expand_pyarrow_subsecond(date_format: str, subsecond_format: str) -> str:
+    # pyarrow's strftime appends sub-second fractions after %S based on the
+    # timestamp resolution. Insert that fraction directly into the format
+    # string for libcudf, but only when %S is not already followed by a
+    # subsecond directive.
+    out: list[str] = []
+    i = 0
+    n = len(date_format)
+    while i < n:
+        ch = date_format[i]
+        if ch == "%" and i + 1 < n:
+            out.append(date_format[i : i + 2])
+            directive = date_format[i + 1]
+            i += 2
+            if directive == "S":
+                # Only append if not already followed by a subsecond directive.
+                if (
+                    i + 1 < n
+                    and date_format[i] == "."
+                    and date_format[i + 1] in "0123456789"
+                ):
+                    pass
+                else:
+                    out.append(subsecond_format)
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
 
 
 class DatetimeProperties(BaseDatelikeProperties):
@@ -4427,9 +4404,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        return self._return_result_like_self(
-            self.series._column.is_leap_year.fillna(False)
-        )
+        col = self.series._column.is_leap_year
+        if not isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.fillna(False)
+        return self._return_result_like_self(col)
 
     @property
     @_performance_tracking
@@ -4490,11 +4468,12 @@ class DatetimeProperties(BaseDatelikeProperties):
         5     Thursday
         6       Friday
         7     Saturday
-        dtype: object
+        dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_day_names(locale)
-        )
+        col = self.series._column.get_day_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def month_name(self, locale: str | None = None) -> Series:
@@ -4520,11 +4499,12 @@ class DatetimeProperties(BaseDatelikeProperties):
         3     January
         4     January
         5    February
-        dtype: object
+        dtype: str
         """
-        return self._return_result_like_self(
-            self.series._column.get_month_names(locale)
-        )
+        col = self.series._column.get_month_names(locale)
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            col = col.astype(pd.ArrowDtype(pa.string()))
+        return self._return_result_like_self(col)
 
     @_performance_tracking
     def isocalendar(self) -> DataFrame:
@@ -4556,7 +4536,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         3    30
         4    30
         5    30
-        Name: week, dtype: object
+        Name: week, dtype: UInt32
 
         >>> serIndex = cudf.to_datetime(pd.Series(["2010-01-01", pd.NaT]))
         >>> serIndex.dt.isocalendar()
@@ -4566,7 +4546,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         >>> serIndex.dt.isocalendar().year
         0    2009
         1    <NA>
-        Name: year, dtype: object
+        Name: year, dtype: UInt32
         """
         ca = ColumnAccessor(self.series._column.isocalendar(), verify=False)
         return self.series._constructor_expanddim._from_data(
@@ -4973,17 +4953,17 @@ class DatetimeProperties(BaseDatelikeProperties):
         0    2000-03-31
         1    2000-06-30
         2    2000-09-30
-        dtype: object
+        dtype: str
         >>> weekday_series.dt.strftime("%Y %d %m")
         0    2000 31 03
         1    2000 30 06
         2    2000 30 09
-        dtype: object
+        dtype: str
         >>> weekday_series.dt.strftime("%Y / %d / %m")
         0    2000 / 31 / 03
         1    2000 / 30 / 06
         2    2000 / 30 / 09
-        dtype: object
+        dtype: str
 
         .. pandas-compat::
             :meth:`pandas.DatetimeIndex.strftime`
@@ -5016,8 +4996,32 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
+        if isinstance(self.series.dtype, pd.ArrowDtype):
+            # pyarrow's strftime returns pa.string(), not pa.large_string().
+            target_dtype = pd.ArrowDtype(pa.string())
+            # pyarrow's "%S" includes the subsecond fraction at the
+            # timestamp's resolution. Translate to the equivalent libcudf
+            # format directive so the output matches.
+            unit = self.series.dtype.pyarrow_dtype.unit
+            subsecond_format = {
+                "s": "",
+                "ms": ".%3f",
+                "us": ".%6f",
+                "ns": ".%9f",
+            }.get(unit, "")
+            if subsecond_format:
+                date_format = _expand_pyarrow_subsecond(
+                    date_format, subsecond_format
+                )
+        else:
+            target_dtype = get_dtype_of_same_kind(
+                self.series.dtype, DEFAULT_STRING_DTYPE
+            )
         return self._return_result_like_self(
-            self.series._column.strftime(format=date_format)
+            self.series._column.strftime(
+                format=date_format,
+                dtype=target_dtype,
+            )
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
@@ -5045,6 +5049,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         return self._return_result_like_self(
             self.series._column.tz_convert(tz)
         )
+
+    @_performance_tracking
+    def to_pydatetime(self) -> pd.Series:
+        """
+        Return the data as a Series of :class:`datetime.datetime` objects.
+        """
+        return self.series.to_pandas().dt.to_pydatetime()
 
 
 class TimedeltaProperties(BaseDatelikeProperties):
@@ -5114,6 +5125,13 @@ class TimedeltaProperties(BaseDatelikeProperties):
     4    0
     dtype: int64
     """
+
+    @_performance_tracking
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an array of native :class:`datetime.timedelta` objects.
+        """
+        return self.series.to_pandas().dt.to_pytimedelta()
 
     @property
     @_performance_tracking

@@ -682,7 +682,8 @@ decode_result decode_data(parse_options const& parse_opts,
   auto h_is_quoted_flags = cudf::detail::make_host_vector<bool*>(num_active_columns, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     if (column_types[i].id() == type_id::STRING) {
-      is_quoted_flags_storage.emplace_back(num_records, stream);
+      is_quoted_flags_storage.emplace_back(cudf::detail::make_zeroed_device_uvector_async<bool>(
+        num_records, stream, cudf::get_current_device_resource_ref()));
       h_is_quoted_flags[i] = is_quoted_flags_storage.back().data();
     }
   }

@@ -11,7 +11,6 @@ import polars as pl
 
 from cudf_polars.dsl.expr import TemporalFunction
 from cudf_polars.testing.asserts import (
-    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -84,7 +83,7 @@ def test_datetime_extract(engine: pl.GPUEngine, field):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_datetime_extra_unsupported(monkeypatch):
+def test_datetime_extra_unsupported(engine: pl.GPUEngine, monkeypatch):
     ldf = pl.LazyFrame(
         {
             "datetimes": pl.datetime_range(
@@ -110,7 +109,7 @@ def test_datetime_extra_unsupported(monkeypatch):
 
     q = ldf.select(pl.col("datetimes").dt.nanosecond())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -158,7 +157,7 @@ def test_strftime_timestamp(engine: pl.GPUEngine, format):
 
 
 @pytest.mark.parametrize("format", ["iso", "polars"])
-def test_strftime_duration(format):
+def test_strftime_duration(engine: pl.GPUEngine, format):
     ldf = pl.LazyFrame(
         {
             "durations": [
@@ -169,7 +168,7 @@ def test_strftime_duration(format):
     )
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -379,13 +378,49 @@ def test_datetime_from_integer(engine: pl.GPUEngine, datetime_dtype, integer_dty
     df = pl.LazyFrame({"data": pl.Series(values, dtype=integer_dtype)})
     q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
     if integer_dtype == pl.UInt64():
-        assert_collect_raises(
-            q,
-            cudf_except=pl.exceptions.ComputeError,
-            polars_except=pl.exceptions.InvalidOperationError,
-        )
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect()
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("every", ["1ns", "1us", "1ms", "1s", "1m", "1h", "1d"])
+def test_datetime_truncate(engine: pl.GPUEngine, dtype, every):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "3h14m15s11ms33us999ns",
+                eager=True,
+            ).cast(dtype)
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("every", ["30m", "1mo"])
+def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "30m",
+                eager=True,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(

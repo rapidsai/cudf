@@ -11,12 +11,11 @@ import pytest
 import polars as pl
 import polars.testing
 
-from cudf_polars.experimental.benchmarks.asserts import (
+from cudf_polars.streaming.benchmarks.asserts import (
     ValidationError,
     assert_tpch_result_equal,
 )
 from cudf_polars.testing.asserts import (
-    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
     assert_sink_ir_translation_raises,
@@ -41,77 +40,32 @@ def test_translation_assert_raises(engine: pl.GPUEngine):
 
     with pytest.raises(AssertionError):
         # This should fail, because we can translate this query.
-        assert_ir_translation_raises(df, NotImplementedError)
+        assert_ir_translation_raises(df, engine, NotImplementedError)
 
     class E(Exception):
         pass
 
     unsupported = df.group_by_dynamic("time", every="1d").agg(pl.col("n").sum())
     # Unsupported query should raise NotImplementedError
-    assert_ir_translation_raises(unsupported, NotImplementedError)
+    assert_ir_translation_raises(unsupported, engine, NotImplementedError)
 
     with pytest.raises(AssertionError):
         # This should fail, because we can't translate this query, but it doesn't raise E.
-        assert_ir_translation_raises(unsupported, E)
+        assert_ir_translation_raises(unsupported, engine, E)
 
 
-def test_collect_assert_raises():
-    df = pl.LazyFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
-
-    with pytest.raises(AssertionError, match="CPU execution DID NOT RAISE"):
-        # This should raise, because polars CPU can run this query,
-        # but we expect an error.
-        assert_collect_raises(
-            df,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=(),
-        )
-
-    with pytest.raises(AssertionError, match="GPU execution DID NOT RAISE"):
-        # This should raise, because polars GPU can run this query,
-        # but we expect an error.
-        assert_collect_raises(
-            df,
-            polars_except=(),
-            cudf_except=pl.exceptions.InvalidOperationError,
-        )
-
-    # Here's an invalid query that gets caught at IR optimisation time.
-    q = df.select(pl.col("a") * pl.col("b"))
-
-    # This exception is raised in preprocessing, so is the same for
-    # both CPU and GPU engines.
-    assert_collect_raises(
-        q,
-        polars_except=pl.exceptions.InvalidOperationError,
-        cudf_except=pl.exceptions.InvalidOperationError,
-    )
-
-    with pytest.raises(AssertionError, match="GPU execution RAISED"):
-        # This should raise because the expected GPU error is wrong
-        assert_collect_raises(
-            q,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=NotImplementedError,
-        )
-
-    with pytest.raises(AssertionError, match="CPU execution RAISED"):
-        # This should raise because the expected CPU error is wrong
-        assert_collect_raises(
-            q,
-            polars_except=NotImplementedError,
-            cudf_except=pl.exceptions.InvalidOperationError,
-        )
-
-
-def test_sink_ir_translation_raises_bad_extension():
+def test_sink_ir_translation_raises_bad_extension(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     # Should raise because ".foo" is not a recognized file extension
     with pytest.raises(ValueError, match="Unsupported file format: .foo"):
-        assert_sink_ir_translation_raises(df, Path("out.foo"), {}, NotImplementedError)
+        assert_sink_ir_translation_raises(
+            df, Path("out.foo"), engine, {}, NotImplementedError
+        )
 
 
-def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path):
+def test_sink_ir_translation_raises_sink_error_before_translation(
+    tmp_path: Path, engine: pl.GPUEngine
+):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     # Should raise because "foo" is not a valid write kwarg,
     # so the sink_* function fails before IR translation
@@ -120,7 +74,7 @@ def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path
         match="Sink function raised an exception before translation: .*foo",
     ):
         assert_sink_ir_translation_raises(
-            df, tmp_path / "out.csv", {"foo": True}, NotImplementedError
+            df, tmp_path / "out.csv", engine, {"foo": True}, NotImplementedError
         )
 
 
@@ -200,6 +154,36 @@ def test_assert_tpch_result_equal_ties_multi_column_sort_by() -> None:
         right,
         sort_by=[("b", False), ("a", False)],
         abs_tol=2 * epsilon,
+        check_exact=False,
+        limit=5,
+    )
+
+
+def test_assert_tpch_result_equal_ties_payload_does_not_drive_order() -> None:
+    # Within the ties partition, payload column values must not determine
+    # the row order used to compare the sort_by columns. Both sides have
+    # the same set of v values in the tolerance band around the split
+    # point, but the payload column k is aligned with v in opposite orders.
+    # Sorting the full ties frame by k before projecting to v would put the
+    # v values in opposite orders on the two sides and fail the
+    # approximate comparison even though the result is correct.
+    left = pl.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.099, 3.100, 3.101],
+            "k": ["a", "b", "x", "y", "z"],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.099, 3.100, 3.101],
+            "k": ["a", "b", "z", "y", "x"],
+        }
+    )
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("v", False)],
+        abs_tol=1e-3,
         check_exact=False,
         limit=5,
     )
@@ -473,4 +457,36 @@ def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
             sort_by=[("lochierarchy", True), ("i_category", False)],
             sort_keys=sort_keys,
             nulls_last=True,
+        )
+
+
+@pytest.mark.parametrize("sort_by", [[("a", True)], []])
+@pytest.mark.parametrize("drop_columns", [[], ["b"], ["a", "b"]])
+def test_assert_tpch_result_equal_grouped_float_sort(
+    sort_by: list[tuple[str, bool]], drop_columns: list[str]
+) -> None:
+    # https://github.com/rapidsai/cudf/issues/22129
+    # Same non-float values with float values reordered inside each non-float group.
+    left = pl.DataFrame({"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.0, 3.0]})
+    right = pl.DataFrame({"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.999, 2.0]})
+
+    if drop_columns:
+        left = left.drop(drop_columns)
+        right = right.drop(drop_columns)
+        if "a" in drop_columns:
+            sort_by = []
+
+    assert_tpch_result_equal(
+        left, right, sort_by=sort_by, abs_tol=0.01, check_exact=False
+    )
+
+    # But this table is different, since row 3.0 - 2.9 > abs_tol.
+    right_different = pl.DataFrame(
+        {"a": [1, 1, 1], "b": [2, 2, 2], "c": [1.0, 2.90, 2.0]}
+    )
+    if drop_columns:
+        right_different = right_different.drop(drop_columns)
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left, right_different, sort_by=sort_by, abs_tol=0.01, check_exact=False
         )

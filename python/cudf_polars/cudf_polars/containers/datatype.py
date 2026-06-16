@@ -45,13 +45,9 @@ def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
     if name in SCALAR_NAME_TO_POLARS_TYPE_MAP:
         return {"kind": "scalar", "name": name}
     if isinstance(dtype, pl.Decimal):
-        # TODO: Add version guard once we support polars 1.34
-        # Also keep in mind the typing change in polars:
-        # https://github.com/pola-rs/polars/pull/25227
-        precision = dtype.precision if dtype.precision is not None else 38
         return {
             "kind": "decimal",
-            "precision": precision,
+            "precision": dtype.precision,
             "scale": dtype.scale,
         }
     if isinstance(dtype, pl.Datetime):

@@ -229,12 +229,7 @@ def test_series_empty(ps):
     "data",
     [
         [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
+        [np.nan, 10, 15, 16],
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],
         ["ab", "zx", None, "pq"],
@@ -389,23 +384,6 @@ def test_series_shape_empty():
     cs = cudf.Series([], dtype="float64")
 
     assert ps.shape == cs.shape
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 4],
-        [],
-        [5.0, 7.0, 8.0],
-        pd.Categorical(["a", "b", "c"]),
-        ["m", "a", "d", "v"],
-    ],
-)
-def test_series_values_host_property(data):
-    pds = pd.Series(data=data, dtype=None if data else float)
-    gds = cudf.Series(data=data, dtype=None if data else float)
-
-    np.testing.assert_array_equal(pds.values, gds.to_numpy())
 
 
 @pytest.mark.parametrize(

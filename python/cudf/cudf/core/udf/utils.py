@@ -24,6 +24,7 @@ import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
@@ -34,7 +35,6 @@ from cudf.core.udf.strings_typing import (
 )
 from cudf.utils.dtypes import (
     BOOL_TYPES,
-    CUDF_STRING_DTYPE,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     SIZE_TYPE_DTYPE,
@@ -83,16 +83,10 @@ DEPRECATED_SM_REGEX = "Architectures prior to '<compute/sm>_75' are deprecated"
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: dtype if str(dtype) in supported_types else np.dtype("O")
-        for colname, dtype in frame._dtypes
-    }
-
-
-def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
-    return {
         colname: dtype
+        if str(dtype) in supported_types and not is_dtype_obj_string(dtype)
+        else np.dtype("O")
         for colname, dtype in frame._dtypes
-        if str(dtype) in supported_types
     }
 
 
@@ -112,7 +106,7 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    if col.dtype == CUDF_STRING_DTYPE:
+    if is_dtype_obj_string(col.dtype):
         col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
@@ -242,7 +236,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     args: list[Buffer | tuple[Buffer, Buffer]] = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        if col.dtype == CUDF_STRING_DTYPE:
+        if is_dtype_obj_string(col.dtype):
             data = column_to_string_view_array_init_heap(col.plc_column)
         else:
             data = col.data
@@ -258,7 +252,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 
 def _return_arr_from_dtype(dtype, size):
-    if dtype == CUDF_STRING_DTYPE:
+    if dtype == np.dtype("object"):
         return rmm.DeviceBuffer(
             size=size * _get_extensionty_size(managed_udf_string)
         )

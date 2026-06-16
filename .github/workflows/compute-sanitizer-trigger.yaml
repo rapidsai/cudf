@@ -9,11 +9,18 @@ on:
     - cron: '0 10 * * 6'  # Weekly on Saturday at 10:00 UTC
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   trigger-racecheck:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
       - name: Trigger racecheck
         env:
           GH_TOKEN: ${{ github.token }}
@@ -22,8 +29,13 @@ jobs:
             -f tool_name="racecheck"
   trigger-synccheck:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
       - name: Trigger synccheck
         env:
           GH_TOKEN: ${{ github.token }}

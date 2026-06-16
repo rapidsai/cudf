@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,8 @@ constexpr int64_t data_size = 512 << 20;
 void PQ_write(nvbench::state& state)
 {
   cudf::size_type const num_cols = state.get_int64("num_cols");
+  auto const rg_size_bytes       = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows        = state.get_int64("row_group_size_rows");
 
   auto const tbl  = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
                                        table_size_bytes{data_size});
@@ -38,6 +40,9 @@ void PQ_write(nvbench::state& state)
                timer.start();
                cudf::io::parquet_writer_options opts =
                  cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
+               // Sentinel 0 == use cuDF default (parquet bytes default is size_t::max).
+               if (rg_size_bytes > 0) opts.set_row_group_size_bytes(rg_size_bytes);
+               if (rg_size_rows > 0) opts.set_row_group_size_rows(rg_size_rows);
                cudf::io::write_parquet(opts);
                timer.stop();
 
@@ -55,6 +60,8 @@ void PQ_write_chunked(nvbench::state& state)
 {
   cudf::size_type const num_cols   = state.get_int64("num_cols");
   cudf::size_type const num_tables = state.get_int64("num_chunks");
+  auto const rg_size_bytes         = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows          = state.get_int64("row_group_size_rows");
 
   std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
@@ -73,6 +80,8 @@ void PQ_write_chunked(nvbench::state& state)
       timer.start();
       cudf::io::chunked_parquet_writer_options opts =
         cudf::io::chunked_parquet_writer_options::builder(source_sink.make_sink_info());
+      if (rg_size_bytes > 0) opts.set_row_group_size_bytes(rg_size_bytes);
+      if (rg_size_rows > 0) opts.set_row_group_size_rows(rg_size_rows);
       cudf::io::chunked_parquet_writer writer(opts);
       std::for_each(tables.begin(),
                     tables.end(),
@@ -93,10 +102,14 @@ void PQ_write_chunked(nvbench::state& state)
 NVBENCH_BENCH(PQ_write)
   .set_name("parquet_write_num_cols")
   .set_min_samples(4)
-  .add_int64_axis("num_cols", {8, 1024});
+  .add_int64_axis("num_cols", {8, 1024})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(PQ_write_chunked)
   .set_name("parquet_chunked_write")
   .set_min_samples(4)
   .add_int64_axis("num_cols", {8, 1024})
-  .add_int64_axis("num_chunks", {8, 64});
+  .add_int64_axis("num_chunks", {8, 64})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});

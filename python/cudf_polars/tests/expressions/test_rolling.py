@@ -13,10 +13,19 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod
+
+
+# In polars 1.36-1.38, rolling window expressions (pl.col(...).rolling(...))
+# are represented as an opaque Rust node that is not accessible via view_expression().
+# Support requires polars <1.36 (via Window+RollingGroupOptions) or >=1.39 (via Rolling).
+skip_rolling_expr_136_to_138 = pytest.mark.skipif(
+    not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
+    reason="Rolling window expressions are not accessible in polars 1.36-1.38, see https://github.com/pola-rs/polars/pull/25117",
+)
 
 
 @pytest.fixture
@@ -32,14 +41,9 @@ def df():
     )
 
 
+@skip_rolling_expr_136_to_138
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
-def test_rolling_datetime(engine: pl.GPUEngine, request, time_unit):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136,
-            reason="Polars translates this to AExpr::Rolling which is NotImplemented",
-        )
-    )
+def test_rolling_datetime(engine: pl.GPUEngine, time_unit):
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",
@@ -62,11 +66,8 @@ def test_rolling_datetime(engine: pl.GPUEngine, request, time_unit):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_rolling_date(engine: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@skip_rolling_expr_136_to_138
+def test_rolling_date(engine: pl.GPUEngine):
     dates = [
         "2020-01-01",
         "2020-01-01",
@@ -87,12 +88,9 @@ def test_rolling_date(engine: pl.GPUEngine, request):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@skip_rolling_expr_136_to_138
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
-def test_rolling_integral_orderby(engine: pl.GPUEngine, request, dtype):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+def test_rolling_integral_orderby(engine: pl.GPUEngine, dtype):
     df = pl.LazyFrame(
         {
             "orderby": pl.Series([1, 4, 8, 10, 12, 13, 14, 22], dtype=dtype),
@@ -106,17 +104,14 @@ def test_rolling_integral_orderby(engine: pl.GPUEngine, request, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_136,
-    reason="Rolling expression node only exists in polars >= 1.36",
-)
-def test_rolling_translation_raises():
+@skip_rolling_expr_136_to_138
+def test_rolling_agg_before_rolling(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     q = df.with_columns(pl.col("a").sum().rolling("b", period="2i"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_rolling_collect_list_raises():
+def test_rolling_collect_list_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "orderby": [1, 4, 8, 10, 12, 13, 14, 22],
@@ -125,15 +120,13 @@ def test_rolling_collect_list_raises():
     )
     assert_ir_translation_raises(
         df.with_columns(pl.col("values").rolling("orderby", period="4i")),
+        engine,
         NotImplementedError,
     )
 
 
-def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@skip_rolling_expr_136_to_138
+def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine):
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -145,11 +138,8 @@ def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine, request):
         q.collect(engine=engine_raise_on_fail)
 
 
-def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@skip_rolling_expr_136_to_138
+def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine):
     df = pl.LazyFrame({"orderby": [1, 2, 4, None], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
@@ -160,23 +150,15 @@ def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine, r
         q.collect(engine=engine_raise_on_fail)
 
 
-def test_invalid_duration_spec_raises_in_translation(request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@skip_rolling_expr_136_to_138
+def test_invalid_duration_spec_raises_in_translation(engine: pl.GPUEngine):
     df = pl.LazyFrame({"orderby": [1, 2, 4, 5], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="3d"))
-    assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
+    assert_ir_translation_raises(q, engine, pl.exceptions.InvalidOperationError)
 
 
-def test_rolling_inside_groupby_raises(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136,
-            reason="not supported as of polars 1.36",
-        )
-    )
+@pytest.mark.xfail(condition=not POLARS_VERSION_LT_136, reason="not supported")
+def test_rolling_inside_groupby_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {"keys": [1, 1, 1, 2], "orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]}
     )
@@ -185,14 +167,11 @@ def test_rolling_inside_groupby_raises(request):
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine, request):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@skip_rolling_expr_136_to_138
+def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "orderby": [1, 2, 3, 4, 5, 6],
@@ -276,14 +255,14 @@ def test_over_with_order_by(
 
 
 @pytest.mark.parametrize("strategy", ["explode", "join"], ids=["explode", "join"])
-def test_over_with_mapping_strategy_unsupported(df, strategy):
+def test_over_with_mapping_strategy_unsupported(engine: pl.GPUEngine, df, strategy):
     q = df.select(pl.col("x").sum().over("g", mapping_strategy=strategy))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_over_boolean_function_unsupported(df):
+def test_over_boolean_function_unsupported(engine: pl.GPUEngine, df):
     q = df.select(pl.col("x").not_().over("g"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_over_ternary(engine: pl.GPUEngine, df):
@@ -320,16 +299,12 @@ def test_over_broadcast_input_row_group_indices_aligned(engine: pl.GPUEngine):
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.col("x")
         .rank(method=method, descending=descending)
@@ -343,16 +318,12 @@ def test_rank_over(
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_ties(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.when(pl.col("g") == 2)
         .then(pl.lit(4))
@@ -368,16 +339,12 @@ def test_rank_over_with_ties(
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_null_values(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.when((pl.col("x") % 2) == 0)
         .then(None)
@@ -391,18 +358,15 @@ def test_rank_over_with_null_values(
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+@pytest.mark.timeout(120)
 def test_rank_over_with_null_group_keys(
     engine: pl.GPUEngine,
-    request,
     df: pl.LazyFrame,
     method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
-    )
     q = df.select(
         pl.col("x")
         .rank(method=method, descending=descending)
@@ -441,15 +405,14 @@ def test_fill_over(
             group_key, order_by=order_by
         )
     )
-    if POLARS_VERSION_LT_132:
-        assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
+def test_fill_null_with_mean_over_unsupported(
+    engine: pl.GPUEngine, df: pl.LazyFrame
+) -> None:
     q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -507,6 +470,6 @@ def test_order_sensitive_over_scalar_aggs(
         )
     )
     if isinstance(order_by, list):
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
         assert_gpu_result_equal(q, engine=engine)

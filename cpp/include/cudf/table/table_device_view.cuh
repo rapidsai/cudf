@@ -131,15 +131,13 @@ class table_device_view_base {
 
  protected:
   /**
-   * @brief Construct a new table device view base object from host table_view
+   * @brief Constructor for subclasses to create a table device view from a host table view
    *
    * @param source_view The host table_view to create table device view from
-   * @param stream The CUDA stream to use for device memory allocation
+   * @param columns Pointer to the array of column device views in device memory corresponding to
+   * the columns of `source_view`
    */
-  table_device_view_base(HostTableView source_view, rmm::cuda_stream_view stream);
-
-  /// Pointer to device memory holding the descendant storage
-  rmm::device_buffer* _descendant_storage{};
+  table_device_view_base(HostTableView source_view, ColumnDeviceView* columns);
 };
 }  // namespace detail
 
@@ -162,19 +160,11 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
    * @return A `unique_ptr` to a `table_device_view` that makes the data from `source_view`
    * available in device memory
    */
-  static auto create(table_view source_view,
-                     rmm::cuda_stream_view stream = cudf::get_default_stream())
-  {
-    auto deleter = [](table_device_view* t) { t->destroy(); };
-    return std::unique_ptr<table_device_view, decltype(deleter)>{
-      new table_device_view(source_view, stream), deleter};
-  }
+  static std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> create(
+    table_view source_view, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
  private:
-  table_device_view(table_view source_view, rmm::cuda_stream_view stream)
-    : detail::table_device_view_base<column_device_view, table_view>(source_view, stream)
-  {
-  }
+  table_device_view(table_view source_view, column_device_view* columns);
 };
 
 /**
@@ -199,20 +189,11 @@ class mutable_table_device_view
    * @return A `unique_ptr` to a `mutable_table_device_view` that makes the data from `source_view`
    * available in device memory
    */
-  static auto create(mutable_table_view source_view,
-                     rmm::cuda_stream_view stream = cudf::get_default_stream())
-  {
-    auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
-    return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
-      new mutable_table_device_view(source_view, stream), deleter};
-  }
+  static std::unique_ptr<mutable_table_device_view, std::function<void(mutable_table_device_view*)>>
+  create(mutable_table_view source_view, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
  private:
-  mutable_table_device_view(mutable_table_view source_view, rmm::cuda_stream_view stream)
-    : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
-                                                                                     stream)
-  {
-  }
+  mutable_table_device_view(mutable_table_view source_view, mutable_column_device_view* columns);
 };
 
 /**
@@ -225,7 +206,7 @@ class mutable_table_device_view
  * @return tuple of device_buffer and @p ColumnDeviceView device pointer
  */
 template <typename ColumnDeviceView, typename HostTableView>
-std::pair<std::unique_ptr<rmm::device_buffer>, ColumnDeviceView*>
-contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_stream_view stream);
+std::pair<std::unique_ptr<rmm::device_buffer>, ColumnDeviceView*> create_column_device_views(
+  HostTableView source_view, rmm::cuda_stream_view stream);
 
 }  // namespace CUDF_EXPORT cudf

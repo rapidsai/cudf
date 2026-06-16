@@ -19,19 +19,16 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <algorithm>
-#include <array>
 #include <bit>
+#include <numeric>
+#include <span>
 #include <string_view>
+#include <type_traits>
 
 namespace cudf::io::parquet::detail {
 
-namespace {
-
 /// Initial capacity for the chars host vector in host_column
 constexpr size_t initial_chars_capacity = 1024;
-
-}  // namespace
 
 /**
  * @brief Base utilities for converting and casting stats values
@@ -41,27 +38,48 @@ constexpr size_t initial_chars_capacity = 1024;
  */
 class stats_caster_base {
  protected:
-  static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
+  template <typename T>
+  static inline T decode_fixed_width_decimal(uint8_t const* stats_val, size_t stats_size)
+    requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
   {
-    auto constexpr endianness = std::endian::native;
-    static_assert(endianness == std::endian::little or endianness == std::endian::big,
-                  "Encountered unsupported endianness while decoding decimal128 from FLBA");
-    using RepType = numeric::decimal128::rep;
-    auto value    = RepType{};
-    std::memcpy(&value, stats_val, sizeof(RepType));
-    auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(value);
-    // byte-swap to native representation on little-endian platforms
-    if constexpr (endianness == std::endian::little) { std::ranges::reverse(value_rep); }
-    return std::bit_cast<RepType>(value_rep);
+    // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
+    // signed two's-complement values using big-endian byte order. The physical width may be
+    // smaller than the selected cudf storage width, so sign extend while decoding
+
+    CUDF_EXPECTS(cudf::is_signed<T>(),
+                 "FLBA/BYTE_ARRAY decimals must have signed representation types");
+    CUDF_EXPECTS(stats_size > 0, "Parquet reader encountered an empty decimal statistics vector");
+    CUDF_EXPECTS(stats_size <= sizeof(T),
+                 "Parquet reader encountered a statistics vector larger than the type's size");
+
+    // Use std::type_identity to defer and avoid instantiating std::make_unsigned<__int128_t>::type
+    // which is not a standard integer type
+    // NOLINTNEXTLINE(modernize-type-traits)
+    using UnsignedT    = std::conditional_t<std::is_same_v<T, __int128_t>,
+                                            std::type_identity<unsigned __int128>,
+                                            std::make_unsigned<T>>::type;
+    auto const payload = std::span{stats_val, stats_size};
+    auto value         = std::accumulate(
+      payload.begin(), payload.end(), UnsignedT{0}, [](UnsignedT acc, uint8_t byte) {
+        return static_cast<UnsignedT>((acc << CHAR_BIT) | static_cast<UnsignedT>(byte));
+      });
+
+    // Check the sign of the first byte to determine if the value is negative
+    auto const is_negative_value = std::bit_cast<int8_t>(stats_val[0]) < 0;
+    // Sign-extension if negative value and the payload is smaller than the storage type
+    if (stats_size < sizeof(T) and is_negative_value) {
+      value = static_cast<UnsignedT>(value | (~UnsignedT{0} << (stats_size * CHAR_BIT)));
+    }
+    return std::bit_cast<T>(value);
   }
 
   template <typename T>
   static inline T decode_fixed_width_value(uint8_t const* stats_val, size_t stats_size)
-    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
-             cudf::is_chrono<T>())
+    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_chrono<T>())
   {
     CUDF_EXPECTS(stats_size == sizeof(T),
-                 "Parquet reader encountered a statistics vector larger than the type's size");
+                 "Parquet reader encountered a mismatch in size of statistics vector and the cudf "
+                 "storage type");
     auto value = T{};
     std::memcpy(&value, stats_val, std::min(stats_size, sizeof(T)));
     return value;
@@ -126,22 +144,24 @@ class stats_caster_base {
           ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
-        if (stats_size == sizeof(T)) {
-          if constexpr (cudf::is_chrono<T>()) {
+        // Handle chronos, decimals and UUIDs here
+        if constexpr (cudf::is_chrono<T>()) {
+          // Chrono
+          return stats_caster_base::target_type<T>(
+            decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
+        } else {
+          // Decimals (32, 64, 128), 256 bit not yet supported
+          if constexpr (cudf::is_fixed_point<T>()) {
+            // Using T::rep as raw stats are always decoded as the underlying storage type
+            // before conversion
             return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
-          } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
-            // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
-            // big-endian.
-            return stats_caster_base::target_type<T>(decode_flba_decimal128(stats_val));
+              decode_fixed_width_decimal<typename T::rep>(stats_val, stats_size), ts_scale);
           } else {
-            // TODO(mh): We may need to add support for `decimal256` (two's complement using
-            // big-endian) and `UUID` types (big-endian)
             return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<T>(stats_val, stats_size));
+              decode_fixed_width_decimal<T>(stats_val, stats_size), ts_scale);
           }
         }
-        [[fallthrough]];
+        // TODO(mh): add support for `UUID` (big-endian but no sign extension) here
       default:
         // unsupported type
         CUDF_FAIL("Invalid type and stats combination");

@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_134
 
 
 def test_select(engine: pl.GPUEngine):
@@ -48,10 +47,10 @@ def test_select_decimal_precision_none_result_max_precision():
     )
     query = ldf.select(pl.col("a"))
     cpu_result = query.collect()
-    gpu_result = query.collect(engine="gpu")
+    gpu_result = query.collect(engine=pl.GPUEngine(executor="in-memory"))
     # See github.com/pola-rs/polars/issues/19784
     # for context on the decimal changes.
-    assert cpu_result.schema["a"].precision is None if POLARS_VERSION_LT_134 else 38
+    assert cpu_result.schema["a"].precision == 38
     assert gpu_result.schema["a"].precision == 38
 
 
@@ -106,7 +105,7 @@ def test_select_native_datetime(engine: pl.GPUEngine):
 
 
 @pytest.mark.parametrize("fmt", ["ndjson", "csv"])
-def test_select_fast_count_unsupported_formats(tmp_path, fmt):
+def test_select_fast_count_unsupported_formats(engine: pl.GPUEngine, tmp_path, fmt):
     df = pl.DataFrame({"a": [1, 2, 3]})
     file = tmp_path / f"test.{fmt}"
     if fmt == "csv":
@@ -119,7 +118,7 @@ def test_select_fast_count_unsupported_formats(tmp_path, fmt):
         if fmt == "csv"
         else pl.scan_ndjson(file).select(pl.len())
     )
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_select_fast_count_parquet(engine: pl.GPUEngine, tmp_path):

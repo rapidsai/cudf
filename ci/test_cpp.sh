@@ -12,7 +12,6 @@ source ./ci/test_cpp_common.sh
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
-
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
@@ -29,6 +28,12 @@ fi
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf_kafka gtests"
     timeout 30m ./ci/run_cudf_kafka_ctests.sh -j20
+    SUITEERROR=$?
+fi
+
+if (( SUITEERROR == 0 )); then
+    rapids-logger "Run libcudf_streaming gtests"
+    timeout 5m ./ci/run_cudf_streaming_ctests.sh -j20
     SUITEERROR=$?
 fi
 

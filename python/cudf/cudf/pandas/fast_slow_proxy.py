@@ -57,12 +57,15 @@ _WRAPPER_ASSIGNMENTS = tuple(
     for attr in functools.WRAPPER_ASSIGNMENTS
     # Skip __doc__ because we assign it on class creation using exec_body
     # callable that updates the namespace of the class.
-    # Skip __annotations__ because there are differences between Python
-    # versions on how it is initialized for a class that doesn't explicitly
-    # define it and we don't want to force eager evaluation of anything that
-    # would normally be lazy (mostly for consistency, shouldn't cause any
-    # significant issues).
-    if attr not in ("__annotations__", "__doc__")
+    # Skip __annotations__ / __annotate__ (PEP 749, added on 3.14) because
+    # there are differences between Python versions on how they're
+    # initialized for a class that doesn't explicitly define them and we
+    # don't want to force eager evaluation of anything that would normally
+    # be lazy. On 3.14 specifically, simply reading ``__annotate__`` causes
+    # ``__annotate_func__`` to materialize on the source class, which then
+    # shows up in ``dir()`` and diverges from the cached ``_fsproxy_slow_dir``
+    # captured a few lines earlier.
+    if attr not in ("__annotations__", "__annotate__", "__doc__")
 )
 
 
@@ -537,15 +540,6 @@ def get_registered_functions():
     return dict()
 
 
-def _raise_attribute_error(obj, name):
-    """
-    Raise an AttributeError with a message that is consistent with
-    the error raised by Python for a non-existent attribute on a
-    proxy object.
-    """
-    raise AttributeError(f"'{obj}' object has no attribute '{name}'")
-
-
 class _FastSlowProxyMeta(type):
     """
     Metaclass used to dynamically find class attributes and
@@ -693,6 +687,23 @@ class _FastSlowProxy:
 
     def __setattr__(self, name, value):
         if name.startswith("_"):
+            # If the class declares this private name as a
+            # ``_FastSlowAttribute``, forward the write to the wrapped
+            # object so that behaviors driven by that attribute
+            # (e.g. ``_readonly`` propagation in
+            # ``ArrowExtensionArray.__getitem__``) are preserved.
+            descriptor = inspect.getattr_static(type(self), name, None)
+            if isinstance(descriptor, _FastSlowAttribute):
+                try:
+                    wrapped = object.__getattribute__(self, "_fsproxy_wrapped")
+                except AttributeError:
+                    wrapped = None
+                if wrapped is not None:
+                    try:
+                        setattr(wrapped, name, value)
+                        return
+                    except (AttributeError, TypeError):
+                        pass
             object.__setattr__(self, name, value)
             return
         return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
@@ -784,9 +795,35 @@ class _FinalProxy(_FastSlowProxy):
         # Need a local import to avoid circular import issues
         from .module_accelerator import disable_module_accelerator
 
-        with disable_module_accelerator():
-            unpickled_wrapped_obj = pickle.loads(state)
-        self._fsproxy_wrapped = unpickled_wrapped_obj
+        if isinstance(state, bytes):
+            # State produced by ``__reduce__`` above.
+            with disable_module_accelerator():
+                unpickled_wrapped_obj = pickle.loads(state)
+            self._fsproxy_wrapped = unpickled_wrapped_obj
+        else:
+            # Native state from the slow class. Reached when raw
+            # ``pickle.load`` resolves a reference to one of our proxy
+            # classes via ordinary attribute lookup (no
+            # ``disable_module_accelerator`` shielding) and then drives
+            # ``__setstate__`` with whatever the slow class's own
+            # ``__reduce__`` produced (e.g. dict for CategoricalDtype,
+            # tuple for PeriodArray). The state may itself contain proxy
+            # objects, so unwrap them to the underlying slow values
+            # before handing the state to the slow class.
+            with disable_module_accelerator():
+                slow_state = _slow_arg(state)
+                slow_type = type(self)._fsproxy_slow_type
+                wrapped = slow_type.__new__(slow_type)
+                if hasattr(wrapped, "__setstate__"):
+                    wrapped.__setstate__(slow_state)
+                elif isinstance(slow_state, dict):
+                    wrapped.__dict__.update(slow_state)
+                else:
+                    raise TypeError(
+                        f"Cannot restore proxy {type(self).__name__} from "
+                        f"state of type {type(slow_state).__name__}"
+                    )
+            self._fsproxy_wrapped = wrapped
 
 
 class _IntermediateProxy(_FastSlowProxy):
@@ -1060,6 +1097,25 @@ class _FastSlowAttribute:
 
         return self._attr
 
+    def __set__(self, instance, value) -> None:
+        # Implementing ``__set__`` makes this a data descriptor, which takes
+        # precedence over an entry of the same name in ``instance.__dict__``.
+        # Without it, ``object.__setattr__`` (called from the proxy's
+        # ``__setattr__`` for underscore-prefixed names) would write to the
+        # instance dict and shadow the descriptor on reads, so private attrs
+        # declared in ``additional_attributes`` would never reach the slow
+        # object.
+        if self._private:
+            # Forward to the slow object so pandas-internal state
+            # (e.g. the ``_readonly`` flag consulted by ``__setitem__``) stays
+            # in sync with what the user assigned on the proxy.
+            object.__setattr__(instance._fsproxy_slow, self._name, value)
+        else:
+            # Preserve the pre-data-descriptor behavior for non-private
+            # entries by writing to the instance dict directly (assigning via
+            # ``object.__setattr__`` would recurse through this descriptor).
+            instance.__dict__[self._name] = value
+
 
 class _MethodProxy(_FunctionProxy):
     def __init__(self, fast, slow, _fsproxy_transfer_block=None):
@@ -1079,6 +1135,10 @@ class _MethodProxy(_FunctionProxy):
     @property
     def __doc__(self):
         return self._fsproxy_slow.__doc__
+
+    @property
+    def __func__(self):
+        return self._fsproxy_slow.__func__
 
     @property
     def __name__(self):
@@ -1361,11 +1421,26 @@ def _transform_arg(
         )
         result[...] = transformed
         return result.reshape(arg.shape)
+    elif isinstance(arg, (types.GeneratorType, map, filter, zip, enumerate)):
+        # "Pure" (resource-free) iterators. On the fast path we force a
+        # fallback because they are consumable (see below). On the slow path we
+        # transform the elements lazily into a new generator -- a bare iterator
+        # would otherwise hand wrapped proxies straight to the slow library,
+        # which can lose type information (e.g. ``MultiIndex.from_product`` of a
+        # ``map`` over categoricals dropping the ``category`` dtype). We yield a
+        # generator (rather than materializing a ``list``) so the slow library
+        # still sees a bare iterator: pandas treats iterators differently from
+        # lists in places (e.g. ``is_nested_list_like`` returns ``False`` for an
+        # iterator, and ``Index.get_loc`` reports the iterator in its error
+        # message), and materializing would silently change that behavior.
+        if attribute_name == "_fsproxy_fast":
+            raise Exception()
+        return (_transform_arg(a, attribute_name, seen) for a in arg)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
-        # this may include consumable objects like generators or
-        # IOBase objects, which we don't want unavailable to the slow
-        # path in case of fallback. So, we raise here and ensure the
-        # slow path is taken:
+        # Other consumable objects such as generators or IOBase objects, which
+        # we don't want unavailable to the slow path in case of fallback. So,
+        # we raise here and ensure the slow path is taken (and the object is
+        # left intact for it):
         raise Exception()
     elif isinstance(arg, types.FunctionType):
         if id(arg) in seen:

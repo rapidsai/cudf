@@ -45,3 +45,4 @@ Quick Start <https://rapids.ai/#quick-start>`_ to get up-and-running with ``cudf
    benchmarks
    how-it-works
    faq
+   developer_guide

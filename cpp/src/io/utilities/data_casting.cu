@@ -837,6 +837,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         cudf::detail::input_offsetalator{},
         nullptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   if (max_length > WARP_THRESHOLD) {
@@ -853,6 +854,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         cudf::detail::input_offsetalator{},
         nullptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   auto [offsets, bytes] =
@@ -884,6 +886,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         d_offsets,
         d_chars);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   if (max_length > WARP_THRESHOLD) {
@@ -900,6 +903,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         d_offsets,
         d_chars);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return make_strings_column(col_size,
