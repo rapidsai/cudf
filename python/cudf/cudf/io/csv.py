@@ -189,8 +189,8 @@ def read_csv(
                     hex_cols.append(index)
                 else:
                     col_dtype = cudf_dtype(col_dtype)
-                cudf_dtypes.append(col_dtype)
-                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
+                cudf_dtypes.append(col_dtype)  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
+                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
         else:
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"

@@ -4886,7 +4886,7 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore[union-attr]
+            return result.explode()
         return result
 
     def hash_character_ngrams(

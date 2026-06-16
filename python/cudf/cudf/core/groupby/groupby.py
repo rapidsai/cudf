@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -2047,7 +2047,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             list(agg) if is_list_like(agg) else [agg]  # type: ignore[arg-type]
             for agg in aggs_per_column
         ]
-        return column_names, columns, normalized_aggs
+        return column_names, columns, normalized_aggs  # type: ignore[return-value]  # (list-like narrowing is not represented)
 
     @_performance_tracking
     def pipe(self, func, *args, **kwargs):
