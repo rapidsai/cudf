@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -83,7 +83,7 @@ def test_string_astype_object_pd_na_pandas_compat(dtype):
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(
             NotImplementedError,
-            match="Casting nullable string columns with pd.NA to object",
+            match=r"Casting nullable string columns with pd.NA to object",
         ):
             sr.astype(object)
 
