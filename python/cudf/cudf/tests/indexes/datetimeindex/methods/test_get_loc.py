@@ -80,6 +80,23 @@ def test_non_monotonic_coarse_key_returns_ndarray():
     _assert_array_get_loc_eq(pi, "2020-01-01")
 
 
+def test_series_loc_partial_string_non_monotonic_datetimeindex():
+    idx = [
+        "2020-03-01",
+        "2020-01-01",
+        "2020-02-01",
+        "2020-01-15",
+        "2020-02-15",
+    ]
+    gs = cudf.Series(range(5), index=cudf.DatetimeIndex(idx))
+    ps = pd.Series(range(5), index=pd.DatetimeIndex(idx))
+
+    result = gs.loc["2020-01"]
+    expected = ps.loc["2020-01"]
+
+    assert_eq(expected, result)
+
+
 def test_resolution_inference_interior_seconds():
     pi = pd.DatetimeIndex(["2020-01-01", "2020-01-01 12:00:00", "2020-01-02"])
 
