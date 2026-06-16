@@ -6,7 +6,7 @@
 # =============================================================================
 
 if(NOT TARGET zstd)
-  message(FATAL_ERROR "embed(): zstd target is required when COMPRESSION is not none.")
+  message(FATAL_ERROR "embed(): zstd target is required for LIBRTCX embedding.")
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
