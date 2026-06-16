@@ -10,7 +10,6 @@ include(${rapids-cmake-dir}/cpm/gbench.cmake)
 rapids_cpm_gbench(BUILD_STATIC)
 
 set(CUDF_STREAMING_BENCHMARK_INSTALL_DIR bin)
-set(CUDF_STREAMING_BENCHMARK_EXECUTABLE_PREFIX libcudf_streaming_)
 
 add_library(bench_utils INTERFACE)
 target_sources(bench_utils INTERFACE utils/random_data.cu)
@@ -21,7 +20,7 @@ if(CUDF_STREAMING_HAVE_COMM)
   set_target_properties(
     bench_shuffle
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
-               OUTPUT_NAME "${CUDF_STREAMING_BENCHMARK_EXECUTABLE_PREFIX}bench_shuffle"
+               OUTPUT_NAME "libcudf_streaming_bench_shuffle"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                CXX_EXTENSIONS ON
@@ -47,7 +46,7 @@ add_executable(bench_partition "bench_partition.cpp")
 set_target_properties(
   bench_partition
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
-             OUTPUT_NAME "${CUDF_STREAMING_BENCHMARK_EXECUTABLE_PREFIX}bench_partition"
+             OUTPUT_NAME "libcudf_streaming_bench_partition"
              CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS ON
@@ -69,7 +68,7 @@ add_executable(bench_pack "bench_pack.cpp")
 set_target_properties(
   bench_pack
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
-             OUTPUT_NAME "${CUDF_STREAMING_BENCHMARK_EXECUTABLE_PREFIX}bench_pack"
+             OUTPUT_NAME "libcudf_streaming_bench_pack"
              CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS ON

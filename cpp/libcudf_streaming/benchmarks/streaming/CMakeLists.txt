@@ -10,7 +10,7 @@ if(CUDF_STREAMING_HAVE_COMM)
   set_target_properties(
     bench_streaming_shuffle
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
-               OUTPUT_NAME "${CUDF_STREAMING_BENCHMARK_EXECUTABLE_PREFIX}bench_streaming_shuffle"
+               OUTPUT_NAME "libcudf_streaming_bench_streaming_shuffle"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                CUDA_STANDARD 20
