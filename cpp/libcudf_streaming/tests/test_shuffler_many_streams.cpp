@@ -8,9 +8,10 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cudf_streaming/integrations/partition.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
 #include <gtest/gtest.h>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>

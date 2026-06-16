@@ -9,6 +9,7 @@
 #include <cudf/io/types.hpp>
 
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/streaming/core/channel.hpp>
 #include <rapidsmpf/streaming/core/context.hpp>
