@@ -1511,33 +1511,39 @@ def _collect_parent_proxies(
     proxies are intentionally skipped: they carry the operation, not the data,
     and consumable intermediates (e.g. file readers) have no proxy parents at
     all, so they are never re-derived.
+
+    The traversal is intentionally iterative (an explicit stack) rather than a
+    nested recursive helper. A recursive closure would hold a cell referencing
+    itself, forming a reference cycle that keeps the closure -- and everything
+    it captured, including the collected parent proxies -- alive until the
+    cyclic garbage collector runs. That delayed collection breaks code that
+    relies on prompt reference-counted teardown of a proxy (e.g. pandas'
+    ``Series.str``-accessor circular-reference test).
     """
     import numpy as np
 
     _, args, kwargs = method_chain
     parents: list[_FastSlowProxy] = []
     seen: set[int] = set()
+    stack: list[Any] = [args, kwargs]
 
-    def _walk(obj: Any) -> None:
+    while stack:
+        obj = stack.pop()
         oid = id(obj)
         if oid in seen:
-            return
+            continue
         seen.add(oid)
         if isinstance(obj, _FastSlowProxy):
             parents.append(obj)
         elif isinstance(obj, (tuple, list)):
-            for item in obj:
-                _walk(item)
+            stack.extend(obj)
         elif isinstance(obj, dict):
             for key, value in obj.items():
-                _walk(key)
-                _walk(value)
+                stack.append(key)
+                stack.append(value)
         elif isinstance(obj, np.ndarray) and obj.dtype == "O":
-            for item in obj.flat:
-                _walk(item)
+            stack.extend(obj.flat)
 
-    _walk(args)
-    _walk(kwargs)
     return parents
 
 
