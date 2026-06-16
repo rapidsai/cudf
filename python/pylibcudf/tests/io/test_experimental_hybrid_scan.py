@@ -256,7 +256,24 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     reason="hybrid scan does not strip the Parquet BloomFilterHeader before probing",
     strict=True,
 )
-def test_hybrid_scan_bloom_filter_matches_read_parquet():
+@pytest.mark.parametrize(
+    "fixture_name,column_name,query_value",
+    [
+        (
+            "bloom_filter_alignment.parquet",
+            "r_reason_desc",
+            "Did not like the color",
+        ),
+        (
+            "mixed_card_ndv_100_bf_fpp0.1_nostats.snappy.parquet",
+            "str",
+            "tbRpIyVJZX",
+        ),
+    ],
+)
+def test_hybrid_scan_bloom_filter_matches_read_parquet(
+    fixture_name, column_name, query_value
+):
     """A/B test hybrid scan bloom filtering vs read_parquet.
 
     A: read_parquet path (libcudf strips the BloomFilterHeader before probing)
@@ -266,13 +283,12 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet():
     """
     fixture = (
         Path(__file__).parents[4]
-        / "python/cudf/cudf/tests/data/parquet/bloom_filter_alignment.parquet"
+        / "python/cudf/cudf/tests/data/parquet"
+        / fixture_name
     )
     if not fixture.exists():
         pytest.skip(f"bloom fixture not found: {fixture}")
     data = fixture.read_bytes()
-    column_name = "r_reason_desc"
-    query_value = "Did not like the color"
     expected_row_groups = list(range(pq.ParquetFile(fixture).metadata.num_row_groups))
 
     literal_value = plc.Scalar.from_arrow(pa.scalar(query_value))
