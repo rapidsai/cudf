@@ -26,6 +26,7 @@ files:
       - depends_on_librapidsmpf
       - depends_on_libucxx
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
       - depends_on_rapids_logger
       - depends_on_rapidsmpf
       - depends_on_ray
@@ -90,6 +91,7 @@ files:
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
   test_python_pylibcudf:
     output: none
     includes:
@@ -203,6 +205,7 @@ files:
       - depends_on_cupy
       - depends_on_libcudf
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
       - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
       - depends_on_cuda_python
@@ -973,6 +976,7 @@ dependencies:
           - libcudf-example==26.8.*,>=0.0.0a0
           - libcudf_kafka==26.8.*,>=0.0.0a0
           - libcudf-tests==26.8.*,>=0.0.0a0
+          - libcudf-streaming-tests==26.8.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
@@ -986,7 +990,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<9.1.0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
@@ -1177,6 +1181,30 @@ dependencies:
           - matrix:
             packages:
               - *numba_cuda
+  depends_on_numba_cuda_mlir:
+    # numba-cuda-mlir is the MLIR-based numba-cuda compiler used by the cudf
+    # UDF backend. Currently only published to PyPI; conda packaging is a
+    # tracked feature request (see TODOs in conda/recipes/cudf/recipe.yaml).
+    # Once a conda package exists, add an `output_types: [conda]` entry here
+    # mirroring `depends_on_numba_cuda`.
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - numba-cuda-mlir[cu12]>=0.3.0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - numba-cuda-mlir[cu13]>=0.3.0
+          # fallback to numba-cuda-mlir with no extra CUDA packages if
+          # 'cuda_suffixed' isn't true
+          - matrix:
+            packages:
+              - numba-cuda-mlir>=0.3.0
   depends_on_pylibcudf:
     common:
       - output_types: conda
@@ -1521,6 +1549,9 @@ dependencies:
           # Intentionally excluding `postgresql` because of
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - pytest-reportlog
           - ipython
           - hypothesis>=6.131.7

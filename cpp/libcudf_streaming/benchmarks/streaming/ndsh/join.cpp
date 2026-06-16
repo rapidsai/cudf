@@ -16,10 +16,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <rapidsmpf/communicator/communicator.hpp>
 #include <rapidsmpf/cuda_event.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
