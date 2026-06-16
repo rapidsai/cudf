@@ -27,14 +27,14 @@ set(nranks_to_run 1 2 5)
 # TEST_TARGET is the name of the test target (required). This adds len(nranks_to_run) test cases
 # identified by <TEST_TARGET>_<n_ranks>. NOTE: When running ctest, the TEST_TARGET executable should
 # be located in the ./gtests/ directory relative to the PWD.
-function(cudf_streaming_mpirun_test_add)
+function(libcudf_streaming_mpirun_test_add)
   set(options) # no options
   set(one_value TEST_TARGET)
   set(multi_value) # no multi_value args
   cmake_parse_arguments(_MPIRUN_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
 
   if(NOT DEFINED _MPIRUN_TEST_TEST_TARGET)
-    message(FATAL_ERROR "cudf_streaming_mpirun_test_add called without a test prefix")
+    message(FATAL_ERROR "libcudf_streaming_mpirun_test_add called without a test prefix")
   endif()
 
   message(STATUS "Adding mpirun test: ${_MPIRUN_TEST_TEST_TARGET} nranks: ${nranks_to_run}")
@@ -45,11 +45,11 @@ function(cudf_streaming_mpirun_test_add)
                                                        ${np} "gtests/${_MPIRUN_TEST_TEST_TARGET}"
     )
   endforeach(np)
-endfunction(cudf_streaming_mpirun_test_add)
+endfunction(libcudf_streaming_mpirun_test_add)
 
-add_library(cudf_streaming_test_sources OBJECT)
+add_library(libcudf_streaming_test_sources OBJECT)
 set_target_properties(
-  cudf_streaming_test_sources
+  libcudf_streaming_test_sources
   PROPERTIES CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS ON
@@ -57,11 +57,11 @@ set_target_properties(
              CUDA_STANDARD_REQUIRED ON
 )
 target_include_directories(
-  cudf_streaming_test_sources PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
+  libcudf_streaming_test_sources PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                       "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(
-  cudf_streaming_test_sources
+  libcudf_streaming_test_sources
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf::cudftestutil cudf::cudftestutil_impl
   PUBLIC GTest::gmock GTest::gtest
 )
@@ -69,10 +69,10 @@ target_link_libraries(
 # compiled into this object library. Those sources use device lambdas, so they require the same CUDA
 # flags cudf builds them with (notably --expt-extended-lambda from CUDF_CUDA_FLAGS).
 target_compile_options(
-  cudf_streaming_test_sources PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+  libcudf_streaming_test_sources PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 target_sources(
-  cudf_streaming_test_sources
+  libcudf_streaming_test_sources
   PRIVATE streaming/test_table_chunk.cpp
           streaming/test_read_parquet.cpp
           streaming/test_channel_metadata.cpp
@@ -86,9 +86,9 @@ target_sources(
           test_shuffler_many_streams.cpp
 )
 
-add_executable(cudf_streaming_single_tests main/single.cpp)
+add_executable(libcudf_streaming_single_tests main/single.cpp)
 set_target_properties(
-  cudf_streaming_single_tests
+  libcudf_streaming_single_tests
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/gtests"
              INSTALL_RPATH "\$ORIGIN/../../../lib"
              CXX_STANDARD 20
@@ -98,17 +98,17 @@ set_target_properties(
              CUDA_STANDARD_REQUIRED ON
 )
 target_include_directories(
-  cudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
+  libcudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                       "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(
-  cudf_streaming_single_tests
+  libcudf_streaming_single_tests
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf GTest::gmock GTest::gtest
-          $<TARGET_NAME_IF_EXISTS:conda_env> cudf_streaming_test_sources
+          $<TARGET_NAME_IF_EXISTS:conda_env> libcudf_streaming_test_sources
 )
 rapids_test_add(
-  NAME cudf_streaming_single_tests
-  COMMAND cudf_streaming_single_tests
+  NAME libcudf_streaming_single_tests
+  COMMAND libcudf_streaming_single_tests
   GPUS 1
   PERCENT 100
   INSTALL_COMPONENT_SET testing
@@ -116,12 +116,12 @@ rapids_test_add(
 
 # ##################################################################################################
 # MPI and UCXX based tests -------------------------------------------------------------------------
-# These executables reuse cudf_streaming_test_sources but provide a different test environment main
+# These executables reuse libcudf_streaming_test_sources but provide a different test environment main
 # (main/mpi.cpp / main/ucxx.cpp), and are launched via mpirun for multiple ranks.
 if(CUDF_STREAMING_HAVE_MPI)
-  add_executable(cudf_streaming_mpi_tests main/mpi.cpp)
+  add_executable(libcudf_streaming_mpi_tests main/mpi.cpp)
   set_target_properties(
-    cudf_streaming_mpi_tests
+    libcudf_streaming_mpi_tests
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/gtests"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
                CXX_STANDARD 20
@@ -131,20 +131,20 @@ if(CUDF_STREAMING_HAVE_MPI)
                CUDA_STANDARD_REQUIRED ON
   )
   target_include_directories(
-    cudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
+    libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                      "${CMAKE_CURRENT_SOURCE_DIR}"
   )
   target_link_libraries(
-    cudf_streaming_mpi_tests
+    libcudf_streaming_mpi_tests
     PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf_streaming::optional_communication GTest::gmock
-            GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env> cudf_streaming_test_sources
+            GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env> libcudf_streaming_test_sources
   )
-  cudf_streaming_mpirun_test_add(TEST_TARGET cudf_streaming_mpi_tests)
+  libcudf_streaming_mpirun_test_add(TEST_TARGET libcudf_streaming_mpi_tests)
 
   if(CUDF_STREAMING_HAVE_UCXX)
-    add_executable(cudf_streaming_ucxx_tests main/ucxx.cpp)
+    add_executable(libcudf_streaming_mpi_tests main/ucxx.cpp)
     set_target_properties(
-      cudf_streaming_ucxx_tests
+      libcudf_streaming_mpi_tests
       PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/gtests"
                  INSTALL_RPATH "\$ORIGIN/../../../lib"
                  CXX_STANDARD 20
@@ -154,11 +154,11 @@ if(CUDF_STREAMING_HAVE_MPI)
                  CUDA_STANDARD_REQUIRED ON
     )
     target_include_directories(
-      cudf_streaming_ucxx_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
+      libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                         "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     target_link_libraries(
-      cudf_streaming_ucxx_tests
+      libcudf_streaming_mpi_tests
       PRIVATE cudf_streaming
               rapidsmpf::rapidsmpf
               cudf_streaming::optional_communication
@@ -166,14 +166,14 @@ if(CUDF_STREAMING_HAVE_MPI)
               GTest::gmock
               GTest::gtest
               $<TARGET_NAME_IF_EXISTS:conda_env>
-              cudf_streaming_test_sources
+              libcudf_streaming_test_sources
     )
-    cudf_streaming_mpirun_test_add(TEST_TARGET cudf_streaming_ucxx_tests)
+    libcudf_streaming_mpirun_test_add(TEST_TARGET libcudf_streaming_mpi_tests)
   else()
-    cudf_streaming_skip_optional_target(cudf_streaming_ucxx_tests "UCXX not found")
+    cudf_streaming_skip_optional_target(libcudf_streaming_mpi_tests "UCXX not found")
   endif()
 else()
-  cudf_streaming_skip_optional_target(cudf_streaming_mpi_tests "MPI not found")
+  cudf_streaming_skip_optional_target(libcudf_streaming_mpi_tests "MPI not found")
 endif()
 
 rapids_test_install_relocatable(
