@@ -100,7 +100,7 @@ def test_dataframescan_zero_width_with_rows(engine: pl.GPUEngine, request):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_struct_literal_not_supported():
+def test_struct_literal_not_supported(engine: pl.GPUEngine):
     dtype = pl.Struct([pl.Field("a", pl.Int64), pl.Field("b", pl.String)])
     q = pl.LazyFrame().select(pl.lit(None, dtype=pl.Null).cast(dtype, strict=True))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

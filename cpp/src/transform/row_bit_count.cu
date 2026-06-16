@@ -503,7 +503,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
   // trivially computed
   if (h_info.complex_type_count <= 0) {
     thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       mcv.begin<size_type>(),
       mcv.end<size_type>(),
       cuda::proclaim_return_type<size_type>(
@@ -552,6 +552,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
     {mcv.data<size_type>(), static_cast<std::size_t>(mcv.size())},
     segment_length,
     h_info.max_branch_depth);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return output;
 }

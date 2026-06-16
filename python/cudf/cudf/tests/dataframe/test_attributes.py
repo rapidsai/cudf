@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import decimal
@@ -213,24 +213,7 @@ def test_dataframe_contains(name, contains, other_names):
 
     assert_eq(gdf, pdf)
 
-    if contains is cudf.NA or name is cudf.NA:
-        expectation = contains is cudf.NA and name is cudf.NA
-        assert (contains in pdf) == expectation
-        assert (contains in gdf) == expectation
-    elif gdf.columns.dtype.kind == "f":
-        # In some cases, the columns are converted to an Index[float] based on
-        # the other column names. That casts name values from None to np.nan.
-        expectation = contains is np.nan and (name is None or name is np.nan)
-        assert (contains in pdf) == expectation
-        assert (contains in gdf) == expectation
-    else:
-        expectation = contains == name or (
-            contains is np.nan and name is np.nan
-        )
-        assert (contains in pdf) == expectation
-        assert (contains in gdf) == expectation
-
-    assert (contains in pdf) == (contains in gdf)
+    assert (contains in gdf) == (contains in pdf)
 
 
 @pytest.mark.parametrize(

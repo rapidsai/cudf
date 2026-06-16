@@ -4,7 +4,6 @@
  */
 
 #include "common_utils.hpp"
-#include "io_source.hpp"
 #include "timer.hpp"
 
 #include <cudf/io/parquet.hpp>

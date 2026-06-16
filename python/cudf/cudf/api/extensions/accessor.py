@@ -1,9 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-
-from pandas.core.accessor import CachedAccessor
 
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
@@ -25,8 +23,8 @@ _docstring_register_accessor = """
 
     Notes
     -----
-    The `{klass}` object will be passed to your custom accessor upon first
-    invocation. And will be cached for future calls.
+    The `{klass}` object will be passed to your custom accessor upon each
+    invocation.
 
     If the data passed to your accessor is of wrong datatype, you should
     raise an `AttributeError` in consistent with other cudf methods.
@@ -132,12 +130,25 @@ doc_register_series_accessor = docfmt_partial(
 )
 
 
+class _Accessor:
+    """Custom property-like object. A descriptor for accessors."""
+
+    def __init__(self, name, accessor):
+        self._name = name
+        self._accessor = accessor
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self._accessor
+        return self._accessor(obj)
+
+
 def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
             msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
-        cached_accessor = CachedAccessor(name, accessor)
+        cached_accessor = _Accessor(name, accessor)
         cls._accessors.add(name)
         setattr(cls, name, cached_accessor)
 

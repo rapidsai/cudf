@@ -72,7 +72,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
     auto const d_out = byte_column->mutable_view().data<char>();
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(rmm::exec_policy_nosync(stream),
+      thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        cuda::counting_iterator<cudf::size_type>{0},
                        cuda::counting_iterator{num_bytes},
                        [d_inp, d_out] __device__(auto index) {
@@ -80,7 +80,10 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                          d_out[index]        = d_inp[index + mask - ((index & mask) << 1)];
                        });
     } else {
-      thrust::copy_n(rmm::exec_policy_nosync(stream), d_inp, num_bytes, d_out);
+      thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     d_inp,
+                     num_bytes,
+                     d_out);
     }
 
     auto const it = cuda::make_constant_iterator(sizeof(T));

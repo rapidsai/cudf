@@ -23,7 +23,9 @@ from pylibcudf.io.types cimport (
     TableInputMetadata,
     TableWithMetadata,
 )
+from pylibcudf.io.parquet_metadata cimport FileMetaData
 from pylibcudf.libcudf.expressions cimport expression
+from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_reader_options,
@@ -36,6 +38,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
+from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     dictionary_policy as dictionary_policy_t,
@@ -73,6 +76,41 @@ def _warn_deprecated(api_name, new_api):
     )
 
 
+cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
+    object parquet_metadatas,
+    size_t num_sources,
+) except *:
+    cdef vector[cpp_FileMetaData] c_metadatas
+    cdef vector[cpp_FileMetaData*] metadata_ptrs
+    cdef object metadata
+    cdef size_t i
+    if parquet_metadatas is None:
+        return c_metadatas
+
+    for metadata in parquet_metadatas:
+        if not isinstance(metadata, FileMetaData):
+            raise TypeError(
+                "parquet_metadatas must contain only FileMetaData objects"
+            )
+        metadata_ptrs.push_back(&(<FileMetaData>metadata).c_obj)
+
+    if metadata_ptrs.size() != num_sources:
+        raise ValueError(
+            f"Length of 'parquet_metadatas' ({metadata_ptrs.size()}) "
+            f"must match the number of input sources "
+            f"({num_sources})"
+        )
+
+    c_metadatas.reserve(metadata_ptrs.size())
+    with nogil:
+        # This copies the (potentially large) metadata object. We don't
+        # want to hold the GIL for that.
+        for i in range(metadata_ptrs.size()):
+            c_metadatas.push_back(dereference(metadata_ptrs[i]))
+
+    return c_metadatas
+
+
 cdef class ParquetReaderOptions:
     """The settings to use for ``read_parquet``
     For details, see :cpp:class:`cudf::io::parquet_reader_options`
@@ -107,8 +145,19 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        row_groups : list
-            List of row groups to read
+        row_groups : list[list[int]]
+            Row groups to read, one inner list per input source.
+
+        Notes
+        -----
+        Rows are emitted in input-source order; all rows selected from
+        source 0 are emitted before rows selected from source 1, and so on.
+        Within each source, row groups are read in the order provided;
+        indices are not sorted or deduplicated, and repeated indices are
+        emitted multiple times. Empty inner lists contribute no rows.
+        When unset, all row groups are read in source order, then in
+        on-disk order within each source. Predicate pushdown drops row
+        groups in place; remaining row groups keep their relative order.
 
         Returns
         -------
@@ -498,12 +547,19 @@ cdef class ChunkedParquetReader:
     ----------
     options : ParquetReaderOptions
         Settings for controlling reading behavior
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     chunk_read_limit : size_t, default 0
         Limit on total number of bytes to be returned per read,
         or 0 if there is no limit.
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    parquet_metadatas : list[FileMetaData], optional
+        Pre-materialized parquet footer metadata, one for each source. If not
+        provided, footers are read from the sources internally.
     """
     def __init__(
         self,
@@ -512,20 +568,42 @@ cdef class ChunkedParquetReader:
         DeviceMemoryResource mr = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
+        object parquet_metadatas=None,
     ):
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        cdef vector[unique_ptr[datasource]] sources
+        cdef vector[cpp_FileMetaData] c_metadatas
         cdef cudaStream_t stream_view = self._stream.view().value()
-        with nogil:
-            self.reader.reset(
-                new cpp_chunked_parquet_reader(
-                    chunk_read_limit,
-                    pass_read_limit,
-                    options.c_obj,
-                    stream_view,
-                    self.mr.get_mr()
+        if parquet_metadatas is None:
+            with nogil:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        options.c_obj,
+                        stream_view,
+                        self.mr.get_mr()
+                    )
                 )
+        else:
+            with nogil:
+                sources = make_datasources(options.c_obj.get_source())
+            c_metadatas = _build_parquet_metadatas(
+                parquet_metadatas, sources.size()
             )
+            with nogil:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        move(sources),
+                        move(c_metadatas),
+                        options.c_obj,
+                        stream_view,
+                        self.mr.get_mr()
+                    )
+                )
 
     __hash__ = None
 
@@ -566,7 +644,10 @@ cdef class ChunkedParquetReader:
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, object stream = None, DeviceMemoryResource mr=None
+    ParquetReaderOptions options,
+    object stream = None,
+    DeviceMemoryResource mr=None,
+    object parquet_metadatas=None,
 ):
     """
     Read from Parquet format.
@@ -584,12 +665,33 @@ cpdef read_parquet(
         CUDA stream used for device memory operations and kernel launches
     mr : DeviceMemoryResource, optional
         Device memory resource used to allocate the returned table's device memory.
+    parquet_metadatas : list[FileMetaData], optional
+        Pre-materialized parquet footer metadata, one for each source. If not
+        provided, footers are read from the sources internally.
     """
     cdef Stream s = _get_stream(stream)
     cdef cudaStream_t _cs = s.view().value()
+    cdef vector[unique_ptr[datasource]] sources
+    cdef vector[cpp_FileMetaData] c_metadatas
+    cdef table_with_metadata c_result
     mr = _get_memory_resource(mr)
-    with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
+    if parquet_metadatas is None:
+        with nogil:
+            c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
+    else:
+        with nogil:
+            sources = make_datasources(options.c_obj.get_source())
+        c_metadatas = _build_parquet_metadatas(parquet_metadatas, sources.size())
+        with nogil:
+            c_result = move(
+                cpp_read_parquet(
+                    move(sources),
+                    move(c_metadatas),
+                    options.c_obj,
+                    _cs,
+                    mr.get_mr(),
+                )
+            )
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 

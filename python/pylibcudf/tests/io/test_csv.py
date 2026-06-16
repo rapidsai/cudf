@@ -28,6 +28,16 @@ _COMMON_CSV_SOURCE_KWARGS = {
 }
 
 
+def _replace_large_string_from_pandas(schema: pa.Schema) -> pa.Schema:
+    # pandas 3 strings use convert to pyarrow.large_string
+    return pa.schema(
+        {
+            name: pa.string() if pa.types.is_large_string(typ) else typ
+            for name, typ in zip(schema.names, schema.types, strict=True)
+        }
+    )
+
+
 @pytest.fixture(scope="module")
 def csv_table_data(table_data):
     """
@@ -149,7 +159,11 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
         plc.Table.from_arrow(full_tbl),
         tbls_w_meta[0].column_names(include_children=True),
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
+    pa_table = pa.Table.from_pandas(exp)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, full_tbl_plc)
 
 
 @pytest.mark.parametrize("usecols", [None, ["col_int64", "col_bool"], [0, 1]])
@@ -232,7 +246,11 @@ def test_read_csv_parse_options(
         quotechar=quotechar,
         lineterminator=lineterminator,
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
+    pa_table = pa.Table.from_pandas(df)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, plc_table_w_meta)
 
 
 @pytest.mark.parametrize("na_filter", [True, False])
@@ -263,7 +281,11 @@ def test_read_csv_na_values(
         na_values=na_values if na_filter else None,
         keep_default_na=keep_default_na,
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
+    pa_table = pa.Table.from_pandas(df)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, plc_table_w_meta)
 
 
 @pytest.mark.parametrize("header", [0, 10, -1])

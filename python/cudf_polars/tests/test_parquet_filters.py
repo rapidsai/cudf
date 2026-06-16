@@ -56,7 +56,23 @@ def pq_file(tmp_path_factory, df):
 def test_scan_by_hand(expr, selection, pq_file, chunked):
     q = pq_file.filter(expr).select(*selection)
     assert_gpu_result_equal(
-        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+        q,
+        engine=pl.GPUEngine(
+            executor="in-memory",
+            raise_on_fail=True,
+            parquet_options={"chunked": chunked},
+        ),
+    )
+
+
+def test_parquet_filter_ne_missing(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, None, 3, None]})
+    df.write_parquet(tmp_path / "df.parquet", row_group_size=3)
+    q = pl.scan_parquet(tmp_path / "df.parquet").filter(
+        pl.col("a").ne_missing(pl.lit(2, dtype=pl.Int64))
+    )
+    assert_gpu_result_equal(
+        q, engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True)
     )
 
 

@@ -13,6 +13,7 @@ from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
 from cudf.core.column import as_column, column_empty
+from cudf.core.column.column import ColumnBase
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -115,6 +116,19 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         ).values()
     )
     launch_args += list(args)
+
+    # The JIT kernel does not consult null masks, and numba-cuda's argument
+    # marshalling rejects ``__cuda_array_interface__`` dicts that include a
+    # ``mask`` entry. Strip masks from any nullable column args so the kernel
+    # sees only the underlying data buffer. The user is responsible for
+    # ensuring that null values do not affect correctness when explicitly
+    # requesting ``engine="jit"``.
+    launch_args = [
+        arg.set_mask(None, 0)
+        if isinstance(arg, ColumnBase) and arg.nullable
+        else arg
+        for arg in launch_args
+    ]
 
     max_group_size = cp.diff(offsets).max()
 

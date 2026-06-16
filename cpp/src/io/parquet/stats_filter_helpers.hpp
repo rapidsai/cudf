@@ -27,12 +27,8 @@
 
 namespace cudf::io::parquet::detail {
 
-namespace {
-
 /// Initial capacity for the chars host vector in host_column
 constexpr size_t initial_chars_capacity = 1024;
-
-}  // namespace
 
 /**
  * @brief Base utilities for converting and casting stats values

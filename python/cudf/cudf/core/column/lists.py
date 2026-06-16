@@ -50,7 +50,9 @@ class ListColumn(ColumnBase):
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
         return ColumnBase.create(sliced_plc_col, self.element_type)
 
-    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+    def _prep_pandas_compat_repr(
+        self, nan_rep: str | None = None
+    ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
 
@@ -178,6 +180,14 @@ class ListColumn(ColumnBase):
                 ),
                 self._string_separators,
             )
+            # format_list_column converts top-level nulls to the na_rep
+            # string ("None"). Re-apply the original null mask so that
+            # top-level nulls remain as actual nulls, matching pandas.
+            if self.null_count > 0:
+                plc_column = plc_column.with_mask(
+                    self.plc_column.null_mask(),
+                    self.null_count,
+                )
             return cast(
                 "cudf.core.column.string.StringColumn",
                 ColumnBase.create(plc_column, dtype),

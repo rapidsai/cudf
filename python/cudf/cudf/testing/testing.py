@@ -13,9 +13,11 @@ import pyarrow as pa
 from pandas import testing as tm
 
 import cudf
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.missing import NA, NaT
-from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 
 def _map_string_view_to_string(dtype: pa.DataType) -> pa.DataType:
@@ -58,7 +60,7 @@ def dtype_can_compare_equal_to_other(dtype):
     # return True if values of this dtype can compare
     # as equal to equal values of a different dtype
     return not (
-        dtype == CUDF_STRING_DTYPE
+        is_dtype_obj_string(dtype)
         or isinstance(
             dtype,
             (
@@ -789,6 +791,24 @@ def assert_frame_equal(
             atol=atol,
             obj=f'Column name="{col}"',
         )
+
+
+def _object_array_equal_nan(x, y):
+    if x.shape != y.shape:
+        assert False
+    for xe, ye in zip(x.flat, y.flat, strict=True):
+        if xe is ye:
+            continue
+        if (
+            isinstance(xe, float)
+            and isinstance(ye, float)
+            and np.isnan(xe)
+            and np.isnan(ye)
+        ):
+            continue
+        if xe != ye:
+            assert False
+    return True
 
 
 def assert_eq(left, right, **kwargs):

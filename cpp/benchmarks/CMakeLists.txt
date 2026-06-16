@@ -285,6 +285,7 @@ ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cpp bitmask/set_null_mask.c
 # * parquet writer benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+  io/parquet/parquet_writer_dict.cpp
 )
 
 # ##################################################################################################
@@ -486,7 +487,7 @@ ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.c
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
-  rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+  rolling/multi_orderby_range_rolling_sum.cpp rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
 )
 
 # ##################################################################################################

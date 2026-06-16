@@ -7,16 +7,15 @@ from __future__ import annotations
 
 import importlib.util
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from contextlib import AbstractContextManager
 
     import polars as pl
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.options import StreamingOptions
 
 
 STREAMING_ENGINE_FIXTURE_PARAMS: list[str] = []
@@ -67,7 +66,7 @@ class EngineFixtureParam:
 def is_streaming_engine(obj: Any) -> bool:
     """Return ``True`` if ``obj`` is a :class:`StreamingEngine`."""
     try:
-        from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+        from cudf_polars.engine.core import StreamingEngine
     except ImportError:  # pragma: no cover; only triggered without rapidsmpf
         return False
     return isinstance(obj, StreamingEngine)
@@ -94,16 +93,19 @@ def warns_on_spmd(  # pragma: no cover; rapidsmpf-only path
 
     import pytest
 
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.engine.spmd import SPMDEngine
 
     if when and isinstance(engine, SPMDEngine):
         return pytest.warns(*args, **kwargs)
     return contextlib.nullcontext()
 
 
+SMALL_MAX_ROWS_PER_PARTITION = 4
+SMALL_TARGET_PARTITION_SIZE = 10
+
+
 def create_streaming_options(
     blocksize_mode: Literal["medium", "small"],
-    overrides: StreamingOptions | None = None,
 ) -> StreamingOptions:
     """
     Create :class:`StreamingOptions` for a block size mode.
@@ -114,15 +116,12 @@ def create_streaming_options(
         Block size configuration. ``"medium"`` uses moderate partition sizes,
         while ``"small"`` uses very small partitions and sets
         ``fallback_mode=SILENT`` to avoid excessive warnings from CPU fallback.
-    overrides
-        Optional options to merge on top of the selected baseline. Fields in
-        ``overrides`` take precedence over the baseline.
 
     Returns
     -------
-    The merged streaming options.
+    The streaming options for the given block size.
     """
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.utils.config import StreamingFallbackMode
 
     # ``allow_gpu_sharing=True`` is always set so the cached multi-rank
@@ -130,7 +129,7 @@ def create_streaming_options(
     # the UUID-collision guard on every ``_reset(...)``.
     match blocksize_mode:
         case "medium":
-            baseline = StreamingOptions(
+            return StreamingOptions(
                 max_rows_per_partition=50,
                 dynamic_planning={},
                 target_partition_size=1_000_000,
@@ -138,64 +137,62 @@ def create_streaming_options(
                 allow_gpu_sharing=True,
             )
         case "small":
-            baseline = StreamingOptions(
-                max_rows_per_partition=4,
+            return StreamingOptions(
+                max_rows_per_partition=SMALL_MAX_ROWS_PER_PARTITION,
                 dynamic_planning={},
-                target_partition_size=10,
+                target_partition_size=SMALL_TARGET_PARTITION_SIZE,
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
                 allow_gpu_sharing=True,
             )
         case _:  # pragma: no cover
             raise ValueError(f"Unknown blocksize_mode: {blocksize_mode!r}")
-    if overrides is None:
-        return baseline
-    return StreamingOptions(**{**baseline.to_dict(), **overrides.to_dict()})
 
 
-def build_streaming_engine(
-    param: EngineFixtureParam,
-    engines: Mapping[str, StreamingEngine],
-    options: StreamingOptions | None = None,
-) -> StreamingEngine:
+def merge_streaming_options(
+    base: StreamingOptions, overrides: StreamingOptions
+) -> StreamingOptions:
     """
-    Return ``engines``'s entry for ``param``, ``_reset``-ed.
-
-    ``engines`` must already contain a slot for ``param.engine_name`` —
-    seeded by the ``streaming_engines`` session-scoped fixture. The
-    fixture owns mutation; this function only reads and ``_reset``-s.
+    Merge override options into the base streaming options.
 
     Parameters
     ----------
-    param
-        Decoded engine fixture parameter describing the backend and block size mode.
-    engines
-        Streaming-engine collection keyed by backend name. Provided by
-        the ``streaming_engines`` test fixture.
-    options
-        Optional streaming options to merge on top of the baseline selected by
-        ``param.blocksize_mode``.
+    base
+        The base streaming options.
+    overrides
+        Any additional streaming options.
 
     Returns
     -------
-    The shared :class:`StreamingEngine`, ``_reset`` to the requested options.
-
-    Raises
-    ------
-    RuntimeError
-        If ``engines`` has no slot for ``param.engine_name``.
+    The merged streaming options with overrides overriding any base options.
     """
-    streaming_options = create_streaming_options(param.blocksize_mode, options)
-    engine = engines.get(param.engine_name)
-    if engine is None:  # pragma: no cover
-        raise RuntimeError(
-            f"No streaming engine for {param.engine_name!r}. The corresponding "
-            "session-scoped fixture must populate the collection before tests run."
-        )
+    from cudf_polars.engine.options import StreamingOptions
+
+    return StreamingOptions(**{**base.to_dict(), **overrides.to_dict()})
+
+
+EngineT = TypeVar("EngineT", bound="StreamingEngine")
+
+
+def configure_streaming_engine(engine: EngineT, options: StreamingOptions) -> EngineT:
+    """
+    Configure an engine with a set of options.
+
+    Parameters
+    ----------
+    engine
+        Streaming engine to configure. The caller owns its lifecycle.
+    options
+        Configuration options to apply to the engine.
+
+    Returns
+    -------
+    ``engine``, reset to the requested options.
+    """
     engine._reset(
-        rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
-        executor_options=streaming_options.to_executor_options(),
-        engine_options=streaming_options.to_engine_options(),
+        rapidsmpf_options=options.to_rapidsmpf_options(),
+        executor_options=options.to_executor_options(),
+        engine_options=options.to_engine_options(),
     )
     return engine
 

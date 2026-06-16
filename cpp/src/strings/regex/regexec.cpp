@@ -104,6 +104,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // initialize the rest of the elements
   d_prog->_max_insts = insts_count;
   d_prog->_prog_size = memsize + sizeof(reprog_device);
+  d_prog->_empty_match_possible =
+    (h_prog.compute_match_flags() == cudf::strings::detail::match_flags::EMPTY_MATCH);
 
   // copy flat prog to device memory
   cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
@@ -145,7 +147,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 {
   _buffer       = buffer;
   _thread_count = thread_count;
-  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+  _max_insts    = max_insts > 0 ? max_insts : _insts_count;
 }
 
 int32_t reprog_device::compute_shared_memory_size() const
