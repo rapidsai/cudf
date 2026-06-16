@@ -99,11 +99,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling sum with window size 2.
 
     >>> print(a.rolling(2).sum())
-    0    <NA>
+    0     NaN
     1     3.0
     2     5.0
-    3    <NA>
-    4    <NA>
+    3     NaN
+    4     NaN
     dtype: float64
 
     Rolling sum with window size 2 and min_periods 1.
@@ -119,8 +119,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling count with window size 3.
 
     >>> print(a.rolling(3).count())
-    0    <NA>
-    1    <NA>
+    0     NaN
+    1     NaN
     2     3.0
     3     2.0
     4     2.0
@@ -130,11 +130,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     center of the window.
 
     >>> print(a.rolling(3, center=True).count())
-    0    <NA>
+    0     NaN
     1     3.0
     2     2.0
     3     2.0
-    4    <NA>
+    4     NaN
     dtype: float64
 
     Rolling max with variable window size specified by an offset;
@@ -153,12 +153,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ... )
 
     >>> print(a.rolling('2s').max())
-    2019-01-01 09:00:00     1.0
-    2019-01-01 09:00:01     9.0
-    2019-01-01 09:00:02     9.0
-    2019-01-01 09:00:04     4.0
-    2019-01-01 09:00:07    <NA>
-    2019-01-01 09:00:08     1.0
+    2019-01-01 09:00:00    1.0
+    2019-01-01 09:00:01    9.0
+    2019-01-01 09:00:02    9.0
+    2019-01-01 09:00:04    4.0
+    2019-01-01 09:00:07    NaN
+    2019-01-01 09:00:08    1.0
     dtype: float64
 
     Apply custom function on the window with the *apply* method
@@ -285,7 +285,13 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     raise NotImplementedError(
                         "center is not implemented for frequency-based windows"
                     )
-                pre = self.window.value
+                # Convert the timedelta to the same resolution as
+                # the datetime index so that the range-based window
+                # comparison uses matching units.
+                resolution = self.obj.index.unit
+                pre = int(
+                    self.window.as_unit(resolution).to_numpy().view(np.int64)
+                )
                 fwd = 0
                 orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
             else:
@@ -684,6 +690,21 @@ class RollingGroupby(Rolling):
         )._gather(sort_order)
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
+
+    def __getitem__(self, arg) -> Self:
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        new = object.__new__(type(self))
+        # Preserve grouping context when subsetting columns.
+        Rolling.__init__(
+            new,
+            self.obj[arg],
+            self.window,
+            min_periods=self.min_periods,
+            center=self.center,
+        )
+        new._group_keys = self._group_keys
+        return new
 
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         index = MultiIndex._from_data(

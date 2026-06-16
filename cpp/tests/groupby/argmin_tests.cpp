@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -23,7 +23,7 @@ TYPED_TEST_SUITE(groupby_argmin_test, cudf::test::FixedWidthTypes);
 TYPED_TEST(groupby_argmin_test, basic)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   if (std::is_same_v<V, bool>) return;
 
@@ -43,7 +43,7 @@ TYPED_TEST(groupby_argmin_test, basic)
 TYPED_TEST(groupby_argmin_test, zero_valid_keys)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   if (std::is_same_v<V, bool>) return;
 
@@ -63,7 +63,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
 TYPED_TEST(groupby_argmin_test, zero_valid_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   if (std::is_same_v<V, bool>) return;
 
@@ -83,7 +83,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
 TYPED_TEST(groupby_argmin_test, null_keys_and_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   if (std::is_same_v<V, bool>) return;
 
@@ -110,7 +110,7 @@ struct groupby_argmin_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_argmin_string_test, basic)
 {
-  using R = cudf::detail::target_type_t<cudf::string_view, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::strings_column_wrapper vals{
@@ -128,10 +128,10 @@ TEST_F(groupby_argmin_string_test, basic)
 
 TEST_F(groupby_argmin_string_test, zero_valid_values)
 {
-  using R = cudf::detail::target_type_t<cudf::string_view, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::strings_column_wrapper vals({"año", "bit", "₹1"}, all_nulls());
+  cudf::test::strings_column_wrapper vals({"", "", ""}, all_nulls());
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
@@ -148,7 +148,7 @@ struct groupby_dictionary_argmin_test : public cudf::test::BaseFixture {};
 TEST_F(groupby_dictionary_argmin_test, basic)
 {
   using V = std::string;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+  using R = cudf::size_type;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys{    1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };

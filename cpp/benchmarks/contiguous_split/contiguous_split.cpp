@@ -1,16 +1,17 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/contiguous_split.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -44,7 +45,7 @@ void contiguous_split_common(nvbench::state& state,
   if (num_splits > 0) {
     cudf::size_type const split_stride = num_rows / num_splits;
     // start after the first element.
-    auto iter = thrust::make_counting_iterator(1);
+    auto iter = cuda::counting_iterator<cudf::size_type>{1};
     splits.reserve(num_splits);
     std::transform(iter,
                    iter + num_splits,
@@ -61,7 +62,10 @@ void contiguous_split_common(nvbench::state& state,
   state.add_global_memory_reads<int8_t>(src_table.alloc_size());
   state.add_global_memory_writes<int8_t>(src_table.alloc_size());
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) { impl(src_table, splits); });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 void bench_contiguous_split_strings(nvbench::state& state);

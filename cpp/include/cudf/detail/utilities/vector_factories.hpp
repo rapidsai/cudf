@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <type_traits>
 #include <vector>
@@ -481,6 +481,22 @@ host_vector<typename Container::value_type> make_host_vector(Container const& c,
   requires(std::is_convertible_v<Container, device_span<typename Container::value_type const>>)
 {
   return make_host_vector(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Construct an empty pinned `cudf::detail::host_vector` with the given capacity.
+ *
+ * @tparam T The type of the vector data
+ * @param capacity Initial capacity of the vector
+ * @param stream The stream on which to allocate memory
+ * @return A pinned host_vector with the given capacity
+ */
+template <typename T>
+host_vector<T> make_empty_pinned_vector(size_t capacity, rmm::cuda_stream_view stream)
+{
+  auto result = host_vector<T>({cudf::get_pinned_memory_resource(), stream});
+  result.reserve(capacity);
+  return result;
 }
 
 /**

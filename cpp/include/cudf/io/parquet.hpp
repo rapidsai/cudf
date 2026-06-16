@@ -103,6 +103,9 @@ class parquet_reader_options {
   type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
+  // Whether column name matching is case sensitive. In case of multiple
+  // case-insensitive matches, the first matched column is selected
+  bool _case_sensitive_names = true;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -286,6 +289,16 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
   /**
+   * @brief Returns whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @return `true` if column name matching is case sensitive (default)
+   */
+  [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
+
+  /**
    * @brief Set a new source location
    *
    * @param src New `source_info`.
@@ -378,6 +391,15 @@ class parquet_reader_options {
    * Example:
    * To read row groups [0, 2] from the first input and [1] from the second input, call:
    *   set_row_groups({{0, 2}, {1}});
+   *
+   * Output ordering: rows are emitted in input-source order; all rows selected from source 0
+   * are emitted before rows selected from source 1, and so on. Within each source, row groups
+   * appear in the exact order given by the inner vector; the reader does not sort or deduplicate
+   * the indices, and repeated indices are emitted multiple times. An empty inner vector means that
+   * source contributes no rows but does not affect the order of the remaining sources. When this
+   * setter is not called, all row groups are read in source order, then in on-disk order within
+   * each source. Row groups removed by standard `read_parquet` predicate pushdown (statistics or
+   * bloom filter pruning) are dropped in place; the remaining row groups keep their relative order.
    *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.
@@ -510,6 +532,16 @@ class parquet_reader_options {
    * columns need to be cast. The scale of each column is preserved from the file.
    */
   void set_decimal_width(type_id width) { _decimal_width = width; }
+
+  /**
+   * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @param val Boolean indicating whether to enable case-sensitive matching.
+   */
+  void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
 };
 
 /**
@@ -573,9 +605,7 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param row_groups Vector of row groups to read
+   * @copydoc parquet_reader_options::set_row_groups
    * @return this for chaining
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
@@ -759,6 +789,21 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @param val Boolean indicating whether to enable case-sensitive matching
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& case_sensitive_names(bool val)
+  {
+    options._case_sensitive_names = val;
+    return *this;
+  }
+
+  /**
    * @brief move parquet_reader_options member once it's built.
    */
   operator parquet_reader_options&&() { return std::move(options); }
@@ -783,6 +828,9 @@ class parquet_reader_options_builder {
  *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
+ *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -806,6 +854,9 @@ table_with_metadata read_parquet(
  *  auto options = cudf::io::parquet_reader_options::builder();
  *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
+ *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
  *
  * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
@@ -1730,6 +1781,8 @@ class parquet_writer_options_builder
  *  cudf::io::write_parquet(options);
  * @endcode
  *
+ * @note If an exception is thrown during encoding or compression, no data is written to the sink.
+ *
  * @param options Settings for controlling writing behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A parquet-compatible blob that contains the file metadata (parquet FileMetadata thrift
@@ -1850,6 +1903,9 @@ class chunked_parquet_writer {
 
   /**
    * @brief Writes table to output.
+   *
+   * @note If an exception is thrown during encoding or compression, the data from the failing call
+   * is not written to the sink. Data from previous successful calls is unaffected.
    *
    * @param[in] table Table that needs to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same

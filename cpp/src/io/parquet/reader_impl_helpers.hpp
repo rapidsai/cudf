@@ -13,7 +13,12 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
+#include <cstddef>
+#include <functional>
+#include <string>
+#include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -62,17 +67,13 @@ struct row_group_info {
   size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
                     // called with index and source_index
   size_t start_row;
-  size_type source_index;  // file index.
+  size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
+  size_type source_index;      // file index.
+  size_t compressed_size;      // compressed size of the row group
+  size_t max_leaf_values;      // maximum number of leaf values in the row group
 
   // Optional metadata pulled from the column and offset indexes, if present.
   std::optional<std::vector<column_chunk_info>> column_chunks;
-
-  row_group_info() = default;
-
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index{index}, start_row{start_row}, source_index{source_index}
-  {
-  }
 
   /**
    * @brief Indicates the presence of page-level indexes.
@@ -81,7 +82,7 @@ struct row_group_info {
 };
 
 /**
- * @brief Function that translates Parquet datatype to cuDF type enum
+ * @brief Translates Parquet datatype to cuDF type enum
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
@@ -411,6 +412,13 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
   /**
+   * @brief Get total number of sources
+   *
+   * @return Total number of sources
+   */
+  [[nodiscard]] auto get_num_sources() const { return per_file_metadata.size(); }
+
+  /**
    * @brief Get the number of row groups per file
    *
    * @return Number of row groups per file
@@ -512,6 +520,18 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
+   * @brief Computes the compressed and total size, the number of rows, and the maximum number of
+   * leaf values in the specified row group
+   *
+   * @param row_group The row group
+   *
+   * @return A tuple of row group compressed size, total size, number of rows, and maximum leaf
+   * values
+   */
+  [[nodiscard]] std::tuple<size_t, size_t, size_t, size_t> get_row_group_properties(
+    RowGroup const& rg) const;
+
+  /**
    * @brief Filters the row groups using stats and bloom filters based on predicate filter
    *
    * @param sources Lists of input datasources
@@ -595,7 +615,8 @@ class aggregate_reader_metadata {
                  bool strings_to_categorical,
                  bool ignore_missing_columns,
                  type_id timestamp_type_id,
-                 type_id decimal_type_id);
+                 type_id decimal_type_id,
+                 bool case_sensitive_names);
 };
 
 }  // namespace cudf::io::parquet::detail

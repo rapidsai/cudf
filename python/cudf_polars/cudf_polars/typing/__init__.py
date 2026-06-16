@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 __all__: list[str] = [
     "ClosedInterval",
+    "CollectKwargs",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
@@ -145,7 +146,10 @@ OptimizationArgs: TypeAlias = Literal[
     "comm_subexpr_elim",
     "cluster_with_columns",
     "no_optimization",
+    "optimizations",
 ]
+
+CollectKwargs: TypeAlias = dict[OptimizationArgs, bool | pl.QueryOptFlags]
 
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)

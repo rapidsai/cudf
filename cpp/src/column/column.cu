@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_stream.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -257,6 +258,25 @@ column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}
 {
+}
+
+std::unique_ptr<column> rebind_stream(column&& col, rmm::cuda_stream_view stream)
+{
+  auto const dtype      = col.type();
+  auto const sz         = col.size();
+  auto const null_count = col.null_count();
+  auto contents         = col.release();
+  contents.data->set_stream(stream);
+  contents.null_mask->set_stream(stream);
+  for (auto& child : contents.children) {
+    child = rebind_stream(std::move(*child), stream);
+  }
+  return std::make_unique<column>(dtype,
+                                  sz,
+                                  std::move(*contents.data),
+                                  std::move(*contents.null_mask),
+                                  null_count,
+                                  std::move(contents.children));
 }
 
 }  // namespace cudf

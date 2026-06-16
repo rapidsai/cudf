@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 )
 @pytest.mark.parametrize("nulls_last", [False, True])
 @pytest.mark.parametrize("maintain_order", [False, True], ids=["unstable", "stable"])
-def test_sort(sort_keys, nulls_last, maintain_order):
+def test_sort(engine: pl.GPUEngine, sort_keys, nulls_last, maintain_order):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 1, 3, 5, None, None],
@@ -36,4 +36,4 @@ def test_sort(sort_keys, nulls_last, maintain_order):
         nulls_last=nulls_last,
         maintain_order=maintain_order,
     )
-    assert_gpu_result_equal(query, check_row_order=maintain_order)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=maintain_order)

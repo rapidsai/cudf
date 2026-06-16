@@ -22,6 +22,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -62,8 +63,8 @@ namespace {
 __device__ bool list_has_nulls(list_device_view list)
 {
   return thrust::any_of(thrust::seq,
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(list.size()),
+                        cuda::counting_iterator{cudf::size_type{0}},
+                        cuda::counting_iterator{list.size()},
                         [&list](auto const idx) { return list.is_null(idx); });
 }
 

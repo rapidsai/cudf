@@ -4,7 +4,6 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 cdef class Table:
@@ -20,7 +19,7 @@ cdef class Table:
     @staticmethod
     cdef Table from_libcudf(
         unique_ptr[table] libcudf_tbl,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     )
 
@@ -31,8 +30,8 @@ cdef class Table:
     cdef Table from_table_view_of_arbitrary(
         const table_view& tv,
         object owner,
-        Stream stream,
+        object stream,
     )
 
     cpdef list columns(self)
-    cpdef Table copy(self, Stream stream=*, DeviceMemoryResource mr=*)
+    cpdef Table copy(self, object stream = *, DeviceMemoryResource mr=*)

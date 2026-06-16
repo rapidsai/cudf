@@ -21,7 +21,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 #include <cstdlib>
@@ -42,9 +42,9 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 
   auto strings_vector = rmm::device_uvector<string_view>(input.size(), stream, mr);
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     strings_vector.begin(),
                     [d_strings = *d_strings] __device__(size_type idx) {
                       // placeholder for factory function that takes a span of string_views

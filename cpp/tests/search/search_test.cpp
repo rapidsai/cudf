@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -912,7 +912,7 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
   cudf::test::strings_column_wrapper column({"N", "N", "N", "N", "Y", "Y", "Y", "Y"},
                                             {1, 1, 1, 1, 1, 1, 1, 1});
 
-  cudf::test::strings_column_wrapper values({"Y", "Z", "N"}, {1, 0, 1});
+  cudf::test::strings_column_wrapper values({"Y", "", "N"}, {1, 0, 1});
 
   fixed_width_column_wrapper<size_type> expect{8, 8, 4};
 

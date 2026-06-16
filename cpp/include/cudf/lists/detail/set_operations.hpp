@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,15 +11,12 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace lists::detail {
 
 /**
  * @copydoc cudf::list::have_overlap
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      lists_column_view const& rhs,
@@ -30,8 +27,6 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
 
 /**
  * @copydoc cudf::list::intersect_distinct
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                            lists_column_view const& rhs,
@@ -42,8 +37,6 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
 
 /**
  * @copydoc cudf::list::union_distinct
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                        lists_column_view const& rhs,
@@ -54,8 +47,6 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
 
 /**
  * @copydoc cudf::list::difference_distinct
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                             lists_column_view const& rhs,
@@ -66,4 +57,4 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
 
 /** @} */  // end of group
 }  // namespace lists::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

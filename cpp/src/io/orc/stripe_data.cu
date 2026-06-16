@@ -1917,7 +1917,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= cuda::std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -1971,17 +1971,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
-              // Convert to UTC
-              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
                                               kTimestampNanoScale[secondary_val & 7]};
 
-              // Adjust seconds only for negative timestamps with positive nanoseconds.
-              // Alternative way to represent negative timestamps is with negative nanoseconds
-              // in which case the adjustment in not needed.
-              // Comparing with 999999 instead of zero to match the apache writer.
-              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
+              // ORC stores timestamps as a (seconds, nanos) pair where `nanos` is always
+              // non-negative. For a negative timestamp with a fractional part, the Apache writer
+              // rounds `seconds` toward zero and puts the leftover positive remainder into `nanos`.
+              // To recover the true value we subtract one second whenever `seconds < 0` and `nanos`
+              // contributes a non-zero fractional part.
+              //
+              // The threshold is 1 ms (not 1 ns) to match the Apache writer's nanos encoding:
+              // sub-millisecond values round to zero on write, so on read they must not trigger the
+              // borrow.
+              if (seconds.count() < 0 and nanos.count() >= 1'000'000) { seconds -= duration_s{1}; }
+
+              // Convert to UTC after the adjustment above, because the adjustment must run in the
+              // writer's (stored seconds + writer epoch) frame
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
@@ -2065,6 +2072,7 @@ void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
   decode_nulls_and_string_dictionaries_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(
       chunks, global_dictionary, num_columns, num_stripes, first_row);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -2099,6 +2107,7 @@ void __host__ decode_column_data(column_desc* chunks,
   auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
   decode_column_data_kernel<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

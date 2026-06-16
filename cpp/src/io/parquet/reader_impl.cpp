@@ -20,8 +20,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <limits>
@@ -189,8 +189,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
-    initial_str_offsets =
-      cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
+    initial_str_offsets = cudf::detail::make_device_uvector(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
   }
 
@@ -512,7 +511,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_skip_bytes(),
              options.get_num_bytes(),
              options.get_row_groups(),
-             options.is_enabled_use_jit_filter()},
+             options.is_enabled_use_jit_filter(),
+             options.is_enabled_case_sensitive_names()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -560,7 +560,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id(),
-                              _options.decimal_width);
+                              _options.decimal_width,
+                              _options.case_sensitive_names);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -573,7 +574,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  _expr_conv =
+    named_to_reference_converter(options.get_filter(), metadata, _options.case_sensitive_names);
 }
 
 void reader_impl::prepare_data(read_mode mode)
@@ -894,7 +896,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
     auto read_table         = std::make_unique<table>(std::move(out_columns));
-    auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
+    auto counting_it        = cuda::counting_iterator<std::size_t>{0};
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
 
@@ -908,7 +910,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
-      auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+      auto output_table = cudf::detail::apply_mask(
+        only_output, *predicate, cudf::detail::mask_type::RETENTION, _stream, _mr);
       return {std::move(output_table), std::move(out_metadata)};
     } else {
       auto output_table = cudf::filter(read_table->view(),

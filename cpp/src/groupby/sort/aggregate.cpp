@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,8 @@ auto column_view_with_common_nulls(column_view const& column_0,
                                    column_view const& column_1,
                                    rmm::cuda_stream_view stream)
 {
-  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
+  auto [new_nullmask, null_count] = cudf::bitmask_and(
+    table_view{{column_0, column_1}}, stream, cudf::get_current_device_resource_ref());
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),
@@ -210,7 +211,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
                              null_removed_map,
                              argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);
@@ -249,7 +250,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
                              null_removed_map,
                              argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);

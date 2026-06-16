@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -25,7 +25,7 @@
 
 #include <memory>
 
-namespace {
+namespace cudf::detail {
 template <cudf::size_type block_size,
           typename SourceValueIterator,
           typename SourceValidityIterator,
@@ -96,10 +96,6 @@ CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
   }
 }
 
-}  // namespace
-
-namespace cudf {
-namespace detail {
 /**
  * @brief Internal API to copy a range of values from source iterators to a
  * target column.
@@ -145,7 +141,8 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    cudf::detail::device_scalar<size_type> null_count(target.null_count(), stream);
+    cudf::detail::device_scalar<size_type> null_count(
+      target.null_count(), stream, cudf::get_current_device_resource_ref());
 
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, true>;
@@ -197,5 +194,4 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

@@ -93,17 +93,17 @@ def simple_hybrid_scan_reader(simple_parquet_bytes, simple_parquet_options):
     PARQUET_MAGIC_BYTES = 4  # Number of bytes for "PAR1" magic number
     PARQUET_SUFFIX_BYTES = PARQUET_FOOTER_SIZE_BYTES + PARQUET_MAGIC_BYTES
 
+    simple_parquet_mv = memoryview(simple_parquet_bytes)
+
     footer_size = int.from_bytes(
-        simple_parquet_bytes[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
+        simple_parquet_mv[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
         byteorder="little",
     )
-    footer_start = (
-        len(simple_parquet_bytes) - PARQUET_SUFFIX_BYTES - footer_size
-    )
-    footer_end = len(simple_parquet_bytes) - PARQUET_SUFFIX_BYTES
-    footer_bytes = simple_parquet_bytes[footer_start:footer_end]
+    footer_start = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES - footer_size
+    footer_end = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES
+    footer_mv = simple_parquet_mv[footer_start:footer_end]
 
-    return HybridScanReader(footer_bytes, simple_parquet_options)
+    return HybridScanReader(footer_mv, simple_parquet_options)
 
 
 def test_hybrid_scan_reader_basic(simple_hybrid_scan_reader, num_rows):
@@ -120,6 +120,7 @@ def test_hybrid_scan_reader_from_metadata(
     """Test creating HybridScanReader from pre-populated metadata."""
     # Get metadata from the fixture reader
     metadata = simple_hybrid_scan_reader.parquet_metadata()
+    assert isinstance(metadata, plc.io.parquet_metadata.FileMetaData)
 
     # Create a second reader from the metadata
     reader2 = HybridScanReader.from_parquet_metadata(
@@ -646,6 +647,46 @@ def test_hybrid_scan_chunked_reading(
     assert chunks_read > 0
 
 
+def test_hybrid_scan_construct_row_group_passes(
+    simple_hybrid_scan_reader,
+    simple_parquet_options,
+):
+    """Test construct_row_group_passes with various pass read limits."""
+    all_row_groups = simple_hybrid_scan_reader.all_row_groups(
+        simple_parquet_options
+    )
+
+    # zero pass read limit => single pass with all row groups
+    pass_read_limit = 0
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert passes == [all_row_groups]
+
+    # small pass read limit => each row group in its own pass
+    pass_read_limit = 1
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert passes == [[rg] for rg in all_row_groups]
+
+    # Passes should flatten to all row groups
+    pass_read_limit = 1024
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert [rg for p in passes for rg in p] == all_row_groups
+    assert all(passes)
+
+    # Empty input row groups raise an error
+    with pytest.raises(
+        ValueError, match="Empty input row group indices encountered"
+    ):
+        simple_hybrid_scan_reader.construct_row_group_passes(
+            [], pass_read_limit
+        )
+
+
 def test_hybrid_scan_metadata_with_page_index(
     simple_parquet_bytes,
     simple_hybrid_scan_reader,
@@ -700,13 +741,14 @@ def test_hybrid_scan_metadata_with_page_index(
     assert page_index_byte_range.size > 0
 
     # Fetch page index bytes from the parquet file
-    page_index_bytes = simple_parquet_bytes[
+    simple_parquet_mv = memoryview(simple_parquet_bytes)
+    page_index_mv = simple_parquet_mv[
         page_index_byte_range.offset : page_index_byte_range.offset
         + page_index_byte_range.size
     ]
 
     # Setup page index with the fetched bytes
-    simple_hybrid_scan_reader.setup_page_index(page_index_bytes)
+    simple_hybrid_scan_reader.setup_page_index(page_index_mv)
 
     # Now try to use build_row_mask_with_page_index_stats AFTER setup_page_index
     # This should work successfully

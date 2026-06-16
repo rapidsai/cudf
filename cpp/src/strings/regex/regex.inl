@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace strings {
@@ -22,7 +23,7 @@ struct alignas(8) relist {
   /**
    * @brief Compute the memory size for the state data.
    */
-  constexpr inline static std::size_t data_size_for(int32_t insts)
+  CUDF_HOST_DEVICE constexpr inline static std::size_t data_size_for(int32_t insts)
   {
     return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
            cudf::util::div_rounding_up_unsafe(insts, 8);
@@ -31,7 +32,8 @@ struct alignas(8) relist {
   /**
    * @brief Compute the aligned memory allocation size.
    */
-  constexpr inline static std::size_t alloc_size(int32_t insts, int32_t num_threads)
+  CUDF_HOST_DEVICE constexpr inline static std::size_t alloc_size(int32_t insts,
+                                                                  int32_t num_threads)
   {
     return cudf::util::round_up_unsafe<size_t>(data_size_for(insts) * num_threads, sizeof(restate));
   }
@@ -131,7 +133,7 @@ struct reljunk {
  *
  * '\n, \r, \u0085, \u2028, or \u2029'
  */
-constexpr bool is_newline(char32_t const ch)
+CUDF_HOST_DEVICE constexpr bool is_newline(char32_t const ch)
 {
   return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
 }
@@ -330,24 +332,51 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
           case BOL: {
             auto titr         = itr;
             auto const prev_c = pos > 0 ? *(--titr) : 0;
+            // For EXT_NEWLINE, \r\n is a single terminator: ^ matches AFTER the \n and
+            // never between the \r and \n.
             if ((pos == 0) || ((inst.u1.c == '^') && (prev_c == '\n')) ||
-                ((inst.u1.c == 'S') && (is_newline(prev_c)))) {
+                ((inst.u1.c == 'S') && is_newline(prev_c) && !((prev_c == '\r') && (c == '\n')))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
           }
           case EOL: {
-            // after the last character OR:
-            // - for MULTILINE, if current character is new-line
-            // - for non-MULTILINE, the very last character of the string can also be a new-line
-            bool const nl = (inst.u1.c == 'S' || inst.u1.c == 'N') ? is_newline(c) : (c == '\n');
-            if (last_character ||
-                (nl && (inst.u1.c != 'Z') &&
-                 ((inst.u1.c == '$' || inst.u1.c == 'S') ||
-                  (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes())))) {
+            // EOL matches at end-of-string, or before a line terminator (MULTILINE: any
+            // terminator; otherwise: only the final terminator). For EXT_NEWLINE the
+            // two-character CRLF (\r\n) is treated as a SINGLE terminator: '$' matches before
+            // the \r and never between \r and \n.
+            if (last_character) {
               id_activate = inst.u2.next_id;
               expanded    = true;
+              break;
+            }
+            bool const ext = (inst.u1.c == 'S' || inst.u1.c == 'N');
+            bool const nl  = ext ? is_newline(c) : (c == '\n');
+            if (nl && (inst.u1.c != 'Z')) {
+              // For EXT_NEWLINE, suppress a match wedged between the CR and LF of a CRLF.
+              auto titr     = itr;
+              bool mid_crlf = ext && (c == '\n') && (pos > 0) && (*(--titr) == '\r');
+              if (!mid_crlf) {
+                // MULTILINE matches before any terminator; otherwise only the final one.
+                bool matched = (inst.u1.c == '$' || inst.u1.c == 'S');
+                if (!matched) {
+                  matched = (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes());
+                  if (!matched && ext && (c == '\r')) {
+                    // a CR beginning a trailing CRLF also ends the string
+                    auto nitr = itr;
+                    ++nitr;
+                    matched =
+                      (nitr.byte_offset() < dstr.size_bytes()) && (*nitr == '\n') &&
+                      (nitr.byte_offset() + bytes_in_char_utf8(static_cast<char_utf8>('\n')) ==
+                       dstr.size_bytes());
+                  }
+                }
+                if (matched) {
+                  id_activate = inst.u2.next_id;
+                  expanded    = true;
+                }
+              }
             }
             break;
           }

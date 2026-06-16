@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,13 +14,11 @@
 
 #include <memory>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
  * @copydoc cudf::fill_in_place
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -30,8 +28,6 @@ void fill_in_place(mutable_column_view& destination,
 
 /**
  * @copydoc cudf::fill
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
@@ -41,4 +37,4 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

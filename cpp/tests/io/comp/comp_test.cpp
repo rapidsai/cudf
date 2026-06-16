@@ -17,6 +17,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
+
 #include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <vector>
@@ -283,6 +285,35 @@ TEST_P(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup)
   auto output                = Decompress(
     GetParam(), cudf::host_span<uint8_t const>(compressed.data(), compressed.size()), input.size());
   EXPECT_EQ(output, input);
+}
+
+TEST_P(SnappyDecompressTest, MalformedAllOffsetZeroCopies)
+{
+  // uncompressed_size = 100 (varint = 0x64).
+  // Then 25 copies of {0x01, 0x00}: each is "1-byte-offset copy, len=4, offset=0".
+  std::vector<uint8_t> compressed{0x64};
+  std::for_each(cuda::counting_iterator(0), cuda::counting_iterator(25), [&](auto) {
+    compressed.push_back(0x01);
+    compressed.push_back(0x00);
+  });
+
+  EXPECT_THROW(Decompress(GetParam(), {compressed.data(), compressed.size()}, 100),
+               cudf::logic_error);
+}
+
+TEST_P(SnappyDecompressTest, MalformedOffsetZeroAfterLiteral)
+{
+  // uncompressed_size = 100
+  // 4-byte literal: tag = (4-1) << 2 = 0x0C, then 4 data bytes.
+  // 24 copies of {0x01, 0x00} = (len=4, offset=0). 24*4 = 96 bytes -> total 100.
+  std::vector<uint8_t> compressed{0x64, 0x0c, 'A', 'B', 'C', 'D'};
+  std::for_each(cuda::counting_iterator(0), cuda::counting_iterator(24), [&](auto) {
+    compressed.push_back(0x01);
+    compressed.push_back(0x00);
+  });
+
+  EXPECT_THROW(Decompress(GetParam(), {compressed.data(), compressed.size()}, 100),
+               cudf::logic_error);
 }
 
 INSTANTIATE_TEST_CASE_P(

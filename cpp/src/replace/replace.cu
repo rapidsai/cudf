@@ -172,7 +172,8 @@ struct replace_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
+    cudf::detail::device_scalar<cudf::size_type> valid_counter(
+      0, stream, cudf::get_current_device_resource_ref());
     cudf::size_type* valid_count = valid_counter.data();
 
     auto replace = [&] {
@@ -206,6 +207,7 @@ struct replace_kernel_forwarder {
                                                                 output_view.size(),
                                                                 *device_values_to_replace,
                                                                 *device_replacement_values);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (output_view.nullable()) {
       output->set_null_count(output->size() - valid_counter.value(stream));

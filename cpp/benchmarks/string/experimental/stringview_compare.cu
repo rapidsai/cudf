@@ -19,10 +19,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <nanoarrow/nanoarrow.hpp>
@@ -223,8 +224,8 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
   // count the (longer) strings that will need to be stored in the data buffer
   auto const num_longer_strings = thrust::count_if(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator<cudf::size_type>{input.size()},
     [d_offsets] __device__(auto idx) {
       return d_offsets[idx + 1] - d_offsets[idx] > NANOARROW_BINARY_VIEW_INLINE_SIZE;
     });
@@ -266,7 +267,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
   // (for-each works better than transform due to the prefix/data of the ArrowBinaryView)
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input.size(), stream);
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      input.size(),
                      strings_to_binary_view{*d_strings, d_offsets, d_items.data()});
 
@@ -303,7 +304,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> gather_sv_ar
   auto offsets   = rmm::device_uvector<int32_t>(map_size + 1, stream);
   auto d_offsets = offsets.data();
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      map_size,
                      [d_offsets, d_output] __device__(cudf::size_type idx) {
                        auto& item      = d_output[idx];
@@ -323,7 +324,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> gather_sv_ar
     // and reset each binary-view offset appropriately
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      thrust::counting_iterator<cudf::size_type>(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       map_size,
       [d_offsets, d_input_data, d_output, d_output_data] __device__(cudf::size_type idx) {
         auto& item      = d_output[idx];
@@ -358,8 +359,8 @@ static void BM_sv_hash(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.add_global_memory_writes(num_rows * sizeof(cudf::hash_value_type));
   auto output = rmm::device_uvector<cudf::hash_value_type>(num_rows, stream);
-  auto begin  = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto end    = thrust::make_counting_iterator<cudf::size_type>(num_rows);
+  auto begin  = cuda::counting_iterator<cudf::size_type>{0};
+  auto end    = cuda::counting_iterator<cudf::size_type>{num_rows};
 
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
@@ -400,8 +401,8 @@ static void BM_sv_starts(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.add_global_memory_writes(num_rows * sizeof(bool));
   auto output = rmm::device_uvector<bool>(num_rows, stream);
-  auto begin  = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto end    = thrust::make_counting_iterator<cudf::size_type>(num_rows);
+  auto begin  = cuda::counting_iterator<cudf::size_type>{0};
+  auto end    = cuda::counting_iterator<cudf::size_type>{num_rows};
 
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
@@ -435,8 +436,8 @@ static void BM_sv_sort(nvbench::state& state)
   auto const card      = static_cast<cudf::size_type>(state.get_int64("card"));
 
   auto h_data = std::vector<std::string>(card);
-  std::transform(thrust::counting_iterator<cudf::size_type>(0),
-                 thrust::counting_iterator<cudf::size_type>(card),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator<cudf::size_type>{card},
                  h_data.begin(),
                  [max_width](auto idx) {
                    auto const fmt = std::format("{{:0{}d}}", max_width);
@@ -458,7 +459,7 @@ static void BM_sv_sort(nvbench::state& state)
 
   // indices are the keys that are sorted (not inplace)
   auto keys      = rmm::device_uvector<cudf::size_type>(num_rows, stream);
-  auto in_keys   = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto in_keys   = cuda::counting_iterator<cudf::size_type>{0};
   auto out_keys  = keys.begin();
   auto tmp_bytes = std::size_t{0};
 

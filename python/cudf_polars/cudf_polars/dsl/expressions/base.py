@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
@@ -20,11 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import Column, DataFrame, DataType
 
-__all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
-
-
-class AggInfo(NamedTuple):
-    requests: list[tuple[Expr | None, plc.aggregation.Aggregation, Expr]]
+__all__ = ["Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
 
 
 class ExecutionContext(IntEnum):

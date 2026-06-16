@@ -12,6 +12,7 @@ enable_testing()
 
 include(rapids-test)
 rapids_test_init()
+rapids_cmake_install_lib_dir(lib_dir)
 
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
@@ -42,7 +43,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
@@ -60,7 +61,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
                                $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
-  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ON)
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
@@ -84,7 +85,9 @@ endfunction()
 # ##################################################################################################
 
 # No need to install Arrow libs when only the final test executables are shipped.
-set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_INSTALL_LIBRARY_DEPS OFF)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL ON)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG EXCLUDE_FROM_ALL)
 set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
@@ -151,6 +154,7 @@ ConfigureTest(
   groupby/replace_nulls_tests.cpp
   groupby/shift_tests.cpp
   groupby/std_tests.cpp
+  groupby/streaming_groupby_test.cpp
   groupby/structs_tests.cpp
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
@@ -185,6 +189,7 @@ ConfigureTest(IS_SORTED_TEST sort/is_sorted_tests.cpp)
 # ##################################################################################################
 # * datetime tests --------------------------------------------------------------------------------
 ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
+ConfigureTest(TIMEZONE_TEST datetime/timezone_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
@@ -344,13 +349,16 @@ ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
 )
+ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
-  io/parquet_deletion_vectors_test.cu
+  io/parquet_deletion_vectors_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
   EXTRA_LIBS
@@ -752,6 +760,19 @@ ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_ROARING_BITMAP_TEST
+  streams/roaring_bitmap_test.cpp
+  STREAM_MODE
+  testing
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROUND_TEST streams/round_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SCALAR_TEST streams/scalar_test.cpp STREAM_MODE testing)
@@ -776,6 +797,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TABLE_EQUALITY_TEST streams/table_equality_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_TEXT_TEST
   streams/text/edit_distance_test.cpp
@@ -789,6 +811,20 @@ ConfigureTest(
 ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_TRANSPOSE_TEST streams/transpose_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
+
+# ##################################################################################################
+# * roaring bitmap tests ---------------------------------------------------------------------------
+ConfigureTest(
+  ROARING_BITMAP_TEST
+  utilities/roaring_bitmap_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
 
 # ##################################################################################################
 # Install tests ####################################################################################
