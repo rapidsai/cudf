@@ -36,7 +36,7 @@ extern cudf::test::TempDirTestEnvironment* const temp_env;
 // column names in the file metadata.
 [[nodiscard]] std::string write_parquet_temp_file(
   cudf::table_view const& tbl,
-  std::string const& filename,
+  std::string_view const filename,
   std::vector<std::string> const& column_names = {});
 
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
