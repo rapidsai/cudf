@@ -487,32 +487,6 @@ def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     ]
 
 
-def _is_already_sorted(
-    metadata_in: ChannelMetadata,
-    order_keys: list[OrderKey],
-    nranks: int,
-) -> bool:
-    """Check if the input data is already sorted according to the order keys."""
-    np = NormalizedPartitioning.from_keys(
-        metadata_in.partitioning, nranks, keys=order_keys
-    )
-    if not np:
-        # np is falsy if `metadata_in.partitioning` does not contain
-        # ordering keys that match `order_keys` or a prefix of `order_keys`.
-        # If `order_keys` is Sequence[OrderKey], the order
-        # and null_order attributes must also match.
-        return False
-    scheme = np.inter_rank_scheme
-    if not isinstance(scheme, OrderScheme):
-        return False
-    ordering = scheme.orderings[0]
-    if len(ordering.keys) < len(order_keys):
-        # If we are only sorted on a subset of the keys,
-        # we need to check if the boundaries are strict.
-        return ordering.strict_boundaries
-    return True
-
-
 def _build_order_scheme(
     context: Context,
     order_keys: list[OrderKey],
@@ -640,7 +614,11 @@ async def sort_actor(
             )
             return
 
-        if _is_already_sorted(metadata_in, _sort_to_order_keys(ir), comm.nranks):
+        order_keys = _sort_to_order_keys(ir)
+        partitioning = NormalizedPartitioning.from_keys(
+            metadata_in.partitioning, comm.nranks, keys=order_keys
+        )
+        if partitioning.is_strictly_sorted(order_keys):
             if tracer is not None:
                 tracer.decision = "already_sorted"
             await chunkwise_evaluate(

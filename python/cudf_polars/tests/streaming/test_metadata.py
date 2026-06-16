@@ -26,7 +26,6 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select, Sort
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.sort import (
-    _is_already_sorted,
     _sort_to_order_keys,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
@@ -750,7 +749,7 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
         (2, False, True),  # exact match + non-strict → skip (strict irrelevant)
     ],
 )
-def test_is_already_sorted(spmd_engine, scheme_key_count, strict, expected) -> None:
+def test_is_strictly_sorted(spmd_engine, scheme_key_count, strict, expected) -> None:
     df_lf = pl.LazyFrame({"x": list(range(5)), "y": list(range(5))})
     base_ir = Translator(df_lf._ldf.visit(), spmd_engine).translate_ir()
     asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
@@ -786,4 +785,7 @@ def test_is_already_sorted(spmd_engine, scheme_key_count, strict, expected) -> N
     )
 
     order_keys = _sort_to_order_keys(sort_xy)
-    assert _is_already_sorted(meta, order_keys, nranks=1) is expected
+    partitioning = NormalizedPartitioning.from_keys(
+        meta.partitioning, nranks=1, keys=order_keys
+    )
+    assert partitioning.is_strictly_sorted(order_keys) is expected

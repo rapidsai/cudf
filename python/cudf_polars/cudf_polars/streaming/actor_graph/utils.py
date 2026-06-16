@@ -891,6 +891,17 @@ class NormalizedPartitioning:
                 return False
         return True
 
+    def is_strictly_sorted(self, order_keys: Sequence[OrderKey]) -> bool:
+        """True if the selected ordering proves sortedness for order_keys."""
+        if not self or not isinstance(self.inter_rank_scheme, OrderScheme):
+            return False
+        ordering = self.inter_rank_scheme.orderings[0]
+        if len(ordering.keys) < len(order_keys):
+            # If we are only sorted on a subset of the keys, we need strict
+            # boundaries to know later keys cannot interleave across chunks.
+            return ordering.strict_boundaries
+        return True
+
     def is_aligned_with(
         self, other: NormalizedPartitioning, br: BufferResource
     ) -> bool:
