@@ -9,7 +9,7 @@ import textwrap
 import warnings
 from collections.abc import Mapping
 from functools import cached_property, singledispatch
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy as cp
 import numpy as np
@@ -3575,46 +3575,46 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
         >>> df.groupby('gender').value_counts()
         gender  education  country
-        female  high       FR         1
-                           US         1
         male    low        FR         2
                            US         1
                 medium     FR         1
+        female  high       US         1
+                           FR         1
         Name: count, dtype: int64
 
         >>> df.groupby('gender').value_counts(ascending=True)
         gender  education  country
-        female  high       FR         1
-                           US         1
         male    low        US         1
                 medium     FR         1
-                low        FR         2
+        female  high       US         1
+                           FR         1
+        male    low        FR         2
         Name: count, dtype: int64
 
         >>> df.groupby('gender').value_counts(normalize=True)
         gender  education  country
-        female  high       FR         0.50
-                           US         0.50
         male    low        FR         0.50
                            US         0.25
                 medium     FR         0.25
+        female  high       US         0.50
+                           FR         0.50
         Name: proportion, dtype: float64
 
         >>> df.groupby('gender', as_index=False).value_counts()
            gender education country  count
-        0  female      high      FR      1
-        1  female      high      US      1
-        2    male       low      FR      2
-        3    male       low      US      1
-        4    male    medium      FR      1
+        0    male       low      FR      2
+        1    male       low      US      1
+        2    male    medium      FR      1
+        3  female      high      US      1
+        4  female      high      FR      1
 
         >>> df.groupby('gender', as_index=False).value_counts(normalize=True)
            gender education country  proportion
-        0  female      high      FR        0.50
-        1  female      high      US        0.50
-        2    male       low      FR        0.50
-        3    male       low      US        0.25
-        4    male    medium      FR        0.25
+        0    male       low      FR        0.50
+        1    male       low      US        0.25
+        2    male    medium      FR        0.25
+        3  female      high      US        0.50
+        4  female      high      FR        0.50
         """
 
         df = self.obj.copy()
@@ -3636,37 +3636,134 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
                 "cannot be in the groupby column keys."
             )
 
-        df["__placeholder"] = 1
+        subset = list(subset)
+        keys = list(groupings) + subset
+
+        # Use the grouping's actual key values rather than the raw object
+        # columns: a ``Grouper(freq=...)`` bins its key (e.g. floors a datetime
+        # to the resampling frequency), so the raw column would give the wrong
+        # group labels.
+        for kname, kcol in zip(
+            self.grouping.names, self.grouping._key_columns, strict=True
+        ):
+            if kname in df._column_names:
+                df[kname] = kcol
+
+        # Bookkeeping columns for counting and for recovering pandas' ordering
+        # (see below). Choose names that cannot clash with the user's columns.
+        taken = set(df._column_names)
+
+        def _free_name(base: str) -> str:
+            while base in taken:
+                base = f"_{base}"
+            taken.add(base)
+            return base
+
+        cnt_col = _free_name("__count")
+        pos_col = _free_name("__pos")
+        seq_col = _free_name("__seq")
+
+        # cudf's groupby does not preserve first-appearance order, so track the
+        # first row index of each unique (key + subset) combination alongside
+        # the count and reorder by it below. Group with ``dropna=False`` and
+        # filter afterwards so the groupby ``dropna`` (group keys) and the
+        # ``value_counts`` ``dropna`` (subset) can be applied independently,
+        # matching pandas.
+        df[cnt_col] = 1
+        df[pos_col] = as_column(range(len(df)))
         result = (
-            df.groupby(groupings + list(subset), dropna=dropna)[
-                "__placeholder"
-            ]
-            .count()
-            .sort_index()
-            .astype(np.dtype(np.int64))
+            df.groupby(keys, dropna=False, sort=False)
+            .agg({cnt_col: "count", pos_col: "min"})
+            .reset_index()
         )
+        result[cnt_col] = result[cnt_col].astype(np.dtype(np.int64))
+
+        drop_cols = (list(groupings) if self._dropna else []) + (
+            subset if dropna else []
+        )
+        keep = None
+        for col in drop_cols:
+            mask = result[col].notna()
+            keep = mask if keep is None else (keep & mask)
+        if keep is not None:
+            result = result[keep]
+
+        # pandas includes unobserved categorical combinations (count 0). cudf's
+        # groupby only emits observed combinations, so when a subset column is
+        # categorical, expand to the full product of the observed group-key
+        # combinations and the subset categories. The base order is the
+        # category product when the groupby is sorted, else first appearance
+        # with the unobserved combinations placed last.
+        from cudf.core.dtypes import CategoricalDtype
+
+        cat_subset = [
+            s
+            for s in subset
+            if isinstance(self.obj._data[s].dtype, CategoricalDtype)
+        ]
+        if cat_subset and len(result):
+            subset_levels = [
+                cast(CategoricalDtype, self.obj._data[s].dtype)
+                .categories.to_pandas()
+                .tolist()
+                if s in cat_subset
+                else result[s].dropna().unique().to_pandas().tolist()
+                for s in subset
+            ]
+            subset_prod = MultiIndex.from_product(
+                subset_levels, names=subset
+            ).to_frame(index=False)
+            for s in subset:
+                subset_prod[s] = subset_prod[s].astype(result[s].dtype)
+            group_combos = result[list(groupings)].drop_duplicates()
+            cross_col = _free_name("__cross")
+            group_combos[cross_col] = 1
+            subset_prod[cross_col] = 1
+            full = group_combos.merge(subset_prod, on=cross_col).drop(
+                columns=[cross_col]
+            )
+            result = full.merge(result, on=keys, how="left")
+            result[cnt_col] = (
+                result[cnt_col].fillna(0).astype(np.dtype(np.int64))
+            )
+            if self._sort:
+                result[pos_col] = as_column(range(len(result)))
+            else:
+                result[pos_col] = (
+                    result[pos_col].fillna(len(df) + 1).astype(SIZE_TYPE_DTYPE)
+                )
+
+        # Mirror pandas: order by first appearance, then -- as two independent
+        # steps -- optionally by value (``sort``) and by group key (the groupby
+        # ``sort``). A running sequence keeps each sort stable for ties (cudf's
+        # value sort is not guaranteed stable).
+        result = result.sort_values(pos_col)
+        result[seq_col] = as_column(range(len(result)))
+        if sort:
+            result = result.sort_values(
+                [cnt_col, seq_col], ascending=[ascending, True]
+            )
+            result[seq_col] = as_column(range(len(result)))
+        if self._sort:
+            result = result.sort_values([*list(groupings), seq_col])
 
         if normalize:
-            levels = list(range(len(groupings), result.index.nlevels))
-            result /= result.groupby(
-                result.index.droplevel(levels),
-            ).transform("sum")
+            # Divide each count by its group total. ``fillna`` handles
+            # non-observed categorical groups (0 / 0).
+            group_size = result.groupby(list(groupings), sort=False)[
+                cnt_col
+            ].transform("sum")
+            result[cnt_col] = (result[cnt_col] / group_size).fillna(0.0)
 
-        if sort:
-            result = result.sort_values(ascending=ascending).sort_index(
-                level=range(len(groupings)), sort_remaining=False
-            )
+        result = result.set_index(keys)[cnt_col]
+        result.name = name
 
         if not self._as_index:
-            if name in df._column_names:
+            if name in keys:
                 raise ValueError(
                     f"Column label '{name}' is duplicate of result column"
                 )
-            result.name = name
-            result = result.to_frame().reset_index()
-        else:
-            result.name = name
-
+            result = result.reset_index()
         return result
 
     @_performance_tracking
