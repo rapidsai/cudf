@@ -119,7 +119,7 @@ __device__ void transform(float* out, float a, float b) {
   *out = a + b;
 }
 )***";
-std::string udf_hash;
+std::string udf_id;
 
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const use_lto  = state.get_string("use_lto") == "true";
@@ -139,12 +139,12 @@ std::string udf_hash;
     case cudf::binary_operator::ADD: {
       fragment_id = cudf_benchmark_fragments::add_f32;
       cuda = jit_add_cuda;
-      udf_hash = "add_f32";
+      udf_id = "add_f32";
     } break;
     case cudf::binary_operator::MUL: {
       fragment_id = cudf_benchmark_fragments::mul_f32;
       cuda = jit_mul_cuda;
-      udf_hash = "mul_f32";
+      udf_id = "mul_f32";
     } break;
     default: throw std::runtime_error("Unsupported binary operator for JIT benchmark");
   }
@@ -159,7 +159,7 @@ std::string udf_hash;
 
  auto result  = use_lto ?
  cudf::transform_lto(udf,
-                                    udf_hash,
+                                    udf_id,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
                                     std::nullopt,
@@ -184,7 +184,7 @@ std::string udf_hash;
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
  [[maybe_unused]] auto result = use_lto ?   cudf::transform_lto(udf,
-                                    udf_hash,
+                                    udf_id,
                                     cudf::lto_binary_type::FATBIN,
                                      cudf::null_aware::NO,
                                     std::nullopt,
