@@ -60,6 +60,10 @@ target_include_directories(
   libcudf_streaming_test_sources PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                          "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+target_compile_options(
+  cudf_streaming_test_sources
+  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS};--expt-extended-lambda>
+)
 target_link_libraries(
   libcudf_streaming_test_sources
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf::cudftestutil cudf::cudftestutil_impl
