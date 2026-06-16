@@ -89,7 +89,9 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
                       cudf::data_type{cudf::type_to_id<key_type>()},
                       false,
                       std::nullopt,
-                      stream.value());
+                      cudf::null_aware::NO,
+                      cudf::output_nullability::PRESERVE,
+                      stream);
       nvtxRangePop();
     };
 
