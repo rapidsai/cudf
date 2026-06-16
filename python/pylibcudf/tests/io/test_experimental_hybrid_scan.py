@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
+from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -249,6 +250,71 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     # These should be lists of ByteRangeInfo
     assert isinstance(bloom_ranges, list)
     assert isinstance(dict_ranges, list)
+
+
+@pytest.mark.xfail(
+    reason="hybrid scan does not strip the Parquet BloomFilterHeader before probing",
+    strict=True,
+)
+def test_hybrid_scan_bloom_filter_matches_read_parquet():
+    """Hybrid-scan bloom filtering must keep the same row group as ``read_parquet``.
+
+    pyarrow cannot write bloom filters, so this reads the committed DuckDB-written fixture
+    (bloom filter on ``r_reason_desc``; the value "Did not like the color" is present). The
+    hybrid-scan path forwards the fetched bytes (``BloomFilterHeader`` + bitset) to the filter
+    without stripping the header, so it wrongly prunes the matching row group.
+    """
+    fixture = (
+        Path(__file__).parents[4]
+        / "python/cudf/cudf/tests/data/parquet/bloom_filter_alignment.parquet"
+    )
+    if not fixture.exists():
+        pytest.skip(f"bloom fixture not found: {fixture}")
+    data = fixture.read_bytes()
+
+    bloom_filter = Operation(
+        ASTOperator.EQUAL,
+        ColumnNameReference("r_reason_desc"),
+        Literal(plc.Scalar.from_arrow(pa.scalar("Did not like the color"))),
+    )
+
+    def make_options():
+        options = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([io.BytesIO(data)])
+        ).build()
+        options.set_filter(bloom_filter)
+        return options
+
+    # A: standard read_parquet keeps the only row group after bloom filtering.
+    table_w_meta = plc.io.parquet.read_parquet(make_options())
+    assert table_w_meta.num_input_row_groups == 1
+    assert table_w_meta.num_row_groups_after_bloom_filter == 1
+
+    # B: hybrid scan should keep the same row group.
+    options = make_options()
+    suffix = 8  # 4-byte footer length + "PAR1"
+    mv = memoryview(data)
+    footer_size = int.from_bytes(mv[-suffix:-4], byteorder="little")
+    reader = HybridScanReader(mv[-suffix - footer_size : -suffix], options)
+
+    row_groups = reader.all_row_groups(options)
+    bloom_ranges, _ = reader.secondary_filters_byte_ranges(row_groups, options)
+    assert bloom_ranges  # the equality predicate makes r_reason_desc bloom-eligible
+
+    stream = plc.utils._get_stream(None)
+    bloom_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(data[r.offset : r.offset + r.size], stream)
+        )
+        for r in bloom_ranges
+    ]
+    synchronize_stream(None)
+    surviving = reader.filter_row_groups_with_bloom_filters(
+        bloom_data, row_groups, options
+    )
+
+    # The queried value is present, so the hybrid path must match read_parquet (row group kept).
+    assert surviving == row_groups == [0]
 
 
 def test_hybrid_scan_column_chunk_byte_ranges(
