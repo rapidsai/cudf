@@ -25,9 +25,6 @@
                     // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
-#include <jit/accessors.cuh>
-#include <jit/span.cuh>
-
 // clang-format off
 // This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
