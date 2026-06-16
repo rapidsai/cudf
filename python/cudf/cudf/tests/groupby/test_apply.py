@@ -432,7 +432,7 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
 
     with pytest.raises(
         UDFError,
-        match=r"JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
+        match=r"JIT GroupBy.apply\(\) does not support DataFrame.sum\(\)",
     ):
         run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
 
