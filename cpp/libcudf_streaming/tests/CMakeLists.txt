@@ -116,8 +116,8 @@ rapids_test_add(
 
 # ##################################################################################################
 # MPI and UCXX based tests -------------------------------------------------------------------------
-# These executables reuse libcudf_streaming_test_sources but provide a different test environment main
-# (main/mpi.cpp / main/ucxx.cpp), and are launched via mpirun for multiple ranks.
+# These executables reuse libcudf_streaming_test_sources but provide a different test environment
+# main (main/mpi.cpp / main/ucxx.cpp), and are launched via mpirun for multiple ranks.
 if(CUDF_STREAMING_HAVE_MPI)
   add_executable(libcudf_streaming_mpi_tests main/mpi.cpp)
   set_target_properties(
