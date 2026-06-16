@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -238,6 +227,29 @@ std::unique_ptr<column> rsplit_record(
   strings_column_view const& strings,
   string_scalar const& delimiter    = string_scalar(""),
   size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns a columns of strings by splitting each input string using the
+ * specified delimiter and returning the string at the specified index
+ *
+ * Any null rows in the input return corresponding null output rows.
+ * A null row is also returned if the number of tokens computed by splitting
+ * the string for that row is less than the `index`.
+ *
+ * @param input Strings instance for this operation
+ * @param delimiter UTF-8 encoded string indicating the split points in each string;
+ *        Default of empty string indicates split on whitespace
+ * @param index The 0-based index of the string to return from the split
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of strings
+ */
+std::unique_ptr<column> split_part(
+  strings_column_view const& input,
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type index                   = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

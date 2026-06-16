@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for rolling window aggregations."""
@@ -12,7 +12,9 @@ import polars as pl
 import pylibcudf as plc
 
 if TYPE_CHECKING:
-    from cudf_polars.typing import ClosedInterval, Duration
+    from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.typing import ClosedInterval
 
 
 __all__ = [
@@ -70,12 +72,14 @@ def duration_to_int(
             "Invalid duration for parsed_int"
         )  # pragma: no cover; polars raises first
     elif not parsed_int and dtype.id() == plc.TypeId.INT64:
-        raise pl.exceptions.InvalidOperationError("Duration must be a parsed integer")
+        raise pl.exceptions.InvalidOperationError(
+            "Duration must be a parsed integer"
+        )  # pragma: no cover; cc is skipped on RollingWindow too
     value = nanoseconds + 24 * 60 * 60 * 10**9 * (days + 7 * weeks)
     return -value if negative else value
 
 
-def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
+def duration_to_scalar(dtype: plc.DataType, value: int, stream: Stream) -> plc.Scalar:
     """
     Convert a raw polars duration value to a pylibcudf scalar.
 
@@ -86,6 +90,9 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
     value
         The raw value as in integer. If `dtype` represents a timestamp
         type, this should be in nanoseconds.
+    stream
+        CUDA stream used for device memory operations and kernel launches
+        on this dataframe. The returned scalar will be valid on this stream.
 
     Returns
     -------
@@ -99,25 +106,40 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
     """
     tid = dtype.id()
     if tid == plc.TypeId.INT64:
-        return plc.Scalar.from_py(value, dtype)
-    elif tid == plc.TypeId.TIMESTAMP_NANOSECONDS:
-        return plc.Scalar.from_py(value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS))
+        return plc.Scalar.from_py(value, dtype, stream=stream)
+    elif tid == plc.TypeId.TIMESTAMP_NANOSECONDS:  # pragma: no cover
+        return plc.Scalar.from_py(
+            value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS), stream=stream
+        )
     elif tid == plc.TypeId.TIMESTAMP_MICROSECONDS:
         return plc.Scalar.from_py(
-            value // 1000, plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+            value // 1000,
+            plc.DataType(plc.TypeId.DURATION_MICROSECONDS),
+            stream=stream,
         )
-    elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:
+    elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:  # pragma: no cover
         return plc.Scalar.from_py(
-            value // 1_000_000, plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+            value // 1_000_000,
+            plc.DataType(plc.TypeId.DURATION_MILLISECONDS),
+            stream=stream,
+        )
+    elif tid == plc.TypeId.TIMESTAMP_DAYS:  # pragma: no cover
+        return plc.Scalar.from_py(
+            value // 86_400_000_000_000,
+            plc.DataType(plc.TypeId.DURATION_DAYS),
+            stream=stream,
         )
     else:
-        raise NotImplementedError("Unsupported data type in rolling window offset")
+        raise NotImplementedError(
+            "Unsupported data type in rolling window offset"
+        )  # pragma: no cover; polars raises first
 
 
 def offsets_to_windows(
     dtype: plc.DataType,
-    offset: Duration,
-    period: Duration,
+    offset_i: int,
+    period_i: int,
+    stream: Stream,
 ) -> tuple[plc.Scalar, plc.Scalar]:
     """
     Convert polars offset/period pair to preceding/following windows.
@@ -126,21 +148,22 @@ def offsets_to_windows(
     ----------
     dtype
         Datatype of column defining windows
-    offset
-        Offset duration
-    period
-        Period of window
+    offset_i
+        Integer ordinal representing the offset of the window.
+        See :func:`duration_to_int` for more details.
+    period_i
+        Integer ordinal representing the period of the window.
+        See :func:`duration_to_int` for more details.
+    stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
-    tuple of preceding and following windows as pyarrow scalars.
+    tuple of preceding and following windows as host integers.
     """
-    offset_i = duration_to_int(dtype, *offset)
-    period_i = duration_to_int(dtype, *period)
-    # Polars uses current_row + offset, ..., current_row + offset + period
-    # Libcudf uses current_row - preceding, ..., current_row + following
-    return duration_to_scalar(dtype, -offset_i), duration_to_scalar(
-        dtype, offset_i + period_i
+    return (
+        duration_to_scalar(dtype, -offset_i, stream=stream),
+        duration_to_scalar(dtype, offset_i + period_i, stream=stream),
     )
 
 

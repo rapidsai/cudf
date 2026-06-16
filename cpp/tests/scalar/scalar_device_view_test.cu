@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -26,6 +15,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/sequence.h>
@@ -59,7 +49,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
 
   auto scalar_device_view  = cudf::get_scalar_device_view(s);
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
 
   test_set_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view,
                                                                   scalar_device_view1);
@@ -86,7 +76,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
 
   test_null<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view, result.data());
   CUDF_CHECK_CUDA(0);
@@ -130,9 +120,10 @@ TEST_F(StringScalarDeviceViewTest, Value)
   cudf::string_scalar s(value);
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
-  auto value_v = cudf::detail::make_device_uvector(
-    value, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
+  auto value_v = cudf::detail::make_device_uvector(cudf::host_span<char const>{value},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
 
   test_string_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     scalar_device_view, value_v.data(), value.size(), result.data());

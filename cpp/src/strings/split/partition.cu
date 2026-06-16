@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -29,16 +18,17 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 
 #include <vector>
 
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<char const*, size_type>;
+using string_index_pair = cuda::std::pair<char const*, size_type>;
 
 namespace {
 //
@@ -96,7 +86,7 @@ struct partition_fn {
       if (*itr <= ' ')  // whitespace delimited
         pos = offset;
     } else {
-      auto bytes = std::min(d_str.size_bytes() - offset, d_delimiter.size_bytes());
+      auto bytes = cuda::std::min(d_str.size_bytes() - offset, d_delimiter.size_bytes());
       if (d_delimiter.compare(d_str.data() + offset, bytes) == 0) pos = offset;
     }
     if (pos >= 0)  // delimiter found, set results
@@ -198,8 +188,8 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      strings_count,
                      partitioner);
   std::vector<std::unique_ptr<column>> results;
@@ -224,8 +214,8 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
   auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      strings_count,
                      partitioner);
 

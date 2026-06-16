@@ -1,10 +1,14 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
+
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class BinaryOperator(IntEnum):
     ADD = ...
@@ -48,6 +52,8 @@ def binary_operation(
     rhs: Column | Scalar,
     op: BinaryOperator,
     output_type: DataType,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def is_supported_operation(
     out: DataType, lhs: DataType, rhs: DataType, op: BinaryOperator

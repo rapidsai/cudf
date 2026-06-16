@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -95,7 +84,8 @@ struct get_element_functor {
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
-    numeric_scalar<size_type> key_index_scalar{index, true, stream};
+    numeric_scalar<size_type> key_index_scalar{
+      index, true, stream, cudf::get_current_device_resource_ref()};
     auto d_key_index = get_scalar_device_view(key_index_scalar);
     auto d_col       = column_device_view::create(input, stream);
 
@@ -108,9 +98,7 @@ struct get_element_functor {
       stream);
 
     if (!key_index_scalar.is_valid(stream)) {
-      auto null_result = make_default_constructed_scalar(dict_view.keys().type(), stream, mr);
-      null_result->set_valid_async(false, stream);
-      return null_result;
+      return make_default_constructed_scalar(dict_view.keys().type(), stream, mr);
     }
 
     // retrieve the key element using the key-index
@@ -156,12 +144,12 @@ struct get_element_functor {
 
     auto device_col = column_device_view::create(input, stream);
 
-    cudf::detail::device_scalar<Type> temp_data(stream, mr);
-    cudf::detail::device_scalar<bool> temp_valid(stream, mr);
+    auto result = std::make_unique<fixed_point_scalar<T>>(
+      Type{}, numeric::scale_type{input.type().scale()}, false, stream, mr);
 
     device_single_thread(
-      [buffer   = temp_data.data(),
-       validity = temp_valid.data(),
+      [buffer   = result->data(),
+       validity = result->validity_data(),
        d_col    = *device_col,
        index] __device__() mutable {
         *buffer   = d_col.element<Type>(index);
@@ -169,11 +157,7 @@ struct get_element_functor {
       },
       stream);
 
-    return std::make_unique<fixed_point_scalar<T>>(std::move(temp_data),
-                                                   numeric::scale_type{input.type().scale()},
-                                                   temp_valid.value(stream),
-                                                   stream,
-                                                   mr);
+    return result;
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* p = nullptr>

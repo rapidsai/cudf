@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -26,13 +16,15 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <cuda/iterator>
 
 #include <numeric>
 #include <stdexcept>
@@ -67,8 +59,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
       cudaMemcpyAsync(typed_data, h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(typed_mask, h_mask.data(), mask.size(), cudaMemcpyDefault, stream.value()));
-    _null_count = cudf::detail::null_count(
-      static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements, stream);
+    _null_count = cudf::null_count(static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements);
     stream.synchronize();
   }
 
@@ -770,7 +761,7 @@ struct StructsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructsColumnTest, ConcatenateStructs)
 {
-  auto count_iter = thrust::make_counting_iterator(0);
+  auto count_iter = cuda::counting_iterator<int>{0};
 
   // 1. String "names" column.
   std::vector<std::vector<std::string>> names(
@@ -849,7 +840,7 @@ TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
 
 TEST_F(StructsColumnTest, ConcatenateSplitStructs)
 {
-  auto count_iter = thrust::make_counting_iterator(0);
+  auto count_iter = cuda::counting_iterator<int>{0};
 
   std::vector<int> splits({2});
 
@@ -926,7 +917,7 @@ TEST_F(StructsColumnTest, ConcatenateStructsNested)
 {
   // includes Struct<Struct> and Struct<List>
 
-  auto count_iter = thrust::make_counting_iterator(0);
+  auto count_iter = cuda::counting_iterator<int>{0};
 
   // inner structs
   std::vector<cudf::test::structs_column_wrapper> inner_structs;
@@ -1093,8 +1084,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // nulls in the leaves
   {
@@ -1193,8 +1183,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // nulls in the lists
   {
@@ -1376,8 +1365,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 {
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   {
     cudf::test::lists_column_wrapper<int> a{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
@@ -1493,7 +1481,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 
 TEST_F(ListsColumnTest, ListOfStructs)
 {
-  auto count_iter = thrust::make_counting_iterator(0);
+  auto count_iter = cuda::counting_iterator<int>{0};
 
   // inner structs
   std::vector<cudf::test::structs_column_wrapper> inner_structs;
@@ -1591,7 +1579,7 @@ TEST_F(FixedPointTest, FixedPointConcatentate)
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
-  auto begin     = thrust::make_counting_iterator(0);
+  auto begin     = cuda::counting_iterator<int32_t>{0};
   auto const vec = std::vector<int32_t>(begin, begin + 1000);
 
   auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-2});
@@ -1609,7 +1597,7 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
-  auto begin     = thrust::make_counting_iterator(0);
+  auto begin     = cuda::counting_iterator<int32_t>{0};
   auto const vec = std::vector<int32_t>(begin, begin + 1000);
 
   auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-1});

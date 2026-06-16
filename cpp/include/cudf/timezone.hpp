@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -43,6 +32,10 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
  * entries). This portion of the table has `solar_cycle_entry_count` elements, as it assumes two
  * transitions per year from Daylight Saving Time. If the timezone does not have DST, the table will
  * still include the future entries, which will all have the same offset.
+ *
+ * If `timezone_name` does not resolve to a TZif file in `tzif_dir`, the directory's `tzdata.zi`
+ * index file is consulted (if present) and `Link` entries are followed to a canonical zone name
+ * whose TZif file exists on disk.
  *
  * @param tzif_dir The directory where the TZif files are located
  * @param timezone_name standard timezone name (for example, "America/Los_Angeles")

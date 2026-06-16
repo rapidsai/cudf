@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compression_common.hpp"
@@ -45,7 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace {
 enum class output_limit : std::size_t {};
@@ -77,7 +66,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
-      col = cudf::structs::detail::superimpose_nulls(
+      col = cudf::structs::detail::superimpose_and_sanitize_nulls(
         static_cast<cudf::bitmask_type const*>(null_mask.data()),
         null_count,
         std::move(col),
@@ -197,7 +186,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 
   auto const generate_input = [num_rows](bool nullable, std::size_t stripe_rows) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
@@ -243,7 +232,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 
   auto const [expected, filepath] = [num_rows]() {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     return write_file(input_columns, "chunked_read_simple_boundary");
   }();
@@ -358,7 +347,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
 
     // ints                               Granularity Segment  total bytes   cumulative bytes
     // 20000 rows of 4 bytes each               = A0           80000         80000
@@ -463,7 +452,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       auto child1 = int32s_col(int_iter, int_iter + num_rows);
@@ -714,7 +703,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructsOfLists)
   // and from 456k to 473k (with nulls).
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       std::vector<std::unique_ptr<cudf::column>> child_columns;
@@ -839,7 +828,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   // and from 330k to 380k (with nulls).
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
 
     auto offsets = std::vector<cudf::size_type>{};
@@ -967,7 +956,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto const sequence = cuda::constant_iterator(1);
   auto const validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
   std::vector<std::unique_ptr<cudf::column>> cols;
@@ -1066,7 +1055,7 @@ struct OrcChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
 TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
 {
   auto constexpr num_rows = 1'000'000;
-  auto const iter1        = thrust::make_constant_iterator(15);
+  auto const iter1        = cuda::make_constant_iterator(15);
   auto const col1         = doubles_col(iter1, iter1 + num_rows);
 
   auto const filename   = std::string{"single_col_fixed_width"};
@@ -1091,11 +1080,12 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
 {
   auto constexpr num_rows = 1'000'000;
 
-  auto const iter1 = thrust::make_counting_iterator<int>(0);
+  auto const iter1 = cuda::counting_iterator<int>{0};
   auto const col1  = int32s_col(iter1, iter1 + num_rows);
 
-  auto const iter2 = thrust::make_counting_iterator<double>(0);
-  auto const col2  = doubles_col(iter2, iter2 + num_rows);
+  auto const iter2 =
+    cudf::detail::make_counting_transform_iterator(0, [](int i) { return static_cast<double>(i); });
+  auto const col2 = doubles_col(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
@@ -1148,15 +1138,18 @@ struct char_values {
 
 TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   int constexpr num_rows  = 50'000'000;
   int constexpr list_size = 4;
 
   auto const stream = cudf::get_default_stream();
-  auto const iter   = thrust::make_counting_iterator(0);
+  auto const iter   = cuda::counting_iterator<int32_t>{0};
 
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1165,14 +1158,14 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
                     value_gen<int>{});
 
   auto const lists_col =
-    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {});
 
   auto const filename   = std::string{"list_type"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
@@ -1202,17 +1195,20 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 
 TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   int constexpr num_rows  = 50'000'000;
   int constexpr list_size = 4;
   int constexpr str_size  = 3;
 
   auto const stream = cudf::get_default_stream();
-  auto const iter   = thrust::make_counting_iterator(0);
+  auto const iter   = cuda::counting_iterator<int32_t>{0};
 
   // list<int>
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1221,26 +1217,26 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
                     value_gen<int>{});
 
   auto const lists_col =
-    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {});
 
   // strings
   int constexpr num_chars = num_rows * str_size;
   auto str_offset_col     = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     str_offset_col->mutable_view().begin<int>(),
                     offset_gen{str_size});
   rmm::device_buffer str_chars(num_chars, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_chars,
                     static_cast<int8_t*>(str_chars.data()),
@@ -1251,7 +1247,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   // doubles
   auto const double_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows,
                     double_col->mutable_view().begin<double>(),
@@ -1292,7 +1288,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   static_assert(num_rows % rows_per_stripe != 0,
                 "`num_rows` should not be divisible by `stripe_size_rows`.");
 
-  auto const it    = thrust::make_counting_iterator(0);
+  auto const it    = cuda::counting_iterator<int32_t>{0};
   auto const col   = int32s_col(it, it + num_rows);
   auto const input = cudf::table_view{{col}};
 
@@ -1356,6 +1352,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
 
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   using data_type = int16_t;
   using data_col  = cudf::test::fixed_width_column_wrapper<data_type, int64_t>;
 
@@ -1365,8 +1364,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  auto const it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int64_t>(0), [num_rows](int64_t i) {
+  auto const it =
+    thrust::make_transform_iterator(cuda::counting_iterator<int64_t>{0}, [num_rows](int64_t i) {
       return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
     });
   auto const col         = data_col(it, it + num_rows);
@@ -1536,6 +1535,7 @@ INSTANTIATE_TEST_CASE_P(Nvcomp,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZLIB,
                                                              cudf::io::compression_type::ZSTD)));
 
 INSTANTIATE_TEST_CASE_P(DeviceInternal,

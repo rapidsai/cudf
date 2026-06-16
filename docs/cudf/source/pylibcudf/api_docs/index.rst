@@ -40,6 +40,7 @@ This page provides API documentation for pylibcudf.
     sorting
     stream_compaction
     table
+    table_equality
     traits
     transform
     transpose
@@ -51,6 +52,7 @@ This page provides API documentation for pylibcudf.
     :maxdepth: 2
     :caption: Subpackages
 
+    experimental/index.rst
     io/index.rst
     strings/index.rst
     nvtext/index.rst

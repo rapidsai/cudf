@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compute_column_kernel.hpp"
+#include "runtime/context.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -24,13 +14,14 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 
@@ -41,6 +32,8 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  if (get_context().use_jit()) { return compute_column_jit(table, expr, stream, mr); }
+
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
@@ -48,9 +41,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
-  auto const has_complex_type = std::any_of(table.begin(), table.end(), [&](auto const& col) {
-    return ast::detail::is_complex_type(col.type().id());
-  });
+  auto const has_complex_type = parser.has_complex_type();
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;

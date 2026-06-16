@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -23,6 +12,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/std/utility>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -372,7 +363,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<char const*, size_type> const> strings,
+  cudf::device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -392,7 +383,7 @@ std::unique_ptr<column> make_strings_column(
  * @return Array of constructed strings columns
  */
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -489,32 +480,23 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * data    (depth 2)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param[in] num_rows The number of lists the column represents.
- * @param[in] offsets_column The column of offset values for this column. Each value should
+ * @param num_rows The number of lists the column represents.
+ * @param offsets_column The column of offset values for this column. Each value should
  * represent the starting offset into the child elements that corresponds to the beginning of the
  * row, with the first row starting at 0. The length of row N can be determined by subtracting
- * offsets[N+1] - offsets[N]. The total number of offsets should be 1 longer than the # of rows in
- * the column.
- * @param[in] child_column The column of nested data referenced by the lists represented by the
- *                     offsets_column. Note: the child column may itself be
- *                     further nested.
- * @param[in] null_count The number of null list entries.
- * @param[in] null_mask The bits specifying the null lists in device memory.
- *                  Arrow format for nulls is used for interpreting this bitmask.
- * @param[in] stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param[in] mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * `offsets[N+1] - offsets[N]`. The total number of offsets should be 1 longer than the
+ * number of rows in the column.
+ * @param child_column The column of nested data referenced by the lists represented by the
+ * offsets_column. Note: the child column may itself be further nested.
+ * @param null_count The number of null list entries.
+ * @param null_mask The bits specifying the null lists in device memory.
  * @return Constructed lists column
  */
-std::unique_ptr<cudf::column> make_lists_column(
-  size_type num_rows,
-  std::unique_ptr<column> offsets_column,
-  std::unique_ptr<column> child_column,
-  size_type null_count,
-  rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+std::unique_ptr<cudf::column> make_lists_column(size_type num_rows,
+                                                std::unique_ptr<column> offsets_column,
+                                                std::unique_ptr<column> child_column,
+                                                size_type null_count,
+                                                rmm::device_buffer&& null_mask);
 
 /**
  * @brief Create an empty LIST column
@@ -522,14 +504,9 @@ std::unique_ptr<cudf::column> make_lists_column(
  * A list column requires a child type and so cannot be created with `make_empty_column`.
  *
  * @param child_type The type used for the empty child column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New empty lists column
  */
-std::unique_ptr<column> make_empty_lists_column(
-  data_type child_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+std::unique_ptr<column> make_empty_lists_column(data_type child_type);
 
 /**
  * @brief Construct a STRUCT column using specified child columns as members.
@@ -555,6 +532,40 @@ std::unique_ptr<column> make_empty_lists_column(
  * @return Constructed structs column
  */
 std::unique_ptr<cudf::column> make_structs_column(
+  size_type num_rows,
+  std::vector<std::unique_ptr<column>>&& child_columns,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Construct a STRUCT column using specified child columns as members
+ *
+ * Specified child/member columns and null_mask are adopted by resultant
+ * struct column i.e. the struct column hierarchy is created with the specified child
+ * columns as its children. This function does not ensure null consistency with the
+ * child columns or the descendant columns i.e. there are no guarantees that if a row of a struct
+ * column is null, then the corresponding rows of the descendant columns would also be null.
+ *
+ * A struct column requires that all specified child columns have the same
+ * number of rows. A struct column's row count equals that of any/all
+ * of its child columns. A single struct row at any index is comprised of
+ * all the individual child column values at the same index, in the order
+ * specified in the list of child columns.
+ *
+ * The specified null mask governs which struct row has a null value. This
+ * is orthogonal to the null values of individual child columns.
+ *
+ * @param[in] num_rows The number of struct values in the struct column.
+ * @param[in] child_columns The list of child/members that the struct is comprised of.
+ * @param[in] null_count The number of null values in the struct column.
+ * @param[in] null_mask The bits specifying the null struct values in the column.
+ * @param[in] stream Optional stream for use with all memory allocation and device kernels.
+ * @param[in] mr Optional resource to use for device memory allocation.
+ * @return Constructed structs column
+ */
+std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,

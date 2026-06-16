@@ -19,8 +19,6 @@
 #     New check that requires a C++20 feature
 # modernize-use-designated-initializers:
 #     New check that requires a C++20 feature
-# modernize-use-integer-sign-comparison:
-#     New check that requires a C++20 feature
 # clang-analyzer-cplusplus.NewDeleteLeaks:
 #     This check has numerous bugs, see
 #     https://github.com/llvm/llvm-project/issues?q=is%3Aissue+is%3Aopen+newdeleteleaks
@@ -45,7 +43,6 @@ Checks:
        -modernize-use-constraints,
        -modernize-use-ranges,
        -modernize-use-designated-initializers,
-       -modernize-use-integer-sign-comparison,
        clang-analyzer-*,
        -clang-analyzer-cplusplus.NewDeleteLeaks,
        -clang-analyzer-optin.core.EnumCastOutOfRange,

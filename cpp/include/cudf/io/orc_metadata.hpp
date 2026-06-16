@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -36,6 +25,9 @@ namespace io {
  * @{
  * @file
  */
+
+//! ORC data type
+using cudf::io::orc::TypeKind;
 
 /**
  * @brief Holds column names and buffers containing raw file-level and stripe-level statistics.
@@ -235,9 +227,7 @@ struct orc_column_schema {
    * @param type ORC type
    * @param children child columns (empty for non-nested types)
    */
-  orc_column_schema(std::string_view name,
-                    orc::TypeKind type,
-                    std::vector<orc_column_schema> children)
+  orc_column_schema(std::string_view name, TypeKind type, std::vector<orc_column_schema> children)
     : _name{name}, _type_kind{type}, _children{std::move(children)}
   {
   }
@@ -293,7 +283,7 @@ struct orc_column_schema {
 
  private:
   std::string _name;
-  orc::TypeKind _type_kind;
+  TypeKind _type_kind;
   std::vector<orc_column_schema> _children;
 };
 

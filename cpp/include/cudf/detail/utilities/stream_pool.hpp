@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -32,7 +21,11 @@ class cuda_stream_pool {
   // matching type used in rmm::cuda_stream_pool::get_stream(stream_id)
   using stream_id_type = std::size_t;
 
-  virtual ~cuda_stream_pool() = default;
+  virtual ~cuda_stream_pool()                          = default;
+  cuda_stream_pool(cuda_stream_pool const&)            = delete;
+  cuda_stream_pool(cuda_stream_pool&&)                 = delete;
+  cuda_stream_pool& operator=(cuda_stream_pool const&) = delete;
+  cuda_stream_pool& operator=(cuda_stream_pool&&)      = delete;
 
   /**
    * @brief Get a `cuda_stream_view` of a stream in the pool.
@@ -76,6 +69,9 @@ class cuda_stream_pool {
    * @return the number of stream objects in the pool
    */
   [[nodiscard]] virtual std::size_t get_stream_pool_size() const = 0;
+
+ protected:
+  cuda_stream_pool() = default;
 };
 
 /**

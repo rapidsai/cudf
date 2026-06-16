@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -31,9 +20,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
 
@@ -97,7 +86,7 @@ template <typename Element>
 auto __device__ inline get_element_pointer_and_size(Element const& element)
 {
   if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+    return cuda::std::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
   } else {
     CUDF_UNREACHABLE("Unsupported type.");
   }
@@ -106,7 +95,8 @@ auto __device__ inline get_element_pointer_and_size(Element const& element)
 template <>
 auto __device__ inline get_element_pointer_and_size(string_view const& element)
 {
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+  return cuda::std::make_pair(reinterpret_cast<uint8_t const*>(element.data()),
+                              element.size_bytes());
 }
 
 // The MD5 algorithm and its hash/shift constants are officially specified in
@@ -289,7 +279,8 @@ std::unique_ptr<column> md5(table_view const& input,
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
-    string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e", true, stream);
+    string_scalar const string_128bit(
+      "d41d8cd98f00b204e9orig98ecf8427e", true, stream, cudf::get_current_device_resource_ref());
     return make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
   }
 
@@ -308,7 +299,7 @@ std::unique_ptr<column> md5(table_view const& input,
   // Digest size in bytes
   auto constexpr digest_size = 32;
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(digest_size);
+  auto begin = cuda::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
@@ -319,9 +310,9 @@ std::unique_ptr<column> md5(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{input.num_rows()},
     [d_chars, device_input = *device_input] __device__(auto row_index) {
       MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {

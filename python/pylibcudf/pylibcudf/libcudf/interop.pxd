@@ -1,6 +1,9 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+from libc.stdint cimport int32_t
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
+from libcpp.optional cimport optional
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -8,6 +11,9 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
+
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "dlpack/dlpack.h" nogil:
@@ -33,17 +39,23 @@ cdef extern from "cudf/interop.hpp" nogil:
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(
-        const DLManagedTensor* managed_tensor
+        const DLManagedTensor* managed_tensor,
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     DLManagedTensor* to_dlpack(
-        const table_view& input
+        const table_view& input,
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef cppclass column_metadata:
         column_metadata() except +libcudf_exception_handler
         column_metadata(string name_) except +libcudf_exception_handler
         string name
+        string timezone
+        optional[int32_t] precision
         vector[column_metadata] children_meta
 
 
@@ -52,24 +64,34 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
     cdef cppclass arrow_column:
         arrow_column(
             ArrowSchema&& schema,
-            ArrowArray&& array
+            ArrowArray&& array,
+            cudaStream_t stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowSchema&& schema,
-            ArrowDeviceArray&& array
+            ArrowDeviceArray&& array,
+            cudaStream_t stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowArrayStream&& stream,
+            cudaStream_t cuda_stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
     cdef cppclass arrow_table:
         arrow_table(
             ArrowArrayStream&& stream,
+            cudaStream_t cuda_stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_table(
             ArrowSchema&& schema,
             ArrowDeviceArray&& array,
+            cudaStream_t stream,
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
 
@@ -113,7 +135,7 @@ cdef extern from *:
     template <typename ViewType>
     ArrowArray* to_arrow_host_raw(
       ViewType const& obj,
-      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+      cudaStream_t stream,
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
       ArrowArray *arr = new ArrowArray();
       auto device_arr = cudf::to_arrow_host(obj, stream, mr);
@@ -153,7 +175,7 @@ cdef extern from *:
     ArrowDeviceArray* to_arrow_device_raw(
       ViewType const& obj,
       PyObject* owner,
-      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+      cudaStream_t stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
       auto tmp = cudf::to_arrow_device(obj, stream, mr);
 
@@ -199,10 +221,12 @@ cdef extern from *:
         ArrowSchema *
     ) except +libcudf_exception_handler nogil
     cdef ArrowArray* to_arrow_host_raw(
-        const table_view& tbl
+        const table_view& tbl,
+        cudaStream_t stream,
     ) except +libcudf_exception_handler nogil
     cdef ArrowArray* to_arrow_host_raw(
-        const column_view& tbl
+        const column_view& tbl,
+        cudaStream_t stream,
     ) except +libcudf_exception_handler nogil
     cdef void release_arrow_array_raw(
         ArrowArray *

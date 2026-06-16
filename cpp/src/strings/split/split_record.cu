@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "split.cuh"
@@ -33,7 +22,6 @@
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -51,7 +39,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
-    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING});
   }
   if (input.size() == input.null_count()) {
     auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
@@ -60,9 +48,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                              std::move(offsets),
                              std::move(results),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
   // builds the offsets and the vector of all tokens
@@ -78,9 +64,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_child),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace

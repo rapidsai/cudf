@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/copying/slice_tests.cuh>
@@ -19,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -41,8 +31,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNulls)
 
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
 
@@ -64,8 +53,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
 
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<T> input = create_fixed_columns<T>(start, size, valids);
 
@@ -88,8 +76,7 @@ TEST_F(SliceStringTest, StringWithNulls)
 {
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
 
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
@@ -109,8 +96,7 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn)
 {
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
 
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
@@ -190,8 +176,7 @@ TEST_F(SliceListTest, ListsWithNulls)
 {
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   {
     cudf::test::lists_column_wrapper<int> list{{1, 2, 3},
@@ -276,8 +261,7 @@ TEST_F(SliceCornerCases, EmptyIndices)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -294,8 +278,7 @@ TEST_F(SliceCornerCases, InvalidSetOfIndices)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{11, 12};
@@ -307,8 +290,7 @@ TEST_F(SliceCornerCases, ImproperRange)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -321,8 +303,7 @@ TEST_F(SliceCornerCases, NegativeOffset)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids           = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -342,8 +323,7 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
 
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids              = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
@@ -364,8 +344,7 @@ struct SliceStringTableTest : public SliceTableTest<std::string> {};
 
 TEST_F(SliceStringTableTest, StringWithNulls)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   std::vector<std::vector<std::string>> strings{
     {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
@@ -410,8 +389,7 @@ TEST_F(SliceTableCornerCases, EmptyIndices)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids              = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -428,8 +406,7 @@ TEST_F(SliceTableCornerCases, InvalidSetOfIndices)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids              = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -443,8 +420,7 @@ TEST_F(SliceTableCornerCases, ImproperRange)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids              = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -458,8 +434,7 @@ TEST_F(SliceTableCornerCases, NegativeOffset)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
+  auto valids              = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);

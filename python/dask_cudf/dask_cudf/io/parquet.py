@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -52,12 +53,16 @@ def _get_device_size():
         if index and not index.isnumeric():
             # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
             handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(
+                    handle
+                )
         else:
             # This is a device index
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
         return pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
-    except ValueError:
+    except (ValueError, pynvml.NVMLError_NotSupported):
         # Fall back to a conservative 8GiB default
         return 8 * 1024**3
 
@@ -511,8 +516,9 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
     ):
         import pyarrow as pa
 
-        from dask.base import apply, tokenize
         from dask.threaded import get
+        from dask.tokenize import tokenize
+        from dask.utils import apply
 
         token = tokenize(frag_filters, columns, schema)
         name = f"pq-file-{token}"
@@ -698,8 +704,6 @@ def read_parquet_expr(
     from dask.core import flatten
     from dask.dataframe.utils import pyarrow_strings_enabled
 
-    from dask_cudf.backends import PYARROW_GE_15
-
     if args:
         raise ValueError(f"Unexpected positional arguments: {args}")
 
@@ -754,10 +758,6 @@ def read_parquet_expr(
         # (See: https://github.com/dask/dask/issues/11352)
         import distributed  # noqa: F401
 
-        if not PYARROW_GE_15:
-            raise ValueError(
-                "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
-            )
         if metadata_task_size is not None:
             warnings.warn(
                 "metadata_task_size is not supported when using the pyarrow filesystem."

@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -104,8 +94,7 @@ TEST_F(ExplodeTest, SingleNull)
 
   constexpr auto null = 0;
 
-  auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto first_invalid = cudf::test::iterators::null_at(0);
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -136,10 +125,8 @@ TEST_F(ExplodeTest, Nulls)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-  auto always_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto valids       = cudf::test::iterators::valids_at_multiples_of(2);
+  auto always_valid = cudf::test::iterators::no_nulls();
 
   LCW a({LCW{1, 2, 7}, LCW{null}, LCW{0, 3}}, valids);
   FCW b({100, 200, 300}, valids);
@@ -171,8 +158,7 @@ TEST_F(ExplodeTest, NullsInList)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a{
     LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
@@ -232,10 +218,8 @@ TEST_F(ExplodeTest, NestedNulls)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-  auto always_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto valids       = cudf::test::iterators::valids_at_multiples_of(2);
+  auto always_valid = cudf::test::iterators::no_nulls();
 
   LCW a({LCW{LCW{1, 2}, LCW{7, 6, 5}}, LCW{LCW{null}}, LCW{LCW{0, 3}, LCW{5}, LCW{2, 1}}}, valids);
   FCW b({100, null, 300}, valids);
@@ -266,8 +250,7 @@ TEST_F(ExplodeTest, NullsInNested)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -301,8 +284,7 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a{LCW{LCW({1, null}, valids), LCW{}, LCW{7, 6, 5}},
         LCW{LCW{5, 6}},
@@ -337,8 +319,7 @@ TEST_F(ExplodeTest, NestedStructs)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -505,8 +486,7 @@ TEST_F(ExplodeTest, SlicedList)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, 2}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -597,8 +577,7 @@ TEST_F(ExplodeOuterTest, SingleNull)
 
   constexpr auto null = 0;
 
-  auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto first_invalid = cudf::test::iterators::null_at(0);
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -627,8 +606,7 @@ TEST_F(ExplodeOuterTest, Nulls)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{1, 2, 7}, LCW{null}, LCW{0, 3}}, valids);
   FCW b({100, null, 300}, valids);
@@ -658,7 +636,7 @@ TEST_F(ExplodeOuterTest, AllNulls)
 
   constexpr auto null = 0;
 
-  auto non_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto non_valid = cudf::test::iterators::all_nulls();
 
   LCW a({LCW{null}, LCW{null}, LCW{null}}, non_valid);
   FCW b({100, 200, 300});
@@ -690,8 +668,7 @@ TEST_F(ExplodeOuterTest, SequentialNulls)
 
   constexpr auto null = 0;
 
-  auto third_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
+  auto third_invalid = cudf::test::iterators::null_at(2);
 
   LCW a{LCW({1, 2, null}, third_invalid), LCW{3, 4}, LCW{}, LCW{}, LCW{5, 6, 7}};
   FCW b{100, 200, 300, 400, 500};
@@ -817,8 +794,7 @@ TEST_F(ExplodeOuterTest, NullsInList)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a{
     LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
@@ -879,14 +855,12 @@ TEST_F(ExplodeOuterTest, NestedNulls)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW{1, 2}, LCW{7, 6, 5}}, LCW{LCW{null}}, LCW{LCW{0, 3}, LCW{5}, LCW{2, 1}}}, valids);
   FCW b({100, 200, 300});
 
-  auto expected_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
+  auto expected_valids = cudf::test::iterators::null_at(2);
   LCW expected_a({LCW{1, 2}, LCW{7, 6, 5}, LCW{null}, LCW{0, 3}, LCW{5}, LCW{2, 1}},
                  expected_valids);
   FCW expected_b({100, 100, 200, 300, 300, 300});
@@ -912,8 +886,7 @@ TEST_F(ExplodeOuterTest, NullsInNested)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -947,8 +920,7 @@ TEST_F(ExplodeOuterTest, NullsInNestedDoubleExplode)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a{LCW{LCW({1, null}, valids), LCW{}, LCW{7, 6, 5}},
         LCW{LCW{5, 6}},
@@ -985,8 +957,7 @@ TEST_F(ExplodeOuterTest, NestedStructs)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -1155,8 +1126,7 @@ TEST_F(ExplodeOuterTest, SlicedList)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},

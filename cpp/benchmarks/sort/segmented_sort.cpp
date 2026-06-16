@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -46,6 +36,7 @@ void nvbench_segmented_sort(nvbench::state& state)
   state.add_element_count(size_bytes, "bytes");
   state.add_global_memory_reads<nvbench::int32_t>(rows * row_width);
   state.add_global_memory_writes<nvbench::int32_t>(rows);
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     if (stable)
@@ -53,6 +44,9 @@ void nvbench_segmented_sort(nvbench::state& state)
     else
       cudf::segmented_sorted_order(*input, *segments);
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(nvbench_segmented_sort)

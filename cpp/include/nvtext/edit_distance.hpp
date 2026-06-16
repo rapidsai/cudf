@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -62,45 +51,6 @@ namespace CUDF_EXPORT nvtext {
 std::unique_ptr<cudf::column> edit_distance(
   cudf::strings_column_view const& input,
   cudf::strings_column_view const& targets,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief Compute the edit distance between all the strings in the input column.
- *
- * This uses the Levenshtein algorithm to calculate the edit distance between
- * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
- *
- * The output is essentially a `input.size() x input.size()` square matrix of integers.
- * All values at diagonal `row == col` are 0 since the edit distance between two identical
- * strings is zero. All values above the diagonal are reflected below since the edit distance
- * calculation is also commutative.
- *
- * @code{.pseudo}
- * Example:
- * s = ["hello", "hallo", "hella"]
- * d = edit_distance_matrix(s)
- * d is now [[0, 1, 1],
- *           [1, 0, 2]
- *           [1, 2, 0]]
- * @endcode
- *
- * Null entries for `input` are ignored and the edit distance
- * is computed as though the null entry is an empty string.
- *
- * The output is a lists column of size `input.size()` and where each list item
- * is `input.size()` elements.
- *
- * @throw std::invalid_argument if `input.size() == 1`
- * @throw std::overflow_error if `input.size() * input.size()` greater than max size_type
- *
- * @param input Strings column of input strings
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New lists column of edit distance values
- */
-std::unique_ptr<cudf::column> edit_distance_matrix(
-  cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

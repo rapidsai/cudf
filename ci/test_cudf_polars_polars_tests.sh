@@ -1,26 +1,39 @@
 #!/bin/bash
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-set -eou pipefail
+set -euo pipefail
 
 source rapids-init-pip
 
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
-CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
+LIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
+PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python pylibcudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+LIBCUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf-streaming cudf --cuda "$RAPIDS_CUDA_VERSION")")
+CUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-streaming cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+CUDF_POLARS_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-polars cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")
 
-# Download libcudf and pylibcudf built in the previous step
-LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
+
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
+    --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
-
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
 rapids-logger "Clone polars to ${TAG}"
@@ -30,10 +43,18 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 rapids-logger "Install polars test requirements"
 # We don't need to pick up dependencies from polars-cloud, so we remove it.
 sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
-# Deltalake release 1.0.0 contains breaking changes for Polars. So we're adding an upper pinning temporarily
-# until things get resolved. Tracking Issue: https://github.com/pola-rs/polars/issues/22999
-sed -i 's/^deltalake>=0.15.0.*/deltalake>=0.15.0,<1.0.0/' polars/py-polars/requirements-dev.txt
-rapids-pip-retry install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
+
+# notes:
+#
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
+#
+rapids-pip-retry install \
+    -v \
+    --prefer-binary \
+    --constraint "${PIP_CONSTRAINT}" \
+    -r polars/py-polars/requirements-dev.txt \
+    -r polars/py-polars/requirements-ci.txt
 
 # shellcheck disable=SC2317
 function set_exitcode()

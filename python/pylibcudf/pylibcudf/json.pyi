@@ -1,7 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
+from pylibcudf.utils import CudaStreamLike
 
 class GetJsonObjectOptions:
     def __init__(
@@ -19,5 +23,9 @@ class GetJsonObjectOptions:
     def set_missing_fields_as_nulls(self, val: bool) -> None: ...
 
 def get_json_object(
-    col: Column, json_path: Scalar, options: GetJsonObjectOptions | None = None
+    col: Column,
+    json_path: Scalar,
+    options: GetJsonObjectOptions | None = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

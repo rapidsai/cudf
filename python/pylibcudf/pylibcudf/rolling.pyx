@@ -1,8 +1,10 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport rolling as cpp_rolling
@@ -10,11 +12,15 @@ from pylibcudf.libcudf.aggregation cimport rolling_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
+from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -23,7 +29,7 @@ __all__ = [
     "CurrentRow",
     "RollingRequest",
     "Unbounded",
-    "grouped_range_rolling_window"
+    "grouped_range_rolling_window",
     "rolling_window",
 ]
 
@@ -120,6 +126,8 @@ cpdef Table grouped_range_rolling_window(
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
     list requests,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Perform grouping-aware range-based rolling window aggregations on some columns.
@@ -130,7 +138,7 @@ cpdef Table grouped_range_rolling_window(
         Possibly empty table of sorted keys defining groups.
     orderby
         Column defining window ranges. Must be sorted, if
-       ``group_keys`` is not empty, must be sorted groupwise.
+        ``group_keys`` is not empty, must be sorted groupwise.
     order
         Sort order of the ``orderby`` column.
     null_order
@@ -141,6 +149,10 @@ cpdef Table grouped_range_rolling_window(
         The type of the following window offset.
     requests
         List of :class:`RollingRequest` objects.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -153,6 +165,10 @@ cpdef Table grouped_range_rolling_window(
     for req in requests:
         crequests.push_back(move((<RollingRequest?>req).view()))
 
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
     with nogil:
         result = cpp_rolling.grouped_range_rolling_window(
             group_keys.view(),
@@ -161,9 +177,11 @@ cpdef Table grouped_range_rolling_window(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
-            crequests
+            crequests,
+            _cs,
+            mr.get_mr()
         )
-    return Table.from_libcudf(move(result))
+    return Table.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column rolling_window(
@@ -172,6 +190,8 @@ cpdef Column rolling_window(
     WindowType following_window,
     size_type min_periods,
     Aggregation agg,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a rolling window operation on a column
 
@@ -191,6 +211,10 @@ cpdef Column rolling_window(
         The minimum number of periods to include in the result.
     agg : Aggregation
         The aggregation to perform.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -201,6 +225,11 @@ cpdef Column rolling_window(
     # TODO: Consider making all the conversion functions nogil functions that
     # reclaim the GIL internally for just the necessary scope like column.view()
     cdef const rolling_aggregation *c_agg = agg.view_underlying_as_rolling()
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
     if WindowType is Column:
         with nogil:
             result = cpp_rolling.rolling_window(
@@ -209,6 +238,8 @@ cpdef Column rolling_window(
                 following_window.view(),
                 min_periods,
                 dereference(c_agg),
+                _cs,
+                mr.get_mr()
             )
     else:
         with nogil:
@@ -218,9 +249,11 @@ cpdef Column rolling_window(
                 following_window,
                 min_periods,
                 dereference(c_agg),
+                _cs,
+                mr.get_mr()
             )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg):
@@ -239,3 +272,61 @@ cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg):
     True if the aggregation is supported.
     """
     return cpp_rolling.is_valid_rolling_aggregation(source.c_obj, agg.kind())
+
+
+cpdef tuple make_range_windows(
+    Table group_keys,
+    Column orderby,
+    order order,
+    null_order null_order,
+    PrecedingRangeWindowType preceding,
+    FollowingRangeWindowType following,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """
+    Constructs preceding and following columns given window range specifications.
+
+    Parameters
+    ----------
+    group_keys
+        Possibly empty table of sorted keys defining groups.
+    orderby
+        Column defining window ranges. Must be sorted, if
+       ``group_keys`` is not empty, must be sorted groupwise.
+    order
+        Sort order of the ``orderby`` column.
+    null_order
+        Null sort order in the sorted ``orderby`` column
+    preceding
+        The type of the preceding window offset.
+    following
+        The type of the following window offset.
+
+    Returns
+    -------
+    tuple[Column, Column]
+        A tuple of preceding and following columns that define the window bounds
+        for each row suitable for passing to `rolling_window`.
+    """
+    cdef pair[unique_ptr[column], unique_ptr[column]] result
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        result = cpp_rolling.make_range_windows(
+            group_keys.view(),
+            orderby.view(),
+            order,
+            null_order,
+            dereference(preceding.c_obj.get()),
+            dereference(following.c_obj.get()),
+            _cs,
+            mr.get_mr()
+        )
+    return (
+        Column.from_libcudf(move(result.first), _stream, mr),
+        Column.from_libcudf(move(result.second), _stream, mr)
+    )

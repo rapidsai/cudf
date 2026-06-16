@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -25,7 +14,6 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/types.hpp>
@@ -37,7 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -164,7 +152,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   // Pass to simple_segmented_reduction, get indices to gather, perform gather here.
   auto device_col = cudf::column_device_view::create(col, stream);
 
-  auto it                 = thrust::make_counting_iterator(0);
+  auto it                 = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;
@@ -183,7 +171,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto result = std::move(cudf::detail::gather(table_view{{col}},
                                                *gather_map,
                                                cudf::out_of_bounds_policy::NULLIFY,
-                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               cudf::negative_index_policy::NOT_ALLOWED,
                                                stream,
                                                mr)
                             ->release()[0]);
@@ -217,6 +205,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling How null entries are processed within each segment
+ * @param init Optional initial value for the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -246,17 +235,18 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                   stream,
                                                   cudf::get_current_device_resource_ref());
 
-      auto const max_count = thrust::reduce(rmm::exec_policy(stream),
-                                            counts.begin(),
-                                            counts.end(),
-                                            size_type{0},
-                                            cudf::detail::maximum<size_type>{});
+      auto const max_count =
+        thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       counts.begin(),
+                       counts.end(),
+                       size_type{0},
+                       cuda::maximum<size_type>{});
 
       auto const new_scale = numeric::scale_type{col.type().scale() * max_count};
 
       // adjust values in each segment to match the new scale
       auto const d_col = column_device_view::create(col, stream);
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         d_col->begin<InputType>(),
                         d_col->end<InputType>(),
                         d_col->begin<InputType>(),
@@ -292,25 +282,27 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
  */
 template <typename Op>
 struct bool_result_column_dispatcher {
-  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<ElementType>())
   {
     return simple_segmented_reduction<ElementType, bool, Op>(
       col, offsets, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
                                      std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(not cudf::is_numeric<ElementType>())
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
@@ -358,7 +350,7 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for strings"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for strings");
 
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }
@@ -406,8 +398,7 @@ struct column_type_dispatcher {
    * The input values are promoted to double (via transform-iterator) for the
    * reduce calculation. The result is then cast to the specified output_type.
    */
-  template <typename ElementType,
-            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
@@ -415,6 +406,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point<ElementType>::value)
   {
     // Floats are computed in double precision and then cast to the output type
     auto result = simple_segmented_reduction<ElementType, double, Op>(
@@ -433,8 +425,7 @@ struct column_type_dispatcher {
    * For uint64_t case, the only reasonable output_type is also UINT64 and
    * this is not called when the input/output types match.
    */
-  template <typename ElementType,
-            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
@@ -442,6 +433,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
+    requires(std::is_integral<ElementType>::value)
   {
     // Integers are computed in int64 precision and then cast to the output type.
     auto result = simple_segmented_reduction<ElementType, int64_t, Op>(
@@ -462,8 +454,7 @@ struct column_type_dispatcher {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
-  template <typename ElementType,
-            typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
@@ -471,6 +462,7 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<ElementType>())
   {
     // If the output type matches the input type, then reduce using that type
     if (output_type.id() == cudf::type_to_id<ElementType>()) {
@@ -481,7 +473,7 @@ struct column_type_dispatcher {
     return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
@@ -489,15 +481,14 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_point<ElementType>())
   {
     CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
     return fixed_point_segmented_reduction<ElementType, Op>(
       col, offsets, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType,
-            std::enable_if_t<not cudf::is_numeric<ElementType>() and
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      data_type const,
@@ -505,6 +496,7 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(not cudf::is_numeric<ElementType>() and not cudf::is_fixed_point<ElementType>())
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }

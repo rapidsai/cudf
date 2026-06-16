@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include "join_common_utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -35,8 +25,11 @@ namespace detail {
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
+ * @param binary_predicate The predicate expression to evaluate
  * @param JoinKind The type of join to be performed
+ * @param output_size Optional pre-computed output size
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @return Join output indices vector pair
  */
@@ -57,8 +50,10 @@ conditional_join(table_view const& left,
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
+ * @param binary_predicate The predicate expression to evaluate
  * @param JoinKind The type of join to be performed
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @return Join output indices vector pair
  */

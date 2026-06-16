@@ -1,0 +1,27 @@
+# GitHub Auto-Generated Release Notes Configuration for RAPIDS
+# This file configures how GitHub automatically generates release notes
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - dependencies
+    authors:
+      - rapids-bot[bot]
+      - dependabot[bot]
+  categories:
+    - title: 🚨 Breaking Changes
+      labels:
+        - breaking
+    - title: 🐛 Bug Fixes
+      labels:
+        - bug
+    - title: 📖 Documentation
+      labels:
+        - doc
+    - title: 🚀 New Features
+      labels:
+        - feature request
+    - title: 🛠️ Improvements
+      labels:
+        - improvement

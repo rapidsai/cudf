@@ -1,31 +1,18 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace detail {
@@ -78,11 +65,19 @@ struct corresponding_operator<aggregation::SUM> {
   using type = DeviceSum;
 };
 template <>
+struct corresponding_operator<aggregation::SUM_WITH_OVERFLOW> {
+  using type = DeviceSum;
+};
+template <>
 struct corresponding_operator<aggregation::PRODUCT> {
   using type = DeviceProduct;
 };
 template <>
 struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
+  using type = DeviceSum;
+};
+template <>
+struct corresponding_operator<aggregation::M2> {
   using type = DeviceSum;
 };
 template <>
@@ -112,7 +107,70 @@ using corresponding_operator_t = typename corresponding_operator<k>::type;
 template <aggregation::Kind k>
 constexpr bool has_corresponding_operator()
 {
-  return !std::is_same_v<typename corresponding_operator<k>::type, void>;
+  return !cuda::std::is_same_v<typename corresponding_operator<k>::type, void>;
+}
+
+/**
+ * @brief Checks if the given type and aggregation kind combination is supported
+ * for identity initialization.
+ *
+ * @tparam T The data type
+ * @tparam k The aggregation kind
+ * @return true if identity initialization is supported for this type/aggregation combo
+ */
+template <typename T, aggregation::Kind k>
+CUDF_HOST_DEVICE constexpr bool is_identity_supported()
+{
+  return cudf::is_fixed_width<T>() and
+         ((k == aggregation::SUM) or (k == aggregation::SUM_OF_SQUARES) or
+          (k == aggregation::MIN) or (k == aggregation::MAX) or (k == aggregation::COUNT_VALID) or
+          (k == aggregation::COUNT_ALL) or (k == aggregation::ARGMIN) or
+          (k == aggregation::ARGMAX) or (k == aggregation::STD) or (k == aggregation::VARIANCE) or
+          (k == aggregation::M2) or
+          (k == aggregation::PRODUCT) and cudf::detail::is_product_supported<T>());
+}
+
+/**
+ * @brief Gets the identity value from the corresponding binary operator.
+ *
+ * @tparam T The data type
+ * @tparam k The aggregation kind
+ * @return The identity value
+ */
+template <typename T, aggregation::Kind k>
+CUDF_HOST_DEVICE T identity_from_operator()
+{
+  static_assert(not cuda::std::is_same_v<corresponding_operator_t<k>, void>,
+                "Unable to get identity/sentinel from device operator");
+  using DeviceType = device_storage_type_t<T>;
+  return corresponding_operator_t<k>::template identity<DeviceType>();
+}
+
+/**
+ * @brief Gets the identity value for the given type and aggregation kind.
+ *
+ * For ARGMAX/ARGMIN, returns the appropriate sentinel value.
+ * For other aggregations, delegates to identity_from_operator.
+ *
+ * @tparam T The data type
+ * @tparam k The aggregation kind
+ * @return The identity value
+ */
+template <typename T, aggregation::Kind k>
+CUDF_HOST_DEVICE T get_identity()
+{
+  if constexpr (k == aggregation::ARGMAX or k == aggregation::ARGMIN) {
+    if constexpr (cudf::is_timestamp<T>()) {
+      return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
+                                      : T{typename T::duration(ARGMIN_SENTINEL)};
+    } else {
+      using DeviceType = device_storage_type_t<T>;
+      return k == aggregation::ARGMAX ? static_cast<DeviceType>(ARGMAX_SENTINEL)
+                                      : static_cast<DeviceType>(ARGMIN_SENTINEL);
+    }
+  } else {
+    return identity_from_operator<T, k>();
+  }
 }
 
 }  // namespace detail

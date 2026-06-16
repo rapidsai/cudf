@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -6,21 +6,24 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import DataFrameScan, MapFunction
+from cudf_polars.dsl.translate import Translator
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
 
 
-def test_explode_multiple_raises():
+def test_explode_multiple_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
     q = df.explode("a", "b")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
-def test_explode_single(column):
+def test_explode_single(engine: pl.GPUEngine, column):
     df = pl.LazyFrame(
         {
             "a": [[1, 2], [3, 4], None],
@@ -30,33 +33,34 @@ def test_explode_single(column):
     )
     q = df.explode(column)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("mapping", [{"b": "a"}, {"a": "c", "b": "c"}])
-def test_rename_duplicate_raises(mapping):
+def test_rename_duplicate_raises(engine: pl.GPUEngine, mapping):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
 
     q = df.rename(mapping)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
     "mapping", [{}, {"b": "c"}, {"b": "a", "a": "b"}, {"a": "c", "b": "d"}]
 )
-def test_rename_columns(mapping):
+def test_rename_columns(engine: pl.GPUEngine, mapping):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
 
     q = df.rename(mapping)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("index", [None, ["a"], ["d", "a"]])
 @pytest.mark.parametrize("variable_name", [None, "names"])
 @pytest.mark.parametrize("value_name", [None, "unpivoted"])
-def test_unpivot(index, variable_name, value_name):
+def test_unpivot(engine: pl.GPUEngine, index, variable_name, value_name):
     df = pl.LazyFrame(
         {
             "a": ["x", "y", "z"],
@@ -69,10 +73,10 @@ def test_unpivot(index, variable_name, value_name):
         ["c", "b"], index=index, variable_name=variable_name, value_name=value_name
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_unpivot_defaults():
+def test_unpivot_defaults(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
@@ -82,10 +86,10 @@ def test_unpivot_defaults():
         }
     )
     q = df.unpivot(index="d")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_with_row_index_defaults():
+def test_with_row_index_defaults(engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
             "a": [1, 3, 5],
@@ -93,4 +97,35 @@ def test_with_row_index_defaults():
         }
     )
     q = lf.with_row_index()
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_unique_hash():
+    # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
+    a = pl.LazyFrame({"a": [1, 2, 3]}).rename({"a": "A"})
+    b = pl.LazyFrame({"a": [4, 5, 6]}).rename({"a": "A"})
+    ir_a = Translator(a._ldf.visit(), pl.GPUEngine()).translate_ir()
+    ir_b = Translator(b._ldf.visit(), pl.GPUEngine()).translate_ir()
+
+    assert hash(ir_a) != hash(ir_b)
+
+
+@pytest.mark.xfail(reason="HintIR not supported")
+def test_set_sorted_then_inner_join(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
+
+    q = df.set_sorted("a").join(
+        pl.LazyFrame({"a": [2, 4], "b": [20, 40]}), on="a", how="inner"
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_explode_single_legacy_options():
+    # Cover the branch: POLARS_VERSION_LT_136 or len(self.options) == 1
+    # On polars >= 1.36 this branch is only reachable by direct construction
+    # with 1-element options (the old pre-1.36 format).
+    df = pl.DataFrame({"a": [[1, 2], [3, 4]]})
+    child = DataFrameScan({"a": DataType(pl.List(pl.Int64()))}, df._df, None)
+    # 1-element options list: [[columns_to_explode]]
+    node = MapFunction({"a": DataType(pl.Int64())}, "explode", [["a"]], child)
+    assert node.options == (("a",),)

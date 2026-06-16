@@ -1,12 +1,12 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
-from typing_extensions import Self
 
 import cudf
 from cudf.api.extensions import no_default
@@ -16,20 +16,25 @@ from cudf.api.types import (
 )
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.mixins import NotIterable
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
+    from collections.abc import Hashable, Mapping
+    from types import NotImplementedType
 
-    import cupy
-    import numpy
     import pyarrow as pa
 
-    from cudf._typing import Dtype, NotImplementedType, ScalarLike
+    from cudf._typing import (
+        Axis,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -44,12 +49,12 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def _reduce(
         self,
-        op,
-        axis=no_default,
-        numeric_only=False,
+        op: str,
+        axis: Axis | None = 0,
+        numeric_only: bool = False,
         **kwargs,
-    ):
-        if axis not in (None, 0, no_default):
+    ) -> ScalarLike:
+        if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         if numeric_only and not is_dtype_obj_numeric(self.dtype):
@@ -63,52 +68,64 @@ class SingleColumnFrame(Frame, NotIterable):
             raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
     @_performance_tracking
-    def _scan(self, op, axis=None, *args, **kwargs):
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        return super()._scan(op, axis=axis, *args, **kwargs)
+        return super()._scan(op, axis=axis, skipna=skipna, *args, **kwargs)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def name(self):
+    def name(self) -> Hashable:
         """Get the name of this object."""
         return next(iter(self._column_names))
 
-    @name.setter  # type: ignore
+    @name.setter
     @_performance_tracking
-    def name(self, value):
+    def name(self, value: Hashable) -> None:
         self._data[value] = self._data.pop(self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def shape(self) -> tuple[int]:
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def _num_columns(self) -> int:
         return 1
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def _column(self) -> ColumnBase:
         return next(iter(self._columns))
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def values(self) -> cupy.ndarray:
+    def values(self) -> cp.ndarray:
         col = self._column
         if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
             return cp.asarray(col)
         return col.values
+
+    @property
+    @_performance_tracking
+    def dtype(self) -> DtypeObj:
+        return self._column.dtype
 
     # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
     # in common cases (like no nulls, no type conversion, no copying). But these fast
@@ -120,7 +137,7 @@ class SingleColumnFrame(Frame, NotIterable):
         dtype: Dtype | None = None,
         copy: bool = False,
         na_value=None,
-    ) -> cupy.ndarray:
+    ) -> cp.ndarray:
         """
         Convert the SingleColumnFrame (e.g., Series) to a CuPy array.
 
@@ -146,11 +163,6 @@ class SingleColumnFrame(Frame, NotIterable):
             .to_cupy(dtype=dtype, copy=copy, na_value=na_value)
             .reshape(len(self), order="F")
         )
-
-    @property  # type: ignore
-    @_performance_tracking
-    def values_host(self) -> numpy.ndarray:
-        return self._column.values_host
 
     @classmethod
     @_performance_tracking
@@ -179,16 +191,16 @@ class SingleColumnFrame(Frame, NotIterable):
         --------
         >>> import cudf
         >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        >>> sr.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
           null
         ]
         >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        >>> ind.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
@@ -222,15 +234,26 @@ class SingleColumnFrame(Frame, NotIterable):
     def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
 
+        unnamed_default = False
+        col_name: Hashable
         if name is no_default:
-            col_name = 0 if self.name is None else self.name
+            if self.name is None:
+                col_name = 0
+                unnamed_default = True
+            else:
+                col_name = self.name
         else:
             col_name = name
-        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        ca = ColumnAccessor(
+            {col_name: self._column},
+            multiindex=isinstance(col_name, tuple),
+            rangeindex=unnamed_default,
+            verify=False,
+        )
         # TODO: Avoid accessing DataFrame from the top level namespace
         return cudf.DataFrame._from_data(ca, index=index)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
@@ -241,7 +264,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_unique
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
         """Return boolean if values in the object are monotonically increasing.
@@ -252,7 +275,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_increasing
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_monotonic_decreasing(self) -> bool:
         """Return boolean if values in the object are monotonically decreasing.
@@ -263,9 +286,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_decreasing
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         # While the parent column class has a `__cuda_array_interface__` method
         # defined, it is not implemented for all column types. When it is not
         # implemented, though, at the Frame level we really want to throw an
@@ -281,7 +304,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, Index]:
+    ) -> tuple[cp.ndarray, Index]:
         """Encode the input values as integer labels.
 
         Parameters
@@ -307,16 +330,23 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> s = cudf.Series(['a', 'a', 'c'])
         >>> codes, uniques = s.factorize()
         >>> codes
-        array([0, 0, 1], dtype=int8)
+        array([0, 0, 1])
         >>> uniques
-        Index(['a', 'c'], dtype='object')
+        Index(['a', 'c'], dtype='str')
         """
-        # TODO: Avoid accessing factorize from the top level namespace
-        return cudf.factorize(
-            self,
-            sort=sort,
-            use_na_sentinel=use_na_sentinel,
+        return self._factorize(sort=sort, use_na_sentinel=use_na_sentinel)
+
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
+    ) -> tuple[cp.ndarray, Index]:
+        """Default factorize implementation for SingleColumnFrame subclasses.
+
+        Subclasses (e.g. ``RangeIndex``) may override to specialize.
+        """
+        labels, cats = self._column.factorize(
+            sort=sort, use_na_sentinel=use_na_sentinel
         )
+        return labels, cudf.Index._from_column(cats)
 
     @_performance_tracking
     def _make_operands_for_binop(
@@ -410,6 +440,10 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
+                if arg.dtype.kind == "f":
+                    raise IndexError(
+                        "arrays used as indices must be of integer type"
+                    )
                 arg = column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)
@@ -422,7 +456,7 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
     @_performance_tracking
-    def transpose(self):
+    def transpose(self) -> Self:
         """Return the transpose, which is by definition self."""
         return self
 

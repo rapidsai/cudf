@@ -1,16 +1,20 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
+
+import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.dsl import ir
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_cache():
+@pytest.mark.xfail(reason="python no longer manages cache hits")
+def test_cache(engine: pl.GPUEngine):
     df1 = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -20,7 +24,7 @@ def test_cache():
     df2 = pl.LazyFrame({"a": [7, 8], "b": [12, 13]})
 
     q = pl.concat([df1, df2, df1, df2, df1])
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
     t = Translator(q._ldf.visit(), pl.GPUEngine())
     qir = t.translate_ir()
@@ -47,6 +51,30 @@ def test_cache():
             return result
 
     node_cache = HitCounter()
-    qir.evaluate(cache=node_cache, timer=None)
+    qir.evaluate(
+        cache=node_cache,
+        timer=None,
+        context=IRExecutionContext(),
+    )
     assert len(node_cache) == 0
     assert node_cache.hits == 3
+
+
+def test_union_cache_nodes():
+    df = pl.LazyFrame({"a": [7, 8], "b": [12, 13]})
+    q = pl.concat([df, df])
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    # Logical plan:
+    # UNION ('x', 'y', 'z')
+    #   CACHE ('x', 'y', 'z')
+    #     PROJECTION ('x', 'y', 'z')
+    #       DATAFRAMESCAN ('x', 'y', 'z')
+    #   (repeated 2 times)
+
+    # Check that the concatenated Cache nodes are the same object
+    # See: https://github.com/rapidsai/cudf/issues/19766
+    assert isinstance(qir, ir.Union)
+    assert isinstance(qir.children[0], ir.Cache)
+    assert isinstance(qir.children[1], ir.Cache)
+    assert hash(qir.children[0]) == hash(qir.children[1])
+    assert hash(qir.children[0].children[0]) == hash(qir.children[1].children[0])

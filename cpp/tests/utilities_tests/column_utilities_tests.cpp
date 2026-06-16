@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -24,7 +14,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 template <typename T>
@@ -116,7 +106,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   auto size = this->size();
 
@@ -144,7 +134,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
@@ -231,7 +221,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 {
   // list<int>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}};
     cudf::test::lists_column_wrapper<int> b{{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}}, all_valid};
 
@@ -248,7 +238,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 
   // list<list<int>>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}};
     cudf::test::lists_column_wrapper<int> b{{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}},
                                             all_valid};
@@ -291,17 +281,23 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids.begin(), valids.end());
 
-    auto c0 = make_lists_column(
-      7, c0_offsets.release(), c0_data.release(), null_count, std::move(null_mask));
+    auto c0 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_offsets.release(), c0_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     cudf::test::fixed_width_column_wrapper<int> c1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_data{3, 3, 5, 5, 5};
-    auto c1 = make_lists_column(
-      7,
-      c1_offsets.release(),
-      c1_data.release(),
-      null_count,
-      std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
+    auto c1 = [&] {
+      auto tmp = make_lists_column(
+        7,
+        c1_offsets.release(),
+        c1_data.release(),
+        null_count,
+        std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
@@ -325,13 +321,19 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end());
-    auto c0_l2 = make_lists_column(
-      7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
+    auto c0_l2 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
-    auto c0 = make_lists_column(
-      7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
+    auto c0 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     cudf::test::fixed_width_column_wrapper<int> c1_l1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_l2_offsets{0, 3, 3, 3, 6, 10};
@@ -343,13 +345,19 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(c1_l2_valids.begin(), c1_l2_valids.end());
-    auto c1_l2 = make_lists_column(
-      5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
+    auto c1_l2 = [&] {
+      auto tmp = make_lists_column(
+        5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
-    auto c1 = make_lists_column(
-      7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));
+    auto c1 = [&] {
+      auto tmp = make_lists_column(
+        7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
@@ -371,7 +379,7 @@ TEST_F(ColumnUtilitiesStructsTest, Properties)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};
@@ -401,7 +409,7 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};

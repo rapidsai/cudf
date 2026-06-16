@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -20,6 +9,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -34,7 +25,7 @@
 
 #include <memory>
 
-namespace {
+namespace cudf::detail {
 template <cudf::size_type block_size,
           typename SourceValueIterator,
           typename SourceValidityIterator,
@@ -105,10 +96,6 @@ CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
   }
 }
 
-}  // namespace
-
-namespace cudf {
-namespace detail {
 /**
  * @brief Internal API to copy a range of values from source iterators to a
  * target column.
@@ -146,7 +133,7 @@ void copy_range(SourceValueIterator source_value_begin,
   CUDF_EXPECTS(type_id_matches_device_storage_type<T>(target.type().id()), "data type mismatch");
 
   auto warp_aligned_begin_lower_bound = cudf::util::round_down_safe(target_begin, warp_size);
-  auto warp_aligned_end_upper_bound   = cudf::util::round_up_safe(target_end, warp_size);
+  auto warp_aligned_end_upper_bound   = cudf::util::round_up_safe<int64_t>(target_end, warp_size);
   auto num_items = warp_aligned_end_upper_bound - warp_aligned_begin_lower_bound;
 
   constexpr size_type block_size{256};
@@ -154,7 +141,8 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    cudf::detail::device_scalar<size_type> null_count(target.null_count(), stream);
+    cudf::detail::device_scalar<size_type> null_count(
+      target.null_count(), stream, cudf::get_current_device_resource_ref());
 
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, true>;
@@ -206,5 +194,4 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

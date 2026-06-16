@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 export GTEST_CUDF_RMM_MODE=cuda
 export GTEST_CUDF_MEMORY_PEAK=1

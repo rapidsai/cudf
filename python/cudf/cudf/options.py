@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
@@ -154,13 +155,6 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
-def _cow_validator(val):
-    if val not in {False, True}:
-        raise ValueError(
-            f"{val} is not a valid option. Must be one of {{False, True}}."
-        )
-
-
 def _spill_validator(val):
     if val not in {False, True}:
         raise ValueError(
@@ -231,21 +225,6 @@ _register_option(
         """
     ),
     _spill_validator,
-)
-
-
-_register_option(
-    "copy_on_write",
-    _env_get_bool("CUDF_COPY_ON_WRITE", False),
-    textwrap.dedent(
-        """
-        If set to `False`, disables copy-on-write.
-        If set to `True`, enables copy-on-write.
-        Read more at: :ref:`copy-on-write-user-doc`
-        \tValid values are True or False. Default is False.
-    """
-    ),
-    _cow_validator,
 )
 
 
@@ -387,10 +366,10 @@ class option_context(ContextDecorator):
                 "[(pat, val), ...])."
             )
 
-        self.ops = tuple(zip(args[::2], args[1::2]))
+        self.ops = tuple(zip(args[::2], args[1::2], strict=True))
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
 
     def __enter__(self) -> None:
-        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
         for pat, val in self.ops:
             set_option(pat, val)
 

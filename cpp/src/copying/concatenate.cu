@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -24,6 +13,8 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
@@ -39,13 +30,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
@@ -86,7 +76,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
 
   // Compute the partition offsets
-  auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
+  auto offsets = cudf::detail::make_pinned_vector_async<size_t>(views.size() + 1, stream);
   thrust::transform_inclusive_scan(
     thrust::host,
     device_views.cbegin(),
@@ -163,7 +153,8 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
                             size_type output_size,
                             rmm::cuda_stream_view stream)
 {
-  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(
+    0, stream, cudf::get_current_device_resource_ref());
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
   concatenate_masks_kernel<block_size>
@@ -174,6 +165,7 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
       dest_mask,
       output_size,
       d_valid_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   return output_size - d_valid_count.value(stream);
 }
 
@@ -266,7 +258,8 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto out_view     = out_col->mutable_view();
   auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
-  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(
+    0, stream, cudf::get_current_device_resource_ref());
 
   // Launch kernel
   constexpr size_type block_size{256};
@@ -279,6 +272,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
     static_cast<size_type>(d_views.size()),
     *d_out_view,
     d_valid_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   if (has_nulls) {
     out_col->set_null_count(output_size - d_valid_count.value(stream));
@@ -306,15 +300,19 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto m_view = col->mutable_view();
 
-  auto count = 0;
-  for (auto& v : views) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(m_view.begin<T>() + count,
-                                  v.begin<T>(),
-                                  v.size() * sizeof(T),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    count += v.size();
+  auto const num_views = views.size();
+  std::vector<void*> dsts(num_views);
+  std::vector<void const*> srcs(num_views);
+  std::vector<std::size_t> sizes(num_views);
+  size_type count = 0;
+  for (std::size_t i = 0; i < num_views; ++i) {
+    dsts[i]  = m_view.begin<T>() + count;
+    srcs[i]  = views[i].begin<T>();
+    sizes[i] = views[i].size() * sizeof(T);
+    count += views[i].size();
   }
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), num_views, stream));
 
   // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
@@ -420,7 +418,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                                                       rmm::cuda_stream_view stream)
 {
   // march each child
-  auto child_iter         = thrust::make_counting_iterator(0);
+  auto child_iter         = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_children = cols.front().num_children();
   std::vector<column_view> nth_children;
   nth_children.reserve(cols.size());
@@ -460,7 +458,8 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  * @brief Verifies that the sum of the sizes of all the columns to be concatenated
  * will not exceed the max value of size_type, and verifies all column types match
  *
- * @param columns_to_concat Span of columns to check
+ * @param cols Span of columns to check
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @throws cudf::logic_error if the total length of the concatenated columns would
  * exceed the max value of size_type

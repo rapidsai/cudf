@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -23,7 +12,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
@@ -37,13 +28,13 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
+   * @brief Returns reference to `device_async_resource_ref` that should be used for
    * all tests inheriting from this fixture
-   * @return pointer to memory resource
+   * @return reference to memory resource
    */
   rmm::device_async_resource_ref mr() { return _mr; }
 };
@@ -58,15 +49,15 @@ class BaseFixture : public ::testing::Test {
  */
 template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
+   * @brief Returns reference to `device_async_resource_ref` that should be used for
    * all tests inheriting from this fixture
-   * @return pointer to memory resource
+   * @return reference to memory resource
    */
-  [[nodiscard]] rmm::device_async_resource_ref mr() const { return _mr; }
+  [[nodiscard]] rmm::device_async_resource_ref mr() { return _mr; }
 };
 
 /**

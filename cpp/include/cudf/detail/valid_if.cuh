@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,6 +8,7 @@
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -83,6 +73,7 @@ CUDF_KERNEL void valid_if_kernel(
  * @param end The end of the sequence
  * @param p The predicate
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>
@@ -100,7 +91,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 
   size_type null_count{0};
   if (size > 0) {
-    cudf::detail::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};

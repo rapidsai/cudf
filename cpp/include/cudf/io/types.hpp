@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -325,6 +314,9 @@ constexpr inline auto is_byte_like_type()
  * @brief Source information for read interfaces
  */
 struct source_info {
+  /**
+   * @brief Default constructor for the next-gen parquet reader
+   */
   source_info() = default;
 
   /**
@@ -333,7 +325,7 @@ struct source_info {
    * @param file_paths Input files paths
    */
   explicit source_info(std::vector<std::string> file_paths)
-    : _type(io_type::FILEPATH), _filepaths(std::move(file_paths))
+    : _type(io_type::FILEPATH), _num_sources(file_paths.size()), _filepaths(std::move(file_paths))
   {
   }
 
@@ -343,7 +335,7 @@ struct source_info {
    * @param file_path Single input file
    */
   explicit source_info(std::string file_path)
-    : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
+    : _type(io_type::FILEPATH), _num_sources(1), _filepaths({std::move(file_path)})
   {
   }
 
@@ -354,7 +346,7 @@ struct source_info {
    */
   template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
   explicit source_info(cudf::host_span<cudf::host_span<T>> const host_buffers)
-    : _type(io_type::HOST_BUFFER)
+    : _type(io_type::HOST_BUFFER), _num_sources(host_buffers.size())
   {
     if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
       _host_buffers.reserve(host_buffers.size());
@@ -378,6 +370,7 @@ struct source_info {
   template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
   explicit source_info(cudf::host_span<T> host_data)
     : _type(io_type::HOST_BUFFER),
+      _num_sources(1),
       _host_buffers{cudf::host_span<std::byte const>(
         reinterpret_cast<std::byte const*>(host_data.data()), host_data.size())}
   {
@@ -389,7 +382,9 @@ struct source_info {
    * @param device_buffers Input buffers in device memory
    */
   explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
-    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers.begin(), device_buffers.end())
+    : _type(io_type::DEVICE_BUFFER),
+      _num_sources(device_buffers.size()),
+      _device_buffers(device_buffers.begin(), device_buffers.end())
   {
   }
 
@@ -399,7 +394,7 @@ struct source_info {
    * @param d_buffer Input buffer in device memory
    */
   explicit source_info(cudf::device_span<std::byte const> d_buffer)
-    : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer}})
+    : _type(io_type::DEVICE_BUFFER), _num_sources(1), _device_buffers({{d_buffer}})
   {
   }
 
@@ -409,7 +404,7 @@ struct source_info {
    * @param sources  User-implemented input sources
    */
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
-    : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
+    : _type(io_type::USER_IMPLEMENTED), _num_sources(sources.size()), _user_sources(sources)
   {
   }
 
@@ -419,7 +414,7 @@ struct source_info {
    * @param source Single user-implemented Input source
    */
   explicit source_info(cudf::io::datasource* source)
-    : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
+    : _type(io_type::USER_IMPLEMENTED), _num_sources(1), _user_sources({source})
   {
   }
 
@@ -454,8 +449,16 @@ struct source_info {
    */
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
+  /**
+   * @brief Get the number of input sources
+   *
+   * @return The number of input sources
+   */
+  [[nodiscard]] auto num_sources() const { return _num_sources; }
+
  private:
-  io_type _type = io_type::VOID;
+  io_type _type       = io_type::VOID;
+  size_t _num_sources = 0;
   std::vector<std::string> _filepaths;
   std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;

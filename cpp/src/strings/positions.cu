@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "positions.hpp"
@@ -25,9 +14,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::strings::detail {
@@ -42,7 +31,7 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
 
   // first, create a vector of string indices for each position
   auto indices = rmm::device_uvector<size_type>(positions.size(), stream);
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       d_offsets,
                       d_offsets + input.size(),
                       positions.begin(),
@@ -52,14 +41,18 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
   // compute position offsets per string
   auto counts = rmm::device_uvector<size_type>(input.size(), stream);
   // memset to zero-out the counts for any null-entries or strings with no positions
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    counts.begin(),
+    counts.end(),
+    0);
 
   // next, count the number of positions per string
   auto d_counts  = counts.data();
   auto d_indices = indices.data();
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<int64_t>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<int64_t>{0},
     positions.size(),
     [d_indices, d_counts] __device__(int64_t idx) {
       auto const str_idx = d_indices[idx] - 1;

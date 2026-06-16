@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -61,7 +50,8 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts);
  *
  * @param threshold The threshold size in bytes. If the size of the copy is less than this
  * threshold, the copy will be done using kernels. If the size is greater than or equal to this
- * threshold, the copy will be done using cudaMemcpyAsync.
+ * threshold, the copy will be done by calling a CUDA runtime API (cudaMemcpyAsync or
+ * cudaMemcpyBatchAsync).
  */
 void set_kernel_pinned_copy_threshold(size_t threshold);
 

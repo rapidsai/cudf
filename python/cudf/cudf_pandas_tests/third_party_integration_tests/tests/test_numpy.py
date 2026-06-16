@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ def df():
 
 @pytest.mark.parametrize("op", reductions)
 def test_numpy_dataframe_reductions(df, op):
-    return getattr(np, op)(df)
+    return getattr(np, op)(df, axis=0)
 
 
 def test_numpy_dot(df):

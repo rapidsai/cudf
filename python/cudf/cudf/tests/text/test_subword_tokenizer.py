@@ -1,5 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
-import os
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pytest
@@ -11,7 +11,7 @@ from cudf.testing import assert_eq
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
-    return os.path.join(datadir, "")
+    return datadir / "text"
 
 
 @pytest.mark.parametrize("max_words", [0, 200, 10])
@@ -27,7 +27,7 @@ def test_text_wordpiece_tokenize(max_words, datadir):
             "but ,  meanwhile ,  nobody cares .   Some of the deepest and most earnest minds vote the question ,  in general ,  a  ' sham and a snare ,  '  and whisper to each other",
         ]
     )
-    vocab_file = os.path.join(datadir, "vocab.txt")
+    vocab_file = datadir / "vocab.txt"
     vc = cudf.read_text(vocab_file, delimiter="\n", strip_delimiters=True)
     wpt = WordPieceVocabulary(vc)
     wpr = wpt.tokenize(s, max_words)

@@ -1,25 +1,20 @@
 # =============================================================================
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 
 include(../../../../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
 include(rapids-cpm)
-rapids_cpm_init()
+rapids_cpm_init(
+  OVERRIDE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../cpp/cmake/thirdparty/patches/override.json"
+)
 
 rapids_cuda_init_architectures(CUDF_JNI)
 
@@ -36,7 +31,6 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
@@ -48,7 +42,6 @@ message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE
         "CUDF_JNI: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}"
 )
-message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
@@ -99,6 +92,10 @@ get_target_property(CUDF_CUDA_FLAGS cudf::cudf CUDF_CUDA_FLAGS)
 get_target_property(CUDF_CXX_DEFINITIONS cudf::cudf CUDF_CXX_DEFINITIONS)
 get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
 
+# The Java/JNI build always triggers static builds of both libcudf itself and its dependencies, and
+# therefore needs all of them to be installed to link against later.
+set(CUDF_INSTALL_LIBRARY_DEPS ON)
+
 # ##################################################################################################
 # * nvtx3 and nvcomp-------------------------------------------------------------------------------
 #   Reuse any cached package that is already available after configuring/installing libcudf. Only
@@ -141,6 +138,18 @@ if(USE_GDS)
   endif()
 endif()
 
+# Set RMM logging level
+set(RMM_LOGGING_LEVEL
+    "INFO"
+    CACHE STRING "Choose the logging level."
+)
+set_property(
+  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+)
+message(VERBOSE "CUDF_JNI: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+
+add_compile_definitions("RMM_LOG_ACTIVE_LEVEL=RAPIDS_LOGGER_LOG_LEVEL_${RMM_LOGGING_LEVEL}")
+
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
@@ -158,8 +167,10 @@ add_library(
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
   src/DataSourceHelperJni.cpp
+  src/DeletionVectorJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
+  src/KeyRemappingJni.cpp
   src/HostUDFWrapperJni.cpp
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
@@ -243,7 +254,7 @@ if(USE_GDS)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -272,13 +283,7 @@ target_link_libraries(
 #   cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic
 #   linking
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-endif()
+set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
 
 # ##################################################################################################
 # * install shared libraries ----------------------------------------------------------------------

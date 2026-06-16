@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -58,6 +47,8 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   cudf::size_type const num_cols    = state.get_int64("num_cols");
   size_t const num_files            = get_num_reads(state);
   size_t const per_file_data_size   = get_read_size(state);
+  auto const rg_size_bytes          = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows           = state.get_int64("row_group_size_rows");
 
   std::vector<cuio_source_sink_pair> source_sink_vector;
 
@@ -77,6 +68,9 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
         .compression(cudf::io::compression_type::SNAPPY)
         .max_page_size_rows(50000)
         .max_page_size_bytes(1024 * 1024);
+    // Sentinel 0 == use cuDF default (parquet bytes default is size_t::max).
+    if (rg_size_bytes > 0) write_opts.set_row_group_size_bytes(rg_size_bytes);
+    if (rg_size_rows > 0) write_opts.set_row_group_size_rows(rg_size_rows);
 
     cudf::io::write_parquet(write_opts);
     total_file_size += source_sink.size();
@@ -281,7 +275,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_mixed)
   .add_int64_axis("num_iterations", {1})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_fixed_width)
   .set_name("parquet_multithreaded_read_decode_fixed_width")
@@ -292,7 +288,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_fixed_width)
   .add_int64_axis("num_iterations", {1})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_string)
   .set_name("parquet_multithreaded_read_decode_string")
@@ -303,7 +301,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_string)
   .add_int64_axis("num_iterations", {1})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_list)
   .set_name("parquet_multithreaded_read_decode_list")
@@ -314,7 +314,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_list)
   .add_int64_axis("num_iterations", {1})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 // mixed data types: fixed width, strings
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_mixed)
@@ -328,7 +330,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_mixed)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_fixed_width)
   .set_name("parquet_multithreaded_read_decode_chunked_fixed_width")
@@ -341,7 +345,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_fixed_width)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_string)
   .set_name("parquet_multithreaded_read_decode_chunked_string")
@@ -354,7 +360,9 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_string)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_list)
   .set_name("parquet_multithreaded_read_decode_chunked_list")
@@ -367,4 +375,6 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_list)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER"})
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});

@@ -1,30 +1,27 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
-
-ctypedef fused Replacement:
-    Column
-    Scalar
-
-ctypedef fused Patterns:
-    RegexProgram
-    list
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 
 cpdef Column replace_re(
     Column input,
-    Patterns patterns,
-    Replacement replacement=*,
+    RegexProgram patterns,
+    Scalar replacement=*,
     size_type max_replace_count=*,
-    regex_flags flags=*
+    object stream = *,
+    DeviceMemoryResource mr=*
 )
 
 cpdef Column replace_with_backrefs(
     Column input,
     RegexProgram prog,
-    str replacement
+    str replacement,
+    object stream = *,
+    DeviceMemoryResource mr=*
 )

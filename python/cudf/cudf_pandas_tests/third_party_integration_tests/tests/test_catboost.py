@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +12,7 @@ rng = np.random.default_rng(seed=42)
 def assert_catboost_equal(expect, got, rtol=1e-7, atol=0.0):
     if isinstance(expect, (tuple, list)):
         assert len(expect) == len(got)
-        for e, g in zip(expect, got):
+        for e, g in zip(expect, got, strict=True):
             assert_catboost_equal(e, g, rtol, atol)
     elif isinstance(expect, np.ndarray):
         np.testing.assert_allclose(expect, got, rtol=rtol, atol=atol)

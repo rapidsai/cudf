@@ -1,22 +1,10 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../utilities/timer.hpp"
 #include "common_utils.hpp"
-#include "io_source.hpp"
+#include "timer.hpp"
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
@@ -138,9 +126,9 @@ int main(int argc, char const** argv)
   }
 
   // Create and use a memory pool
-  bool is_pool_used = true;
-  auto resource     = create_memory_resource(is_pool_used);
-  cudf::set_current_device_resource(resource.get());
+  bool constexpr is_pool_used = true;
+  auto resource               = create_memory_resource(is_pool_used);
+  cudf::set_current_device_resource(resource);
 
   // Read input parquet file
   // We do not want to time the initial read time as it may include
@@ -157,7 +145,7 @@ int main(int argc, char const** argv)
             << page_stat_string << "..\n";
 
   // `timer` is automatically started here
-  cudf::examples::timer timer;
+  timer timer;
   write_parquet(input->view(), metadata, output_filepath, encoding, compression, page_stats);
   timer.print_elapsed_millis();
 

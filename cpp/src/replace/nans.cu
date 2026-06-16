@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -30,7 +19,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/limits>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -40,12 +30,12 @@ namespace {
 
 struct replace_nans_functor {
   template <typename T, typename Replacement>
-  std::enable_if_t<std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    Replacement const& replacement,
-    bool replacement_nullable,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     Replacement const& replacement,
+                                     bool replacement_nullable,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point_v<T>)
   {
     CUDF_EXPECTS(input.type() == replacement.type(),
                  "Input and replacement must be of the same type");
@@ -74,7 +64,8 @@ struct replace_nans_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
@@ -138,7 +129,7 @@ struct normalize_nans_and_zeros_lambda {
   T __device__ operator()(cudf::size_type i)
   {
     auto e = in.element<T>(i);
-    if (isnan(e)) { return std::numeric_limits<T>::quiet_NaN(); }
+    if (isnan(e)) { return cuda::std::numeric_limits<T>::quiet_NaN(); }
     if (T{0.0} == e) { return T{0.0}; }
     return e;
   }
@@ -150,21 +141,23 @@ struct normalize_nans_and_zeros_lambda {
  */
 struct normalize_nans_and_zeros_kernel_forwarder {
   // floats and doubles. what we really care about.
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   void operator()(cudf::column_device_view in,
                   cudf::mutable_column_device_view out,
                   rmm::cuda_stream_view stream)
+    requires(std::is_floating_point_v<T>)
   {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(in.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{in.size()},
                       out.head<T>(),
                       normalize_nans_and_zeros_lambda<T>{in});
   }
 
   // if we get in here for anything but a float or double, that's a problem.
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_floating_point_v<T>, void> operator()(Args&&...)
+  void operator()(Args&&...)
+    requires(not std::is_floating_point_v<T>)
   {
     CUDF_FAIL("Unexpected non floating-point type.");
   }
@@ -240,6 +233,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out, rmm::cuda_stream_view stream)
 {

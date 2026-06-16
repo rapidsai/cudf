@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -78,7 +67,8 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   agg_requests.front().aggregations.push_back(convert_to<cudf::groupby_aggregation>(aggr));
 
   auto group_by = cudf::groupby::groupby{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-  auto aggregation_results           = group_by.aggregate(agg_requests, stream);
+  auto aggregation_results =
+    group_by.aggregate(agg_requests, stream, cudf::get_current_device_resource_ref());
   auto const& aggregation_result_col = aggregation_results.second.front().results.front();
 
   using cudf::groupby::detail::sort::sort_groupby_helper;
@@ -88,7 +78,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   auto result_columns = cudf::detail::gather(cudf::table_view{{*aggregation_result_col}},
                                              group_labels,
                                              cudf::out_of_bounds_policy::DONT_CHECK,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             cudf::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr)
                           ->release();
@@ -105,9 +95,11 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
   auto const reduce_results = [&] {
     auto const return_dtype = cudf::detail::target_type(input.type(), aggr.kind);
     if (aggr.kind == aggregation::COUNT_ALL) {
-      return cudf::make_fixed_width_scalar(input.size(), stream);
+      return cudf::make_fixed_width_scalar(
+        input.size(), stream, cudf::get_current_device_resource_ref());
     } else if (aggr.kind == aggregation::COUNT_VALID) {
-      return cudf::make_fixed_width_scalar(input.size() - input.null_count(), stream);
+      return cudf::make_fixed_width_scalar(
+        input.size() - input.null_count(), stream, cudf::get_current_device_resource_ref());
     } else {
       return cudf::reduction::detail::reduce(input,
                                              *convert_to<cudf::reduce_aggregation>(aggr),

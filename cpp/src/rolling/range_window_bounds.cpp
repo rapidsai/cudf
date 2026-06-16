@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "detail/range_window_bounds.hpp"
@@ -19,6 +8,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace {
@@ -44,7 +34,9 @@ struct range_scalar_constructor {
                                      rmm::cuda_stream_view stream) const
   {
     return std::make_unique<duration_scalar<T>>(
-      static_cast<duration_scalar<T> const&>(range_scalar_), stream);
+      static_cast<duration_scalar<T> const&>(range_scalar_),
+      stream,
+      cudf::get_current_device_resource_ref());
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && not cudf::is_boolean<T>())>
@@ -52,7 +44,8 @@ struct range_scalar_constructor {
                                      rmm::cuda_stream_view stream) const
   {
     return std::make_unique<numeric_scalar<T>>(static_cast<numeric_scalar<T> const&>(range_scalar_),
-                                               stream);
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
@@ -60,7 +53,9 @@ struct range_scalar_constructor {
                                      rmm::cuda_stream_view stream) const
   {
     return std::make_unique<fixed_point_scalar<T>>(
-      static_cast<fixed_point_scalar<T> const&>(range_scalar_), stream);
+      static_cast<fixed_point_scalar<T> const&>(range_scalar_),
+      stream,
+      cudf::get_current_device_resource_ref());
   }
 };
 }  // namespace
@@ -78,12 +73,16 @@ range_window_bounds::range_window_bounds(extent_type extent_,
 
 range_window_bounds range_window_bounds::unbounded(data_type type, rmm::cuda_stream_view stream)
 {
-  return {extent_type::UNBOUNDED, make_default_constructed_scalar(type, stream), stream};
+  auto s = make_default_constructed_scalar(type, stream, cudf::get_current_device_resource_ref());
+  s->set_valid_async(true, stream);
+  return {extent_type::UNBOUNDED, std::move(s), stream};
 }
 
 range_window_bounds range_window_bounds::current_row(data_type type, rmm::cuda_stream_view stream)
 {
-  return {extent_type::CURRENT_ROW, make_default_constructed_scalar(type, stream), stream};
+  auto s = make_default_constructed_scalar(type, stream, cudf::get_current_device_resource_ref());
+  s->set_valid_async(true, stream);
+  return {extent_type::CURRENT_ROW, std::move(s), stream};
 }
 
 range_window_bounds range_window_bounds::get(scalar const& boundary, rmm::cuda_stream_view stream)

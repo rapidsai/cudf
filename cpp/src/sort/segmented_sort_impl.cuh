@@ -1,22 +1,11 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -78,8 +67,10 @@ struct column_fast_sort_fn {
                                                 stream,
                                                 cudf::get_current_device_resource_ref());
     mutable_column_view output_view = temp_col->mutable_view();
-    auto temp_indices               = cudf::column(
-      cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0), stream);
+    auto temp_indices =
+      cudf::column(cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0),
+                   stream,
+                   cudf::get_current_device_resource_ref());
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -166,8 +157,11 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
 {
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
-  auto sorted_indices =
-    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0, true, stream}, stream, mr);
+  auto sorted_indices = cudf::detail::sequence(
+    input.size(),
+    numeric_scalar<size_type>{0, true, stream, cudf::get_current_device_resource_ref()},
+    stream,
+    mr);
   auto indices_view = sorted_indices->mutable_view();
 
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
@@ -321,7 +315,7 @@ std::unique_ptr<table> segmented_sort_by_key_common(table_view const& values,
   return detail::gather(values,
                         sorted_order->view(),
                         out_of_bounds_policy::DONT_CHECK,
-                        detail::negative_index_policy::NOT_ALLOWED,
+                        negative_index_policy::NOT_ALLOWED,
                         stream,
                         mr);
 }

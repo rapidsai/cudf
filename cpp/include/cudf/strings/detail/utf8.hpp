@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -148,6 +137,9 @@ CUDF_HOST_DEVICE constexpr inline size_type from_char_utf8(char_utf8 character, 
  * @brief Converts a single UTF-8 character into a code-point value that
  * can be used for lookup in the character flags or the character case tables.
  *
+ * Note that this could return a 3-byte value outside the supported lookup
+ * tables' ranges.
+ *
  * @param utf8_char Single UTF-8 character to convert.
  * @return Code-point for the UTF-8 character.
  */
@@ -167,7 +159,7 @@ CUDF_HOST_DEVICE constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
     unchr |= (utf8_char & 0x00'003F);       // unmask
   } else if (utf8_char <= 0xF800'0000u)     // four bytes
   {
-    unchr = (utf8_char & 0x0300'0000) >> 6;   // upper 3 bits
+    unchr = (utf8_char & 0x0700'0000) >> 6;   // upper 3 bits
     unchr |= (utf8_char & 0x003F'0000) >> 4;  // next 6 bits
     unchr |= (utf8_char & 0x0000'3F00) >> 2;  // next 6 bits
     unchr |= (utf8_char & 0x0000'003F);       // unmask

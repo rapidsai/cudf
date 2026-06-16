@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/hashing.hpp>
@@ -106,7 +96,7 @@ TEST_F(MD5HashTest, EmptyNullEquivalence)
 
 TEST_F(MD5HashTest, StringLists)
 {
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto validity = cudf::test::iterators::null_at(0);
 
   // Test of data serialization: a string should hash the same as a list of
   // strings that concatenate to the same input.
@@ -177,7 +167,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
   cudf::test::fixed_width_column_wrapper<bool> const col3(
     {0, 0, 0, 1, 1, 0, 0, 0, 1}, {true, false, false, true, true, false, false, false, true});
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::test::iterators::null_at(1);
   cudf::test::lists_column_wrapper<bool> const list_col({{false, false, false},
                                                          {true},
                                                          {},
@@ -217,7 +207,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
   cudf::test::fixed_width_column_wrapper<T> const col3({0, 0, 0, 64, 49, 0, 0, 0, 102},
                                                        {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  auto validity = cudf::test::iterators::null_at(1);
   cudf::test::lists_column_wrapper<T> const list_col(
     {{0, 0, 0}, {}, {}, {{32, 0, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
     validity);

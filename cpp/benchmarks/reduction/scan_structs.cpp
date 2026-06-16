@@ -1,25 +1,15 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/scan.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -56,10 +46,12 @@ static void nvbench_structs_scan(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   std::unique_ptr<cudf::column> result = nullptr;
+  auto const mem_stats_logger          = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    result = cudf::detail::scan_inclusive(
-      input_view, *agg, null_policy, stream, cudf::get_current_device_resource_ref());
+    result = cudf::scan(input_view, *agg, cudf::scan_type::INCLUSIVE, null_policy, stream);
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 
   state.add_element_count(input_view.size());
   state.add_global_memory_reads(estimate_size(input_view));

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "text/utilities/tokenize_ops.cuh"
@@ -35,19 +24,20 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 #include <thrust/remove.h>
 
 namespace nvtext {
 namespace detail {
 namespace {
 
-using replace_result = thrust::pair<bool, cudf::string_view>;
+using replace_result = cuda::std::pair<bool, cudf::string_view>;
 
 struct base_token_replacer_fn {
   cudf::column_device_view d_strings;          ///< strings to tokenize
@@ -303,19 +293,22 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
   auto tmp_offsets = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
-    auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    auto const count_itr = cuda::counting_iterator<int64_t>{0};
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       count_itr,
                       count_itr + sub_count,
                       sub_offsets.data(),
                       sub_offset_fn{input_chars, first_offset, last_offset});
     // remove 0s -- where sub-offset could not be computed
     auto const remove_end =
-      thrust::remove(rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L);
+      thrust::remove(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     sub_offsets.begin(),
+                     sub_offsets.end(),
+                     0L);
     sub_count = cuda::std::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   sub_offsets.begin(),
@@ -335,7 +328,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
 
   // compute indices to the actual output rows
   auto indices = rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream);
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input_offsets,
                       input_offsets + input.size() + 1,
                       tmp_offsets.begin(),
@@ -344,7 +337,10 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
 
   // initialize the output row sizes
   auto d_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), d_sizes.begin(), d_sizes.end(), 0);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               d_sizes.begin(),
+               d_sizes.end(),
+               0);
 
   replacer.d_strings      = *d_tmp_strings;
   replacer.d_indices      = indices.data();

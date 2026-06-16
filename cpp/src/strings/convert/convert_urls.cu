@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -20,6 +9,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -37,6 +27,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cooperative_groups/scan.h>
 #include <cub/cub.cuh>
+#include <cuda/std/algorithm>
 
 namespace cudf {
 namespace strings {
@@ -161,7 +152,7 @@ namespace detail {
 namespace {
 
 // utility to convert a hex char into a single byte
-constexpr uint8_t hex_char_to_byte(char ch)
+__device__ constexpr uint8_t hex_char_to_byte(char ch)
 {
   if (ch >= '0' && ch <= '9') return (ch - '0');
   if (ch >= 'A' && ch <= 'F') return (ch - 'A' + 10);  // in hex A=10,B=11,...,F=15
@@ -169,7 +160,7 @@ constexpr uint8_t hex_char_to_byte(char ch)
   return 0;
 }
 
-constexpr bool is_hex_digit(char ch)
+__device__ constexpr bool is_hex_digit(char ch)
 {
   return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
 }
@@ -233,7 +224,7 @@ CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
 
     for (size_type block_idx = 0; block_idx < nblocks; block_idx++) {
       auto const string_length_block =
-        std::min(char_block_size, string_length - char_block_size * block_idx);
+        cuda::std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to the shared memory.
       // When testing whether a location is the start of an escaped character, we need to access
@@ -323,7 +314,7 @@ CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
 
     for (size_type block_idx = 0; block_idx < nblocks; block_idx++) {
       auto const string_length_block =
-        std::min(char_block_size, string_length - char_block_size * block_idx);
+        cuda::std::min(char_block_size, string_length - char_block_size * block_idx);
 
       // Each warp collectively loads input characters of the current block to shared memory.
       // Two halo cells before and after the block are added. The halo cells are used to test
@@ -401,6 +392,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   auto row_sizes = rmm::device_uvector<size_type>(strings_count, stream);
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, row_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   // performs scan on the sizes and builds the appropriate offsets column
   auto [offsets_column, out_chars_bytes] = cudf::strings::detail::make_offsets_child_column(
     row_sizes.begin(), row_sizes.end(), stream, mr);
@@ -414,6 +406,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   // decode and copy the characters from the input column to the output column
   url_decode_char_replacer<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, d_out_chars, offsets);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
