@@ -10,15 +10,15 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.integrations.partition import (
-    split_and_pack,
-    unpack_and_concat,
-)
-from cudf_streaming.streaming.partition import (
+from cudf_streaming.partition import (
     partition_and_pack,
     unpack_and_concat as streaming_unpack_and_concat,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.partition_utils import (
+    split_and_pack,
+    unpack_and_concat,
+)
+from cudf_streaming.table_chunk import TableChunk
 from cudf_streaming.testing import assert_eq
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import (

@@ -8,7 +8,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_device.hpp>
@@ -159,9 +159,8 @@ streaming::Actor consume_channel(std::shared_ptr<streaming::Context> ctx,
   while (true) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    if (msg.holds<cudf_streaming::streaming::TableChunk>()) {
-      auto chunk =
-        co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    if (msg.holds<cudf_streaming::table_chunk>()) {
+      auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
       ctx->logger()->print("Consumed chunk with ",
                            chunk.table_view().num_rows(),
                            " rows and ",

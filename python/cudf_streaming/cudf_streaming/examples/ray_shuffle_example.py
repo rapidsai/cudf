@@ -12,7 +12,7 @@ import pylibcudf as plc
 import ray
 
 import rmm
-from cudf_streaming.integrations.partition import (
+from cudf_streaming.partition_utils import (
     partition_and_pack,
     unpack_and_concat,
 )

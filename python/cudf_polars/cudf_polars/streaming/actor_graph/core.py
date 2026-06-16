@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-    from cudf_streaming.streaming.table_chunk import TableChunk
+    from cudf_streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context

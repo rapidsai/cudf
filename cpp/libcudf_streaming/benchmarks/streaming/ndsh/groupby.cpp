@@ -9,7 +9,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rapidsmpf/communicator/communicator.hpp>
 #include <rapidsmpf/streaming/core/channel.hpp>
@@ -33,9 +33,9 @@ streaming::Actor chunkwise_group_by(std::shared_ptr<streaming::Context> ctx,
   while (!ch_out->is_shutdown()) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    auto chunk  = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
-    auto stream = chunk.stream();
-    auto table  = chunk.table_view();
+    auto chunk        = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
+    auto stream       = chunk.stream();
+    auto table        = chunk.table_view();
     auto agg_requests = std::vector<cudf::groupby::aggregation_request>();
     agg_requests.reserve(requests.size());
     std::ranges::transform(requests, std::back_inserter(agg_requests), [&table](auto&& req) {
@@ -53,10 +53,10 @@ streaming::Actor chunkwise_group_by(std::shared_ptr<streaming::Context> ctx,
     for (auto&& a : aggregated) {
       std::ranges::move(a.results, std::back_inserter(result));
     }
-    co_await ch_out->send(cudf_streaming::streaming::to_message(
-      msg.sequence_number(),
-      std::make_unique<cudf_streaming::streaming::TableChunk>(
-        std::make_unique<cudf::table>(std::move(result)), stream)));
+    co_await ch_out->send(
+      cudf_streaming::to_message(msg.sequence_number(),
+                                 std::make_unique<cudf_streaming::table_chunk>(
+                                   std::make_unique<cudf::table>(std::move(result)), stream)));
   }
   co_await ch_out->drain(ctx->executor());
 }

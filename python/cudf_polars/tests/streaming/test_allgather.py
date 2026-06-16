@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager

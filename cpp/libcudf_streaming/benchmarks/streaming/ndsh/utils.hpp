@@ -10,8 +10,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/parquet.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -95,11 +95,10 @@ namespace detail {
  * @return Filter expression with proper lifetime management
  */
 template <typename timestamp_type>
-std::unique_ptr<cudf_streaming::streaming::Filter> make_date_filter(
-  rmm::cuda_stream_view stream,
-  cuda::std::chrono::year_month_day date,
-  std::string const& column_name,
-  cudf::ast::ast_operator op)
+std::unique_ptr<cudf_streaming::filter> make_date_filter(rmm::cuda_stream_view stream,
+                                                         cuda::std::chrono::year_month_day date,
+                                                         std::string const& column_name,
+                                                         cudf::ast::ast_operator op)
 {
   auto owner    = new std::vector<std::any>;
   auto sys_days = cuda::std::chrono::sys_days(date);
@@ -112,7 +111,7 @@ std::unique_ptr<cudf_streaming::streaming::Filter> make_date_filter(
     op,
     *std::any_cast<std::shared_ptr<cudf::ast::column_name_reference>>(owner->at(2)),
     *std::any_cast<std::shared_ptr<cudf::ast::literal>>(owner->at(1))));
-  return std::make_unique<cudf_streaming::streaming::Filter>(
+  return std::make_unique<cudf_streaming::filter>(
     stream,
     *std::any_cast<std::shared_ptr<cudf::ast::operation>>(owner->back()),
     OwningWrapper(static_cast<void*>(owner),
@@ -135,7 +134,7 @@ std::unique_ptr<cudf_streaming::streaming::Filter> make_date_filter(
  * @return Filter expression with proper lifetime management
  */
 template <typename timestamp_type>
-std::unique_ptr<cudf_streaming::streaming::Filter> make_date_range_filter(
+std::unique_ptr<cudf_streaming::filter> make_date_range_filter(
   rmm::cuda_stream_view stream,
   cuda::std::chrono::year_month_day start_date,
   cuda::std::chrono::year_month_day end_date,
@@ -176,7 +175,7 @@ std::unique_ptr<cudf_streaming::streaming::Filter> make_date_range_filter(
     *std::any_cast<std::shared_ptr<cudf::ast::operation>>(owner->at(5)),
     *std::any_cast<std::shared_ptr<cudf::ast::operation>>(owner->at(6))));
 
-  return std::make_unique<cudf_streaming::streaming::Filter>(
+  return std::make_unique<cudf_streaming::filter>(
     stream,
     *std::any_cast<std::shared_ptr<cudf::ast::operation>>(owner->back()),
     OwningWrapper(static_cast<void*>(owner),
@@ -200,7 +199,7 @@ std::unique_ptr<cudf_streaming::streaming::Filter> make_date_range_filter(
  * @param ctx Streaming context
  * @param ch Channel to consume messages from.
  *
- * @note If the channel contains `TableChunk`s, moves them to device and prints small
+ * @note If the channel contains `table_chunk`s, moves them to device and prints small
  * amount of detail about them (row and column count).
  *
  * @return Coroutine representing consuming and discarding messages in channel.

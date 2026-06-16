@@ -25,8 +25,8 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/parquet.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 
@@ -62,7 +62,7 @@ rapidsmpf::streaming::Actor read_lineitem(std::shared_ptr<rapidsmpf::streaming::
       .column_names(
         {"l_discount", "l_extendedprice", "l_orderkey", "l_partkey", "l_quantity", "l_suppkey"})
       .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -78,7 +78,7 @@ rapidsmpf::streaming::Actor read_nation(std::shared_ptr<rapidsmpf::streaming::Co
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files))
                    .column_names({"n_name", "n_nationkey"})
                    .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -94,7 +94,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files))
                    .column_names({"o_orderdate", "o_orderkey"})
                    .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -110,7 +110,7 @@ rapidsmpf::streaming::Actor read_part(std::shared_ptr<rapidsmpf::streaming::Cont
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files))
                    .column_names({"p_partkey", "p_name"})
                    .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -126,7 +126,7 @@ rapidsmpf::streaming::Actor read_partsupp(std::shared_ptr<rapidsmpf::streaming::
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files))
                    .column_names({"ps_partkey", "ps_suppkey", "ps_supplycost"})
                    .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -142,7 +142,7 @@ rapidsmpf::streaming::Actor read_supplier(std::shared_ptr<rapidsmpf::streaming::
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files))
                    .column_names({"s_nationkey", "s_suppkey"})
                    .build();
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -156,16 +156,16 @@ rapidsmpf::streaming::Actor filter_part(std::shared_ptr<rapidsmpf::streaming::Co
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
     co_await ctx->executor()->schedule();
-    auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto chunk        = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto chunk_stream = chunk.stream();
     auto table        = chunk.table_view();
     auto p_name       = table.column(1);
     auto target       = cudf::make_string_scalar("green", chunk_stream, mr);
     auto mask         = cudf::strings::contains(
       p_name, *static_cast<cudf::string_scalar*>(target.get()), chunk_stream, mr);
-    co_await ch_out->send(cudf_streaming::streaming::to_message(
+    co_await ch_out->send(cudf_streaming::to_message(
       msg.sequence_number(),
-      std::make_unique<cudf_streaming::streaming::TableChunk>(
+      std::make_unique<cudf_streaming::table_chunk>(
         cudf::apply_boolean_mask(table.select({0}), mask->view(), chunk_stream, mr),
         chunk_stream)));
   }
@@ -186,7 +186,7 @@ rapidsmpf::streaming::Actor select_columns(std::shared_ptr<rapidsmpf::streaming:
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
     co_await ctx->executor()->schedule();
-    auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto chunk           = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto chunk_stream    = chunk.stream();
     auto sequence_number = msg.sequence_number();
     auto table           = chunk.table_view();
@@ -221,9 +221,9 @@ static __device__ void calculate_amount(double *amount, double discount, double 
       cudf::output_nullability::PRESERVE,
       chunk_stream,
       ctx->br()->device_mr()));
-    co_await ch_out->send(cudf_streaming::streaming::to_message(
+    co_await ch_out->send(cudf_streaming::to_message(
       sequence_number,
-      std::make_unique<cudf_streaming::streaming::TableChunk>(
+      std::make_unique<cudf_streaming::table_chunk>(
         std::make_unique<cudf::table>(std::move(result)), chunk_stream)));
   }
   co_await ch_out->drain(ctx->executor());
@@ -248,7 +248,7 @@ rapidsmpf::streaming::Actor round_sum_profit(std::shared_ptr<rapidsmpf::streamin
   RAPIDSMPF_EXPECTS(!msg.empty(), "Expecting to see a single chunk");
   auto next = co_await ch_in->receive();
   RAPIDSMPF_EXPECTS(next.empty(), "Not expecting to see a second chunk");
-  auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+  auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
   auto table = chunk.table_view();
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -256,9 +256,9 @@ rapidsmpf::streaming::Actor round_sum_profit(std::shared_ptr<rapidsmpf::streamin
   auto rounded = cudf::round(
     table.column(2), 2, cudf::rounding_method::HALF_EVEN, chunk.stream(), ctx->br()->device_mr());
 #pragma GCC diagnostic pop
-  auto result = cudf_streaming::streaming::to_message(
+  auto result = cudf_streaming::to_message(
     0,
-    std::make_unique<cudf_streaming::streaming::TableChunk>(
+    std::make_unique<cudf_streaming::table_chunk>(
       std::make_unique<cudf::table>(
         cudf::table_view({table.column(0), table.column(1), rounded->view()}),
         chunk.stream(),

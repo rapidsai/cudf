@@ -8,9 +8,9 @@
 #include "../utils/rmm_utils.hpp"
 #include "data_generator.hpp"
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/partition.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
@@ -233,13 +233,13 @@ rapidsmpf::Duration run(std::shared_ptr<rapidsmpf::streaming::Context> ctx,
     actors.push_back(rapidsmpf::streaming::actor::random_table_generator(
       ctx, stream, ch1, args.num_local_partitions, num_columns, num_local_rows, min_val, max_val));
     auto ch2 = ctx->create_channel();
-    actors.push_back(cudf_streaming::streaming::actor::partition_and_pack(
+    actors.push_back(cudf_streaming::actor::partition_and_pack(
       ctx, ch1, ch2, {0}, static_cast<int>(total_num_partitions), hash_function, seed));
     auto ch3 = ctx->create_channel();
     actors.push_back(
       rapidsmpf::streaming::actor::shuffler(ctx, comm, ch2, ch3, op_id, total_num_partitions));
     auto ch4 = ctx->create_channel();
-    actors.push_back(cudf_streaming::streaming::actor::unpack_and_concat(ctx, ch3, ch4));
+    actors.push_back(cudf_streaming::actor::unpack_and_concat(ctx, ch3, ch4));
     actors.push_back(consumer(ctx, ch4));
   }
   auto const t0_elapsed = rapidsmpf::Clock::now();

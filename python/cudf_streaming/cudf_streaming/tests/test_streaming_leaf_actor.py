@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.leaf_actor import (

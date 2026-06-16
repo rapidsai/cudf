@@ -10,9 +10,9 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.streaming import ChannelMetadata
-from cudf_streaming.streaming.bloom_filter import BloomFilter
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming import ChannelMetadata
+from cudf_streaming.bloom_filter import BloomFilter
+from cudf_streaming.table_chunk import TableChunk
 from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
 from rapidsmpf.streaming.core.leaf_actor import (
@@ -24,7 +24,7 @@ from rapidsmpf.streaming.core.message import Message
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from cudf_streaming.streaming.bloom_filter import BloomFilterChunk
+    from cudf_streaming.bloom_filter import BloomFilterChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.actor import CppActor

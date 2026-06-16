@@ -5,7 +5,7 @@
 
 #include "base_streaming_fixture.hpp"
 
-#include <cudf_streaming/integrations/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
 
 #include <cuda_runtime_api.h>
 

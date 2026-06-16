@@ -8,13 +8,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import pylibcudf as plc
-from cudf_streaming.streaming.bloom_filter import BloomFilter
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.bloom_filter import BloomFilter
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, MutableMapping
     from types import CoroutineType
 
-    from cudf_streaming.streaming.bloom_filter import BloomFilterChunk
+    from cudf_streaming.bloom_filter import BloomFilterChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context

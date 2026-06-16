@@ -8,7 +8,7 @@
 
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -29,7 +29,7 @@
 using namespace rapidsmpf;
 using namespace rapidsmpf::streaming;
 namespace actor = rapidsmpf::streaming::actor;
-using namespace cudf_streaming::streaming;
+using namespace cudf_streaming;
 
 using StreamingLeafTasks = BaseStreamingFixture;
 
@@ -52,7 +52,7 @@ TEST_F(StreamingLeafTasks, PushAndPullChunks)
     for (int i = 0; i < num_chunks; ++i) {
       inputs.emplace_back(to_message(
         i,
-        std::make_unique<TableChunk>(
+        std::make_unique<table_chunk>(
           std::make_unique<cudf::table>(expects[i], stream, ctx->br()->device_mr()), stream)));
     }
 
@@ -67,7 +67,7 @@ TEST_F(StreamingLeafTasks, PushAndPullChunks)
   EXPECT_EQ(expects.size(), outputs.size());
   for (std::size_t i = 0; i < expects.size(); ++i) {
     EXPECT_EQ(outputs[i].sequence_number(), i);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(outputs[i].get<TableChunk>().table_view(),
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(outputs[i].get<table_chunk>().table_view(),
                                        expects[i].view());
   }
 }

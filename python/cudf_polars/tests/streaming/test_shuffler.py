@@ -9,12 +9,12 @@ import pytest
 
 import polars as pl
 
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.options import StreamingOptions

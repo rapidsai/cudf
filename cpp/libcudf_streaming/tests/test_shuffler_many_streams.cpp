@@ -8,7 +8,7 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

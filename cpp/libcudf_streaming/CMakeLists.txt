@@ -71,14 +71,8 @@ include(../cmake/thirdparty/get_cucollections.cmake)
 # * library target --------------------------------------------------------------------------------
 add_library(
   cudf_streaming SHARED
-  src/integrations/bloom_filter.cu
-  src/integrations/partition.cpp
-  src/integrations/utils.cpp
-  src/streaming/bloom_filter.cpp
-  src/streaming/channel_metadata.cpp
-  src/streaming/parquet.cpp
-  src/streaming/partition.cpp
-  src/streaming/table_chunk.cpp
+  src/bloom_filter.cpp src/channel_metadata.cpp src/detail/device_bloom_filter.cu src/parquet.cpp
+  src/partition.cpp src/partition_utils.cpp src/table_chunk.cpp src/utils.cpp
 )
 
 # ##################################################################################################
@@ -149,7 +143,13 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf_streaming-exports
 )
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING
+  PATTERN "*.hpp"
+  PATTERN "detail" EXCLUDE
+)
 
 rapids_export(
   INSTALL cudf_streaming

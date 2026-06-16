@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 import pylibcudf.partitioning
-from cudf_streaming.integrations.partition import (
-    partition_and_pack as py_partition_and_pack,
-    split_and_pack as py_split_and_pack,
-    unpack_and_concat as py_unpack_and_concat,
-)
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.partition_utils import (
+    partition_and_pack as py_partition_and_pack,
+    split_and_pack as py_split_and_pack,
+    unpack_and_concat as py_unpack_and_concat,
+)
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.shuffler import PartitionAssignment
@@ -443,7 +443,7 @@ async def shuffle_actor(
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
-    from cudf_streaming.integrations.partition.
+    from cudf_streaming.partition_utils.
 
     Parameters
     ----------
