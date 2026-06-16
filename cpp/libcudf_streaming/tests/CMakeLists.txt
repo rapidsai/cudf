@@ -146,9 +146,9 @@ if(CUDF_STREAMING_HAVE_MPI)
   libcudf_streaming_mpirun_test_add(TEST_TARGET libcudf_streaming_mpi_tests)
 
   if(CUDF_STREAMING_HAVE_UCXX)
-    add_executable(libcudf_streaming_mpi_tests main/ucxx.cpp)
+    add_executable(libcudf_streaming_ucxx_tests main/ucxx.cpp)
     set_target_properties(
-      libcudf_streaming_mpi_tests
+      libcudf_streaming_ucxx_tests
       PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/gtests"
                  INSTALL_RPATH "\$ORIGIN/../../../lib"
                  CXX_STANDARD 20
@@ -158,11 +158,11 @@ if(CUDF_STREAMING_HAVE_MPI)
                  CUDA_STANDARD_REQUIRED ON
     )
     target_include_directories(
-      libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
+      libcudf_streaming_ucxx_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                           "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     target_link_libraries(
-      libcudf_streaming_mpi_tests
+      libcudf_streaming_ucxx_tests
       PRIVATE cudf_streaming
               rapidsmpf::rapidsmpf
               cudf_streaming::optional_communication
@@ -172,9 +172,9 @@ if(CUDF_STREAMING_HAVE_MPI)
               $<TARGET_NAME_IF_EXISTS:conda_env>
               libcudf_streaming_test_sources
     )
-    libcudf_streaming_mpirun_test_add(TEST_TARGET libcudf_streaming_mpi_tests)
+    libcudf_streaming_mpirun_test_add(TEST_TARGET libcudf_streaming_ucxx_tests)
   else()
-    cudf_streaming_skip_optional_target(libcudf_streaming_mpi_tests "UCXX not found")
+    cudf_streaming_skip_optional_target(libcudf_streaming_ucxx_tests "UCXX not found")
   endif()
 else()
   cudf_streaming_skip_optional_target(libcudf_streaming_mpi_tests "MPI not found")
