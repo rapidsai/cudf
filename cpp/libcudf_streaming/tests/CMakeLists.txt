@@ -58,7 +58,7 @@ set_target_properties(
 )
 target_include_directories(
   libcudf_streaming_test_sources PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
-                                      "${CMAKE_CURRENT_SOURCE_DIR}"
+                                         "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(
   libcudf_streaming_test_sources
@@ -99,7 +99,7 @@ set_target_properties(
 )
 target_include_directories(
   libcudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
-                                      "${CMAKE_CURRENT_SOURCE_DIR}"
+                                         "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(
   libcudf_streaming_single_tests
