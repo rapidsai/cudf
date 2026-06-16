@@ -701,7 +701,12 @@ def parse_single_row_loc_key(
                                 )
                             )
                         else:
-                            return MaskIndexer(BooleanMask(as_column(loc), n))
+                            loc_column = as_column(loc)
+                            if loc_column.dtype.kind in {"i", "u"}:
+                                return MapIndexer(
+                                    GatherMap(loc_column, n, nullify=False)
+                                )
+                            return MaskIndexer(BooleanMask(loc_column, n))
                 # Try to turn strings into datetimes
                 key = as_column(key, dtype=index.dtype)
             haystack = index._column
