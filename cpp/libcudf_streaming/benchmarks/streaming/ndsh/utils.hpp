@@ -10,12 +10,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cudf_streaming/streaming/parquet.hpp>
+#include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/memory_resource>
 
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/owning_wrapper.hpp>

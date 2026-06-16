@@ -7,6 +7,7 @@
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/partition.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/streaming/chunks/partition.hpp>
