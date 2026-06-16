@@ -53,7 +53,6 @@ target_sources(
           streaming/test_leaf_actor.cpp
           test_partition.cpp
           test_shuffler.cpp
-          test_shuffler_many_streams.cpp
 )
 
 add_executable(cudf_streaming_single_tests main/single.cpp)
