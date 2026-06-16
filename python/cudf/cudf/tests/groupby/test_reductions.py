@@ -1238,6 +1238,22 @@ def test_groupby_all_any_empty(op):
     assert_eq(expect, got, check_index_type=False)
 
 
+@pytest.mark.parametrize("op", ["all", "any"])
+@pytest.mark.parametrize("key_is_categorical", [False, True])
+def test_groupby_all_any_as_index_false(op, key_is_categorical):
+    # With as_index=False the grouping key is reset as a column; it must not
+    # be coerced to bool along with the (reduced) value columns.
+    key = [2, 1, 2, 3]
+    if key_is_categorical:
+        key = pd.Categorical(key, categories=[1, 4, 3, 2], ordered=True)
+    pdf = pd.DataFrame({"a": key, "b": range(4)})
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a", as_index=False), op)()
+    expect = getattr(pdf.groupby("a", as_index=False), op)()
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "string_dtype",
     [
