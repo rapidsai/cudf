@@ -6,6 +6,7 @@
 #include "../benchmarks/utils/random_data.hpp"
 
 #include <cudf_streaming/integrations/partition.hpp>
+
 #include <mpi.h>
 #include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/error.hpp>

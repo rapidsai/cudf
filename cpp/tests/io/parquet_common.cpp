@@ -7,12 +7,17 @@
 
 #include <cudf_test/iterator_utilities.hpp>
 
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/parquet_metadata.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
 
 #include <format>
+#include <numeric>
 #include <string>
 
 // Global environment for temporary files
@@ -694,6 +699,66 @@ TYPED_WITH_STATS(cudf::timestamp_ns);
 TYPED_WITH_STATS(numeric::decimal32);
 TYPED_WITH_STATS(numeric::decimal64);
 TYPED_WITH_STATS(numeric::decimal128);
+
+// helpers for row-group output ordering tests
+
+ordered_rg_source make_ordered_rg_source(int file_id,
+                                         cudf::size_type num_row_groups,
+                                         cudf::size_type rows_per_row_group)
+{
+  auto const num_rows = num_row_groups * rows_per_row_group;
+  std::vector<int32_t> values(num_rows);
+  for (cudf::size_type rg = 0; rg < num_row_groups; ++rg) {
+    auto const base = file_id * 10000 + rg * rows_per_row_group;
+    std::iota(values.begin() + rg * rows_per_row_group,
+              values.begin() + (rg + 1) * rows_per_row_group,
+              base);
+  }
+
+  cudf::test::fixed_width_column_wrapper<int32_t> col(values.begin(), values.end());
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(col.release());
+  auto in_memory = std::make_unique<cudf::table>(std::move(columns));
+
+  auto const filename = std::format("ordered_rg_source_f{}_rg{}.parquet", file_id, num_row_groups);
+  auto const filepath = temp_env->get_temp_filepath(filename);
+
+  // Setting `max_page_fragment_size` equal to `rows_per_row_group` makes the `row_group_size_rows`
+  // limit actually honored at the requested granularity.
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, in_memory->view())
+      .row_group_size_rows(rows_per_row_group)
+      .max_page_size_rows(rows_per_row_group)
+      .max_page_fragment_size(rows_per_row_group)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+  cudf::io::write_parquet(out_opts);
+
+  auto const written_meta = cudf::io::read_parquet_metadata(cudf::io::source_info{filepath});
+  CUDF_EXPECTS(written_meta.num_rowgroups() == num_row_groups,
+               "Parquet writer produced an unexpected number of row groups");
+
+  return ordered_rg_source{std::move(in_memory), filepath, num_row_groups, rows_per_row_group};
+}
+
+cudf::table_view get_row_group_slice(ordered_rg_source const& src, cudf::size_type rg_idx)
+{
+  auto const start = rg_idx * src.rows_per_row_group;
+  auto const end   = start + src.rows_per_row_group;
+  return cudf::slice(src.table->view(), {start, end}).front();
+}
+
+std::unique_ptr<cudf::table> build_expected_ordered_table(
+  cudf::host_span<ordered_rg_source const* const> sources,
+  cudf::host_span<std::vector<cudf::size_type> const> rg_selection)
+{
+  std::vector<cudf::table_view> slices;
+  for (size_t src_idx = 0; src_idx < rg_selection.size(); ++src_idx) {
+    for (auto const rg_idx : rg_selection[src_idx]) {
+      slices.push_back(get_row_group_slice(*sources[src_idx], rg_idx));
+    }
+  }
+  return cudf::concatenate(slices);
+}
 
 // utility functions for column index tests
 
