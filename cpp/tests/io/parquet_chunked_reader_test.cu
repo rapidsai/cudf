@@ -4,7 +4,6 @@
  */
 
 #include "compression_common.hpp"
-#include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -1097,7 +1096,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   }
 }
 
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCountWithoutExplicitPassLimit)
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
 {
   auto constexpr num_rows = 100'000;
 
@@ -1120,9 +1119,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCountWithoutExplicitPassLimi
   auto const byte_limit = page_limit_rows * sizeof(int);
   auto const read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
-  cudf::test::log_capture log;
   auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
-  EXPECT_TRUE(log.has_messages());
 
   do {
     // Every fourth row is null

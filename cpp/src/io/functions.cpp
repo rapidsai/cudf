@@ -4,7 +4,7 @@
  */
 
 #include "io/orc/orc.hpp"
-#include "io/parquet/parquet_reader_helpers.hpp"
+#include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>

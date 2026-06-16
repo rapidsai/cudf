@@ -4,7 +4,7 @@
  */
 
 #include "deletion_vectors_helpers.hpp"
-#include "io/parquet/parquet_reader_helpers.hpp"
+#include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
