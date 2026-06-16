@@ -945,7 +945,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
                 cols = {
-                    i: as_column(col_value.array, nan_as_null=nan_as_null)
+                    # Pass the Series (not ``col_value.array``) so that
+                    # ``as_column`` sees the column's explicit dtype. For an
+                    # object-dtype string column with nulls this preserves
+                    # ``object`` rather than inferring ``str`` in
+                    # pandas-compatible mode, matching ``cudf.Series(col)``.
+                    i: as_column(col_value, nan_as_null=nan_as_null)
                     for i, (_, col_value) in enumerate(data.items())
                 }
                 new_idx = from_pandas(data.index, nan_as_null=nan_as_null)
@@ -5629,7 +5634,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col in data_to_describe._column_names
         ]
         if len(describe_series_list) == 1:
-            return describe_series_list[0].to_frame()
+            result = describe_series_list[0].to_frame()
         else:
             ldesc_indexes = sorted(
                 (x.index for x in describe_series_list), key=len
@@ -5643,7 +5648,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 None,
             )
 
-            return cudf.concat(
+            result = cudf.concat(
                 [
                     series.reindex(names, copy=False)
                     for series in describe_series_list
@@ -5651,6 +5656,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 axis=1,
                 sort=False,
             )
+        # ``describe`` produces one column per described column in the same
+        # order, so preserve the source column index (incl. its dtype/name,
+        # e.g. a ``CategoricalIndex``), which ``concat``/``to_frame`` drop.
+        result.columns = data_to_describe._data.to_pandas_index
+        return result
 
     @_performance_tracking
     def to_pandas(
