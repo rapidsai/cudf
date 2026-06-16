@@ -1,12 +1,14 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-from rmm.pylibrmm.stream import Stream
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
+from pylibcudf.utils import CudaStreamLike
 
 def edit_distance(
-    input: Column, targets: Column, stream: Stream | None = None
-) -> Column: ...
-def edit_distance_matrix(
-    input: Column, stream: Stream | None = None
+    input: Column,
+    targets: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

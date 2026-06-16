@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -27,6 +28,6 @@ def test_round(column, round_mode, decimals):
         "half_to_even": plc.round.RoundingMethod.HALF_EVEN,
     }[round_mode]
     got = plc.round.round(column, decimals, method)
-    expect = pc.round(plc.interop.to_arrow(column), decimals, round_mode)
+    expect = pc.round(column.to_arrow(), decimals, round_mode)
 
     assert_column_eq(expect, got)

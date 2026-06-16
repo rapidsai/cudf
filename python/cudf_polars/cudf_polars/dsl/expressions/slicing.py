@@ -43,4 +43,4 @@ class Slice(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.slice((self.offset, self.length))
+        return column.slice((self.offset, self.length), stream=df.stream)

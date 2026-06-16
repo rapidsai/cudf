@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -30,8 +19,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -66,7 +55,7 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
     auto const d_offsets = offsets->mutable_view().template data<OutputType>();
     auto const output_it = cudf::detail::make_sizes_to_offsets_iterator(
       d_offsets, d_offsets + string_count + 1, chars_sizes.data() + idx);
-    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            input_it,
                            input_it + string_count + 1,
                            output_it,
@@ -94,7 +83,10 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), d_valid_counts.begin(), d_valid_counts.end(), 0);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    d_valid_counts.begin(),
+    d_valid_counts.end(),
+    0);
 
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const& string_pairs = input[idx];
@@ -114,6 +106,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
         string_count,
         [] __device__(string_index_pair const pair) -> bool { return pair.first != nullptr; },
         d_valid_counts.data() + idx);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   auto const chars_sizes  = cudf::detail::make_std_vector_async(d_chars_sizes, stream);
@@ -184,7 +177,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
 // Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<char const*, size_type> const> strings,
+  device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -193,7 +186,7 @@ std::unique_ptr<column> make_strings_column(
 }
 
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -205,11 +198,11 @@ namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
-  __device__ thrust::pair<char const*, size_type> operator()(string_view const& i)
+  __device__ cuda::std::pair<char const*, size_type> operator()(string_view const& i)
   {
     return (i.data() == null_placeholder.data())
-             ? thrust::pair<char const*, size_type>{nullptr, 0}
-             : thrust::pair<char const*, size_type>{i.data(), i.size_bytes()};
+             ? cuda::std::pair<char const*, size_type>{nullptr, 0}
+             : cuda::std::pair<char const*, size_type>{i.data(), i.size_bytes()};
   }
 };
 

@@ -1,6 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
@@ -19,6 +23,7 @@
 
 #include "compiled/binary_ops.hpp"
 #include "jit/cache.hpp"
+#include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 
@@ -37,8 +42,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
-
-#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 #include <string>
 
@@ -151,19 +154,24 @@ void binary_operation(mutable_column_view& out,
                                            {2, cudf::type_to_name(rhs.type())},
                                          });
 
-  std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
-                              .instantiate(output_type_name,  // list of template arguments
-                                           cudf::type_to_name(lhs.type()),
-                                           cudf::type_to_name(rhs.type()),
-                                           std::string("cudf::binops::jit::UserDefinedOp"));
+  std::string kernel_reflection = rtcx::reflect_template("cudf::binops::jit::binary_op_kernel",
+                                                         output_type_name,
+                                                         cudf::type_to_name(lhs.type()),
+                                                         cudf::type_to_name(rhs.type()),
+                                                         "cudf::binops::jit::UserDefinedOp");
 
-  cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-    .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
-    ->launch(out.size(),
-             cudf::jit::get_data_ptr(out),
-             cudf::jit::get_data_ptr(lhs),
-             cudf::jit::get_data_ptr(rhs));
+  auto kernel = cudf::jit::get_udf_kernel(
+    "cudf/cpp/src/binaryop/jit/kernel.cu", kernel_reflection, cuda_source);
+  auto cfg = kernel.max_occupancy_config(0, 0);
+
+  kernel.launch_with({cfg.min_grid_size},
+                     {cfg.block_size},
+                     0,
+                     stream,
+                     static_cast<size_type>(out.size()),
+                     cudf::jit::get_data_ptr(out),
+                     cudf::jit::get_data_ptr(lhs),
+                     cudf::jit::get_data_ptr(rhs));
 }
 }  // namespace jit
 

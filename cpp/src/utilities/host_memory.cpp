@@ -1,21 +1,9 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/getenv_or.hpp"
-
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
@@ -23,105 +11,98 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <atomic>
-#include <cstdint>
+#include <cassert>
 #include <cstdlib>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
+#include <unordered_set>
 
 namespace cudf {
 
 namespace {
 
-class fixed_pinned_pool_memory_resource {
+// Inlined from RMM internals after public MR definitions moved to source files:
+// https://github.com/rapidsai/rmm/pull/2416
+void* aligned_host_allocate(std::size_t bytes, std::size_t alignment)
+{
+  assert(rmm::is_supported_alignment(alignment));
+
+  // allocate memory for bytes, plus potential alignment correction,
+  // plus store of the correction offset
+  std::size_t padded_allocation_size{bytes + alignment + sizeof(std::ptrdiff_t)};
+  char* const original = static_cast<char*>(::operator new(padded_allocation_size));
+
+  // account for storage of offset immediately prior to the aligned pointer
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  void* aligned{original + sizeof(std::ptrdiff_t)};
+
+  // std::align modifies `aligned` to point to the first aligned location
+  std::align(alignment, bytes, aligned, padded_allocation_size);
+
+  // Compute the offset between the original and aligned pointers
+  std::ptrdiff_t const offset = static_cast<char*>(aligned) - original;
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  *(static_cast<std::ptrdiff_t*>(aligned) - 1) = offset;
+
+  return aligned;
+}
+
+void aligned_host_deallocate(void* ptr,
+                             [[maybe_unused]] std::size_t bytes,
+                             [[maybe_unused]] std::size_t alignment) noexcept
+{
+  assert(rmm::is_supported_alignment(alignment));
+
+  if (ptr != nullptr) {
+    // Get offset from the location immediately prior to the aligned pointer
+    // NOLINTNEXTLINE
+    std::ptrdiff_t const offset = *(reinterpret_cast<std::ptrdiff_t*>(ptr) - 1);
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    void* const original = static_cast<char*>(ptr) - offset;
+
+    ::operator delete(original);
+  }
+}
+
+class pinned_pool_with_fallback_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
-  using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
+  using host_pooled_mr = rmm::mr::pool_memory_resource;
+
+  struct fallback_state {
+    mutable std::shared_mutex mutex;
+    std::unordered_set<void*> allocations;
+  };
 
  private:
   upstream_mr upstream_mr_{};
-  size_t pool_size_{0};
+  size_t initial_pool_size_{0};
+  size_t max_pool_size_{0};
   // Raw pointer to avoid a segfault when the pool is destroyed on exit
   host_pooled_mr* pool_{nullptr};
-  void* pool_begin_{nullptr};
-  void* pool_end_{nullptr};
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
+  // Wrapped in shared_ptr so the outer class is copyable (required by any_resource)
+  std::shared_ptr<fallback_state> fallback_{std::make_shared<fallback_state>()};
+
  public:
-  fixed_pinned_pool_memory_resource(size_t size)
+  pinned_pool_with_fallback_memory_resource(size_t initial_size, size_t max_size)
     :  // rmm requires the pool size to be a multiple of 256 bytes
-      pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
-      pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
+      initial_pool_size_{rmm::align_up(initial_size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
+      max_pool_size_{rmm::align_up(max_size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
+      pool_{new host_pooled_mr(upstream_mr_, initial_pool_size_, max_pool_size_)}
   {
-    CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
-
-    // Allocate full size from the pinned pool to figure out the beginning and end address
-    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
-    pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
-  }
-
-  void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
-  {
-    if (bytes <= pool_size_) {
-      try {
-        return pool_->allocate_async(bytes, alignment, stream);
-      } catch (...) {
-        // If the pool is exhausted, fall back to the upstream memory resource
-      }
-    }
-
-    return upstream_mr_.allocate_async(bytes, alignment, stream);
-  }
-
-  void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
-  {
-    return allocate_async(bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
-  }
-
-  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
-  {
-    auto const result = allocate_async(bytes, alignment, stream_);
-    stream_.wait();
-    return result;
-  }
-
-  void deallocate_async(void* ptr,
-                        std::size_t bytes,
-                        std::size_t alignment,
-                        cuda::stream_ref stream)
-  {
-    if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
-      pool_->deallocate_async(ptr, bytes, alignment, stream);
-    } else {
-      upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
-    }
-  }
-
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
-  {
-    return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
-  }
-
-  void deallocate(void* ptr,
-                  std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
-  {
-    deallocate_async(ptr, bytes, alignment, stream_);
-    stream_.wait();
-  }
-
-  bool operator==(fixed_pinned_pool_memory_resource const& other) const
-  {
-    return pool_ == other.pool_ and stream_ == other.stream_;
-  }
-
-  bool operator!=(fixed_pinned_pool_memory_resource const& other) const
-  {
-    return !operator==(other);
+    CUDF_LOG_INFO(
+      "Pinned pool initial size = %zu, max size = %zu", initial_pool_size_, max_pool_size_);
   }
 
   // clang-tidy will complain about this function because it is completely
@@ -131,18 +112,90 @@ class fixed_pinned_pool_memory_resource {
   // clang. If cudf were ever to try to support clang as a compile we would
   // need to force the compiler to emit this symbol. The same goes for the
   // other get_property definitions in this file.
-  friend void get_property(fixed_pinned_pool_memory_resource const&,  // NOLINT
+  friend void get_property(pinned_pool_with_fallback_memory_resource const&,  // NOLINT
                            cuda::mr::device_accessible) noexcept
   {
   }
 
-  friend void get_property(fixed_pinned_pool_memory_resource const&,  // NOLINT
+  friend void get_property(pinned_pool_with_fallback_memory_resource const&,  // NOLINT
                            cuda::mr::host_accessible) noexcept
   {
   }
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, ptr, bytes, alignment);
+  }
+
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    if (max_pool_size_ == 0) { return upstream_mr_.allocate(stream, bytes, alignment); }
+
+    try {
+      return pool_->allocate(stream, bytes, alignment);
+    } catch (...) {
+      CUDF_LOG_INFO("Pinned pool exhausted, falling back to new pinned allocation for %zu bytes",
+                    bytes);
+      // fall back to upstream
+      auto* ptr = upstream_mr_.allocate(stream, bytes, alignment);
+
+      {
+        std::unique_lock lock(fallback_->mutex);
+        fallback_->allocations.insert(ptr);
+      }
+
+      return ptr;
+    }
+  }
+
+  void deallocate(cuda::stream_ref stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    if (max_pool_size_ == 0) {
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
+      return;
+    }
+
+    bool is_fallback{false};
+    {
+      std::shared_lock lock(fallback_->mutex);
+      is_fallback = fallback_->allocations.find(ptr) != fallback_->allocations.end();
+    }
+
+    if (is_fallback) {
+      {
+        std::unique_lock lock(fallback_->mutex);
+        fallback_->allocations.erase(ptr);
+      }
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
+    } else {
+      pool_->deallocate(stream, ptr, bytes, alignment);
+    }
+  }
+
+  bool operator==(pinned_pool_with_fallback_memory_resource const& other) const noexcept
+  {
+    return pool_ == other.pool_ && stream_ == other.stream_;
+  }
+
+  bool operator!=(pinned_pool_with_fallback_memory_resource const& other) const noexcept
+  {
+    return !(*this == other);
+  }
 };
 
-static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
+static_assert(cuda::mr::resource_with<pinned_pool_with_fallback_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>,
               "Pinned pool mr must be accessible from both host and device");
@@ -150,8 +203,8 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
 CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
   std::optional<size_t> config_size)
 {
-  static fixed_pinned_pool_memory_resource mr = [config_size]() {
-    auto const size = [&config_size]() -> size_t {
+  static pinned_pool_with_fallback_memory_resource mr = [config_size]() {
+    auto const initial_size = [&config_size]() -> size_t {
       if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
         return std::atol(env_val);
       }
@@ -159,12 +212,18 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
       if (config_size.has_value()) { return *config_size; }
 
       auto const total = rmm::available_device_memory().second;
-      // 0.5% of the total device memory, capped at 100MB
-      return std::min(total / 200, size_t{100} * 1024 * 1024);
+      // 0.5% of the total device memory, capped at 64MB
+      return std::min(total / 200, size_t{64} * 1024 * 1024);
     }();
 
-    // make the pool with max size equal to the initial size
-    return fixed_pinned_pool_memory_resource{size};
+    auto const max_size = [&initial_size]() -> size_t {
+      if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_MAX_SIZE"); env_val != nullptr) {
+        return std::atol(env_val);
+      }
+      return initial_size * 16;
+    }();
+
+    return pinned_pool_with_fallback_memory_resource{initial_size, max_size};
   }();
 
   static rmm::host_device_async_resource_ref mr_ref{mr};
@@ -204,47 +263,35 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& host_mr()
 
 class new_delete_memory_resource {
  public:
-  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
     try {
-      return rmm::detail::aligned_host_allocate(
-        bytes, alignment, [](std::size_t size) { return ::operator new(size); });
+      return aligned_host_allocate(bytes, alignment);
     } catch (std::bad_alloc const& e) {
       CUDF_FAIL("Failed to allocate memory: " + std::string{e.what()}, rmm::out_of_memory);
     }
   }
 
-  void* allocate_async(std::size_t bytes, [[maybe_unused]] cuda::stream_ref stream)
+  void* allocate([[maybe_unused]] cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
-    return allocate(bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+    return allocate_sync(bytes, alignment);
   }
 
-  void* allocate_async(std::size_t bytes,
-                       std::size_t alignment,
-                       [[maybe_unused]] cuda::stream_ref stream)
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    return allocate(bytes, alignment);
+    aligned_host_deallocate(ptr, bytes, alignment);
   }
 
-  void deallocate(void* ptr,
+  void deallocate([[maybe_unused]] cuda::stream_ref stream,
+                  void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    rmm::detail::aligned_host_deallocate(
-      ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
-  }
-
-  void deallocate_async(void* ptr,
-                        std::size_t bytes,
-                        std::size_t alignment,
-                        [[maybe_unused]] cuda::stream_ref stream)
-  {
-    deallocate(ptr, bytes, alignment);
-  }
-
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
-  {
-    deallocate(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+    deallocate_sync(ptr, bytes, alignment);
   }
 
   bool operator==(new_delete_memory_resource const& other) const { return true; }
@@ -287,7 +334,8 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
 CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 {
   // use cudaMemcpyAsync for all pinned copies
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
   return threshold;
 }
 
@@ -301,7 +349,8 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
   return threshold;
 }
 

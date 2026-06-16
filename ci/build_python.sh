@@ -1,10 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
 source rapids-configure-sccache
-
 source rapids-date-string
 
 export CMAKE_GENERATOR=Ninja
@@ -16,7 +16,7 @@ rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
 
-CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
@@ -28,7 +28,7 @@ rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
-sccache --zero-stats
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building pylibcudf"
 
@@ -41,7 +41,7 @@ rapids-telemetry-record build-pylibcudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
-sccache --zero-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
 rapids-logger "Building cudf"
 
@@ -51,17 +51,7 @@ rapids-telemetry-record build-cudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
-sccache --zero-stats
-
-rapids-logger "Building dask-cudf"
-
-rapids-telemetry-record build-dask-cudf.log \
-    rattler-build build --recipe conda/recipes/dask-cudf \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
-sccache --zero-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
 rapids-logger "Building cudf_kafka"
 
@@ -71,26 +61,20 @@ rapids-telemetry-record build-cudf_kafka.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
-sccache --zero-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
-rapids-logger "Building custreamz"
+rapids-logger "Building cudf_streaming"
 
-rapids-telemetry-record build-custreamz.log \
-    rattler-build build --recipe conda/recipes/custreamz \
+rapids-telemetry-record build-cudf_streaming.log \
+    rattler-build build --recipe conda/recipes/cudf_streaming \
                     "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
 
-rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
-sccache --zero-stats
-
-rapids-logger "Building cudf-polars"
-
-rapids-telemetry-record build-cudf-polars.log \
-    rattler-build build --recipe conda/recipes/cudf-polars \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-cudf_streaming.txt sccache --show-adv-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
+
+RAPIDS_PACKAGE_NAME="$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")"
+export RAPIDS_PACKAGE_NAME

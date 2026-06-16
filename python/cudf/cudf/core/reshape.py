@@ -1,19 +1,17 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
-import warnings
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -21,10 +19,13 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    find_common_type,
+    is_pandas_nullable_extension_dtype,
     min_unsigned_type,
 )
 
@@ -107,7 +108,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not index._is_object()
+            sort = not is_dtype_obj_string(index.dtype)
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -129,12 +130,39 @@ def _normalize_series_and_dataframe(
             name = obj.name
             if name is None:
                 if axis == 0:
-                    name = 0
+                    # Preserve "unnamed" semantics so the resulting frame has
+                    # a RangeIndex columns object (matching pandas).
+                    objs[idx] = obj.to_frame()
+                    continue
                 else:
                     name = sr_name
                     sr_name += 1
 
             objs[idx] = obj.to_frame(name=name)
+
+
+def _finalize_concat_metadata(result, inputs):
+    """Propagate ``attrs`` and ``flags`` onto a concat result.
+
+    Mirrors pandas' ``__finalize__`` with ``input_objs``: ``attrs`` are
+    propagated only when all inputs carry identical non-empty ``attrs``,
+    and ``allows_duplicate_labels`` is the AND across inputs. The
+    :class:`~pandas.errors.DuplicateLabelError` check is performed by
+    :class:`pandas.Flags` when setting ``allows_duplicate_labels`` to
+    ``False``.
+    """
+    inputs = [
+        obj for obj in inputs if isinstance(obj, (cudf.Series, cudf.DataFrame))
+    ]
+    if not inputs or not isinstance(result, (cudf.Series, cudf.DataFrame)):
+        return result
+    if all(bool(obj.attrs) for obj in inputs):
+        first_attrs = inputs[0].attrs
+        if all(obj.attrs == first_attrs for obj in inputs[1:]):
+            result._attrs = copy.deepcopy(first_attrs)
+    allows = all(obj.flags.allows_duplicate_labels for obj in inputs)
+    result.flags.allows_duplicate_labels = allows
+    return result
 
 
 def concat(
@@ -193,17 +221,17 @@ def concat(
     >>> s1
     0    a
     1    b
-    dtype: object
+    dtype: str
     >>> s2
     0    c
     1    d
-    dtype: object
+    dtype: str
     >>> cudf.concat([s1, s2])
     0    a
     1    b
     0    c
     1    d
-    dtype: object
+    dtype: str
 
     Clear the existing index and reset it in the
     result by setting the ``ignore_index`` option to ``True``.
@@ -213,7 +241,7 @@ def concat(
     1    b
     2    c
     3    d
-    dtype: object
+    dtype: str
 
     Combine two DataFrame objects with identical columns.
 
@@ -248,8 +276,8 @@ def concat(
     1      d       4    dog
     >>> cudf.concat([df1, df3], sort=False)
       letter  number animal
-    0      a       1   <NA>
-    1      b       2   <NA>
+    0      a       1    NaN
+    1      b       2    NaN
     0      c       3    cat
     1      d       4    dog
 
@@ -287,6 +315,38 @@ def concat(
     0      a       1       c       3
     1      b       2       d       4
     """
+    # Materialize the input sequence so both `concat`'s implementation and
+    # `_finalize_concat_metadata` see identical objects (concat consumes
+    # dicts/iterators).
+    if isinstance(objs, dict):
+        inputs = list(objs.values())
+    else:
+        inputs = list(objs)
+    result = _concat_impl(
+        objs,
+        axis=axis,
+        join=join,
+        ignore_index=ignore_index,
+        keys=keys,
+        levels=levels,
+        names=names,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+    return _finalize_concat_metadata(result, inputs)
+
+
+def _concat_impl(
+    objs,
+    axis=0,
+    join="outer",
+    ignore_index=False,
+    keys=None,
+    levels=None,
+    names=None,
+    verify_integrity=False,
+    sort=None,
+):
     if keys is not None:
         raise NotImplementedError("keys is currently not supported")
     if levels is not None:
@@ -390,25 +450,9 @@ def concat(
             )
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        any_empty = any(obj.empty for obj in objs)
-        if any_empty:
-            # Do not remove until pandas-3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The behavior of array concatenation with empty entries is "
-                "deprecated. In a future version, this will no longer exclude "
-                "empty items when determining the result dtype. "
-                "To retain the old behavior, exclude the empty entries before "
-                "the concat operation.",
-                FutureWarning,
-            )
         # Inner joins involving empty data frames always return empty dfs, but
         # We must delay returning until we have set the column names.
-        empty_inner = any_empty and join == "inner"
-
-        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        empty_inner = join == "inner" and any(obj.empty for obj in objs)
 
         if len(objs) == 0:
             # TODO: https://github.com/rapidsai/cudf/issues/16550
@@ -463,7 +507,7 @@ def concat(
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
-            for k, o in zip(keys_objs, objs):
+            for k, o in zip(keys_objs, objs, strict=True):
                 for name, col in o._column_labels_and_values:
                     # if only series, then only keep keys_objs as column labels
                     # if the existing column is multiindex, prepend it
@@ -538,7 +582,15 @@ def concat(
     elif typ is cudf.Series:
         new_objs = [obj for obj in objs if len(obj)]
         if len(new_objs) == 1 and not ignore_index:
-            return new_objs[0]
+            result = new_objs[0]
+            # Promote dtype for empty series with explicit dtypes,
+            # e.g. int64 + empty float64 should yield float64.
+            all_promote_dtypes = {obj.dtype for obj in objs if len(obj) == 0}
+            all_promote_dtypes.add(result.dtype)
+            if len(all_promote_dtypes) > 1:
+                common_dtype = find_common_type(list(all_promote_dtypes))
+                result = result.astype(common_dtype)
+            return result
         else:
             return cudf.Series._concat(objs, axis=axis, index=not ignore_index)
     elif typ is cudf.MultiIndex:
@@ -715,7 +767,7 @@ def melt(
         [frame[val]._column for val in value_vars]
     )
 
-    result = cudf.DataFrame._from_data(mdata)
+    result = cudf.DataFrame._from_data(mdata, attrs=frame.attrs)
     if not ignore_index:
         taker = np.tile(np.arange(len(frame)), frame.shape[1] - len(id_vars))
         result.index = frame.index.take(taker)
@@ -772,10 +824,10 @@ def get_dummies(
     2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_<NA>  a_value1  a_value2
-    0  0   False      True     False
-    1  0   False     False      True
-    2  0    True     False     False
+       b  a_value1  a_value2  a_<NA>
+    0  0      True     False   False
+    1  0     False      True   False
+    2  0     False     False    True
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -785,14 +837,14 @@ def get_dummies(
     0   1.0
     1   2.0
     2   NaN
-    3  <NA>
+    3   NaN
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_<NA>  a_1.0  a_2.0  a_nan
-    0   False   True  False  False
-    1   False  False   True  False
-    2   False  False  False   True
-    3    True  False  False  False
+       a_1.0  a_2.0  a_nan  a_<NA>
+    0   True  False  False   False
+    1  False   True  False   False
+    2  False  False   True   False
+    3  False  False  False    True
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -803,12 +855,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-        <NA>      1      2      4
-    0  False   True  False  False
-    1  False  False   True  False
-    2   True  False  False  False
-    3  False  False   True  False
-    4  False  False  False   True
+           1      2      4   <NA>
+    0   True  False  False  False
+    1  False   True  False  False
+    2  False  False  False   True
+    3  False   True  False  False
+    4  False  False   True  False
     """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
@@ -816,7 +868,7 @@ def get_dummies(
     dtype = cudf_dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
+        encode_fallback_dtypes = [DEFAULT_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
@@ -834,14 +886,14 @@ def get_dummies(
         elif isinstance(prefix, dict):
             prefix_map = prefix
         else:
-            prefix_map = dict(zip(columns, prefix))
+            prefix_map = dict(zip(columns, prefix, strict=True))
 
         if isinstance(prefix_sep, str):
             prefix_sep_map = {}
         elif isinstance(prefix_sep, dict):
             prefix_sep_map = prefix_sep
         else:
-            prefix_sep_map = dict(zip(columns, prefix_sep))
+            prefix_sep_map = dict(zip(columns, prefix_sep, strict=True))
 
         # If we have no columns to encode, we need to drop
         # fallback columns(if any)
@@ -876,115 +928,6 @@ def get_dummies(
             dummy_na=dummy_na,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
-
-
-def _merge_sorted(
-    objs,
-    keys=None,
-    by_index=False,
-    ignore_index=False,
-    ascending=True,
-    na_position="last",
-):
-    """Merge a list of sorted DataFrame or Series objects.
-
-    Dataframes/Series in objs list MUST be pre-sorted by columns
-    listed in `keys`, or by the index (if `by_index=True`).
-
-    Parameters
-    ----------
-    objs : list of DataFrame or Series
-    keys : list, default None
-        List of Column names to sort by. If None, all columns used
-        (Ignored if `by_index=True`)
-    by_index : bool, default False
-        Use index for sorting. `keys` input will be ignored if True
-    ignore_index : bool, default False
-        Drop and ignore index during merge. Default range index will
-        be used in the output dataframe.
-    ascending : bool, default True
-        Sorting is in ascending order, otherwise it is descending
-    na_position : {'first', 'last'}, default 'last'
-        'first' nulls at the beginning, 'last' nulls at the end
-
-    Returns
-    -------
-    A new, lexicographically sorted, DataFrame/Series.
-    """
-    if is_scalar(objs):
-        raise TypeError("objs must be a list-like of Frame-like objects")
-
-    if len(objs) < 1:
-        raise ValueError("objs must be non-empty")
-
-    if not all(
-        isinstance(table, (cudf.DataFrame, cudf.Series)) for table in objs
-    ):
-        raise TypeError("Elements of objs must be Frame-like")
-
-    if len(objs) == 1:
-        return objs[0]
-
-    if by_index and ignore_index:
-        raise ValueError("`by_index` and `ignore_index` cannot both be True")
-
-    if by_index:
-        key_columns_indices = list(range(0, objs[0].index.nlevels))
-    else:
-        if keys is None:
-            key_columns_indices = list(range(0, objs[0]._num_columns))
-        else:
-            key_columns_indices = [
-                objs[0]._column_names.index(key) for key in keys
-            ]
-        if not ignore_index:
-            key_columns_indices = [
-                idx + objs[0].index.nlevels for idx in key_columns_indices
-            ]
-
-    columns = (
-        itertools.chain(obj.index._columns, obj._columns)
-        if not ignore_index
-        else obj._columns
-        for obj in objs
-    )
-
-    input_tables = [
-        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
-        for source_columns in columns
-    ]
-
-    num_keys = len(key_columns_indices)
-
-    column_order = (
-        plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
-    )
-
-    if not ascending:
-        na_position = "last" if na_position == "first" else "first"
-
-    null_precedence = (
-        plc.types.NullOrder.BEFORE
-        if na_position == "first"
-        else plc.types.NullOrder.AFTER
-    )
-
-    plc_table = plc.merge.merge(
-        input_tables,
-        key_columns_indices,
-        [column_order] * num_keys,
-        [null_precedence] * num_keys,
-    )
-
-    result_columns = [
-        ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-    ]
-
-    return objs[0]._from_columns_like_self(
-        result_columns,
-        column_names=objs[0]._column_names,
-        index_names=None if ignore_index else objs[0]._index_names,
-    )
 
 
 def _pivot(
@@ -1030,6 +973,7 @@ def _pivot(
                         target_col.split_by_offsets(
                             list(range(nrows, new_size, nrows))
                         ),
+                        strict=True,
                     )
                 )
             )
@@ -1092,8 +1036,8 @@ def pivot(
               c
         b     1     2      3
         a
-        1   one   two   <NA>
-        2  <NA>  <NA>  three
+        1   one   two    NaN
+        2   NaN   NaN  three
 
     """
     values_is_list = True
@@ -1123,12 +1067,41 @@ def pivot(
                 index_data = index_data.get_level_values(0)
         else:
             index_data = cudf.Index(index_data)
+        # An entirely empty input pivots to an empty result. Pandas uses the
+        # default ``object`` dtype for the resulting index axis in that case;
+        # mirror this so index metadata (dtype/inferred_type) matches.
+        if (
+            len(data) == 0
+            and not isinstance(index_data, cudf.MultiIndex)
+            and is_pandas_nullable_extension_dtype(index_data.dtype)
+            and is_dtype_obj_string(index_data.dtype)
+        ):
+            index_data = cudf.Index(
+                pd.Index([], name=index_data.name, dtype=object)
+            )
 
     column_data = data.loc[:, columns]
+    # When `columns` is a scalar but the source DataFrame has a MultiIndex on
+    # the row axis, ``loc`` may return a 2-D selection in cuDF. Treat the
+    # selection as 1-D so we end up with a flat Index of column labels.
+    if is_scalar(columns) and column_data.ndim == 2:
+        column_data = column_data.iloc[:, 0]
     if column_data.ndim == 2:
         column_data = cudf.MultiIndex.from_frame(column_data)
     else:
         column_data = cudf.Index(column_data)
+    # An entirely empty input pivots to an empty result. Pandas reports the
+    # default ``object`` dtype for the resulting columns axis in that case;
+    # mirror this so column metadata (dtype/inferred_type) matches.
+    if (
+        len(data) == 0
+        and not isinstance(column_data, cudf.MultiIndex)
+        and is_pandas_nullable_extension_dtype(column_data.dtype)
+        and is_dtype_obj_string(column_data.dtype)
+    ):
+        column_data = cudf.Index(
+            pd.Index([], name=column_data.name, dtype=object)
+        )
 
     # Create a DataFrame composed of columns from both
     # columns and index
@@ -1149,6 +1122,7 @@ def pivot(
     result = _pivot(
         data._data.select_by_label(cols_to_select), index_data, column_data
     )
+    result._attrs = data.attrs  # type: ignore[has-type]
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1255,6 +1229,20 @@ def unstack(df, level, fill_value=None, sort: bool = True):
     if df.empty:
         raise ValueError("Cannot unstack an empty dataframe.")
 
+    if (
+        not is_scalar(level)
+        and len(level) > 1
+        and df.index.nlevels > 1
+        and cudf.get_option("mode.pandas_compatible")
+    ):
+        # We currently produce columns in the wrong order vs pandas
+        # See https://github.com/rapidsai/cudf/issues/20446.
+        # We should plan to remove once we rewrite pivot and unstack
+        # for better performance. See https://github.com/rapidsai/cudf/issues/20469
+        raise NotImplementedError(
+            "Unstacking multiple index levels is not yet pandas compatible"
+        )
+
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
     elif sort is False:
@@ -1264,17 +1252,17 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             return df
     if not isinstance(df.index, cudf.MultiIndex):
         dtype = df._columns[0].dtype
-        for col in df._columns:
-            if not col.dtype == dtype:
-                raise ValueError(
-                    "Calling unstack() on single index dataframe"
-                    " with different column datatype is not supported."
-                )
-        res = df.T.stack(future_stack=False)
+        if any(col_dtype != dtype for _, col_dtype in df._dtypes):
+            raise ValueError(
+                "Calling unstack() on single index dataframe"
+                " with different column datatype is not supported."
+            )
+        res = df.T.stack(future_stack=True)
         # Result's index is a multiindex
         res.index.names = (
             tuple(df._data.to_pandas_index.names) + df.index.names
         )
+        res._attrs = df.attrs
         return res
     else:
         index = df.index.droplevel(level)
@@ -1292,6 +1280,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             )
             columns.names = new_names
         result = _pivot(df, index, columns)
+        result._attrs = df.attrs  # type: ignore[has-type]
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result
@@ -1335,7 +1324,9 @@ def _one_hot_encode_column(
         x if x is not None else "<NA>"
         for x in categories.to_arrow().to_pylist()
     )
-    data = dict(zip(result_labels, column.one_hot_encode(categories)))
+    data = dict(
+        zip(result_labels, column.one_hot_encode(categories), strict=True)
+    )
 
     if drop_first and len(data):
         data.pop(next(iter(data)))
@@ -1463,8 +1454,8 @@ def crosstab(
         raise ValueError("colnames must be unique")
 
     data = {
-        **dict(zip(rownames, map(as_column, index))),
-        **dict(zip(colnames, map(as_column, columns))),
+        **dict(zip(rownames, map(as_column, index), strict=True)),
+        **dict(zip(colnames, map(as_column, columns), strict=True)),
     }
 
     df = cudf.DataFrame._from_data(data)
@@ -1613,5 +1604,5 @@ def pivot_table(
         table.columns = table._data.to_pandas_index.droplevel(0)
     if len(index) == 0 and len(columns) > 0:
         table = table.T
-
+    table._attrs = data.attrs
     return table

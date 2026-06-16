@@ -1,26 +1,15 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "orc_gpu.hpp"
 
 #include <cudf/detail/offsets_iterator.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/io/orc_types.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -75,6 +64,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 
   rowgroup_char_counts_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     counts, orc_columns, rowgroup_bounds, str_col_indexes);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 struct equality_functor {
@@ -82,7 +72,7 @@ struct equality_functor {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const
   {
     // We don't call this for nulls so this is fine
-    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    auto const equal = cudf::detail::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<string_view>(lhs_idx), col.element<string_view>(rhs_idx));
   }
 };
@@ -180,7 +170,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto* slot     = dict.map_slots.begin() + t + i;
+      auto* slot     = dict.map_slots.data() + t + i;
       auto const key = slot->first;
       if (key != KEY_SENTINEL) {
         auto loc       = counter.fetch_add(1, memory_order_relaxed);
@@ -242,6 +232,7 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
   constexpr int block_size = 256;
   populate_dictionary_hash_maps_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
@@ -251,6 +242,7 @@ void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
   constexpr int block_size = 1024;
   collect_map_entries_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
@@ -261,6 +253,7 @@ void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
   constexpr int block_size = 1024;
   get_dictionary_indices_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

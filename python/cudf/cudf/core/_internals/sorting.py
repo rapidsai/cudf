@@ -1,21 +1,21 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.utils import access_columns
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from cudf.core.column import ColumnBase
 
 
-@acquire_spill_lock()
 def is_sorted(
-    source_columns: Iterable[ColumnBase],
+    source_columns: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
 ) -> bool:
@@ -44,11 +44,15 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
     column_order, null_precedence = ordering(ascending, na_position)
-    return plc.sorting.is_sorted(
-        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
-        column_order,
-        null_precedence,
-    )
+
+    with access_columns(
+        *source_columns, mode="read", scope="internal"
+    ) as source_columns:
+        return plc.sorting.is_sorted(
+            plc.Table([col.plc_column for col in source_columns]),
+            column_order,
+            null_precedence,
+        )
 
 
 def ordering(
@@ -87,9 +91,8 @@ def ordering(
     return c_column_order, c_null_precedence
 
 
-@acquire_spill_lock()
 def order_by(
-    columns_from_table: Iterable[ColumnBase],
+    columns_from_table: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
     *,
@@ -100,7 +103,7 @@ def order_by(
 
     Parameters
     ----------
-    columns_from_table : Iterable[Column]
+    columns_from_table : Sequence[Column]
         Columns from the table which will be sorted
     ascending : sequence[bool]
          Sequence of boolean values which correspond to each column
@@ -120,19 +123,22 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    return func(
-        plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns_from_table],
-        ),
-        column_order,
-        null_precedence,
-    )
+
+    with access_columns(
+        *columns_from_table, mode="read", scope="internal"
+    ) as columns_from_table:
+        return func(
+            plc.Table(
+                [col.plc_column for col in columns_from_table],
+            ),
+            column_order,
+            null_precedence,
+        )
 
 
-@acquire_spill_lock()
 def sort_by_key(
-    values: Iterable[ColumnBase],
-    keys: Iterable[ColumnBase],
+    values: Sequence[ColumnBase],
+    keys: Sequence[ColumnBase],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
     *,
@@ -143,9 +149,9 @@ def sort_by_key(
 
     Parameters
     ----------
-    values : Iterable[Column]
+    values : Sequence[Column]
         Columns of the table which will be sorted
-    keys : Iterable[Column]
+    keys : Sequence[Column]
         Columns making up the sort key
     ascending : Iterable[bool]
         Sequence of boolean values which correspond to each column
@@ -166,18 +172,25 @@ def sort_by_key(
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
-    return func(
-        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-        plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
-        column_order,
-        null_precedence,
-    ).columns()
+
+    with access_columns(
+        *values, *keys, mode="read", scope="internal"
+    ) as accessed:
+        # Split accessed tuple back into values and keys
+        n_values = len(values)
+        values = accessed[:n_values]
+        keys = accessed[n_values:]
+        return func(
+            plc.Table([col.plc_column for col in values]),
+            plc.Table([col.plc_column for col in keys]),
+            column_order,
+            null_precedence,
+        ).columns()
 
 
-@acquire_spill_lock()
 def search_sorted(
-    source: Iterable[ColumnBase],
-    values: Iterable[ColumnBase],
+    source: Sequence[ColumnBase],
+    values: Sequence[ColumnBase],
     side: Literal["left", "right"],
     ascending: Iterable[bool],
     na_position: Iterable[Literal["first", "last"]],
@@ -186,10 +199,10 @@ def search_sorted(
 
     Parameters
     ----------
-    source : Iterable of columns
-        Iterable of columns to search in
-    values : Iterable of columns
-        Iterable of value columns to search for
+    source : Sequence of columns
+        Sequence of columns to search in
+    values : Sequence of columns
+        Sequence of value columns to search for
     side : str {'left', 'right'} optional
         If 'left', the index of the first suitable location is given.
         If 'right', return the last such index
@@ -205,9 +218,17 @@ def search_sorted(
         plc.search,
         "lower_bound" if side == "left" else "upper_bound",
     )
-    return func(
-        plc.Table([col.to_pylibcudf(mode="read") for col in source]),
-        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-        column_order,
-        null_precedence,
-    )
+
+    with access_columns(
+        *source, *values, mode="read", scope="internal"
+    ) as accessed:
+        # Split accessed tuple back into source and values
+        n_source = len(source)
+        source = accessed[:n_source]
+        values = accessed[n_source:]
+        return func(
+            plc.Table([col.plc_column for col in source]),
+            plc.Table([col.plc_column for col in values]),
+            column_order,
+            null_precedence,
+        )

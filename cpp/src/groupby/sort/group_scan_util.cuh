@@ -1,22 +1,11 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -37,8 +26,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
@@ -118,13 +107,14 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                    group_labels.begin(),
-                                    group_labels.end(),
-                                    inp_iter,
-                                    out_iter,
-                                    cuda::std::equal_to{},
-                                    binop);
+      thrust::inclusive_scan_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.begin(),
+        group_labels.end(),
+        inp_iter,
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     if (values.has_nulls()) {
@@ -163,13 +153,14 @@ struct group_scan_functor<K,
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                    group_labels.begin(),
-                                    group_labels.end(),
-                                    inp_iter,
-                                    out_iter,
-                                    cuda::std::equal_to{},
-                                    binop);
+      thrust::inclusive_scan_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.begin(),
+        group_labels.end(),
+        inp_iter,
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     if (values.has_nulls()) {
@@ -204,14 +195,15 @@ struct group_scan_functor<K,
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
 
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  thrust::make_counting_iterator<size_type>(0),
-                                  gather_map.begin(),
-                                  cuda::std::equal_to{},
-                                  binop_generator.binop());
+      cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.end(),
+      cuda::counting_iterator<size_type>{0},
+      gather_map.begin(),
+      cuda::std::equal_to{},
+      binop_generator.binop());
 
     //
     // Gather the children elements of the prefix min/max struct elements first.
@@ -225,7 +217,7 @@ struct group_scan_functor<K,
         table_view(std::vector<column_view>{values.child_begin(), values.child_end()}),
         gather_map,
         cudf::out_of_bounds_policy::DONT_CHECK,
-        cudf::detail::negative_index_policy::NOT_ALLOWED,
+        cudf::negative_index_policy::NOT_ALLOWED,
         stream,
         mr)
         ->release();

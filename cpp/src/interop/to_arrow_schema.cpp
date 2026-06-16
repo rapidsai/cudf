@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "arrow_utilities.hpp"
@@ -79,37 +68,41 @@ struct dispatch_to_arrow_type {
 template <typename DeviceType>
 int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
+  CUDF_EXPECTS(precision >= 1 and precision <= 38,
+               "Precision must be between 1 and 38 inclusive",
+               cudf::data_type_error);
   return ArrowSchemaSetTypeDecimal(
     out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = int32_t;
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int64_t;
-  // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
-  // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
+  using DeviceType  = int64_t;
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
-                                                            column_metadata const&,
+                                                            column_metadata const& metadata,
                                                             ArrowSchema* out)
 {
-  using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = __int128_t;
+  int32_t precision = metadata.precision.value_or(std::numeric_limits<DeviceType>::digits10);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
@@ -176,9 +169,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                       ? column_metadata{"element"}
                       : metadata.children_meta[cudf::lists_column_view::child_column_index];
 
-  out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  out->flags = input.nullable() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
-  out->children[0]->flags = child.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  out->children[0]->flags = child.nullable() ? ARROW_FLAG_NULLABLE : 0;
   if (child.type().id() == cudf::type_id::EMPTY) {
     return ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA);
   }
@@ -225,7 +218,7 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
     auto col   = input.column(i);
     ArrowSchemaInit(child);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child, metadata[i].name.c_str()));
-    child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+    child->flags = col.nullable() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
       NANOARROW_THROW_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));

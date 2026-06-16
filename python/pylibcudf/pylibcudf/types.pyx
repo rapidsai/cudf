@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
@@ -7,6 +8,7 @@ from pylibcudf.libcudf.types cimport (
     size_of as cpp_size_of,
     size_type,
     type_id,
+    bitmask_type
 )
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
@@ -17,11 +19,20 @@ from pylibcudf.libcudf.types import interpolation as Interpolation  # no-cython-
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_equality as NullEquality  # no-cython-lint, isort:skip
+from pylibcudf.libcudf.types import null_aware as NullAware  # no-cython-lint, isort:skip
+from pylibcudf.libcudf.types import output_nullability as OutputNullability  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
 from functools import cache
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
 
 try:
     import pyarrow as pa
@@ -42,6 +53,7 @@ try:
         pa.bool_(): type_id.BOOL8,
         pa.string(): type_id.STRING,
         pa.large_string(): type_id.STRING,
+        pa.string_view(): type_id.STRING,
         pa.duration('s'): type_id.DURATION_SECONDS,
         pa.duration('ms'): type_id.DURATION_MILLISECONDS,
         pa.duration('us'): type_id.DURATION_MICROSECONDS,
@@ -54,14 +66,10 @@ try:
         pa.null(): type_id.EMPTY,
     }
 
-    # New in pyarrow 18.0.0
-    if (string_view := getattr(pa, "string_view", None)) is not None:
-        ARROW_TO_PYLIBCUDF_TYPES[string_view()] = type_id.STRING
-
     LIBCUDF_TO_ARROW_TYPES = {
         v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
     }
-    # Because we map 2-3 pyarrow string types to type_id.STRING,
+    # Because we map 3 pyarrow string types to type_id.STRING,
     # just map type_id.STRING to pa.string
     LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
 except ImportError as e:
@@ -79,6 +87,8 @@ __all__ = [
     "NanPolicy",
     "NullEquality",
     "NullOrder",
+    "NullAware",
+    "OutputNullability",
     "NullPolicy",
     "Order",
     "SIZE_TYPE",
@@ -186,6 +196,60 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+    def to_arrow(self, **kwargs):
+        """
+        Convert a datatype to arrow.
+
+        Returns
+        -------
+        pyarrow.DataType
+
+        Notes
+        -----
+        Translation of some types requires extra information as a keyword
+        argument. Specifically:
+
+        - When translating a decimal type, provide ``precision``
+        - When translating a struct type, provide ``fields``
+        - When translating a list type, provide the wrapped ``value_type``
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        if self.id() in {
+            type_id.DECIMAL32,
+            type_id.DECIMAL64,
+            type_id.DECIMAL128
+        }:
+            if not (precision := kwargs.get("precision")):
+                raise ValueError(
+                    "Precision must be provided for decimal types"
+                )
+                # no pa.decimal32 or pa.decimal64
+            return pa.decimal128(precision, -self.scale())
+        elif self.id() == type_id.STRUCT:
+            if not (fields := kwargs.get("fields")):
+                raise ValueError(
+                    "Fields must be provided for struct types"
+                )
+            return pa.struct(fields)
+        elif self.id() == type_id.LIST:
+            if not (value_type := kwargs.get("value_type")):
+                raise ValueError(
+                    "Value type must be provided for list types"
+                )
+            return pa.list_(value_type)
+        else:
+            try:
+                return LIBCUDF_TO_ARROW_TYPES[self.id()]
+            except KeyError:
+                raise TypeError(
+                    f"Unable to convert {self.id()} to arrow datatype"
+                )
 
     @staticmethod
     def from_arrow(pa_typ) -> DataType:
@@ -305,6 +369,8 @@ def _from_arrow(obj: pa.DataType) -> DataType:
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
+BITMASK_TYPE = DataType(type_to_id[bitmask_type]())
+
 
 TypeId.__str__ = TypeId.__repr__
 NanPolicy.__str__ = NanPolicy.__repr__
@@ -313,6 +379,8 @@ Interpolation.__str__ = Interpolation.__repr__
 MaskState.__str__ = MaskState.__repr__
 NanEquality.__str__ = NanEquality.__repr__
 NullEquality.__str__ = NullEquality.__repr__
+NullAware.__str__ = NullAware.__repr__
+OutputNullability.__str__ = OutputNullability.__repr__
 NullOrder.__str__ = NullOrder.__repr__
 Order.__str__ = Order.__repr__
 Sorted.__str__ = Sorted.__repr__

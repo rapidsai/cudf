@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -8,10 +9,19 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_floats as cpp_convert_floats,
 )
 from pylibcudf.types cimport DataType
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_floats", "is_float", "to_floats"]
 
-cpdef Column to_floats(Column strings, DataType output_type):
+cpdef Column to_floats(
+    Column strings,
+    DataType output_type,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns a new numeric column by parsing float values from each string
     in the provided strings column.
@@ -26,23 +36,33 @@ cpdef Column to_floats(Column strings, DataType output_type):
     output_type : DataType
         Type of float numeric column to return.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New column with floats converted from strings.
     """
     cdef unique_ptr[column] c_result
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_floats.to_floats(
             strings.view(),
             output_type.c_obj,
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column from_floats(Column floats):
+cpdef Column from_floats(
+    Column floats, object stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new strings column converting the float values from the
     provided column into strings.
@@ -54,20 +74,28 @@ cpdef Column from_floats(Column floats):
     floats : Column
         Numeric column to convert.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New strings column with floats as strings.
     """
     cdef unique_ptr[column] c_result
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_floats.from_floats(floats.view())
+        c_result = cpp_convert_floats.from_floats(
+            floats.view(), _cs, mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column is_float(Column input):
+cpdef Column is_float(Column input, object stream=None, DeviceMemoryResource mr=None):
     """
     Returns a boolean column identifying strings in which all
     characters are valid for conversion to floats.
@@ -79,14 +107,22 @@ cpdef Column is_float(Column input):
     input : Column
         Strings instance for this operation.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New column of boolean results for each string.
     """
     cdef unique_ptr[column] c_result
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_floats.is_float(input.view())
+        c_result = cpp_convert_floats.is_float(
+            input.view(), _cs, mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)

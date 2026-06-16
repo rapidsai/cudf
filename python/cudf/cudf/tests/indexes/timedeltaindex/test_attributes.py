@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import cupy as cp
@@ -96,5 +97,25 @@ def test_tdi_asi8():
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
-    with pytest.raises(NotImplementedError, match="cupy does not support"):
-        s.values
+    result = s.values
+    expected = cp.array([1, 2, 3]).view("timedelta64[ns]")
+    assert_eq(result, expected)
+
+
+def test_timedeltaindex_constructor():
+    gidx = cudf.TimedeltaIndex([1, 2, 3])
+
+    assert gidx._constructor is cudf.TimedeltaIndex
+
+
+@pytest.mark.parametrize(
+    "timedeltas",
+    [
+        pd.timedelta_range("1 day", periods=5),
+        [pd.Timedelta(days=i) for i in range(5)],
+    ],
+)
+def test_timedeltaindex_inferred_type(timedeltas):
+    gidx = cudf.TimedeltaIndex(timedeltas)
+    pidx = pd.TimedeltaIndex(timedeltas)
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

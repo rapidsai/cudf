@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -59,30 +48,6 @@ std::unique_ptr<column> replace_re(
   std::optional<size_type> max_replace_count = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
-
-/**
- * @brief For each string, replaces any character sequence matching the given patterns
- * with the corresponding string in the `replacements` column.
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param input Strings instance for this operation
- * @param patterns The regular expression patterns to search within each string
- * @param replacements The strings used for replacement
- * @param flags Regex flags for interpreting special characters in the patterns
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New strings column
- */
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  std::vector<std::string> const& patterns,
-  strings_column_view const& replacements,
-  regex_flags const flags           = regex_flags::DEFAULT,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief For each string, replaces any character sequence matching the given regex

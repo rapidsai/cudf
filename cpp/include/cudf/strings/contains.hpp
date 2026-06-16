@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -147,7 +136,9 @@ std::unique_ptr<column> count_re(
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw std::invalid_argument if `pattern` or `escape_character` is invalid
+ * The `pattern` and `escape_character` parameter must be valid until a
+ * synchronize is performed on the given `stream` parameter.
+ *
  * @throw std::invalid_argument if `escape_character` contains more than on byte
  *
  * @param input Strings instance for this operation
@@ -160,10 +151,10 @@ std::unique_ptr<column> count_re(
  */
 std::unique_ptr<column> like(
   strings_column_view const& input,
-  string_scalar const& pattern,
-  string_scalar const& escape_character = string_scalar(""),
-  rmm::cuda_stream_view stream          = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
+  std::string_view const& pattern,
+  std::string_view const& escape_character = "",
+  rmm::cuda_stream_view stream             = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which

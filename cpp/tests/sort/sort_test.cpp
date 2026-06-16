@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -63,7 +52,7 @@ TYPED_TEST(Sort, WithNullMax)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -84,15 +73,9 @@ TYPED_TEST(Sort, WithNullMax)
   } else {
     // for bools only validate that the null element landed at the back, since
     // the rest of the values are equivalent and yields random sorted order.
-    auto to_host = [](cudf::column_view const& col) {
-      thrust::host_vector<int32_t> h_data(col.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-      return h_data;
-    };
-    thrust::host_vector<int32_t> h_exp = to_host(expected);
-    thrust::host_vector<int32_t> h_got = to_host(got->view());
-    EXPECT_EQ(h_exp[h_exp.size() - 1], h_got[h_got.size() - 1]);
+    auto const last_idx = got->size();
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(got->view(), {last_idx - 1, last_idx}).back(),
+                                   cudf::slice(expected, {last_idx - 1, last_idx}).back());
 
     // Run test for sort and sort_by_key
     cudf::test::fixed_width_column_wrapper<int32_t> expected_for_bool{{0, 3, 5, 1, 4, 2}};
@@ -105,7 +88,7 @@ TYPED_TEST(Sort, WithNullMin)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "", "d", "k"}, {1, 1, 0, 1, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -123,15 +106,8 @@ TYPED_TEST(Sort, WithNullMin)
   } else {
     // for bools only validate that the null element landed at the front, since
     // the rest of the values are equivalent and yields random sorted order.
-    auto to_host = [](cudf::column_view const& col) {
-      thrust::host_vector<int32_t> h_data(col.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-      return h_data;
-    };
-    thrust::host_vector<int32_t> h_exp = to_host(expected);
-    thrust::host_vector<int32_t> h_got = to_host(got->view());
-    EXPECT_EQ(h_exp.front(), h_got.front());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(got->view(), {0, 1}).front(),
+                                   cudf::slice(expected, {0, 1}).front());
 
     // Run test for sort and sort_by_key
     cudf::test::fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
@@ -144,7 +120,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {0, 0, 1, 1, 0}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {0, 1, 0, 0, 1});
+  cudf::test::strings_column_wrapper col2({"", "e", "", "", "k"}, {0, 1, 0, 0, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -161,15 +137,8 @@ TYPED_TEST(Sort, WithMixedNullOrder)
   } else {
     // for bools only validate that the null element landed at the front, since
     // the rest of the values are equivalent and yields random sorted order.
-    auto to_host = [](cudf::column_view const& col) {
-      thrust::host_vector<int32_t> h_data(col.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-      return h_data;
-    };
-    thrust::host_vector<int32_t> h_exp = to_host(expected);
-    thrust::host_vector<int32_t> h_got = to_host(got->view());
-    EXPECT_EQ(h_exp.front(), h_got.front());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(got->view(), {0, 1}).front(),
+                                   cudf::slice(expected, {0, 1}).front());
   }
 
   // Run test for sort and sort_by_key
@@ -446,7 +415,7 @@ TYPED_TEST(Sort, WithSlicedStructColumn)
   // clang-format off
   using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
   std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
-  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", ""};
   auto col2 =                           FWCW{{    1,     1,     0,     0,    0,    2,   1,   3}};
   auto col3 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
   auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
@@ -510,7 +479,7 @@ TYPED_TEST(Sort, SlicedColumns)
 
   // clang-format off
   std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
-  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", ""};
   auto col2 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
   auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
   // clang-format on
@@ -1111,35 +1080,6 @@ TEST_F(SortDouble, InfinityAndNan)
       {5, 11, 0, 14, 7, 8, 6, 4, 10, 1, 2, 3, 9, 12, 13});
   auto results = cudf::sorted_order(cudf::table_view({input}));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
-}
-
-TYPED_TEST(Sort, TopK)
-{
-  using T = TypeParam;
-  if constexpr (std::is_same_v<T, bool>) { GTEST_SKIP(); }
-
-  auto itr   = thrust::counting_iterator<int32_t>(0);
-  auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    itr, itr + 100, cudf::test::iterators::null_at(4));
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<T, int32_t>({99, 98, 97, 96, 95, 94, 93, 92, 91, 90});
-  auto result = cudf::top_k(input, 10);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
-  auto expected_order = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    {99, 98, 97, 96, 95, 94, 93, 92, 91, 90});
-  result = cudf::top_k_order(input, 10);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
-
-  result   = cudf::top_k(input, 10, cudf::order::ASCENDING);
-  expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3, 5, 6, 7, 8, 9, 10});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
-  expected_order =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 5, 6, 7, 8, 9, 10});
-  result = cudf::top_k_order(input, 10, cudf::order::ASCENDING);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
-
-  EXPECT_THROW(cudf::top_k(input, 101), std::invalid_argument);
-  EXPECT_THROW(cudf::top_k_order(input, 101), std::invalid_argument);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

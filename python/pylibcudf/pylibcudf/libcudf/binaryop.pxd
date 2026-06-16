@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -9,7 +10,8 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport data_type
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
@@ -55,7 +57,8 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         binary_operator op,
         data_type output_type,
-        cuda_stream_view stream
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
@@ -63,7 +66,8 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const scalar& rhs,
         binary_operator op,
         data_type output_type,
-        cuda_stream_view stream
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
@@ -71,7 +75,8 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         binary_operator op,
         data_type output_type,
-        cuda_stream_view stream
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
@@ -79,7 +84,8 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         const string& op,
         data_type output_type,
-        cuda_stream_view stream
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:

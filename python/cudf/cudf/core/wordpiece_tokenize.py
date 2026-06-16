@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -19,10 +20,10 @@ class WordPieceVocabulary:
 
     def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.wordpiece_tokenize.WordPieceVocabulary(
-            vocabulary._column.to_pylibcudf(mode="read")
+            vocabulary._column.plc_column
         )
 
-    def tokenize(self, text, max_words_per_row: int = 0) -> Series:
+    def tokenize(self, text: Series, max_words_per_row: int = 0) -> Series:
         """
         Produces tokens for the input strings.
         The input is expected to be the output of NormalizeCharacters or a

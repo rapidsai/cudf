@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import pyarrow as pa
@@ -20,7 +21,7 @@ def test_interleave_columns(reshape_data):
     raw_data, reshape_plc_tbl = reshape_data
     got = plc.reshape.interleave_columns(reshape_plc_tbl)
 
-    interleaved_data = [pa.array(pair) for pair in zip(*raw_data)]
+    interleaved_data = [pa.array(pair) for pair in zip(*raw_data, strict=True)]
 
     expect = pa.concat_arrays(interleaved_data)
 
@@ -32,10 +33,9 @@ def test_tile(reshape_data, cnt):
     raw_data, reshape_plc_tbl = reshape_data
     got = plc.reshape.tile(reshape_plc_tbl, cnt)
 
-    tiled_data = [pa.array(col * cnt) for col in raw_data]
-
     expect = pa.Table.from_arrays(
-        tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
+        [pa.array(col * cnt) for col in raw_data],
+        schema=reshape_plc_tbl.to_arrow().schema,
     )
 
     assert_table_eq(expect, got)
@@ -50,7 +50,7 @@ def test_tile(reshape_data, cnt):
         ("float64", TypeId.FLOAT64),
     ],
 )
-def test_table_to_array(dtype, type_id):
+def test_table_to_array(dtype, type_id, patch_cupy_stream):
     arrow_type = pa.from_numpy_dtype(getattr(cp, dtype))
     arrs = [
         pa.array([1, 2, 3], type=arrow_type),
@@ -68,5 +68,6 @@ def test_table_to_array(dtype, type_id):
         got.nbytes,
     )
 
-    expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
-    cp.testing.assert_array_equal(expect, got)
+    with patch_cupy_stream:
+        expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
+        cp.testing.assert_array_equal(expect, got)

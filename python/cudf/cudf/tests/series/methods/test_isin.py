@@ -1,15 +1,12 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
-from cudf.testing._utils import (
-    expect_warning_if,
-)
 
 
 @pytest.mark.parametrize(
@@ -44,7 +41,7 @@ def test_isin_numeric(data, values):
     rng = np.random.default_rng(seed=0)
     index = rng.integers(0, 100, len(data))
     psr = pd.Series(data, index=index)
-    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
+    gsr = cudf.Series(psr, nan_as_null=False)
 
     expected = psr.isin(values)
     got = gsr.isin(values)
@@ -52,10 +49,6 @@ def test_isin_numeric(data, values):
     assert_eq(got, expected)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning newly introduced in pandas-2.2.0",
-)
 @pytest.mark.parametrize(
     "data",
     [
@@ -102,13 +95,11 @@ def test_isin_numeric(data, values):
 )
 def test_isin_datetime(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
-    is_len_str = isinstance(next(iter(values), None), str) and len(data)
-    with expect_warning_if(is_len_str):
-        got = gsr.isin(values)
-    with expect_warning_if(is_len_str):
-        expected = psr.isin(values)
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+
     assert_eq(got, expected)
 
 
@@ -134,7 +125,7 @@ def test_isin_datetime(data, values):
 )
 def test_isin_string(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     got = gsr.isin(values)
     expected = psr.isin(values)
@@ -163,7 +154,7 @@ def test_isin_string(data, values):
 )
 def test_isin_categorical(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     got = gsr.isin(values)
     expected = psr.isin(values)

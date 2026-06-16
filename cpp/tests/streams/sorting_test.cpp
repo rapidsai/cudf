@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -130,6 +119,17 @@ TEST_F(SortingTest, StableSegmentedSortByKey)
 
   cudf::stable_segmented_sort_by_key(
     values, keys, segment_offsets, {}, {}, cudf::test::get_default_stream());
+}
+
+TEST_F(SortingTest, TopK)
+{
+  auto stream = cudf::test::get_default_stream();
+  cudf::test::fixed_width_column_wrapper<int32_t> const input{10, 20, 30, 40, 50};
+  cudf::top_k(input, 2, cudf::order::ASCENDING, stream);
+  cudf::top_k_order(input, 2, cudf::order::ASCENDING, stream);
+  cudf::test::fixed_width_column_wrapper<int32_t> const offsets{0, 5};
+  cudf::segmented_top_k(input, offsets, 2, cudf::order::ASCENDING, stream);
+  cudf::segmented_top_k_order(input, offsets, 2, cudf::order::ASCENDING, stream);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

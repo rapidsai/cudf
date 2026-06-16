@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -31,7 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/limits>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -65,7 +55,7 @@ struct char_types_fn {
       if (is_utf8_continuation_char(chr)) { continue; }
       auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
       // using max(int8) here since max(char)=255 on ARM systems
-      if (u8 > std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
+      if (u8 > cuda::std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
 
       // lookup flags in table by codepoint
       auto const code_point = utf8_to_codepoint(u8);
@@ -100,12 +90,12 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                      stream,
                                      mr);
   // get the static character types table
-  auto d_flags = detail::get_character_flags_table();
+  auto d_flags = detail::get_character_flags_table(stream);
 
   // set the output values by checking the character types for each string
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     results->mutable_view().data<bool>(),
                     char_types_fn{*d_strings, d_flags, types, verify_types});
 
@@ -193,7 +183,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   cudf::string_view d_replacement(replacement.data(), replacement.size());
   filter_chars_fn filterer{*strings_column,
-                           detail::get_character_flags_table(),
+                           detail::get_character_flags_table(stream),
                            types_to_remove,
                            types_to_keep,
                            d_replacement};

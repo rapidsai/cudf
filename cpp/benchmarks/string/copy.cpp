@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -50,9 +40,13 @@ static void bench_copy(nvbench::state& state)
     state.add_global_memory_reads<nvbench::int8_t>(data_size +
                                                    (map_view.size() * sizeof(cudf::size_type)));
     state.add_global_memory_writes<nvbench::int8_t>(data_size);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
+
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::gather(source->view(), map_view, cudf::out_of_bounds_policy::NULLIFY, stream);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else if (api == "scatter") {
     auto const target =
       create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
@@ -61,9 +55,12 @@ static void bench_copy(nvbench::state& state)
     state.add_global_memory_reads<nvbench::int8_t>(data_size +
                                                    (map_view.size() * sizeof(cudf::size_type)));
     state.add_global_memory_writes<nvbench::int8_t>(data_size);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::scatter(source->view(), map_view, target->view(), stream);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   }
 }
 
@@ -71,5 +68,6 @@ NVBENCH_BENCH(bench_copy)
   .set_name("copy")
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("num_rows",
+                  {131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432})
   .add_string_axis("api", {"gather", "scatter"});

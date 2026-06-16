@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/compression.hpp"
@@ -27,6 +16,8 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <cuda/iterator>
 
 #include <src/io/comp/nvcomp_adapter.hpp>
 
@@ -296,6 +287,35 @@ TEST_P(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup)
   EXPECT_EQ(output, input);
 }
 
+TEST_P(SnappyDecompressTest, MalformedAllOffsetZeroCopies)
+{
+  // uncompressed_size = 100 (varint = 0x64).
+  // Then 25 copies of {0x01, 0x00}: each is "1-byte-offset copy, len=4, offset=0".
+  std::vector<uint8_t> compressed{0x64};
+  std::for_each(cuda::counting_iterator(0), cuda::counting_iterator(25), [&](auto) {
+    compressed.push_back(0x01);
+    compressed.push_back(0x00);
+  });
+
+  EXPECT_THROW(Decompress(GetParam(), {compressed.data(), compressed.size()}, 100),
+               cudf::logic_error);
+}
+
+TEST_P(SnappyDecompressTest, MalformedOffsetZeroAfterLiteral)
+{
+  // uncompressed_size = 100
+  // 4-byte literal: tag = (4-1) << 2 = 0x0C, then 4 data bytes.
+  // 24 copies of {0x01, 0x00} = (len=4, offset=0). 24*4 = 96 bytes -> total 100.
+  std::vector<uint8_t> compressed{0x64, 0x0c, 'A', 'B', 'C', 'D'};
+  std::for_each(cuda::counting_iterator(0), cuda::counting_iterator(24), [&](auto) {
+    compressed.push_back(0x01);
+    compressed.push_back(0x00);
+  });
+
+  EXPECT_THROW(Decompress(GetParam(), {compressed.data(), compressed.size()}, 100),
+               cudf::logic_error);
+}
+
 INSTANTIATE_TEST_CASE_P(
   BrotliDecompressTest,
   BrotliDecompressTest,
@@ -379,7 +399,7 @@ TEST_F(NvcompConfigTest, Decompression)
 void roundtrip_test(cudf::io::compression_type compression)
 {
   auto const stream = cudf::get_default_stream();
-  auto const mr     = rmm::mr::get_current_device_resource();
+  auto const mr     = cudf::get_current_device_resource_ref();
   std::vector<uint8_t> expected;
   expected.reserve(8 * (8 << 20));
   for (size_t size = 1; size < 8 << 20; size *= 2) {
@@ -417,7 +437,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
 
-    auto d_got = cudf::detail::hostdevice_vector<uint8_t>(expected.size(), stream);
+    auto d_got = rmm::device_uvector<uint8_t>(expected.size(), stream);
     {
       auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
       hd_srcs[0]   = d_comp;

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from typing import Any
@@ -32,9 +33,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
-_UDF_DOC_URL = (
-    "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
-)
+_UDF_DOC_URL = "https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/"
 
 
 class Group:
@@ -204,7 +203,8 @@ class GroupOpBase(AbstractTemplate):
         if funcs := call_cuda_functions.get(self.key.__name__):
             for sig in funcs.keys():
                 if all(
-                    arg.group_scalar_type == ty for arg, ty in zip(args, sig)
+                    arg.group_scalar_type == ty
+                    for arg, ty in zip(args, sig, strict=True)
                 ):
                     return nb_signature(sig[0], *args)
         raise UDFError(self.make_error_string(args))
@@ -242,7 +242,7 @@ class GroupAttrBase(AbstractTemplate):
                 retty, selfty, *argtys = sig
                 if self.this.group_scalar_type == selfty and all(
                     arg.group_scalar_type == ty
-                    for arg, ty in zip(args, argtys)
+                    for arg, ty in zip(args, argtys, strict=True)
                 ):
                     return nb_signature(retty, *args, recvr=self.this)
         raise UDFError(self.make_error_string(args))

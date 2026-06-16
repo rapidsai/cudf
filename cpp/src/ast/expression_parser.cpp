@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -238,9 +227,12 @@ cudf::size_type expression_parser::visit(operation const& expr)
   auto end      = begin + operand_data_ref_indices.size();
   auto const operand_types = std::vector<cudf::data_type>(begin, end);
 
-  // Validate types of operand data references match
-  if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
-      operand_types.cend()) {
+  // Validate type_id's of operand data references match
+  // (decimal types with different scales are supported)
+  if (std::adjacent_find(
+        operand_types.cbegin(), operand_types.cend(), [](auto const& dt1, auto const& dt2) {
+          return dt1.id() != dt2.id();
+        }) != operand_types.cend()) {
     CUDF_FAIL("An AST expression was provided non-matching operand types.");
   }
 

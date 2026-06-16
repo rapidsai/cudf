@@ -1,10 +1,26 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
-def to_fixed_point(input: Column, output_type: DataType) -> Column: ...
-def from_fixed_point(input: Column) -> Column: ...
+def to_fixed_point(
+    input: Column,
+    output_type: DataType,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def from_fixed_point(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def is_fixed_point(
-    input: Column, decimal_type: DataType | None = None
+    input: Column,
+    decimal_type: DataType | None = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import itertools
 
@@ -40,15 +41,14 @@ def test_struct_from_children_children_different_sizes(children_plc):
 
 def test_struct_from_children_struct_list(children_plc):
     result = plc.Column.struct_from_children(children_plc)
-    expected = plc.interop.to_arrow(
-        plc.Column(
-            plc.DataType(plc.TypeId.STRUCT),
-            children_plc[0].size(),
-            None,
-            children_plc[0].null_mask(),
-            children_plc[0].null_count(),
-            0,
-            children_plc,
-        )
-    )
+    expected = plc.Column(
+        plc.DataType(plc.TypeId.STRUCT),
+        children_plc[0].size(),
+        None,
+        children_plc[0].null_mask(),
+        children_plc[0].null_count(),
+        0,
+        children_plc,
+    ).to_arrow()
+
     assert_column_eq(result, expected)

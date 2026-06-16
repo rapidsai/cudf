@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -33,10 +22,9 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -183,9 +171,8 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * It is only used for longer strings.
  *
  * @param d_strings The input strings column
- * @param d_pattern The pattern to match
+ * @param pattern_itr The pattern to match
  * @param d_escape The escape character
- * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
 template <typename PatternIterator>
@@ -227,8 +214,8 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
     return idx;
   };
 
-  auto const itr_zero = thrust::counting_iterator<size_type>(0);
-  auto const itr_size = thrust::counting_iterator<size_type>(d_pattern.size_bytes());
+  auto const itr_zero = cuda::counting_iterator<size_type>{0};
+  auto const itr_size = cuda::counting_iterator<size_type>{d_pattern.size_bytes()};
   auto const wcs_size =
     esc_char == multi_wildcard ? 0 : thrust::count_if(thrust::seq, itr_zero, itr_size, count_wc_fn);
 
@@ -336,17 +323,19 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       results->mutable_view().data<bool>(),
                       like_fn{*d_strings, patterns_itr, d_escape});
   } else {
     // warp-parallel for longer strings
-    constexpr auto block_size = 512;
-    auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+    constexpr thread_index_type block_size = 512;
+    constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+    auto const grid = cudf::detail::grid_1d(input.size() * warp_size, block_size);
     like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
       *d_strings, patterns_itr, d_escape, results->mutable_view().data<bool>());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   results->set_null_count(input.null_count());
@@ -372,8 +361,20 @@ std::unique_ptr<column> like(strings_column_view const& input,
                std::invalid_argument);
 
   auto const d_pattern    = pattern.value(stream);
-  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+  auto const patterns_itr = cuda::make_constant_iterator(d_pattern);
   return like(input, patterns_itr, d_escape, stream, mr);
+}
+
+std::unique_ptr<column> like(strings_column_view const& input,
+                             std::string_view const& pattern,
+                             std::string_view const& escape_character,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
+{
+  auto const ptn = string_scalar(pattern, true, stream, cudf::get_current_device_resource_ref());
+  auto const esc =
+    string_scalar(escape_character, true, stream, cudf::get_current_device_resource_ref());
+  return like(input, ptn, esc, stream, mr);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
@@ -407,8 +408,8 @@ std::unique_ptr<column> like(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> like(strings_column_view const& input,
-                             string_scalar const& pattern,
-                             string_scalar const& escape_character,
+                             std::string_view const& pattern,
+                             std::string_view const& escape_character,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {

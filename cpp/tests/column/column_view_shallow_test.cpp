@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -23,7 +12,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <memory>
 #include <type_traits>
@@ -33,8 +22,8 @@ template <typename T>
 std::unique_ptr<cudf::column> example_column()
   requires(cudf::is_fixed_width<T>())
 {
-  auto begin = thrust::make_counting_iterator(1);
-  auto end   = thrust::make_counting_iterator(16);
+  auto begin = cuda::counting_iterator<int32_t>{1};
+  auto end   = cuda::counting_iterator<int32_t>{16};
   return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
 }
 
@@ -69,8 +58,8 @@ template <typename T>
 std::unique_ptr<cudf::column> example_column()
   requires(std::is_same_v<T, cudf::struct_view>)
 {
-  auto begin    = thrust::make_counting_iterator(1);
-  auto end      = thrust::make_counting_iterator(16);
+  auto begin    = cuda::counting_iterator<int32_t>{1};
+  auto end      = cuda::counting_iterator<int32_t>{16};
   auto member_0 = cudf::test::fixed_width_column_wrapper<int32_t>(begin, end);
   auto member_1 = cudf::test::fixed_width_column_wrapper<int32_t>(begin + 10, end + 10);
   return cudf::test::structs_column_wrapper({member_0, member_1}).release();

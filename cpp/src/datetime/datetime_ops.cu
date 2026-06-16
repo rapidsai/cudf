@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -37,7 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/transform.h>
 
@@ -257,7 +246,7 @@ struct dispatch_round {
                                           stream,
                                           mr);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       column.begin<Timestamp>(),
                       column.end<Timestamp>(),
                       output->mutable_view().begin<Timestamp>(),
@@ -295,7 +284,7 @@ struct launch_functor {
   void operator()(rmm::cuda_stream_view stream) const
     requires(cudf::is_timestamp_t<Timestamp>::value)
   {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -358,7 +347,7 @@ struct add_calendrical_months_functor {
       make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, mr);
     auto output_mview = output->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_begin,
@@ -410,7 +399,7 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   if (months.is_valid(stream)) {
     auto const months_begin_iter = thrust::make_permutation_iterator(
       cudf::detail::indexalator_factory::make_input_iterator(months),
-      thrust::make_constant_iterator(0));
+      cuda::make_constant_iterator(0));
     auto output = type_dispatcher(timestamp_column.type(),
                                   add_calendrical_months_functor{},
                                   timestamp_column,

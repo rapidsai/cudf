@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
@@ -26,8 +16,6 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -36,12 +24,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
+#include <cuda/std/limits>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
@@ -62,7 +51,7 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
  *
  * This value should be different from `NOT_FOUND_SENTINEL`.
  */
-auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
+auto constexpr __device__ NULL_SENTINEL = cuda::std::numeric_limits<size_type>::min();
 
 /**
  * @brief Check if the given type is a supported non-nested type in `cudf::lists::contains`.
@@ -102,13 +91,14 @@ struct is_supported_type_fn {
 template <bool forward>
 __device__ auto element_index_pair_iter(size_type const size)
 {
-  auto const begin = thrust::make_counting_iterator(0);
-  auto const end   = thrust::make_counting_iterator(size);
+  auto const begin = cuda::counting_iterator<cudf::size_type>{0};
+  auto const end   = cuda::counting_iterator{size};
 
   if constexpr (forward) {
-    return thrust::pair{begin, end};
+    return cuda::std::pair{begin, end};
   } else {
-    return thrust::pair{thrust::make_reverse_iterator(end), thrust::make_reverse_iterator(begin)};
+    return cuda::std::pair{cuda::std::make_reverse_iterator(end),
+                           cuda::std::make_reverse_iterator(begin)};
   }
 }
 
@@ -142,8 +132,8 @@ struct search_list_fn {
   template <bool forward>
   __device__ inline size_type search_list_op(list_device_view const list) const
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
@@ -172,7 +162,7 @@ void index_of(InputIterator input_it,
 {
   auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
   auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input_it,
                     input_it + num_rows,
                     output_it,
@@ -221,7 +211,7 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const child_tview = cudf::table_view{{child}};
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
-    cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
+    cudf::detail::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   if (cudf::is_nested(search_keys.type())) {
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     index_of(input_it, num_rows, output_it, child, search_keys, find_option, d_comp, stream);
@@ -255,7 +245,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
@@ -352,7 +342,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
   thrust::tabulate(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     out_begin,
     out_begin + lists.size(),
     cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{
@@ -360,8 +350,8 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
       auto const list = list_device_view{lists, list_idx};
       return list.is_null() ||
              thrust::any_of(thrust::seq,
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(list.size()),
+                            cuda::counting_iterator<cudf::size_type>{0},
+                            cuda::counting_iterator{list.size()},
                             [&list](auto const idx) { return list.is_null(idx); });
     }));
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -7,7 +8,6 @@ from pandas.api import types as pd_types  # noqa: TID251
 
 import cudf
 from cudf.api import types
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,7 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), True),
+        (cudf.CategoricalDtype(["a"]), True),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -191,7 +191,7 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.Decimal32Dtype, True),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), True),
@@ -212,6 +212,17 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
+        (cudf.Index([], dtype="bool"), True),
+        (cudf.Index([], dtype="int64"), True),
+        (cudf.Index([], dtype="uint8"), True),
+        (cudf.Index([], dtype="float64"), True),
+        (cudf.Index([], dtype="boolean"), True),
+        (cudf.Index([], dtype="Int64"), True),
+        (cudf.Index([], dtype="UInt16"), True),
+        (cudf.Index([], dtype="Float32"), True),
+        (cudf.Index([], dtype="str"), False),
+        (cudf.Index([], dtype="datetime64[s]"), False),
+        (cudf.Index([], dtype="timedelta64[s]"), False),
     ),
 )
 def test_is_numeric_dtype(obj, expect):
@@ -293,7 +304,7 @@ def test_is_numeric_dtype(obj, expect):
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -395,7 +406,7 @@ def test_is_integer_dtype(obj, expect):
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -483,22 +494,8 @@ def test_is_integer(obj, expect):
         (pd.Series(dtype="int"), False),
         (pd.Series(dtype="float"), False),
         (pd.Series(dtype="complex"), False),
-        pytest.param(
-            pd.Series(dtype="str"),
-            True,
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="bug in previous pandas versions",
-            ),
-        ),
-        pytest.param(
-            pd.Series(dtype="unicode"),
-            True,
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="bug in previous pandas versions",
-            ),
-        ),
+        (pd.Series(dtype="str"), True),
+        (pd.Series(dtype="unicode"), True),
         (pd.Series(dtype="datetime64[s]"), False),
         (pd.Series(dtype="timedelta64[s]"), False),
         (pd.Series(dtype="category"), False),
@@ -512,7 +509,7 @@ def test_is_integer(obj, expect):
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -614,7 +611,7 @@ def test_is_string_dtype(obj, expect):
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -716,7 +713,7 @@ def test_is_datetime_dtype(obj, expect):
         (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), True),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -818,7 +815,7 @@ def test_is_list_dtype(obj, expect):
         (cudf.Decimal32Dtype, False),
         # (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), True),
         (cudf.Decimal128Dtype(5, 2), False),
@@ -918,12 +915,12 @@ def test_is_struct_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
-        (cudf.Decimal128Dtype, True),
-        (cudf.Decimal64Dtype, True),
-        (cudf.Decimal32Dtype, True),
+        (cudf.Decimal128Dtype, False),
+        (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
-        (cudf.CategoricalDtype("a"), False),
+        (cudf.CategoricalDtype(["a"]), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
         (cudf.Decimal128Dtype(5, 2), True),
@@ -950,10 +947,6 @@ def test_is_decimal_dtype(obj, expect):
     assert types.is_decimal_dtype(obj) == expect
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="inconsistent warnings in older pandas versions",
-)
 @pytest.mark.parametrize(
     "obj",
     (

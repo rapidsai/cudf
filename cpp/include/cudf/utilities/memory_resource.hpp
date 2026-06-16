@@ -1,25 +1,15 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 namespace cudf {
 
@@ -30,58 +20,67 @@ namespace cudf {
  */
 
 /**
- * @brief Get the current device memory resource.
- *
- * @return The current device memory resource.
- */
-inline rmm::mr::device_memory_resource* get_current_device_resource()
-{
-  return rmm::mr::get_current_device_resource();
-}
-
-/**
  * @brief Get the current device memory resource reference.
  *
  * @return The current device memory resource reference.
  */
 inline rmm::device_async_resource_ref get_current_device_resource_ref()
 {
-  // For now, match current behavior which is to return current resource pointer
-  return rmm::mr::get_current_device_resource();
+  return rmm::mr::get_current_device_resource_ref();
 }
 
 /**
  * @brief Set the current device memory resource.
  *
  * @param mr The new device memory resource.
- * @return The previous device memory resource.
+ * @return An owning any_resource holding the previous resource.
  */
-inline rmm::mr::device_memory_resource* set_current_device_resource(
-  rmm::mr::device_memory_resource* mr)
+inline cuda::mr::any_resource<cuda::mr::device_accessible> set_current_device_resource(
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
 {
-  return rmm::mr::set_current_device_resource(mr);
+  return rmm::mr::set_current_device_resource(std::move(mr));
 }
 
 /**
  * @brief Set the current device memory resource reference.
  *
+ * @deprecated Use `set_current_device_resource` instead.
+ *
+ * The object referenced by `mr` must outlive the last use of the resource, otherwise behavior is
+ * undefined. It is the caller's responsibility to maintain the lifetime of the resource object.
+ *
  * @param mr The new device memory resource reference.
- * @return The previous device memory resource reference.
+ * @return An owning any_resource holding the previous resource.
  */
-inline rmm::device_async_resource_ref set_current_device_resource_ref(
-  rmm::device_async_resource_ref mr)
+[[deprecated("Use set_current_device_resource instead.")]]  //
+inline cuda::mr::any_resource<cuda::mr::device_accessible>
+set_current_device_resource_ref(rmm::device_async_resource_ref mr)
 {
-  return rmm::mr::set_current_device_resource_ref(mr);
+  return set_current_device_resource(cuda::mr::any_resource<cuda::mr::device_accessible>{mr});
+}
+
+/**
+ * @brief Reset the current device memory resource to the initial resource.
+ *
+ * @return An owning any_resource holding the previous resource.
+ */
+inline cuda::mr::any_resource<cuda::mr::device_accessible> reset_current_device_resource()
+{
+  return rmm::mr::reset_current_device_resource();
 }
 
 /**
  * @brief Reset the current device memory resource reference to the initial resource.
  *
- * @return The previous device memory resource reference.
+ * @deprecated Use `reset_current_device_resource` instead.
+ *
+ * @return An owning any_resource holding the previous resource.
  */
-inline rmm::device_async_resource_ref reset_current_device_resource_ref()
+[[deprecated("Use reset_current_device_resource instead.")]]  //
+inline cuda::mr::any_resource<cuda::mr::device_accessible>
+reset_current_device_resource_ref()
 {
-  return rmm::mr::reset_current_device_resource_ref();
+  return reset_current_device_resource();
 }
 
 /** @} */  // end of group

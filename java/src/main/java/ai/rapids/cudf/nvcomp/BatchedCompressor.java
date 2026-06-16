@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package ai.rapids.cudf.nvcomp;
@@ -91,7 +80,8 @@ public abstract class BatchedCompressor {
         buildAddrsAndSizes(inputs, inputChunkAddrs, inputChunkSizes, compressedBuffers,
             outputChunkAddrs);
 
-        final long tempBufferSize = batchedCompressGetTempSize(numChunks, chunkSize);
+        final long tempBufferSize = batchedCompressGetTempSize(numChunks, chunkSize,
+          numChunks * chunkSize);
         try (DeviceMemoryBuffer addrsAndSizes = putAddrsAndSizesOnDevice(inputChunkAddrs,
                 inputChunkSizes, outputChunkAddrs, stream);
              DeviceMemoryBuffer tempBuffer =
@@ -308,9 +298,11 @@ public abstract class BatchedCompressor {
    * Get the temporary workspace size required to perform compression of an entire batch.
    * @param batchSize number of chunks in the batch
    * @param maxChunkSize maximum size of an uncompressed chunk in bytes
+   * @param totalSize Upper bound on the total uncompressed size of all chunks
    * @return The size of required temporary workspace in bytes to compress the batch.
    */
-  protected abstract long batchedCompressGetTempSize(long batchSize, long maxChunkSize);
+  protected abstract long batchedCompressGetTempSize(long batchSize, long maxChunkSize,
+    long totalSize);
 
    /**
    * Asynchronously compress a batch of buffers. Note that compressedSizesOutPtr must

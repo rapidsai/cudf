@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -40,9 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -100,6 +88,7 @@ void scatter_scalar_bitmask_inplace(std::reference_wrapper<scalar const> const& 
                                           : marking_bitmask_kernel<false, decltype(scatter_map)>;
     bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       *target_view, scatter_map, num_scatter_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     target.set_null_count(
       cudf::detail::null_count(target.view().null_mask(), 0, target.size(), stream));
@@ -126,9 +115,9 @@ struct column_scalar_scatterer_impl {
     // Use permutation iterator with constant index to dereference scalar data
     auto scalar_impl = static_cast<scalar_type_t<Element> const*>(&source.get());
     auto scalar_iter =
-      thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
+      thrust::make_permutation_iterator(scalar_impl->data(), cuda::make_constant_iterator(0));
 
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -154,7 +143,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
 
     auto const scalar_impl = static_cast<string_scalar const*>(&source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
-    auto const begin       = thrust::make_constant_iterator(source_view);
+    auto const begin       = cuda::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
     auto result            = strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
 
@@ -192,42 +181,31 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    auto dict_target =
-      dictionary::detail::add_keys(dictionary_column_view(target),
-                                   make_column_from_scalar(source.get(), 1, stream)->view(),
-                                   stream,
-                                   mr);
+    auto dict_target = dictionary::detail::add_keys(
+      dictionary_column_view(target),
+      make_column_from_scalar(source.get(), 1, stream, cudf::get_current_device_resource_ref())
+        ->view(),
+      stream,
+      mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
       dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
     auto scalar_iter = thrust::make_permutation_iterator(
-      indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
+      indexalator_factory::make_input_iterator(*scalar_index), cuda::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
                     target_iter);
 
-    // build the dictionary indices column from the result
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
-                                                   0);
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
     // create the output column
-    auto result = make_dictionary_column(std::move(keys_column),
-                                         std::move(indices_column),
-                                         std::move(*(contents.null_mask.release())),
-                                         null_count);
+    auto result =
+      make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
     return result;
@@ -406,18 +384,24 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  auto indices = cudf::make_numeric_column(
-    data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
+  auto indices         = cudf::make_numeric_column(data_type{type_id::INT32},
+                                           target.size(),
+                                           mask_state::UNALLOCATED,
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
   auto mutable_indices = indices->mutable_view();
 
-  thrust::sequence(rmm::exec_policy_nosync(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    mutable_indices.begin<size_type>(),
                    mutable_indices.end<size_type>(),
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map = detail::apply_boolean_mask(
-    table_view{{indices->view()}}, boolean_mask, stream, cudf::get_current_device_resource_ref());
+  auto scatter_map  = detail::apply_mask(table_view{{indices->view()}},
+                                        boolean_mask,
+                                        mask_type::RETENTION,
+                                        stream,
+                                        cudf::get_current_device_resource_ref());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 
@@ -489,8 +473,8 @@ std::unique_ptr<table> boolean_mask_scatter(
                cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
-  CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(target.num_columns()),
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<size_type>{0},
+                           cuda::counting_iterator<size_type>{target.num_columns()},
                            [&input, &target](auto index) {
                              return cudf::have_same_types(target.column(index), input[index].get());
                            }),

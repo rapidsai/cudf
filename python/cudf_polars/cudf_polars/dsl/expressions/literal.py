@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -43,7 +43,11 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return Column(
-            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype.plc), 1),
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(self.value, self.dtype.plc_type, stream=df.stream),
+                1,
+                stream=df.stream,
+            ),
             dtype=self.dtype,
         )
 
@@ -53,15 +57,21 @@ class Literal(Expr):
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
 
+    def get_hashable(self) -> Hashable:
+        """Get the hash of the literal."""
+        return (type(self), self.dtype.plc_type, id(self.value))
+
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""
+        if dtype.id() == plc.TypeId.STRUCT:
+            raise NotImplementedError("Struct literals are not supported")
         if self.value is None:
             return Literal(dtype, self.value)
         else:
             # Use polars to cast instead of pylibcudf
             # since there are just Python scalars
-            casted = pl.Series(values=[self.value], dtype=self.dtype.polars).cast(
-                dtype.polars
+            casted = pl.Series(values=[self.value], dtype=self.dtype.polars_type).cast(
+                dtype.polars_type
             )[0]
             return Literal(dtype, casted)
 
@@ -82,13 +92,15 @@ class LiteralColumn(Expr):
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return (type(self), self.dtype.plc, id(self.value))
+        return (type(self), self.dtype.plc_type, id(self.value))
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return Column(plc.Column.from_arrow(self.value), dtype=self.dtype)
+        return Column(
+            plc.Column.from_arrow(self.value, stream=df.stream), dtype=self.dtype
+        )
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102

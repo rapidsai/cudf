@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -29,6 +18,9 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/iterator>
+#include <cuda/std/tuple>
 
 namespace cudf::io::parquet::detail {
 
@@ -312,8 +304,8 @@ struct dispatch_to_flatbuf {
 
     // Traverse the struct in DFS manner and process children fields.
     else if constexpr (std::is_same_v<T, cudf::struct_view>) {
-      std::transform(thrust::make_counting_iterator(0UL),
-                     thrust::make_counting_iterator(col->children.size()),
+      std::transform(cuda::counting_iterator<std::size_t>{0},
+                     cuda::counting_iterator{col->children.size()},
                      std::back_inserter(children),
                      [&](auto const idx) {
                        return make_arrow_schema_fields(
@@ -387,15 +379,16 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
   field_offsets.reserve(linked_columns.size());
 
   // populate field offsets (aka schema fields)
-  std::transform(thrust::make_zip_iterator(
-                   thrust::make_tuple(linked_columns.begin(), metadata.column_metadata.begin())),
-                 thrust::make_zip_iterator(
-                   thrust::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
-                 std::back_inserter(field_offsets),
-                 [&](auto const& elem) {
-                   return make_arrow_schema_fields(
-                     fbb, thrust::get<0>(elem), thrust::get<1>(elem), write_mode, utc_timestamps);
-                 });
+  std::transform(
+    thrust::make_zip_iterator(
+      cuda::std::make_tuple(linked_columns.begin(), metadata.column_metadata.begin())),
+    thrust::make_zip_iterator(
+      cuda::std::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
+    std::back_inserter(field_offsets),
+    [&](auto const& elem) {
+      return make_arrow_schema_fields(
+        fbb, cuda::std::get<0>(elem), cuda::std::get<1>(elem), write_mode, utc_timestamps);
+    });
 
   // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to
   // create an ipc message flatbuffer

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -177,28 +166,55 @@ std::unique_ptr<table> stable_sort_by_key(
  * value starts from 1.
  *
  * @code{.pseudo}
- * input = { 3, 4, 5, 4, 1, 2}
- * Result for different rank_method are
+ * Using default order::ASCENDING
+ * input = {3, 4, 5, 4, 1, 2}
+ * Results for different rank_methods
  * FIRST    = {3, 4, 6, 5, 1, 2}
  * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
  * MIN      = {3, 4, 6, 4, 1, 2}
  * MAX      = {3, 5, 6, 5, 1, 2}
  * DENSE    = {3, 4, 5, 4, 1, 2}
+ *
+ * For null_policy::INCLUDE, null_order::AFTER
+ * input = {3, 4, null, 4, 1, 2}
+ * The results are the same as above.
+ *
+ * For null_policy::INCLUDE, null_order::BEFORE
+ * input = {3, 4, null, 4, 1, 2}
+ * Results for different rank_methods
+ * FIRST    = {4, 5, 1, 6, 2, 3}
+ * AVERAGE  = {4, 5.5, 1, 5.5, 2, 3}
+ * MIN      = {4, 5, 1, 5, 2, 3}
+ * MAX      = {4, 6, 1, 6, 2, 3}
+ * DENSE    = {4, 5, 1, 5, 2, 3}
+ *
+ * For null_policy::EXCLUDE (null_order::AFTER only)
+ * input = {3, 4, null, 4, 1, 2}
+ * Results for different rank_methods
+ * FIRST    = {3, 4, null, 5, 1, 2}
+ * AVERAGE  = {3, 4.5, null, 4.5, 1, 2}
+ * MIN      = {3, 4, null, 4, 1, 2}
+ * MAX      = {3, 5, null, 5, 1, 2}
+ * DENSE    = {3, 4, null, 4, 1, 2}
  * @endcode
+ *
+ * For null_policy::EXCLUDE with null_order::BEFORE, using column_order::ASCENDING
+ * will result in undefined behavior. Likewise for null_policy::EXCLUDE with
+ * null_order::AFTER and column_order::DESCENDING.
+ *
+ * The output column type will be `double` when `method=rank_method::AVERAGE` or `percentage=True`
+ * and `size_type` otherwise.
  *
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
- * @param null_handling  flag to include nulls during ranking. If nulls are not
- * included, corresponding rank will be null.
- * @param null_precedence The desired order of null compared to other elements
- * for column
- * @param percentage flag to convert ranks to percentage in range (0,1]
+ * @param null_handling Flag to include nulls during ranking.
+ *                      If nulls are excluded, the corresponding rank will be null.
+ * @param null_precedence The desired order of null rows compared to other elements
+ * @param percentage Flag to convert ranks to percentage in range (0,1]
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A column of containing the rank of the each element of the column of `input`. The output
- * column type will be `size_type`column by default or else `double` when
- * `method=rank_method::AVERAGE` or `percentage=True`
+ * @return A column of containing the rank of the each element of the column of `input`
  */
 std::unique_ptr<column> rank(
   column_view const& input,
@@ -354,7 +370,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
  *
  * @param col Column to compute top k
  * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
+ * @param topk_order The desired sort order for the top k values.
  *                   Default is high to low.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -363,7 +379,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
 std::unique_ptr<column> top_k(
   column_view const& col,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -377,7 +393,7 @@ std::unique_ptr<column> top_k(
  *
  * @param col Column to compute top k
  * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
+ * @param topk_order The desired sort order for the top k values.
  *                   Default is high to low.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -386,7 +402,79 @@ std::unique_ptr<column> top_k(
 std::unique_ptr<column> top_k_order(
   column_view const& col,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the top k values within each segment of a column
+ *
+ * Returns the top k values (largest or smallest) within each segment of the given column.
+ * The values within each segment may not necessarily be sorted.
+ * If a segment contain less than k elements then all values for that segment are returned.
+ *
+ * @code{.pseudo}
+ * Example:
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [0, 3, 7, 13]
+ * result = cudf::segmented_top_k(col, offsets, 3);
+ * result is [[5,4,3], [4,3,2], [10,8,9]] // each segment may not be sorted
+ * @endcode
+ *
+ * @throw std::invalid_argument if k less than or equal to zero
+ * @throw cudf::data_type_error if segment_offsets is not size_type
+ * @throw std::invalid_argument segments_offsets is empty or contains nulls
+ *
+ * @param col Column to compute top k
+ * @param segment_offsets Start offset index for each contiguous segment
+ * @param k Number of values to return for each segment
+ * @param topk_order DESCENDING is the largest k values (default).
+ *                   ASCENDING is the smallest k values.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A column with the top k values of the input column.
+ */
+std::unique_ptr<column> segmented_top_k(
+  column_view const& col,
+  column_view const& segment_offsets,
+  size_type k,
+  order topk_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the indices of the top k values within each segment of a column
+ *
+ * The indices will represent the top k elements within each segment but may not represent
+ * those elements as k sorted values.
+ * If a segment contain less than k elements then all values for that segment are returned.
+ *
+ * @code{.pseudo}
+ * Example:
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [0, 3, 7, 13]
+ * result = cudf::segmented_top_k_order(col, offsets, 3);
+ * result is [[2,1,0], [3,6,5], [12,10,11]] // each segment may not be sorted
+ * @endcode
+ *
+ * @throw std::invalid_argument if k less than or equal to zero
+ * @throw cudf::data_type_error if segment_offsets is not size_type
+ * @throw std::invalid_argument segments_offsets is empty or contains nulls
+ *
+ * @param col Column to compute top k
+ * @param segment_offsets Start offset index for each contiguous segment
+ * @param k Number of values to return for each segment
+ * @param topk_order DESCENDING is the indices of the largest k values (default).
+ *                   ASCENDING is the indices of the smallest k values.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Indices of the top k values of the input column
+ */
+std::unique_ptr<column> segmented_top_k_order(
+  column_view const& col,
+  column_view const& segment_offsets,
+  size_type k,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -1,29 +1,19 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -86,24 +76,46 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+
+    // Must be set after computing above list offsets
+    cg::invoke_one(block, [&]() {
+      page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+      page.num_nulls -= has_repetition ? 0 : s->first_row;
+      page.num_valids = 0;
+    });
     return;
   }
 
   auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
+  // Check malformed BYTE_STREAM_SPLIT pages
+  if (s->dtype_len_in <= 0 or data_len <= 0) {
+    cg::invoke_one(block, [&]() {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_BYTE_STREAM_SPLIT_SIZE),
+                error_code);
+    });
+    return;
+  }
+
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -216,7 +228,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     block.sync();
   }
-  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
+
+  // Zero-fill null positions after decoding valid values
+  if (has_repetition) {
+    int const leaf_level_index = s->col.max_nesting_depth - 1;
+    auto const& ni             = s->nesting_info[leaf_level_index];
+    if (ni.valid_map != nullptr) {
+      int const num_values = ni.valid_map_offset - init_valid_map_offset;
+      zero_fill_null_positions_shared<decode_block_size>(
+        s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+    }
+  }
+
+  if (s->error != 0) {
+    cg::invoke_one(block, [&]() { set_error(s->error, error_code); });
+  }
 }
 
 /**
@@ -269,12 +295,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
 
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
@@ -288,11 +313,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
     if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
       // Initial string offset
-      auto const initial_value = s->page.str_offset;
+      auto const initial_value = page.str_offset;
+
+      // We must use the batch size from the nesting info (the size of the page for this batch)
+      auto value_count = page.nesting[s->col.max_nesting_depth - 1].batch_size;
 
       // If no repetition we haven't calculated start/end bounds and instead just skipped
       // values until we reach first_row. account for that here.
-      auto value_count = s->page.num_input_values;
       if (not has_repetition) { value_count -= s->first_row; }
 
       auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
@@ -303,10 +330,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         offptr[idx] = initial_value;
       }
     }
+
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
+    page.num_valids = 0;
+
     return;
   }
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   if (s->dict_base) {
     out_warp_id = (s->dict_bits > 0) ? 2 : 1;
@@ -319,8 +354,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
   }
 
-  __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+
+  auto const is_decimal =
+    s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+  Type const dtype = s->col.physical_type;
 
   auto const first_out_thread_id = out_warp_id * warp.size();
   // skipped_leaf_values will always be 0 for flat hierarchies.
@@ -367,7 +410,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      Type const dtype = s->col.physical_type;
       src_pos += block.thread_rank() - first_out_thread_id;
 
       // the position in the output column/buffer
@@ -401,8 +443,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint32_t const dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        auto const is_decimal =
-          s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+
         if (dtype == Type::BYTE_ARRAY) {
           if (is_decimal) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
@@ -447,7 +488,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+            auto const dst_ptr = static_cast<uint32_t*>(dst);
+            read_fixed_width_value_fast(s, sb, val_src_pos, dst_ptr);
+            // zero out most significant bytes
+            cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
           } else if (s->ts_scale) {
             read_int64_timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
           } else {
@@ -464,7 +508,22 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     __syncthreads();
   }
-  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
+
+  // Zero-fill null positions after decoding valid values
+  auto const is_string =
+    ((dtype == Type::BYTE_ARRAY) && !is_decimal) || (dtype == Type::FIXED_LEN_BYTE_ARRAY);
+  if (is_string || has_repetition) {
+    auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+    if (ni.valid_map != nullptr) {
+      int const num_values = ni.valid_map_offset - init_valid_map_offset;
+      zero_fill_null_positions_shared<decode_block_size>(
+        s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+    }
+  }
+
+  if (s->error != 0) {
+    cg::invoke_one(block, [&]() { set_error(s->error, error_code); });
+  }
 }
 
 struct mask_tform {
@@ -477,12 +536,12 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
                                            rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+  return cudf::detail::transform_reduce(pages.device_begin(),
+                                        pages.device_end(),
+                                        mask_tform{},
+                                        uint32_t{0},
+                                        cuda::std::bit_or<uint32_t>{},
+                                        stream);
 }
 
 /**
@@ -505,9 +564,11 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_page_data<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_page_data<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -532,10 +593,12 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
     decode_split_page_data_kernel<rolling_buf_size, uint8_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_split_page_data_kernel<rolling_buf_size, uint16_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(
         pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -548,7 +611,7 @@ void write_final_offsets(host_span<size_type const> offsets,
     offsets, stream, cudf::get_current_device_resource_ref());
   // Iterator for the source (scalar) data
   auto src_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<std::size_t>(0),
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<cudf::size_type*>(
       [src = d_src_data.begin()] __device__(std::size_t i) { return src + i; }));
 
@@ -556,7 +619,7 @@ void write_final_offsets(host_span<size_type const> offsets,
   auto d_dst_addrs = cudf::detail::make_device_uvector_async(
     buff_addrs, stream, cudf::get_current_device_resource_ref());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
-  auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
+  auto size_iter = cuda::make_constant_iterator(sizeof(size_type));
 
   // Copy offsets to buffers in batched manner.
   cudf::detail::batched_memcpy_async(

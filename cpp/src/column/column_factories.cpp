@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -181,7 +170,11 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
   CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
     make_column_from_scalar(s, 1, stream, mr),
-    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream, mr),
+    make_column_from_scalar(
+      numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
+      size,
+      stream,
+      mr),
     rmm::device_buffer{0, stream, mr},
     0);
 }

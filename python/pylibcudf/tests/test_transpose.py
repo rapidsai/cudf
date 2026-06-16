@@ -1,17 +1,13 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
-from packaging.version import parse
 from utils import assert_table_eq
 
 import pylibcudf as plc
 
 
-@pytest.mark.skipif(
-    parse(pa.__version__) < parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/40070",
-)
 @pytest.mark.parametrize(
     "arr",
     [
@@ -26,11 +22,10 @@ def test_transpose(arr):
     arrow_tbl = pa.table(data)
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
     got = plc.transpose.transpose(plc_tbl)
-    pa_got = plc.interop.to_arrow(got)
     expect = pa.table(
         pa.Table.from_pandas(
             arrow_tbl.to_pandas().T, preserve_index=False
         ).rename_columns([""] * len(arr)),
-        schema=pa_got.schema,
+        schema=got.to_arrow().schema,
     )
     assert_table_eq(expect, got)

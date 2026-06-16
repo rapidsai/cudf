@@ -1,22 +1,15 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 package ai.rapids.cudf;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
+
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * This is the binding class for rmm lib.
@@ -30,6 +23,23 @@ public class Rmm {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
+
+  private static final ReadWriteLock rmmLock = new ReentrantReadWriteLock();
+
+  /*
+   * Advanced users that want to make sure they can protect against Rmm
+   * shutting down for example, while doing work with memory resources
+   * could use the reader and writer locks provided here (publicy)
+   * to protect their state.
+   *
+   * `writeLock`:
+   *    1. Covers mutation of `tracker` and `initialized`.
+   *    2. [set/clear]EventHandler (unlikely) race
+   *
+   * `readLock`: All other APIs.
+   */
+  public static final Lock readLock = rmmLock.readLock();
+  public static final Lock writeLock = rmmLock.writeLock();
 
   enum LogLoc {
     NONE(0),
@@ -84,16 +94,26 @@ public class Rmm {
    * not return the correct value if the resource was not set using the java APIs. It will
    * return a null if the resource was never set through the java APIs.
    */
-  public static synchronized RmmDeviceMemoryResource getCurrentDeviceResource() {
-    return deviceResource;
+  public static RmmDeviceMemoryResource getCurrentDeviceResource() {
+    readLock.lock();
+    try {
+      return deviceResource;
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
    * Get the currently set RmmTrackingResourceAdaptor that is set. This might return null if
    * RMM has nto been initialized.
    */
-  public static synchronized RmmTrackingResourceAdaptor<RmmDeviceMemoryResource> getTracker() {
-    return tracker;
+  public static RmmTrackingResourceAdaptor<RmmDeviceMemoryResource> getTracker() {
+    readLock.lock();
+    try {
+      return tracker;
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
@@ -124,55 +144,61 @@ public class Rmm {
    *                         never happen, but just to be careful.
    * @param forceChange if true then the expectedResource check is not done.
    */
-  public static synchronized RmmDeviceMemoryResource setCurrentDeviceResource(
+  public static RmmDeviceMemoryResource setCurrentDeviceResource(
       RmmDeviceMemoryResource newResource,
       RmmDeviceMemoryResource expectedResource,
       boolean forceChange) {
-    boolean shouldInit = false;
-    boolean shouldDeinit = false;
-    RmmDeviceMemoryResource newResourceToSet = newResource;
-    if (newResourceToSet == null) {
-      // We always want it to be set to something or else it can cause problems...
-      newResourceToSet = new RmmCudaMemoryResource();
-      if (initialized) {
-        shouldDeinit = true;
+
+    writeLock.lock();
+    try {
+      boolean shouldInit = false;
+      boolean shouldDeinit = false;
+      RmmDeviceMemoryResource newResourceToSet = newResource;
+      if (newResourceToSet == null) {
+        // We always want it to be set to something or else it can cause problems...
+        newResourceToSet = new RmmCudaMemoryResource();
+        if (initialized) {
+          shouldDeinit = true;
+        }
+      } else if (!initialized) {
+        shouldInit = true;
       }
-    } else if (!initialized) {
-      shouldInit = true;
-    }
 
-    RmmDeviceMemoryResource oldResource = deviceResource;
-    if (!forceChange && expectedResource != null && deviceResource != null) {
-      long expectedOldHandle = expectedResource.getHandle();
-      long oldHandle = deviceResource.getHandle();
-      if (oldHandle != expectedOldHandle) {
-        throw new RmmException("The expected device resource is not correct " +
-            Long.toHexString(oldHandle) + " != " + Long.toHexString(expectedOldHandle));
+      RmmDeviceMemoryResource oldResource = deviceResource;
+      if (!forceChange && expectedResource != null && deviceResource != null) {
+        long expectedOldHandle = expectedResource.getHandle();
+        long oldHandle = deviceResource.getHandle();
+        if (oldHandle != expectedOldHandle) {
+          throw new RmmException("The expected device resource is not correct " +
+              Long.toHexString(oldHandle) + " != " + Long.toHexString(expectedOldHandle));
+        }
       }
-    }
 
-    poolSize = -1;
-    poolingEnabled = false;
-    setGlobalValsFromResource(newResourceToSet);
-    if (newResource != null && tracker == null) {
-      // No tracker was set, but we need one
-      tracker = new RmmTrackingResourceAdaptor<>(newResourceToSet, 256);
-      newResourceToSet = tracker;
-    }
-    long newHandle = newResourceToSet.getHandle();
-    setCurrentDeviceResourceInternal(newHandle);
-    deviceResource = newResource;
-    if (shouldInit) {
-      initDefaultCudaDevice();
-      MemoryCleaner.setDefaultGpu(Cuda.getDevice());
-      initialized = true;
-    }
+      poolSize = -1;
+      poolingEnabled = false;
+      setGlobalValsFromResource(newResourceToSet);
+      if (newResource != null && tracker == null) {
+        // No tracker was set, but we need one
+        tracker = new RmmTrackingResourceAdaptor<>(newResourceToSet, 256);
+        newResourceToSet = tracker;
+      }
+      long newHandle = newResourceToSet.getHandle();
+      setCurrentDeviceResourceInternal(newHandle);
+      deviceResource = newResource;
+      if (shouldInit) {
+        initDefaultCudaDevice();
+        MemoryCleaner.setDefaultGpu(Cuda.getDevice());
+        initialized = true;
+      }
 
-    if (shouldDeinit) {
-      cleanupDefaultCudaDevice();
-      initialized = false;
+      if (shouldDeinit) {
+        cleanupDefaultCudaDevice();
+        initialized = false;
+      }
+      return oldResource;
+    } finally {
+      writeLock.unlock();
     }
-    return oldResource;
   }
 
   private static void setGlobalValsFromResource(RmmDeviceMemoryResource resource) {
@@ -213,8 +239,18 @@ public class Rmm {
    * @param poolSize       The initial pool size in bytes
    * @throws IllegalStateException if RMM has already been initialized
    */
-  public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize)
+  public static void initialize(int allocationMode, LogConf logConf, long poolSize)
       throws RmmException {
+    writeLock.lock();
+    try {
+      initializeUnderLock(allocationMode, logConf, poolSize);
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  // This function is called from initialize and must be called with a write lock held.
+  private static void initializeUnderLock(int allocationMode, LogConf logConf, long poolSize) throws RmmException {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
     }
@@ -282,20 +318,29 @@ public class Rmm {
    * @return true if we were able to setup the default resource, false if there was
    *         a resource already set.
    */
-  public static synchronized native boolean configureDefaultCudfPinnedPoolSize(long size);
+  public static boolean configureDefaultCudfPinnedPoolSize(long size) {
+    writeLock.lock();
+    try {
+      return configureDefaultCudfPinnedPoolSizeImpl(size);
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  private static native boolean configureDefaultCudfPinnedPoolSizeImpl(long size);
 
   /**
    * Get the most recently set pool size or -1 if RMM has not been initialized or pooling is
    * not enabled.
    */
-  public static synchronized long getPoolSize() {
+  public static long getPoolSize() {
     return poolSize;
   }
 
   /**
    * Return true if rmm is initialized and pooling has been enabled, else false.
    */
-  public static synchronized boolean isPoolingEnabled() {
+  public static boolean isPoolingEnabled() {
     return poolingEnabled;
   }
 
@@ -312,23 +357,34 @@ public class Rmm {
    * allocator decides to return more memory than what was requested. However,
    * the result will always be a lower bound on the amount allocated.
    */
-  public static synchronized long getTotalBytesAllocated() {
-    if (tracker == null) {
-      return 0;
-    } else {
-      return tracker.getTotalBytesAllocated();
+  public static long getTotalBytesAllocated() {
+    readLock.lock();
+    try {
+      if (tracker == null) {
+        return 0;
+      } else {
+        return tracker.getTotalBytesAllocated();
+      }
+    } finally {
+      readLock.unlock();
     }
   }
+
 
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding during the
    * lifetime of the process.
    */
-  public static synchronized long getMaximumTotalBytesAllocated() {
-    if (tracker == null) {
-      return 0;
-    } else {
-      return tracker.getMaxTotalBytesAllocated();
+  public static long getMaximumTotalBytesAllocated() {
+    readLock.lock();
+    try {
+      if (tracker == null) {
+        return 0;
+      } else {
+        return tracker.getMaxTotalBytesAllocated();
+      }
+    } finally {
+      readLock.unlock();
     }
   }
 
@@ -338,9 +394,14 @@ public class Rmm {
    *
    * @param initialValue an initial value (in Bytes) to use for this scoped counter
    */
-  public static synchronized void resetScopedMaximumBytesAllocated(long initialValue) {
-    if (tracker != null) {
-      tracker.resetScopedMaxTotalBytesAllocated(initialValue);
+  public static void resetScopedMaximumBytesAllocated(long initialValue) {
+    readLock.lock();
+    try {
+      if (tracker != null) {
+        tracker.resetScopedMaxTotalBytesAllocated(initialValue);
+      }
+    } finally {
+      readLock.unlock();
     }
   }
 
@@ -350,9 +411,14 @@ public class Rmm {
    *
    * This resets the counter to 0 Bytes.
    */
-  public static synchronized void resetScopedMaximumBytesAllocated() {
-    if (tracker != null) {
-      tracker.resetScopedMaxTotalBytesAllocated(0L);
+  public static void resetScopedMaximumBytesAllocated() {
+    readLock.lock();
+    try {
+      if (tracker != null) {
+        tracker.resetScopedMaxTotalBytesAllocated(0L);
+      }
+    } finally {
+      readLock.unlock();
     }
   }
 
@@ -369,11 +435,16 @@ public class Rmm {
    *
    * @return the scoped maximum bytes allocated
    */
-  public static synchronized long getScopedMaximumBytesAllocated() {
-    if (tracker == null) {
-      return 0L;
-    } else {
-      return tracker.getScopedMaxTotalBytesAllocated();
+  public static long getScopedMaximumBytesAllocated() {
+    readLock.lock();
+    try {
+      if (tracker == null) {
+        return 0L;
+      } else {
+        return tracker.getScopedMaxTotalBytesAllocated();
+      }
+    } finally {
+      readLock.unlock();
     }
   }
 
@@ -397,8 +468,17 @@ public class Rmm {
    *                    (onAllocated, onDeallocated)
    * @throws RmmException if an active handler is already set
    */
-  public static synchronized void setEventHandler(RmmEventHandler handler,
+  public static void setEventHandler(RmmEventHandler handler,
                                      boolean enableDebug) throws RmmException {
+    writeLock.lock();
+    try {
+      setEventHandlerUnderLock(handler, enableDebug);
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  private static void setEventHandlerUnderLock(RmmEventHandler handler, boolean enableDebug) throws RmmException {
     if (!initialized) {
       throw new RmmException("RMM has not been initialized");
     }
@@ -423,7 +503,16 @@ public class Rmm {
   }
 
   /** Clears the active RMM event handler if one is set. */
-  public static synchronized void clearEventHandler() throws RmmException {
+  public static void clearEventHandler() throws RmmException {
+    writeLock.lock();
+    try {
+      clearEventHandlerUnderLock();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  private static void clearEventHandlerUnderLock() throws RmmException {
     if (deviceResource != null && deviceResource instanceof RmmEventHandlerResourceAdaptor) {
       RmmEventHandlerResourceAdaptor<RmmDeviceMemoryResource> orig =
           (RmmEventHandlerResourceAdaptor<RmmDeviceMemoryResource>)deviceResource;
@@ -474,33 +563,38 @@ public class Rmm {
    * @throws RmmException on any error. This includes if there are outstanding allocations that
    * could not be collected before maxWaitTime.
    */
-  public static synchronized void shutdown(long forceGCInterval, long maxWaitTime, TimeUnit units)
+  public static void shutdown(long forceGCInterval, long maxWaitTime, TimeUnit units)
       throws RmmException {
-    long now = System.currentTimeMillis();
-    final long endTime = now + units.toMillis(maxWaitTime);
-    long nextGcTime = now;
+    writeLock.lock();
     try {
+      long now = System.currentTimeMillis();
+      final long endTime = now + units.toMillis(maxWaitTime);
+      long nextGcTime = now;
+      try {
+        if (MemoryCleaner.bestEffortHasRmmBlockers()) {
+          do {
+            if (nextGcTime <= now) {
+              System.gc();
+              nextGcTime = nextGcTime + units.toMillis(forceGCInterval);
+            }
+            // Check if everything is ready about every 10 ms
+            Thread.sleep(10);
+            now = System.currentTimeMillis();
+          } while (endTime > now && MemoryCleaner.bestEffortHasRmmBlockers());
+        }
+      } catch (InterruptedException e) {
+        // Ignored
+      }
       if (MemoryCleaner.bestEffortHasRmmBlockers()) {
-        do {
-          if (nextGcTime <= now) {
-            System.gc();
-            nextGcTime = nextGcTime + units.toMillis(forceGCInterval);
-          }
-          // Check if everything is ready about every 10 ms
-          Thread.sleep(10);
-          now = System.currentTimeMillis();
-        } while (endTime > now && MemoryCleaner.bestEffortHasRmmBlockers());
+        throw new RmmException("Could not shut down RMM there appear to be outstanding allocations");
       }
-    } catch (InterruptedException e) {
-      // Ignored
-    }
-    if (MemoryCleaner.bestEffortHasRmmBlockers()) {
-      throw new RmmException("Could not shut down RMM there appear to be outstanding allocations");
-    }
-    if (initialized) {
-      if (deviceResource != null) {
-        setCurrentDeviceResource(null, deviceResource, true).close();
+      if (initialized) {
+        if (deviceResource != null) {
+          setCurrentDeviceResource(null, deviceResource, true).close();
+        }
       }
+    } finally {
+      writeLock.unlock();
     }
   }
 

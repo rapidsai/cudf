@@ -1,21 +1,13 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
 import io
 import pathlib
+import subprocess
+import sys
+import textwrap
 
 import fastavro
 import numpy as np
@@ -23,7 +15,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -305,10 +296,6 @@ def get_days_from_epoch(date: datetime.date | None) -> int | None:
 
 
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas (datetime(9999, ...) too large)",
-)
 def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
     avro_type = {"logicalType": "date", "type": "int"}
     if nullable:
@@ -434,18 +421,20 @@ def test_alltypes_plain_avro():
 
     data = [{column: row[column] for column in columns} for row in records]
 
-    # discard timezone information as we don't support it:
     expected = pd.DataFrame(data)
-    expected["timestamp_col"].dt.tz_localize(None)
 
     # The fastavro.reader supports the `'logicalType': 'timestamp-micros'` used
     # by the 'timestamp_col' column, which is converted into Python
     # datetime.datetime() objects (see output of pprint(records[0]) above).
-    # As we don't support that logical type yet in cudf, we need to convert to
-    # int64, then divide by 1000 to convert from nanoseconds to microseconds.
-    timestamps = expected["timestamp_col"].astype("int64")
-    timestamps //= 1000
-    expected["timestamp_col"] = timestamps
+    # cudf reads this column as int64 (raw microseconds) because the logical
+    # type appears inside a union schema (['timestamp-micros', 'null']), so we
+    # convert the expected datetime values to int64 microseconds to match.
+    expected["timestamp_col"] = (
+        expected["timestamp_col"]
+        .dt.tz_convert(None)
+        .astype("datetime64[us]")
+        .astype("int64")
+    )
 
     # Furthermore, we need to force the 'int_col' into an int32, per the schema
     # definition.  (It ends up as an int64 due to cudf.DataFrame() defaulting
@@ -655,3 +644,32 @@ def test_avro_reader_multiblock(
     actual_df = cudf.read_avro(buffer, skiprows=skip_rows, num_rows=num_rows)
 
     assert_eq(expected_df, actual_df)
+
+
+def test_avro_reader_no_hang_on_truncated_schema(datadir):
+    path = datadir / "avro" / "hang_input.avro"
+    assert path.is_file(), path
+
+    script = textwrap.dedent(
+        f"""
+        import cudf
+        try:
+            cudf.read_avro({str(path)!r})
+        except Exception:
+            pass
+        """
+    )
+
+    timeout_s = 10
+    try:
+        subprocess.run(
+            [sys.executable, "-c", script],
+            timeout=timeout_s,
+            check=False,
+            capture_output=True,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(
+            f"cudf.read_avro hung on malformed input {path.name!r} "
+            f"(no completion within {timeout_s}s)"
+        )

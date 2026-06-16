@@ -1,7 +1,12 @@
 /*
+ * SPDX-FileCopyrightText: Copyright 2019 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

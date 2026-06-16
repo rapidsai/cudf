@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -22,6 +11,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -29,13 +19,17 @@
 #include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <cstddef>
 
 namespace cudf {
 namespace strings {
@@ -202,68 +196,6 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 }
 
 /**
- * @brief Returns a new chars column using the specified indices to select
- * strings from the input iterator.
- *
- * This uses a character-parallel gather CUDA kernel that performs very
- * well on a strings column with long strings (e.g. average > 64 bytes).
- *
- * @tparam StringIterator Iterator should produce `string_view` objects.
- * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
- *
- * @param strings_begin Start of the iterator to retrieve `string_view` instances.
- * @param map_begin Start of index iterator.
- * @param map_end End of index iterator.
- * @param offsets The offset values to be associated with the output chars column.
- * @param chars_bytes The total number of bytes for the output chars column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New chars column fit for a strings column.
- */
-template <typename StringIterator, typename MapIterator>
-rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
-                                       MapIterator map_begin,
-                                       MapIterator map_end,
-                                       cudf::detail::input_offsetalator const offsets,
-                                       int64_t chars_bytes,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
-
-  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars_data, stream);
-  auto d_chars = chars_data.data();
-
-  constexpr int warps_per_threadblock = 4;
-  // String parallel strategy will be used if average string length is above this threshold.
-  // Otherwise, char parallel strategy will be used.
-  constexpr int64_t string_parallel_threshold = 32;
-
-  int64_t const average_string_length = chars_bytes / output_count;
-
-  if (average_string_length > string_parallel_threshold) {
-    constexpr int max_threadblocks = 65536;
-    gather_chars_fn_string_parallel<<<
-      min((static_cast<int>(output_count) + warps_per_threadblock - 1) / warps_per_threadblock,
-          max_threadblocks),
-      warps_per_threadblock * cudf::detail::warp_size,
-      0,
-      stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
-  } else {
-    constexpr int strings_per_threadblock = 32;
-    gather_chars_fn_char_parallel<strings_per_threadblock>
-      <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
-         warps_per_threadblock * cudf::detail::warp_size,
-         0,
-         stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
-  }
-
-  return chars_data;
-}
-
-/**
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.
  *
@@ -310,16 +242,94 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
         if (not d_strings.is_valid(idx)) { return 0; }
         return static_cast<size_type>(d_in_offsets[idx + 1] - d_in_offsets[idx]);
       }));
-  auto [out_offsets_column, total_bytes] = cudf::strings::detail::make_offsets_child_column(
+
+  auto [out_offsets_column, out_char_bytes] = cudf::strings::detail::make_offsets_child_column(
     sizes_itr, sizes_itr + output_count, stream, mr);
 
-  // build chars column
+  // build out offset view
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
-  cudf::experimental::prefetch::detail::prefetch(
-    "gather", strings.chars_begin(stream), strings.chars_size(stream), stream);
-  auto out_chars_data = gather_chars(
-    d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
+  cudf::prefetch::detail::prefetch(strings.chars_begin(stream), strings.chars_size(stream), stream);
+
+  // build output char column
+  auto out_chars_data = rmm::device_uvector<char>(out_char_bytes, stream, mr);
+  cudf::prefetch::detail::prefetch(out_chars_data, stream);
+  auto d_out_chars = out_chars_data.data();
+
+  constexpr int warps_per_threadblock = 4;
+  // String parallel strategy will be used if average string length is above this threshold.
+  // Otherwise, char parallel strategy will be used.
+  constexpr int64_t string_parallel_threshold = 32;
+
+  int64_t const average_string_length = out_char_bytes / output_count;
+
+  if (average_string_length > string_parallel_threshold) {
+    constexpr int max_threadblocks = 65536;
+    auto const grid_size =
+      min(cudf::util::div_rounding_up_safe(static_cast<int64_t>(output_count),
+                                           static_cast<int64_t>(warps_per_threadblock)),
+          static_cast<int64_t>(max_threadblocks));
+    gather_chars_fn_string_parallel<<<grid_size,
+                                      warps_per_threadblock * cudf::detail::warp_size,
+                                      0,
+                                      stream.value()>>>(
+      d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+  } else {
+    // Threshold is based on empirical data on H100.
+    // If row count is above this threshold we use the cub::DeviceMemcpy::Batched API, otherwise we
+    // use the custom cuDF kernel.
+    constexpr int64_t cub_batch_copy_threshold = 1024 * 1024 * 0.5;
+
+    if (output_count < cub_batch_copy_threshold) {
+      constexpr int strings_per_threadblock = 32;
+      auto const grid_size                  = cudf::util::div_rounding_up_safe(
+        static_cast<int64_t>(output_count), static_cast<int64_t>(strings_per_threadblock));
+      gather_chars_fn_char_parallel<strings_per_threadblock>
+        <<<grid_size, warps_per_threadblock * cudf::detail::warp_size, 0, stream.value()>>>(
+          d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+    } else {
+      // Iterator over the character column of input strings to gather
+      auto in_chars_itr = thrust::make_transform_iterator(
+        begin,
+        cuda::proclaim_return_type<const char*>([d_strings = *d_strings] __device__(size_type idx) {
+          if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) {
+            return static_cast<const char*>(nullptr);
+          }
+          if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
+          return d_strings.element<string_view>(idx).data();
+        }));
+
+      // Iterator over the output locations to write the output
+      auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
+        0,
+        cuda::proclaim_return_type<char*>(
+          [d_strings = *d_strings, offsets_view, d_out_chars] __device__(size_type idx) {
+            return d_out_chars + offsets_view[idx];
+          }));
+
+      // Determine temporary device storage requirements
+      size_t temp_storage_bytes = 0;
+      cub::DeviceMemcpy::Batched(nullptr,
+                                 temp_storage_bytes,
+                                 in_chars_itr,
+                                 out_chars_itr,
+                                 sizes_itr,
+                                 output_count,
+                                 stream.value());
+
+      // Allocate temporary storage
+      auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream, mr);
+
+      // Run batched copy algorithm
+      cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                 temp_storage_bytes,
+                                 in_chars_itr,
+                                 out_chars_itr,
+                                 sizes_itr,
+                                 output_count,
+                                 stream.value());
+    }
+  }
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),

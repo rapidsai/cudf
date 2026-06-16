@@ -1,26 +1,18 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+
+#include <cuda/iterator>
 
 template <typename T>
 struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
@@ -36,7 +28,7 @@ TYPED_TEST_SUITE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
     sequence, sequence);
   cudf::column_view view = col;
@@ -61,7 +53,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, EmptyList)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableIteratorConstructor)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   auto size = this->size();
 
@@ -91,9 +83,9 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableListConstructor)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllValid)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
 
   auto size = this->size();
 
@@ -110,7 +102,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllValid)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllValid)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4, 5}, all_valid);
   cudf::column_view view = col;
@@ -124,9 +116,9 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllValid)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllNull)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
-  auto all_null = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto all_null = cudf::test::iterators::all_nulls();
 
   auto size = this->size();
 
@@ -144,7 +136,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllNull)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllNull)
 {
-  auto all_null = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto all_null = cudf::test::iterators::all_nulls();
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4, 5}, all_null);
   cudf::column_view view = col;
@@ -175,8 +167,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNull)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNullMatch)
 {
-  auto odd_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto odd_valid = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> match_col({1, 2, 3, 4, 5}, odd_valid);
   cudf::column_view match_view = match_col;
@@ -194,7 +185,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNullMatch)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4, 5}, all_valid);
   auto colPtr            = col.release();
@@ -209,7 +200,7 @@ TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid)
 
 TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull)
 {
-  auto all_null = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto all_null = cudf::test::iterators::all_nulls();
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4, 5}, all_null);
   auto colPtr            = col.release();
@@ -262,8 +253,7 @@ TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNull)
 
 TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNullMatch)
 {
-  auto odd_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto odd_valid = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::strings_column_wrapper match_col({"a", "string", "", "test", "for", "nulls"},
                                                odd_valid);

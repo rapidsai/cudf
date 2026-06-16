@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -8,15 +9,21 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport (
     convert_durations as cpp_convert_durations,
 )
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.types import DataType
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_durations", "to_durations"]
 
 cpdef Column to_durations(
     Column input,
     DataType duration_type,
-    str format
+    str format,
+    object stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns a new duration column converting a strings column into
@@ -35,6 +42,9 @@ cpdef Column to_durations(
     format : str
         String specifying the duration format in strings.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
@@ -42,19 +52,26 @@ cpdef Column to_durations(
     """
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_durations.to_durations(
             input.view(),
             duration_type.c_obj,
-            c_format
+            c_format,
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column from_durations(
     Column durations,
-    str format=None
+    str format=None,
+    object stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns a new strings column converting a duration column into
@@ -71,12 +88,18 @@ cpdef Column from_durations(
         The string specifying output format.
         Default format is "%D days %H:%M:%S".
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New strings column with formatted durations.
     """
     cdef unique_ptr[column] c_result
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if format is None:
         format = "%D days %H:%M:%S"
@@ -85,7 +108,9 @@ cpdef Column from_durations(
     with nogil:
         c_result = cpp_convert_durations.from_durations(
             durations.view(),
-            c_format
+            c_format,
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)

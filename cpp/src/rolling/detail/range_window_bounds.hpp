@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -139,7 +128,9 @@ range_rep_type<OrderByType> range_comparable_value(range_window_bounds const& ra
                                                    rmm::cuda_stream_view stream)
 {
   auto const& range_scalar = range_bounds.range_scalar();
-  using range_type         = cudf::detail::range_type<OrderByType>;
+  CUDF_EXPECTS(
+    range_scalar.is_valid(stream), "Range bounds scalar must be valid.", std::invalid_argument);
+  using range_type = cudf::detail::range_type<OrderByType>;
 
   CUDF_EXPECTS(range_scalar.type().id() == cudf::type_to_id<range_type>(),
                "Range bounds scalar must match the type of the orderby column.");

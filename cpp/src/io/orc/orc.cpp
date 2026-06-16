@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "orc.hpp"
@@ -23,8 +12,10 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
+#include <cuda/numeric>
 #include <thrust/tabulate.h>
 
+#include <stdexcept>
 #include <string>
 
 namespace cudf::io::orc::detail {
@@ -441,7 +432,9 @@ host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t c
       // Uncompressed block
       max_dst_length += block_len;
     } else {
-      max_dst_length += m_blockSize;
+      auto const next = cuda::add_overflow<size_t>(max_dst_length, m_blockSize);
+      CUDF_EXPECTS(!next.overflow, "ORC decompression: compression block size overflow");
+      max_dst_length = next.value;
     }
     i += block_len;
     CUDF_EXPECTS(i <= src.size() and block_len <= m_blockSize, "Error in decompression");
@@ -480,9 +473,24 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
   // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
   size_t const ps_length = buffer->data()[max_ps_size - 1];
+  CUDF_EXPECTS(ps_length + 1 <= max_ps_size,
+               "ORC PostScript length byte exceeds file size",
+               std::out_of_range);
   uint8_t const* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   protobuf_reader(ps_data, ps_length).read(ps);
-  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
+
+  auto const file_length = static_cast<uint64_t>(len);
+  auto const ps_size     = static_cast<uint64_t>(ps_length);
+  CUDF_EXPECTS(ps.footerLength <= file_length - (ps_size + 1),
+               "ORC file is too small to contain the footer",
+               std::out_of_range);
+  CUDF_EXPECTS(ps.metadataLength <= file_length - (ps_size + 1) - ps.footerLength,
+               "ORC file is too small to contain the metadata",
+               std::out_of_range);
+
+  CUDF_EXPECTS(ps.compressionBlockSize <= 1ULL << 30,
+               "Compression block size exceeds maximum allowed (1 GiB)",
+               std::out_of_range);
 
   // If compression is used, the rest of the metadata is compressed
   // If no compressed is used, the decompressor is simply a pass-through

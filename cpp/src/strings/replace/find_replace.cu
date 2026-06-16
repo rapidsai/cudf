@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/device_scalar.hpp>
@@ -23,6 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
 
@@ -49,8 +39,8 @@ struct find_replace_fn {
     // find d_str in d_values
     // if found return corresponding replacement
     // if not found, return d_str
-    auto const begin = thrust::counting_iterator<size_type>(0);
-    auto const end   = thrust::counting_iterator<size_type>(d_values.size());
+    auto const begin = cuda::counting_iterator<size_type>{0};
+    auto const end   = cuda::counting_iterator<size_type>{d_values.size()};
     auto const itr =
       thrust::find_if(thrust::seq, begin, end, [d_values = d_values, d_str](size_type i) -> bool {
         return d_str == d_values.element<string_view>(i);
@@ -74,9 +64,9 @@ std::unique_ptr<cudf::column> find_and_replace_all(
 
   auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     indices.begin(),
                     find_replace_fn{*d_input, *d_values_to_replace, *d_replacements});
 

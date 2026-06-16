@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
 # Otherwise, we assume that the library was installed in a system path that ld can find.
@@ -10,11 +11,6 @@ else:
     libcudf.load_library()
     del libcudf
 
-from cudf.utils.gpu_utils import validate_setup
-
-validate_setup()
-
-del validate_setup
 import cupy
 from numba import cuda
 

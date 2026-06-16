@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -32,103 +21,112 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Scalar_closeScalar(JNIEnv* env,
                                                               jclass,
                                                               jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::scalar* s = reinterpret_cast<cudf::scalar*>(scalar_handle);
     delete s;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Scalar_isScalarValid(JNIEnv* env,
                                                                     jclass,
                                                                     jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::scalar* s = reinterpret_cast<cudf::scalar*>(scalar_handle);
     return static_cast<jboolean>(s->is_valid());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jbyte JNICALL Java_ai_rapids_cudf_Scalar_getByte(JNIEnv* env, jclass, jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<int8_t>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jbyte>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jshort JNICALL Java_ai_rapids_cudf_Scalar_getShort(JNIEnv* env,
                                                              jclass,
                                                              jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<int16_t>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jshort>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Scalar_getInt(JNIEnv* env, jclass, jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<int32_t>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jint>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getLong(JNIEnv* env, jclass, jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<int64_t>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jlong>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jfloat JNICALL Java_ai_rapids_cudf_Scalar_getFloat(JNIEnv* env,
                                                              jclass,
                                                              jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<float>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jfloat>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jdouble JNICALL Java_ai_rapids_cudf_Scalar_getDouble(JNIEnv* env,
                                                                jclass,
                                                                jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<double>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jdouble>(s->value());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getBigIntegerBytes(JNIEnv* env,
                                                                            jclass,
                                                                            jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     using ScalarType = cudf::scalar_type_t<__int128_t>;
     auto s           = reinterpret_cast<ScalarType*>(scalar_handle);
@@ -137,14 +135,15 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getBigIntegerBytes(JNIEn
     cudf::jni::native_jbyteArray jbytes{env, ptr, sizeof(__int128_t)};
     return jbytes.get_jArray();
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv* env,
                                                                 jclass,
                                                                 jlong scalar_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto s = reinterpret_cast<cudf::string_scalar*>(scalar_handle);
     std::string val{s->to_string()};
@@ -156,7 +155,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv* env,
       env, reinterpret_cast<jbyte const*>(val.data()), static_cast<int>(val.size())};
     return jbytes.get_jArray();
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv* env,
@@ -164,21 +163,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv* e
                                                                        jlong scalar_handle)
 {
   JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto s = reinterpret_cast<cudf::list_scalar*>(scalar_handle);
     // Creates a column view in heap with the stack one, to let JVM take care of its
     // life cycle.
     return reinterpret_cast<jlong>(new cudf::column_view(s->view()));
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL
 Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv* env, jclass, jlong scalar_handle)
 {
   JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
     cudf::table_view const& table = s->view();
@@ -188,7 +189,7 @@ Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv* env, jclass, jlon
     }
     return column_handles.get_jArray();
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv* env,
@@ -196,7 +197,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv* env,
                                                                    jboolean value,
                                                                    jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
@@ -208,7 +210,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv* env,
@@ -216,7 +218,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv* env,
                                                                   jbyte value,
                                                                   jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT8));
@@ -227,7 +230,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint8Scalar(JNIEnv* env,
@@ -235,7 +238,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint8Scalar(JNIEnv* env,
                                                                    jbyte value,
                                                                    jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT8));
@@ -246,7 +250,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint8Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv* env,
@@ -254,7 +258,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv* env,
                                                                    jshort value,
                                                                    jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT16));
@@ -265,7 +270,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv* env,
@@ -273,7 +278,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv* env,
                                                                     jshort value,
                                                                     jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT16));
@@ -284,7 +290,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv* env,
@@ -292,7 +298,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv
                                                                           jint value,
                                                                           jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_duration_scalar(cudf::data_type(cudf::type_id::DURATION_DAYS));
@@ -303,7 +310,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv* env,
@@ -311,7 +318,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv* env,
                                                                    jint value,
                                                                    jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
@@ -322,7 +330,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint32Scalar(JNIEnv* env,
@@ -330,7 +338,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint32Scalar(JNIEnv* env,
                                                                     jint value,
                                                                     jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT32));
@@ -341,7 +350,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint32Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv* env,
@@ -349,7 +358,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv* env,
                                                                    jlong value,
                                                                    jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
@@ -360,7 +370,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint64Scalar(JNIEnv* env,
@@ -368,7 +378,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint64Scalar(JNIEnv* env,
                                                                     jlong value,
                                                                     jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT64));
@@ -379,7 +390,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint64Scalar(JNIEnv* env,
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv* env,
@@ -387,7 +398,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv* env
                                                                      jfloat value,
                                                                      jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT32));
@@ -398,7 +410,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv* env
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv* env,
@@ -406,7 +418,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv* env
                                                                      jdouble value,
                                                                      jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT64));
@@ -417,7 +430,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv* env
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv* env,
@@ -425,7 +438,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv* env,
                                                                     jbyteArray value,
                                                                     jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::string strval;
     if (is_valid) {
@@ -436,7 +450,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv* env,
     auto s = new cudf::string_scalar{strval, static_cast<bool>(is_valid)};
     return reinterpret_cast<jlong>(s);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEnv* env,
@@ -444,7 +458,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
                                                                            jint value,
                                                                            jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s =
       cudf::make_timestamp_scalar(cudf::data_type(cudf::type_id::TIMESTAMP_DAYS));
@@ -455,13 +470,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationTimeScalar(
   JNIEnv* env, jclass, jint jdtype_id, jlong value, jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto dtype_id                   = static_cast<cudf::type_id>(jdtype_id);
     std::unique_ptr<cudf::scalar> s = cudf::make_duration_scalar(cudf::data_type(dtype_id));
@@ -472,13 +488,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationTimeScalar(
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(
   JNIEnv* env, jclass, jint jdtype_id, jlong value, jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto dtype_id                   = static_cast<cudf::type_id>(jdtype_id);
     std::unique_ptr<cudf::scalar> s = cudf::make_timestamp_scalar(cudf::data_type(dtype_id));
@@ -489,13 +506,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(
     }
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal32Scalar(
   JNIEnv* env, jclass, jint value, jint scale, jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const value_ = static_cast<int32_t>(value);
     auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
@@ -504,13 +522,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal32Scalar(
     s->set_valid_async(is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(
   JNIEnv* env, jclass, jlong value, jint scale, jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const value_ = static_cast<int64_t>(value);
     auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
@@ -519,13 +538,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(
     s->set_valid_async(is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal128Scalar(
   JNIEnv* env, jclass, jbyteArray value, jint scale, jboolean is_valid)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
     cudf::jni::native_jbyteArray jbytes{env, value};
@@ -535,7 +555,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal128Scalar(
     s->set_valid_async(is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(
@@ -543,7 +563,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(
 {
   JNI_NULL_CHECK(env, lhs_ptr, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::scalar* lhs           = reinterpret_cast<cudf::scalar*>(lhs_ptr);
     auto rhs                    = reinterpret_cast<cudf::column_view*>(rhs_view);
@@ -569,7 +590,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(
 
     return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv* env,
@@ -578,7 +599,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv* env,
                                                                   jboolean is_valid)
 {
   JNI_NULL_CHECK(env, view_handle, "Column view should NOT be null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto col_view = reinterpret_cast<cudf::column_view*>(view_handle);
 
@@ -590,7 +612,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv* env,
     s->set_valid_async(is_valid);
     return reinterpret_cast<jlong>(s);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv* env,
@@ -599,7 +621,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv* env,
                                                                     jboolean is_valid)
 {
   JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::column_view> ret;
     cudf::jni::native_jpointerArray<cudf::column_view> column_pointers(env, handles);
@@ -613,7 +636,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv* env,
       cudf::host_span<cudf::column_view const>{columns}, is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_repeatString(JNIEnv* env,
@@ -622,12 +645,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_repeatString(JNIEnv* env,
                                                                 jint repeat_times)
 {
   JNI_NULL_CHECK(env, handle, "scalar handle is null", 0)
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const str = *reinterpret_cast<cudf::string_scalar*>(handle);
     return reinterpret_cast<jlong>(cudf::strings::repeat_string(str, repeat_times).release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 }  // extern "C"

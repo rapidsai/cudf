@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -336,6 +325,7 @@ namespace detail {
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use
+ * @param[in] int96_timestamps Whether timestamps are written as INT96
  * @tparam IO File format for which statistics calculation is being done
  */
 template <detail::io_file_format IO>
@@ -348,6 +338,7 @@ void calculate_group_statistics(statistics_chunk* chunks,
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups, int96_timestamps);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -402,6 +393,7 @@ void merge_group_statistics(statistics_chunk* chunks_out,
   constexpr int block_size = 256;
   gpu_merge_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks_out, chunks_in, groups);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace detail

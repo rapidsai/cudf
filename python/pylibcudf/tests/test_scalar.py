@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
 
@@ -45,13 +46,15 @@ def test_from_py(py_scalar):
         # instead of to_arrow
         assert result.to_py() == expected.as_py()
     else:
-        assert plc.interop.to_arrow(result).equals(expected)
+        assert result.to_arrow().equals(expected)
     if isinstance(py_scalar, decimal.Decimal):
-        assert plc.interop.to_arrow(
-            result.type(), precision=len(py_scalar.as_tuple().digits)
-        ).equals(expected.type)
+        assert (
+            result.type()
+            .to_arrow(precision=len(py_scalar.as_tuple().digits))
+            .equals(expected.type)
+        )
     else:
-        assert plc.interop.to_arrow(result.type()).equals(expected.type)
+        assert result.type().to_arrow().equals(expected.type)
 
 
 def test_to_py_none():
@@ -62,6 +65,7 @@ def test_to_py(py_scalar):
     if isinstance(py_scalar, (datetime.datetime, datetime.timedelta)):
         with pytest.raises(NotImplementedError):
             plc.Scalar.from_py(py_scalar).to_py()
+        assert py_scalar == plc.Scalar.from_py(py_scalar).to_arrow().as_py()
     else:
         assert py_scalar == plc.Scalar.from_py(py_scalar).to_py()
 
@@ -86,6 +90,8 @@ def test_to_py(py_scalar):
         (1.5, TypeId.FLOAT64),
         ("str", TypeId.STRING),
         (True, TypeId.BOOL8),
+        (0, TypeId.BOOL8),
+        (1, TypeId.BOOL8),
         (datetime.timedelta(1), TypeId.DURATION_SECONDS),
         (datetime.timedelta(1), TypeId.DURATION_MILLISECONDS),
         (datetime.timedelta(1), TypeId.DURATION_NANOSECONDS),
@@ -97,8 +103,8 @@ def test_to_py(py_scalar):
 def test_from_py_with_dtype(val, tid):
     dtype = DataType(tid)
     result = plc.Scalar.from_py(val, dtype)
-    expected = pa.scalar(val).cast(plc.interop.to_arrow(dtype))
-    assert plc.interop.to_arrow(result).equals(expected)
+    expected = pa.scalar(val).cast(dtype.to_arrow())
+    assert result.to_arrow().equals(expected)
 
 
 @pytest.mark.parametrize(
@@ -129,10 +135,10 @@ def test_from_py_with_dtype(val, tid):
             "Cannot assign negative value to UINT64 scalar",
         ),
         (
-            1,
+            2,
             TypeId.BOOL8,
-            TypeError,
-            "Cannot convert int to Scalar with dtype BOOL8",
+            ValueError,
+            "Cannot convert 2 to BOOL8 scalar",
         ),
         (
             "str",
@@ -216,7 +222,7 @@ def test_from_py_none_no_type_raises():
 def test_from_py_none():
     result = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
     expected = pa.scalar(None, type=pa.string())
-    assert plc.interop.to_arrow(result).equals(expected)
+    assert result.to_arrow().equals(expected)
 
 
 @pytest.mark.parametrize(
@@ -241,7 +247,7 @@ def test_from_numpy(np, np_type):
     np_val = np_klass("1" if np_type == "str_" else 1)
     result = plc.Scalar.from_numpy(np_val)
     expected = pa.scalar(np_val)
-    assert plc.interop.to_arrow(result).equals(expected)
+    assert result.to_arrow().equals(expected)
 
 
 @pytest.mark.parametrize("np_type", ["datetime64", "timedelta64"])
@@ -266,7 +272,7 @@ def test_round_trip_scalar_through_column(py_scalar):
         # instead of to_arrow
         assert result.to_py() == expected.as_py()
     else:
-        assert plc.interop.to_arrow(result).equals(expected)
+        assert result.to_arrow().equals(expected)
 
 
 def test_non_constant_column_to_scalar_raises():

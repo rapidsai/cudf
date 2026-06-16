@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -27,8 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace io {
@@ -58,9 +47,9 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                                                             stream);
   auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
 
-  auto iter = thrust::make_counting_iterator<size_type>(0);
+  auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     iter,
     iter + parent_table_device_view.num_columns(),
     [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
@@ -80,7 +69,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
         col = child;
       }
       // Store leaf_column to device storage
-      column_device_view* leaf_col_ptr = leaf_columns.begin() + index;
+      column_device_view* leaf_col_ptr = leaf_columns.data() + index;
       *leaf_col_ptr                    = col;
       col_desc[index].leaf_column      = leaf_col_ptr;
     });

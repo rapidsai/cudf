@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -97,7 +86,7 @@ class byte_array_view {
    * @brief Comparing target byte_array_view with this byte_array_view. Each byte in the array is
    * compared.
    *
-   * @param byte_array_view Target byte_array_view to compare with this byte_array_view.
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
    * @return 0  If they compare equal.
    *         <0 Either the value of the first byte of this byte_array_view that does not match is
    * lower in the arg byte_array_view, or all compared bytes match but the arg byte_array_view is

@@ -1,10 +1,11 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 [tool.mypy]
 ignore_missing_imports = true
-# If we don't specify this, then mypy will check excluded files if
-# they are imported by a checked file.
-follow_imports = "skip"
+ignore_errors = false
+enable_error_code = "ignore-without-code"
+warn_unused_ignores = true
 exclude = [
     "cudf/_lib/",
     "cudf/cudf/tests/",
@@ -13,8 +14,14 @@ exclude = [
  ]
 
 [[tool.mypy.overrides]]
+module = ["cudf.core.column.*"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
 module = ["cudf_polars.*"]
 disallow_untyped_defs = true
+follow_imports = "normal"
+ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
 module = ["polars.*"]
@@ -28,13 +35,13 @@ follow_imports = "normal"
 skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
 # ignore short words, and typename parameters like OffsetT
 ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
-ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty,womens"
 builtin = "clear"
 quiet-level = 3
 
 [tool.ruff]
 line-length = 79
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 typing-modules = ["cudf._typing"]
@@ -47,6 +54,8 @@ select = [
     "W",
     # isort
     "I",
+    # zip-without-explicit-strict
+    "B905",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -134,6 +143,10 @@ fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
+extend-unsafe-fixes = [
+    # zip-without-explicit-strict's autofix sets strict to False, but we want to enforce True
+    "B905",
+]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
@@ -143,9 +156,7 @@ exclude = [
 
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
-"docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
-# Lots of pytest implicitly injected attributes in conftest-patch.py
-"python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
+"docs/cudf/source/cudf/missing-data.ipynb" = ["E711"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
 "ci/*" = ["T201"]

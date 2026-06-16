@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -12,18 +13,24 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport strip as cpp_strip
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.side_type cimport side_type
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["strip"]
 
 cpdef Column strip(
     Column input,
     side_type side=side_type.BOTH,
-    Scalar to_strip=None
+    Scalar to_strip=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Removes the specified characters from the beginning
     or end (or both) of each string.
 
-    For details, see :cpp:func:`cudf::strings::strip`.
+    For details, see :cpp:func:`strip`.
 
     Parameters
     ----------
@@ -41,10 +48,13 @@ cpdef Column strip(
     pylibcudf.Column
         New strings column.
     """
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if to_strip is None:
         to_strip = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     cdef unique_ptr[column] c_result
@@ -55,7 +65,9 @@ cpdef Column strip(
         c_result = cpp_strip.strip(
             input.view(),
             side,
-            dereference(cpp_to_strip)
+            dereference(cpp_to_strip),
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)

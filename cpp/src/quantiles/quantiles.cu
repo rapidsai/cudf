@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "quantiles/quantiles_util.hpp"
@@ -31,7 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
@@ -86,8 +75,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(
-      input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, mr);
+    return detail::quantiles(input, cuda::counting_iterator<size_type>{0}, q, interp, stream, mr);
   } else {
     auto sorted_idx = detail::sorted_order(
       input, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());

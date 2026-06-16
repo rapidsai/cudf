@@ -1,9 +1,13 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class UnaryOperator(IntEnum):
     SIN = ...
@@ -31,10 +35,36 @@ class UnaryOperator(IntEnum):
     NOT = ...
     NEGATE = ...
 
-def unary_operation(input: Column, op: UnaryOperator) -> Column: ...
-def is_null(input: Column) -> Column: ...
-def is_valid(input: Column) -> Column: ...
-def cast(input: Column, data_type: DataType) -> Column: ...
-def is_nan(input: Column) -> Column: ...
-def is_not_nan(input: Column) -> Column: ...
+def unary_operation(
+    input: Column,
+    op: UnaryOperator,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_null(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_valid(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def cast(
+    input: Column,
+    data_type: DataType,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_nan(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_not_nan(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def is_supported_cast(from_: DataType, to: DataType) -> bool: ...

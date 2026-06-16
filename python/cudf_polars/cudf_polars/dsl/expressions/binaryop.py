@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars.polars import _expr_nodes as pl_expr
+from polars import polars  # type: ignore[attr-defined]
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+
+pl_expr = polars._expr_nodes
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -33,7 +35,7 @@ class BinOp(Expr):
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype.plc):
+        if plc.traits.is_boolean(self.dtype.plc_type):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -42,7 +44,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype.plc, left.dtype.plc, right.dtype.plc, op
+            self.dtype.plc_type, left.dtype.plc_type, right.dtype.plc_type, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -59,7 +61,9 @@ class BinOp(Expr):
         plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
     }
 
-    _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
+    _MAPPING: ClassVar[
+        dict[polars._expr_nodes.Operator, plc.binaryop.BinaryOperator]
+    ] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
         pl_expr.Operator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
         pl_expr.Operator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
@@ -87,20 +91,25 @@ class BinOp(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         left, right = (child.evaluate(df, context=context) for child in self.children)
-        lop = left.obj
-        rop = right.obj
+        lop: plc.Column | plc.Scalar = left.obj
+        rop: plc.Column | plc.Scalar = right.obj
         if left.size != right.size:
             if left.is_scalar:
-                lop = left.obj_scalar
+                lop = left.obj_scalar(stream=df.stream)
             elif right.is_scalar:
-                rop = right.obj_scalar
-        if plc.traits.is_integral_not_bool(self.dtype.plc) and self.op in {
+                rop = right.obj_scalar(stream=df.stream)
+        if plc.traits.is_integral_not_bool(self.dtype.plc_type) and self.op in {
             plc.binaryop.BinaryOperator.FLOOR_DIV,
             plc.binaryop.BinaryOperator.PYMOD,
         }:
-            if right.obj.size() == 1 and right.obj.to_scalar().to_py() == 0:
+            if (
+                right.obj.size() == 1
+                and right.obj.to_scalar(stream=df.stream).to_py(stream=df.stream) == 0
+            ):
                 return Column(
-                    plc.Column.all_null_like(left.obj, left.obj.size()),
+                    plc.Column.all_null_like(
+                        left.obj, left.obj.size(), stream=df.stream
+                    ),
                     dtype=self.dtype,
                 )
 
@@ -108,13 +117,24 @@ class BinOp(Expr):
                 rop = plc.replace.find_and_replace_all(
                     right.obj,
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(0, dtype=self.dtype.plc), 1
+                        plc.Scalar.from_py(
+                            0, dtype=self.dtype.plc_type, stream=df.stream
+                        ),
+                        1,
+                        stream=df.stream,
                     ),
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, dtype=self.dtype.plc), 1
+                        plc.Scalar.from_py(
+                            None, dtype=self.dtype.plc_type, stream=df.stream
+                        ),
+                        1,
+                        stream=df.stream,
                     ),
+                    stream=df.stream,
                 )
         return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc),
+            plc.binaryop.binary_operation(
+                lop, rop, self.op, self.dtype.plc_type, stream=df.stream
+            ),
             dtype=self.dtype,
         )

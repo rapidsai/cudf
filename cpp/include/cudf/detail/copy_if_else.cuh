@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -30,7 +19,6 @@
 
 namespace cudf {
 namespace detail {
-namespace {  // anonymous
 
 template <size_type block_size,
           typename T,
@@ -102,8 +90,6 @@ __launch_bounds__(block_size) CUDF_KERNEL
   }
 }
 
-}  // anonymous namespace
-
 /**
  * @brief Returns a new column, where each element is selected from either of two input ranges based
  * on a filter
@@ -141,7 +127,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
  * @param rhs         Begin iterator of rhs range
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
- * @param out_type    `cudf::data_type` of the returned column
+ * @param output_type `cudf::data_type` of the returned column
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
@@ -172,7 +158,8 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 
   // if we have validity in the output
   if (nullable) {
-    cudf::detail::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>

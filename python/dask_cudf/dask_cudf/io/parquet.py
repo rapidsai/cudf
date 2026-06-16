@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -515,8 +516,9 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
     ):
         import pyarrow as pa
 
-        from dask.base import apply, tokenize
         from dask.threaded import get
+        from dask.tokenize import tokenize
+        from dask.utils import apply
 
         token = tokenize(frag_filters, columns, schema)
         name = f"pq-file-{token}"
@@ -702,8 +704,6 @@ def read_parquet_expr(
     from dask.core import flatten
     from dask.dataframe.utils import pyarrow_strings_enabled
 
-    from dask_cudf.backends import PYARROW_GE_15
-
     if args:
         raise ValueError(f"Unexpected positional arguments: {args}")
 
@@ -758,10 +758,6 @@ def read_parquet_expr(
         # (See: https://github.com/dask/dask/issues/11352)
         import distributed  # noqa: F401
 
-        if not PYARROW_GE_15:
-            raise ValueError(
-                "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
-            )
         if metadata_task_size is not None:
             warnings.warn(
                 "metadata_task_size is not supported when using the pyarrow filesystem."

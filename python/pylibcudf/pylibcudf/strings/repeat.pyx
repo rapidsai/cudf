@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -6,20 +7,25 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport repeat as cpp_repeat
 from pylibcudf.libcudf.types cimport size_type
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from ..utils cimport _get_stream
+from ..utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["repeat_strings"]
 
 cpdef Column repeat_strings(
-    Column input, ColumnorSizeType repeat_times, Stream stream=None
+    Column input,
+    ColumnorSizeType repeat_times,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Repeat each string in the given strings column by the numbers
     of times given in another numeric column.
 
-    For details, see :cpp:func:`cudf::strings::repeat`.
+    For details, see :cpp:func:`repeat`.
 
     Parameters
     ----------
@@ -30,6 +36,8 @@ cpdef Column repeat_strings(
         for each row are repeated.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -37,23 +45,27 @@ cpdef Column repeat_strings(
         New column containing the repeated strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if ColumnorSizeType is Column:
         with nogil:
             c_result = cpp_repeat.repeat_strings(
                 input.view(),
                 repeat_times.view(),
-                stream.view()
+                _cs,
+                mr.get_mr()
             )
     elif ColumnorSizeType is size_type:
         with nogil:
             c_result = cpp_repeat.repeat_strings(
                 input.view(),
                 repeat_times,
-                stream.view()
+                _cs,
+                mr.get_mr()
             )
     else:
         raise ValueError("repeat_times must be size_type or integer")
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)

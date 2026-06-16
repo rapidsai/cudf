@@ -1,13 +1,14 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import functools
-from typing import Any
-
-import pandas as pd
-import pyarrow as pa
+from typing import TYPE_CHECKING
 
 import pylibcudf as plc
+
+if TYPE_CHECKING:
+    import pyarrow as pa
 
 
 @functools.lru_cache(maxsize=128)
@@ -25,32 +26,3 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
         pylibcudf.Scalar to use in pylibcudf APIs
     """
     return plc.Scalar.from_arrow(pa_scalar)
-
-
-def maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
-    """
-    Convert a valid, "nested" pyarrow scalar to a Python object.
-
-    These scalars come from pylibcudf.Scalar where field names can be
-    duplicate empty strings.
-
-    Parameters
-    ----------
-    pa_scalar: pa.Scalar
-
-    Returns
-    -------
-    Any
-        Python scalar
-    """
-    if not pa_scalar.is_valid:
-        return pd.NA
-    if pa.types.is_struct(pa_scalar.type):
-        return {
-            str(i): maybe_nested_pa_scalar_to_py(val)
-            for i, (_, val) in enumerate(pa_scalar.items())
-        }
-    elif pa.types.is_list(pa_scalar.type):
-        return [maybe_nested_pa_scalar_to_py(val) for val in pa_scalar]
-    else:
-        return pa_scalar.as_py()

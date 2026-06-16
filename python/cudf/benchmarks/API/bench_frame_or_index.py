@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of methods that exist for both Frame and Index."""
 
@@ -33,12 +34,6 @@ def bench_min(benchmark, frame_or_index):
 def bench_where(benchmark, frame_or_index):
     cond = frame_or_index % 2 == 0
     benchmark(frame_or_index.where, cond, 0)
-
-
-@benchmark_with_object(cls="frame_or_index", dtype="int", nulls=False)
-@pytest.mark.pandas_incompatible
-def bench_values_host(benchmark, frame_or_index):
-    benchmark(lambda: frame_or_index.values_host)
 
 
 @benchmark_with_object(cls="frame_or_index", dtype="int", nulls=False)

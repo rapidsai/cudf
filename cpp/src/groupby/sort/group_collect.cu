@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -25,10 +14,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <memory>
@@ -70,14 +59,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);
 
   thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_groups),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{num_groups},
     null_purged_sizes.begin(),
     [d_offsets = offsets.template begin<size_type>(), not_null_pred] __device__(auto i) {
       return thrust::count_if(thrust::seq,
-                              thrust::make_counting_iterator<size_type>(d_offsets[i]),
-                              thrust::make_counting_iterator<size_type>(d_offsets[i + 1]),
+                              cuda::counting_iterator<size_type>{d_offsets[i]},
+                              cuda::counting_iterator<size_type>{d_offsets[i + 1]},
                               not_null_pred);
     });
 
@@ -99,7 +88,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
     auto offsets_column = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
-    thrust::copy(rmm::exec_policy(stream),
+    thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  offsets_column->mutable_view().template begin<size_type>());
@@ -119,9 +108,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
                            std::move(offsets_column),
                            std::move(child_column),
                            0,
-                           rmm::device_buffer{0, stream, mr},
-                           stream,
-                           mr);
+                           rmm::device_buffer{0, stream, mr});
 }
 }  // namespace detail
 }  // namespace groupby

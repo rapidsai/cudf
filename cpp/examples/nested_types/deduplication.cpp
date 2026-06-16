@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -27,10 +16,11 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 #include <iostream>
 #include <string>
@@ -55,12 +45,11 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool pool)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
+  rmm::mr::cuda_memory_resource cuda_mr{};
   if (pool) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{cuda_mr, rmm::percent_of_free_device_memory(50)};
   }
   return cuda_mr;
 }
@@ -192,7 +181,7 @@ int main(int argc, char const** argv)
 
   auto pool     = mr_name == "pool";
   auto resource = create_memory_resource(pool);
-  cudf::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource);
 
   std::cout << "Reading " << input_filepath << "..." << std::endl;
   // read input file

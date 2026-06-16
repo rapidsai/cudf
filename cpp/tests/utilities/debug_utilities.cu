@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/column_utilities.hpp>
@@ -28,7 +17,7 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 #include <iomanip>
@@ -163,7 +152,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
@@ -189,8 +178,8 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
+      std::transform(cuda::counting_iterator<size_type>{0},
+                     cuda::counting_iterator{col.size()},
                      out.begin(),
                      [&h_data](auto idx) {
                        return bit_is_set(h_data.second.data(), idx)
@@ -238,8 +227,8 @@ struct column_view_printer {
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
+      std::transform(cuda::counting_iterator<size_type>{0},
+                     cuda::counting_iterator{col.size()},
                      std::back_inserter(out),
                      [&h_data](auto idx) {
                        return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
@@ -283,8 +272,8 @@ struct column_view_printer {
     };
 
     out.resize(col.size());
-    std::transform(thrust::make_counting_iterator(size_type{0}),
-                   thrust::make_counting_iterator(col.size()),
+    std::transform(cuda::counting_iterator<size_type>{0},
+                   cuda::counting_iterator{col.size()},
                    out.begin(),
                    [&](auto idx) {
                      return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
@@ -324,8 +313,8 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
+      std::transform(cuda::counting_iterator<size_type>{0},
+                     cuda::counting_iterator{col.size()},
                      out.begin(),
                      [&h_data](auto idx) {
                        return bit_is_set(h_data.second.data(), idx)
@@ -388,7 +377,7 @@ struct column_view_printer {
                  << detail::to_string(cudf::test::bitmask_to_host(col), col.size(), indent) << "\n";
     }
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(
       iter,
       iter + view.num_children(),

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import bisect
 import itertools
@@ -142,14 +143,14 @@ def expect(
         preceding_endpoint,
         (plc.rolling.BoundedClosed, plc.rolling.BoundedOpen),
     ):
-        prec_delta = plc.interop.to_arrow(preceding_endpoint.delta).as_py()
+        prec_delta = preceding_endpoint.delta.to_arrow().as_py()
     else:
         prec_delta = 0
     if isinstance(
         following_endpoint,
         (plc.rolling.BoundedClosed, plc.rolling.BoundedOpen),
     ):
-        foll_delta = plc.interop.to_arrow(following_endpoint.delta).as_py()
+        foll_delta = following_endpoint.delta.to_arrow().as_py()
     else:
         foll_delta = 0
     if sort_order == plc.types.Order.ASCENDING:
