@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite using the GPU engine."""
@@ -529,7 +529,7 @@ def pytest_collection_modifyitems(
         return
     with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+        if (reason := TESTS_TO_SKIP.get(item.nodeid)) is not None or (
             with_streaming_engine
             and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
             is not None
