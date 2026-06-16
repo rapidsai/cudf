@@ -68,6 +68,10 @@ def _lower_ir_fallback(
     # Make sure we avoid mixed-length columns in intermediate TableChunks.
     ir = _inline_hstack_false(ir)
 
+    if not ir.children:
+        # nothing to lower or repartition.
+        return ir, {ir: PartitionInfo(count=1)}
+
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
