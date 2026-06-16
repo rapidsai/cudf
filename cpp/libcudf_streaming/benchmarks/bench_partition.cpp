@@ -9,13 +9,14 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cudf_streaming/integrations/partition.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <benchmark/benchmark.h>
-#include <cudf_streaming/integrations/partition.hpp>
 #include <rapidsmpf/utils/misc.hpp>
 
 #include <memory>

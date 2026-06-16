@@ -28,8 +28,12 @@ Result Variables
 # cmake-lint: disable=C0112
 function(find_and_configure_cudf VERSION EXPORT_SET)
   rapids_cmake_parse_version(MAJOR_MINOR ${VERSION} major_minor)
+  set(cudf_components)
+  if(BUILD_TESTS)
+    list(APPEND cudf_components COMPONENTS testing)
+  endif()
   rapids_cpm_find(
-    cudf ${VERSION}
+    cudf ${VERSION} ${cudf_components}
     BUILD_EXPORT_SET ${EXPORT_SET}
     INSTALL_EXPORT_SET ${EXPORT_SET}
     CPM_ARGS
