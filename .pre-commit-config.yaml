@@ -327,7 +327,7 @@ repos:
       - id: shellcheck
         args: ["--severity=warning"]
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.24.1
+    rev: v1.25.2
     hooks:
       - id: zizmor
 
