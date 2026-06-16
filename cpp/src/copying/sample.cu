@@ -61,7 +61,7 @@ std::unique_ptr<table> sample(table_view const& input,
                                           cudf::get_current_device_resource_ref());
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
-    thrust::shuffle_copy(rmm::exec_policy_nosync(stream),
+    thrust::shuffle_copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          cuda::counting_iterator<size_type>{num_rows},
                          gather_map_mutable_view.begin<size_type>(),

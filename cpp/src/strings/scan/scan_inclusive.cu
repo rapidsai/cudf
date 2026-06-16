@@ -78,7 +78,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   // build indices of the scan operation results
   rmm::device_uvector<size_type> result_map(input.size(), stream);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          cuda::counting_iterator<size_type>{input.size()},
                          result_map.begin(),
@@ -89,7 +89,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     // this prevents un-sanitized null entries in the output
     auto null_itr = cudf::detail::make_counting_transform_iterator(0, null_iterator{mask});
     auto oob_val  = cuda::constant_iterator<size_type>(input.size());
-    thrust::scatter_if(rmm::exec_policy_nosync(stream),
+    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        oob_val,
                        oob_val + input.size(),
                        cuda::counting_iterator<size_type>{0},

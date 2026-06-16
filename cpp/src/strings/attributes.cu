@@ -80,7 +80,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // fill in the lengths
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator<cudf::size_type>{strings.size()},
                     d_lengths,
@@ -146,6 +146,7 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
   cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   count_characters_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_lengths);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // reset null count after call to mutable_view()
   results->set_null_count(input.null_count());
@@ -219,7 +220,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   // create offsets vector to account for each string's character length
   rmm::device_uvector<size_type> offsets(input.size() + 1, stream);
   thrust::transform_inclusive_scan(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{input.size()},
     offsets.begin() + 1,
@@ -241,7 +242,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   // fill column with character code-point values
   auto d_results = results_view.data<int32_t>();
   // now set the ranges from each strings' character values
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      input.size(),
                      code_points_fn{d_column, offsets.data(), d_results});

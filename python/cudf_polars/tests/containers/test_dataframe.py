@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -176,14 +176,14 @@ def test_sorted_flags_preserved(with_nulls, nulls_last):
     assert df.flags == gf.to_polars().flags
 
 
-def test_empty_name_roundtrips_overlap():
+def test_empty_name_roundtrips_overlap(engine: pl.GPUEngine):
     df = pl.LazyFrame({"": [1, 2, 3], "column_0": [4, 5, 6]})
-    assert_gpu_result_equal(df)
+    assert_gpu_result_equal(df, engine=engine)
 
 
-def test_empty_name_roundtrips_no_overlap():
+def test_empty_name_roundtrips_no_overlap(engine: pl.GPUEngine):
     df = pl.LazyFrame({"": [1, 2, 3], "b": [4, 5, 6]})
-    assert_gpu_result_equal(df)
+    assert_gpu_result_equal(df, engine=engine)
 
 
 @pytest.mark.parametrize(

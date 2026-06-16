@@ -116,7 +116,7 @@ struct contains_scalar_dispatch {
     // runtime performance over using the comparator in a transform iterator with thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       begin,
       end,
       d_results.begin(),
@@ -127,8 +127,10 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(
-             rmm::exec_policy_nosync(stream), d_results.begin(), d_results.end(), true) > 0;
+    return thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         d_results.begin(),
+                         d_results.end(),
+                         true) > 0;
   }
 };
 

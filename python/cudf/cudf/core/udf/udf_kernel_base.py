@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -74,6 +74,11 @@ class ApplyKernelBase(ABC):
         Get a dict of globals needed to exec the kernel
         string.
         """
+
+    @staticmethod
+    def _format_arg_list(prefix, count):
+        """Build a comma-separated parameter list like 'prefix_0, prefix_1, ...'."""
+        return ", ".join(f"{prefix}_{i}" for i in range(count))
 
     def _construct_signature(self, return_type):
         """

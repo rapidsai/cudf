@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/getenv_or.hpp"
-
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -36,7 +35,7 @@ std::shared_mutex g_pools_mutex;
 {
   static std::size_t const default_pool_size =
     std::min<std::size_t>(16, std::thread::hardware_concurrency() / 4);
-  return getenv_or("LIBCUDF_NUM_HOST_WORKERS", default_pool_size);
+  return cudf::detail::getenv_or("LIBCUDF_NUM_HOST_WORKERS", default_pool_size);
 }
 
 /**

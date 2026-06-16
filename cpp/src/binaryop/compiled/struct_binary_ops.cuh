@@ -79,7 +79,7 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   auto tabulate_device_operator = [&](auto device_comparator) {
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       cuda::counting_iterator<size_type>(0),
       cuda::counting_iterator<size_type>(out.size()),
       out.begin<bool>(),
@@ -153,7 +153,7 @@ void apply_struct_equality_op(mutable_column_view& out,
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(out.size()),
                       out.begin<bool>(),

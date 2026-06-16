@@ -362,7 +362,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto const zero_itr = cuda::counting_iterator<cudf::size_type>{0};
     auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       zero_itr,
                       zero_itr + input.size(),
                       d_sizes.begin(),
@@ -377,7 +377,10 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
     vocabulary_tokenizer_fn<decltype(map_ref)> tokenizer{
       *d_strings, d_delimiter, map_ref, default_id, d_offsets, d_tokens};
-    thrust::for_each_n(rmm::exec_policy_nosync(stream), zero_itr, input.size(), tokenizer);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       zero_itr,
+                       input.size(),
+                       tokenizer);
     return cudf::make_lists_column(input.size(),
                                    std::move(token_offsets),
                                    std::move(tokens),
@@ -406,12 +409,14 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                        grid_chars.num_threads_per_block,
                        0,
                        stream.value()>>>(d_input_chars, chars_size, d_delimiter, d_marks.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // launch warp per string to compute token counts
   constexpr cudf::thread_index_type warp_size = cudf::detail::warp_size;
   cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   token_counts_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_delimiter, d_token_counts.data(), d_marks.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
     d_token_counts.begin(), d_token_counts.end(), stream, mr);
 
@@ -439,7 +444,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto d_tokens = tokens->mutable_view().data<cudf::size_type>();
 
   transform_tokenizer_fn<decltype(map_ref)> tokenizer{d_delimiter, map_ref, default_id};
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     d_tmp_strings->begin<cudf::string_view>(),
                     d_tmp_strings->end<cudf::string_view>(),
                     d_tokens,

@@ -16,14 +16,33 @@ void nvbench_inner_join(nvbench::state& state,
                                            nvbench::enum_type<DataType>>)
 {
   auto const num_keys = state.get_int64("num_keys");
+  auto const mode     = state.get_string("mode");
   auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left_input,
-                 cudf::table_view const& right_input,
-                 cudf::null_equality compare_nulls) {
-    return cudf::inner_join(left_input, right_input, compare_nulls);
-  };
-  BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
+  if (mode == "normal") {
+    auto join = [](cudf::table_view const& left_input,
+                   cudf::table_view const& right_input,
+                   cudf::null_equality compare_nulls) {
+      return cudf::inner_join(left_input, right_input, compare_nulls);
+    };
+    BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
+  } else if (mode == "partitioned") {
+    // Partitioned code path: build hash join, compute match context, then retrieve the
+    // entire probe table as a single partition.  This exercises the two-phase
+    // count-then-retrieve flow used for chunked probing.
+    auto join = [](cudf::table_view const& left_input,
+                   cudf::table_view const& right_input,
+                   cudf::null_equality compare_nulls) {
+      auto hash_joiner = cudf::hash_join(right_input, compare_nulls);
+      auto match_ctx   = hash_joiner.inner_join_match_context(left_input);
+      auto part_ctx    = cudf::join_partition_context{
+        std::make_unique<cudf::join_match_context>(std::move(match_ctx)), 0, left_input.num_rows()};
+      return hash_joiner.partitioned_inner_join(part_ctx);
+    };
+    BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
+  } else {
+    CUDF_FAIL("unrecognized mode: " + mode);
+  }
 }
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
@@ -91,7 +110,9 @@ NVBENCH_BENCH_TYPES(nvbench_inner_join,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1})
+  .add_string_axis("mode", {"normal", "partitioned"});
 
 NVBENCH_BENCH_TYPES(nvbench_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -101,7 +122,8 @@ NVBENCH_BENCH_TYPES(nvbench_left_join,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -111,7 +133,8 @@ NVBENCH_BENCH_TYPES(nvbench_full_join,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_inner_join_selectivity,
                     NVBENCH_TYPE_AXES(DEFAULT_JOIN_NULL_EQUALITY, SELECTIVITY_JOIN_DATATYPES))
@@ -120,4 +143,5 @@ NVBENCH_BENCH_TYPES(nvbench_inner_join_selectivity,
   .add_int64_axis("left_size", {100'000'000})
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("num_probes", {4})
-  .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
+  .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});

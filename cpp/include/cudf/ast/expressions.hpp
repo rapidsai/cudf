@@ -59,7 +59,7 @@ class expression_transformer;
  * This class is a part of a "visitor" pattern with the `expression_parser` class.
  * Expressions inheriting from this class can accept parsers as visitors.
  */
-struct expression {
+struct [[nodiscard]] expression {
   /**
    * @brief Accepts a visitor class.
    *
@@ -514,17 +514,17 @@ class operation : public expression {
 
 namespace detail {
 
-/// @brief An expression that represents a filter predicate.
+/// @brief An expression that represents a predicate.
 ///
 /// This is an internal expression used in filter operations. It is not intended to be used by
 /// external code and is not a part of the public API.
-class filter_predicate : public expression {
+class predicate : public expression {
  public:
   /**
    * @brief Construct a new filter predicate object
    * @param source The source expression from which the predicate value is taken
    */
-  filter_predicate(expression const& source) : source_{source} {}
+  predicate(expression const& source) : source_{source} {}
 
   /**
    * @copydoc expression::accept

@@ -5,6 +5,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -489,9 +490,8 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowDeviceTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
 
   std::vector<std::unique_ptr<cudf::column>> cols;

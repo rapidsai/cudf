@@ -88,6 +88,7 @@ void scatter_scalar_bitmask_inplace(std::reference_wrapper<scalar const> const& 
                                           : marking_bitmask_kernel<false, decltype(scatter_map)>;
     bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       *target_view, scatter_map, num_scatter_rows);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     target.set_null_count(
       cudf::detail::null_count(target.view().null_mask(), 0, target.size(), stream));
@@ -116,7 +117,7 @@ struct column_scalar_scatterer_impl {
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), cuda::make_constant_iterator(0));
 
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -194,7 +195,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -390,14 +391,17 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                            cudf::get_current_device_resource_ref());
   auto mutable_indices = indices->mutable_view();
 
-  thrust::sequence(rmm::exec_policy_nosync(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    mutable_indices.begin<size_type>(),
                    mutable_indices.end<size_type>(),
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map = detail::apply_boolean_mask(
-    table_view{{indices->view()}}, boolean_mask, stream, cudf::get_current_device_resource_ref());
+  auto scatter_map  = detail::apply_mask(table_view{{indices->view()}},
+                                        boolean_mask,
+                                        mask_type::RETENTION,
+                                        stream,
+                                        cudf::get_current_device_resource_ref());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 

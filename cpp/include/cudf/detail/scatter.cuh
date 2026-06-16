@@ -68,13 +68,14 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
   // We'll use the `numeric_limits::lowest()` value for this since it should always be outside the
   // valid range.
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             gather_map.begin(),
-                             gather_map.end(),
-                             std::numeric_limits<size_type>::lowest());
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    gather_map.begin(),
+    gather_map.end(),
+    std::numeric_limits<size_type>::lowest());
 
   // Convert scatter map to a gather map
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   cuda::counting_iterator<MapValueType>{0},
                   cuda::counting_iterator{
                     static_cast<MapValueType>(std::distance(scatter_map_begin, scatter_map_end))},
@@ -103,13 +104,16 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
                                   rmm::cuda_stream_view stream)
 {
   auto gather_map = rmm::device_uvector<size_type>(gather_rows, stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), 0);
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   gather_map.begin(),
+                   gather_map.end(),
+                   0);
 
   auto const out_of_bounds_begin =
     cuda::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
     out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   out_of_bounds_begin,
                   out_of_bounds_end,
                   scatter_map_begin,
@@ -141,7 +145,7 @@ struct column_scatterer_impl<Element, std::enable_if_t<cudf::is_fixed_width<Elem
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     source.begin<Element>(),
                     source.begin<Element>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
@@ -216,7 +220,7 @@ struct column_scatterer_impl<dictionary32> {
     auto source_itr  = indexalator_factory::make_input_iterator(source_view.indices());
     auto new_indices = std::make_unique<column>(target_view.get_indices_annotated(), stream, mr);
     auto target_itr  = indexalator_factory::make_output_iterator(new_indices->mutable_view());
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     source_itr,
                     source_itr + std::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,

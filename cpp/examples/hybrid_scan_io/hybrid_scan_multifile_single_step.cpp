@@ -14,7 +14,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <ranges>
@@ -146,9 +145,8 @@ int main(int argc, char const** argv)
   auto resource               = create_memory_resource(is_pool_used);
   auto stream_pool = rmm::cuda_stream_pool(1 + num_threads, rmm::cuda_stream::flags::non_blocking);
   auto default_stream = stream_pool.get_stream();
-  auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto stats_mr       = rmm::mr::statistics_resource_adaptor{resource};
+  rmm::mr::set_current_device_resource(stats_mr);
 
   // List of input sources from the input_paths string.
   auto const input_sources = [&]() {

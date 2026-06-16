@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(
 
   auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     indices.begin(),

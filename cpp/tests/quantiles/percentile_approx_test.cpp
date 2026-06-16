@@ -5,6 +5,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -289,7 +290,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
 
 std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(cudf::column_view const& col)
 {
-  auto itr = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto itr = cudf::test::iterators::valids_at_multiples_of(2);
   return cudf::test::detail::make_null_mask(itr, itr + col.size());
 }
 

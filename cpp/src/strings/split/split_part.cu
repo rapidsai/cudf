@@ -80,7 +80,7 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
 
   // get just the indexed value of each element
   auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     d_indices.begin(),

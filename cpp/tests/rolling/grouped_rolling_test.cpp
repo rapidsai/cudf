@@ -429,6 +429,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
 class GroupedRollingErrorTest : public cudf::test::BaseFixture {};
 
+class GroupedRollingSumEdgeCaseTest : public cudf::test::BaseFixture {};
+
 // negative sizes
 TEST_F(GroupedRollingErrorTest, NegativeMinPeriods)
 {
@@ -623,6 +625,56 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
 
 using GroupedRollingTestInts = GroupedRollingTest<int32_t>;
 
+TEST_F(GroupedRollingSumEdgeCaseTest, SumFloatNonFinite)
+{
+  auto const nan = std::numeric_limits<double>::quiet_NaN();
+  auto const inf = std::numeric_limits<double>::infinity();
+
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<double>{{nan, 1.0, 2.0, inf, -inf, 4.0, 5.0}};
+  auto const keys          = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0, 1, 1, 1, 1}};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{keys}};
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<double>{{nan, nan, 3.0, inf, nan, -inf, 9.0}};
+
+  auto const result = cudf::grouped_rolling_window(
+    grouping_keys, input, 2, 0, 1, *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+}
+
+TEST_F(GroupedRollingSumEdgeCaseTest, SumFloatFiniteCancellation)
+{
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<double>{{1e20, 1.0, 2.0, 3.0, 1e20, 4.0, 5.0, 6.0}};
+  auto const keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0, 0, 1, 1, 1, 1}};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{keys}};
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<double>{{1e20, 1e20, 3.0, 5.0, 1e20, 1e20, 9.0, 11.0}};
+
+  auto const result = cudf::grouped_rolling_window(
+    grouping_keys, input, 2, 0, 1, *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+}
+
+TEST_F(GroupedRollingSumEdgeCaseTest, SumInt64PrefixOverflow)
+{
+  auto constexpr max = std::numeric_limits<int64_t>::max();
+
+  auto const input = cudf::test::fixed_width_column_wrapper<int64_t>{
+    {max, int64_t{-1}, int64_t{2}, max, int64_t{-1}, int64_t{2}}};
+  auto const keys          = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0, 1, 1, 1}};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{keys}};
+  auto const expected      = cudf::test::fixed_width_column_wrapper<int64_t>{
+    {max, max - int64_t{1}, int64_t{1}, max, max - int64_t{1}, int64_t{1}}};
+
+  auto const result = cudf::grouped_rolling_window(
+    grouping_keys, input, 2, 0, 1, *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+}
+
 TEST_F(GroupedRollingTestInts, SumLargeWindow)
 {
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> input({1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
@@ -651,7 +703,7 @@ using GroupedRollingTestStrings = GroupedRollingTest<cudf::string_view>;
 
 TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators)
 {
-  cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
+  cudf::test::strings_column_wrapper input{{"This", "is", "not", "", "string", ""},
                                            {true, true, true, false, true, false}};
 
   const cudf::size_type DATA_SIZE{static_cast<cudf::column_view>(input).size()};

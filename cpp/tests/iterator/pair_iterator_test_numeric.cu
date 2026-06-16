@@ -103,7 +103,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
   // GPU test
-  auto it_dev         = d_col->pair_begin<T, true>();
+  auto it_dev         = d_col->template pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
   auto result         = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                it_dev_squared,

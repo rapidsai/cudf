@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
       *d_col, row_equal, null_handling, offsets.data(), labels.data()};
 
     auto identifiers = rmm::device_uvector<size_type>(col.size(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{col.size()},
                       identifiers.begin(),

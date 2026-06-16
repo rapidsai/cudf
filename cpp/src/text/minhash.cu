@@ -395,7 +395,9 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   rmm::cuda_stream_view stream)
 {
   auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   indices.begin(),
+                   indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then
@@ -404,12 +406,21 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
     auto sizes = rmm::device_uvector<cudf::size_type>(size, stream);
     auto begin = cuda::counting_iterator<cudf::size_type>{0};
     auto end   = begin + size;
-    thrust::transform(rmm::exec_policy_nosync(stream), begin, end, sizes.data(), tfn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      begin,
+                      end,
+                      sizes.data(),
+                      tfn);
     // these 2 are slightly faster than using partition()
-    thrust::sort_by_key(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
-    auto const lb = thrust::lower_bound(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
+    thrust::sort_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        sizes.begin(),
+                        sizes.end(),
+                        indices.begin());
+    auto const lb =
+      thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          sizes.begin(),
+                          sizes.end(),
+                          wide_row_threshold);
     threshold_index = static_cast<cudf::size_type>(cuda::std::distance(sizes.begin(), lb));
   }
   return {threshold_index, std::move(indices)};
@@ -465,6 +476,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto transform_fn = [d_strings = *d_strings] __device__(auto idx) -> cudf::size_type {
     if (d_strings.is_null(idx)) { return 0; }
@@ -485,6 +497,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
     minhash_kernel<offsets_type, hash_value_type, 1>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, width, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // handle the strings above the threshold width
@@ -496,6 +509,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
     minhash_kernel<offsets_type, hash_value_type, blocks_per_row>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, width, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return results;
@@ -553,6 +567,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto sizes_fn = [d_list] __device__(auto idx) -> cudf::size_type {
     if (d_list.is_null(idx)) { return 0; }
@@ -572,6 +587,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
     minhash_kernel<offset_type, hash_value_type, 1>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, ngrams, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // handle the strings above the threshold width
@@ -583,6 +599,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
     minhash_kernel<offset_type, hash_value_type, blocks_per_row>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         input_offsets, d_indices, parameter_a, parameter_b, ngrams, d_hashes.data(), d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return results;

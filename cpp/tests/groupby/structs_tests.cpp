@@ -127,7 +127,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
   auto expected_values   = fwcw<R> {    6,   19,   17,      3  };
   auto expected_member_0 = fwcw<M0>{ {  1,    2,    3,   null  }, null_at(3)};
   auto expected_member_1 = fwcw<M1>{ { 11,   22,   33,   null  }, null_at(3)};
-  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22", "33", "null" }, null_at(3)};
+  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22", "33", "" }, null_at(3)};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(3)};
   // clang-format on
 
@@ -157,7 +157,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   auto expected_values   = fwcw<R> {    9,   14,    10,     7,     1,      4  };
   auto expected_member_0 = fwcw<M0>{{   1,    2,     3,     3,  null,   null  }, nulls_at({4,5})};
   auto expected_member_1 = fwcw<M1>{{  11,   22,    33,  null,    22,   null  }, nulls_at({3,5})};
-  auto expected_member_2 = cudf::test::strings_column_wrapper {{ "11", "22",  "33",  "33",  "22", "null" }, null_at(5)};
+  auto expected_member_2 = cudf::test::strings_column_wrapper {{ "11", "22",  "33",  "33",  "22", "" }, null_at(5)};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(5)};
   // clang-format on
 
@@ -192,7 +192,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   auto expected_values   = fwcw<R> {    9,   14,    17,      1,      4  };
   auto expected_member_0 = fwcw<M0>{ {  1,    2,     3,   null,   null  }, nulls_at({3,4})};
   auto expected_member_1 = fwcw<M1>{ { 11,   22,    33,   null,   null  }, nulls_at({3,4})};
-  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22",  "33", "null", "null" }, nulls_at({3,4})};
+  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22",  "33", "", "" }, nulls_at({3,4})};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(4)};
   // clang-format on
 
@@ -210,7 +210,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   auto values            = fwcw<V> {    0,      1,    2,    3,    4,    5,    6,    7,    8,    9 };
   auto struct_0_member_0 = fwcw<M0>{{   1,   null,    3,    1,    2,    2,    1,    3,    3,    2 }, null_at(1)};
   auto struct_0_member_1 = fwcw<M1>{{  11,   null,   33,   11,   22,   22,   11,   33,   33,   22 }, null_at(1)};
-  auto struct_0_member_2 = cudf::test::strings_column_wrapper {{ "11", "null", "33", "11", "22", "22", "11", "33", "33", "22"}, null_at(1)};
+  auto struct_0_member_2 = cudf::test::strings_column_wrapper {{ "11", "", "33", "11", "22", "22", "11", "33", "33", "22"}, null_at(1)};
   // clang-format on
 
   auto struct_0 = cudf::test::structs_column_wrapper{
@@ -226,7 +226,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   auto expected_values            = fwcw<R> {    9,   14,    17,      1,      4  };
   auto expected_member_0          = fwcw<M0>{ {  1,    2,     3,   null,   null  }, nulls_at({3,4})};
   auto expected_member_1          = fwcw<M1>{ { 11,   22,    33,   null,   null  }, nulls_at({3,4})};
-  auto expected_member_2          = cudf::test::strings_column_wrapper { {"11", "22",  "33", "null", "null" }, nulls_at({3,4})};
+  auto expected_member_2          = cudf::test::strings_column_wrapper { {"11", "22",  "33", "", "" }, nulls_at({3,4})};
   auto expected_structs           = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(4)};
   auto expected_struct_1_member_1 = fwcw<M1>{    8,    7,     6,      9,      0  };
   auto expected_keys              = cudf::test::structs_column_wrapper{{expected_structs, expected_struct_1_member_1}};
@@ -276,7 +276,7 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   auto expected_values   = fwcw<R> {    45 };
   auto expected_member_0 = fwcw<M0>{ null };
   auto expected_member_1 = fwcw<M1>{ null };
-  auto expected_member_2 = cudf::test::strings_column_wrapper {"null"};
+  auto expected_member_2 = cudf::test::strings_column_wrapper {""};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, all_nulls()};
   // clang-format on
 

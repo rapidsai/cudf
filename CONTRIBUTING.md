@@ -32,7 +32,7 @@ conda install cudf -c rapidsai-nightly -c conda-forge
 ```
 
 3. Build and view the docs locally following the instructions in the [Building
-documentation docs](https://docs.rapids.ai/api/cudf/stable/developer_guide/documentation/#building-and-viewing-docs)
+documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/documentation/#building-and-viewing-docs)
 4. Follow steps 7-10 in the section [Your first issue](#your-first-issue)
 
 ## Code contributions
@@ -119,9 +119,7 @@ Instructions for a minimal build environment without conda are included below.
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-# note: RAPIDS currently doesn't support `channel_priority: strict`;
-# use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-131_arch-$(uname -m).yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-132_arch-$(uname -m).yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -322,7 +320,7 @@ This will bring up an interactive prompt to select which spelling fixes to apply
 
 The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
-The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
+The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/index.html) includes details on contributing to cuDF Python code.
 
 
 ## Attribution

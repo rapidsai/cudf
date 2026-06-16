@@ -22,13 +22,19 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cuda/iterator>
 
 #include <src/io/parquet/parquet_common.hpp>
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <fstream>
 #include <functional>
+#include <iterator>
+#include <random>
 
 using cudf::test::iterators::no_nulls;
 
@@ -473,8 +479,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto seq_col0                      = random_values<int32_t>(num_rows);
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
@@ -1107,6 +1112,102 @@ TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
   EXPECT_EQ(nbits, expected_bits);
 }
 
+TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
+{
+  constexpr auto num_rows          = 100'000;
+  constexpr auto num_pages         = 10;
+  constexpr auto page_size         = num_rows / num_pages;
+  constexpr auto freq_pages        = num_pages - 2;
+  constexpr auto cardinality       = 64'000;
+  constexpr auto frequent_set_size = 64;
+
+  auto const filepath = temp_env->get_temp_filepath("VariableBitWidthDictEncoding.parquet");
+  {
+    std::mt19937 rng{0xACAD1A};
+    using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+    // Hot pages contain values in [0, frequent_set_size - 1], (first `freq_pages` pages in the
+    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `num_pages -
+    // freq_pages` pages in the chunk)
+    std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
+    std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
+    auto constexpr threshold = freq_pages * page_size;
+    auto values              = std::vector<int64_t>{};
+    values.reserve(num_rows);
+    std::transform(
+      cuda::counting_iterator(0),
+      cuda::counting_iterator(num_rows),
+      std::back_inserter(values),
+      [&](auto row_idx) { return row_idx < threshold ? freq_dist(rng) : rare_dist(rng); });
+    auto const col = ColumnType(values.begin(), values.end());
+
+    auto writer_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table_view{{col}})
+        .compression(cudf::io::compression_type::NONE)              // No compression
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)  // Write page index
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)     // Always dictionary encode
+        .row_group_size_rows(num_rows)                              // Single row group only
+        .max_page_size_rows(page_size)               // Max page size is set to the page size
+        .max_page_size_bytes(std::size_t{64} << 20)  // Unlimited page size
+        .build();
+    cudf::io::write_parquet(writer_opts);
+  }
+
+  auto datasource = cudf::io::datasource::create(filepath);
+
+  // Extract dictionary bit width for each data page from page index
+  std::vector<int> page_dict_bits;
+  {
+    // Read file metadata
+    cudf::io::parquet::FileMetaData file_metadata;
+    read_footer(datasource, &file_metadata);
+
+    // Check dictionary encoded pages
+    auto const& colchunk = file_metadata.row_groups.front().columns.front();
+    EXPECT_TRUE(std::any_of(colchunk.meta_data.encodings.begin(),
+                            colchunk.meta_data.encodings.end(),
+                            [](auto const encoding) {
+                              return encoding == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+                                     encoding == cudf::io::parquet::Encoding::RLE_DICTIONARY;
+                            }));
+
+    auto const oi = read_offset_index(datasource, colchunk);
+    page_dict_bits.reserve(oi.page_locations.size());
+    std::transform(oi.page_locations.begin(),
+                   oi.page_locations.end(),
+                   std::back_inserter(page_dict_bits),
+                   [&datasource](auto const& page_location) {
+                     return read_dict_bits(datasource, page_location);
+                   });
+
+    // Check page count
+    EXPECT_EQ(oi.page_locations.size(), static_cast<std::size_t>(num_pages));
+  }
+
+  // Checks
+  {
+    // Check min and max bit widths
+    auto const [min_bits_iter, max_bits_iter] = std::ranges::minmax_element(page_dict_bits);
+    auto const chunk_wide_max_bits            = std::bit_width<uint32_t>(cardinality - 1);
+    auto const frequent_max_bits              = std::bit_width<uint32_t>(frequent_set_size - 1);
+
+    ASSERT_FALSE(page_dict_bits.empty());
+    EXPECT_GT(*min_bits_iter, 1);
+    EXPECT_GT(*max_bits_iter, frequent_max_bits);
+    EXPECT_LE(*max_bits_iter, chunk_wide_max_bits);
+
+    // Check expected number of freq and rare pages
+    // TODO(mh): Race-dependent checks. Enable these along with cuDF PR #22323.
+
+    // auto const total_page_count = static_cast<int>(page_dict_bits.size());
+    // auto const freq_page_count  = static_cast<int>(
+    //   std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits;
+    //   }));
+    // EXPECT_EQ(freq_page_count, freq_pages);
+    // EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
+  }
+}
+
 TEST_F(ParquetWriterTest, DictionaryNeverTest)
 {
   constexpr unsigned int nrows = 1'000U;
@@ -1532,8 +1633,7 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   auto const col1_data = random_values<int32_t>(num_rows);
 
   auto const col0_validity = cudf::test::iterators::no_nulls();
-  auto const col1_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto const col1_validity = cudf::test::iterators::valids_at_multiples_of(2);
 
   column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), col0_validity};
   column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), col1_validity};
@@ -1834,6 +1934,88 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   EXPECT_TRUE(has_delta);
 }
 
+TEST_F(ParquetWriterTest, ListElementFieldIds)
+{
+  // Field-id overview for the written Parquet schema:
+  //
+  //   simple_list                           -> id=1
+  //   simple_list.list                      -> synthetic repeated group, no id
+  //   simple_list.list.element              -> id=2
+  //
+  //   nested_list                           -> id=3
+  //   nested_list.list                      -> synthetic repeated group, no id
+  //   nested_list.list.element              -> id=4
+  //   nested_list.list.element.list         -> synthetic repeated group, no id
+  //   nested_list.list.element.list.element -> id=5
+  auto simple_values  = cudf::test::fixed_width_column_wrapper<int64_t>{1, 2, 3};
+  auto simple_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto simple_list =
+    cudf::make_lists_column(2, simple_offsets.release(), simple_values.release(), 0, {});
+
+  auto nested_values  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13};
+  auto nested_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3, 4};
+  auto inner_list =
+    cudf::make_lists_column(3, nested_offsets.release(), nested_values.release(), 0, {});
+  auto outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto nested_list =
+    cudf::make_lists_column(2, outer_offsets.release(), std::move(inner_list), 0, {});
+
+  auto const expected = cudf::table_view{{*simple_list, *nested_list}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("simple_list").set_parquet_field_id(1);
+  expected_metadata.column_metadata[0].child(1).set_name("element").set_parquet_field_id(2);
+  expected_metadata.column_metadata[1].set_name("nested_list").set_parquet_field_id(3);
+  expected_metadata.column_metadata[1].child(1).set_name("element").set_parquet_field_id(4);
+  expected_metadata.column_metadata[1].child(1).child(1).set_name("element").set_parquet_field_id(
+    5);
+
+  auto const filepath = temp_env->get_temp_filepath("ListElementFieldIds.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // The footer schema is stored in pre-order traversal:
+  //   [1] simple_list(id=1), [2] list(no id), [3] element(id=2)
+  //   [4] nested_list(id=3), [5] list(no id), [6] element(id=4),
+  //   [7] list(no id), [8] element(id=5)
+  ASSERT_GE(fmd.schema.size(), 9);
+
+  ASSERT_TRUE(fmd.schema[1].field_id.has_value());
+  EXPECT_EQ(fmd.schema[1].name, "simple_list");
+  EXPECT_EQ(fmd.schema[1].field_id.value(), 1);
+
+  EXPECT_EQ(fmd.schema[2].name, "list");
+  EXPECT_FALSE(fmd.schema[2].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[3].field_id.has_value());
+  EXPECT_EQ(fmd.schema[3].name, "element");
+  EXPECT_EQ(fmd.schema[3].field_id.value(), 2);
+
+  ASSERT_TRUE(fmd.schema[4].field_id.has_value());
+  EXPECT_EQ(fmd.schema[4].name, "nested_list");
+  EXPECT_EQ(fmd.schema[4].field_id.value(), 3);
+
+  EXPECT_EQ(fmd.schema[5].name, "list");
+  EXPECT_FALSE(fmd.schema[5].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[6].field_id.has_value());
+  EXPECT_EQ(fmd.schema[6].name, "element");
+  EXPECT_EQ(fmd.schema[6].field_id.value(), 4);
+
+  EXPECT_EQ(fmd.schema[7].name, "list");
+  EXPECT_FALSE(fmd.schema[7].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[8].field_id.has_value());
+  EXPECT_EQ(fmd.schema[8].name, "element");
+  EXPECT_EQ(fmd.schema[8].field_id.value(), 5);
+}
+
 TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
 {
   // decimal128 in cuDF maps to FIXED_LEN_BYTE_ARRAY, which is allowed by the spec to use
@@ -1923,8 +2105,7 @@ make_byte_stream_split_table(bool as_struct)
 
     // make as a nested struct
     if (as_struct) {
-      auto valids =
-        cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+      auto valids                  = cudf::test::iterators::valids_at_multiples_of(2);
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
 
       std::vector<std::unique_ptr<cudf::column>> table_cols;
@@ -2219,7 +2400,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 {
   auto sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);

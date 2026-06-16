@@ -24,17 +24,17 @@ using hash_table_t     = typename cudf::detail::hash_join<hash_join_hasher>::imp
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 
-void validate_hash_join_probe(table_view const& build, table_view const& probe, bool has_nulls);
+void validate_hash_join_probe(table_view const& right, table_view const& left, bool has_nulls);
 
 std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
-  table_view const& build,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  table_view const& right,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_right,
   cudf::detail::hash_table_t const& hash_table,
   bool is_empty,
   bool has_nulls,
   null_equality compare_nulls,
   join_kind join,
-  table_view const& probe,
+  table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

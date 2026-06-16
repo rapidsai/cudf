@@ -50,10 +50,13 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                                                  stream,
                                                  cudf::get_current_device_resource_ref());
   auto per_row_mapping_begin = per_row_mapping->mutable_view().template begin<size_type>();
-  thrust::fill_n(rmm::exec_policy_nosync(stream), per_row_mapping_begin, num_child_rows, 0);
+  thrust::fill_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 per_row_mapping_begin,
+                 num_child_rows,
+                 0);
 
   auto const begin = cuda::counting_iterator<size_type>{0};
-  thrust::scatter_if(rmm::exec_policy_nosync(stream),
+  thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      begin,
                      begin + offsets.size() - 1,
                      offsets.begin<size_type>(),
@@ -71,7 +74,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   // For the case with an empty list at index 2:
   //   scatter result == [0, 0, 1, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0]
   //   inclusive_scan == [0, 0, 1, 1, 1, 3, 3, 3, 4, 4, 4, 5, 5]
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
@@ -134,7 +137,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                            stream,
                                            cudf::get_current_device_resource_ref());
 
-  thrust::tabulate(rmm::exec_policy_nosync(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    new_sizes->mutable_view().template begin<size_type>(),
                    new_sizes->mutable_view().template end<size_type>(),
                    [d_gather_map  = gather_map.template begin<size_type>(),

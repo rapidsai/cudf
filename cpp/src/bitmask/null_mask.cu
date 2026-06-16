@@ -20,17 +20,16 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cub/cub.cuh>
 #include <cuda/atomic>
+#include <cuda/numeric>
 #include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
-#include <limits>
 #include <numeric>
 
 namespace cudf {
@@ -212,7 +211,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
       auto const num_words =
         num_bitmask_words(end_bits[i]) - begin_bits[i] / detail::size_in_bits<bitmask_type>();
       // Handle overflow if any
-      if (num_words >= std::numeric_limits<size_t>::max() - cumulative_null_mask_words) {
+      if (cuda::add_overflow<size_t>(cumulative_null_mask_words, num_words).overflow) {
         average_nullmask_words +=
           cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
         cumulative_null_mask_words = 0;
@@ -227,7 +226,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
     cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
-  auto const mr           = rmm::mr::get_current_device_resource_ref();
+  auto const mr           = cudf::get_current_device_resource_ref();
   auto destinations       = cudf::detail::make_device_uvector_async(bitmasks, stream, mr);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);
@@ -496,6 +495,7 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
     dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
   count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     d_bitmasks, start, stop - 1, d_non_zero_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // Use pinned memory to copy the result back to the host, then copy again to the output vector.
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
@@ -739,7 +739,7 @@ void set_all_valid_null_masks(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  if (input.nullable()) {
+  if (input.nullable() && output.size() > 0) {
     auto mask = detail::create_null_mask(output.size(), mask_state::ALL_VALID, stream, mr);
     output.set_null_mask(std::move(mask), 0);
 
@@ -808,6 +808,7 @@ size_type index_of_first_set_bit(bitmask_type const* bitmask,
   find_first_set_bit_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       bitmask, start, stop, bit_count, d_index.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   return d_index.value(stream);
 }
 

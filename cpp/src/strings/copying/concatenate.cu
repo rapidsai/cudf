@@ -67,7 +67,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
   auto [device_view_owners, device_views_ptr] =
-    contiguous_copy_column_device_views<column_device_view>(views, stream);
+    create_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
@@ -87,12 +87,13 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   device_views_ptr,
-                                   device_views_ptr + views.size(),
-                                   std::next(d_partition_offsets.begin()),
-                                   chars_size_transform{},
-                                   cuda::std::plus{});
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    device_views_ptr,
+    device_views_ptr + views.size(),
+    std::next(d_partition_offsets.begin()),
+    chars_size_transform{},
+    cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
@@ -250,6 +251,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       itr_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
       d_valid_count.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (has_nulls) { null_count = strings_count - d_valid_count.value(stream); }
   }
@@ -267,6 +269,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                                             static_cast<size_type>(columns.size()),
                                                             total_bytes,
                                                             d_new_chars);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {

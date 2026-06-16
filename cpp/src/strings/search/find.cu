@@ -176,9 +176,10 @@ void find_utility(strings_column_view const& input,
     finder_warp_parallel_fn<TargetIterator, forward>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         *d_strings, target_itr, start, stop, d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     // string-per-thread function
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       d_results,
@@ -214,7 +215,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   if (d_target.empty()) {
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       d_results,
@@ -384,8 +385,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
   if (d_target.empty()) {
-    thrust::fill(
-      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 results_view.begin<bool>(),
+                 results_view.end<bool>(),
+                 true);
   } else {
     // launch warp per string
     auto const d_strings                   = column_device_view::create(input.parent(), stream);
@@ -394,6 +397,7 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
     cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
     contains_warp_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_target, results_view.data<bool>());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   results->set_null_count(input.null_count());
   return results;
@@ -448,7 +452,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{strings_count},
                     d_results,
@@ -502,7 +506,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{strings.size()},
     d_results,

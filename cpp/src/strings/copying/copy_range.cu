@@ -91,7 +91,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{target.size()},
     [d_source, d_target, source_begin, target_begin, target_end, d_offsets, d_chars] __device__(

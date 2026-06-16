@@ -33,14 +33,15 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
   }
 
   auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             reduction_results.begin(),
-                             reduction_results.end(),
-                             reduction_init_value(keep));
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    reduction_results.begin(),
+    reduction_results.end(),
+    reduction_init_value(keep));
 
   auto set_ref = set.ref(cuco::op::insert_and_find);
 
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cuda::counting_iterator<cudf::size_type>{0},
                    cuda::counting_iterator{num_rows},
                    [set_ref, keep, reduction_results = reduction_results.begin()] __device__(

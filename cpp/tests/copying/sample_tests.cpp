@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,10 +8,11 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <cuda/iterator>
 
 struct SampleTest : public cudf::test::BaseFixture {};
 
@@ -31,7 +32,7 @@ TEST_F(SampleTest, FailCaseRowMultipleSampling)
 TEST_F(SampleTest, RowMultipleSamplingDisallowed)
 {
   cudf::size_type const n_samples = 1024;
-  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data                       = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + n_samples);
 
   cudf::table_view input({col1});
@@ -47,7 +48,7 @@ TEST_F(SampleTest, RowMultipleSamplingDisallowed)
 TEST_F(SampleTest, TestReproducibilityWithSeed)
 {
   cudf::size_type const n_samples = 1024;
-  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data                       = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + n_samples);
 
   cudf::table_view input({col1});
@@ -76,7 +77,7 @@ TEST_P(SampleBasicTest, CombinationOfParameters)
   cudf::size_type const table_size   = 1024;
   auto const [n_samples, multi_smpl] = GetParam();
 
-  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + table_size);
   cudf::test::fixed_width_column_wrapper<float> col2(data, data + table_size);
 

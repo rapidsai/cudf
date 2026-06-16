@@ -11,8 +11,8 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.hash cimport DEFAULT_HASH_SEED
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
     cpdef enum class hash_id(int32_t):
@@ -28,8 +28,8 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         int num_partitions,
         hash_id hash_function,
         uint32_t seed,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
@@ -39,8 +39,8 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         int num_partitions,
         hash_id hash_function,
         uint32_t seed,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
@@ -48,8 +48,8 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         const table_view& t,
         const column_view& partition_map,
         int num_partitions,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
@@ -57,6 +57,6 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         const table_view& input,
         int num_partitions,
         int start_partition,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler

@@ -72,7 +72,7 @@ Enable cuDF spilling
 
 When using Dask cuDF for classic ETL workloads, it is usually best
 to enable `native spilling support in cuDF
-<https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory>`__.
+<https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/library_design/#spilling-to-host-memory>`__.
 When using :class:`dask_cuda.LocalCUDACluster`, this is easily accomplished by
 setting ``enable_cudf_spill=True``.
 

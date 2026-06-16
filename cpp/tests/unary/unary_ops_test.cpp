@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -24,8 +25,7 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
   if (not nullable) {
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   } else {
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    auto valids = cudf::test::iterators::valids_at_multiples_of(2);
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size, valids);
   }
 }

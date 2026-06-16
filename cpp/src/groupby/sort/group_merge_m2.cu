@@ -49,11 +49,23 @@ struct merge_fn {
       if (partial_n == 0) { continue; }
       auto const partial_avg = d_means[idx];
       auto const partial_m2  = d_M2s[idx];
-      auto const new_n       = n + partial_n;
-      auto const delta       = partial_avg - avg;
-      m2 += partial_m2 + delta * delta * n * partial_n / new_n;
-      avg = (avg * n + partial_avg * partial_n) / new_n;
-      n   = new_n;
+
+      // Merging an empty accumulator with a non-empty partial is an identity operation. Running
+      // the generic formula for this case can evaluate inf * 0 and turn extreme finite partials
+      // into NaN.
+      if (n == 0) {
+        n   = partial_n;
+        avg = partial_avg;
+        m2  = partial_m2;
+        continue;
+      }
+
+      auto const new_n   = n + partial_n;
+      auto const delta   = partial_avg - avg;
+      auto const delta_n = delta / new_n;
+      m2 += partial_m2 + delta * delta_n * n * partial_n;
+      avg += delta_n * partial_n;
+      n = new_n;
     }
 
     return {n, avg, m2};

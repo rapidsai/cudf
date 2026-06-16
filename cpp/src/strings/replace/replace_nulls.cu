@@ -54,7 +54,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& input,
   // build chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
   auto d_chars = chars.data();
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      strings_count,
                      [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {

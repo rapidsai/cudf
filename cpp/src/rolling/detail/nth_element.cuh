@@ -147,8 +147,10 @@ std::unique_ptr<column> nth_element(size_type n,
       n, input, preceding, following, min_periods, stream});
 
   auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
-  thrust::copy(
-    rmm::exec_policy_nosync(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               gather_iter,
+               gather_iter + input.size(),
+               gather_map.begin());
 
   auto gathered = cudf::detail::gather(table_view{{input}},
                                        gather_map,

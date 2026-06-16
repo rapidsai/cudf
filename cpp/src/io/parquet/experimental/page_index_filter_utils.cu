@@ -204,7 +204,7 @@ rmm::device_uvector<size_type> compute_page_indices_async(
     cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
 
   // Scatter page indices across the their first row's index
-  thrust::scatter_if(rmm::exec_policy_nosync(stream),
+  thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      cuda::counting_iterator{static_cast<size_type>(row_counts.size())},
                      row_offsets.begin(),
@@ -213,7 +213,7 @@ rmm::device_uvector<size_type> compute_page_indices_async(
 
   // Inclusive scan with maximum to replace zeros with the (increasing) page index it belongs to.
   // Page indices are scattered at their first row's index.
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          page_indices.begin(),
                          page_indices.end(),
                          page_indices.begin(),
