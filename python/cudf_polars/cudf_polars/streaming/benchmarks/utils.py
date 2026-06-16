@@ -1210,9 +1210,9 @@ def run_polars_in_memory(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     engine = pl.GPUEngine(
         executor="in-memory",
-        raise_on_fail=True,
         **engine_options,
     )
     records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1248,6 +1248,7 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1305,6 +1306,7 @@ def run_polars_ray(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
@@ -1354,6 +1356,7 @@ def run_polars_dask(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     dask_client = None
     if run_config.connect is not None:
         if Path(run_config.connect).is_file():

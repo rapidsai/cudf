@@ -28,10 +28,13 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 #include <src/io/parquet/stats_filter_helpers.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -2872,6 +2875,44 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
+static constexpr char const* parquet_metadata_size_hint_env_var =
+  "LIBCUDF_PARQUET_METADATA_SIZE_HINT";
+
+struct ParquetMetadataSizeHintTest : public ParquetReaderTest {};
+
+TEST_F(ParquetMetadataSizeHintTest, ReadParquet)
+{
+  srand(31337);
+  auto const expected = create_random_fixed_table<int>(2, 8, false);
+
+  auto const filepath = temp_env->get_temp_filepath("MetadataSizeHint.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
+  cudf::io::write_parquet(write_opts);
+
+  auto const source        = cudf::io::datasource::create(filepath);
+  auto const file_size     = source->size();
+  auto constexpr ender_len = sizeof(cudf::io::parquet::file_ender_s);
+  auto const ender_buffer  = source->host_read(file_size - ender_len, ender_len);
+  auto const ender = reinterpret_cast<cudf::io::parquet::file_ender_s const*>(ender_buffer->data());
+  auto const footer_len = static_cast<size_t>(ender->footer_len);
+
+  auto const source_info = cudf::io::source_info{filepath};
+
+  // Test cases:
+  // - 0: disable speculative reads
+  // - 9: smaller than typical footer metadata
+  // - footer_len + 1: larger than the footer
+  // - file_size + 1: larger than the entire file
+  std::vector<size_t> const hints{0, 9, footer_len + 1, file_size + 1};
+  for (auto const hint : hints) {
+    tmp_env_var const env(parquet_metadata_size_hint_env_var, std::to_string(hint));
+    auto const read_opts = cudf::io::parquet_reader_options::builder(source_info).build();
+    auto const result    = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected->view());
+  }
+}
+
 TEST_F(ParquetMetadataReaderTest, Basics)
 {
   auto const num_rows = 1200;
@@ -4112,6 +4153,135 @@ TEST_F(ParquetReaderTest, DeviceWriteAsyncThrows)
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }
+}
+
+//////////////////////////////////////////
+// row group output ordering tests
+//
+// See the @note on read_parquet in
+// cpp/include/cudf/io/parquet.hpp for the documented behavior.
+
+TEST_F(ParquetReaderTest, RowGroupOrderAscending)
+{
+  auto const f0        = make_ordered_rg_source(0, 4);
+  auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 1, 3}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0}, selection);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{f0.filepath})
+                      .row_groups(selection)
+                      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderNonAscending)
+{
+  auto const f0        = make_ordered_rg_source(0, 4);
+  auto const selection = std::vector<std::vector<cudf::size_type>>{{3, 0, 2}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0}, selection);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{f0.filepath})
+                      .row_groups(selection)
+                      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderRepeatedIndices)
+{
+  auto const f0        = make_ordered_rg_source(0, 3);
+  auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 2, 0, 1, 0}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0}, selection);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{f0.filepath})
+                      .row_groups(selection)
+                      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderEmptySourceVector)
+{
+  auto const f0 = make_ordered_rg_source(0, 2);
+  auto const f1 = make_ordered_rg_source(1, 2);
+  auto const f2 = make_ordered_rg_source(2, 2);
+
+  // Middle source contributes nothing; outer source order must be preserved.
+  auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 1}, {}, {0}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0, &f1, &f2}, selection);
+
+  auto const opts =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath, f2.filepath}})
+      .row_groups(selection)
+      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderMultiSourceMix)
+{
+  auto const f0 = make_ordered_rg_source(0, 4);
+  auto const f1 = make_ordered_rg_source(1, 4);
+
+  // Within each source, user-given order is preserved (non-ascending for f0).
+  auto const selection = std::vector<std::vector<cudf::size_type>>{{0, 3}, {0, 1}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0, &f1}, selection);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(
+                      cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath}})
+                      .row_groups(selection)
+                      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderUnsetMultiSource)
+{
+  auto const f0 = make_ordered_rg_source(0, 3);
+  auto const f1 = make_ordered_rg_source(1, 2);
+
+  // Without .row_groups(...): all RGs in source order, then on-disk order.
+  auto const expected_order = std::vector<std::vector<cudf::size_type>>{{0, 1, 2}, {0, 1}};
+  auto const expected       = build_expected_ordered_table(std::vector{&f0, &f1}, expected_order);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(
+                      cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath}})
+                      .build();
+  auto const got = cudf::io::read_parquet(opts).tbl;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, got->view());
+}
+
+TEST_F(ParquetReaderTest, RowGroupOrderStatsPushdown)
+{
+  // Values in f0 RGs span [0,100), [100,200), [200,300), [300,400);
+  // values in f1 RGs span [10000,10100), [10100,10200), [10200,10300).
+  // Predicate `col < 300` keeps every row in f0 RG{0,1,2} and prunes f0 RG3
+  // and all of f1 at the row-group statistics level. Because every surviving
+  // row passes the predicate, the row-level result equals the whole-RG slices,
+  // letting the test focus purely on ordering of survivors.
+  auto const f0 = make_ordered_rg_source(0, 4);
+  auto const f1 = make_ordered_rg_source(1, 3);
+
+  auto literal_value     = cudf::numeric_scalar<int32_t>(300);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref           = cudf::ast::column_reference(0);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+
+  // Survivors must keep relative order: f0 RG0, f0 RG1, f0 RG2.
+  auto const survivors = std::vector<std::vector<cudf::size_type>>{{0, 1, 2}, {}};
+  auto const expected  = build_expected_ordered_table(std::vector{&f0, &f1}, survivors);
+
+  auto const opts = cudf::io::parquet_reader_options::builder(
+                      cudf::io::source_info{std::vector<std::string>{f0.filepath, f1.filepath}})
+                      .filter(filter_expression)
+                      .build();
+  auto const result = cudf::io::read_parquet(opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, result.tbl->view());
+
+  // Sanity: stats-based pruning actually fired and shrank the surviving set.
+  ASSERT_TRUE(result.metadata.num_row_groups_after_stats_filter.has_value());
+  EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(), 3);
 }
 
 //////////////////////////////////////////
