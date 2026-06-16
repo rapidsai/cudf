@@ -1,28 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-"""
-MLIR (numba_cuda_mlir) lowering for ``MaskedType`` -- mirrors the typing
-surface introduced in :mod:`cudf.core.udf.mlir_backend.masked_typing`.
-
-Scope of this PR (intentionally minimal):
-
-* a ``PrimitiveModel`` data model registering ``MaskedType`` as a
-  two-field LLVM struct ``{value_ty, i1}``;
-* lowering of the ``Masked(value, valid)`` constructor;
-* lowering of ``.value`` and ``.valid`` accessors via a generic
-  getattr.
-
-Out of scope (deferred to subsequent PRs in the stack):
-
-* ``pack_return`` (the scalar-vs-Masked return bridge for UDFs);
-* binary / unary / comparison op lowerings;
-* casts between ``MaskedType`` value types;
-* scalar -> ``Masked`` implicit casts (used by ``return literal``
-  patterns).
-
-Importing this module registers lowerings with ``numba_cuda_mlir``.
-"""
-
 from __future__ import annotations
 
 from numba_cuda_mlir import types

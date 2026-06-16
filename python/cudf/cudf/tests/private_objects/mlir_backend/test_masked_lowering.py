@@ -38,8 +38,6 @@ from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import DEPRECATED_SM_REGEX
 from cudf.utils._numba import _CUDFNumbaConfig
 
-# --- helpers ---------------------------------------------------------------
-
 
 def _jit(sig):
     """Compile a small kernel suppressing the deprecated-SM warning."""
@@ -78,9 +76,6 @@ _DTYPE_SAMPLES = [
     (types.float64, np.float64, np.float64(-1.25)),
     (types.boolean, np.bool_, np.bool_(True)),
 ]
-
-
-# --- constructor + accessors -----------------------------------------------
 
 
 @pytest.mark.parametrize("nb_ty,np_dt,sample", _DTYPE_SAMPLES)

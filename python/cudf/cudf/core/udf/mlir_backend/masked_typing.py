@@ -1,29 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-"""
-MLIR (numba_cuda_mlir) typing for ``MaskedType`` -- the foundational
-"value + validity bit" wrapper used by every UDF input/return value.
-
-Scope of this PR (intentionally minimal):
-
-* the ``MaskedType`` class itself, parameterized by a value type;
-* numeric value types only (``int8..int64``, ``uint8..uint64``,
-  ``float32``, ``float64``, ``boolean``) -- string / datetime / timedelta
-  cases are layered in later PRs;
-* the ``Masked(value, valid)`` constructor;
-* the ``.value`` and ``.valid`` attributes.
-
-Out of scope (deferred to subsequent PRs in the stack):
-
-* ``pack_return`` (the scalar-vs-Masked return bridge for UDFs);
-* ``NAType`` and ``Masked + NA`` semantics;
-* binary / unary / comparison / bitwise op typing;
-* string- and datetime-flavored value types;
-* casts between Masked values of different inner types.
-
-Importing this module registers typing with ``numba_cuda_mlir``.
-"""
-
 from __future__ import annotations
 
 from numba_cuda_mlir import types

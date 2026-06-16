@@ -28,8 +28,6 @@ from cudf.core.udf.mlir_backend.masked_typing import (
     _supported_value_type_instances,
 )
 
-# --- type identity / hashing ------------------------------------------------
-
 
 def test_masked_type_repr():
     assert repr(MaskedType(types.int64)) == "Masked(int64)"
@@ -72,9 +70,6 @@ def test_masked_type_unsupported_value_becomes_poison():
     """
     masked = MaskedType(types.unicode_type)
     assert isinstance(masked.value_type, types.Poison)
-
-
-# --- supported value type set ----------------------------------------------
 
 
 def test_supported_value_type_classes_are_numeric_and_boolean_only():
