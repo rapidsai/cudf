@@ -48,7 +48,12 @@ rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments,
       std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
   }
   for (auto const& fragment : memory_fragments) {
-    ctx.update(fragment.data);
+    if (fragment.name != nullptr) {
+      ctx.update(
+        std::span{reinterpret_cast<uint8_t const*>(fragment.name), std::strlen(fragment.name)});
+    } else {
+      ctx.update(fragment.data);
+    }
   }
   return ctx.finalize();
 }
