@@ -132,7 +132,7 @@ if(CUDF_STREAMING_HAVE_MPI)
   )
   target_include_directories(
     libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
-                                     "${CMAKE_CURRENT_SOURCE_DIR}"
+                                        "${CMAKE_CURRENT_SOURCE_DIR}"
   )
   target_link_libraries(
     libcudf_streaming_mpi_tests
@@ -155,7 +155,7 @@ if(CUDF_STREAMING_HAVE_MPI)
     )
     target_include_directories(
       libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
-                                        "${CMAKE_CURRENT_SOURCE_DIR}"
+                                          "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     target_link_libraries(
       libcudf_streaming_mpi_tests
