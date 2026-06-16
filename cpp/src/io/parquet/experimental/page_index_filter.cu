@@ -870,20 +870,11 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
                std::runtime_error);
 
   // Total number of rows
-  auto const total_rows = std::accumulate(
-    cuda::counting_iterator<std::size_t>{0},
-    cuda::counting_iterator{row_group_indices.size()},
-    std::size_t{0},
-    [&](auto sum, auto const src_index) {
-      auto const& rg_indices = row_group_indices[src_index];
-      return std::accumulate(
-        rg_indices.begin(), rg_indices.end(), sum, [&](auto subsum, auto const rg_index) {
-          CUDF_EXPECTS(subsum + per_file_metadata[src_index].row_groups[rg_index].num_rows <=
-                         std::numeric_limits<size_type>::max(),
-                       "Total rows exceed the maximum value");
-          return subsum + per_file_metadata[src_index].row_groups[rg_index].num_rows;
-        });
-    });
+  auto const total_rows = total_rows_in_row_groups(row_group_indices);
+  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
+               "Total rows in row groups exceed the cudf's column size limit. Retry with a smaller "
+               "set of row groups",
+               std::invalid_argument);
 
   auto const num_columns = output_dtypes.size();
 
@@ -994,11 +985,15 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Input row bitmask should be of type BOOL8");
 
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
+  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
+               "Total rows in row groups exceed the cudf's column size limit. Retry with a smaller "
+               "set of row groups",
+               std::invalid_argument);
 
   CUDF_EXPECTS(
-    std::cmp_less_equal(static_cast<std::size_t>(row_mask_offset) + total_rows, row_mask.size()),
+    std::cmp_less_equal(row_mask_offset + total_rows, row_mask.size()),
     "Encountered a mismatch in number of rows in the row group pass and the row mask size",
-    std::invalid_argument);
+    std::overflow_error);
 
   // Return an empty vector if all rows are invalid or all rows are required
   if (std::cmp_equal(row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream),

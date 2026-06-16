@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+
 from rapidsmpf.statistics import Statistics
 
 from cudf_polars.engine.options import StreamingOptions

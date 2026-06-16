@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 
+#include "io/parquet/column_path_helpers.hpp"
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
@@ -20,6 +21,7 @@
 #include <numeric>
 #include <optional>
 #include <unordered_set>
+#include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -202,6 +204,16 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
   if (not opts_row_groups.empty()) {
     CUDF_EXPECTS(opts_row_groups.size() == per_file_metadata.size(),
                  "Row groups in parquet reader options must specify one vector per data source");
+    auto iter = cuda::zip_iterator(opts_row_groups.begin(), per_file_metadata.begin());
+    std::for_each(iter, iter + opts_row_groups.size(), [&](auto const& pair) {
+      auto const& [file_row_groups, file_metadata] = pair;
+      auto const& row_groups                       = file_metadata.row_groups;
+      for (auto const rg_idx : file_row_groups) {
+        CUDF_EXPECTS(rg_idx >= 0 and std::cmp_less(rg_idx, row_groups.size()),
+                     "Encountered out-of-bounds row group index for data source",
+                     std::invalid_argument);
+      }
+    });
     return opts_row_groups;
   }
 
@@ -276,14 +288,10 @@ aggregate_reader_metadata::select_payload_columns(
 
   std::vector<std::string> valid_payload_columns;
 
-  using cudf::io::parquet::detail::normalize_column_path;
-
   // Helper lambda to construct a set of normalized column names for O(1) lookup
   auto construct_filter_columns_set = [](auto const& names, bool case_sensitive_names) {
-    std::unordered_set<std::string> filter_columns_set;
-    for (auto const& name : names) {
-      filter_columns_set.insert(normalize_column_path(name, case_sensitive_names));
-    }
+    auto filter_columns_set = cudf::io::parquet::detail::make_column_path_set(case_sensitive_names);
+    filter_columns_set.insert(names.begin(), names.end());
     return filter_columns_set;
   };
 
@@ -299,10 +307,7 @@ aggregate_reader_metadata::select_payload_columns(
       valid_payload_columns.erase(
         std::remove_if(valid_payload_columns.begin(),
                        valid_payload_columns.end(),
-                       [&](auto const& col) {
-                         return filter_columns_set.count(
-                                  normalize_column_path(col, case_sensitive_names)) > 0;
-                       }),
+                       [&](auto const& col) { return filter_columns_set.count(col) > 0; }),
         valid_payload_columns.end());
     }
     // Call the base `select_columns()` method with valid payload columns
@@ -326,9 +331,7 @@ aggregate_reader_metadata::select_payload_columns(
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
     // TODO: Add children when AST filter expressions start supporting nested struct columns
-    if (filter_columns_set.count(normalize_column_path(curr_path, case_sensitive_names)) == 0) {
-      valid_payload_columns.push_back(curr_path);
-    }
+    if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
   };
 
   if (not filter_column_names->empty()) {
@@ -683,21 +686,15 @@ named_to_reference_converter::named_to_reference_converter(
 {
   if (!expr.has_value()) { return; }
 
-  _case_sensitive_names = case_sensitive_names;
-
   _column_indices_to_names = cudf::io::parquet::detail::map_column_indices_to_names(
     options, schema_tree, case_sensitive_names);
 
   // Map column names to their indices
-  std::transform(
-    metadata.schema_info.cbegin(),
-    metadata.schema_info.cend(),
-    cuda::counting_iterator<std::size_t>{0},
-    std::inserter(_column_name_to_index, _column_name_to_index.end()),
-    [&](auto const& sch, auto index) {
-      return std::make_pair(
-        cudf::io::parquet::detail::normalize_column_path(sch.name, case_sensitive_names), index);
-    });
+  _column_name_to_index =
+    cudf::io::parquet::detail::make_column_path_map<cudf::size_type>(case_sensitive_names);
+  for (cudf::size_type index = 0; auto const& sch : metadata.schema_info) {
+    _column_name_to_index.insert({sch.name, index++});
+  }
 
   expr.value().get().accept(*this);
 }

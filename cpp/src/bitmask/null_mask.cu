@@ -496,6 +496,7 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
     dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
   count_set_bits_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
     d_bitmasks, start, stop - 1, d_non_zero_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // Use pinned memory to copy the result back to the host, then copy again to the output vector.
   auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
@@ -808,6 +809,7 @@ size_type index_of_first_set_bit(bitmask_type const* bitmask,
   find_first_set_bit_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       bitmask, start, stop, bit_count, d_index.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   return d_index.value(stream);
 }
 

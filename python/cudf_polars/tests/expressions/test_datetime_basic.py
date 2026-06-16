@@ -387,6 +387,43 @@ def test_datetime_from_integer(engine: pl.GPUEngine, datetime_dtype, integer_dty
 
 
 @pytest.mark.parametrize(
+    "dtype", [pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("every", ["1ns", "1us", "1ms", "1s", "1m", "1h", "1d"])
+def test_datetime_truncate(engine: pl.GPUEngine, dtype, every):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "3h14m15s11ms33us999ns",
+                eager=True,
+            ).cast(dtype)
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("every", ["30m", "1mo"])
+def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "30m",
+                eager=True,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
     "datetime_dtype",
     [
         pl.Datetime("ms"),

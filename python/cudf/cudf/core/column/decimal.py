@@ -6,7 +6,7 @@ from __future__ import annotations
 import warnings
 from decimal import Decimal
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pyarrow as pa
@@ -19,11 +19,6 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.dtype.validators import (
-    is_dtype_obj_decimal32,
-    is_dtype_obj_decimal64,
-    is_dtype_obj_decimal128,
-)
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -39,7 +34,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     import pandas as pd
 
@@ -58,11 +53,10 @@ def _to_plc_scalar(scalar: int | Decimal, dtype: DecimalDtype) -> plc.Scalar:
     return pa_scalar_to_plc_scalar(pa_scalar)
 
 
-class DecimalBaseColumn(NumericalBaseColumn):
+class DecimalColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-    _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
 
     @cached_property
     def scale(self) -> int:
@@ -115,7 +109,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_decimal_column(
         self,
         dtype: DecimalDtype,
-    ) -> DecimalBaseColumn:
+    ) -> DecimalColumn:
         if isinstance(dtype, DecimalDtype) and dtype.scale < self.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
@@ -194,7 +188,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     type(self.dtype)(self.dtype.MAX_PRECISION, 0)  # type: ignore[call-overload, union-attr]
                 )
             elif not isinstance(self.dtype, other.dtype.__class__):
-                # This branch occurs if we have a DecimalBaseColumn of a
+                # This branch occurs if we have a DecimalColumn of a
                 # different size (e.g. 64 instead of 32).
                 if (
                     self.precision == other.dtype.precision  # type: ignore[union-attr]
@@ -324,35 +318,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> pd.Index:
         col = self
         if version.parse(pa.__version__) < version.parse("20") and isinstance(
-            col, (Decimal32Column, Decimal64Column)
+            col.dtype, (Decimal32Dtype, Decimal64Dtype)
         ):
             col = cast(
-                "Decimal128Column",
+                "DecimalColumn",
                 self.astype(
-                    cudf.Decimal128Dtype(
+                    Decimal128Dtype(
                         self.precision,
                         self.scale,
                     )
                 ),
             )
-        return super(DecimalBaseColumn, col).to_pandas(
+        return super(DecimalColumn, col).to_pandas(
             nullable=nullable, arrow_type=arrow_type
         )
-
-
-class Decimal32Column(DecimalBaseColumn):
-    _decimal_cls = Decimal32Dtype
-    _decimal_type_check = is_dtype_obj_decimal32
-
-
-class Decimal64Column(DecimalBaseColumn):
-    _decimal_cls = Decimal64Dtype
-    _decimal_type_check = is_dtype_obj_decimal64
-
-
-class Decimal128Column(DecimalBaseColumn):
-    _decimal_cls = Decimal128Dtype
-    _decimal_type_check = is_dtype_obj_decimal128
 
 
 def _get_decimal_type(

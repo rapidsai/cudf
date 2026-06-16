@@ -21,7 +21,6 @@ from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
-from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint  # noqa: F401, deprecated
 from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
@@ -42,7 +41,6 @@ __all__ = [
     "mixed_left_anti_join",
     "mixed_left_join",
     "mixed_left_semi_join",
-    "SetAsBuildTable",
 ]
 
 cdef Column _column_from_gather_map(

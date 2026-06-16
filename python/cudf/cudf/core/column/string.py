@@ -54,7 +54,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.decimal import DecimalBaseColumn
+    from cudf.core.column.decimal import DecimalColumn
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
@@ -366,7 +366,7 @@ class StringColumn(ColumnBase, Scannable):
         format = _infer_timedelta_format(self)
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         with self.access(mode="read", scope="internal"):
             plc_column = (
                 plc.strings.convert.convert_fixed_point.to_fixed_point(
@@ -375,7 +375,7 @@ class StringColumn(ColumnBase, Scannable):
                 )
             )
             return cast(
-                "cudf.core.column.decimal.DecimalBaseColumn",
+                "cudf.core.column.decimal.DecimalColumn",
                 ColumnBase.create(plc_column, dtype),
             )
 
@@ -974,14 +974,6 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(plc_column, self.dtype),
             )
-
-    def _modify_characters(
-        self, method: Callable[[plc.Column], plc.Column]
-    ) -> Self:
-        """Helper function for methods that modify characters e.g. to_lower"""
-        with self.access(mode="read", scope="internal"):
-            plc_column = method(self.plc_column)
-            return cast(Self, ColumnBase.create(plc_column, self.dtype))
 
     def to_lower(self) -> Self:
         result = cast(

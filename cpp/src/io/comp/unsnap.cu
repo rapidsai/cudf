@@ -713,14 +713,17 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<codec_exec_result> results,
                 rmm::cuda_stream_view stream)
 {
+  if (inputs.empty()) { return; }
+
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
   unsnap_kernel_no_racecheck<128>
     <<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
-__global__ void get_snappy_uncompressed_size_kernel(
+CUDF_KERNEL void get_snappy_uncompressed_size_kernel(
   device_span<device_span<uint8_t const> const> inputs, device_span<size_t> uncompressed_sizes)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
@@ -750,12 +753,15 @@ void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> 
                                   device_span<size_t> uncompressed_sizes,
                                   rmm::cuda_stream_view stream)
 {
+  if (inputs.empty()) { return; }
+
   int threads_per_block = 128;
   auto const num_blocks =
     cudf::util::div_rounding_up_safe<size_t>(inputs.size(), threads_per_block);
 
   get_snappy_uncompressed_size_kernel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
     inputs, uncompressed_sizes);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::detail
