@@ -396,7 +396,8 @@ ConfigureNVBench(
 # * transform benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
-  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp
+  transform/polynomials_concurrent.cpp transform/transform.cpp
 )
 
 # ##################################################################################################
