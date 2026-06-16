@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import re
 import warnings
 from typing import TYPE_CHECKING, Literal, cast, overload
@@ -28,6 +29,8 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
 )
 
+re_parser = importlib.import_module("re._parser")
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -42,6 +45,57 @@ def _is_supported_regex_flags(flags: int) -> bool:
     return flags == 0 or (
         (flags & all_flags) != 0 and (flags & ~all_flags) == 0
     )
+
+
+def _replace_unescaped_dollar_with_end_anchor(pat: str) -> str:
+    parts: list[str] = []
+    escaped = False
+    in_character_class = False
+    for char in pat:
+        if escaped:
+            parts.append(char)
+            escaped = False
+        elif char == "\\":
+            parts.append(char)
+            escaped = True
+        elif char == "[":
+            parts.append(char)
+            in_character_class = True
+        elif char == "]":
+            parts.append(char)
+            in_character_class = False
+        elif char == "$" and not in_character_class:
+            parts.append(r"\Z")
+        else:
+            parts.append(char)
+    return "".join(parts)
+
+
+def _normalize_pyarrow_replacement_backrefs(pat: str, repl: str) -> str:
+    group_count = re.compile(pat).groups
+    normalized_parts: list[str] = []
+    index = 0
+
+    for match in re.finditer(r"\\([1-9][0-9]*)", repl):
+        normalized_parts.append(repl[index : match.start()])
+        digits = match.group(1)
+        group_number = int(digits)
+        if group_number <= group_count:
+            normalized_parts.append(rf"${{{group_number}}}")
+        elif len(digits) > 1:
+            ambiguous_group_number = int(digits[0])
+            if ambiguous_group_number <= group_count:
+                normalized_parts.append(
+                    rf"${{{ambiguous_group_number}}}{digits[1:]}"
+                )
+            else:
+                normalized_parts.append(match.group(0))
+        else:
+            normalized_parts.append(match.group(0))
+        index = match.end()
+
+    normalized_parts.append(repl[index:])
+    return "".join(normalized_parts)
 
 
 def _massage_string_arg(
@@ -71,6 +125,28 @@ def _massage_string_arg(
     raise ValueError(f"Expected {expected} for {name} but got {type(value)}")
 
 
+def _optional_capture_groups(pat: str, flags: int) -> set[int]:
+    optional_groups = set()
+
+    def collect(subpattern, optional: bool) -> None:
+        for op, args in subpattern:
+            if op is re_parser.SUBPATTERN:
+                group_number, _, _, nested = args
+                if group_number is not None and optional:
+                    optional_groups.add(group_number - 1)
+                collect(nested, optional)
+            elif op in (re_parser.MAX_REPEAT, re_parser.MIN_REPEAT):
+                min_repeat, _, nested = args
+                collect(nested, optional or min_repeat == 0)
+            elif op is re_parser.BRANCH:
+                _, branches = args
+                for branch in branches:
+                    collect(branch, optional)
+
+    collect(re_parser.parse(pat, flags), False)
+    return optional_groups
+
+
 class StringMethods(BaseAccessor):
     """
     Vectorized string functions for Series and Index.
@@ -82,6 +158,85 @@ class StringMethods(BaseAccessor):
     """
 
     _column: StringColumn
+
+    def _is_empty_pandas_string_input(self) -> bool:
+        return len(self._column) == 0 and isinstance(
+            self._column.dtype, pd.StringDtype
+        )
+
+    def _empty_pandas_string_result(self, dtype) -> Series | Index:
+        return self._return_or_inplace(column_empty(0, dtype=dtype))
+
+    def _return_pandas_string_nullable_result(
+        self,
+        result_col: ColumnBase,
+        target_dtype,
+    ) -> Series | Index:
+        if not isinstance(self._column.dtype, pd.StringDtype):
+            return self._return_or_inplace(result_col)
+        if self._is_empty_pandas_string_input():
+            if self._column.dtype == np.dtype("object"):
+                if target_dtype == pd.Int64Dtype():
+                    return self._empty_pandas_string_result(np.dtype(np.int64))
+                if target_dtype == pd.BooleanDtype():
+                    return self._empty_pandas_string_result(np.dtype(np.bool_))
+            elif (
+                isinstance(self._column.dtype, pd.StringDtype)
+                and self._column.dtype.na_value is np.nan
+            ):
+                if target_dtype == pd.Int64Dtype():
+                    return self._empty_pandas_string_result(np.dtype(np.int64))
+                if target_dtype == pd.BooleanDtype():
+                    return self._empty_pandas_string_result(np.dtype(np.bool_))
+            return self._empty_pandas_string_result(target_dtype)
+        if target_dtype == pd.Int64Dtype():
+            if self._column.dtype == np.dtype("object"):
+                return self._return_or_inplace(
+                    result_col.astype(np.dtype("float64"))
+                )
+            result_col = result_col.astype(target_dtype)
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.na_value is pd.NA
+        ):
+            result_col = result_col.astype(target_dtype)
+        if self._column.dtype == np.dtype("object"):
+            if target_dtype == pd.BooleanDtype():
+                return self._return_or_inplace(
+                    result_col.astype(np.dtype("object"))
+                )
+        return self._return_or_inplace(result_col)
+
+    def _return_pandas_string_int_result(
+        self, result_col: ColumnBase
+    ) -> Series | Index:
+        return self._return_pandas_string_nullable_result(
+            result_col, pd.Int64Dtype()
+        )
+
+    def _return_pandas_string_bool_result(
+        self, result_col: ColumnBase
+    ) -> Series | Index:
+        return self._return_pandas_string_nullable_result(
+            result_col, pd.BooleanDtype()
+        )
+
+    def _return_pandas_string_object_result(
+        self, result_col: ColumnBase | dict[int, StringColumn]
+    ) -> Series | Index:
+        if not isinstance(self._column.dtype, pd.StringDtype):
+            return self._return_or_inplace(result_col)
+        if isinstance(result_col, dict):
+            return self._return_or_inplace(result_col)
+        if self._is_empty_pandas_string_input():
+            return self._empty_pandas_string_result(np.dtype("object"))
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+            and self._column.dtype.na_value is pd.NA
+        ):
+            return self._return_or_inplace(result_col)
+        return self._return_or_inplace(result_col)
 
     def __init__(self, parent: Series | Index):
         value_type = (
@@ -184,9 +339,11 @@ class StringMethods(BaseAccessor):
         1       0
         2       1
         3    <NA>
-        dtype: int32
+        dtype: ...
         """
-        return self._return_or_inplace(self._column.count_characters())
+        return self._return_pandas_string_int_result(
+            self._column.count_characters()
+        )
 
     def byte_count(self) -> Series | Index:
         """
@@ -207,13 +364,13 @@ class StringMethods(BaseAccessor):
         0    3
         1    1
         2    2
-        dtype: int32
+        dtype: ...
         >>> s = cudf.Series(["Hello", "Bye", "Thanks 😊"])
         >>> s.str.byte_count()
         0     5
         1     3
         2    11
-        dtype: int32
+        dtype: ...
         """
         return self._return_or_inplace(self._column.count_bytes())
 
@@ -627,21 +784,39 @@ class StringMethods(BaseAccessor):
             )
 
         compiled = re.compile(pat)
-        group_names = list(compiled.groupindex.keys())
-        if len(group_names) > 0:
+        if isinstance(self._parent, cudf.Index):
+            if expand is False and compiled.groups > 1:
+                raise ValueError(
+                    "only one regex group is supported with Index"
+                )
+            return cudf.Series._from_column(self._column).str.extract(
+                pat, flags=flags, expand=expand
+            )
+        group_names: list[str | int] = list(range(compiled.groups))
+        for name, group_number in compiled.groupindex.items():
+            group_names[group_number - 1] = name
+        optional_groups = _optional_capture_groups(pat, flags)
+        if compiled.groupindex:
             pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         data = self._column.extract(pat, flags)
+        for key in optional_groups & data.keys():
+            mask = (data[key] != "").fillna(False)
+            mask_buffer, null_count = mask.as_mask()
+            data[key] = data[key].set_mask(mask_buffer, null_count)
         result_name = None
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
-            if len(group_names) > 0:
-                result_name = group_names[0]
+            result_name = (
+                group_names[0] if isinstance(group_names[0], str) else None
+            )
         elif expand is False and len(data) > 1:
             expand = True
-        if len(group_names) == len(data):
-            named_data = {}
-            for key, value in data.items():
-                named_data[group_names[key]] = value
+        if isinstance(data, dict) and any(
+            isinstance(name, str) for name in group_names
+        ):
+            named_data: dict[str | int, ColumnBase] = {
+                group_names[key]: value for key, value in data.items()
+            }
             data = named_data  # type: ignore[assignment]
         return self._return_or_inplace(
             data, expand=expand, replace_name=result_name
@@ -815,22 +990,27 @@ class StringMethods(BaseAccessor):
                 result_col = input_column.str_contains(pat_normed)
         else:
             # TODO: we silently ignore the `regex=` flag here
-            col_pat = as_column(pat, dtype=DEFAULT_STRING_DTYPE)
+            col_pat = cast(
+                "StringColumn", as_column(pat, dtype=DEFAULT_STRING_DTYPE)
+            )
             if case is False:
                 input_column = self._column.to_lower()
-                col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
+                col_pat = col_pat.to_lower()
             else:
                 input_column = self._column
-            result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+            result_col = input_column.str_contains(col_pat)
+        bool_result_col = cast("ColumnBase", result_col)
         if (
             na is no_default
             and self._column._PANDAS_NA_VALUE in {np.nan, None}
             and self._column.has_nulls()
         ):
-            result_col = result_col.fillna(False)
+            bool_result_col = bool_result_col.fillna(False)
         if na is not no_default:
-            result_col = result_col.fillna(na)
-        return self._return_or_inplace(result_col)
+            bool_result_col = bool_result_col.fillna(na)
+        if self._is_empty_pandas_string_input():
+            return self._return_pandas_string_bool_result(bool_result_col)
+        return self._return_or_inplace(bool_result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
         """
@@ -1050,6 +1230,22 @@ class StringMethods(BaseAccessor):
 
         if not isinstance(repl, str):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
+
+        if (
+            regex is True
+            and getattr(self._column.dtype, "storage", None) == "pyarrow"
+            and isinstance(pat, str)
+        ):
+            pat = self._remove_named_capture_groups(pat)
+            pat = _replace_unescaped_dollar_with_end_anchor(pat)
+            normalized_repl = _normalize_pyarrow_replacement_backrefs(
+                pat, repl
+            )
+            if normalized_repl != repl or re.search(r"\\[1-9]", repl):
+                result = self._column.replace_with_backrefs(
+                    pat, normalized_repl
+                )
+                return self._return_or_inplace(result)
 
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 0:
@@ -1425,10 +1621,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.DECIMAL
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isalnum(self) -> Series | Index:
@@ -1500,10 +1697,11 @@ class StringMethods(BaseAccessor):
         2    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.ALPHANUM
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isalpha(self) -> Series | Index:
@@ -1562,10 +1760,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.ALPHA
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isdigit(self) -> Series | Index:
@@ -1630,10 +1829,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.DIGIT
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isnumeric(self) -> Series | Index:
@@ -1704,10 +1904,11 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.NUMERIC
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isupper(self) -> Series | Index:
@@ -1767,11 +1968,12 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.UPPER,
                 plc.strings.char_types.StringCharacterTypes.CASE_TYPES,
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def islower(self) -> Series | Index:
@@ -1831,11 +2033,12 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.LOWER,
                 plc.strings.char_types.StringCharacterTypes.CASE_TYPES,
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def isipv4(self) -> Series | Index:
@@ -2100,7 +2303,9 @@ class StringMethods(BaseAccessor):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(self._column.is_title())
+        return self._return_pandas_string_nullable_result(
+            self._column.is_title(), pd.BooleanDtype()
+        )
 
     def filter_alphanum(
         self, repl: str | None = None, keep: bool = True
@@ -2645,6 +2850,8 @@ class StringMethods(BaseAccessor):
                     n,
                 )
 
+        if not expand:
+            return self._return_pandas_string_object_result(result_table)
         return self._return_or_inplace(result_table, expand=expand)
 
     def rsplit(
@@ -2824,6 +3031,8 @@ class StringMethods(BaseAccessor):
                     n,
                 )
 
+        if not expand:
+            return self._return_pandas_string_object_result(result_table)
         return self._return_or_inplace(result_table, expand=expand)
 
     def split_part(
@@ -3600,7 +3809,7 @@ class StringMethods(BaseAccessor):
         4    <NA>
         5       0
         6       1
-        dtype: int32
+        dtype: ...
 
         Escape ``'$'`` to find the literal dollar sign.
 
@@ -3612,13 +3821,13 @@ class StringMethods(BaseAccessor):
         3    2
         4    2
         5    0
-        dtype: int32
+        dtype: ...
 
         This is also available on Index.
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Index([0, 0, 2, 1], dtype='int32')
+        Index([0, 0, 2, 1], dtype='...')
 
         .. pandas-compat::
             :meth:`pandas.Series.str.count`
@@ -3637,7 +3846,10 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)
-        return self._return_or_inplace(self._column.count_re(pat, flags))
+        result_col = self._column.count_re(pat, flags)
+        if isinstance(self._column.dtype, pd.StringDtype):
+            return self._return_pandas_string_int_result(result_col)
+        return self._return_or_inplace(result_col)
 
     def _findall(
         self,
@@ -3655,7 +3867,7 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
-        return self._return_or_inplace(
+        return self._return_pandas_string_object_result(
             self._column.findall(method, pat, flags)
         )
 
@@ -3753,7 +3965,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2    4
         3    2
-        dtype: int32
+        dtype: ...
         """
         return self._findall(plc.strings.findall.find_re, pat, flags)
 
@@ -3910,10 +4122,11 @@ class StringMethods(BaseAccessor):
         2    False
         dtype: bool
         """
-        return self._return_or_inplace(
+        return self._return_pandas_string_nullable_result(
             self._column.all_characters_of_type(
                 plc.strings.char_types.StringCharacterTypes.SPACE
-            )
+            ),
+            pd.BooleanDtype(),
         )
 
     def _starts_ends_with(
@@ -3921,9 +4134,10 @@ class StringMethods(BaseAccessor):
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
         pat: str | tuple[str, ...],
     ) -> Series | Index:
-        return self._return_or_inplace(
-            self._column.starts_ends_with(method, pat)
-        )
+        result_col = self._column.starts_ends_with(method, pat)
+        if self._is_empty_pandas_string_input():
+            return self._return_pandas_string_bool_result(result_col)
+        return self._return_or_inplace(result_col)
 
     def endswith(self, pat: str | tuple[str, ...]) -> Series | Index:
         """
@@ -4102,8 +4316,8 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        return self._return_or_inplace(
-            self._column.find(method, sub, start, end)
+        return self._return_pandas_string_nullable_result(
+            self._column.find(method, sub, start, end), pd.Int64Dtype()
         )
 
     def find(
@@ -4138,7 +4352,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2    0
         3    2
-        dtype: int64
+        dtype: ...
 
         Parameters such as `start` and `end` can also be used.
 
@@ -4147,7 +4361,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2   -1
         3    2
-        dtype: int64
+        dtype: ...
         """
         return self._find(plc.strings.find.find, sub, start, end)
 
@@ -4188,7 +4402,7 @@ class StringMethods(BaseAccessor):
         0    0
         1   -1
         2    7
-        dtype: int64
+        dtype: ...
 
         Using `start` and `end` parameters.
 
@@ -4196,7 +4410,7 @@ class StringMethods(BaseAccessor):
         0   -1
         1   -1
         2   -1
-        dtype: int64
+        dtype: ...
         """
         return self._find(plc.strings.find.rfind, sub, start, end)
 
@@ -4388,11 +4602,46 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)
+        pyarrow_string_dtype = (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.storage == "pyarrow"
+        )
+        input_dtype = self._column.dtype
+        pyarrow_nullable_string_dtype = (
+            isinstance(input_dtype, pd.StringDtype)
+            and input_dtype.storage == "pyarrow"
+            and input_dtype.na_value is pd.NA
+        )
+        if pyarrow_string_dtype:
+            pat = _replace_unescaped_dollar_with_end_anchor(pat)
         result = self._column.matches_re(pat, flags)
+        if (
+            na is no_default
+            and self._column._PANDAS_NA_VALUE is None
+            and self._column.has_nulls()
+        ):
+            result_index = (
+                self._parent.index.to_pandas()
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            result_name = (
+                self._parent.name
+                if isinstance(self._parent, cudf.Series)
+                else None
+            )
+            return cast(
+                "Series | Index",
+                pd.Series(
+                    result.to_pandas(), index=result_index, name=result_name
+                ),
+            )
         if na is not no_default:
             result = result.fillna(na)
-        elif self._column._PANDAS_NA_VALUE in {np.nan, None}:
-            result = result.fillna(False)
+        elif self._column._PANDAS_NA_VALUE is np.nan:
+            result = result.set_mask(None, 0)
+        if pyarrow_nullable_string_dtype:
+            result = cast("StringColumn", result.astype(pd.BooleanDtype()))
         return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:

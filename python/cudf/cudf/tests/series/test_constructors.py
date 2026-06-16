@@ -1138,8 +1138,9 @@ def test_series_arrow_list_types_roundtrip():
 def test_series_error_nan_mixed_types():
     ps = pd.Series([np.nan, "ab", "cd"], dtype=object)
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(MixedTypeError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+    assert gs.dtype == np.dtype("object")
+    assert gs.to_arrow().to_pylist() == [None, "ab", "cd"]
 
 
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])

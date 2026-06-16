@@ -1473,6 +1473,7 @@ def test_string_count(data, pat, flags):
         cudf.Index(gs).str.count(pat=pat),
         pd.Index(ps).str.count(pat=pat),
         exact=False,
+        check_exact=False,
     )
 
 

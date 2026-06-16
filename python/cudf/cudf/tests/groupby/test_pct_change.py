@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import pandas as pd
 import pytest
 
 import cudf
@@ -34,9 +35,6 @@ from cudf.testing import assert_eq
                 "val1": [None, None, None, None, None, None],
             },
             ["id"],
-            marks=pytest.mark.xfail(
-                reason="cuDF null values are None instead of NaN"
-            ),
         ),
     ],
 )
@@ -51,6 +49,12 @@ def test_groupby_pct_change(data, gkey, periods):
     expected = pdf.groupby(gkey).pct_change(
         periods=periods,
     )
+
+    # pandas may return NaN for all-null object columns; cuDF returns None.
+    # Normalize cross-version so assert_eq is not sensitive to this difference.
+    for col in expected.columns:
+        if expected[col].dtype == object and expected[col].isna().all():
+            expected[col] = pd.array([None] * len(expected), dtype=object)
 
     assert_eq(expected, actual)
 

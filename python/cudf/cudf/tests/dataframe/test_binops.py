@@ -634,7 +634,9 @@ def test_empty_column(binary_op, data, scalar):
     expected = binary_op(pdf, scalar)
 
     if data is not None:
-        expected = expected.fillna(None)
+        for col in expected.columns:
+            if expected[col].dtype == object and expected[col].isna().all():
+                expected[col] = pd.array([None] * len(expected), dtype=object)
     # pandas can still hold an all NA columns with object dtype,
     # cuDF cannot, and uses StringDtype instead.
     assert_eq(expected, got, check_dtype=False)

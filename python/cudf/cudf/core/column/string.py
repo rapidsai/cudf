@@ -455,7 +455,19 @@ class StringColumn(ColumnBase, Scannable):
                     nullable=nullable, arrow_type=arrow_type
                 )
             return pd.Index(pandas_array, copy=False)
-        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if (
+            not nullable
+            and not arrow_type
+            and self.dtype == np.dtype("object")
+            and self.has_nulls()
+        ):
+            pa_array = self.to_arrow()
+            np_array = pa_array.to_numpy(zero_copy_only=False, writable=True)
+            null_mask = pa_array.is_null().to_numpy(zero_copy_only=False)
+            np_array[null_mask] = None
+            result = pd.Index(np_array, dtype=object, copy=False)
+        return result
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:

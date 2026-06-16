@@ -3499,11 +3499,20 @@ def as_column(
                 try:
                     pyarrow_array = pa.array(arbitrary, from_pandas=False)
                 except (pa.lib.ArrowInvalid, pa.lib.ArrowTypeError):
+                    if inferred_dtype == "mixed":
+                        pyarrow_array = pa.array(arbitrary, from_pandas=True)
+                        if pa.types.is_string(
+                            pyarrow_array.type
+                        ) or pa.types.is_null(pyarrow_array.type):
+                            pass
+                        else:
+                            pyarrow_array = None
                     # Decimal can hold float("nan")
                     # All np.nan is not restricted by type
-                    raise MixedTypeError(
-                        f"Cannot have NaN with {inferred_dtype}"
-                    )
+                    if pyarrow_array is None:
+                        raise MixedTypeError(
+                            f"Cannot have NaN with {inferred_dtype}"
+                        )
 
             if pyarrow_array is None:
                 pyarrow_array = pa.array(
