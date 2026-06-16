@@ -11,7 +11,6 @@
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <rapidsmpf/error.hpp>
-#include <rapidsmpf/rmm_resource_adaptor.hpp>
 
 #include <string>
 
@@ -40,17 +39,4 @@ inline void set_current_rmm_resource(std::string const& name)
   } else {
     RAPIDSMPF_FAIL("unknown RMM resource name: " + name);
   }
-}
-
-/**
- * @brief Create a statistics-enabled device memory resource wrapping the current
- * device resource, and set it as the current device resource.
- *
- * @return A RmmResourceAdaptor (shared ownership) for accessing statistics.
- */
-[[nodiscard]] inline rapidsmpf::RmmResourceAdaptor set_device_mem_resource_with_stats()
-{
-  rapidsmpf::RmmResourceAdaptor adaptor{rmm::mr::get_current_device_resource_ref()};
-  rmm::mr::set_current_device_resource(adaptor);
-  return adaptor;
 }

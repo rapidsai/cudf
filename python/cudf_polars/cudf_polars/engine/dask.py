@@ -24,7 +24,6 @@ from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
@@ -112,7 +111,7 @@ class _WorkerContext:
     comm: Communicator | None
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
-    mr: RmmResourceAdaptor | None
+    mr: rmm.mr.DeviceMemoryResource | None
 
 
 def _setup_root(
@@ -156,8 +155,7 @@ def _setup_root(
     options = Options.deserialize(rapidsmpf_options_as_bytes)
     bind_to_gpu(hardware_binding)
     memory_resource_config = memory_resource_config or MemoryResourceConfig.default()
-    base_mr = memory_resource_config.create_memory_resource()
-    mr = RmmResourceAdaptor(base_mr)
+    mr = memory_resource_config.create_memory_resource()
     comm = new_communicator(
         nranks=nranks,
         ucx_worker=None,
@@ -223,8 +221,7 @@ def _setup_worker(
         memory_resource_config = (
             memory_resource_config or MemoryResourceConfig.default()
         )
-        base_mr = memory_resource_config.create_memory_resource()
-        mr = RmmResourceAdaptor(base_mr)
+        mr = memory_resource_config.create_memory_resource()
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
             nranks=nranks,
@@ -235,8 +232,9 @@ def _setup_worker(
         )
     else:
         # Root worker: comm and mr were created in _setup_root.
-        mr = mp_ctx.mr
+        assert mp_ctx.mr is not None
         assert mp_ctx.comm is not None
+        mr = mp_ctx.mr
         comm = mp_ctx.comm
 
     barrier(comm)

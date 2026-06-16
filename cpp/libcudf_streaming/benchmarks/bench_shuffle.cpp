@@ -493,7 +493,6 @@ int main(int argc, char** argv)
   rapidsmpf::config::Options options{rapidsmpf::config::get_environment_variables()};
 
   set_current_rmm_resource(args.rmm_mr);
-  rapidsmpf::RmmResourceAdaptor stat_enabled_mr = set_device_mem_resource_with_stats();
 
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
@@ -505,13 +504,19 @@ int main(int argc, char** argv)
   // We're only going to measure the last run, so disable initially.
   stats->disable();
   auto br = rapidsmpf::BufferResource::create(
-    stat_enabled_mr,
+    rmm::mr::get_current_device_resource_ref(),
     args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
                             : rapidsmpf::PinnedMemoryResource::make_if_available(),
     std::move(memory_limits),
     std::chrono::milliseconds{1},
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
     stats);
+  // `BufferResource` wraps the device resource in an internal tracking
+  // `RmmResourceAdaptor` (exposed via `device_mr_adaptor()`). Install the
+  // tracking adaptor as the current device resource so libcudf temporary
+  // allocations are also tracked.
+  auto& stat_enabled_mr = br->device_mr_adaptor();
+  rmm::mr::set_current_device_resource(stat_enabled_mr);
 
   std::shared_ptr<rapidsmpf::Communicator> comm;
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>(stats);
