@@ -207,10 +207,6 @@ async def shutdown_on_error(
             )
 
 
-def _ordering_column_indices(ordering: Ordering) -> tuple[int, ...]:
-    return tuple(k.column_index for k in ordering.keys)
-
-
 def _update_ordering_indices(
     ordering: Ordering, new_indices: tuple[int, ...]
 ) -> Ordering:
@@ -245,7 +241,7 @@ def _remap_scheme_select(
         new_orderings: list[Ordering] = []
         for ordering in scheme.orderings:
             old_key_names = indices_to_names(
-                _ordering_column_indices(ordering), select.children[0].schema
+                ordering.column_indices, select.children[0].schema
             )
             if set(old_key_names).issubset(set(old_to_new_names)):
                 new_indices = names_to_indices(
@@ -273,9 +269,7 @@ def _remap_scheme_simple(
     if isinstance(scheme, OrderScheme):
         new_orderings: list[Ordering] = []
         for ordering in scheme.orderings:
-            old_key_names = indices_to_names(
-                _ordering_column_indices(ordering), child.schema
-            )
+            old_key_names = indices_to_names(ordering.column_indices, child.schema)
             try:
                 new_indices = names_to_indices(old_key_names, ir.schema)
             except (ValueError, IndexError):

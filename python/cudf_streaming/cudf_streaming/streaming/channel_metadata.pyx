@@ -160,6 +160,13 @@ cdef class Ordering:
         return tuple(OrderKey.from_cpp(self._handle.keys[i]) for i in range(n))
 
     @property
+    def column_indices(self) -> tuple:
+        """Column indices for the ordering keys."""
+        cdef int i
+        cdef int n = self._handle.keys.size()
+        return tuple(self._handle.keys[i].column_index for i in range(n))
+
+    @property
     def strict_boundaries(self) -> bool:
         """Whether chunks are strictly aligned to boundary ranges."""
         return self._handle.strict_boundaries

@@ -108,6 +108,7 @@ def test_order_scheme(context: Context) -> None:
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     )
+    assert ordering.column_indices == (0, 1)
     assert not ordering.strict_boundaries
     assert ordering.num_boundaries == 1
     assert "OrderScheme" in repr(o1)
