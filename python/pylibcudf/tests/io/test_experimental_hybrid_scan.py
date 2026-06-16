@@ -3,9 +3,12 @@
 import io
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
-from utils import synchronize_stream
+from utils import (
+    extract_parquet_footer,
+    synchronize_stream,
+    write_hybrid_scan_parquet_bytes,
+)
 
 import rmm
 from rmm.pylibrmm.stream import Stream
@@ -30,12 +33,6 @@ def num_rows():
 
 
 @pytest.fixture(scope="module")
-def row_group_size():
-    """Row group size for parquet files."""
-    return 250
-
-
-@pytest.fixture(scope="module")
 def num_row_groups(num_rows, row_group_size):
     """Number of row groups in the test parquet file."""
     return num_rows // row_group_size
@@ -55,16 +52,9 @@ def simple_parquet_table(num_rows):
 @pytest.fixture(scope="module")
 def simple_parquet_bytes(simple_parquet_table, row_group_size):
     """Create parquet bytes from the simple table."""
-    buf = io.BytesIO()
-    pq.write_table(
-        simple_parquet_table,
-        buf,
-        row_group_size=row_group_size,
-        use_dictionary=True,
-        write_statistics=True,
-        write_page_index=True,
+    return write_hybrid_scan_parquet_bytes(
+        simple_parquet_table, row_group_size
     )
-    return buf.getvalue()
 
 
 @pytest.fixture
@@ -86,23 +76,7 @@ def simple_hybrid_scan_reader(simple_parquet_bytes, simple_parquet_options):
     Note: This is function-scoped (not module-scoped) because it depends on
     the function-scoped simple_parquet_options fixture.
     """
-    # Extract footer bytes from the parquet file
-    # According to Parquet file format specification:
-    # https://parquet.apache.org/docs/file-format/
-    PARQUET_FOOTER_SIZE_BYTES = 4  # Number of bytes encoding footer length
-    PARQUET_MAGIC_BYTES = 4  # Number of bytes for "PAR1" magic number
-    PARQUET_SUFFIX_BYTES = PARQUET_FOOTER_SIZE_BYTES + PARQUET_MAGIC_BYTES
-
-    simple_parquet_mv = memoryview(simple_parquet_bytes)
-
-    footer_size = int.from_bytes(
-        simple_parquet_mv[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
-        byteorder="little",
-    )
-    footer_start = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES - footer_size
-    footer_end = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES
-    footer_mv = simple_parquet_mv[footer_start:footer_end]
-
+    footer_mv = extract_parquet_footer(simple_parquet_bytes)
     return HybridScanReader(footer_mv, simple_parquet_options)
 
 
