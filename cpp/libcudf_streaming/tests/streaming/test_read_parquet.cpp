@@ -170,7 +170,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
   if (num_rows.has_value()) { options.set_num_rows(num_rows.value()); }
   auto filter_expr = [&]() -> std::unique_ptr<Filter> {
     if (!use_filter) { return nullptr; }
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
     auto owner  = new std::vector<std::any>;
     owner->push_back(std::make_shared<cudf::numeric_scalar<std::int32_t>>(15, true, stream));
     owner->push_back(std::make_shared<cudf::ast::literal>(

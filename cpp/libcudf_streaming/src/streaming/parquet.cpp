@@ -257,7 +257,7 @@ rapidsmpf::streaming::Actor produce_chunks(
     chunk_options.set_skip_rows(chunk.skip_rows);
     chunk_options.set_num_rows(chunk.num_rows);
     chunk_options.set_source(chunk.source);
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
     auto ticket = co_await ch_out->acquire();
     if (!ticket.has_value()) {
       // Semaphore (and hence output channel) shutdown
@@ -321,8 +321,8 @@ rapidsmpf::streaming::Actor read_parquet(std::shared_ptr<rapidsmpf::streaming::C
     // deps in the tasks
     rapidsmpf::cuda_stream_join(
       std::ranges::transform_view(
-        std::ranges::iota_view(std::size_t{0}, ctx->br()->stream_pool().get_pool_size()),
-        [&](auto i) { return ctx->br()->stream_pool().get_stream(i); }),
+        std::ranges::iota_view(std::size_t{0}, ctx->br()->stream_pool()->get_pool_size()),
+        [&](auto i) { return ctx->br()->stream_pool()->get_stream(i); }),
       std::ranges::single_view(filter->stream));
   }
   // TODO: Handle case where multiple ranks are reading from a single file.
@@ -381,7 +381,7 @@ rapidsmpf::streaming::Actor read_parquet(std::shared_ptr<rapidsmpf::streaming::C
       empty_opts.set_skip_rows(0);
       empty_opts.set_num_rows(0);
       co_await ctx->executor()->schedule(ch_out->send(
-        read_parquet_chunk(ctx, ctx->br()->stream_pool().get_stream(), std::move(empty_opts), 0)));
+        read_parquet_chunk(ctx, ctx->br()->stream_pool()->get_stream(), std::move(empty_opts), 0)));
     }
   } else {
     std::vector<rapidsmpf::streaming::Actor> read_tasks;
@@ -401,8 +401,8 @@ rapidsmpf::streaming::Actor read_parquet(std::shared_ptr<rapidsmpf::streaming::C
     rapidsmpf::cuda_stream_join(
       std::ranges::single_view(filter->stream),
       std::ranges::transform_view(
-        std::ranges::iota_view(std::size_t{0}, ctx->br()->stream_pool().get_pool_size()),
-        [&](auto i) { return ctx->br()->stream_pool().get_stream(i); }));
+        std::ranges::iota_view(std::size_t{0}, ctx->br()->stream_pool()->get_pool_size()),
+        [&](auto i) { return ctx->br()->stream_pool()->get_stream(i); }));
   }
 }
 }  // namespace cudf_streaming::streaming::actor

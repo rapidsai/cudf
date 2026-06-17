@@ -110,7 +110,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
                    })
                    .build();
 
-  auto stream = ctx->br()->stream_pool().get_stream();
+  auto stream = ctx->br()->stream_pool()->get_stream();
   // 1993-07-01 <= o_orderdate < 1993-10-01
   constexpr auto start_date = cuda::std::chrono::year_month_day(
     cuda::std::chrono::year(1993), cuda::std::chrono::month(7), cuda::std::chrono::day(1));

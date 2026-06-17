@@ -58,7 +58,7 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
   if (comm->nranks() == 1) {
     std::vector<cudf_streaming::streaming::TableChunk> chunks;
     std::vector<cudf::table_view> views;
-    auto gather_stream = ctx->br()->stream_pool().get_stream();
+    auto gather_stream = ctx->br()->stream_pool()->get_stream();
     while (true) {
       auto msg = co_await ch_in->receive();
       if (msg.empty()) { break; }
@@ -103,7 +103,7 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
                            std::make_unique<cudf_streaming::streaming::TableChunk>(
                              std::make_unique<PackedData>(std::move(result[0]))));
     } else {
-      auto stream = ctx->br()->stream_pool().get_stream();
+      auto stream = ctx->br()->stream_pool()->get_stream();
       co_return to_message(
         0,
         std::make_unique<cudf_streaming::streaming::TableChunk>(
@@ -502,7 +502,7 @@ streaming::Actor shuffle(std::shared_ptr<streaming::Context> ctx,
   co_await shuffler.insert_finished();
   for (auto pid : shuffler.local_partitions()) {
     auto packed_data = shuffler.extract(pid);
-    auto stream      = ctx->br()->stream_pool().get_stream();
+    auto stream      = ctx->br()->stream_pool()->get_stream();
     co_await ch_out->send(to_message(
       pid,
       std::make_unique<cudf_streaming::streaming::TableChunk>(

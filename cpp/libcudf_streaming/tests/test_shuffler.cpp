@@ -407,7 +407,7 @@ TEST(Shuffler, concurrent_wait)
             static_cast<std::int32_t>(total_num_partitions),
             hash_fn,
             seed,
-            br->stream_pool().get_stream(),
+            br->stream_pool()->get_stream(),
             br.get(),
             rapidsmpf::AllowOverbooking::YES));
         }));

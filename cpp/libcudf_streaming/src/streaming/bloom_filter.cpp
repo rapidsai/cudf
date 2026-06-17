@@ -32,7 +32,7 @@ rapidsmpf::streaming::Actor BloomFilter::build(
   co_await ch_out->shutdown_metadata();
   auto const& br     = ctx_->br();
   auto mr            = br->device_mr();
-  auto filter_stream = br->stream_pool().get_stream();
+  auto filter_stream = br->stream_pool()->get_stream();
   rapidsmpf::CudaEvent event;
   auto storage =
     cudf_streaming::integrations::BloomFilter::storage(num_filter_blocks_, filter_stream, mr);
