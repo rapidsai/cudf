@@ -351,13 +351,38 @@ def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
-    scan_fn, with_columns, source_type, predicate, nrows = node.options
-    options = (scan_fn, with_columns, source_type, nrows)
-    predicate = (
-        translate_named_expr(translator, n=predicate, schema=schema)
-        if predicate is not None
-        else None
-    )
+    scan_fn, with_columns, source_type, raw_predicate, nrows = node.options
+    if source_type != "io_plugin":
+        # cudf-polars supports register_io_source plugins (and pl.defer), which
+        # report source_type "io_plugin". Other sources, notably pyarrow-dataset
+        # scans ("pyarrow"), are not supported and fall back to the CPU engine.
+        raise NotImplementedError(
+            f"Unsupported PythonScan source type: {source_type!r}"
+        )
+    if nrows is not None:
+        # A global row limit cannot be enforced independently per rank; tracked
+        # in https://github.com/rapidsai/cudf/issues/22918.
+        raise NotImplementedError(
+            "A row limit (head/limit) on a PythonScan source is not supported."
+        )
+    options = (scan_fn, with_columns, source_type)
+    if raw_predicate is None:
+        predicate = None
+    elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":
+        # A pushed-down predicate is exported as ("polars", node_id), where
+        # node_id indexes the expression arena (PythonPredicate::Polars(e) in
+        # the Polars Rust source).
+        predicate = expr.NamedExpr(
+            "_predicate",
+            translator.translate_expr(n=raw_predicate[1], schema=schema),
+        )
+    else:  # pragma: no cover
+        # The only other form is a pyarrow predicate, ("pyarrow", ...), which
+        # Polars only emits for pyarrow-dataset scans, never for an
+        # ``register_io_source`` plugin.
+        raise NotImplementedError(
+            f"Unsupported PythonScan predicate: {raw_predicate!r}"
+        )
     return ir.PythonScan(schema, options, predicate)
 
 

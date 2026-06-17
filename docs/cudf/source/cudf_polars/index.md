@@ -106,6 +106,7 @@ To learn more, visit the [GPU Support page](https://docs.pola.rs/user-guide/gpu-
 usage
 engines
 options
+io_plugins
 profiling
 other_engines
 memory_errors

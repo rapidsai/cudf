@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import functools
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +22,7 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
+    PythonScan,
     Sink,
     _prepare_parquet_predicate,
 )
@@ -49,14 +52,17 @@ from cudf_polars.streaming.io import (
     _sink_to_file,
     can_use_native_parquet_node,
 )
+from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
@@ -288,6 +294,167 @@ def _(
                 rows_per_partition=rows_per_partition,
                 estimated_chunk_bytes=estimated_chunk_bytes,
                 distributed_scan=config_options.executor.cluster != "spmd",
+            )
+        ]
+    }
+    return nodes, channels
+
+
+@contextlib.contextmanager
+def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[bool]:
+    """
+    Temporarily bind the current worker rank into a wrapped :class:`RankAwareSource`.
+
+    Rebinds the source for the duration of the ``with`` block and restores the
+    original binding on exit, so the user's source object is not left mutated
+    after the source has been called. The source must be invoked inside the
+    block; the returned iterator it produces captures ``rank``/``nranks`` in its
+    own frame, so it stays valid after the block exits.
+
+    Parameters
+    ----------
+    scan_fn
+        Python scan function exported by Polars for a ``PythonScan`` node. For
+        sources created with :func:`polars.io.plugins.register_io_source`, this
+        is the wrapper function that captures the original user-provided source.
+    rank
+        Rank of the current worker.
+    nranks
+        Total number of workers participating in the query.
+
+    Yields
+    ------
+    ``True`` if the scan function wraps a `RankAwareSource` (now bound), or
+    ``False`` if it does not (nothing is rebound).
+
+    Notes
+    -----
+    This reaches into Polars' ``register_io_source`` closure layout (the captured
+    source object) and temporarily rebinds it. It is the only available hook
+    today; if Polars exposes a supported way to thread state into a source this
+    should move to it. See https://github.com/rapidsai/cudf/issues/22917.
+    """
+    for cell in getattr(scan_fn, "__closure__", None) or ():
+        original = cell.cell_contents
+        # Unwrap any functools.partial layers (e.g. a user-applied partial)
+        # to look for RankAwareSource.
+        func = original
+        while isinstance(func, functools.partial):
+            func = func.func
+        if isinstance(func, RankAwareSource):
+            cell.cell_contents = functools.partial(original, rank=rank, nranks=nranks)
+            try:
+                yield True
+            finally:
+                cell.cell_contents = original
+            return
+    yield False
+
+
+@define_actor()
+async def python_scan_node(
+    context: Context,
+    comm: Communicator,
+    ir: PythonScan,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    *,
+    estimated_chunk_bytes: int,
+) -> None:
+    """
+    PythonScan node for rapidsmpf.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    comm
+        The communicator.
+    ir
+        The PythonScan node.
+    ir_context
+        The execution context for the IR node.
+    ch_out
+        The output Channel[TableChunk].
+    estimated_chunk_bytes
+        Estimated size of each chunk in bytes. Used for memory reservation
+        with block spilling to avoid thrashing.
+    """
+    async with shutdown_on_error(
+        context, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
+
+        def to_chunk(df: DataFrame) -> TableChunk:
+            return TableChunk.from_pylibcudf_table(
+                df.table, df.stream, exclusive_view=True, br=context.br()
+            )
+
+        async def reserve() -> MemoryReservation:
+            """Small helper to make the memory reservation."""
+            return opaque_memory_usage(
+                await reserve_memory(
+                    context,
+                    size=estimated_chunk_bytes,
+                    net_memory_delta=estimated_chunk_bytes,
+                )
+            )
+
+        with _bind_rank(ir.options[0], comm.rank, comm.nranks) as bound:
+            if not bound and comm.nranks > 1 and comm.rank != 0:
+                await send_metadata(ch_out, context, ChannelMetadata(local_count=0))
+                await ch_out.drain(context)
+                return
+            count, processed = await ir_context.to_thread(
+                lambda: ir.run_source_function(
+                    ir.options, ir.schema, ir.predicate, context=ir_context
+                )
+            )
+        if count is not None:
+            # The chunk count is available so we can stream one chunk at a time.
+            announced = max(count, 1)
+            await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            seq_num = 0
+            while True:
+                with await reserve():
+                    df = await ir_context.to_thread(next, processed, None)
+                if df is None:
+                    break
+                await send_chunk(context, ch_out, to_chunk(df), seq_num, tracer=tracer)
+                seq_num += 1
+            if seq_num != announced:
+                raise RuntimeError(
+                    f"PythonScan source reported {announced} chunk(s) but "
+                    f"produced {seq_num}"
+                )
+        else:
+            # A plain generator hides its count, so we must drain it to learn the count.
+            with await reserve():
+                chunks = await ir_context.to_thread(lambda: list(processed))
+            await send_metadata(
+                ch_out, context, ChannelMetadata(local_count=len(chunks))
+            )
+            for seq_num, df in enumerate(chunks):
+                await send_chunk(context, ch_out, to_chunk(df), seq_num, tracer=tracer)
+        await ch_out.drain(context)
+
+
+@generate_ir_sub_network.register(PythonScan)
+def _(
+    ir: PythonScan, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    estimated_chunk_bytes = rec.state["config_options"].executor.target_partition_size
+    context = rec.state["context"]
+    ir_context = rec.state["ir_context"]
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(context)}
+    nodes: dict[IR, list[Any]] = {
+        ir: [
+            python_scan_node(
+                context,
+                rec.state["comm"],
+                ir,
+                ir_context,
+                channels[ir].reserve_input_slot(),
+                estimated_chunk_bytes=estimated_chunk_bytes,
             )
         ]
     }

@@ -636,6 +636,8 @@ nitpick_ignore = [
     ("py:class", "Options"),
     # polars aliases that don't match the public intersphinx targets.
     ("py:class", "pl.DataFrame"),
+    ("py:class", "pl.Expr"),
+    ("py:class", "pl.LazyFrame"),
     ("py:class", "polars.LazyFrame"),
     ("py:class", "polars.DataFrame"),
     ("py:class", "polars.dataframe.frame.DataFrame"),
