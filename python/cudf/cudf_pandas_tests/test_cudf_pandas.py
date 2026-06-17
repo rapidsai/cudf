@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -365,7 +365,7 @@ def test_copy_deepcopy_recursion(dataframe):
     # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     import copy
 
-    pdf, df = dataframe
+    _pdf, df = dataframe
     copy.copy(df)
     copy.deepcopy(df)
 
