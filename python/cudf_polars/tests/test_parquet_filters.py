@@ -88,6 +88,8 @@ def test_jit_filter(pq_file):
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
-            raise_on_fail=True, parquet_options={"use_jit_filter": True}
+            executor="in-memory",
+            raise_on_fail=True,
+            parquet_options={"use_jit_filter": True},
         ),
     )
