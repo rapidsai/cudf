@@ -107,15 +107,14 @@ rtcx::hash128 compute_embed_hash(std::span<uint8_t const> uncompressed_files_byt
                                  std::span<uint8_t const> merged_include_dirs_bytes,
                                  std::string_view compression)
 {
-  XXH3_state_t* state = XXH3_createState();
-  RTCX_EMBED_EXPECTS(state != nullptr, "Failed to create XXH3 state");
-  XXH3_128bits_reset(state);
-  XXH3_128bits_update(state, uncompressed_files_bytes.data(), uncompressed_files_bytes.size());
-  XXH3_128bits_update(state, merged_dests_bytes.data(), merged_dests_bytes.size());
-  XXH3_128bits_update(state, merged_include_dirs_bytes.data(), merged_include_dirs_bytes.size());
-  XXH3_128bits_update(state, compression.data(), compression.size());
-  XXH128_hash_t hash = XXH3_128bits_digest(state);
-  XXH3_freeState(state);
+  XXH3_state_t state;
+  XXH3_INITSTATE(&state);
+  XXH3_128bits_reset(&state);
+  XXH3_128bits_update(&state, uncompressed_files_bytes.data(), uncompressed_files_bytes.size());
+  XXH3_128bits_update(&state, merged_dests_bytes.data(), merged_dests_bytes.size());
+  XXH3_128bits_update(&state, merged_include_dirs_bytes.data(), merged_include_dirs_bytes.size());
+  XXH3_128bits_update(&state, compression.data(), compression.size());
+  XXH128_hash_t hash = XXH3_128bits_digest(&state);
   return rtcx::hash128{hash.high64, hash.low64};
 }
 
