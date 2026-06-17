@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import numpy as np
 
 import pylibcudf as plc
 
-import cudf
+import cudf  # noqa: TC001 (used at runtime for cudf.DataFrame etc., not type-only)
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
@@ -599,7 +599,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     ).columns()[0]
     return GatherMap.from_column_unchecked(
         cast(
-            cudf.core.column.NumericalColumn,
+            "cudf.core.column.NumericalColumn",
             type(haystack).create(
                 plc_right_rows,
                 dtype=dtype_from_pylibcudf_column(plc_right_rows),

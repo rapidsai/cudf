@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -2072,9 +2072,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name=self.name,
         )
         res.attrs = self.attrs
-        res.flags.allows_duplicate_labels = (
-            self._flags.allows_duplicate_labels  # type: ignore[has-type]
-        )
+        res.flags.allows_duplicate_labels = self._flags.allows_duplicate_labels
         return res
 
     @_performance_tracking

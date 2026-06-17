@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -1122,7 +1122,7 @@ def pivot(
     result = _pivot(
         data._data.select_by_label(cols_to_select), index_data, column_data
     )
-    result._attrs = data.attrs  # type: ignore[has-type]
+    result._attrs = data.attrs
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1280,7 +1280,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             )
             columns.names = new_names
         result = _pivot(df, index, columns)
-        result._attrs = df.attrs  # type: ignore[has-type]
+        result._attrs = df.attrs
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result
