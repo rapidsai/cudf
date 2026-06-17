@@ -50,6 +50,7 @@ dependencies:
 - librmm==26.8.*,>=0.0.0a0
 - libucxx==0.51.*,>=0.0.0a0
 - make
+- matplotlib
 - mmh3
 - moto>=4.0.8
 - msgpack-python
@@ -67,6 +68,7 @@ dependencies:
 - numpydoc
 - nvidia-ml-py>=12
 - nvtx>=0.2.1
+- odfpy
 - openpyxl
 - packaging
 - pandas>=3.0.0,<3.1.0
@@ -83,10 +85,12 @@ dependencies:
 - pytest-timeout
 - pytest-xdist
 - pytest<9.1.0
+- python-calamine
 - python-confluent-kafka
 - python-xxhash
 - python>=3.11
 - pytorch>=2.4.0
+- pyxlsb
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.8.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
@@ -106,8 +110,10 @@ dependencies:
 - streamz
 - structlog
 - sysroot_linux-64==2.28
+- tables
 - typing_extensions>=4.0.0
 - ucxx==0.51.*,>=0.0.0a0
+- xlrd
 - xlsxwriter
 - zlib>=1.2.13
 - zstandard

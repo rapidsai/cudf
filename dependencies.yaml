@@ -1578,7 +1578,13 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          - matplotlib
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - tables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
