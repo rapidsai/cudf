@@ -395,10 +395,9 @@ kernel get_kernel(std::string const& name,
   auto bundle_hash = bundle.get_hash();
   auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
-  XXH3_state_t* state = XXH3_createState();
-  CUDF_EXPECTS(state != nullptr, "Failed to create XXH3 state", std::runtime_error);
-  XXH3_128bits_reset(state);
-  RTCX_DEFER([state] { XXH3_freeState(state); });
+  XXH3_state_t state;
+  XXH3_INITSTATE(&state);
+  XXH3_128bits_reset(&state);
   auto spec = std::format(R"***(cuLibrary
 name={}
 binary_type=CUBIN
@@ -417,10 +416,10 @@ kernel_instance={}
                           source_file,
                           kernel_instance);
 
-  hash(state, spec);
-  hash(state, header_include_names);
-  hash(state, headers);
-  auto digest = XXH3_128bits_digest(state);
+  hash(&state, spec);
+  hash(&state, header_include_names);
+  hash(&state, headers);
+  auto digest = XXH3_128bits_digest(&state);
 
   rtcx::hash128 cache_key{digest.high64, digest.low64};
 
