@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import math
 import sys
 
 import cloudpickle
@@ -32,10 +33,8 @@ else:
     ray_cloudpickle.register_pickle_by_value(sys.modules[__name__])
 
 
-class _Source(RankAwareSource):
-    """
-    Rank-aware scan source that emits ``df`` on rank 0 only.
-    """
+class Source(RankAwareSource):
+    """Rank-aware scan source that emits ``df`` on rank 0."""
 
     def __init__(self, df: pl.DataFrame) -> None:
         self.df = df
@@ -55,7 +54,7 @@ def test_rank_aware_source(engine: pl.GPUEngine):
     df = pl.DataFrame(
         {"a": pl.Series([1, 2, 3, 4, 5], dtype=pl.Int8()), "b": [10, 20, 30, 40, 50]}
     )
-    q = register_io_source(_Source(df), schema={"a": pl.Int8, "b": pl.Int64})
+    q = register_io_source(Source(df), schema={"a": pl.Int8, "b": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), df)
     assert_frame_equal(q.select("a").collect(engine=engine), df.select("a"))
     assert_frame_equal(
@@ -63,14 +62,13 @@ def test_rank_aware_source(engine: pl.GPUEngine):
     )
 
 
-class _MultiChunkSource(RankAwareSource):
-    """Rank-aware scan source that emits two chunks on rank 0 only."""
+class MultiChunkSource(RankAwareSource):
+    """Rank-aware scan source whose data lives on rank 0, emitted as two chunks."""
 
     def __init__(self, chunks: list[pl.DataFrame]) -> None:
         self.chunks = chunks
 
     def __call__(self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1):
-        # Emit on rank 0 only (the lone worker defaults to rank 0).
         if rank:
             yield from (c.clear() for c in self.chunks)
         else:
@@ -79,11 +77,11 @@ class _MultiChunkSource(RankAwareSource):
 
 def test_rank_aware_source_multi_chunk(engine: pl.GPUEngine):
     chunks = [pl.DataFrame({"a": [1, 2]}), pl.DataFrame({"a": [3, 4]})]
-    q = register_io_source(_MultiChunkSource(chunks), schema={"a": pl.Int64})
+    q = register_io_source(MultiChunkSource(chunks), schema={"a": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), pl.DataFrame({"a": [1, 2, 3, 4]}))
 
 
-class _GpuSource(RankAwareSource):
+class GpuSource(RankAwareSource):
     """Rank-aware source that yields GPU-resident cudf-polars DataFrames."""
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -96,18 +94,19 @@ class _GpuSource(RankAwareSource):
 
 def test_rank_aware_source_gpu_chunks(engine: pl.GPUEngine):
     df = pl.DataFrame({"a": [1, 2, 3]})
-    q = register_io_source(_GpuSource(df), schema={"a": pl.Int64})
+    q = register_io_source(GpuSource(df), schema={"a": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), df)
 
 
-class _PartitioningSource(RankAwareSource):
+class PartitioningSource(RankAwareSource):
     """Self-partitions a shared frame across workers using ``rank``/``nranks``."""
 
     def __init__(self, df: pl.DataFrame) -> None:
         self.df = df
 
     def __call__(self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1):
-        out = self.df.gather_every(nranks, offset=rank)
+        per_rank = math.ceil(self.df.height / nranks)
+        out = self.df.slice(rank * per_rank, per_rank)
         if with_columns is not None:
             out = out.select(with_columns)
         yield out
@@ -115,9 +114,8 @@ class _PartitioningSource(RankAwareSource):
 
 def test_rank_aware_source_self_partition(engine: pl.GPUEngine):
     df = pl.DataFrame({"a": list(range(10))})
-    q = register_io_source(_PartitioningSource(df), schema={"a": pl.Int64})
-    # Order across ranks is not guaranteed, so compare after sorting.
-    assert_frame_equal(q.collect(engine=engine).sort("a"), df)
+    q = register_io_source(PartitioningSource(df), schema={"a": pl.Int64})
+    assert_frame_equal(q.collect(engine=engine), df)
 
 
 def _plain_source(with_columns, predicate, n_rows, batch_size):
@@ -166,11 +164,11 @@ def test_sized_chunks_reports_count_and_iterates():
 @pytest.mark.spmd
 def test_rank_aware_source_collect_twice(spmd_engine: pl.GPUEngine):
     df = pl.DataFrame({"a": list(range(10))})
-    q = register_io_source(_PartitioningSource(df), schema={"a": pl.Int64})
+    q = register_io_source(PartitioningSource(df), schema={"a": pl.Int64})
 
     # First collect runs the rank-aware source under streaming (binds the rank).
-    q.collect(engine=spmd_engine)
+    assert_frame_equal(q.collect(engine=spmd_engine), df)
 
     # Second collect uses the default engine, which does not bind a rank, so the
-    # source must run with its rank=0, nranks=1 defaults and return everything.
-    assert_frame_equal(q.collect().sort("a"), df)
+    # source runs with its rank=0, nranks=1 defaults and returns everything.
+    assert_frame_equal(q.collect(), df)

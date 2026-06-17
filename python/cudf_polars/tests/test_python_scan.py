@@ -127,7 +127,7 @@ def test_python_scan_multi_chunk_groupby(engine: pl.GPUEngine):
         .group_by("a")
         .agg(pl.col("b").sum())
     )
-    assert_frame_equal(q.collect(engine=engine).sort("a"), q.collect().sort("a"))
+    assert_frame_equal(q.collect(engine=engine), q.collect(), check_row_order=False)
 
 
 def test_python_scan_multi_chunk_scalar_aggregate(engine: pl.GPUEngine):
@@ -145,7 +145,7 @@ def test_python_scan_multi_chunk_unique(engine: pl.GPUEngine):
         yield pl.DataFrame({"a": [2, 3]})
 
     q = register_io_source(source, schema={"a": pl.Int64}).unique()
-    assert_frame_equal(q.collect(engine=engine).sort("a"), q.collect().sort("a"))
+    assert_frame_equal(q.collect(engine=engine), q.collect(), check_row_order=False)
 
 
 def test_python_scan_multi_chunk_all_filtered(engine: pl.GPUEngine):
@@ -193,19 +193,19 @@ def test_python_scan_predicate_and_projection(engine: pl.GPUEngine):
 
     q = register_io_source(source, schema={"a": pl.Int64, "b": pl.Int64})
     assert_frame_equal(
-        q.collect(engine=engine).sort("a"),
+        q.collect(engine=engine),
         pl.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}),
     )
     assert_frame_equal(
-        q.filter(pl.col("b") > 1).collect(engine=engine).sort("a"),
+        q.filter(pl.col("b") > 1).collect(engine=engine),
         pl.DataFrame({"a": [2, 3], "b": [2, 3]}),
     )
     assert_frame_equal(
-        q.filter(pl.col("b") > 1).select("a").collect(engine=engine).sort("a"),
+        q.filter(pl.col("b") > 1).select("a").collect(engine=engine),
         pl.DataFrame({"a": [2, 3]}),
     )
     assert_frame_equal(
-        q.select("a").collect(engine=engine).sort("a"),
+        q.select("a").collect(engine=engine),
         pl.DataFrame({"a": [1, 2, 3]}),
     )
 
@@ -228,8 +228,7 @@ def test_python_scan_reordered_columns(engine: pl.GPUEngine):
     assert_frame_equal(
         register_io_source(source, schema=schema)
         .select("b", "a")
-        .collect(engine=engine)
-        .sort("a"),
+        .collect(engine=engine),
         expected,
     )
 
@@ -250,7 +249,7 @@ def test_python_scan_multi_chunk(engine: pl.GPUEngine):
         yield df
 
     q = register_io_source(source, schema=df.schema)
-    assert_frame_equal(q.collect(engine=engine).sort("a"), df)
+    assert_frame_equal(q.collect(engine=engine), df)
 
 
 def test_python_scan_lines(engine: pl.GPUEngine):
@@ -294,7 +293,7 @@ def test_python_scan_defer(engine: pl.GPUEngine):
     """`pl.defer` builds a PythonScan; it should run on the GPU engine."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]})
     q = pl.defer(lambda: df, schema=df.schema)
-    assert_frame_equal(q.collect(engine=engine).sort("a"), df)
+    assert_frame_equal(q.collect(engine=engine), df)
 
 
 def test_python_scan_sized_chunks(engine: pl.GPUEngine):
@@ -308,8 +307,8 @@ def test_python_scan_sized_chunks(engine: pl.GPUEngine):
     q = register_io_source(source, schema={"a": pl.Int64})
     expected = pl.DataFrame({"a": [1, 2, 3, 4]})
     # Works on both the default (host) engine and the GPU engine.
-    assert_frame_equal(q.collect().sort("a"), expected)
-    assert_frame_equal(q.collect(engine=engine).sort("a"), expected)
+    assert_frame_equal(q.collect(), expected)
+    assert_frame_equal(q.collect(engine=engine), expected)
 
 
 def test_python_scan_sized_chunks_groupby(engine: pl.GPUEngine):
@@ -325,4 +324,4 @@ def test_python_scan_sized_chunks_groupby(engine: pl.GPUEngine):
         .group_by("a")
         .agg(pl.col("b").sum())
     )
-    assert_frame_equal(q.collect(engine=engine).sort("a"), q.collect().sort("a"))
+    assert_frame_equal(q.collect(engine=engine), q.collect(), check_row_order=False)
