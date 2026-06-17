@@ -728,7 +728,7 @@ class Scan(IR):
             for p in paths:
                 skiprows = reader_options["skip_rows"]
                 path = Path(p)
-                with path.open() as f:
+                with path.open(encoding="utf-8") as f:
                     while f.readline() == "\n":
                         skiprows += 1
                 options = (
