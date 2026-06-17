@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
+import numpy as np
 
 import cudf
 from cudf.api.extensions import no_default
@@ -120,6 +121,18 @@ class SingleColumnFrame(Frame, NotIterable):
         col = self._column
         if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
             return cp.asarray(col)
+        if not isinstance(col.dtype, np.dtype) and col.has_nulls():
+            # A pandas nullable/masked extension dtype with nulls cannot be
+            # represented as a plain numpy array without losing the NA. pandas
+            # keeps it as an ExtensionArray, so raise here and let cudf.pandas
+            # fall back to pandas ``.values`` instead of silently down-casting
+            # to a float array with NaN.
+            raise ValueError(
+                f"cannot convert to "
+                f"'{getattr(col.dtype, 'numpy_dtype', col.dtype)}'-dtype "
+                "NumPy array with missing values. Specify an appropriate "
+                "'na_value' for this dtype."
+            )
         return col.values
 
     @property

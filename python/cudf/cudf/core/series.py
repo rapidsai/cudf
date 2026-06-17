@@ -380,6 +380,21 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
+            if (
+                isinstance(arg, Series)
+                and arg.dtype.kind == "b"
+                and not arg.index.equals(self._frame.index)
+            ):
+                # Align a boolean Series indexer to the frame's index by
+                # label rather than positionally.
+                aligned = arg.reindex(self._frame.index)
+                if aligned._column.has_nulls():
+                    raise ValueError(
+                        "Unalignable boolean Series provided as indexer "
+                        "(index of the boolean Series and of the indexed "
+                        "object do not match)."
+                    )
+                return Series._from_column(aligned._column)
             col = as_column(arg)
             if col.dtype.kind == "b":
                 return Series._from_column(col)

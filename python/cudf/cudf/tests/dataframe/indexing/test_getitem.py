@@ -1,5 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+import operator
 from itertools import combinations
 
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_struct_of_struct_loc():
@@ -352,3 +354,18 @@ def test_dataframe_strided_slice(arg):
     got = gdf[arg]
 
     assert_eq(expect, got)
+
+
+def test_getitem_slice_in_tuple_raises():
+    # A tuple key in __getitem__ is a single (possibly MultiIndex) column
+    # label; a slice inside it is invalid (use .loc for slicing) and
+    # raises InvalidIndexError like pandas.
+    mi = pd.MultiIndex.from_product([["x", "y"], [0, 1]])
+    pdf = pd.DataFrame([[1, 1, 2, 2], [3, 3, 4, 4]], columns=mi)
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lfunc=operator.getitem,
+        rfunc=operator.getitem,
+        lfunc_args_and_kwargs=([pdf, (slice(None), 0)],),
+        rfunc_args_and_kwargs=([gdf, (slice(None), 0)],),
+    )

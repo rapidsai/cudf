@@ -161,6 +161,7 @@ def _shape_mismatch_error(x, y):
 
 class _DataFrameIndexer(_FrameIndexer):
     def __setitem__(self, key, value):
+        indexing_utils.check_dict_or_set_indexers(key)
         if not isinstance(key, tuple):
             key = (key, slice(None))
         return self._setitem_tuple_arg(key, value)
@@ -173,6 +174,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg):
+        indexing_utils.check_dict_or_set_indexers(arg)
         if isinstance(self._frame.index, MultiIndex):
             # This try/except block allows the use of pandas-like
             # tuple arguments to index into MultiIndex dataframes.
@@ -226,6 +228,34 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = (arg,)
                 else:
                     row_arg = arg
+                nlevels = columns_df.index.nlevels
+                if (
+                    is_list_like(row_arg)
+                    and not isinstance(row_arg, tuple)
+                    and len(row_arg) > 0
+                    and all(
+                        isinstance(label, tuple) and len(label) == nlevels
+                        for label in row_arg
+                    )
+                ):
+                    # A list of full-length tuples selects those exact
+                    # MultiIndex rows (pandas semantics), instead of being
+                    # mis-parsed as a per-level indexer.
+                    key_mi = MultiIndex.from_tuples(
+                        list(row_arg), names=columns_df.index.names
+                    )
+                    result = columns_df.take(
+                        _indices_from_labels(columns_df, key_mi)
+                    )
+                    if (
+                        isinstance(arg, tuple)
+                        and len(arg) > 1
+                        and is_scalar(arg[1])
+                    ):
+                        # A scalar column key yields a single column, so
+                        # downcast the result to a Series.
+                        return result[arg[1]]
+                    return result
                 result = columns_df.index._get_row_major(columns_df, row_arg)
                 if (
                     len(result) == 1
@@ -316,7 +346,25 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         self._frame.loc[key[0]].shape,
                     )
                 value_column_names = set(value._column_names)
-                scatter_map = _indices_from_labels(self._frame, key[0])
+                row_key = key[0]
+                row_key_col = (
+                    as_column(row_key)
+                    if (is_list_like(row_key) or is_column_like(row_key))
+                    else None
+                )
+                if row_key_col is not None and row_key_col.dtype.kind == "b":
+                    # A boolean row mask must be used directly as the scatter
+                    # target; routing it through _indices_from_labels would
+                    # (mis)interpret True/False as integer index labels.
+                    # Align the RHS to the selected rows by label before
+                    # scattering, so a reordered RHS index assigns the right
+                    # value to each masked row.
+                    target_index = self._frame.loc[row_key].index
+                    if not value.index.equals(target_index):
+                        value = value.reindex(target_index)
+                    scatter_map = row_key_col
+                else:
+                    scatter_map = _indices_from_labels(self._frame, row_key)
                 for col in columns_df._column_names:
                     columns_df[col][scatter_map] = (
                         value._data[col] if col in value_column_names else NA
@@ -354,7 +402,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # If the key is 1d, a broadcast will happen.
                     else:
                         for i, col in enumerate(columns_df._column_names):
-                            self._frame[col].loc[key[0]] = value[i]
+                            if isinstance(value, (Series, pd.Series)):
+                                # A Series RHS is row-indexed: assign the whole
+                                # Series so .loc aligns it by label to key[0],
+                                # rather than picking value[i] (which would
+                                # treat it as a list of per-column values).
+                                self._frame[col].loc[key[0]] = value
+                            else:
+                                self._frame[col].loc[key[0]] = value[i]
 
 
 class _DataFrameAtIndexer(_DataFrameLocIndexer):
@@ -1444,6 +1499,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         8  8  8  8
         """
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
+            if isinstance(arg, tuple) and any(
+                isinstance(k, slice) for k in arg
+            ):
+                # A tuple key in __getitem__ is a single (possibly
+                # MultiIndex) column label; a slice inside it is invalid
+                # (use .loc for slicing), matching pandas' InvalidIndexError.
+                raise pd.errors.InvalidIndexError(
+                    next(k for k in arg if isinstance(k, slice))
+                )
             out = self._get_columns_by_label(arg)
             if is_scalar(arg):
                 nlevels = 1
@@ -1503,8 +1567,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     f"value = {type(arg)} is not supported"
                 )
             else:
+                if not self.index.equals(arg.index):
+                    # Align a boolean DataFrame mask to this frame by label
+                    # before scattering, so a reordered or partial mask
+                    # selects the correct rows. Labels missing from the mask
+                    # are treated as not-selected.
+                    arg = arg.reindex(self.index)
                 for col_name in self._data:
                     scatter_map = arg._data[col_name]
+                    if scatter_map.has_nulls():
+                        scatter_map = scatter_map.fillna(False)
                     if is_scalar(value):
                         self._data[col_name][scatter_map] = value
                     else:
@@ -1568,6 +1640,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 mask = np.array(mask)
 
             if mask.dtype == "bool":
+                if isinstance(arg, (cudf.Series, pd.Series)) and not (
+                    self.index.equals(cudf.Series(arg).index)
+                ):
+                    # Align a boolean Series mask to this frame by label;
+                    # unaligned labels are not selected.
+                    arg = (
+                        cudf.Series(arg)
+                        .reindex(self.index)
+                        .fillna(False)
+                        .astype("bool")
+                    )
                 mask = as_column(arg)
 
                 if isinstance(value, DataFrame):

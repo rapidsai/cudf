@@ -7292,6 +7292,13 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return True
     elif is_dtype_obj_string(lhs_dtype) and is_dtype_obj_string(rhs_dtype):
         return True
+    elif getattr(lhs_dtype, "kind", None) in {"i", "u", "f"} and getattr(
+        rhs_dtype, "kind", None
+    ) in {"i", "u", "f"}:
+        # Numeric index labels are compatible across int/float for
+        # reindexing; the join matches labels by equality (e.g. 4 == 4.0)
+        # instead of bailing to an all-null result.
+        return True
     else:
         return False
 
