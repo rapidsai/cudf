@@ -108,6 +108,7 @@ rtcx::hash128 compute_embed_hash(std::span<uint8_t const> uncompressed_files_byt
                                  std::string_view compression)
 {
   XXH3_state_t* state = XXH3_createState();
+  RTCX_EMBED_EXPECTS(state != nullptr, "Failed to create XXH3 state");
   XXH3_128bits_reset(state);
   XXH3_128bits_update(state, uncompressed_files_bytes.data(), uncompressed_files_bytes.size());
   XXH3_128bits_update(state, merged_dests_bytes.data(), merged_dests_bytes.size());

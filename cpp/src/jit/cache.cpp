@@ -297,6 +297,7 @@ kernel get_kernel(std::string const& name,
   auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
   XXH3_state_t* state = XXH3_createState();
+  CUDF_EXPECTS(state != nullptr, "Failed to create XXH3 state", std::runtime_error);
   XXH3_128bits_reset(state);
   RTCX_DEFER([state] { XXH3_freeState(state); });
   auto spec = std::format(R"***(cuLibrary
