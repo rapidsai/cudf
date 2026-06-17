@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,6 +39,71 @@ namespace {
 
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 128;
 
+bool is_default_slice_options(slice_strings_options const& options)
+{
+  return options.start_indexing == start_indexing_policy::ZERO_BASED &&
+         options.negative_start == negative_start_policy::CLAMP_TO_ZERO &&
+         options.bounds == slice_bounds_policy::START_AND_STOP &&
+         options.negative_length == negative_length_policy::PRESERVE &&
+         options.missing_length == missing_length_policy::TO_END;
+}
+
+__device__ int64_t saturating_add(int64_t lhs, int64_t rhs)
+{
+  if (rhs > 0 && lhs > cuda::std::numeric_limits<int64_t>::max() - rhs) {
+    return cuda::std::numeric_limits<int64_t>::max();
+  }
+  if (rhs < 0 && lhs < cuda::std::numeric_limits<int64_t>::min() - rhs) {
+    return cuda::std::numeric_limits<int64_t>::min();
+  }
+  return lhs + rhs;
+}
+
+__device__ int64_t clamp_position(int64_t value, int64_t length)
+{
+  return cuda::std::min(cuda::std::max(value, int64_t{0}), length);
+}
+
+__device__ int64_t pre_length_start_position(size_type length,
+                                             int64_t raw_start,
+                                             slice_strings_options const& options)
+{
+  if (raw_start < 0 && options.negative_start == negative_start_policy::RELATIVE_TO_END) {
+    return saturating_add(static_cast<int64_t>(length), raw_start);
+  }
+  if (raw_start < 0 && options.negative_start == negative_start_policy::CLAMP_TO_ZERO) { return 0; }
+  if (raw_start > 0 && options.start_indexing == start_indexing_policy::ONE_BASED) {
+    return raw_start - 1;
+  }
+  return raw_start;
+}
+
+__device__ int64_t stop_position(size_type length,
+                                 int64_t pre_length_start,
+                                 int64_t raw_stop_or_length,
+                                 bool has_stop_or_length,
+                                 slice_strings_options const& options)
+{
+  if (options.bounds == slice_bounds_policy::START_AND_LENGTH) {
+    if (!has_stop_or_length) {
+      return options.missing_length == missing_length_policy::MAX_SIZE
+               ? clamp_position(
+                   saturating_add(pre_length_start, cuda::std::numeric_limits<size_type>::max()),
+                   length)
+               : static_cast<int64_t>(length);
+    }
+    auto substring_length = raw_stop_or_length;
+    if (substring_length < 0 && options.negative_length == negative_length_policy::CLAMP_TO_ZERO) {
+      substring_length = 0;
+    }
+    return clamp_position(saturating_add(pre_length_start, substring_length), length);
+  }
+
+  if (!has_stop_or_length) { return static_cast<int64_t>(length); }
+  return raw_stop_or_length < 0 ? static_cast<int64_t>(length)
+                                : clamp_position(raw_stop_or_length, length);
+}
+
 /**
  * @brief Function logic for compute_substrings_from_fn API
  *
@@ -67,6 +132,45 @@ struct substring_from_fn {
 
   substring_from_fn(column_device_view const& d_column, IndexIterator starts, IndexIterator stops)
     : d_column(d_column), starts(starts), stops(stops)
+  {
+  }
+};
+
+template <typename IndexIterator>
+struct substring_with_options_from_fn {
+  column_device_view const d_column;
+  IndexIterator const starts;
+  IndexIterator const stops_or_lengths;
+  bool const has_stop_or_length;
+  slice_strings_options const options;
+
+  __device__ string_index_pair operator()(size_type idx) const
+  {
+    if (d_column.is_null(idx)) { return string_index_pair{nullptr, 0}; }
+    auto const d_str     = d_column.template element<string_view>(idx);
+    auto const length    = d_str.length();
+    auto const raw_start = static_cast<int64_t>(starts[idx]);
+    auto const pre_start = pre_length_start_position(length, raw_start, options);
+    auto const start     = clamp_position(pre_start, length);
+    auto const raw_stop  = has_stop_or_length ? static_cast<int64_t>(stops_or_lengths[idx]) : 0;
+    auto const stop      = stop_position(length, pre_start, raw_stop, has_stop_or_length, options);
+    auto const sub_str   = start < stop ? d_str.substr(static_cast<size_type>(start),
+                                                     static_cast<size_type>(stop - start))
+                                        : string_view{};
+    return sub_str.empty() ? string_index_pair{"", 0}
+                           : string_index_pair{sub_str.data(), sub_str.size_bytes()};
+  }
+
+  substring_with_options_from_fn(column_device_view const& d_column,
+                                 IndexIterator starts,
+                                 IndexIterator stops_or_lengths,
+                                 bool has_stop_or_length,
+                                 slice_strings_options const& options)
+    : d_column(d_column),
+      starts(starts),
+      stops_or_lengths(stops_or_lengths),
+      has_stop_or_length(has_stop_or_length),
+      options(options)
   {
   }
 };
@@ -265,6 +369,29 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
   return make_strings_column(results.begin(), results.end(), stream, mr);
 }
 
+template <typename IndexIterator>
+std::unique_ptr<column> compute_substrings_with_options_from_fn(
+  strings_column_view const& input,
+  IndexIterator starts,
+  IndexIterator stops_or_lengths,
+  bool has_stop_or_length,
+  slice_strings_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto results = rmm::device_uvector<string_index_pair>(input.size(), stream);
+
+  auto const d_column = column_device_view::create(input.parent(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
+                    results.begin(),
+                    substring_with_options_from_fn{
+                      *d_column, starts, stops_or_lengths, has_stop_or_length, options});
+
+  return make_strings_column(results.begin(), results.end(), stream, mr);
+}
+
 }  // namespace
 
 //
@@ -316,6 +443,38 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& input,
+                                      numeric_scalar<size_type> const& start,
+                                      numeric_scalar<size_type> const& stop,
+                                      numeric_scalar<size_type> const& step,
+                                      slice_strings_options const& options,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  if (is_default_slice_options(options)) {
+    return slice_strings(input, start, stop, step, stream, mr);
+  }
+
+  if (input.size() == input.null_count()) {
+    return std::make_unique<column>(input.parent(), stream, mr);
+  }
+
+  auto const step_valid = step.is_valid(stream);
+  auto const step_value = step_valid ? step.value(stream) : 1;
+  if (step_valid) { CUDF_EXPECTS(step_value == 1, "Step parameter must be 1 with slice options"); }
+
+  auto const start_value = start.is_valid(stream) ? start.value(stream) : 0;
+  auto const stop_valid  = stop.is_valid(stream);
+  auto const stop_value  = stop_valid ? stop.value(stream) : 0;
+  return compute_substrings_with_options_from_fn(input,
+                                                 cuda::constant_iterator<size_type>(start_value),
+                                                 cuda::constant_iterator<size_type>(stop_value),
+                                                 stop_valid,
+                                                 options,
+                                                 stream,
+                                                 mr);
+}
+
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
@@ -337,6 +496,34 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
   return compute_substrings_from_fn(input, starts_iter, stops_iter, stream, mr);
 }
 
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
+                                      column_view const& starts_column,
+                                      column_view const& stops_column,
+                                      slice_strings_options const& options,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  if (is_default_slice_options(options)) {
+    return slice_strings(input, starts_column, stops_column, stream, mr);
+  }
+
+  if (input.size() == input.null_count()) {
+    return std::make_unique<column>(input.parent(), stream, mr);
+  }
+
+  CUDF_EXPECTS(starts_column.size() == input.size(),
+               "Parameter starts must have the same number of rows as strings.");
+  CUDF_EXPECTS(stops_column.size() == input.size(),
+               "Parameter stops must have the same number of rows as strings.");
+  CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
+  CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
+
+  auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
+  auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
+  return compute_substrings_with_options_from_fn(
+    input, starts_iter, stops_iter, true, options, stream, mr);
+}
+
 }  // namespace detail
 
 // external API
@@ -353,6 +540,18 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& input,
+                                      numeric_scalar<size_type> const& start,
+                                      numeric_scalar<size_type> const& stop,
+                                      numeric_scalar<size_type> const& step,
+                                      slice_strings_options const& options,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice_strings(input, start, stop, step, options, stream, mr);
+}
+
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
@@ -360,6 +559,17 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(input, starts_column, stops_column, stream, mr);
+}
+
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
+                                      column_view const& starts_column,
+                                      column_view const& stops_column,
+                                      slice_strings_options const& options,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice_strings(input, starts_column, stops_column, options, stream, mr);
 }
 
 }  // namespace strings
