@@ -91,12 +91,12 @@ class RankAwareSource(abc.ABC):
     call concurrently.
 
     Pass the `RankAwareSource` instance directly to `register_io_source`; do not
-    wrap it in another callable. To inject rank information into the source,
-    cudf-polars must locate the `RankAwareSource` instance inside the registered
-    callable. It makes a best effort to see through a `functools.partial` wrapper,
-    but any other wrapping (a closure, a lambda, a decorator) may hide the instance,
-    in which case the source is treated as rank-unaware and runs on rank 0 only.
-    This limitation is tracked in https://github.com/rapidsai/cudf/issues/22917.
+    wrap it in another callable. To inject rank information, cudf-polars must
+    locate the `RankAwareSource` instance inside the registered callable. Only an
+    unwrapped instance is recognized; wrapping it in anything else (a
+    `functools.partial`, closure, lambda, or decorator) hides it, in which case
+    the source is treated as rank-unaware and runs on rank 0 only. This
+    limitation is tracked in https://github.com/rapidsai/cudf/issues/22917.
 
     Examples
     --------

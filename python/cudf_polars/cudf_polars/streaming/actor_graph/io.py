@@ -324,7 +324,7 @@ def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[
 
     Yields
     ------
-    ``True`` if the scan function wraps a `RankAwareSource` (now bound), or
+    ``True`` if the scan function captures a `RankAwareSource` (now bound), or
     ``False`` if it does not (nothing is rebound).
 
     Notes
@@ -335,18 +335,13 @@ def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[
     should move to it. See https://github.com/rapidsai/cudf/issues/22917.
     """
     for cell in getattr(scan_fn, "__closure__", ()):
-        original = cell.cell_contents
-        # Unwrap any functools.partial layers (e.g. a user-applied partial)
-        # to look for RankAwareSource.
-        func = original
-        while isinstance(func, functools.partial):
-            func = func.func
-        if isinstance(func, RankAwareSource):
-            cell.cell_contents = functools.partial(original, rank=rank, nranks=nranks)
+        source = cell.cell_contents
+        if isinstance(source, RankAwareSource):
+            cell.cell_contents = functools.partial(source, rank=rank, nranks=nranks)
             try:
                 yield True
             finally:
-                cell.cell_contents = original
+                cell.cell_contents = source
             return
     yield False
 

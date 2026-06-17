@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import functools
 import sys
 
 import cloudpickle
@@ -119,29 +118,6 @@ def test_rank_aware_source_self_partition(engine: pl.GPUEngine):
     q = register_io_source(_PartitioningSource(df), schema={"a": pl.Int64})
     # Order across ranks is not guaranteed, so compare after sorting.
     assert_frame_equal(q.collect(engine=engine).sort("a"), df)
-
-
-class _PartialArgSource(RankAwareSource):
-    """Source whose extra keyword is supplied via ``functools.partial``."""
-
-    def __call__(
-        self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1, *, value=0
-    ):
-        out = pl.DataFrame({"a": [value]})
-        if rank:
-            out = out.clear()
-        if with_columns is not None:
-            out = out.select(with_columns)
-        yield out
-
-
-def test_rank_aware_source_preserves_partial(engine: pl.GPUEngine):
-    # A user may wrap their source in functools.partial. Binding the rank must
-    # preserve the partial-applied arguments: if it dropped ``value`` the source
-    # would fall back to the default (0) instead of 42.
-    source = functools.partial(_PartialArgSource(), value=42)
-    q = register_io_source(source, schema={"a": pl.Int64})
-    assert_frame_equal(q.collect(engine=engine), pl.DataFrame({"a": [42]}))
 
 
 def _plain_source(with_columns, predicate, n_rows, batch_size):
