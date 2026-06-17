@@ -118,7 +118,9 @@ __device__ cuda::std::optional<bool> null_logical_or(cuda::std::optional<A> a,
 /**
  * @brief Selects one of two values based on a predicate.
  *
- * @tparam T Selected value type.
+ * @tparam A True value type.
+ * @tparam B False value type.
+ * @tparam Predicate Selection predicate type.
  * @param true_value Value selected when @p pred is true.
  * @param false_value Value selected when @p pred is false.
  * @param pred Selection predicate.

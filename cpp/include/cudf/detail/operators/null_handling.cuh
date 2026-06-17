@@ -37,7 +37,8 @@ __device__ bool is_null(T a)
 /**
  * @brief Returns the first non-null of two values.
  *
- * @tparam T Value type.
+ * @tparam A First value type.
+ * @tparam B Second value type.
  * @param a First value.
  * @param b Second value.
  */

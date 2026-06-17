@@ -77,7 +77,7 @@ __device__ void transform_kernel(size_type row_size,
       });
 
     } else {
-      auto active_mask = __ballot_sync(0xFFFF'FFFFU, row < row_size);
+      auto active_mask = __ballot_sync(__activemask(), row < row_size);
 
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });

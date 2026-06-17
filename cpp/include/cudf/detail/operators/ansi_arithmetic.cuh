@@ -23,7 +23,8 @@ namespace ops {
 /**
  * @brief Adds operands with overflow detection.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  * @return `errc::OVERFLOW` on overflow, else the result.
@@ -44,12 +45,6 @@ __device__ cuda::std::expected<A, errc> add_overflow(A a, B b)
   return a + b;
 }
 
-/**
- * @brief Adds operands with overflow detection.
- *
- * @tparam R Decimal representation type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <typename A, typename B>
 __device__ cuda::std::expected<numeric::decimal<A>, errc> add_overflow(numeric::decimal<A> a,
                                                                        numeric::decimal<B> b)
@@ -65,6 +60,15 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> add_overflow(numeric::
     a.rescaled(scale).value() + b.rescaled(scale).value(), numeric::scale_type{scale}}};
 }
 
+/**
+ * @brief Subtracts operands with overflow detection.
+ *
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
+ * @param a Left operand.
+ * @param b Right operand.
+ * @return `errc::OVERFLOW` on overflow, else the result.
+ */
 template <integer A, integer B>
 __device__ cuda::std::expected<A, errc> sub_overflow(A a, B b)
   requires(cuda::std::same_as<A, B>)
@@ -74,12 +78,6 @@ __device__ cuda::std::expected<A, errc> sub_overflow(A a, B b)
   return r;
 }
 
-/**
- * @brief Subtracts operands with overflow detection.
- *
- * @tparam T Value type.
- * @return `errc::OVERFLOW` on overflow, else the result.
- */
 template <floating_point A, floating_point B>
 __device__ cuda::std::expected<A, errc> sub_overflow(A a, B b)
   requires(cuda::std::same_as<A, B>)
@@ -105,7 +103,8 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> sub_overflow(numeric::
 /**
  * @brief Multiplies operands with overflow detection.
  *
- * @tparam T Value type.
+ * @tparam A Left operand type.
+ * @tparam B Right operand type.
  * @param a Left operand.
  * @param b Right operand.
  * @return `errc::OVERFLOW` on overflow, else the result.
@@ -140,9 +139,10 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> mul_overflow(numeric::
 }
 
 /**
- * @brief Divides operands with ANSI checks.
+ * @brief Divides operands with overflow detection.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  * @return `errc::DIVISION_BY_ZERO` on zero divisor, `errc::OVERFLOW` on overflow, else
@@ -181,9 +181,10 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> div_overflow(numeric::
 }
 
 /**
- * @brief Computes modulus with ANSI checks.
+ * @brief Computes modulus with overflow detection.
  *
- * @tparam T Value type.
+ * @tparam A Dividend type.
+ * @tparam B Divisor type.
  * @param a Dividend.
  * @param b Divisor.
  * @return `errc::DIVISION_BY_ZERO` on zero divisor, else the result.
@@ -231,7 +232,7 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> mod_overflow(numeric::
 }
 
 /**
- * @brief Computes absolute value with ANSI overflow checks.
+ * @brief Computes absolute value with overflow detection.
  *
  * @tparam T Value type.
  * @param a Input value.
@@ -267,7 +268,7 @@ __device__ cuda::std::expected<numeric::decimal<R>, errc> abs_overflow(numeric::
 }
 
 /**
- * @brief Computes unary negation with ANSI overflow checks.
+ * @brief Computes unary negation with overflow detection.
  *
  * @tparam T Value type.
  * @param a Input value.
@@ -300,13 +301,14 @@ __device__ cuda::std::expected<numeric::decimal<R>, errc> neg_overflow(numeric::
  * @brief Validates decimal precision against a target precision value.
  *
  * @tparam R Decimal representation type.
+ * @tparam P Target precision type.
  * @param a Input decimal value.
  * @param precision Maximum allowed precision.
  * @return `errc::OVERFLOW` when precision is invalid or exceeded, else the result.
  */
-template <typename R, cuda::std::integral Precision>
+template <typename R, cuda::std::integral P>
 __device__ cuda::std::expected<numeric::decimal<R>, errc> check_precision(numeric::decimal<R> a,
-                                                                          Precision precision)
+                                                                          P precision)
 {
   if (precision <= 0) { return cuda::std::unexpected{errc::OVERFLOW}; }
 
