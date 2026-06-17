@@ -369,9 +369,7 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
     if raw_predicate is None:
         predicate = None
     elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":
-        # A pushed-down predicate is exported as ("polars", node_id), where
-        # node_id indexes the expression arena (PythonPredicate::Polars(e) in
-        # the Polars Rust source).
+        # The predicate is an expression to be translated.
         predicate = expr.NamedExpr(
             "_predicate",
             translator.translate_expr(n=raw_predicate[1], schema=schema),

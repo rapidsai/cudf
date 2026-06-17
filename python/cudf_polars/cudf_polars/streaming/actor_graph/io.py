@@ -334,7 +334,7 @@ def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[
     today; if Polars exposes a supported way to thread state into a source this
     should move to it. See https://github.com/rapidsai/cudf/issues/22917.
     """
-    for cell in getattr(scan_fn, "__closure__", None) or ():
+    for cell in getattr(scan_fn, "__closure__", ()):
         original = cell.cell_contents
         # Unwrap any functools.partial layers (e.g. a user-applied partial)
         # to look for RankAwareSource.
