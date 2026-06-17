@@ -33,6 +33,7 @@ void hash(XXH3_state_t* ctx, std::span<char const* const> inputs)
 {
   for (auto const* input : inputs) {
     XXH3_128bits_update(ctx, input, std::strlen(input));
+    XXH3_128bits_update(ctx, "\0", 1);  // null terminator
   }
 }
 
