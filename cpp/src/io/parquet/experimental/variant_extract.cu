@@ -452,6 +452,30 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
   return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
+// Parse an array-index step token of the form "[<N>]" into its zero-based index. Returns nullopt
+// for any malformed token or an index that does not fit in `size_type` (such an index is out of
+// range for any array, so the caller treats it as a missing element).
+//
+// The index is accumulated in an unsigned 64-bit value so a long digit run cannot overflow the
+// signed `size_type` accumulator (which would be UB) before the range check rejects it.
+__device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view step)
+{
+  auto const slen = step.size_bytes();
+  auto const* sd  = step.data();
+  if (slen < 2 || sd[0] != '[' || sd[slen - 1] != ']') { return cuda::std::nullopt; }
+
+  uint64_t index = 0;
+  for (size_type k = 1; k < slen - 1; ++k) {
+    char const c = sd[k];
+    if (c < '0' || c > '9') { return cuda::std::nullopt; }
+    index = index * 10 + static_cast<uint64_t>(c - '0');
+    if (index > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
+      return cuda::std::nullopt;
+    }
+  }
+  return static_cast<size_type>(index);
+}
+
 // Walk a path of object-key or array-index steps level by level starting at `val` and return
 // the span of the final value (subspan of `val`). Returns an empty span on failure.
 //
@@ -466,31 +490,11 @@ __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> me
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
     auto const step = path.element<cudf::string_view>(i);
-    auto const slen = step.size_bytes();
-    auto const* sd  = step.data();
 
-    if (slen >= 2 && sd[0] == '[') {
-      // Accumulate the index in an unsigned 64-bit value so a long digit run cannot overflow the
-      // signed size_type accumulator (which would be UB). An index that does not fit in size_type
-      // is out of range for any array and resolves to a missing element (empty span).
-      uint64_t index     = 0;
-      bool ok            = (sd[slen - 1] == ']');
-      size_type const lo = 1;
-      size_type const hi = slen - 1;
-      for (size_type k = lo; ok && k < hi; ++k) {
-        char const c = sd[k];
-        if (c < '0' || c > '9') {
-          ok = false;
-          break;
-        }
-        index = index * 10 + static_cast<uint64_t>(c - '0');
-        if (index > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok || lo == hi) { return {}; }
-      sub_val = locate_array_element(sub_val, static_cast<size_type>(index));
+    if (step.size_bytes() >= 1 && step.data()[0] == '[') {
+      auto const index = parse_index_step(step);
+      if (!index.has_value()) { return {}; }
+      sub_val = locate_array_element(sub_val, index.value());
     } else {
       auto const field_id = find_key_in_metadata(meta, step);
       if (!field_id.has_value()) { return {}; }
