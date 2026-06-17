@@ -213,7 +213,7 @@ __device__ cuda::std::expected<A, errc> mod_overflow(A a, B b)
   requires(cuda::std::same_as<A, B>)
 {
   if (b == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
-  return a - b * cuda::std::floor(a / b);
+  return cuda::std::fmod(a, b);
 }
 
 template <typename A, typename B>
@@ -221,9 +221,13 @@ __device__ cuda::std::expected<numeric::decimal<A>, errc> mod_overflow(numeric::
                                                                        numeric::decimal<B> b)
   requires(cuda::std::same_as<A, B>)
 {
-  auto r = div_overflow(a, b);
-  if (!r.has_value()) { return cuda::std::unexpected{r.error()}; }
-  return a - b * floor(r.value());
+  if (b.value() == 0) { return cuda::std::unexpected{errc::DIVISION_BY_ZERO}; }
+
+  if (numeric::division_overflow<A>(a.value(), b.value())) {
+    return cuda::std::unexpected{errc::OVERFLOW};
+  }
+
+  return a % b;
 }
 
 /**
