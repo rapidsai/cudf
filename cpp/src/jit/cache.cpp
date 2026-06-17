@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,7 @@
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
+#include <xxh3.h>
 
 #include <filesystem>
 #include <format>
@@ -23,20 +24,16 @@ namespace CUDF_EXPORT cudf {
 
 namespace {
 
-rtcx::sha256 hash(std::span<char const> input)
+void hash(XXH3_state_t* ctx, std::span<char const> input)
 {
-  rtcx::sha256_context ctx;
-  ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
-  return ctx.finalize();
+  XXH3_128bits_update(ctx, input.data(), input.size());
 }
 
-rtcx::sha256 hash(std::span<char const* const> inputs)
+void hash(XXH3_state_t* ctx, std::span<char const* const> inputs)
 {
-  rtcx::sha256_context ctx;
   for (auto const* input : inputs) {
-    ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
+    XXH3_128bits_update(ctx, input, std::strlen(input));
   }
-  return ctx.finalize();
 }
 
 void install_file_set(
@@ -149,7 +146,7 @@ void jit_bundle_t::ensure_installed() const
 
 std::string jit_bundle_t::get_hash() const
 {
-  auto str = rtcx::sha256_hex_string::make(cudf_cuda_embed::hash);
+  auto str = rtcx::hash128_hex_string::make(cudf_cuda_embed::hash);
   return std::string{str.view()};
 }
 
@@ -293,15 +290,16 @@ kernel get_kernel(std::string const& name,
   auto& cache  = cudf::get_context().rtcx_cache();
   auto& bundle = cudf::get_context().jit_bundle();
 
-  auto runtime                   = get_runtime_version();
-  auto driver                    = get_driver_version();
-  auto sm                        = get_current_device_compute_capability();
-  auto header_include_names_hash = hash(header_include_names).to_hex_string();
-  auto headers_hash              = hash(headers).to_hex_string();
-  auto bundle_hash               = bundle.get_hash();
-  auto source_file               = std::format("{}/{}", bundle.get_directory(), source_file_id);
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_compute_capability();
+  auto bundle_hash = bundle.get_hash();
+  auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
-  auto cache_key = std::format(R"***(cuLibrary
+  XXH3_state_t* state = XXH3_createState();
+  XXH3_128bits_reset(state);
+  RTCX_DEFER([state] { XXH3_freeState(state); });
+  auto spec = std::format(R"***(cuLibrary
 name={}
 binary_type=CUBIN
 cuda_runtime={}
@@ -309,21 +307,22 @@ cuda_driver={}
 arch={}
 bundle={}
 source_file={}
-header_include_names={}
-headers={}
 kernel_instance={}
 )***",
-                               name,
-                               runtime,
-                               driver,
-                               sm,
-                               bundle_hash,
-                               source_file,
-                               header_include_names_hash.view(),
-                               headers_hash.view(),
-                               kernel_instance);
+                          name,
+                          runtime,
+                          driver,
+                          sm,
+                          bundle_hash,
+                          source_file,
+                          kernel_instance);
 
-  auto cache_key_sha256 = hash(cache_key);
+  hash(state, spec);
+  hash(state, header_include_names);
+  hash(state, headers);
+  auto digest = XXH3_128bits_digest(state);
+
+  rtcx::hash128 cache_key{digest.high64, digest.low64};
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
@@ -331,8 +330,7 @@ kernel_instance={}
     return compile_library(name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
-  auto fut =
-    cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
+  auto fut = cache.get_or_add_library(cache_key, rtcx::library_compile_func::from_functor(compile));
 
   auto lib = fut.get();
   return kernel{lib, lib->get_kernel("cudf_kernel_entry")};

@@ -12,7 +12,8 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and nvJitLink designe
 
 ## Build-time Requirements
 - CMake >= 4.0
-- LibZSTD - for binary compression
+- LibZSTD
+- xxHash
 - CUDA >= 12.2
 
 # Dependencies

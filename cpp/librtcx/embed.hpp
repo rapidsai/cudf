@@ -4,11 +4,14 @@
  */
 
 #pragma once
-#include "sha256.hpp"
+#include "hash.hpp"
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#define XXH_INLINE_ALL
+#include <xxhash.h>
 #include <zstd.h>
 
 #include <cstdint>
@@ -99,17 +102,20 @@ std::vector<uint8_t> compress_bytes(std::span<uint8_t const> bytes, std::string_
   return compressed;
 }
 
-rtcx::sha256 compute_embed_hash(std::span<uint8_t const> uncompressed_files_bytes,
-                                std::span<uint8_t const> merged_dests_bytes,
-                                std::span<uint8_t const> merged_include_dirs_bytes,
-                                std::string_view compression)
+rtcx::hash128 compute_embed_hash(std::span<uint8_t const> uncompressed_files_bytes,
+                                 std::span<uint8_t const> merged_dests_bytes,
+                                 std::span<uint8_t const> merged_include_dirs_bytes,
+                                 std::string_view compression)
 {
-  rtcx::sha256_context ctx;
-  ctx.update(uncompressed_files_bytes);
-  ctx.update(merged_dests_bytes);
-  ctx.update(merged_include_dirs_bytes);
-  ctx.update(std::span{reinterpret_cast<const uint8_t*>(compression.data()), compression.size()});
-  return ctx.finalize();
+  XXH3_state_t* state = XXH3_createState();
+  XXH3_128bits_reset(state);
+  XXH3_128bits_update(state, uncompressed_files_bytes.data(), uncompressed_files_bytes.size());
+  XXH3_128bits_update(state, merged_dests_bytes.data(), merged_dests_bytes.size());
+  XXH3_128bits_update(state, merged_include_dirs_bytes.data(), merged_include_dirs_bytes.size());
+  XXH3_128bits_update(state, compression.data(), compression.size());
+  XXH128_hash_t hash = XXH3_128bits_digest(state);
+  XXH3_freeState(state);
+  return rtcx::hash128{hash.high64, hash.low64};
 }
 
 template <typename Container, typename Formatter>

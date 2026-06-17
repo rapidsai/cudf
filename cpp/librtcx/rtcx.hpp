@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include "sha256.hpp"
+#include <hash.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -104,26 +104,24 @@ func(void*, R (*)(void*, Args...)) -> func<R(Args...)>;
 template <typename R, typename... Args>
 func(R (*)(Args...)) -> func<R(Args...)>;
 
-struct [[nodiscard]] sha256_hasher {
-  constexpr std::uint64_t operator()(sha256 const& obj) const
+struct [[nodiscard]] hash128_hasher {
+  constexpr std::uint64_t operator()(hash128 const& obj) const
   {
-    struct u64x4 {
-      alignas(alignof(sha256)) std::uint64_t  // NOLINT(modernize-avoid-c-arrays)
-        v[sizeof(sha256) / sizeof(std::uint64_t)];
+    struct u64x2 {
+      alignas(alignof(hash128)) std::uint64_t  // NOLINT(modernize-avoid-c-arrays)
+        v[sizeof(hash128) / sizeof(std::uint64_t)];
     };
 
-    auto value = std::bit_cast<u64x4>(obj);
+    auto value = std::bit_cast<u64x2>(obj);
     auto h0    = value.v[0];
     auto h1    = value.v[1];
-    auto h2    = value.v[2];
-    auto h3    = value.v[3];
 
     auto mix = [](std::uint64_t seed, std::uint64_t v) {
       seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
       return seed;
     };
 
-    return mix(mix(mix(h0, h1), h2), h3);
+    return mix(h0, h1);
   }
 };
 
@@ -477,7 +475,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
     void hit(std::uint64_t tick) { last_touched_tick = tick; }
   };
 
-  std::unordered_map<sha256, entry, sha256_hasher> entries_ = {};
+  std::unordered_map<hash128, entry, hash128_hasher> entries_ = {};
   std::size_t limit_;
 
   explicit lru_memory_cache(std::size_t limit) : limit_{limit}
@@ -492,7 +490,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
 
     auto num_to_purge = (entries_.size() + 1) / 2;
 
-    std::vector<std::pair<sha256, std::uint64_t>> rankings;
+    std::vector<std::pair<hash128, std::uint64_t>> rankings;
     rankings.reserve(entries_.size());
 
     for (auto& [key, entry] : entries_) {
@@ -510,7 +508,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
     }
   }
 
-  void insert(sha256 const& sha, T&& value, std::uint64_t tick)
+  void insert(hash128 const& sha, T&& value, std::uint64_t tick)
   {
     if (limit_ == 0) { return; }
 
@@ -648,23 +646,22 @@ struct cache_t {  // NOLINT
   [[nodiscard]] std::string const& get_tmp_dir();
 
   /**
-   * @brief Query the cache for a compiled blob by its SHA-256 hash, or insert it if not present
-   * @param sha SHA-256 hash of the blob to query or insert
+   * @brief Query the cache for a compiled blob by its hash, or insert it if not present
+   * @param hash hash of the blob to query or insert
    * @param compile Function to compile the blob if it's not found in the cache
    * @return A shared future that will hold the compiled blob once it's available
    */
-  [[nodiscard]] std::shared_future<blob> get_or_add_blob(sha256 const& sha,
+  [[nodiscard]] std::shared_future<blob> get_or_add_blob(hash128 const& hash,
                                                          blob_compile_func compile);
 
   /**
-   * @brief Query the cache for a compiled library by its SHA-256 hash and binary type, or insert
+   * @brief Query the cache for a compiled library by its hash and binary type, or insert
    * it if not present
-   * @param sha SHA-256 hash of the library to query or insert
-   * @param type Binary type of the library (e.g., CUBIN, PTX)
+   * @param hash hash of the library to query or insert
    * @param compile Function to compile the library if it's not found in the cache
    * @return A shared future that will hold the compiled library once it's available
    */
-  [[nodiscard]] std::shared_future<library> get_or_add_library(sha256 const& sha,
+  [[nodiscard]] std::shared_future<library> get_or_add_library(hash128 const& hash,
                                                                library_compile_func compile);
 
   /**
