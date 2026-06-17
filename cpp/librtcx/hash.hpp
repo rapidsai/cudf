@@ -69,7 +69,7 @@ struct hash128 {
 
   [[nodiscard]] std::uint8_t operator[](std::size_t index) const
   {
-    return reinterpret_cast<std::uint8_t const*>(&value)[16 - index];
+    return reinterpret_cast<std::uint8_t const*>(&value)[15 - index];
   }
 
   [[nodiscard]] std::size_t size() const { return 16; }
