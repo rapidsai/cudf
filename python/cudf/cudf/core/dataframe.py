@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -2967,6 +2967,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def reindex(
         self,
         labels=None,
+        *,
         index=None,
         columns=None,
         axis=None,
@@ -3078,6 +3079,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
+
+        if labels is not None and index is not None and columns is not None:
+            raise TypeError(
+                "Cannot specify all of 'labels', 'index', 'columns'."
+            )
 
         # pandas simply ignores the labels keyword if it is provided in
         # addition to index and columns, but it prohibits the axis arg.
@@ -3280,7 +3286,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
         ):
             # Don't turn single level MultiIndex into an Index
-            idx = Index._from_column(data_to_add[0], name=names[0])
+            freq = (
+                getattr(keys[0], "freq", None)
+                if isinstance(keys[0], (cudf.Index, pd.Index))
+                else None
+            )
+            if freq is not None and data_to_add[0].dtype.kind == "M":
+                # Preserve the freq of a DatetimeIndex passed as the key.
+                idx = cudf.DatetimeIndex._from_column(
+                    data_to_add[0], name=names[0], freq=freq
+                )
+            else:
+                idx = Index._from_column(data_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
@@ -3663,7 +3680,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     self.index, how="right", sort=False
                 )
 
-        value = as_column(value, nan_as_null=nan_as_null)
+        if isinstance(value, (list, tuple)) and len(value) == 0:
+            # An empty list-like assigned as a DataFrame column has no
+            # inferable dtype and becomes float64, matching pandas (note
+            # pd.Series([]) is object, but DataFrame column assignment is
+            # float64).
+            value = as_column(
+                value, nan_as_null=nan_as_null, dtype=np.dtype(np.float64)
+            )
+        else:
+            value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
     @property

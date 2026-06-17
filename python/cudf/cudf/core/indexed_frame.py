@@ -3977,6 +3977,20 @@ class IndexedFrame(Frame):
             dtypes = {}
 
         df = self
+        # Original column dtypes, captured before any index handling
+        # mutates ``df``; used to infer the dtype of brand-new columns.
+        orig_col_dtypes = [dtype for _, dtype in self._dtypes]
+        frame_common_dtype = (
+            orig_col_dtypes[0]
+            if (
+                orig_col_dtypes
+                and all(dt == orig_col_dtypes[0] for dt in orig_col_dtypes)
+                and isinstance(orig_col_dtypes[0], np.dtype)
+            )
+            else None
+        )
+        row_reindex = index is not None
+        rows_added = False
         if index is not None:
             if not df.index.is_unique:
                 raise ValueError(
@@ -4015,8 +4029,9 @@ class IndexedFrame(Frame):
                     index=df.index,
                 )
                 diff = index.difference(df.index)
+                rows_added = len(diff) > 0
                 df = lhs.join(rhs, how="left", sort=True)
-                if fill_value is not NA and len(diff) > 0:
+                if fill_value is not NA and rows_added:
                     df.loc[diff] = fill_value
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
@@ -4059,24 +4074,80 @@ class IndexedFrame(Frame):
             multiindex = False
             rangeindex = False
 
-        cols = {
-            name: (
-                df._data[name].copy(deep=deep)
-                if name in df._data
-                else (
-                    column_empty(
-                        dtype=dtypes.get(name, np.dtype(np.float64)),
-                        row_count=len(index),
-                    ).fillna(fill_value)
-                    if fill_value is not NA
-                    else column_empty(
-                        dtype=dtypes.get(name, np.dtype(np.float64)),
-                        row_count=len(index),
+        def _new_column(name):
+            # Build a brand-new column produced by reindex (entirely
+            # missing / fill values), choosing a dtype that matches pandas
+            # for the common numeric cases. Non-numeric fills keep the
+            # legacy ``column_empty(...).fillna`` path, which raises for
+            # incompatible fills so cudf.pandas falls back to pandas.
+            if fill_value is NA:
+                # All-null new column: keep a homogeneous float dtype,
+                # else float64 (numpy integer/bool cannot hold NaN).
+                if name in dtypes:
+                    target = dtypes[name]
+                elif (
+                    frame_common_dtype is not None
+                    and frame_common_dtype.kind == "f"
+                ):
+                    target = frame_common_dtype
+                else:
+                    target = np.dtype(np.float64)
+                return column_empty(dtype=target, row_count=len(index))
+            if name not in dtypes and is_scalar(fill_value):
+                scalar_col = as_column(fill_value, length=1)
+                if scalar_col.dtype.kind in "iuf":
+                    # Numeric scalar fill: a row-reindex of a homogeneous
+                    # numpy frame promotes the frame dtype against the fill
+                    # value (uint8 + 10 -> uint8, uint8 + 300 -> int64);
+                    # otherwise the new column's dtype is the fill value's.
+                    if row_reindex and frame_common_dtype is not None:
+                        if scalar_col.can_cast_safely(frame_common_dtype):
+                            target = frame_common_dtype
+                        else:
+                            target = find_common_type(
+                                [frame_common_dtype, scalar_col.dtype]
+                            )
+                    else:
+                        target = scalar_col.dtype
+                    return as_column(fill_value, length=len(index)).astype(
+                        target
                     )
-                )
-            )
-            for name in names
-        }
+            # Non-numeric / non-scalar fill: legacy behavior.
+            return column_empty(
+                dtype=dtypes.get(name, np.dtype(np.float64)),
+                row_count=len(index),
+            ).fillna(fill_value)
+
+        # cudf cannot represent duplicate column names; pandas can. Raise
+        # so cudf.pandas falls back to pandas rather than silently
+        # collapsing duplicates.
+        names_list = list(names)
+        if len(names_list) != len(set(names_list)):
+            raise ValueError("Duplicate column names are not allowed")
+
+        # pandas upcasts integer columns to float64 when default-NaN
+        # filling newly added rows on reindex (a numpy integer column
+        # cannot hold NA). Gated to preserve cudf's documented legacy
+        # behavior of keeping the integer dtype.
+        upcast_int_nulls = (
+            rows_added
+            and fill_value is NA
+            and cudf.get_option("mode.pandas_compatible")
+        )
+
+        cols = {}
+        for name in names_list:
+            if name in df._data:
+                col = df._data[name].copy(deep=deep)
+                if (
+                    upcast_int_nulls
+                    and col.dtype.kind in "iu"
+                    and col.null_count
+                ):
+                    col = col.astype(np.dtype(np.float64))
+            else:
+                col = _new_column(name)
+            cols[name] = col
 
         result = self.__class__._from_data(
             data=ColumnAccessor(
@@ -7291,6 +7362,13 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
     ):
         return True
     elif is_dtype_obj_string(lhs_dtype) and is_dtype_obj_string(rhs_dtype):
+        return True
+    elif is_dtype_obj_numeric(
+        lhs_dtype, include_decimal=False
+    ) and is_dtype_obj_numeric(rhs_dtype, include_decimal=False):
+        # Numeric index labels are joinable across int/float widths
+        # (e.g. an int level reindexed against a float level), matching
+        # pandas instead of bailing to an all-null result.
         return True
     else:
         return False
