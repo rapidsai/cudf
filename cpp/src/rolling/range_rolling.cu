@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -85,7 +85,7 @@ std::unique_ptr<column> make_range_window(
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
-  auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
+  auto dispatch = [&](auto&& clamper, scalar const* row_delta, column_view const* delta_col) {
     return type_dispatcher(orderby.type(),
                            clamper,
                            orderby,
@@ -94,13 +94,15 @@ std::unique_ptr<column> make_range_window(
                            grouping,
                            nulls_at_start,
                            row_delta,
+                           delta_col,
                            stream,
                            mr);
   };
   return std::visit(
     [&](auto&& window) -> std::unique_ptr<column> {
       using WindowType = cuda::std::decay_t<decltype(window)>;
-      return dispatch(rolling::range_window_clamper<WindowType>{}, window.delta());
+      return dispatch(
+        rolling::range_window_clamper<WindowType>{}, window.delta(), window.delta_column());
     },
     window);
 }
