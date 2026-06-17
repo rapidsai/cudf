@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+members = [
+    "cudf",
+    "cudf-sys",
+]
+resolver = "2"
+
+[workspace.package]
+version = "26.8.0"
+edition = "2024"
+repository = "https://github.com/rapidsai/cudf"
+homepage = "https://github.com/rapidsai/cudf"
+description = "GPU DataFrame library"
+authors = ["NVIDIA Corporation"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+cudf-sys = { path = "cudf-sys", version = "26.8.0" }
