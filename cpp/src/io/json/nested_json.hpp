@@ -57,6 +57,14 @@ enum class stack_behavior_t : char {
 constexpr auto list_child_name{"element"};
 
 /**
+ * @brief Row-level schema mismatch diagnostics for one top-level output column.
+ */
+struct schema_mismatch_rows {
+  std::string column_name;
+  std::vector<size_type> row_indices;
+};
+
+/**
  * @brief Intermediate representation of data from a nested JSON input
  */
 struct json_column {
@@ -169,6 +177,9 @@ struct device_json_column {
   // (rather than a vector) keeps `add_top_level_schema_mismatch` and the metadata-emit lookup at
   // O(1) and naturally deduplicates names.
   std::unordered_set<std::string> schema_mismatch_column_names;
+
+  // Row-level schema mismatch diagnostics, stored only on the root column.
+  std::vector<schema_mismatch_rows> rows_with_schema_mismatch;
 
   /**
    * @brief Construct a new d json column object
@@ -391,6 +402,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
  * @param row_offsets Row offsets of the nodes in the tree
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param collect_schema_mismatch_rows Whether to collect row-level schema mismatch diagnostics
  * @param options Parsing options specifying the parsing behaviour
  * options affecting behaviour are
  *   is_enabled_lines: Whether the input is a line-delimited JSON
@@ -405,6 +417,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
+                             bool collect_schema_mismatch_rows,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
@@ -442,6 +455,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
 struct device_parse_nested_json_result {
   table_with_metadata data;
   std::vector<std::string> top_level_columns_with_schema_mismatch;
+  std::vector<schema_mismatch_rows> top_level_columns_with_schema_mismatch_rows;
 };
 
 /**
@@ -451,6 +465,7 @@ struct device_parse_nested_json_result {
  *
  * @param input The JSON input
  * @param options Parsing options specifying the parsing behaviour
+ * @param collect_schema_mismatch_rows Whether to collect row-level schema mismatch diagnostics
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return The parsed data plus the list of mismatched top-level column names
@@ -459,6 +474,7 @@ CUDF_EXPORT
 device_parse_nested_json_result device_parse_nested_json_with_diagnostics(
   device_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
+  bool collect_schema_mismatch_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

@@ -257,6 +257,20 @@ json_reader_result read_json_with_diagnostics(json_reader_options options,
   return json::detail::read_json_with_diagnostics(datasources, options, stream, mr);
 }
 
+json_reader_result_with_row_diagnostics read_json_with_row_diagnostics(
+  json_reader_options options, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(options.get_source(),
+                                      options.get_byte_range_offset(),
+                                      options.get_byte_range_size_with_padding());
+
+  return json::detail::read_json_with_row_diagnostics(datasources, options, stream, mr);
+}
+
 void write_json(json_writer_options const& options, rmm::cuda_stream_view stream)
 {
   auto sinks = make_datasinks(options.get_sink());
