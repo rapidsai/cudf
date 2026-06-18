@@ -315,13 +315,13 @@ def _drop_dyn_pred_hints(
 
 
 def translate_predicate(
-    translator: Translator, *, n: Any, schema: Schema
+    translator: Translator, *, n: int, output_name: str, schema: Schema
 ) -> expr.NamedExpr | None:
     """Translate predicate, dropping Polars' dynamic predicate hints."""
-    mask = _drop_dyn_pred_hints(translator, n.node, schema)
+    mask = _drop_dyn_pred_hints(translator, n, schema)
     if mask is None:
         return None
-    return expr.NamedExpr(n.output_name, mask)
+    return expr.NamedExpr(output_name, mask)
 
 
 class set_internal_name_gen(AbstractContextManager[None]):
@@ -373,10 +373,8 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
     if raw_predicate is None:
         predicate = None
     elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":
-        # The predicate is an expression to be translated.
-        predicate = expr.NamedExpr(
-            "_predicate",
-            translator.translate_expr(n=raw_predicate[1], schema=schema),
+        predicate = translate_predicate(
+            translator, n=raw_predicate[1], output_name="_predicate", schema=schema
         )
     else:  # pragma: no cover
         # The only other form is a pyarrow predicate, ("pyarrow", ...), which
@@ -451,7 +449,12 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         (
             None
             if node.predicate is None
-            else translate_predicate(translator, n=node.predicate, schema=schema)
+            else translate_predicate(
+                translator,
+                n=node.predicate.node,
+                output_name=node.predicate.output_name,
+                schema=schema,
+            )
         ),
         parquet_options,
     )
@@ -668,7 +671,12 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        mask = translate_predicate(translator, n=node.predicate, schema=inp.schema)
+        mask = translate_predicate(
+            translator,
+            n=node.predicate.node,
+            output_name=node.predicate.output_name,
+            schema=inp.schema,
+        )
         if mask is None:
             return inp
     return ir.Filter(schema, mask, inp)

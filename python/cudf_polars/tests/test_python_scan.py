@@ -44,6 +44,16 @@ def test_python_scan_empty_keeps_schema(engine: pl.GPUEngine):
     assert result.schema == pl.Schema({"a": pl.Int64})
 
 
+def test_python_scan_dynamic_predicate(engine: pl.GPUEngine):
+    def source(with_columns, predicate, n_rows, batch_size):
+        yield pl.DataFrame({"a": [5, 3, 1, 4, 2]})
+
+    # sort + head pushes a dynamic-predicate optimizer hint
+    # (``col(...).dynamic_predicate()``) into the PythonScan.
+    q = register_io_source(source, schema={"a": pl.Int64}).sort("a").head(3)
+    assert_frame_equal(q.collect(engine=engine), pl.DataFrame({"a": [1, 2, 3]}))
+
+
 def test_python_scan_predicate_pushdown(engine: pl.GPUEngine):
     df = pl.DataFrame({"a": [1, 2, 3, 4, 5]})
 
