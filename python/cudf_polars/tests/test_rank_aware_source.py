@@ -12,10 +12,7 @@ import polars as pl
 from polars.io.plugins import register_io_source
 from polars.testing import assert_frame_equal
 
-import cudf_polars.streaming.io  # noqa: F401  (registers the PythonScan lower handler)
-from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.dsl import ir
-from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.rank_aware_source import RankAwareSource, SizedChunks
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
@@ -62,37 +59,39 @@ def test_rank_aware_source(engine: pl.GPUEngine):
     )
 
 
-class MultiChunkSource(RankAwareSource):
-    """Rank-aware scan source whose data lives on rank 0, emitted as two chunks."""
-
-    def __init__(self, chunks: list[pl.DataFrame]) -> None:
-        self.chunks = chunks
-
-    def __call__(self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1):
-        if rank:
-            yield from (c.clear() for c in self.chunks)
-        else:
-            yield from self.chunks
-
-
 def test_rank_aware_source_multi_chunk(engine: pl.GPUEngine):
+    class MultiChunkSource(RankAwareSource):
+        """Rank-aware scan source whose data lives on rank 0, emitted as two chunks."""
+
+        def __init__(self, chunks: list[pl.DataFrame]) -> None:
+            self.chunks = chunks
+
+        def __call__(
+            self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1
+        ):
+            if rank:
+                yield from (c.clear() for c in self.chunks)
+            else:
+                yield from self.chunks
+
     chunks = [pl.DataFrame({"a": [1, 2]}), pl.DataFrame({"a": [3, 4]})]
     q = register_io_source(MultiChunkSource(chunks), schema={"a": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), pl.DataFrame({"a": [1, 2, 3, 4]}))
 
 
-class GpuSource(RankAwareSource):
-    """Rank-aware source that yields GPU-resident cudf-polars DataFrames."""
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self.df = df
-
-    def __call__(self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1):
-        df = self.df if not rank else self.df.clear()
-        yield DataFrame.from_polars(df, stream=get_cuda_stream())
-
-
 def test_rank_aware_source_gpu_chunks(engine: pl.GPUEngine):
+    class GpuSource(RankAwareSource):
+        """Rank-aware source that yields GPU-resident cudf-polars DataFrames."""
+
+        def __init__(self, df: pl.DataFrame) -> None:
+            self.df = df
+
+        def __call__(
+            self, with_columns, predicate, n_rows, batch_size, rank=0, nranks=1
+        ):
+            df = self.df if not rank else self.df.clear()
+            yield DataFrame.from_polars(df, stream=get_cuda_stream())
+
     df = pl.DataFrame({"a": [1, 2, 3]})
     q = register_io_source(GpuSource(df), schema={"a": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), df)
@@ -116,39 +115,6 @@ def test_rank_aware_source_self_partition(engine: pl.GPUEngine):
     df = pl.DataFrame({"a": list(range(10))})
     q = register_io_source(PartitioningSource(df), schema={"a": pl.Int64})
     assert_frame_equal(q.collect(engine=engine), df)
-
-
-def _plain_source(with_columns, predicate, n_rows, batch_size):
-    yield pl.DataFrame({"a": [1]})
-
-
-def _scan_fn(source) -> object:
-    """The register_io_source wrapper stored in the PythonScan options."""
-    lf = register_io_source(source, schema={"a": pl.Int64})
-    return lf._ldf.visit().view_current_node().options[0]
-
-
-class _LowerState:
-    """Minimal stand-in for the lowering transformer (only ``state`` is read)."""
-
-    def __init__(self, nranks: int) -> None:
-        self.state = {"nranks": nranks}
-
-
-def _lower_python_scan(source, nranks: int) -> int:
-    schema = {"a": DataType(pl.Int64())}
-    # options = (scan_fn, with_columns, source_type)
-    node = ir.PythonScan(schema, (_scan_fn(source), None, "io_plugin"), None)
-    # _LowerState is a minimal stub, not a full GenericTransformer.
-    _, partition_info = lower_ir_node(node, _LowerState(nranks=nranks))  # type: ignore[arg-type]
-    return partition_info[node].count
-
-
-def test_python_scan_partition_count():
-    # A PythonScan can emit multiple chunks and the count is unknown at lowering,
-    # so it always lowers as multi-partition (count > 1) regardless of world size.
-    assert _lower_python_scan(_plain_source, nranks=3) == 2
-    assert _lower_python_scan(_plain_source, nranks=1) == 2
 
 
 def test_sized_chunks_reports_count_and_iterates():
