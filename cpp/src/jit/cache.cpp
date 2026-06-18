@@ -37,23 +37,25 @@ void hash(XXH3_state_t* ctx, std::span<char const* const> inputs)
   }
 }
 
-rtcx::sha256 hash(std::span<rtcx::file_fragment const> file_fragments,
-                  std::span<rtcx::memory_fragment const> memory_fragments)
+void hash(XXH3_state_t* ctx, std::span<rtcx::file_fragment const> file_fragments)
 {
-  rtcx::sha256_context ctx;
   for (auto const& fragment : file_fragments) {
-    ctx.update(
-      std::span{reinterpret_cast<uint8_t const*>(fragment.path), std::strlen(fragment.path)});
+    XXH3_128bits_update(ctx, fragment.path, std::strlen(fragment.path));
+    XXH3_128bits_update(ctx, "\0", 1);  // null terminator
   }
+}
+
+void hash(XXH3_state_t* ctx, std::span<rtcx::memory_fragment const> memory_fragments)
+{
   for (auto const& fragment : memory_fragments) {
     if (fragment.name != nullptr) {
-      ctx.update(
-        std::span{reinterpret_cast<uint8_t const*>(fragment.name), std::strlen(fragment.name)});
+      XXH3_128bits_update(ctx, fragment.name, std::strlen(fragment.name));
+      XXH3_128bits_update(ctx, "\0", 1);  // null terminator
     } else {
-      ctx.update(fragment.data);
+      XXH3_128bits_update(ctx, fragment.data.data(), fragment.data.size());
+      XXH3_128bits_update(ctx, "\0", 1);  // null terminator
     }
   }
-  return ctx.finalize();
 }
 
 void install_file_set(
@@ -398,6 +400,7 @@ kernel get_kernel(std::string const& name,
   XXH3_state_t state;
   XXH3_INITSTATE(&state);
   XXH3_128bits_reset(&state);
+
   auto spec = std::format(R"***(cuLibrary
 name={}
 binary_type=CUBIN
@@ -417,11 +420,13 @@ kernel_instance={}
                           kernel_instance);
 
   hash(&state, spec);
+  hash(&state, "header_include_names: ");
   hash(&state, header_include_names);
+  hash(&state, "headers: ");
   hash(&state, headers);
-  auto digest = XXH3_128bits_digest(&state);
 
-  rtcx::hash128 cache_key{digest.high64, digest.low64};
+  auto digest = XXH3_128bits_digest(&state);
+  auto key    = rtcx::hash128{digest.high64, digest.low64};
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
@@ -429,7 +434,7 @@ kernel_instance={}
     return compile_library(name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
-  auto fut = cache.get_or_add_library(cache_key, rtcx::library_compile_func::from_functor(compile));
+  auto fut = cache.get_or_add_library(key, rtcx::library_compile_func::from_functor(compile));
 
   auto lib = fut.get();
   return kernel{lib, lib->get_kernel("cudf_kernel_entry")};
@@ -446,15 +451,13 @@ rtcx::blob get_kernel_fragment(std::string const& name,
   auto& cache  = cudf::get_context().rtcx_cache();
   auto& bundle = cudf::get_context().jit_bundle();
 
-  auto runtime                   = get_runtime_version();
-  auto driver                    = get_driver_version();
-  auto sm                        = get_current_device_compute_capability();
-  auto header_include_names_hash = hash(header_include_names).to_hex_string();
-  auto headers_hash              = hash(headers).to_hex_string();
-  auto bundle_hash               = bundle.get_hash();
-  auto source_file               = std::format("{}/{}", bundle.get_directory(), source_file_id);
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_compute_capability();
+  auto bundle_hash = bundle.get_hash();
+  auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
-  auto cache_key = std::format(R"***(objectFile
+  auto spec = std::format(R"***(objectFile
 name={}
 binary_type=LTO_IR
 cuda_runtime={}
@@ -462,21 +465,28 @@ cuda_driver={}
 arch={}
 bundle={}
 source_file={}
-header_include_names={}
-headers={}
 kernel_instance={}
 )***",
-                               name,
-                               runtime,
-                               driver,
-                               sm,
-                               bundle_hash,
-                               source_file,
-                               header_include_names_hash.view(),
-                               headers_hash.view(),
-                               kernel_instance);
+                          name,
+                          runtime,
+                          driver,
+                          sm,
+                          bundle_hash,
+                          source_file,
+                          kernel_instance);
 
-  auto cache_key_sha256 = hash(cache_key);
+  XXH3_state_t state;
+  XXH3_INITSTATE(&state);
+  XXH3_128bits_reset(&state);
+
+  hash(&state, spec);
+  hash(&state, "header_include_names: ");
+  hash(&state, header_include_names);
+  hash(&state, "headers: ");
+  hash(&state, headers);
+
+  auto digest = XXH3_128bits_digest(&state);
+  auto key    = rtcx::hash128{digest.high64, digest.low64};
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
@@ -484,8 +494,7 @@ kernel_instance={}
     return compile_fragment(name.c_str(), source.c_str(), header_include_names, headers, {});
   };
 
-  auto fut =
-    cache.get_or_add_blob(cache_key_sha256, rtcx::blob_compile_func::from_functor(compile));
+  auto fut = cache.get_or_add_blob(key, rtcx::blob_compile_func::from_functor(compile));
 
   return fut.get();
 }
@@ -537,38 +546,45 @@ kernel get_lto_linked_kernel(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache         = cudf::get_context().rtcx_cache();
-  auto& bundle        = cudf::get_context().jit_bundle();
-  auto runtime        = get_runtime_version();
-  auto driver         = get_driver_version();
-  auto sm             = get_current_device_compute_capability();
-  auto bundle_hash    = bundle.get_hash();
-  auto fragments_hash = hash(file_fragments, memory_fragments).to_hex_string();
+  auto& cache      = cudf::get_context().rtcx_cache();
+  auto& bundle     = cudf::get_context().jit_bundle();
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_compute_capability();
+  auto bundle_hash = bundle.get_hash();
 
-  auto cache_key = std::format(R"***(cuLibrary
+  auto spec = std::format(R"***(cuLibrary
 name={}
 binary_type=CUBIN
 cuda_runtime={}
 cuda_driver={}
 arch={}
 bundle={}
-fragments={}
 )***",
-                               name,
-                               runtime,
-                               driver,
-                               sm,
-                               bundle_hash,
-                               fragments_hash.view());
+                          name,
+                          runtime,
+                          driver,
+                          sm,
+                          bundle_hash);
 
-  auto cache_key_sha256 = hash(cache_key);
+  XXH3_state_t state;
+  XXH3_INITSTATE(&state);
+  XXH3_128bits_reset(&state);
+
+  hash(&state, spec);
+  hash(&state, "file_fragments: ");
+  hash(&state, file_fragments);
+  hash(&state, "memory_fragments: ");
+  hash(&state, memory_fragments);
+
+  auto digest = XXH3_128bits_digest(&state);
+  auto key    = rtcx::hash128{digest.high64, digest.low64};
 
   auto compile = [&] {
     return link_library_uncached(name.c_str(), file_fragments, memory_fragments);
   };
 
-  auto fut =
-    cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
+  auto fut = cache.get_or_add_library(key, rtcx::library_compile_func::from_functor(compile));
 
   auto lib = fut.get();
   return kernel{lib, lib->get_kernel("cudf_kernel_entry")};
