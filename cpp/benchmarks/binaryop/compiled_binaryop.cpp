@@ -74,6 +74,7 @@ BINARYOP_BENCHMARK_DEFINE(timestamp_s,  duration_s,   ADD,                  time
 BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_D,   SUB,                  duration_ms);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      SUB,                  int64_t);
 BINARYOP_BENCHMARK_DEFINE(float,        float,        MUL,                  int64_t);
+BINARYOP_BENCHMARK_DEFINE(float,        float,        MUL,                  float);
 BINARYOP_BENCHMARK_DEFINE(duration_s,   int64_t,      MUL,                  duration_s);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      DIV,                  int64_t);
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  int32_t,      DIV,                  duration_ms);
