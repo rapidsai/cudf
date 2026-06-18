@@ -3703,7 +3703,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         ]
         if cat_subset and len(result):
             subset_levels = [
-                cast(CategoricalDtype, self.obj._data[s].dtype)
+                cast("CategoricalDtype", self.obj._data[s].dtype)
                 .categories.to_pandas()
                 .tolist()
                 if s in cat_subset
