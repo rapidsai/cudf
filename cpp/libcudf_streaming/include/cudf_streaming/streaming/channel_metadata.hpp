@@ -130,12 +130,13 @@ struct Ordering {
 /**
  * @brief Order-based partitioning scheme for sorted/range-partitioned data.
  *
- * An OrderScheme may contain multiple alternative ordering descriptions for
- * the same stream. Consumers are responsible for selecting the ordering that is
- * relevant to a particular operation.
+ * An OrderScheme advertises that the same stream is sorted/range-partitioned
+ * with respect to any individual Ordering it contains. Consumers are
+ * responsible for selecting the Ordering that is relevant to a particular
+ * operation.
  */
 struct OrderScheme {
-  std::vector<Ordering> orderings;  ///< Alternative ordering descriptions.
+  std::vector<Ordering> orderings;  ///< Ordering descriptions valid for the stream.
 
   /// @brief Default constructor. Produces an invalid (empty) scheme.
   OrderScheme() = default;
@@ -152,7 +153,7 @@ struct OrderScheme {
   /**
    * @brief Construct a validated multi-ordering OrderScheme.
    *
-   * @param orderings Non-empty alternative ordering descriptions.
+   * @param orderings Non-empty sequence of orderings valid for the stream.
    */
   explicit OrderScheme(std::vector<Ordering> orderings);
 };

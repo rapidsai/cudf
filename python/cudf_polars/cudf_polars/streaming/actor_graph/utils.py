@@ -72,6 +72,94 @@ InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
 
 
+def _hash_keys_match(
+    scheme: HashScheme, key_indices: tuple[int, ...], *, allow_subset: bool
+) -> bool:
+    current = scheme.column_indices
+    target = key_indices[: len(current)] if allow_subset else key_indices
+    return target == current
+
+
+def _ordering_keys_match(
+    ordering: Ordering,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> bool:
+    if allow_subset:
+        n = len(ordering.keys)
+        if n > len(key_indices):
+            return False
+    else:
+        if len(ordering.keys) != len(key_indices):
+            return False
+        n = len(key_indices)
+    if order_based:
+        return all(ok == k for ok, k in zip(ordering.keys, keys[:n], strict=True))
+    return all(
+        k.column_index == k_idx
+        for k, k_idx in zip(ordering.keys, key_indices[:n], strict=True)
+    )
+
+
+def _matching_order_scheme(
+    scheme: OrderScheme,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> OrderScheme | None:
+    matches = [
+        (i, ordering)
+        for i, ordering in enumerate(scheme.orderings)
+        if _ordering_keys_match(
+            ordering,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
+    ]
+    if matches:
+        # Prefer the most specific matching ordering; equal-length ties
+        # keep the original metadata order.
+        i, ordering = max(matches, key=lambda match: len(match[1].keys))
+        return OrderScheme(
+            (
+                ordering,
+                *scheme.orderings[:i],
+                *scheme.orderings[i + 1 :],
+            )
+        )
+    return None
+
+
+def _keys_match(
+    scheme: object,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> InterRankScheme:
+    if isinstance(scheme, HashScheme) and _hash_keys_match(
+        scheme, key_indices, allow_subset=allow_subset
+    ):
+        return scheme
+    if isinstance(scheme, OrderScheme):
+        return _matching_order_scheme(
+            scheme,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
+    return None
+
+
 class ChunkStore:
     """Ordered spillable buffer for TableChunk messages."""
 
@@ -998,59 +1086,14 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         if partitioning_metadata is None:
             return trivial, None
 
-        def _hash_keys_match(scheme: HashScheme) -> bool:
-            current = scheme.column_indices
-            target = key_indices[: len(current)] if allow_subset else key_indices
-            return target == current
-
-        def _ordering_keys_match(ordering: Ordering) -> bool:
-            if allow_subset:
-                n = len(ordering.keys)
-                if n > len(key_indices):
-                    return False
-            else:
-                if len(ordering.keys) != len(key_indices):
-                    return False
-                n = len(key_indices)
-            if order_based:
-                return all(
-                    ok == k for ok, k in zip(ordering.keys, keys[:n], strict=True)
-                )
-            return all(
-                k.column_index == k_idx
-                for k, k_idx in zip(ordering.keys, key_indices[:n], strict=True)
-            )
-
-        def _matching_order_scheme(scheme: OrderScheme) -> OrderScheme | None:
-            matches = [
-                (i, ordering)
-                for i, ordering in enumerate(scheme.orderings)
-                if _ordering_keys_match(ordering)
-            ]
-            if matches:
-                # Prefer the most specific matching ordering; equal-length ties
-                # keep the original metadata order.
-                i, ordering = max(matches, key=lambda match: len(match[1].keys))
-                return OrderScheme(
-                    (
-                        ordering,
-                        *scheme.orderings[:i],
-                        *scheme.orderings[i + 1 :],
-                    )
-                )
-            return None
-
-        def _keys_match(
-            scheme: object,
-        ) -> InterRankScheme:
-            if isinstance(scheme, HashScheme) and _hash_keys_match(scheme):
-                return scheme
-            if isinstance(scheme, OrderScheme):
-                return _matching_order_scheme(scheme)
-            return None
-
         inter_rank = partitioning_metadata.inter_rank
-        strict_inter_rank = _keys_match(inter_rank)
+        strict_inter_rank = _keys_match(
+            inter_rank,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
         inter_rank_scheme: InterRankScheme = strict_inter_rank or trivial
         if inter_rank_scheme is None and nranks > 1:
             # Partitioning is meaningless without inter-rank partitioning
@@ -1058,7 +1101,13 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
 
         local = partitioning_metadata.local
         local_scheme: PartitioningScheme
-        matched_local = _keys_match(local)
+        matched_local = _keys_match(
+            local,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
         if matched_local is not None:
             local_scheme = matched_local
         elif local == "inherit":

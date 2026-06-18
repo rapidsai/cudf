@@ -140,8 +140,6 @@ cdef class Ordering:
         cdef vector[cpp_OrderKey] cpp_keys
         for key in keys:
             cpp_keys.push_back((<OrderKey?>key)._handle)
-        if cpp_keys.empty():
-            raise ValueError("Ordering: keys must not be empty")
         self._handle = cpp_Ordering(
             move(cpp_keys), move(boundaries.release_handle()), strict_boundaries
         )
@@ -226,22 +224,21 @@ cdef class Ordering:
 cdef class OrderScheme:
     """Order-based partitioning scheme for sorted/range-partitioned data.
 
-    An OrderScheme contains one or more alternative ordering descriptions.
-    Consumers should inspect the ``Ordering`` they intend to use for keys,
-    boundaries, and strictness.
+    An OrderScheme advertises that the same stream is sorted/range-partitioned
+    with respect to any individual ``Ordering`` it contains. Consumers should
+    inspect the ``Ordering`` they intend to use for keys, boundaries, and
+    strictness.
 
     Parameters
     ----------
     orderings
-        Non-empty sequence of alternative ``Ordering`` objects.
+        Non-empty sequence of ``Ordering`` objects valid for the stream.
     """
 
     def __init__(self, object orderings):
         cdef vector[cpp_Ordering] cpp_orderings
         for ordering in orderings:
             cpp_orderings.push_back((<Ordering?>ordering)._handle)
-        if cpp_orderings.empty():
-            raise ValueError("OrderScheme: orderings must not be empty")
         self._handle = cpp_OrderScheme(move(cpp_orderings))
 
     @staticmethod
@@ -252,7 +249,7 @@ cdef class OrderScheme:
 
     @property
     def orderings(self) -> tuple:
-        """Alternative ordering descriptions."""
+        """Ordering descriptions valid for the stream."""
         cdef int i
         cdef int n = self._handle.orderings.size()
         return tuple(

@@ -101,7 +101,8 @@ OrderScheme::OrderScheme(std::vector<Ordering> orderings) : orderings{std::move(
   RAPIDSMPF_EXPECTS(
     !this->orderings.empty(), "OrderScheme: orderings must not be empty", std::invalid_argument);
   for (auto const& ordering : this->orderings) {
-    validate_ordering(ordering);
+    RAPIDSMPF_EXPECTS(
+      !ordering.keys.empty(), "OrderScheme: orderings must not be empty", std::invalid_argument);
   }
 }
 
