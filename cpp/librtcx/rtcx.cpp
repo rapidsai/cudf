@@ -15,9 +15,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
-#define XXH_INLINE_ALL
-#include <xxhash.h>
 #include <zstd.h>
 
 #include <atomic>

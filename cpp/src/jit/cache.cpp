@@ -13,7 +13,9 @@
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
-#include <xxh3.h>
+
+#define XXH_INLINE_ALL
+#include <xxhash.h>
 
 #include <filesystem>
 #include <format>

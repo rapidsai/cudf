@@ -6,7 +6,11 @@
 # =============================================================================
 
 if(NOT TARGET zstd)
-  message(FATAL_ERROR "embed(): zstd target is required for LIBRTCX embedding.")
+  message(FATAL_ERROR "zstd target is required for LIBRTCX embedding.")
+endif()
+
+if(NOT TARGET xxhash)
+  message(FATAL_ERROR "xxhash target is required for LIBRTCX embedding.")
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
@@ -272,7 +276,7 @@ function(embed TARGET)
 
   set(RUNNER "${TARGET}__jit_embed_run")
   add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
+  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd xxhash)
   target_include_directories(
     ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}
   )
