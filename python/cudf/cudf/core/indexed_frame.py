@@ -4141,6 +4141,11 @@ class IndexedFrame(Frame):
                 col = df._data[name].copy(deep=deep)
                 if (
                     upcast_int_nulls
+                    # Only plain numpy integer columns cannot hold NA;
+                    # nullable extension integers (masked ``IntX``,
+                    # ``ArrowDtype``) natively represent NA, so pandas
+                    # keeps their dtype rather than upcasting to float64.
+                    and isinstance(col.dtype, np.dtype)
                     and col.dtype.kind in "iu"
                     and col.null_count
                 ):

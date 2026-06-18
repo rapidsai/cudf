@@ -3243,7 +3243,12 @@ class Series(SingleColumnFrame, IndexedFrame):
                     else None
                 )
                 res = res[res.index.notna()]
-                res = res.reindex(self.dtype.categories).fillna(0)
+                # Fill missing categories with a 0 count directly via
+                # ``reindex`` (rather than ``reindex(...).fillna(0)``) so
+                # the integer count dtype is preserved: a default-NA
+                # reindex upcasts integer columns to float64 in
+                # pandas-compatible mode.
+                res = res.reindex(self.dtype.categories, fill_value=0)
                 res.index = res.index.astype(self.dtype)
                 if nan_count is not None:
                     res = cudf.concat([res, nan_count])
