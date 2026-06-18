@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -1325,6 +1325,36 @@ def test_groupby_string_min_max_preserves_dtype(string_dtype, op):
     expect = getattr(pdf.groupby("a"), op)()
     assert_eq(expect, got)
     assert got["b"].dtype == expect["b"].dtype
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["any", "all"])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_any_all_string_nulls(string_dtype, op, skipna):
+    # any/all over string groups must treat nulls like pandas regardless of
+    # the StringDtype's na_value: an all-null group is empty under skipna
+    # (``all`` -> True, ``any`` -> False), and non-empty/empty strings map
+    # to True/False. Groups here are either all-null or all-valued so the
+    # result is unambiguous (no Kleene NA propagation).
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 3],
+            "b": pd.array([pd.NA, pd.NA, "x", ""], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)(skipna=skipna)
+    expect = getattr(pdf.groupby("a"), op)(skipna=skipna)
+    assert_eq(expect, got)
 
 
 def test_groupby_series_identity_column_exclusion():
