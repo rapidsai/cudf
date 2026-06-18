@@ -365,7 +365,11 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
         raise NotImplementedError(
             "A row limit (head/limit) on a PythonScan source is not supported."
         )
-    options = (scan_fn, with_columns, source_type)
+    # Reused sources share the same ``scan_fn`` object, so capture the Polars
+    # node index to keep occurrences distinct in our IR identity (hash/eq).
+    # The index is deterministic across ranks.
+    ir_node_index = translator.visitor.get_node()
+    options = (scan_fn, with_columns, source_type, ir_node_index)
     if raw_predicate is None:
         predicate = None
     elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":

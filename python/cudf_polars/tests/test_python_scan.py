@@ -325,3 +325,17 @@ def test_python_scan_sized_chunks_groupby(engine: pl.GPUEngine):
         .agg(pl.col("b").sum())
     )
     assert_frame_equal(q.collect(engine=engine), q.collect(), check_row_order=False)
+
+
+def test_python_scan_same_source_used_twice(engine: pl.GPUEngine):
+    state = {"calls": 0}
+
+    def source(with_columns, predicate, n_rows, batch_size):
+        state["calls"] += 1
+        yield pl.DataFrame({"a": [state["calls"]]})
+
+    lf = register_io_source(source, schema={"a": pl.Int64})
+    result = pl.concat([lf, lf]).collect(engine=engine)
+    # Two independent calls -> two rows with distinct counter values.
+    assert result.height == 2
+    assert result["a"].n_unique() == 2

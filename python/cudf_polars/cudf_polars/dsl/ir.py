@@ -370,11 +370,11 @@ class PythonScan(IR):
 
     def get_hashable(self) -> Hashable:
         """Return a hashable representation."""
-        scan_fn, with_columns, source_type = self.options
+        _scan_fn, with_columns, source_type, ir_node_index = self.options
         return (
             type(self),
             tuple(self.schema.items()),
-            id(scan_fn),
+            ir_node_index,
             tuple(with_columns) if with_columns is not None else None,
             source_type,
             self.predicate,
@@ -401,7 +401,8 @@ class PythonScan(IR):
         Parameters
         ----------
         options
-            The `PythonScan` options tuple ``(scan_fn, with_columns, source_type)``.
+            The `PythonScan` options tuple
+            ``(scan_fn, with_columns, source_type, ir_node_index)``.
         schema
             The declared output schema, used for the empty-source fallback frame.
         rank_aware_source
@@ -435,7 +436,7 @@ class PythonScan(IR):
         # https://github.com/rapidsai/cudf/issues/22918), so n_rows is always
         # None. We pass predicate=None to the source and apply any pushed
         # predicate on the GPU in process_chunk.
-        scan_fn, with_columns, _source_type = options
+        scan_fn, with_columns, _source_type, _ir_node_index = options
         if rank_aware_source is not None:
             source_chunks = rank_aware_source(
                 with_columns, None, None, None, rank=rank, nranks=nranks
