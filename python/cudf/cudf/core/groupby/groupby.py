@@ -1412,7 +1412,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 skipna=kwargs.get("skipna", True), min_count=min_count
             )
 
-        result = self.agg(op)
+        agg_op: str | _FirstLastAggSpec = op
+        if op in {"first", "last"} and not kwargs.get("skipna", True):
+            # ``first``/``last`` default to dropping nulls (skipna=True). With
+            # ``skipna=False`` the actual first/last element of each group is
+            # returned even when it is null, matching pandas.
+            agg_op = _FirstLastAggSpec(op, skipna=False)
+
+        result = self.agg(agg_op)
         if min_count and min_count > 0:
             counts = self.agg("count")
             result = result.where(counts >= min_count, None)
@@ -4136,6 +4143,28 @@ class _Grouping(Serializable):
         out._named_columns = copy.deepcopy(self._named_columns)
         out._key_columns = [col.copy(deep=deep) for col in self._key_columns]
         return out
+
+
+class _FirstLastAggSpec:
+    """Callable aggregation spec for groupby ``first``/``last``.
+
+    Lets :meth:`GroupBy._reduce` thread ``skipna`` to
+    :meth:`Aggregation.first`/:meth:`Aggregation.last` through
+    ``make_aggregation``'s callable path. ``__str__``/``__name__`` report the
+    op name so aggregation-validity checks and result-column naming behave
+    exactly as they do for the plain ``"first"``/``"last"`` string specs.
+    """
+
+    def __init__(self, op: str, skipna: bool) -> None:
+        self._op = op
+        self._skipna = skipna
+        self.__name__ = op
+
+    def __call__(self, agg):
+        return getattr(agg, self._op)(skipna=self._skipna)
+
+    def __str__(self) -> str:
+        return self._op
 
 
 def _is_multi_agg(aggs):

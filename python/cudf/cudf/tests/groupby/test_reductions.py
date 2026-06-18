@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -1384,6 +1384,46 @@ def test_groupby_reduce_min_count(op, min_count):
     with cudf.option_context("mode.pandas_compatible", True):
         got = getattr(gdf.groupby("a"), op)(min_count=min_count)
     expect = getattr(pdf.groupby("a"), op)(min_count=min_count)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["Int64", "UInt32", "Float64", "int64[pyarrow]", "double[pyarrow]"],
+)
+@pytest.mark.parametrize("op", ["first", "last"])
+@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+def test_groupby_first_last_skipna(dtype, op, skipna, sort):
+    # first/last honor skipna: with skipna=True nulls are dropped, with
+    # skipna=False the actual first/last element of each group is returned
+    # even when it is null (previously skipna=False was ignored).
+    pdf = pd.DataFrame(
+        {
+            "a": [2, 1, 1, 2, 3, 3],
+            "b": pd.array([None, 3, None, 4, None, None], dtype=dtype),
+            "c": pd.array([None, 30, None, 40, None, None], dtype=dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a", sort=sort), op)(skipna=skipna)
+    expect = getattr(pdf.groupby("a", sort=sort), op)(skipna=skipna)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["first", "last"])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_series_first_last_skipna(op, skipna):
+    psr = pd.Series(
+        pd.array([None, 3, None, 4, None, None], dtype="Float64"), name="b"
+    )
+    pkeys = pd.Series([2, 1, 1, 2, 3, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gsr.groupby(gkeys), op)(skipna=skipna)
+    expect = getattr(psr.groupby(pkeys), op)(skipna=skipna)
     assert_eq(expect, got)
 
 
