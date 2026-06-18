@@ -114,7 +114,7 @@ rtcx::hash128 compute_embed_hash(std::span<uint8_t const> uncompressed_files_byt
   XXH3_128bits_update(&state, merged_dests_bytes.data(), merged_dests_bytes.size());
   XXH3_128bits_update(&state, merged_include_dirs_bytes.data(), merged_include_dirs_bytes.size());
   XXH3_128bits_update(&state, compression.data(), compression.size());
-  XXH128_hash_t hash = XXH3_128bits_digest(&state);
+  auto hash = XXH3_128bits_digest(&state);
   return rtcx::hash128{hash.high64, hash.low64};
 }
 

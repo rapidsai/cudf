@@ -13,7 +13,9 @@
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
-#include <xxh3.h>
+
+#define XXH_INLINE_ALL
+#include <xxhash.h>
 
 #include <filesystem>
 #include <format>
@@ -397,10 +399,6 @@ kernel get_kernel(std::string const& name,
   auto bundle_hash = bundle.get_hash();
   auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
-  XXH3_state_t state;
-  XXH3_INITSTATE(&state);
-  XXH3_128bits_reset(&state);
-
   auto spec = std::format(R"***(cuLibrary
 name={}
 binary_type=CUBIN
@@ -419,6 +417,9 @@ kernel_instance={}
                           source_file,
                           kernel_instance);
 
+  XXH3_state_t state;
+  XXH3_INITSTATE(&state);
+  XXH3_128bits_reset(&state);
   hash(&state, spec);
   hash(&state, "header_include_names: ");
   hash(&state, header_include_names);
