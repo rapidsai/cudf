@@ -386,14 +386,17 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not arg.index.equals(self._frame.index)
             ):
                 # Align a boolean Series indexer to the frame's index by
-                # label rather than positionally.
-                aligned = arg.reindex(self._frame.index)
-                if aligned._column.has_nulls():
+                # label rather than positionally. Only labels missing from
+                # the mask make it unalignable; pre-existing NA values are
+                # treated as not-selected (matching pandas), so check for
+                # missing labels rather than for nulls post-reindex.
+                if len(self._frame.index.difference(arg.index)) > 0:
                     raise ValueError(
                         "Unalignable boolean Series provided as indexer "
                         "(index of the boolean Series and of the indexed "
                         "object do not match)."
                     )
+                aligned = arg.reindex(self._frame.index)
                 return Series._from_column(aligned._column)
             col = as_column(arg)
             if col.dtype.kind == "b":

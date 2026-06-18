@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -347,6 +347,18 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
                 value_column_names = set(value._column_names)
                 row_key = key[0]
+                if (
+                    isinstance(row_key, (Series, pd.Series))
+                    and row_key.dtype.kind == "b"
+                ):
+                    # Align a boolean Series row mask to the frame's index by
+                    # label so the scatter targets the correct rows even when
+                    # the mask is reordered relative to the frame; NA mask
+                    # values are treated as not-selected.
+                    row_key = Series(row_key)
+                    if not self._frame.index.equals(row_key.index):
+                        row_key = row_key.reindex(self._frame.index)
+                    row_key = row_key.fillna(False).astype("bool")
                 row_key_col = (
                     as_column(row_key)
                     if (is_list_like(row_key) or is_column_like(row_key))
@@ -359,6 +371,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # Align the RHS to the selected rows by label before
                     # scattering, so a reordered RHS index assigns the right
                     # value to each masked row.
+                    if row_key_col.has_nulls():
+                        row_key_col = row_key_col.fillna(False)
                     target_index = self._frame.loc[row_key].index
                     if not value.index.equals(target_index):
                         value = value.reindex(target_index)
@@ -401,12 +415,35 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # the indexed object.
                     # If the key is 1d, a broadcast will happen.
                     else:
+                        # A scalar row key referencing an existing label lets
+                        # a Series RHS be aligned to the column labels below;
+                        # a brand-new label cannot (multi-column row append
+                        # from a Series is unsupported).
+                        align_series_to_columns = (
+                            isinstance(value, (Series, pd.Series))
+                            and is_scalar(key[0])
+                            and key[0] in self._frame.index
+                        )
                         for i, col in enumerate(columns_df._column_names):
-                            if isinstance(value, (Series, pd.Series)):
-                                # A Series RHS is row-indexed: assign the whole
-                                # Series so .loc aligns it by label to key[0],
-                                # rather than picking value[i] (which would
-                                # treat it as a list of per-column values).
+                            if align_series_to_columns:
+                                # A single existing target row: align the
+                                # Series RHS to the column labels (pandas
+                                # aligns by label; labels missing from the
+                                # Series become NA).
+                                rhs = (
+                                    value.loc[col]
+                                    if col in value.index
+                                    else NA
+                                )
+                                self._frame[col].loc[key[0]] = rhs
+                            elif isinstance(value, (Series, pd.Series)):
+                                # A Series RHS over multiple target rows is
+                                # row-indexed: assign the whole Series so .loc
+                                # aligns it by label to key[0], rather than
+                                # picking value[i] (which would treat it as a
+                                # list of per-column values). A new scalar
+                                # label also lands here so the unsupported
+                                # append fails loudly instead of silently.
                                 self._frame[col].loc[key[0]] = value
                             else:
                                 self._frame[col].loc[key[0]] = value[i]
@@ -434,6 +471,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
 
     def __getitem__(self, arg):
+        indexing_utils.check_dict_or_set_indexers(arg)
         (
             row_key,
             (
@@ -1639,18 +1677,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if is_list_like(mask):
                 mask = np.array(mask)
 
-            if mask.dtype == "bool":
-                if isinstance(arg, (cudf.Series, pd.Series)) and not (
-                    self.index.equals(cudf.Series(arg).index)
-                ):
-                    # Align a boolean Series mask to this frame by label;
-                    # unaligned labels are not selected.
-                    arg = (
-                        cudf.Series(arg)
-                        .reindex(self.index)
-                        .fillna(False)
-                        .astype("bool")
-                    )
+            if getattr(mask.dtype, "kind", None) == "b":
+                if isinstance(arg, (cudf.Series, pd.Series)):
+                    arg = cudf.Series(arg)
+                    if not self.index.equals(arg.index):
+                        # Align a boolean Series mask to this frame by
+                        # label; unaligned labels are not selected.
+                        arg = arg.reindex(self.index)
+                    # Normalize NA mask values to False (pandas treats NA in
+                    # a boolean mask as not-selected) and collapse a nullable
+                    # ``boolean`` dtype to plain ``bool`` for scattering,
+                    # regardless of whether reindexing was needed.
+                    arg = arg.fillna(False).astype("bool")
                 mask = as_column(arg)
 
                 if isinstance(value, DataFrame):

@@ -688,15 +688,17 @@ def parse_single_row_loc_key(
             and not key.index.equals(index)
         ):
             # A boolean Series indexer is aligned to the frame's index by
-            # label rather than applied positionally.
-            aligned = key.reindex(index)
-            if aligned._column.has_nulls():
+            # label rather than applied positionally. Only labels missing
+            # from the mask make it unalignable; pre-existing NA values in
+            # the mask are treated as not-selected (matching pandas), so
+            # check for missing labels rather than for nulls post-reindex.
+            if len(index.difference(key.index)) > 0:
                 raise ValueError(
                     "Unalignable boolean Series provided as indexer "
                     "(index of the boolean Series and of the indexed "
                     "object do not match)."
                 )
-            key = aligned._column
+            key = key.reindex(index)._column
         else:
             key = as_column(key)
         if (
