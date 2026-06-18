@@ -8,7 +8,7 @@ import asyncio
 import contextlib
 import functools
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pylibcudf as plc
 from cudf_streaming.streaming.channel_metadata import ChannelMetadata
@@ -19,6 +19,7 @@ from rapidsmpf.streaming.core.memory_reserve_or_wait import (
 )
 from rapidsmpf.streaming.core.message import Message
 
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
@@ -57,12 +58,12 @@ from cudf_polars.streaming.rank_aware_source import RankAwareSource
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
+    import polars as pl
+
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
@@ -353,8 +354,6 @@ async def python_scan_node(
     ir: PythonScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
-    *,
-    estimated_chunk_bytes: int,
 ) -> None:
     """
     PythonScan node for rapidsmpf.
@@ -371,50 +370,59 @@ async def python_scan_node(
         The execution context for the IR node.
     ch_out
         The output Channel[TableChunk].
-    estimated_chunk_bytes
-        Estimated size of each chunk in bytes. Used for memory reservation
-        with block spilling to avoid thrashing.
     """
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
 
-        def to_chunk(df: DataFrame) -> TableChunk:
-            return TableChunk.from_pylibcudf_table(
+        async def process_and_send_chunk(
+            chunk: pl.DataFrame | DataFrame, seq_num: int
+        ) -> None:
+            """
+            Move a raw chunk to the device, validate and filter it, then send it.
+
+            A host chunk must be copied to the device, so we reserve room sized
+            from the host chunk. A GPU chunk needs no copy, so its size is 0.
+            When a predicate is applied, the filter briefly holds both the input
+            and its (smaller) output, so we reserve double for that transient peak.
+            """
+            process = functools.partial(
+                ir.process_chunk, chunk, ir.schema, ir.predicate, context=ir_context
+            )
+            size = 0 if isinstance(chunk, DataFrame) else chunk.estimated_size()
+            reservation = size * 2 if ir.predicate is not None else size
+            with opaque_memory_usage(
+                await reserve_memory(context, size=reservation, net_memory_delta=size)
+            ):
+                df = await ir_context.to_thread(process)
+            chunk_out = TableChunk.from_pylibcudf_table(
                 df.table, df.stream, exclusive_view=True, br=context.br()
             )
-
-        async def reserve() -> MemoryReservation:
-            """Small helper to make the memory reservation."""
-            return opaque_memory_usage(
-                await reserve_memory(
-                    context,
-                    size=estimated_chunk_bytes,
-                    net_memory_delta=estimated_chunk_bytes,
-                )
-            )
+            await send_chunk(context, ch_out, chunk_out, seq_num, tracer=tracer)
 
         with _bind_rank(ir.options[0], comm.rank, comm.nranks) as bound:
             if not bound and comm.nranks > 1 and comm.rank != 0:
                 await send_metadata(ch_out, context, ChannelMetadata(local_count=0))
                 await ch_out.drain(context)
                 return
-            count, processed = await ir_context.to_thread(
+            count, raw_chunks = await ir_context.to_thread(
                 lambda: ir.run_source_function(
-                    ir.options, ir.schema, ir.predicate, context=ir_context
+                    ir.options, ir.schema, context=ir_context
                 )
             )
         if count is not None:
             # The chunk count is available so we can stream one chunk at a time.
             announced = max(count, 1)
             await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            sentinel = object()
             seq_num = 0
             while True:
-                with await reserve():
-                    df = await ir_context.to_thread(next, processed, None)
-                if df is None:
+                chunk = await ir_context.to_thread(next, raw_chunks, sentinel)
+                if chunk is sentinel:
                     break
-                await send_chunk(context, ch_out, to_chunk(df), seq_num, tracer=tracer)
+                await process_and_send_chunk(
+                    cast("pl.DataFrame | DataFrame", chunk), seq_num
+                )
                 seq_num += 1
             if seq_num != announced:
                 raise RuntimeError(
@@ -422,14 +430,14 @@ async def python_scan_node(
                     f"produced {seq_num}"
                 )
         else:
-            # A plain generator hides its count, so we must drain it to learn the count.
-            with await reserve():
-                chunks = await ir_context.to_thread(lambda: list(processed))
+            # A plain generator hides its count, so we must drain it to learn the
+            # count before announcing it.
+            chunks = await ir_context.to_thread(lambda: list(raw_chunks))
             await send_metadata(
                 ch_out, context, ChannelMetadata(local_count=len(chunks))
             )
-            for seq_num, df in enumerate(chunks):
-                await send_chunk(context, ch_out, to_chunk(df), seq_num, tracer=tracer)
+            for seq_num, chunk in enumerate(chunks):
+                await process_and_send_chunk(chunk, seq_num)
         await ch_out.drain(context)
 
 
@@ -437,7 +445,6 @@ async def python_scan_node(
 def _(
     ir: PythonScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    estimated_chunk_bytes = rec.state["config_options"].executor.target_partition_size
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(context)}
@@ -449,7 +456,6 @@ def _(
                 ir,
                 ir_context,
                 channels[ir].reserve_input_slot(),
-                estimated_chunk_bytes=estimated_chunk_bytes,
             )
         ]
     }

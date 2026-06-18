@@ -383,34 +383,28 @@ class PythonScan(IR):
     def run_source_function(
         options: Any,
         schema: Schema,
-        predicate: expr.NamedExpr | None,
         *,
         context: IRExecutionContext,
-    ) -> tuple[int | None, Iterator[DataFrame]]:
+    ) -> tuple[int | None, Iterator[pl.DataFrame | DataFrame]]:
         """
-        Call the source and process its chunks into device dataframes.
+        Call the source and return its raw chunks.
 
         The source's scan function is invoked here, so this is where the
-        registered IO source's user code runs. Each chunk it yields is moved to
-        the device (if not already there), validated against the declared schema,
-        and filtered by any pushed-down predicate. A source that yields no chunks
-        produces a single empty frame carrying the declared schema, so the
-        returned iterator always yields at least one chunk.
+        registered IO source's user code runs. Chunks are returned as produced
+        (a host :class:`polars.DataFrame` or a GPU-resident
+        `cudf_polars.containers.DataFrame`); use :meth:`process_chunk` to move
+        each to the device, validate it, and apply any pushed predicate. A source
+        that yields no chunks produces a single empty host frame carrying the
+        declared schema, so the iterator always yields at least one chunk.
 
         Parameters
         ----------
         options
             The `PythonScan` options tuple ``(scan_fn, with_columns, source_type)``.
         schema
-            The declared output schema. Each produced chunk must match it in
-            name, order, and dtype, or a :class:`polars.exceptions.SchemaError`
-            is raised.
-        predicate
-            A pushed-down filter to apply on the device, or ``None``. It is
-            applied here rather than by the source, so the source never filters.
+            The declared output schema, used for the empty-source fallback frame.
         context
-            The IR execution context, providing the CUDA stream and
-            stream-ordering used to build and filter each chunk.
+            The IR execution context (provides the CUDA stream).
 
         Returns
         -------
@@ -419,41 +413,31 @@ class PythonScan(IR):
             sized iterator) or None for a plain generator whose length is unknown until
             it is drained.
         chunks
-            An iterator of device dataframes, always yielding at least one chunk.
+            An iterator of raw chunks, always yielding at least one chunk.
 
         Raises
         ------
-        polars.exceptions.SchemaError
-            If a produced chunk's schema does not match ``schema``.
+        TypeError
+            If the source yields something other than a polars or cudf-polars
+            DataFrame.
         """
         # A pushed-down row limit is rejected during translation (see
         # https://github.com/rapidsai/cudf/issues/22918), so n_rows is always
-        # None. We pass predicate=None and apply any pushed predicate on the GPU
-        # below; the discarded second return value is the source's "predicate
-        # applied" flag, which carries no information here.
+        # None. We pass predicate=None to the source and apply any pushed
+        # predicate on the GPU in process_chunk; the discarded second return value
+        # is the source's "predicate applied" flag, which carries no information.
         scan_fn, with_columns, _source_type = options
         source_chunks, _ = scan_fn(with_columns, None, None, None)
         count = len(source_chunks) if isinstance(source_chunks, Sized) else None
-        # Validate each chunk against the declared (output) schema. Polars
-        # performs this check for register_io_source(..., validate_schema=True),
-        # but the flag is not exposed to the GPU plan, so we always validate.
-        declared = pl.Schema(
-            (name, dtype.polars_type) for name, dtype in schema.items()
-        )
 
-        def chunks() -> Generator[DataFrame, None, None]:
+        def chunks() -> Generator[pl.DataFrame | DataFrame, None, None]:
             iterator = iter(source_chunks)
             sentinel = object()
             first = next(iterator, sentinel)
             if first is sentinel:
-                # Empty source: emit one empty frame carrying the declared schema.
-                yield DataFrame.from_polars(
-                    pl.DataFrame(
-                        schema={
-                            name: dtype.polars_type for name, dtype in schema.items()
-                        }
-                    ),
-                    stream=context.get_cuda_stream(),
+                # Empty source: emit one empty host frame carrying the declared schema.
+                yield pl.DataFrame(
+                    schema={name: dtype.polars_type for name, dtype in schema.items()}
                 )
                 return
             for chunk in itertools.chain((first,), iterator):
@@ -462,28 +446,67 @@ class PythonScan(IR):
                         "PythonScan source must yield polars.DataFrame or "
                         "cudf_polars.containers.DataFrame chunks"
                     )
-                # Each chunk is either a host polars frame or an already-GPU-
-                # resident cudf-polars DataFrame.
-                df = (
-                    chunk
-                    if isinstance(chunk, DataFrame)
-                    else DataFrame.from_polars(chunk, stream=context.get_cuda_stream())
-                )
-                produced = pl.Schema(
-                    zip(
-                        df.column_names,
-                        (dtype.polars_type for dtype in df.dtypes),
-                        strict=True,
-                    )
-                )
-                if produced != declared:
-                    raise pl.exceptions.SchemaError(
-                        f"PythonScan source produced schema {produced} which does "
-                        f"not match the declared schema {declared}"
-                    )
-                yield apply_predicate(df, predicate)
+                yield chunk
 
         return count, chunks()
+
+    @staticmethod
+    def process_chunk(
+        chunk: pl.DataFrame | DataFrame,
+        schema: Schema,
+        predicate: expr.NamedExpr | None,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """
+        Move a raw source chunk to the device, validate it, and filter it.
+
+        Parameters
+        ----------
+        chunk
+            A raw chunk returned from :meth:`run_source_function`.
+        schema
+            The declared output schema. The chunk must match it in name, order,
+            and dtype.
+        predicate
+            A pushed-down filter to apply on the device, or ``None``.
+        context
+            The IR execution context (provides the CUDA stream).
+
+        Returns
+        -------
+        The device dataframe for this chunk, filtered by ``predicate``.
+
+        Raises
+        ------
+        polars.exceptions.SchemaError
+            If the chunk's schema does not match ``schema``.
+        """
+        # A host frame is copied to the device; a cudf-polars frame is already there.
+        df = (
+            chunk
+            if isinstance(chunk, DataFrame)
+            else DataFrame.from_polars(chunk, stream=context.get_cuda_stream())
+        )
+        # Validate against the declared (output) schema. Polars performs this
+        # check for register_io_source(..., validate_schema=True), but the flag is
+        # not exposed to the GPU plan, so we always validate.
+        declared = pl.Schema(
+            (name, dtype.polars_type) for name, dtype in schema.items()
+        )
+        produced = pl.Schema(
+            zip(
+                df.column_names,
+                (dtype.polars_type for dtype in df.dtypes),
+                strict=True,
+            )
+        )
+        if produced != declared:
+            raise pl.exceptions.SchemaError(
+                f"PythonScan source produced schema {produced} which does not "
+                f"match the declared schema {declared}"
+            )
+        return apply_predicate(df, predicate)
 
     @classmethod
     @log_do_evaluate
@@ -496,11 +519,19 @@ class PythonScan(IR):
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
-        """Evaluate and return a dataframe."""
-        _, processed = cls.run_source_function(
-            options, schema, predicate, context=context
-        )
-        chunks = list(processed)
+        """
+        Evaluate and return a dataframe.
+
+        This runs the source eagerly, producing the whole scan output as one
+        frame. It is used by the non-streaming (in-memory) engine. Streaming
+        engines do not call this; they handle ``PythonScan`` with a dedicated
+        actor (``python_scan_node``) that streams chunks individually.
+        """
+        _, raw = cls.run_source_function(options, schema, context=context)
+        chunks = [
+            cls.process_chunk(chunk, schema, predicate, context=context)
+            for chunk in raw
+        ]
         # run_source_function always yields at least one chunk.
         if len(chunks) == 1:
             return chunks[0]
