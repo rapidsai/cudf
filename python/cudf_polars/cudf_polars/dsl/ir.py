@@ -390,12 +390,9 @@ class PythonScan(IR):
         Call the source and return its raw chunks.
 
         The source's scan function is invoked here, so this is where the
-        registered IO source's user code runs. Chunks are returned as produced
-        (a host :class:`polars.DataFrame` or a GPU-resident
-        `cudf_polars.containers.DataFrame`); use :meth:`process_chunk` to move
-        each to the device, validate it, and apply any pushed predicate. A source
-        that yields no chunks produces a single empty host frame carrying the
-        declared schema, so the iterator always yields at least one chunk.
+        registered IO source's user code runs. A source that yields no chunks
+        produces a single empty host frame carrying the declared schema, so
+        the iterator always yields at least one chunk.
 
         Parameters
         ----------
