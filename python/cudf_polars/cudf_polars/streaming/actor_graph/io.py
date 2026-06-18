@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import functools
 import math
 from typing import TYPE_CHECKING, Any, cast
@@ -56,7 +55,7 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Sequence
 
     import polars as pl
 
@@ -301,16 +300,9 @@ def _(
     return nodes, channels
 
 
-@contextlib.contextmanager
-def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[bool]:
+def _find_rank_aware_source(scan_fn: Callable[..., Any]) -> RankAwareSource | None:
     """
-    Temporarily bind the current worker rank into a wrapped :class:`RankAwareSource`.
-
-    Rebinds the source for the duration of the ``with`` block and restores the
-    original binding on exit, so the user's source object is not left mutated
-    after the source has been called. The source must be invoked inside the
-    block; the returned iterator it produces captures ``rank``/``nranks`` in its
-    own frame, so it stays valid after the block exits.
+    Return the :class:`RankAwareSource` captured by a registered IO source function.
 
     Parameters
     ----------
@@ -318,33 +310,24 @@ def _bind_rank(scan_fn: Callable[..., Any], rank: int, nranks: int) -> Iterator[
         Python scan function exported by Polars for a ``PythonScan`` node. For
         sources created with :func:`polars.io.plugins.register_io_source`, this
         is the wrapper function that captures the original user-provided source.
-    rank
-        Rank of the current worker.
-    nranks
-        Total number of workers participating in the query.
 
-    Yields
-    ------
-    ``True`` if the scan function captures a `RankAwareSource` (now bound), or
-    ``False`` if it does not (nothing is rebound).
+    Returns
+    -------
+    The captured `RankAwareSource`, or ``None`` if the IO source function does not
+    capture one directly (a plain or wrapped source, treated as rank-unaware).
 
     Notes
     -----
     This reaches into Polars' ``register_io_source`` closure layout (the captured
-    source object) and temporarily rebinds it. It is the only available hook
-    today; if Polars exposes a supported way to thread state into a source this
-    should move to it. See https://github.com/rapidsai/cudf/issues/22917.
+    source object). It is the only available hook today. When Polars exposes a
+    supported way to thread state into a source this should move to it. See
+    https://github.com/rapidsai/cudf/issues/22917.
     """
     for cell in getattr(scan_fn, "__closure__", ()):
         source = cell.cell_contents
         if isinstance(source, RankAwareSource):
-            cell.cell_contents = functools.partial(source, rank=rank, nranks=nranks)
-            try:
-                yield True
-            finally:
-                cell.cell_contents = source
-            return
-    yield False
+            return source
+    return None
 
 
 @define_actor()
@@ -400,16 +383,24 @@ async def python_scan_node(
             )
             await send_chunk(context, ch_out, chunk_out, seq_num, tracer=tracer)
 
-        with _bind_rank(ir.options[0], comm.rank, comm.nranks) as bound:
-            if not bound and comm.nranks > 1 and comm.rank != 0:
-                await send_metadata(ch_out, context, ChannelMetadata(local_count=0))
-                await ch_out.drain(context)
-                return
-            count, raw_chunks = await ir_context.to_thread(
-                lambda: ir.run_source_function(
-                    ir.options, ir.schema, context=ir_context
-                )
+        rank_aware_source = _find_rank_aware_source(ir.options[0])
+        if rank_aware_source is None and comm.nranks > 1 and comm.rank != 0:
+            # A plain (rank-unaware) source runs on rank 0 only; other ranks
+            # contribute nothing to avoid duplicating the data.
+            await send_metadata(ch_out, context, ChannelMetadata(local_count=0))
+            await ch_out.drain(context)
+            return
+
+        count, raw_chunks = await ir_context.to_thread(
+            lambda: ir.run_source_function(
+                ir.options,
+                ir.schema,
+                rank_aware_source=rank_aware_source,
+                rank=comm.rank,
+                nranks=comm.nranks,
+                context=ir_context,
             )
+        )
         if count is not None:
             # The chunk count is available so we can stream one chunk at a time.
             announced = max(count, 1)

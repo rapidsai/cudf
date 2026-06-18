@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn
+    from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -384,6 +385,9 @@ class PythonScan(IR):
         options: Any,
         schema: Schema,
         *,
+        rank_aware_source: RankAwareSource | None = None,
+        rank: int = 0,
+        nranks: int = 1,
         context: IRExecutionContext,
     ) -> tuple[int | None, Iterator[pl.DataFrame | DataFrame]]:
         """
@@ -400,6 +404,15 @@ class PythonScan(IR):
             The `PythonScan` options tuple ``(scan_fn, with_columns, source_type)``.
         schema
             The declared output schema, used for the empty-source fallback frame.
+        rank_aware_source
+            The `RankAwareSource` captured by the registered scan function, when one was
+            found (see `cudf_polars.streaming.actor_graph.io._find_rank_aware_source`).
+        rank
+            Rank running this scan, passed to a `RankAwareSource`. Defaults to
+            ``0`` for single-rank / in-memory execution.
+        nranks
+            Total number of ranks, passed to a `RankAwareSource`. Defaults to
+            ``1`` for single-rank / in-memory execution.
         context
             The IR execution context (provides the CUDA stream).
 
@@ -421,10 +434,16 @@ class PythonScan(IR):
         # A pushed-down row limit is rejected during translation (see
         # https://github.com/rapidsai/cudf/issues/22918), so n_rows is always
         # None. We pass predicate=None to the source and apply any pushed
-        # predicate on the GPU in process_chunk; the discarded second return value
-        # is the source's "predicate applied" flag, which carries no information.
+        # predicate on the GPU in process_chunk.
         scan_fn, with_columns, _source_type = options
-        source_chunks, _ = scan_fn(with_columns, None, None, None)
+        if rank_aware_source is not None:
+            source_chunks = rank_aware_source(
+                with_columns, None, None, None, rank=rank, nranks=nranks
+            )
+        else:
+            # A plain source. The discarded second return value is the wrapper's
+            # "predicate applied" flag, which carries no information here.
+            source_chunks, _ = scan_fn(with_columns, None, None, None)
         count = len(source_chunks) if isinstance(source_chunks, Sized) else None
 
         def chunks() -> Generator[pl.DataFrame | DataFrame, None, None]:
