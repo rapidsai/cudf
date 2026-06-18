@@ -479,7 +479,6 @@ kernel_instance={}
   XXH3_state_t state;
   XXH3_INITSTATE(&state);
   XXH3_128bits_reset(&state);
-
   hash(&state, spec);
   hash(&state, "header_include_names: ");
   hash(&state, header_include_names);
@@ -571,7 +570,6 @@ bundle={}
   XXH3_state_t state;
   XXH3_INITSTATE(&state);
   XXH3_128bits_reset(&state);
-
   hash(&state, spec);
   hash(&state, "file_fragments: ");
   hash(&state, file_fragments);
