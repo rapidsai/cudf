@@ -209,8 +209,6 @@ enum class lto_binary_type : uint8_t {
  *
  * @param udf The LTO-IR string of the transform function to apply. The UDF must be named
  * `transform` and follow the CUDF UDF ABI.
- * @param udf_id An optional identifier of the UDF to use for caching. If not provided, the UDF will
- * be hashed and cached based on its binary contents.
  * @param binary_type   The type of the LTO binary provided in `udf`
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param user_data     User-defined device data to pass to the UDF.
@@ -228,7 +226,6 @@ enum class lto_binary_type : uint8_t {
  */
 std::unique_ptr<table> transform_lto(
   std::span<uint8_t const> udf,
-  std::optional<std::string> udf_id,
   lto_binary_type binary_type,
   null_aware is_null_aware,
   std::optional<void*> user_data,

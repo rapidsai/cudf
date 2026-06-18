@@ -35,7 +35,6 @@ TEST_F(TransformLTOTest, InvSqrt)
   std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
 
   auto result = cudf::transform_lto(udf,
-                                    std::nullopt,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
                                     std::nullopt,
@@ -62,7 +61,6 @@ TEST_F(TransformLTOTest, ToUpper)
   std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
 
   auto result = cudf::transform_lto(udf,
-                                    std::nullopt,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
                                     std::nullopt,
@@ -90,7 +88,6 @@ TEST_F(TransformLTOTest, SumOfSquares)
   std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
 
   auto result = cudf::transform_lto(udf,
-                                    std::nullopt,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
                                     std::nullopt,
@@ -122,7 +119,6 @@ TEST_F(TransformLTOTest, BankersRounding)
   cudf::transform_output outputs[] = {output};
 
   auto result = cudf::transform_lto(udf,
-                                    std::nullopt,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
                                     std::nullopt,

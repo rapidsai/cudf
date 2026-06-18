@@ -443,7 +443,6 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
              std::span<input_column_view const> inputs,
              std::span<output_column const> outputs,
              std::span<uint8_t const> udf_binary,
-             std::optional<std::string> udf_id,
              lto_binary_type source_type,
              rmm::cuda_stream_view stream,
              rmm::device_async_resource_ref mr)
@@ -473,9 +472,7 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
     {
       .data = udf_binary,
       .type = as_rtcx_binary_type(source_type),
-      .name = udf_id.has_value()
-                ? udf_id->c_str()
-                : nullptr  // nullptr = unnamed fragment: the binary will be used to hash the UDF
+      .name = nullptr  // nullptr = unnamed fragment: the binary will be used to hash the UDF
     }};
 
   auto kernel = get_lto_linked_kernel("cudf/cpp/src/transform/jit/kernel.cu", {}, memory_fragments);
@@ -1122,7 +1119,6 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
 }
 
 std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
-                                     std::optional<std::string> udf_id,
                                      lto_binary_type binary_type,
                                      null_aware is_null_aware,
                                      std::optional<void*> user_data,
@@ -1160,7 +1156,6 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                          inputs,
                          output_columns,
                          udf,
-                         udf_id,
                          binary_type,
                          stream,
                          mr);
