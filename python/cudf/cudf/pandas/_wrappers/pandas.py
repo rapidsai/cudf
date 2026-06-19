@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import contextlib
@@ -303,6 +303,15 @@ def _ExcelWriter__init__(self, *args, **kwargs):
     pass
 
 
+def _to_string(self, *args, **kwargs):
+    # cudf's ``to_string`` mirrors ``repr`` (it truncates via
+    # ``display.max_rows``, renders nulls as ``<NA>`` and appends a
+    # ``dtype``/``name``/``length`` footer), which differs from pandas'
+    # ``to_string`` defaults. Use the pandas (slow) implementation so
+    # cudf.pandas matches pandas exactly.
+    return self._fsproxy_slow.to_string(*args, **kwargs)
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -311,6 +320,7 @@ DataFrame = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__array__": array_method,
+        "to_string": _to_string,
         "__dir__": _DataFrame__dir__,
         "__arrow_c_stream__": _FastSlowAttribute("__arrow_c_stream__"),
         "_constructor": _FastSlowAttribute("_constructor"),
@@ -400,6 +410,7 @@ Series = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__array__": array_method,
+        "to_string": _to_string,
         "__array_function__": array_function_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,

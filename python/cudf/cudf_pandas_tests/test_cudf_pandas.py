@@ -162,6 +162,31 @@ def test_repr(dataframe):
     assert df.__repr__() == pdf.__repr__()
 
 
+@pytest.mark.parametrize(
+    "data, dtype",
+    [
+        ([0, 1, None], "Int64"),
+        ([0, 1, None], "UInt32"),
+        ([0.0, 1.0, None], "Float64"),
+        (["foo", np.nan, "bar", "baz"], None),
+        ([0.0, 1.5678, 2.0, -3.0, 4.0], None),
+    ],
+)
+def test_series_to_string_matches_pandas(data, dtype):
+    # cudf's to_string mirrors repr (dtype footer, <NA>, truncation); under
+    # cudf.pandas it must match pandas' to_string instead.
+    assert (
+        xpd.Series(data, dtype=dtype).to_string()
+        == pd.Series(data, dtype=dtype).to_string()
+    )
+
+
+def test_dataframe_to_string_no_truncation():
+    # DataFrame.to_string does not truncate by default (unlike repr).
+    data = {"a": list(range(100))}
+    assert xpd.DataFrame(data).to_string() == pd.DataFrame(data).to_string()
+
+
 def test_binops_series(series):
     psr, sr = series
     expected = psr + psr
