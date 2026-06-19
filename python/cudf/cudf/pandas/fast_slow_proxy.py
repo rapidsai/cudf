@@ -542,6 +542,16 @@ def get_registered_functions():
 
 _NO_SLOW_ATTR = object()
 
+# Mirroring of class-level attribute writes onto the underlying "slow" (real)
+# type (see ``_FastSlowProxyMeta.__setattr__``) is only meaningful for runtime
+# monkeypatches applied *after* the proxy machinery has been installed. During
+# cudf.pandas' own setup, ``_wrappers/pandas.py`` assigns custom methods (e.g.
+# ``DataFrame.query``/``DataFrame.eval``) onto the proxy classes; those must
+# NOT be forwarded to the real pandas types or they would clobber pandas'
+# genuine implementations. ``_wrappers/pandas.py`` flips this to ``True`` once
+# that setup is complete.
+_MIRROR_SLOW_OVERRIDES = False
+
 
 class _FastSlowProxyMeta(type):
     """
@@ -570,6 +580,11 @@ class _FastSlowProxyMeta(type):
         # class, not the proxy, so a patch applied only to the proxy would
         # otherwise be invisible to that code.
         type.__setattr__(cls, name, value)
+        if not _MIRROR_SLOW_OVERRIDES:
+            # cudf.pandas' own setup is in progress (or this is a non-pandas
+            # proxy): only mirror user/runtime monkeypatches, never the
+            # custom methods we install on the proxy classes ourselves.
+            return
         if name.startswith("_"):
             return
         slow = cls.__dict__.get("_fsproxy_slow_type")

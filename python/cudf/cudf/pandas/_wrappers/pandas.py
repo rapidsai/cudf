@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import contextlib
@@ -2847,3 +2847,13 @@ def _reduce_NaT(obj):
 
 
 copyreg.dispatch_table[type(pd.NaT)] = _reduce_NaT
+
+
+# All proxy types and their custom methods (e.g. ``DataFrame.query``/``eval``)
+# have now been installed. From here on, class-level attribute writes on proxy
+# types are genuine runtime monkeypatches and should be mirrored onto the real
+# pandas types so that fallback code running under
+# ``disable_module_accelerator()`` can see them.
+from .. import fast_slow_proxy as _fast_slow_proxy  # noqa: E402
+
+_fast_slow_proxy._MIRROR_SLOW_OVERRIDES = True
