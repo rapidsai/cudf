@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -540,6 +540,9 @@ def get_registered_functions():
     return dict()
 
 
+_NO_SLOW_ATTR = object()
+
+
 class _FastSlowProxyMeta(type):
     """
     Metaclass used to dynamically find class attributes and
@@ -557,6 +560,52 @@ class _FastSlowProxyMeta(type):
     @property
     def _fsproxy_fast(self) -> type:
         return self._fsproxy_fast_type
+
+    def __setattr__(cls, name, value):
+        # Class-level attribute assignments on a proxy type (e.g.
+        # ``monkeypatch.setattr(pd.ExcelFile, "parse", fn)``) must also be
+        # mirrored onto the underlying "slow" (real) type. Code that runs
+        # under ``disable_module_accelerator()`` (e.g. the pandas fallback
+        # path of ``pd.read_excel``) resolves attributes from the real
+        # class, not the proxy, so a patch applied only to the proxy would
+        # otherwise be invisible to that code.
+        type.__setattr__(cls, name, value)
+        if name.startswith("_"):
+            return
+        slow = cls.__dict__.get("_fsproxy_slow_type")
+        if slow is None:
+            return
+        stash = cls.__dict__.get("_fsproxy_slow_overrides")
+        if stash is None:
+            stash = {}
+            type.__setattr__(cls, "_fsproxy_slow_overrides", stash)
+        if isinstance(
+            value, (_MethodProxy, _FastSlowAttribute, _FastSlowProxy)
+        ):
+            # Restoring the proxy's own machinery (e.g. ``monkeypatch``
+            # teardown re-setting a previously-unpatched attribute, whose
+            # saved value is a ``_MethodProxy``/``_FastSlowAttribute``).
+            # Revert the real type to whatever it had before we touched it
+            # rather than shadowing its genuine implementation.
+            if name in stash:
+                original = stash.pop(name)
+                try:
+                    if original is _NO_SLOW_ATTR:
+                        if name in slow.__dict__:
+                            delattr(slow, name)
+                    else:
+                        setattr(slow, name, original)
+                except (AttributeError, TypeError):
+                    pass
+            return
+        # Real value being patched in: remember the real type's original
+        # so it can be restored later, then forward the patch.
+        if name not in stash:
+            stash[name] = slow.__dict__.get(name, _NO_SLOW_ATTR)
+        try:
+            setattr(slow, name, value)
+        except (AttributeError, TypeError):
+            pass
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
