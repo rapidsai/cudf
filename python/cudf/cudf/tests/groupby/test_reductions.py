@@ -1357,6 +1357,25 @@ def test_groupby_any_all_string_nulls(string_dtype, op, skipna):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    ["int64", "Int64", "UInt16", "Float64", "boolean", "int64[pyarrow]"],
+)
+@pytest.mark.parametrize("op", ["any", "all"])
+def test_groupby_any_all_result_dtype(dtype, op):
+    # any/all output dtype mirrors the input's flavor, matching pandas:
+    # numpy -> bool, masked-nullable -> boolean, pyarrow -> bool[pyarrow].
+    pdf = pd.DataFrame(
+        {"a": ["x", "y", "y"], "b": pd.array([1, 0, 1], dtype=dtype)}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+    assert got["b"].dtype == expect["b"].dtype
+
+
 def test_groupby_series_identity_column_exclusion():
     pdf = pd.DataFrame(
         {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}

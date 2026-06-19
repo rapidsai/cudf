@@ -55,6 +55,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
+    is_pandas_nullable_extension_dtype,
     is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -3444,12 +3445,25 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         result = bool_gb.agg(agg_name)
 
+        def _bool_result_dtype(input_dtype):
+            # Mirror pandas' any/all output dtype to the input's "flavor":
+            # masked nullable -> ``boolean``, pyarrow -> ``bool[pyarrow]``,
+            # numpy/string -> numpy ``bool``.
+            if isinstance(input_dtype, pd.ArrowDtype):
+                return pd.ArrowDtype(pa.bool_())
+            if is_pandas_nullable_extension_dtype(
+                input_dtype
+            ) and not is_dtype_obj_string(input_dtype):
+                return pd.BooleanDtype()
+            return np.dtype(np.bool_)
+
         # Empty groups (skipna=True with all-NA values) yield NA from
         # min/max — pandas treats these as ``True`` for ``all`` and
         # ``False`` for ``any``.
-        bool_np = np.dtype(np.bool_)
         if isinstance(result, Series):
-            result = result.fillna(fill_value).astype(bool_np)
+            result = result.fillna(fill_value).astype(
+                _bool_result_dtype(self.obj.dtype)
+            )
         else:
             # With ``as_index=False`` the group-key columns are present in the
             # result; only the aggregated value columns must be coerced to
@@ -3459,8 +3473,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             for col_name in result._column_names:
                 if col_name in key_names:
                     continue
+                target = _bool_result_dtype(self.obj._data[col_name].dtype)
                 result[col_name] = (
-                    result[col_name].fillna(fill_value).astype(bool_np)
+                    result[col_name].fillna(fill_value).astype(target)
                 )
 
         if min_count and min_count > 0:
