@@ -50,7 +50,7 @@ dependencies:
 - librmm==26.8.*,>=0.0.0a0
 - libucxx==0.51.*,>=0.0.0a0
 - make
-- matplotlib
+- matplotlib<3.11
 - mmh3
 - moto>=4.0.8
 - msgpack-python
@@ -77,6 +77,7 @@ dependencies:
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4
+- pytables
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
@@ -110,7 +111,6 @@ dependencies:
 - streamz
 - structlog
 - sysroot_linux-64==2.28
-- tables
 - typing_extensions>=4.0.0
 - ucxx==0.51.*,>=0.0.0a0
 - xlrd
