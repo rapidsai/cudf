@@ -14,8 +14,9 @@
 #include <cudf/types.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/random>
 #include <thrust/execution_policy.h>
-#include <thrust/random.h>
+#include <thrust/random/linear_congruential_engine.h>
 #include <thrust/shuffle.h>
 #include <thrust/tabulate.h>
 
@@ -61,7 +62,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto const num_matching     = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
   auto probe_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
-  thrust::uniform_int_distribution<cudf::size_type> non_matching_dist(
+  cuda::std::uniform_int_distribution<cudf::size_type> non_matching_dist(
     unique_rows_build_table_numrows,
     unique_rows_build_table_numrows + num_extra_nonmatching_rows - 1);
   thrust::tabulate(thrust::device,
@@ -75,20 +76,23 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
                          return idx % unique_rows_build_table_numrows;
                        } else {
                          // Non-matching key: random index into extra non-matching rows
-                         thrust::default_random_engine rng(idx);
+                         cuda::std::philox4x32 rng(idx);
                          return non_matching_dist(rng);
                        }
                      }));
 
   // Shuffle gather maps to avoid cache effects
+  // thrust::shuffle requires thrust:: engines due to URBG interface mismatch
+  // TODO: Replace thrust::minstd_rand with cuda::std::philox4x32 when updating to CCCL 3.5 with
+  // NVIDIA/cccl#9319.
   thrust::shuffle(thrust::device,
                   build_table_gather_map->mutable_view().begin<cudf::size_type>(),
                   build_table_gather_map->mutable_view().end<cudf::size_type>(),
-                  thrust::default_random_engine{12345});
+                  thrust::minstd_rand{12345});
   thrust::shuffle(thrust::device,
                   probe_table_gather_map->mutable_view().begin<cudf::size_type>(),
                   probe_table_gather_map->mutable_view().end<cudf::size_type>(),
-                  thrust::default_random_engine{67890});
+                  thrust::minstd_rand{67890});
 
   auto build_table = cudf::gather(unique_rows_build_table->view(),
                                   build_table_gather_map->view(),
