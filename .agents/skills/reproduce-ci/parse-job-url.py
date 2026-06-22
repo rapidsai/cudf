@@ -12,8 +12,6 @@
 #    JOB_ID=XXXXXXXXX
 #    PR_NUMBER=XXXX
 
-"""Parse GitHub Actions job URLs into shell-friendly variable assignments."""
-
 import re
 import sys
 from urllib.parse import parse_qs, urlparse
