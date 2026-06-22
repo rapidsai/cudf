@@ -1687,11 +1687,9 @@ cdef extern from *:
       ArrowArray* arr;
       bool large_offsets;
 
-      // Unsupported types (timestamps, decimals, lists, structs, etc.)
       template <typename T, std::enable_if_t<std::is_same_v<T, void>>* = nullptr>
       PyObject* operator()() const { return nullptr; }
 
-      // BOOL8: Arrow stores bools as bit-packed bitmap in buffers[1]
       template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
       PyObject* operator()() const
       {
@@ -1711,7 +1709,7 @@ cdef extern from *:
           });
       }
 
-      // STRING: Arrow uses offsets (buffers[1]) + char data (buffers[2]).
+      // For strings, Arrow uses offsets (buffers[1]) + char data (buffers[2]).
       // Offsets may be int32_t (standard) or int64_t (large strings > 2GB).
       template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
       PyObject* operator()() const
@@ -1738,7 +1736,6 @@ cdef extern from *:
         }
       }
 
-      // Numeric fixed-width types (integral and floating point, excluding bool)
       template <typename T,
                 std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>>* = nullptr>
       PyObject* operator()() const
