@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Define an interface for columns that can perform numerical operations."""
 
@@ -164,7 +164,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         # will only have values in range [0, 1]
         if len(self) == 0:
             result = cast(
-                cudf.core.column.numerical_base.NumericalBaseColumn,
+                "cudf.core.column.numerical_base.NumericalBaseColumn",
                 column_empty(row_count=len(q), dtype=self.dtype),
             )
         else:
@@ -185,7 +185,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             plc_exact = exact and interpolation in {"linear", "midpoint"}
 
             result = cast(
-                cudf.core.column.numerical_base.NumericalBaseColumn,
+                "cudf.core.column.numerical_base.NumericalBaseColumn",
                 PylibcudfFunction(
                     plc.quantiles.quantile,
                     pylibcudf_result_same_kind_dtype_policy,
@@ -269,7 +269,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         plc_how = plc.round.RoundingMethod[how.upper()]
 
         return cast(
-            cudf.core.column.numerical_base.NumericalBaseColumn,
+            "cudf.core.column.numerical_base.NumericalBaseColumn",
             PylibcudfFunction(
                 plc.round.round,
                 pylibcudf_result_dtype_policy,

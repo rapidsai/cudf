@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,12 +24,16 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import SMALL_MAX_ROWS_PER_PARTITION
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
     from pathlib import Path
+    from typing import Any, Literal
+
+    import cudf_polars.engine.core
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +56,20 @@ def df():
     ],
 )
 @pytest.mark.timeout(90)
-def test_parallel_scan(tmp_path, df, fmt, scan_fn, streaming_engine):
+def test_parallel_scan(
+    tmp_path: Path,
+    df: pl.DataFrame,
+    fmt: Literal["csv", "ndjson", "parquet", "chunked_parquet"],
+    scan_fn: Any,
+    streaming_engine: cudf_polars.engine.core.StreamingEngine,
+) -> None:
+    # The spmd-small case creates *many* partitions with the length-3000 df.
+    # A smaller dataframe gives us sufficient test coverage, and runs much faster.
+    if (
+        streaming_engine.config["executor_options"]["max_rows_per_partition"]
+        == SMALL_MAX_ROWS_PER_PARTITION
+    ):
+        df = df.head(40)
     make_partitioned_source(df, tmp_path, fmt, n_files=3)
     q = scan_fn(tmp_path)
     assert_gpu_result_equal(q, engine=streaming_engine)
@@ -214,14 +232,18 @@ def test_expand_scan_for_rank_fused_and_single_read(
     nranks: int,
     expected_path_groups: list[list[str]],
 ) -> None:
-    scans = expand_scan_for_rank(
+    partition_count = math.ceil(len(paths) / plan.factor)
+    streaming_scan = expand_scan_for_rank(
         _make_parquet_scan(paths),
         plan,
+        partition_count,
         rank=rank,
         nranks=nranks,
         parquet_options=ParquetOptions(),
     )
-    for scan, expected_paths in zip(scans, expected_path_groups, strict=True):
+    for scan, expected_paths in zip(
+        streaming_scan.scans, expected_path_groups, strict=True
+    ):
         assert isinstance(scan, FusedScan)
         assert scan.paths == expected_paths
 
@@ -238,15 +260,20 @@ def test_expand_scan_for_rank_split_files(
     expected_splits: list[tuple[int, int]],
 ) -> None:
     plan = IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES)
-    scans = expand_scan_for_rank(
-        _make_parquet_scan(["file.parquet"]),
+    paths = ["file.parquet"]
+    partition_count = plan.factor * len(paths)
+    streaming_scan = expand_scan_for_rank(
+        _make_parquet_scan(paths),
         plan,
+        partition_count,
         rank=rank,
         nranks=2,
         parquet_options=ParquetOptions(),
     )
-    assert len(scans) == len(expected_splits)
-    for scan, (split_index, total_splits) in zip(scans, expected_splits, strict=True):
+    assert len(streaming_scan.scans) == len(expected_splits)
+    for scan, (split_index, total_splits) in zip(
+        streaming_scan.scans, expected_splits, strict=True
+    ):
         assert isinstance(scan, SplitScan)
         assert scan.split_index == split_index
         assert scan.total_splits == total_splits

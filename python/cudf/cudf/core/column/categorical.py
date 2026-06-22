@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -254,7 +254,7 @@ class CategoricalColumn(ColumnBase):
             )
             plc_col = plc.Column.from_scalar(plc_scalar, len(self))
             other = cast(
-                CategoricalColumn,
+                "CategoricalColumn",
                 ColumnBase.create(plc_col, self.dtype),
             )
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
