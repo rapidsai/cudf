@@ -107,14 +107,8 @@ func(R (*)(Args...)) -> func<R(Args...)>;
 struct [[nodiscard]] hash128_hasher {
   constexpr std::uint64_t operator()(hash128 const& obj) const
   {
-    struct u64x2 {
-      alignas(alignof(hash128)) std::uint64_t  // NOLINT(modernize-avoid-c-arrays)
-        v[sizeof(hash128) / sizeof(std::uint64_t)];
-    };
-
-    auto value = std::bit_cast<u64x2>(obj);
-    auto h0    = value.v[0];
-    auto h1    = value.v[1];
+    auto h1 = (obj.value >> 64);
+    auto h0 = static_cast<std::uint64_t>(obj.value);
 
     auto mix = [](std::uint64_t seed, std::uint64_t v) {
       seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
