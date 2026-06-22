@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF AllGather functionality."""
@@ -22,7 +22,7 @@ async def _test_allgather(engine) -> None:
     """Very simple test that AllGatherManager can concatenate tables."""
     context = engine.context
     comm = engine.comm
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
 
     # Create simple test tables with different sizes
     tables = [
