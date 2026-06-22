@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+from polars.exceptions import ComputeError
 
 import pylibcudf as plc
 
@@ -22,7 +24,51 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame, DataType
 
-__all__ = ["Agg"]
+__all__ = ["Agg", "Item"]
+
+
+class Item(Expr):
+    """Validate and return the result of an ``item`` aggregation."""
+
+    __slots__ = ("allow_empty",)
+    _non_child = ("dtype", "allow_empty")
+
+    def __init__(
+        self,
+        dtype: DataType,
+        allow_empty: bool,  # noqa: FBT001
+        value: Expr,
+        count: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.allow_empty = allow_empty
+        self.children = (value, count)
+        self.is_pointwise = False
+
+    def do_evaluate(
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate the validated ``item`` aggregation result."""
+        value, count = (child.evaluate(df, context=context) for child in self.children)
+        if count.size == 0:
+            return value
+
+        min_count_scalar, max_count_scalar = plc.reduce.minmax(
+            count.obj, stream=df.stream
+        )
+        max_count = cast("int | None", max_count_scalar.to_py(stream=df.stream))
+        if max_count is not None and max_count > 1:
+            qualifier = "no or a single value" if self.allow_empty else "a single value"
+            raise ComputeError(
+                f"aggregation 'item' expected {qualifier}, got {max_count} values"
+            )
+        if not self.allow_empty:
+            min_count = cast("int | None", min_count_scalar.to_py(stream=df.stream))
+            if min_count == 0:
+                raise ComputeError(
+                    "aggregation 'item' expected a single value, got none"
+                )
+        return value
 
 
 class Agg(Expr):
@@ -64,7 +110,7 @@ class Agg(Expr):
                 if options
                 else plc.types.NullPolicy.INCLUDE
             )
-        elif name == "first" or name == "last":
+        elif name in {"first", "last", "item", "first_non_null"}:
             req = None
         elif name == "mean":
             req = plc.aggregation.mean()
@@ -124,7 +170,7 @@ class Agg(Expr):
             op = partial(op, propagate_nans=options)
         elif name == "count":
             op = partial(op, include_nulls=options)
-        elif name in {"sum", "first", "last"}:
+        elif name in {"sum", "first", "last", "item", "first_non_null"}:
             pass
         else:
             raise NotImplementedError(
@@ -139,6 +185,8 @@ class Agg(Expr):
             "median",
             "n_unique",
             "first",
+            "first_non_null",
+            "item",
             "last",
             "mean",
             "m2",
@@ -161,9 +209,13 @@ class Agg(Expr):
 
     @property
     def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
-        if self.name == "first":
+        if self.name in {"first", "item"}:
             return plc.aggregation.nth_element(
                 0, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        elif self.name == "first_non_null":
+            return plc.aggregation.nth_element(
+                0, null_handling=plc.types.NullPolicy.EXCLUDE
             )
         elif self.name == "last":
             return plc.aggregation.nth_element(
@@ -279,6 +331,36 @@ class Agg(Expr):
             plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
         else:
             plc_result = plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0]
+        return Column(
+            plc_result,
+            name=column.name,
+            dtype=self.dtype,
+        )
+
+    def _first_non_null(self, column: Column, stream: Stream) -> Column:
+        return self._reduce(
+            column,
+            request=plc.aggregation.nth_element(
+                0, null_handling=plc.types.NullPolicy.EXCLUDE
+            ),
+            stream=stream,
+        )
+
+    def _item(self, column: Column, stream: Stream) -> Column:
+        n = column.size
+        if n == 0:
+            if not self.options:
+                raise ComputeError(
+                    "aggregation 'item' expected a single value, got none"
+                )
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        elif n == 1:
+            plc_result = plc.copying.slice(column.obj, [0, 1], stream=stream)[0]
+        else:
+            qualifier = "no or a single value" if self.options else "a single value"
+            raise ComputeError(
+                f"aggregation 'item' expected {qualifier}, got {n} values"
+            )
         return Column(
             plc_result,
             name=column.name,

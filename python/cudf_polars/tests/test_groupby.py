@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -175,6 +175,46 @@ def test_groupby_len(engine: pl.GPUEngine, df, keys):
     q = df.group_by(*keys).agg(pl.len())
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_pivot_item(engine: pl.GPUEngine):
+    lf = pl.LazyFrame(
+        {
+            "bucket": [1, 1, 2, 2, 3],
+            "exchange": ["A", "B", "A", "B", "A"],
+            "value": [10.0, 20.0, 30.0, 40.0, None],
+        }
+    )
+    q = lf.pivot(
+        on="exchange",
+        on_columns=["A", "B", "C"],
+        index="bucket",
+        values="value",
+    )
+
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_pivot_item_duplicate_cells_raise(engine_raise_on_fail):
+    lf = pl.LazyFrame(
+        {
+            "bucket": [1, 1],
+            "exchange": ["A", "A"],
+            "value": [10.0, 20.0],
+        }
+    )
+    q = lf.pivot(
+        on="exchange",
+        on_columns=["A"],
+        index="bucket",
+        values="value",
+    )
+
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match="aggregation 'item' expected no or a single value",
+    ):
+        q.collect(engine=engine_raise_on_fail)
 
 
 @pytest.mark.parametrize(
