@@ -7,6 +7,7 @@ An executor for polars logical plans.
 This package implements an executor for polars logical plans using
 pylibcudf to execute the plans on device.
 """
+# noqa: trigger CI
 
 from __future__ import annotations
 
