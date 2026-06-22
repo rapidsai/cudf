@@ -141,8 +141,8 @@ conda activate cudf_dev
 ### Build cuDF from source
 
 - A `build.sh` script is provided in `$CUDF_HOME`. Running the script without explicit targets
-  builds and installs the default targets: `libcudf`, `pylibcudf`, `cudf`, `cudf_polars`, and
-  `dask_cudf`. By default, C++ libraries are installed to the `$CONDA_PREFIX` directory. To install
+  builds and installs the default targets: `libcudf`, `pylibcudf`, `cudf`, `libcudf_streaming`, `cudf_streaming`,
+  `cudf_polars`, and `dask_cudf`. By default, C++ libraries are installed to the `$CONDA_PREFIX` directory. To install
   them into a different location, set `$INSTALL_PREFIX`. Python packages are installed into the
   active Python environment. Finally, note that the script depends on the `nvcc` executable being on
   your path, or defined in `$CUDACXX`.
@@ -154,12 +154,12 @@ cd $CUDF_HOME
 # you want to build and install the libcudf C++ library only,
 # or include Python libraries:
 
-./build.sh  # libcudf, pylibcudf, cudf, cudf_polars, and dask_cudf
+./build.sh  # libcudf, pylibcudf, cudf, libcudf_streaming, cudf_streaming, cudf_polars, and dask_cudf
 ./build.sh libcudf  # libcudf only
 ./build.sh libcudf cudf  # libcudf and cudf only
 ```
 
-- Other libraries like `cudf-kafka`, `cudf-streaming`, and `custreamz` can be installed with this
+- Other libraries like `cudf-kafka` and `custreamz` can be installed with this
   script. For the complete list of libraries as well as details about the script usage, run the
   `help` command:
 
