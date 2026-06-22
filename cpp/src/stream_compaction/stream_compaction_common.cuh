@@ -9,8 +9,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -74,7 +74,7 @@ OutputIterator unique_copy(InputIterator first,
   return cudf::detail::copy_if(
     first,
     last,
-    thrust::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>{0},
     output,
     unique_copy_fn<InputIterator, BinaryPredicate>{first, keep, comp, last_index},
     stream);

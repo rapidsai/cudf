@@ -3,7 +3,6 @@
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport bitmask_type, data_type
 from pylibcudf.libcudf.types cimport null_aware, output_nullability
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
@@ -14,30 +13,30 @@ from .types cimport DataType
 
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(
-    Column input, Stream stream = *, DeviceMemoryResource mr = *
+    Column input, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Column column_nans_to_nulls(
-    Column input, Stream stream = *, DeviceMemoryResource mr = *
+    Column input, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Column compute_column(
-    Table input, Expression expr, Stream stream = *, DeviceMemoryResource mr = *
+    Table input, Expression expr, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Column compute_column_jit(
-    Table input, Expression expr, Stream stream = *, DeviceMemoryResource mr = *
+    Table input, Expression expr, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef tuple[gpumemoryview, int] bools_to_mask(
-    Column input, Stream stream = *, DeviceMemoryResource mr = *
+    Column input, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Column mask_to_bools(
     Py_ssize_t bitmask,
     int begin_bit,
     int end_bit,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )
 
@@ -48,17 +47,17 @@ cpdef Column transform(
     bool is_ptx,
     null_aware is_null_aware,
     output_nullability null_policy,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )
 
 cpdef tuple[Table, Column] encode(
-    Table input, Stream stream = *, DeviceMemoryResource mr = *
+    Table input, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef Table one_hot_encode(
     Column input_column,
     Column categories,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )

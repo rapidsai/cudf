@@ -67,7 +67,8 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   agg_requests.front().aggregations.push_back(convert_to<cudf::groupby_aggregation>(aggr));
 
   auto group_by = cudf::groupby::groupby{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-  auto aggregation_results           = group_by.aggregate(agg_requests, stream);
+  auto aggregation_results =
+    group_by.aggregate(agg_requests, stream, cudf::get_current_device_resource_ref());
   auto const& aggregation_result_col = aggregation_results.second.front().results.front();
 
   using cudf::groupby::detail::sort::sort_groupby_helper;
@@ -94,9 +95,11 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
   auto const reduce_results = [&] {
     auto const return_dtype = cudf::detail::target_type(input.type(), aggr.kind);
     if (aggr.kind == aggregation::COUNT_ALL) {
-      return cudf::make_fixed_width_scalar(input.size(), stream);
+      return cudf::make_fixed_width_scalar(
+        input.size(), stream, cudf::get_current_device_resource_ref());
     } else if (aggr.kind == aggregation::COUNT_VALID) {
-      return cudf::make_fixed_width_scalar(input.size() - input.null_count(), stream);
+      return cudf::make_fixed_width_scalar(
+        input.size() - input.null_count(), stream, cudf::get_current_device_resource_ref());
     } else {
       return cudf::reduction::detail::reduce(input,
                                              *convert_to<cudf::reduce_aggregation>(aggr),

@@ -164,7 +164,7 @@ def test_strings(tmpdir):
 
 def test_dask_timeseries_from_pandas(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
-    ddf2 = dask.datasets.timeseries(freq="D")
+    ddf2 = dask.datasets.timeseries(freq="D", seed=1)
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
@@ -175,7 +175,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     fn = str(tmpdir)
-    ddf2 = dask.datasets.timeseries(freq="D")
+    ddf2 = dask.datasets.timeseries(freq="D", seed=1)
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
     read_df = dask_cudf.read_parquet(
         fn, index=index, calculate_divisions=divisions

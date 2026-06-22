@@ -24,12 +24,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -91,8 +91,8 @@ struct is_supported_type_fn {
 template <bool forward>
 __device__ auto element_index_pair_iter(size_type const size)
 {
-  auto const begin = thrust::make_counting_iterator(0);
-  auto const end   = thrust::make_counting_iterator(size);
+  auto const begin = cuda::counting_iterator<cudf::size_type>{0};
+  auto const end   = cuda::counting_iterator{size};
 
   if constexpr (forward) {
     return cuda::std::pair{begin, end};
@@ -162,7 +162,7 @@ void index_of(InputIterator input_it,
 {
   auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
   auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input_it,
                     input_it + num_rows,
                     output_it,
@@ -245,7 +245,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
@@ -342,7 +342,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
   thrust::tabulate(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     out_begin,
     out_begin + lists.size(),
     cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{
@@ -350,8 +350,8 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
       auto const list = list_device_view{lists, list_idx};
       return list.is_null() ||
              thrust::any_of(thrust::seq,
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(list.size()),
+                            cuda::counting_iterator<cudf::size_type>{0},
+                            cuda::counting_iterator{list.size()},
                             [&list](auto const idx) { return list.is_null(idx); });
     }));
 

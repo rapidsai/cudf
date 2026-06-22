@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import numpy as np
 import pytest
 
 import cudf
@@ -67,5 +68,18 @@ def test_series_mode(gs, dropna):
 
     expected = ps.mode(dropna=dropna)
     actual = gs.mode(dropna=dropna)
+
+    if (
+        not dropna
+        and len(gs)
+        and gs.null_count == len(gs)
+        and isinstance(gs.dtype, np.dtype)
+        and gs.dtype.kind == "O"
+    ):
+        # cudf coerces an all-null object column to float64 (groupby, used
+        # internally by ``mode``, labels an all-null object key with a float64
+        # NaN), so the all-null mode is float64 NaN rather than pandas' object
+        # None.
+        expected = expected.astype("float64")
 
     assert_eq(expected, actual, check_dtype=False)

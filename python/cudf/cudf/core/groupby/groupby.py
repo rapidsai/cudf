@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -18,9 +18,7 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
-from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting
 from cudf.core.abc import Serializable
 from cudf.core.column import access_columns
@@ -34,7 +32,10 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -50,11 +51,11 @@ from cudf.core.reshape import concat
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,
+        DtypeObj,
         MultiColumnAggType,
         ScalarLike,
     )
@@ -104,9 +106,12 @@ _DECIMAL_AGGS = {
 
 @singledispatch
 def get_valid_aggregation(dtype):
-    if dtype == CUDF_STRING_DTYPE:
-        return _STRING_AGGS
     return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: pd.StringDtype):
+    return _STRING_AGGS
 
 
 @get_valid_aggregation.register
@@ -145,8 +150,7 @@ def _is_unsupported_agg_for_type(dtype, str_agg: str) -> bool:
 
 
 @_is_unsupported_agg_for_type.register
-def _(dtype: np.dtype, str_agg: str) -> bool:
-    # string specifically
+def _(dtype: pd.StringDtype, str_agg: str) -> bool:
     cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
     basic_agg = any(
         a in str_agg
@@ -161,10 +165,8 @@ def _(dtype: np.dtype, str_agg: str) -> bool:
             "nth",
         )
     )
-    return (
-        dtype.kind == "O"
-        and str_agg not in _STRING_AGGS
-        and (cumulative_agg or not (basic_agg or str_agg == "<class 'list'>"))
+    return str_agg not in _STRING_AGGS and (
+        cumulative_agg or not (basic_agg or str_agg == "<class 'list'>")
     )
 
 
@@ -452,6 +454,33 @@ class _GroupByContextManager:
         return False
 
 
+def _collect_series_key_column_names(obj, by) -> dict[int, Hashable]:
+    """For each Series grouping key in ``by``, map ``id`` of the Series'
+    underlying column to the name of the matching column in ``obj`` (when
+    one exists by object identity). Mirrors pandas' behavior of excluding
+    such columns from aggregation values.
+
+    Only applies when ``obj`` is a DataFrame: for Series inputs, the single
+    column *is* the value column, so identity-based exclusion would empty
+    the aggregation result. Keying by ``id(series._column)`` makes the
+    match robust to ordering, the presence of non-Series keys, and to
+    repeated Series keys.
+    """
+    import cudf
+
+    result: dict[int, Hashable] = {}
+    if not isinstance(obj, cudf.DataFrame):
+        return result
+    by_list = by if isinstance(by, list) else [by]
+    for key in by_list:
+        if isinstance(key, cudf.Series):
+            for col_name, col in obj._column_labels_and_values:
+                if col is key._column:
+                    result[id(key._column)] = col_name
+                    break
+    return result
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -526,6 +555,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        # Determine which column names in `obj` correspond to the grouping
+        # key Series by column identity (mirrors pandas' behavior).
+        # Must be done before ``nans_to_nulls`` which breaks identity.
+        by_series_col_names = _collect_series_key_column_names(obj, by)
+
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
         self.obj = obj
@@ -535,12 +569,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
+        self._selection: tuple[Any, ...] | None = None
 
         if isinstance(self._by, _Grouping):
             self._by._obj = self.obj
             self.grouping = self._by
         else:
-            self.grouping = _Grouping(obj, self._by, level)
+            self.grouping = _Grouping(
+                obj, self._by, level, by_series_col_names, dropna=self._dropna
+            )
 
         self._groupby_manager = _GroupByContextManager(
             self.grouping, self._dropna
@@ -554,7 +591,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, Index):
             group_names = group_names.to_pandas()
-        for i, name in enumerate(group_names):
+        if self._sort or len(offsets) <= 2:
+            order: Iterable[int] = range(len(offsets) - 1)
+        else:
+            # libcudf returns groups sorted by key, but with ``sort=False``
+            # pandas iterates groups in order of first appearance. Reorder by
+            # the earliest original row position in each group (group order
+            # matches between the two ``_groups`` calls since the grouping is
+            # identical).
+            pos_offsets, _, (positions,) = self._groups(
+                [self._range_column_from_obj]
+            )
+            # Gather the earliest original row position of each group and sort
+            # the groups by it entirely on the device; only the small ``order``
+            # array (one entry per group) is copied back to the host.
+            first_pos = positions.take(as_column(pos_offsets[:-1]))
+            order = first_pos.argsort().to_numpy()
+        for i in order:
+            name = group_names[i]
             yield (
                 (name,)
                 if isinstance(self._by, list) and len(self._by) == 1
@@ -574,43 +628,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def ndim(self) -> int:
         return self.obj.ndim
 
-    @property
-    def dtypes(self):
-        """
-        Return the dtypes in this group.
-
-        .. deprecated:: 24.04
-           Use `.dtypes` on base object instead.
-
-        Returns
-        -------
-        pandas.DataFrame
-            The data type of each column of the group.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
-        ...                      'c':[10, 11, 12, 12]})
-        >>> df.groupby("a").dtypes
-               a       b      c
-        a
-        1  int64  object  int64
-        2  int64  object  int64
-        3  int64  object  int64
-        """
-        warnings.warn(
-            f"{type(self).__name__}.dtypes is deprecated and will be "
-            "removed in a future version. Check the dtypes on the "
-            "base object instead",
-            FutureWarning,
-        )
-        index = self.grouping.keys.unique().sort_values().to_pandas()
-        return pd.DataFrame(
-            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
-            index=index,
-        )
-
     @cached_property
     def groups(self):
         """
@@ -623,6 +640,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             warnings.warn(
                 f"GroupBy.groups() performance scales poorly with "
                 f"number of groups. Got {len(group_names)} groups."
+            )
+        if isinstance(self._by, list) and len(self._by) == 1:
+            warnings.warn(
+                "In a future version, the keys of `groups` will be a "
+                f"tuple with a single element, e.g. ({self._by[0]},) , "
+                f"instead of a scalar, e.g. {self._by[0]}, when grouping "
+                "by a list with a single element. Use ``df.groupby(by='a').groups`` "
+                "instead of ``df.groupby(by=['a']).groups`` to avoid this warning",
+                FutureWarning,
             )
 
         return dict(
@@ -676,16 +702,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             index = MultiIndex.from_arrays(group_keys)
         else:
             index = Index._from_column(group_keys[0])
+        split = cp.split(indices.values, offsets[1:-1])
         return dict(
             zip(
                 index.to_pandas(),
-                cp.split(indices.values, offsets[1:-1]),
+                split,
                 strict=True,
             )
         )
 
     @_performance_tracking
-    def get_group(self, name, obj=None):
+    def get_group(self, name):
         """
         Construct DataFrame from group with provided name.
 
@@ -693,10 +720,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         name : object
             The name of the group to get as a DataFrame.
-        obj : DataFrame, default None
-            The DataFrame to take the DataFrame out of.  If
-            it is None, the object groupby was called on will
-            be used.
 
         Returns
         -------
@@ -717,21 +740,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  A  1
         2  A  3
         """
-        if obj is None:
-            obj = self.obj
-        else:
-            warnings.warn(
-                "obj is deprecated and will be removed in a future version. "
-                "Use ``df.iloc[gb.indices.get(name)]`` "
-                "instead of ``gb.get_group(name, obj=df)``.",
-                FutureWarning,
-            )
         if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
                 raise KeyError(name)
-        return obj.iloc[self.indices[name]]
+        return self.obj.iloc[self.indices[name]]
 
     @_performance_tracking
     def size(self) -> Series:
@@ -746,7 +760,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
-        if isinstance(getattr(self.obj, "dtype", None), pd.ArrowDtype):
+        obj_dtype = getattr(self.obj, "dtype", None)
+        if isinstance(obj_dtype, pd.ArrowDtype):
             # TODO: Remove once groupby.agg preserves pandas extension dtypes.
             arrow_dtype = pd.ArrowDtype(pa.int64())
             if isinstance(result, Series):
@@ -756,6 +771,23 @@ class GroupBy(Serializable, Reducible, Scannable):
             elif "size" in result._column_names:
                 result._data["size"] = ColumnBase.create(
                     result._data["size"].plc_column, arrow_dtype
+                )
+        elif (
+            isinstance(obj_dtype, pd.StringDtype)
+            and obj_dtype.storage == "pyarrow"
+            and obj_dtype.na_value is pd.NA
+        ):
+            # Series.groupby.size() on ``string[pyarrow]`` returns Int64.
+            int64_dtype = pd.Int64Dtype()
+            if isinstance(result, Series):
+                result = Series._from_column(
+                    ColumnBase.create(result._column.plc_column, int64_dtype),
+                    name=result.name,
+                    index=result.index,
+                )
+            elif "size" in result._column_names:
+                result._data["size"] = ColumnBase.create(
+                    result._data["size"].plc_column, int64_dtype
                 )
         if not self._as_index:
             result = result.rename("size").reset_index()
@@ -783,7 +815,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 column_empty(len(self.obj), np.dtype(np.int8)),
                 index=self.obj.index,
             )
-            .groupby(self.grouping, sort=self._sort)
+            .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("cumcount")
         )
 
@@ -966,18 +998,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
 
     def _replace_nulls(
-        self, values: tuple[ColumnBase, ...], method: str
+        self, values: tuple[ColumnBase, ...], method: plc.replace.ReplacePolicy
     ) -> Generator[ColumnBase]:
         with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 _, replaced = plc_groupby.replace_nulls(
                     plc.Table([col.plc_column for col in values]),
-                    [
-                        plc.replace.ReplacePolicy.PRECEDING
-                        if method == "ffill"
-                        else plc.replace.ReplacePolicy.FOLLOWING
-                    ]
-                    * len(values),
+                    [method] * len(values),
                 )
 
                 return (
@@ -1086,6 +1113,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError(
                 "Passing args to func is currently not supported."
             )
+        from cudf.core.dataframe import DataFrame
 
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
@@ -1132,12 +1160,16 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    cast_dtype = get_dtype_of_same_kind(
-                        orig_dtype, np.dtype(np.int64)
-                    )
+                    if isinstance(orig_dtype, pd.StringDtype):
+                        cast_dtype = np.dtype(np.int64)
+                    else:
+                        cast_dtype = get_dtype_of_same_kind(
+                            orig_dtype, np.dtype(np.int64)
+                        )
+                elif agg_kind == "NUNIQUE":
+                    cast_dtype = np.dtype(np.int64)
                 elif (
-                    self.obj.empty
-                    and (
+                    (
                         isinstance(agg_name, str)
                         and agg_name in Reducible._SUPPORTED_REDUCTIONS
                     )
@@ -1161,11 +1193,42 @@ class GroupBy(Serializable, Reducible, Scannable):
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
                 data[key] = result_col
-        data = ColumnAccessor(data, multiindex=multilevel)
-        if not multilevel:
+        # Preserve the column axis label-dtype/level_names from the source
+        # DataFrame so that aggregations such as ``nunique`` keep the column
+        # axis name (matching pandas behavior).
+        if len(data) == 0 and not multilevel and self.obj.ndim == 2:
+            # No columns were aggregated (e.g. a frame with no value
+            # columns): mirror the source column axis so its dtype and
+            # RangeIndex-ness are preserved. Otherwise an empty
+            # ColumnAccessor reconstructs its columns as a string/object
+            # Index, whereas pandas keeps the original (e.g. empty
+            # RangeIndex) columns.
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                rangeindex=self.obj._data.rangeindex,
+                label_dtype=self.obj._data.label_dtype,
+                level_dtypes=self.obj._data.level_dtypes,
+            )
+        elif (
+            not multilevel
+            and self.obj.ndim == 2
+            and self.obj._data.level_names != (None,)
+        ):
+            data = ColumnAccessor(
+                data,
+                multiindex=False,
+                level_names=self.obj._data.level_names,
+                label_dtype=self.obj._data.label_dtype,
+            )
+        else:
+            data = ColumnAccessor(data, multiindex=multilevel)
+        if not multilevel and len(data) > 0:
+            # Skip when there are no columns: there is nothing to rename, and
+            # rebuilding the ColumnAccessor would discard column-axis metadata
+            # (e.g. the preserved RangeIndex/dtype set above).
             data = data.rename_levels({np.nan: None}, level=0)
-
-        from cudf.core.dataframe import DataFrame
 
         result = DataFrame._from_data(data, index=result_index)
 
@@ -1243,12 +1306,66 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 )
 
-        if not self._as_index:
+        is_scan = _is_all_scan_aggregate(normalized_aggs)
+        if not self._as_index and not is_scan:
             result = result.reset_index()
-        if _is_all_scan_aggregate(normalized_aggs):
-            # Scan aggregations return rows in original index order
+        if is_scan:
+            # Scan aggregations are transforms: rows are returned in the
+            # original index order and the grouping keys are never part of
+            # the output, regardless of ``as_index``.
             return self._mimic_pandas_order(result)
 
+        return result
+
+    def _wrap_idxmin_idxmax(self, result: DataFrame | Series, *, skipna: bool):
+        # libcudf's idxmin/idxmax return the integer row-position of the
+        # min/max element within each group (null if the group's values were
+        # all NA). pandas instead returns the *label* of that row taken from
+        # the source object's row index, so we validate skipna against the raw
+        # positions and then gather the corresponding index labels.
+        from cudf.core.multiindex import MultiIndex
+        from cudf.core.series import Series
+
+        key_names = set(self.grouping.names)
+        if result.ndim == 2:
+            value_items = [
+                (name, col)
+                for name, col in result._column_labels_and_values
+                if name not in key_names
+            ]
+        else:
+            value_items = [(None, result._column)]
+
+        if skipna and any(col.has_nulls() for _, col in value_items):
+            raise ValueError(
+                "Encountered all NA values in a group with skipna=True"
+            )
+
+        index = self.obj.index
+        if isinstance(index, MultiIndex):
+            # pandas maps the positions to tuple-valued MultiIndex labels
+            # stored in an object column, which is not currently supported.
+            # Leave the (positional) result untouched, as before.
+            return result
+
+        def gather_labels(positions: ColumnBase) -> ColumnBase:
+            # ``gather`` cannot consume a null gather-map, so redirect null
+            # positions to an out-of-bounds index; ``take(nullify=True)`` then
+            # yields a null label for them while valid positions still gather
+            # their (possibly null) index label.
+            if positions.has_nulls():
+                positions = positions.fillna(len(index))
+            return index._column.take(positions, nullify=True)
+
+        if result.ndim == 2:
+            for name, col in value_items:
+                result._data[name] = gather_labels(col)
+        else:
+            result = Series._from_column(
+                gather_labels(result._column),
+                index=result.index,
+                name=result.name,
+            )
         return result
 
     def _reduce_numeric_only(self, op: str):
@@ -1287,17 +1404,123 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if min_count != 0:
-            raise NotImplementedError(
-                "min_count parameter is not implemented yet"
-            )
         if numeric_only:
             return self._reduce_numeric_only(op)
-        return self.agg(op)
+
+        if op == "sum" and self._has_string_value_column():
+            return self._string_sum(
+                skipna=kwargs.get("skipna", True), min_count=min_count
+            )
+
+        result = self.agg(op)
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
     def _scan(self, op: str, *args, **kwargs):
         """{op_name} for each group."""
         return self.agg(op)
+
+    def _has_string_value_column(self) -> bool:
+        from cudf.core.series import Series
+
+        if isinstance(self.obj, Series):
+            return isinstance(self.obj.dtype, pd.StringDtype)
+        for col_name in self.grouping._values_column_names:
+            if isinstance(self.obj._data[col_name].dtype, pd.StringDtype):
+                return True
+        return False
+
+    def _string_sum(self, *, skipna: bool, min_count: int):
+        """Implement groupby sum for StringDtype columns as per-group
+        string concatenation.
+        """
+        from cudf.core.column import ColumnBase
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
+
+        is_series = isinstance(self.obj, Series)
+        if is_series:
+            value_cols: list[tuple[Any, ColumnBase]] = [
+                (self.obj.name, self.obj._column)
+            ]
+        else:
+            value_cols = []
+            for col_name in self.grouping._values_column_names:
+                col = self.obj._data[col_name]
+                if not isinstance(col.dtype, pd.StringDtype):
+                    # TODO: handle mixed dtype frames
+                    raise NotImplementedError(
+                        "sum on mixed string and non-string columns is "
+                        "not yet supported"
+                    )
+                value_cols.append((col_name, col))
+
+        # Build a single batched groupby aggregation: one request per value
+        # column, computing collect_list and (when min_count > 0) count.
+        aggs = [plc.aggregation.collect_list()]
+        if min_count > 0:
+            aggs.append(plc.aggregation.count())
+        requests = [
+            plc.groupby.GroupByRequest(col.plc_column, aggs)
+            for _, col in value_cols
+        ]
+        columns_for_access = [col for _, col in value_cols]
+        with access_columns(
+            *columns_for_access, mode="read", scope="internal"
+        ):
+            with self._groupby_manager as plc_groupby:
+                keys, results = plc_groupby.aggregate(requests)
+
+        sep = plc.Scalar.from_py("")
+        sep_narep = plc.Scalar.from_py("")
+        if skipna:
+            string_narep = plc.Scalar.from_py("")
+            empty_policy = plc.strings.combine.OutputIfEmptyList.EMPTY_STRING
+        else:
+            string_narep = plc.Scalar.from_py(
+                None, plc.DataType(plc.TypeId.STRING)
+            )
+            empty_policy = plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT
+        null_str = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
+
+        out_data: dict[Any, ColumnBase] = {}
+        for (col_name, col), table in zip(value_cols, results, strict=True):
+            agg_columns = table.columns()
+            joined = plc.strings.combine.join_list_elements(
+                agg_columns[0],
+                sep,
+                sep_narep,
+                string_narep,
+                plc.strings.combine.SeparatorOnNulls.YES,
+                empty_policy,
+            )
+            if min_count > 0:
+                keep_mask_plc = plc.binaryop.binary_operation(
+                    agg_columns[1],
+                    plc.Scalar.from_py(min_count),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                joined = plc.copying.copy_if_else(
+                    joined, null_str, keep_mask_plc
+                )
+            out_data[col_name] = ColumnBase.create(joined, col.dtype)
+
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
+        index = self.grouping.keys._from_columns_like_self(
+            [
+                ColumnBase.create(key, dtype)
+                for key, dtype in zip(keys.columns(), key_dtypes, strict=True)
+            ]
+        )
+
+        if is_series:
+            return Series._from_column(
+                out_data[self.obj.name], name=self.obj.name, index=index
+            )
+        return DataFrame._from_data(out_data, index=index)
 
     aggregate = agg
 
@@ -1552,32 +1775,53 @@ class GroupBy(Serializable, Reducible, Scannable):
         0    0
         1    0
         2    1
-        3    3
-        4    2
+        3    2
+        4    3
         5    0
         dtype: int64
         """
         from cudf.core.series import Series
 
-        index = self.grouping.keys.unique().sort_values()
+        index = self.grouping.keys.unique()
+        # Groups are numbered in the order they would be iterated over: sorted
+        # order when ``sort=True``, otherwise order of first appearance.
+        if self._sort:
+            index = index.sort_values()
         num_groups = len(index)
-        has_null_group = any(col.has_nulls() for col in index._columns)
-        if ascending:
-            # Count ascending from 0 to num_groups - 1
-            groups = range(num_groups)
-        elif has_null_group:
-            # Count descending from num_groups - 1 to 0, but subtract one more
-            # for the null group making it num_groups - 2 to -1.
-            groups = range(num_groups - 2, -2, -1)
+
+        if not self._dropna:
+            # ``dropna=False``: a group whose key contains a null is a regular
+            # group numbered like any other, so the labels are simply the
+            # group positions in iteration order.
+            seq = (
+                range(num_groups)
+                if ascending
+                else range(num_groups - 1, -1, -1)
+            )
+            group_ids = Series._from_column(
+                as_column(seq, dtype=np.dtype(np.int64))
+            )
         else:
-            # Count descending from num_groups - 1 to 0
-            groups = range(num_groups - 1, -1, -1)
-
-        group_ids = Series._from_column(as_column(groups))
-
-        if has_null_group:
-            group_ids.iloc[-1] = pd.NA
-
+            # ``dropna=True``: pandas labels rows whose key contains a null
+            # with NA and excludes those groups from the numbering. A group is
+            # a "null group" when any of its key columns is null there.
+            null_group_col = functools.reduce(
+                lambda a, b: a | b,
+                (col.isnull() for col in index._columns),
+            )
+            non_null_mask = ~null_group_col
+            non_null = non_null_mask.astype(SIZE_TYPE_DTYPE)
+            # 0-based position of each labeled (non-null) group; the value at
+            # null positions is irrelevant as it is replaced with NA below.
+            rank = non_null.cumsum() - non_null
+            if not ascending:
+                rank = (int(non_null.sum()) - 1) - rank
+            group_ids = Series._from_column(
+                rank.astype(np.dtype(np.int64)).copy_if_else(
+                    pa_scalar_to_plc_scalar(pa.scalar(None, type=pa.int64())),
+                    non_null_mask,
+                )
+            )
         group_ids.index = index
         return self._broadcast(group_ids)
 
@@ -1760,6 +2004,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self, *, include_groups: bool = True):
+        from cudf.core.dataframe import DataFrame
+
         offsets, grouped_key_cols, grouped_value_cols = self._groups(
             itertools.chain(self.obj.index._columns, self.obj._columns)
         )
@@ -1773,11 +2019,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
-            index_names=self.obj._index_names,  # type: ignore[arg-type]
+            index_names=self.obj.index.names,
         )
-        if not include_groups:
+        if not include_groups and isinstance(grouped_values, DataFrame):
+            selection = getattr(self, "_selection", None)
             for col_name in to_drop:
-                del grouped_values[col_name]
+                if col_name in grouped_values._column_names and (
+                    selection is None or col_name not in selection
+                ):
+                    del grouped_values[col_name]
         group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -1841,7 +2091,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns, aggs_per_column = zip(
                 *(
                     (self.obj._data[x[0]], x[1])
-                    if isinstance(x, tuple)
+                    if isinstance(x, (tuple, NamedAgg))
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
                 ),
@@ -1859,7 +2109,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             list(agg) if is_list_like(agg) else [agg]  # type: ignore[arg-type]
             for agg in aggs_per_column
         ]
-        return column_names, columns, normalized_aggs
+        return column_names, columns, normalized_aggs  # type: ignore[return-value]  # (list-like narrowing is not represented)
 
     @_performance_tracking
     def pipe(self, func, *args, **kwargs):
@@ -1972,20 +2222,23 @@ class GroupBy(Serializable, Reducible, Scannable):
             # group is a row-like "Series" where the index labels
             # are the same as the original calling DataFrame
             if _is_row_of(chunk_results[0], self.obj):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results, axis=1).T
+                result = concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
+                # pandas names the columns axis after the row-like Series
+                # returned by the UDF (e.g. ``iloc[0]`` carries the original
+                # row label as its name); ``concat(..., axis=1).T`` otherwise
+                # drops it, leaving an unnamed columns axis.
+                result.columns = result.columns.set_names(
+                    [chunk_results[0].name]
+                )
             # When the UDF is like df.x + df.y, the result for each
             # group is the same length as the original group
             elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
                 len(self.obj),
                 len(group_names),
             }:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    result = concat(chunk_results)
+                result = concat(chunk_results)
                 if total_rows == len(group_names):
                     result.index = group_names
                     # TODO: Is there a better way to determine what
@@ -2009,18 +2262,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                     f"type {type(chunk_results[0])}"
                 )
         else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                result = concat(chunk_results)
+            result = concat(chunk_results)
             if self._group_keys:
                 index_data = group_keys._data.copy(deep=True)
-                index_data[None] = grouped_values.index._column
+                # The inner index level is the index returned by the UDF for
+                # each group (preserved through ``concat``), not the original
+                # row positions of the grouped values. This matches pandas,
+                # e.g. a UDF returning ``DataFrame({"values": range(len(grp))})``
+                # contributes a fresh 0..len(grp)-1 range per group.
+                index_data[None] = result.index._column
                 result.index = MultiIndex._from_data(index_data)
         return result
 
     @_performance_tracking
     def apply(
-        self, func, *args, engine="auto", include_groups: bool = True, **kwargs
+        self,
+        func,
+        *args,
+        engine="auto",
+        include_groups: bool = False,
+        **kwargs,
     ):
         """Apply a python transformation function over the grouped chunk.
 
@@ -2039,16 +2300,15 @@ class GroupBy(Serializable, Reducible, Scannable):
           allowed. Binary operations are not yet supported, so syntax like
           `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
-          <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
+          <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>`__.
           Use `cudf` to select the iterative groupby apply algorithm which aims
           to provide maximum flexibility at the expense of performance.
           The default value `auto` will attempt to use the numba JIT pipeline
           where possible and will fall back to the iterative algorithm if
           necessary.
-        include_groups : bool, default True
+        include_groups : bool, default False
             When True, will attempt to apply ``func`` to the groupings in
-            the case that they are columns of the DataFrame. In the future,
-            this will default to ``False``.
+            the case that they are columns of the DataFrame.
         kwargs : dict
             Optional keyword arguments to pass to the function.
             Currently not supported
@@ -2352,13 +2612,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         2   24.0     90
         3   26.0     80
         >>> gdf.groupby('Score').describe()
-             Speed
-             count   mean   std    min    25%    50%    75%     max
+              Speed
+              count   mean  std    min    25%    50%    75%    max
         Score
-        30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
-        50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
-        80        1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
-        90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
+        30        1  370.0  NaN  370.0  370.0  370.0  370.0  370.0
+        50        1  380.0  NaN  380.0  380.0  380.0  380.0  380.0
+        80        1   26.0  NaN   26.0   26.0   26.0   26.0   26.0
+        90        1   24.0  NaN   24.0   24.0   24.0   24.0   24.0
 
         """
         if percentiles is not None:
@@ -2705,7 +2965,58 @@ class GroupBy(Serializable, Reducible, Scannable):
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
-        return self.agg(func)
+        result = self.agg(func)
+        return self._align_quantile_dtypes(result, interpolation)
+
+    @staticmethod
+    def _quantile_result_dtype(
+        orig_dtype: DtypeObj | None, exact: bool
+    ) -> DtypeObj | None:
+        """Return the dtype pandas produces for a quantile of ``orig_dtype``.
+
+        libcudf's quantile aggregation always yields ``float64``. pandas,
+        however, chooses the result dtype from the input dtype and the
+        interpolation method (``exact`` is ``True`` for ``lower``/``higher``/
+        ``nearest``, where the quantile is an actual element of the input):
+
+        * numpy / pyarrow integer columns -> ``int64`` when ``exact`` else
+          ``float64``; numpy / pyarrow floating columns -> always ``float64``.
+        * pandas nullable (masked) integer columns -> keep their dtype when
+          ``exact`` else ``Float64``; nullable floating columns -> always keep
+          their dtype (e.g. ``Float32`` stays ``Float32``).
+
+        Returns ``None`` to leave the (float64) result untouched.
+        """
+        if orig_dtype is None:
+            return None
+        if is_pandas_nullable_numpy_dtype(orig_dtype) and not isinstance(
+            orig_dtype, pd.ArrowDtype
+        ):
+            # pandas nullable (masked) extension dtype.
+            if orig_dtype.kind == "f":
+                return orig_dtype
+            if orig_dtype.kind in "iu":
+                return orig_dtype if exact else pd.Float64Dtype()
+            return None
+        # numpy and pyarrow-backed columns do not preserve their dtype; the
+        # result is always numpy-backed.
+        if orig_dtype.kind == "f":
+            return np.dtype(np.float64)
+        if orig_dtype.kind in "iu":
+            return np.dtype(np.int64) if exact else np.dtype(np.float64)
+        return None
+
+    def _align_quantile_dtypes(
+        self, result: DataFrameOrSeries, interpolation: str
+    ) -> DataFrameOrSeries:
+        """Cast quantile result columns to the dtype pandas would produce."""
+        exact = interpolation in {"lower", "higher", "nearest"}
+        orig_dtypes = dict(self.grouping.values._dtypes)
+        for name, col in list(result._data.items()):
+            target = self._quantile_result_dtype(orig_dtypes.get(name), exact)
+            if target is not None and target != col.dtype:
+                result._data[name] = col.astype(target)
+        return result
 
     def _quantile_array(self, qs, interpolation="linear"):
         """Compute multiple quantiles and return result with proper
@@ -2755,13 +3066,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         combined.index = new_index
 
-        # If operating on a SeriesGroupBy, return a Series instead of
-        # a single-column DataFrame.
-        from cudf.core.series import Series
-
-        if isinstance(first, Series):
-            return combined.iloc[:, 0]
-
+        # If operating on a SeriesGroupBy, ``combined`` is already a Series;
+        # a DataFrameGroupBy yields a single-/multi-column DataFrame.
         return combined
 
     @_performance_tracking
@@ -2794,9 +3100,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         values.index = self.obj.index
         return values - self.shift(periods=periods)
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+    def _scan_fill(
+        self, method: plc.replace.ReplacePolicy, limit: int | None
+    ) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
+        from cudf.core.dataframe import DataFrame
+
         result = self.obj._from_data(
             dict(
                 zip(
@@ -2806,9 +3116,31 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
+        # Pandas' groupby.ffill/bfill builds the result columns via a ``take``
+        # on the input columns, which converts integer-valued column labels
+        # to object dtype. Reproduce that here so column metadata matches.
+        if (
+            isinstance(result, DataFrame)
+            and isinstance(self.obj, DataFrame)
+            and result._num_columns < self.obj._num_columns
+        ):
+            source_pd_cols = self.obj._data.to_pandas_index
+            if (
+                source_pd_cols.dtype.kind in {"i", "u"}
+                or source_pd_cols.dtype == object
+            ):
+                indexer = source_pd_cols.get_indexer(result._column_names)
+                if not (indexer == -1).any():
+                    taken = source_pd_cols.take(indexer)
+                    if (
+                        not isinstance(taken, pd.MultiIndex)
+                        and taken.dtype != object
+                    ):
+                        taken = taken.astype(object)
+                    result.columns = taken
         return self._mimic_pandas_order(result)
 
-    def ffill(self, limit=None):
+    def ffill(self, limit: int | None = None):
         """Forward fill NA values.
 
         Parameters
@@ -2816,13 +3148,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
+        return self._scan_fill(plc.replace.ReplacePolicy.PRECEDING, limit)
 
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("ffill", limit)
-
-    def bfill(self, limit=None):
+    def bfill(self, limit: int | None = None):
         """Backward fill NA values.
 
         Parameters
@@ -2830,76 +3158,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         limit : int, default None
             Unsupported
         """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        return self._scan_fill("bfill", limit)
-
-    @_performance_tracking
-    def fillna(
-        self,
-        value=None,
-        method=None,
-        axis=0,
-        inplace=False,
-        limit=None,
-        downcast=None,
-    ):
-        """Fill NA values using the specified method.
-
-        Parameters
-        ----------
-        value : scalar, dict
-            Value to use to fill the holes. Cannot be specified with method.
-        method : { 'bfill', 'ffill', None}, default None
-            Method to use for filling holes in reindexed Series
-
-            - ffill: propagate last valid observation forward to next valid
-            - bfill: use next valid observation to fill gap
-        axis : {0 or 'index', 1 or 'columns'}
-            Unsupported
-        inplace : bool, default False
-            If `True`, fill inplace. Note: this will modify other views on this
-            object.
-        limit : int, default None
-            Unsupported
-        downcast : dict, default None
-            Unsupported
-
-        Returns
-        -------
-        DataFrame or Series
-        """
-        warnings.warn(
-            "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill "
-            "or groupby bfill for forward or backward filling instead.",
-            FutureWarning,
-        )
-        if inplace:
-            raise NotImplementedError("Does not support inplace yet.")
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-        if downcast is not None:
-            raise NotImplementedError("Does not support downcast yet.")
-        if not axis == 0:
-            raise NotImplementedError("Only support axis == 0.")
-
-        if value is None and method is None:
-            raise ValueError("Must specify a fill 'value' or 'method'.")
-        if value is not None and method is not None:
-            raise ValueError("Cannot specify both 'value' and 'method'.")
-
-        if method is not None:
-            if method not in {"ffill", "bfill"}:
-                raise ValueError("Method can only be of 'ffill', 'bfill'.")
-            return getattr(self, method, limit)()
-
-        values = self.grouping.values
-        values.index = self.obj.index
-        return values.fillna(
-            value=value, inplace=inplace, axis=axis, limit=limit
-        )
+        return self._scan_fill(plc.replace.ReplacePolicy.FOLLOWING, limit)
 
     @_performance_tracking
     def shift(
@@ -2980,10 +3239,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_performance_tracking
     def pct_change(
         self,
-        periods=1,
-        fill_method=no_default,
-        axis=0,
-        limit=no_default,
+        periods: int = 1,
+        fill_method: None = None,
         freq=None,
     ):
         """
@@ -2995,17 +3252,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         periods : int, default 1
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
+            Must be None.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -3015,40 +3262,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Percentage changes within each group
         """
-        if not axis == 0:
-            raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
 
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' keyword being not None and the 'limit' "
-                f"keywords in {type(self).__name__}.pct_change are "
-                "deprecated and will be removed in a future version. "
-                "Either fill in any non-leading NA values prior "
-                "to calling pct_change or specify 'fill_method=None' "
-                "to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method in (no_default, None):
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            filled = self.fillna(method=fill_method, limit=limit)
-
-        fill_grp = filled.groupby(self.grouping)
+        filled = self.ffill()
+        fill_grp = filled.groupby(
+            self.grouping, sort=self._sort, dropna=self._dropna
+        )
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1
 
@@ -3147,18 +3369,91 @@ class GroupBy(Serializable, Reducible, Scannable):
     def any(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if any value in the group is truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("any is currently not implemented")
+        return self._bool_reduce("any", skipna=skipna, min_count=min_count)
 
     def all(self, skipna: bool = True, min_count: int = 0, **kwargs: Any):
         """
         Return True if all values in the group are truthful, else False.
-
-        Currently not implemented.
         """
-        raise NotImplementedError("all is currently not implemented")
+        return self._bool_reduce("all", skipna=skipna, min_count=min_count)
+
+    def _bool_reduce(self, op: str, *, skipna: bool, min_count: int):
+        """Implement all/any as min/max on bool-coerced value columns."""
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
+
+        agg_name = {"all": "min", "any": "max"}[op]
+        # Empty-group fill value: vacuously True for all, vacuously False for any
+        fill_value = op == "all"
+
+        is_series = isinstance(self.obj, Series)
+
+        # Coerce each value column to a (nullable) bool column so that
+        # nulls are preserved through the aggregation (min/max skip
+        # nulls). For ``skipna=False``, nulls are replaced with True so
+        # they don't flip ``all`` to False and always make ``any`` True.
+        bool_dtype = np.dtype(np.bool_)
+
+        def _to_bool_col(col):
+            if is_dtype_obj_string(col.dtype):
+                bool_col = col.count_characters() > np.int8(0)
+            else:
+                # For numeric/bool inputs, cast to bool preserving nulls.
+                bool_col = col != 0
+            # Normalize away pandas-extension bool dtypes so the downstream
+            # aggregation always sees ``np.bool_``.
+            bool_col = bool_col.astype(bool_dtype, copy=False)
+            if not skipna:
+                bool_col = bool_col.fillna(True)
+            return bool_col
+
+        if is_series:
+            new_obj = Series._from_column(
+                _to_bool_col(self.obj._column), name=self.obj.name
+            )
+        else:
+            new_data = {
+                col_name: _to_bool_col(self.obj._data[col_name])
+                for col_name in self.grouping._values_column_names
+            }
+            new_obj = DataFrame._from_data(new_data, index=self.obj.index)
+
+        # Reuse the same grouping so key columns match ``new_obj`` exactly,
+        # avoiding label-based lookup when the key column was excluded.
+        bool_gb = type(self)(
+            new_obj,
+            by=self.grouping,
+            level=None,
+            sort=self._sort,
+            as_index=self._as_index,
+            dropna=self._dropna,
+        )
+        result = bool_gb.agg(agg_name)
+
+        # Empty groups (skipna=True with all-NA values) yield NA from
+        # min/max — pandas treats these as ``True`` for ``all`` and
+        # ``False`` for ``any``.
+        bool_np = np.dtype(np.bool_)
+        if isinstance(result, Series):
+            result = result.fillna(fill_value).astype(bool_np)
+        else:
+            # With ``as_index=False`` the group-key columns are present in the
+            # result; only the aggregated value columns must be coerced to
+            # bool (casting a key column would corrupt it, e.g. a categorical
+            # key turning into ``[False, True]``).
+            key_names = set(self.grouping.names)
+            for col_name in result._column_names:
+                if col_name in key_names:
+                    continue
+                result[col_name] = (
+                    result[col_name].fillna(fill_value).astype(bool_np)
+                )
+
+        if min_count and min_count > 0:
+            counts = self.agg("count")
+            result = result.where(counts >= min_count, None)
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -3177,13 +3472,40 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         return self[columns].agg(op)
 
     def __getitem__(self, key):
-        return self.obj[key].groupby(
+        new = self.obj[key].groupby(
             by=self.grouping.keys,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
             as_index=self._as_index,
         )
+        # Track explicit column selection so include_groups=False does not
+        # strip columns the user explicitly asked for (matches pandas
+        # behavior of returning group-key columns when reselected).
+        new._selection = (
+            tuple(key) if isinstance(key, (list, tuple)) else (key,)
+        )
+        return new
+
+    def idxmin(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        numeric_only: bool = False,
+        **kwargs: Any,
+    ) -> DataFrame:
+        result = self._reduce("idxmin", numeric_only=numeric_only)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+
+    def idxmax(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        numeric_only: bool = False,
+        **kwargs: Any,
+    ) -> DataFrame:
+        result = self._reduce("idxmax", numeric_only=numeric_only)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
 
     def value_counts(
         self,
@@ -3470,9 +3792,17 @@ class SeriesGroupBy(GroupBy):
             if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 
-        # drop the first level if we have a multiindex
+        # Collapse the column MultiIndex produced by a list aggregation down to
+        # the aggregation names. With ``as_index=False`` the group-key columns
+        # have already been inserted (as ``(key, "")`` tuples by
+        # ``reset_index``); blindly dropping level 0 would replace each key
+        # name with the empty padding level, so keep the name for those.
         if result._data.nlevels > 1:
-            result.columns = result._data.to_pandas_index.droplevel(0)
+            key_names = set(self.grouping.names)
+            result.columns = [
+                top if (second == "" and top in key_names) else second
+                for top, second in result._data.to_pandas_index
+            ]
 
         return result
 
@@ -3485,6 +3815,18 @@ class SeriesGroupBy(GroupBy):
         result.name = self.obj.name
 
         return result
+
+    def idxmin(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> Series:
+        result = self._reduce("idxmin")
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+
+    def idxmax(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> Series:
+        result = self._reduce("idxmax")
+        return self._wrap_idxmin_idxmax(result, skipna=skipna)
 
     @property
     def dtype(self) -> pd.Series:
@@ -3588,7 +3930,14 @@ class Grouper:
 
 
 class _Grouping(Serializable):
-    def __init__(self, obj, by=None, level=None):
+    def __init__(
+        self,
+        obj,
+        by=None,
+        level=None,
+        series_key_column_names=None,
+        dropna=True,
+    ):
         self._obj = obj
         self._key_columns = []
         self.names = []
@@ -3596,7 +3945,36 @@ class _Grouping(Serializable):
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
         self._named_columns = []
+        # ``id(series._column)`` -> name of the matching ``obj`` column,
+        # for each Series-typed grouping key that is identical (by object
+        # identity) to one of ``obj``'s columns. Used by ``_handle_series``
+        # to mirror pandas' exclusion of such columns from value columns.
+        self._series_key_column_names = dict(series_key_column_names or {})
         self._handle_by_or_level(by, level)
+
+        # pandas treats NaN and null group keys identically, and labels an
+        # all-null object key with a float64 NaN. Externally supplied key
+        # columns (e.g. a Series or array passed as ``by``) also bypass the
+        # ``nans_to_nulls`` conversion applied to ``obj``. Normalize the key
+        # columns here so that, e.g., a float key of ``[None, NaN]`` collapses
+        # to a single null group and an all-null object key produces a float64
+        # NaN group label, matching pandas.
+        normalized = []
+        for col in self._key_columns:
+            if (
+                # Only when ``dropna=False`` is the all-null group actually
+                # kept and labelled. With ``dropna=True`` the group is dropped,
+                # and pandas leaves the (empty) result index as the original
+                # object dtype rather than promoting it to float64.
+                not dropna
+                and isinstance(col.dtype, np.dtype)
+                and col.dtype.kind == "O"
+                and len(col)
+                and col.null_count == len(col)
+            ):
+                col = column_empty(len(col), np.dtype("float64"))
+            normalized.append(col.nans_to_nulls())
+        self._key_columns = normalized
 
         if len(obj) and not len(self._key_columns):
             raise ValueError("No group keys passed")
@@ -3674,9 +4052,17 @@ class _Grouping(Serializable):
         self.__init__(self._obj, by)
 
     def _handle_series(self, by):
+        # Mirror pandas: if the grouping Series' underlying column was one
+        # of the obj's columns (identity captured pre-transformation),
+        # exclude that column name from value columns during aggregation.
+        # Look up by ``id`` of the original column *before* alignment may
+        # produce a fresh column object.
+        matched = self._series_key_column_names.get(id(by._column))
         by = by._align_to_index(self._obj.index, how="right")
         self._key_columns.append(by._column)
         self.names.append(by.name)
+        if matched is not None:
+            self._named_columns.append(matched)
 
     def _handle_index(self, by):
         self._key_columns.extend(by._columns)

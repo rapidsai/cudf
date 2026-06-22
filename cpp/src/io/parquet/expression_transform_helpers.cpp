@@ -5,7 +5,7 @@
 
 #include "expression_transform_helpers.hpp"
 
-#include "reader_impl_helpers.hpp"
+#include "column_path_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -16,7 +16,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -89,18 +89,15 @@ named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   table_metadata const& metadata,
   bool case_sensitive_names)
-  : _case_sensitive_names(case_sensitive_names)
+  : _column_name_to_index(make_column_path_map<size_type>(case_sensitive_names))
 {
   if (!expr.has_value()) { return; }
   // create map for column name.
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
-                 thrust::counting_iterator<size_t>(0),
+                 cuda::counting_iterator<std::size_t>{0},
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
-                 [case_sensitive_names](auto const& sch, auto index) {
-                   return std::make_pair(normalize_column_path(sch.name, case_sensitive_names),
-                                         index);
-                 });
+                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 
   expr.value().get().accept(*this);
 }
@@ -123,8 +120,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   ast::column_name_reference const& expr)
 {
   // check if column name is in metadata
-  auto const col_name = normalize_column_path(expr.get_column_name(), _case_sensitive_names);
-  auto col_index_it   = _column_name_to_index.find(col_name);
+  auto col_index_it = _column_name_to_index.find(expr.get_column_name());
   CUDF_EXPECTS(col_index_it != _column_name_to_index.end(),
                "Column name in the filter expression not found in the "
                "metadata of selected columns. Note that only top-level "
@@ -170,13 +166,9 @@ names_from_expression::names_from_expression(
   std::vector<std::string> const& skip_names,
   cudf::io::parquet_reader_options const& options,
   std::vector<SchemaElement> const& schema_tree)
-  : _case_sensitive_names(options.is_enabled_case_sensitive_names())
+  : _skip_names(make_column_path_set(options.is_enabled_case_sensitive_names()))
 {
-  std::transform(
-    skip_names.cbegin(),
-    skip_names.cend(),
-    std::inserter(_skip_names, _skip_names.end()),
-    [&](auto const& skip_name) { return normalize_column_path(skip_name, _case_sensitive_names); });
+  _skip_names.insert(skip_names.cbegin(), skip_names.cend());
 
   if (!expr.has_value()) { return; }
 
@@ -204,10 +196,9 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
     "only top-level columns except structs and lists are supported in "
     "Parquet filter expression",
     std::invalid_argument);
-  auto const col_name            = col_name_iter->second;
-  auto const normalized_col_name = normalize_column_path(col_name, _case_sensitive_names);
+  auto const col_name = col_name_iter->second;
   // If the normalized column name is not in the skip_names, add it
-  if (_skip_names.count(normalized_col_name) == 0) { _column_names.insert(col_name); }
+  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }
 
@@ -215,10 +206,9 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_name_reference const& expr)
 {
   // collect column names
-  auto const col_name            = expr.get_column_name();
-  auto const normalized_col_name = normalize_column_path(col_name, _case_sensitive_names);
+  auto const col_name = expr.get_column_name();
   // If the normalized column name is not in the skip_names, add it
-  if (_skip_names.count(normalized_col_name) == 0) { _column_names.insert(col_name); }
+  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }
 
@@ -261,7 +251,7 @@ void names_from_expression::visit_operands(
   if (selected_column_names.has_value()) {
     std::transform(selected_column_names->begin(),
                    selected_column_names->end(),
-                   thrust::counting_iterator<cudf::size_type>(0),
+                   cuda::counting_iterator<cudf::size_type>{0},
                    std::inserter(column_indices_to_names, column_indices_to_names.end()),
                    [case_sensitive_names](auto const& col_name, auto const col_index) {
                      return std::make_pair(col_index,
@@ -274,7 +264,7 @@ void names_from_expression::visit_operands(
     if (selected_column_indices.has_value()) {
       std::transform(selected_column_indices->begin(),
                      selected_column_indices->end(),
-                     thrust::counting_iterator<cudf::size_type>(0),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      std::inserter(column_indices_to_names, column_indices_to_names.end()),
                      [&](auto selected_col_idx, auto const mapped_col_idx) {
                        auto const schema_idx = root.children_idx[selected_col_idx];
@@ -285,8 +275,8 @@ void names_from_expression::visit_operands(
     } else {
       // Map all top-level column indices to their names from the schema tree
       std::for_each(
-        thrust::counting_iterator<int32_t>(0),
-        thrust::counting_iterator<int32_t>(root.children_idx.size()),
+        cuda::counting_iterator<int32_t>{0},
+        cuda::counting_iterator{static_cast<int32_t>(root.children_idx.size())},
         [&](auto col_idx) {
           auto const schema_idx = root.children_idx[col_idx];
           column_indices_to_names.insert(

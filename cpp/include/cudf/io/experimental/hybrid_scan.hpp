@@ -19,15 +19,13 @@
 #include <utility>
 #include <vector>
 
-namespace CUDF_EXPORT cudf {
-namespace io::parquet::experimental::detail {
+namespace cudf::io::parquet::experimental::detail {
 /**
  * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
  *        Hybrid Scan operation.
  */
 class hybrid_scan_reader_impl;
-}  // namespace io::parquet::experimental::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf::io::parquet::experimental::detail
 
 //! Using `byte_range_info` from cudf::io::text
 using cudf::io::text::byte_range_info;
@@ -344,7 +342,7 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @return Total number of top-level rows in the row groups
    */
-  [[nodiscard]] size_type total_rows_in_row_groups(
+  [[nodiscard]] std::size_t total_rows_in_row_groups(
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
@@ -661,6 +659,26 @@ class hybrid_scan_reader {
    * @return Table of materialized all (or selected) columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
+
+  /**
+   * @brief Partition row groups into passes such that the amount of GPU memory required to read,
+   * decompress and decode a pass is bounded by the specified limit
+   *
+   * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
+   * cannot fit within the limit given, it will still constitute a pass. The compressed row group
+   * size is estimated over all columns in each row group (not just the columns selected for
+   * reading), for conservative estimates.
+   *
+   * @throws std::invalid_argument if no row group indices in the input
+   *
+   * @param row_group_indices Input row group indices
+   * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
+   * no limit (single pass)
+   *
+   * @return Vector of vectors of row group indices, one per constructed pass
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
+    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup

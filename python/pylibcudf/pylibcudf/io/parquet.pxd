@@ -6,10 +6,11 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.expressions cimport Expression
+from pylibcudf.io.parquet_metadata cimport FileMetaData
 
 from pylibcudf.io.types cimport (
     compression_type,
@@ -74,7 +75,7 @@ cdef class ParquetReaderOptionsBuilder:
 
 
 cdef class ChunkedParquetReader:
-    cdef readonly Stream stream
+    cdef Stream _stream
     cdef DeviceMemoryResource mr
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
@@ -83,7 +84,10 @@ cdef class ChunkedParquetReader:
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+    ParquetReaderOptions options,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+    object parquet_metadatas=*,
 )
 
 
@@ -180,7 +184,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+cpdef memoryview write_parquet(ParquetWriterOptions options, object stream = *)
 
 cpdef bool is_supported_read_parquet(compression_type compression)
 

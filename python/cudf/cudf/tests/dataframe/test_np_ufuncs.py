@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
@@ -10,19 +10,10 @@ import pytest
 from packaging.version import parse
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
-from cudf.testing._utils import expect_warning_if, set_random_null_mask_inplace
+from cudf.testing._utils import set_random_null_mask_inplace
 
 
-# Skip matmul since it requires aligned shapes.
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_dataframe(request, numpy_ufunc, has_nulls, indexed):
@@ -107,24 +98,25 @@ def test_ufunc_dataframe(request, numpy_ufunc, has_nulls, indexed):
             assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
-            with expect_warning_if(
-                numpy_ufunc
-                in (
-                    np.isfinite,
-                    np.isinf,
-                    np.isnan,
-                    np.logical_and,
-                    np.logical_not,
-                    np.logical_or,
-                    np.logical_xor,
-                    np.signbit,
-                    np.equal,
-                    np.greater,
-                    np.greater_equal,
-                    np.less,
-                    np.less_equal,
-                    np.not_equal,
-                )
+            if numpy_ufunc in (
+                np.isfinite,
+                np.isinf,
+                np.isnan,
+                np.logical_and,
+                np.logical_not,
+                np.logical_or,
+                np.logical_xor,
+                np.signbit,
+                np.equal,
+                np.greater,
+                np.greater_equal,
+                np.less,
+                np.less_equal,
+                np.not_equal,
             ):
+                # cuDF .to_pandas for bools with nulls represents missing as None,
+                # should this be np.nan?
+                expect = expect.astype(object).mask(mask, None)
+            else:
                 expect[mask] = np.nan
         assert_eq(got, expect, check_exact=False)

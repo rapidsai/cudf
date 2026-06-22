@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -271,7 +271,7 @@ std::unique_ptr<column> clamp(
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in] input column_view of floating-point elements to copy and normalize
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr device_memory_resource allocator for allocating output data
+ * @param[in] mr Device memory resource for allocating output data
  *
  * @returns new column with the modified data
  */

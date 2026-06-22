@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 
 #include <vector>
@@ -444,7 +445,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
 {
   // Test that when the number of observations is fewer than min_periods,
   // the result is null.
-  auto const input_iter   = thrust::counting_iterator{0};
+  auto const input_iter   = cuda::counting_iterator<int32_t>{0};
   auto const input_column = cudf::test::fixed_point_column_wrapper<int32_t>{
     input_iter, input_iter + 6, numeric::scale_type{0}};
 
@@ -977,19 +978,18 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithMinPeriods)
     min_periods,
     *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{
-    {{10, 11, 12, 13},
-     {10, 11, 12, 13},
-     {10, 11, 12, 13, 14},
-     {10, 11, 12, 13, 14},
-     {10, 11, 12, 13, 14},
-     {},
-     {},
-     {},
-     {}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i < 5;
-    })}.release();
+  auto const expected_result =
+    cudf::test::lists_column_wrapper<T, int32_t>{{{10, 11, 12, 13},
+                                                  {10, 11, 12, 13},
+                                                  {10, 11, 12, 13, 14},
+                                                  {10, 11, 12, 13, 14},
+                                                  {10, 11, 12, 13, 14},
+                                                  {},
+                                                  {},
+                                                  {},
+                                                  {}},
+                                                 cudf::test::iterators::nulls_at({5, 6, 7, 8})}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1035,19 +1035,18 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
   auto null_at_1 = cudf::test::iterators::null_at(1);
 
   // In the results, `11` and `21` should be nulls.
-  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{
-    {{{10, 11, 12, 13}, null_at_1},
-     {{10, 11, 12, 13}, null_at_1},
-     {{10, 11, 12, 13, 14}, null_at_1},
-     {{10, 11, 12, 13, 14}, null_at_1},
-     {{10, 11, 12, 13, 14}, null_at_1},
-     {},
-     {},
-     {},
-     {}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i < 5;
-    })}.release();
+  auto const expected_result =
+    cudf::test::lists_column_wrapper<T, int32_t>{{{{10, 11, 12, 13}, null_at_1},
+                                                  {{10, 11, 12, 13}, null_at_1},
+                                                  {{10, 11, 12, 13, 14}, null_at_1},
+                                                  {{10, 11, 12, 13, 14}, null_at_1},
+                                                  {{10, 11, 12, 13, 14}, null_at_1},
+                                                  {},
+                                                  {},
+                                                  {},
+                                                  {}},
+                                                 cudf::test::iterators::nulls_at({5, 6, 7, 8})}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1103,19 +1102,19 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithMinPeriods)
     min_periods,
     *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<cudf::string_view>{
-    {{"10", "11", "12", "13"},
-     {"10", "11", "12", "13"},
-     {"10", "11", "12", "13", "14"},
-     {"10", "11", "12", "13", "14"},
-     {"10", "11", "12", "13", "14"},
-     {},
-     {},
-     {},
-     {}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i < 5;
-    })}.release();
+  auto const expected_result =
+    cudf::test::lists_column_wrapper<cudf::string_view>{
+      {{"10", "11", "12", "13"},
+       {"10", "11", "12", "13"},
+       {"10", "11", "12", "13", "14"},
+       {"10", "11", "12", "13", "14"},
+       {"10", "11", "12", "13", "14"},
+       {},
+       {},
+       {},
+       {}},
+      cudf::test::iterators::nulls_at({5, 6, 7, 8})}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1160,19 +1159,19 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
   auto null_at_1 = cudf::test::iterators::null_at(1);
 
   // In the results, `11` and `21` should be nulls.
-  auto const expected_result = cudf::test::lists_column_wrapper<cudf::string_view>{
-    {{{"10", "11", "12", "13"}, null_at_1},
-     {{"10", "11", "12", "13"}, null_at_1},
-     {{"10", "11", "12", "13", "14"}, null_at_1},
-     {{"10", "11", "12", "13", "14"}, null_at_1},
-     {{"10", "11", "12", "13", "14"}, null_at_1},
-     {},
-     {},
-     {},
-     {}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return i < 5;
-    })}.release();
+  auto const expected_result =
+    cudf::test::lists_column_wrapper<cudf::string_view>{
+      {{{"10", "11", "12", "13"}, null_at_1},
+       {{"10", "11", "12", "13"}, null_at_1},
+       {{"10", "11", "12", "13", "14"}, null_at_1},
+       {{"10", "11", "12", "13", "14"}, null_at_1},
+       {{"10", "11", "12", "13", "14"}, null_at_1},
+       {},
+       {},
+       {},
+       {}},
+      cudf::test::iterators::nulls_at({5, 6, 7, 8})}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1198,7 +1197,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
        {},
        {},
        {}},
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i < 5; })}
+      cudf::test::iterators::nulls_at({5, 6, 7, 8})}
       .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_with_nulls_excluded->view(),
@@ -1253,8 +1252,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
   auto expected_offsets_column =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 13, 18, 23, 23, 23, 23, 23}
       .release();
-  auto expected_validity_iter =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i < 5; });
+  auto expected_validity_iter = cudf::test::iterators::nulls_at({5, 6, 7, 8});
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(expected_validity_iter, expected_validity_iter + 9);
   auto expected_result = cudf::make_lists_column(9,

@@ -13,7 +13,7 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-# Run libcudf and libcudf_kafka gtests from libcudf-tests package
+# Run gtests from the libcudf-tests and libcudf-streaming-tests packages
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
 rapids-logger "Run libcudf gtests"
@@ -32,10 +32,9 @@ if (( SUITEERROR == 0 )); then
     SUITEERROR=$?
 fi
 
-# Ensure that benchmarks are runnable
 if (( SUITEERROR == 0 )); then
-    rapids-logger "Run tests of libcudf benchmarks"
-    timeout 30m ./ci/run_cudf_benchmark_smoketests.sh
+    rapids-logger "Run libcudf_streaming gtests"
+    timeout 5m ./ci/run_cudf_streaming_ctests.sh -j20
     SUITEERROR=$?
 fi
 

@@ -28,7 +28,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -610,10 +609,13 @@ struct PdaSymbolToSymbolGroupId {
     // escape, comma, colon or whitespace characters.
     auto constexpr newline    = '\n';
     auto constexpr whitespace = ' ';
+    // Cast to unsigned char first so high-bit bytes (>= 0x80) are not sign-extended to negative
+    // int32_t values, which would underflow the min() clamp used as the lookup index.
     auto const symbol_position =
       symbol == delimiter
         ? static_cast<int32_t>(newline)
-        : (symbol == newline ? static_cast<int32_t>(whitespace) : static_cast<int32_t>(symbol));
+        : (symbol == newline ? static_cast<int32_t>(whitespace)
+                             : static_cast<int32_t>(static_cast<unsigned char>(symbol)));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
@@ -1435,7 +1437,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(
+    stream, cudf::get_current_device_resource_ref());
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
@@ -1543,11 +1546,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy_nosync(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy_nosync(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());
@@ -1628,20 +1631,14 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
       tokenizer_pda::get_translation_table(recover_from_error)),
     stream);
 
-  // Perform a PDA-transducer pass
-  // Compute the maximum amount of tokens that can possibly be emitted for a given input size
-  // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
-  // may be arbitrarily deeply nested: {"":_}, where '_' is a placeholder for any JSON value,
-  // possibly another such struct. That is, 6 tokens for 5 chars (plus chars and tokens of '_')
-  std::size_t constexpr min_chars_per_struct  = 5;
-  std::size_t constexpr max_tokens_per_struct = 6;
-  auto const max_token_out_count =
-    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  cudf::detail::device_scalar<std::size_t> num_written_tokens{stream};
   // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
+
+  // Perform a PDA-transducer pass
+  cudf::detail::device_scalar<std::size_t> num_written_tokens{
+    stream, cudf::get_current_device_resource_ref()};
 
   // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
@@ -1673,9 +1670,6 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     tokens         = std::move(filtered_tokens);
     tokens_indices = std::move(filtered_tokens_indices);
   }
-
-  CUDF_EXPECTS(num_total_tokens <= max_token_out_count,
-               "Generated token count exceeds the expected token count");
 
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }

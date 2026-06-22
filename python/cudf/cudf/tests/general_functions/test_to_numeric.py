@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,9 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.testing import assert_eq
-from cudf.testing._utils import expect_warning_if
 
 
 @pytest.fixture(params=["integer", "signed", "unsigned", "float"])
@@ -244,18 +242,16 @@ def test_to_numeric_downcast_string_large_float(data, downcast):
         pd.Series(["1", "a", "3", ""]),  # mix of unconvertible and empty str
     ],
 )
-@pytest.mark.parametrize("errors", ["ignore", "raise", "coerce"])
+@pytest.mark.parametrize("errors", ["raise", "coerce"])
 def test_to_numeric_error(data, errors):
     if errors == "raise":
         with pytest.raises(
-            ValueError, match="Unable to convert some strings to numerics."
+            ValueError, match=r"Unable to convert some strings to numerics."
         ):
             cudf.to_numeric(data, errors=errors)
     else:
-        with expect_warning_if(PANDAS_GE_220 and errors == "ignore"):
-            expect = pd.to_numeric(data, errors=errors)
-        with expect_warning_if(errors == "ignore"):
-            got = cudf.to_numeric(data, errors=errors)
+        expect = pd.to_numeric(data, errors=errors)
+        got = cudf.to_numeric(data, errors=errors)
 
         assert_eq(expect, got)
 

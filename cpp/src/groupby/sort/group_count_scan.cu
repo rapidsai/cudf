@@ -35,22 +35,24 @@ std::unique_ptr<column> count_scan(column_view const& values,
   auto resultview = result->mutable_view();
   // aggregation::COUNT_ALL
   if (nulls == null_policy::INCLUDE) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  cuda::make_constant_iterator<size_type>(1),
-                                  resultview.begin<size_type>());
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.end(),
+      cuda::make_constant_iterator<size_type>(1),
+      resultview.begin<size_type>());
   } else {  // aggregation::COUNT_VALID
     auto d_values = cudf::column_device_view::create(values, stream);
     auto itr      = cudf::detail::make_counting_transform_iterator(
       0, [d_values = *d_values] __device__(auto idx) -> cudf::size_type {
         return d_values.is_valid(idx);
       });
-    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  itr,
-                                  resultview.begin<size_type>());
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.end(),
+      itr,
+      resultview.begin<size_type>());
   }
   return result;
 }

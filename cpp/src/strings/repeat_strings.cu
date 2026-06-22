@@ -20,9 +20,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
@@ -46,11 +46,11 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                std::overflow_error);
 
   auto const str_size = input.size();
-  auto const iter     = thrust::make_counting_iterator(0);
+  auto const iter     = cuda::counting_iterator<cudf::size_type>{0};
   auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),

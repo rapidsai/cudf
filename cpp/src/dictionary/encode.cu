@@ -30,6 +30,8 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -96,9 +98,9 @@ std::unique_ptr<column> encode(column_view const& input,
   // and keep track of the indices of the unique values
   auto d_indices = rmm::device_uvector<size_type>(input.size(), stream);
   auto d_input   = column_device_view::create(input, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     d_indices.begin(),
                     encode_fn{set_ref, *d_input});
 
@@ -107,7 +109,9 @@ std::unique_ptr<column> encode(column_view const& input,
   keys_indices.resize(cuda::std::distance(keys_indices.begin(), keys_end), stream);
 
   // sort the keys_indices so we can use lower-bound on them
-  thrust::sort(rmm::exec_policy_nosync(stream), keys_indices.begin(), keys_indices.end());
+  thrust::sort(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               keys_indices.begin(),
+               keys_indices.end());
 
   // use keys_indices to retrieve the keys
   auto const oob_policy   = cudf::out_of_bounds_policy::DONT_CHECK;
@@ -120,7 +124,7 @@ std::unique_ptr<column> encode(column_view const& input,
   // call lower-bound with keys_indices and d_indices to get the output indices_column
   auto d_result =
     cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       keys_indices.begin(),
                       keys_indices.end(),
                       d_indices.begin(),

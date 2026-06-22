@@ -53,7 +53,6 @@ enum class distribution_id : int8_t {
 };
 
 // Default distribution types for each type
-namespace {
 template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
@@ -107,7 +106,6 @@ std::pair<T, T> default_range()
   // Limits need to be such that `upper - lower` does not overflow
   return {std::numeric_limits<T>::lowest() / 2, std::numeric_limits<T>::max() / 2};
 }
-}  // namespace
 
 /**
  * @brief Enables partial specializations with SFINAE.

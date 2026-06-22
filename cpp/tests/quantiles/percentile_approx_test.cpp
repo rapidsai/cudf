@@ -5,6 +5,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -19,6 +20,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/iterator>
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
@@ -270,7 +273,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
@@ -287,7 +290,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
 
 std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(cudf::column_view const& col)
 {
-  auto itr = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto itr = cudf::test::iterators::valids_at_multiples_of(2);
   return cudf::test::detail::make_null_mask(itr, itr + col.size());
 }
 
@@ -317,7 +320,7 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),

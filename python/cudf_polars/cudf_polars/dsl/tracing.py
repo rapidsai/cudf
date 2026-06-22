@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracing and monitoring IR execution."""
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import ir
 
 
-class Scope(str, enum.Enum):
+class Scope(enum.StrEnum):
     """Scope values for structured logging."""
 
     PLAN = "plan"

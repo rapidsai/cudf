@@ -48,32 +48,56 @@ struct findall_fn {
     size_type output_idx = 0;
 
     auto itr = d_str.begin();
-    while (itr.position() < nchars) {
+    while (itr.position() <= nchars) {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
       auto const d_result    = string_from_match(*match, d_str, itr);
       d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      itr += (match->second - itr.position());
+      itr += (match->second - itr.position()) + (match->first == match->second);
     }
   }
 };
 
-std::unique_ptr<column> findall_util(column_device_view const& d_strings,
-                                     reprog_device& d_prog,
-                                     int64_t total_matches,
-                                     size_type const* d_offsets,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-{
-  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+/**
+ * @brief Extracts the first capture group instead of the whole match
+ */
+struct one_capture_fn {
+  column_device_view const d_strings;
+  size_type const* d_offsets;
+  string_index_pair* d_indices;
 
-  launch_for_each_kernel(
-    findall_fn{d_strings, d_offsets, indices.data()}, d_prog, d_strings.size(), stream);
+  __device__ void operator()(size_type const idx,
+                             reprog_device const d_prog,
+                             int32_t const prog_idx)
+  {
+    if (d_strings.is_null(idx)) { return; }
 
-  return make_strings_column(indices.begin(), indices.end(), stream, mr);
-}
+    auto const d_str = d_strings.element<string_view>(idx);
+    auto const bytes = d_str.size_bytes();
+
+    auto d_output   = d_indices + d_offsets[idx];
+    auto output_idx = size_type{0};
+
+    auto itr = d_str.begin();
+    while (itr.byte_offset() <= bytes) {
+      auto const match = d_prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+      itr += (match->first - itr.position());  // position to beginning of the match
+      auto const result = d_prog.extract(prog_idx, d_str, itr, match->second, 0);
+      if (result) {
+        auto const ext_str   = string_from_match(*result, d_str, itr);
+        d_output[output_idx] = string_index_pair{ext_str.data(), ext_str.size_bytes()};
+      } else {
+        d_output[output_idx] = string_index_pair{"", 0};  // empty string
+      }
+      if (itr.byte_offset() >= bytes) { break; }
+      itr += (match->second - itr.position()) + (match->first == match->second);
+      ++output_idx;
+    }
+  }
+};
 
 }  // namespace
 
@@ -83,6 +107,9 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
+  auto const groups = prog.groups_count();
+  CUDF_EXPECTS(groups <= 1, "findall does not support more than 1 capture group");
+
   if (input.is_empty()) {
     return cudf::lists::detail::make_empty_lists_column(input.parent().type());
   }
@@ -99,7 +126,15 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto const d_offsets = offsets->view().data<size_type>();
 
   // Build strings column of the matches
-  auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
+  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+  if (groups == 1) {
+    launch_for_each_kernel(
+      one_capture_fn{*d_strings, d_offsets, indices.data()}, *d_prog, input.size(), stream);
+  } else {
+    launch_for_each_kernel(
+      findall_fn{*d_strings, d_offsets, indices.data()}, *d_prog, input.size(), stream);
+  }
+  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
 
   // Build the lists column from the offsets and the strings
   return make_lists_column(input.size(),

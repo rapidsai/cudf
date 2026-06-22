@@ -14,7 +14,6 @@
 
 #include <jit/cache.hpp>
 #include <jit/span.cuh>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 #include <algorithm>
 #include <span>
@@ -32,13 +31,6 @@ get_transform_base_column(std::vector<column_view> const& inputs);
 
 size_type get_projection_size(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);
-
-struct input_reflection {
-  std::string type_name;
-  bool is_scalar = false;
-
-  [[nodiscard]] std::string accessor(int32_t index) const;
-};
 
 std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,
                                                  std::span<std::string const> input_typenames,
@@ -75,24 +67,17 @@ column_views_to_device(std::span<ColumnView const> views,
   }
 
   rmm::device_uvector<DeviceView> device_array{handles.size(), stream, mr};
-  cudf::detail::cuda_memcpy_async<DeviceView>(device_array, host_array, stream);
+  cudf::detail::cuda_memcpy<DeviceView>(device_array, host_array, stream);
 
   return std::make_tuple(std::move(handles), std::move(device_array));
 }
 
-std::vector<std::string> output_type_names(std::span<mutable_column_view const> views);
-
 std::vector<std::string> input_type_names(
   std::span<std::variant<column_view, scalar_column_view> const> views);
 
-input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input);
-
-std::vector<input_reflection> reflect_inputs(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs);
-
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source);
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& cuda_source);
 
 }  // namespace jit
 }  // namespace cudf
