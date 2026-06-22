@@ -1629,59 +1629,40 @@ cdef extern from *:
         return ((bm[idx >> 3] >> (idx & 7)) & 1) != 0;
     }
 
-    template <typename T>
-    struct into_py;
+    // Helper: PyList_SetItem steals a reference, so we incref
+    // borrowed singletons before calling it.
+    // https://docs.python.org/3/c-api/list.html#c.PyList_SetItem
+    static inline void _set_item(PyObject* list, Py_ssize_t i, PyObject* obj) {
+        Py_INCREF(obj);
+        PyList_SetItem(list, i, obj);
+    }
 
-    template <typename T>
-    requires (std::is_integral_v<T> && std::is_signed_v<T>)
-    struct into_py<T> {
-        static inline PyObject* convert(T v) {
-            return PyLong_FromLongLong((long long)v);
-        }
-    };
-
-    template <typename T>
-    requires (std::is_integral_v<T> && std::is_unsigned_v<T>)
-    struct into_py<T> {
-        static inline PyObject* convert(T v) {
-            return PyLong_FromUnsignedLongLong((unsigned long long)v);
-        }
-    };
-
-    template <typename T>
-    requires (std::is_floating_point_v<T>)
-        struct into_py<T> {
-        static inline PyObject* convert(T v) {
-            return PyFloat_FromDouble((double)v);
-        }
-    };
-
-    template <typename T>
+    template <bool check_valid, typename T>
     static inline PyObject* _make_pylist(
         int64_t n,
         int64_t offset,
-        bool check_valid,
         const uint8_t* null_bm,
         const T& conv
     )
     {
-        PyObject* out = PyList_New(n);
+        auto out = PyList_New(n);
         if (!out) return nullptr;
         for (int64_t i = 0; i < n; ++i) {
-            // PyList_SetItem steals a reference, so this helper pattern
-            // ensures that we incref borrowed singletons before calling it.
-            size_t bit_index = size_t(offset + i);
-            if (check_valid && !_is_valid(null_bm, bit_index)) {
-                Py_INCREF(Py_None);
-                PyList_SET_ITEM(out, i, Py_None);
-                continue;
+            auto bit_index = static_cast<size_t>(offset + i);
+            if constexpr (check_valid) {
+                if (!_is_valid(null_bm, bit_index)) {
+                    // TODO: Py_INCREF(Py_None) unnecessary once Python<3.12 is
+                    // dropped (Py_None is immortal in 3.12+).
+                    _set_item(out, i, Py_None);
+                    continue;
+                }
             }
-            PyObject* obj = conv(i, bit_index);
+            auto obj = conv(i, bit_index);
             if (!obj) {
                 Py_DECREF(out);
                 return nullptr;
             }
-            PyList_SET_ITEM(out, i, obj);
+            PyList_SetItem(out, i, obj);
         }
         return out;
     }
@@ -1689,8 +1670,11 @@ cdef extern from *:
     struct bool_converter {
         const uint8_t* bool_base;
         PyObject* operator()(int64_t, size_t bit_index) const {
-            bool is_valid = ((bool_base[bit_index >> 3] >> (bit_index & 7)) & 1) != 0;
-            PyObject* obj = is_valid ? Py_True : Py_False;
+            bool val = ((bool_base[bit_index >> 3] >> (bit_index & 7)) & 1) != 0;
+            // TODO: Py_INCREF unnecessary for Py_True/Py_False once Python<3.12
+            // is dropped (they are immortal objects in 3.12+).
+            // See: https://docs.python.org/3/c-api/bool.html#c.Py_False
+            auto obj = val ? Py_True : Py_False;
             Py_INCREF(obj);
             return obj;
         }
@@ -1700,7 +1684,7 @@ cdef extern from *:
         const int32_t* str_offsets;
         const char*    str_base;
         PyObject* operator()(int64_t i, size_t) const {
-            PyObject* s = PyUnicode_DecodeUTF8(
+            auto s = PyUnicode_DecodeUTF8(
                 str_base + str_offsets[i],
                 str_offsets[i + 1] - str_offsets[i],
                 nullptr
@@ -1709,7 +1693,6 @@ cdef extern from *:
                 PyErr_SetString(
                     PyExc_MemoryError, "Unable to convert string dtype to python"
                 );
-                return (PyObject*)nullptr;
             }
             return s;
         }
@@ -1719,102 +1702,108 @@ cdef extern from *:
     struct numeric_converter {
         const T* base;
         PyObject* operator()(int64_t i, size_t) const {
-            PyObject* obj = into_py<T>::convert(base[i]);
+            auto v = base[i];
+            PyObject* obj;
+            if constexpr (std::is_integral_v<T> && std::is_signed_v<T>) {
+                obj = PyLong_FromLongLong(static_cast<long long>(v));
+            } else if constexpr (std::is_integral_v<T> && std::is_unsigned_v<T>) {
+                obj = PyLong_FromUnsignedLongLong(static_cast<unsigned long long>(v));
+            } else {
+                obj = PyFloat_FromDouble(static_cast<double>(v));
+            }
             if (!obj) {
                 PyErr_SetString(
                     PyExc_MemoryError, "Unable to convert numeric dtype to python"
                 );
-                return (PyObject*)nullptr;
             }
             return obj;
         }
     };
 
-    template <typename T>
+    template <bool check_valid, typename T>
     inline PyObject* _make_numeric_pylist(
         const void* const* buffers,
         int64_t offset,
         int64_t n,
-        bool check_valid,
         const uint8_t* null_bm)
     {
-    return _make_pylist(
-            n, offset, check_valid, null_bm,
+        return _make_pylist<check_valid>(
+            n, offset, null_bm,
             numeric_converter<T>{static_cast<const T*>(buffers[1]) + offset}
         );
     }
 
-    static inline PyObject* cpp_arrow_to_pylist_impl(
-        cudf::type_id dtype, ArrowArray* arr
-    )
+    template <bool check_valid>
+    static inline PyObject* _dispatch_pylist(
+        cudf::type_id dtype, ArrowArray* arr)
     {
-        int64_t n = (int64_t)arr->length;
-        if (n == 0) return PyList_New(0);
-
-        const void* const* buffers = arr->buffers;
-        int64_t offset = arr->offset;
-        bool check_valid = (arr->null_count != 0);
-        const uint8_t* null_bm = check_valid ? (const uint8_t*)buffers[0] : nullptr;
+        auto n = arr->length;
+        auto buffers = arr->buffers;
+        auto offset = arr->offset;
+        auto null_bm = check_valid
+            ? static_cast<const uint8_t*>(buffers[0]) : nullptr;
 
         if (dtype == cudf::type_id::BOOL8) {
-            return _make_pylist(
-                n, offset, check_valid, null_bm,
-                bool_converter{(const uint8_t*)buffers[1]}
+            return _make_pylist<check_valid>(
+                n, offset, null_bm,
+                bool_converter{static_cast<const uint8_t*>(buffers[1])}
             );
         }
 
         if (dtype == cudf::type_id::STRING) {
-            return _make_pylist(
-                n, offset, check_valid, null_bm,
+            return _make_pylist<check_valid>(
+                n, offset, null_bm,
                 string_converter{
-                    (const int32_t*)buffers[1] + offset,
-                    (const char*)buffers[2]}
+                    static_cast<const int32_t*>(buffers[1]) + offset,
+                    static_cast<const char*>(buffers[2])}
             );
         }
 
         switch (dtype) {
             case cudf::type_id::INT8:
-                return _make_numeric_pylist<int8_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, int8_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::INT16:
-                return _make_numeric_pylist<int16_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, int16_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::INT32:
-                return _make_numeric_pylist<int32_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, int32_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::INT64:
-                return _make_numeric_pylist<int64_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, int64_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::UINT8:
-                return _make_numeric_pylist<uint8_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, uint8_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::UINT16:
-                return _make_numeric_pylist<uint16_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, uint16_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::UINT32:
-                return _make_numeric_pylist<uint32_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, uint32_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::UINT64:
-                return _make_numeric_pylist<uint64_t>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, uint64_t>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::FLOAT32:
-                return _make_numeric_pylist<float>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, float>(
+                    buffers, offset, n, null_bm);
             case cudf::type_id::FLOAT64:
-                return _make_numeric_pylist<double>(
-                    buffers, offset, n, check_valid, null_bm
-                );
+                return _make_numeric_pylist<check_valid, double>(
+                    buffers, offset, n, null_bm);
             default:
                 return nullptr;
+        }
+    }
+
+    static inline PyObject* cpp_arrow_to_pylist_impl(
+        cudf::type_id dtype, ArrowArray* arr)
+    {
+        if (arr->length == 0) return PyList_New(0);
+
+        if (arr->null_count != 0) {
+            return _dispatch_pylist<true>(dtype, arr);
+        } else {
+            return _dispatch_pylist<false>(dtype, arr);
         }
     }
     """
