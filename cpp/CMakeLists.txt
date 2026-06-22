@@ -20,7 +20,7 @@ rapids_cuda_init_architectures(CUDF)
 project(
   CUDF
   VERSION "${RAPIDS_VERSION}"
-  LANGUAGES C CXX CUDA
+  LANGUAGES C CXX CUDA ASM
 )
 
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
@@ -38,7 +38,6 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
-option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
@@ -77,10 +76,26 @@ if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
       ON
       CACHE BOOL "Statically link the CUDA runtime" FORCE
   )
+  set(RTCX_STATIC_LINK_NVRTC
+      ON
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      ON
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
+  )
 else()
   set(CUDA_STATIC_RUNTIME
       OFF
       CACHE BOOL "Statically link the CUDA runtime" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVRTC
+      OFF
+      CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(RTCX_STATIC_LINK_NVJITLINK
+      OFF
+      CACHE BOOL "Use static linking for nvJitLink" FORCE
   )
 endif()
 
@@ -110,7 +125,6 @@ message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
-message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
@@ -293,6 +307,16 @@ endfunction()
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in in site-packages --------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  include(${rapids-cmake-dir}/cython-core/find_prefix_paths.cmake)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
@@ -345,9 +369,6 @@ endif()
 
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
-# find jitify
-include(cmake/thirdparty/get_jitify.cmake)
-
 # find NVTX
 include(cmake/thirdparty/get_nvtx.cmake)
 
@@ -377,9 +398,6 @@ if(CUDF_BUILD_TESTUTIL)
   include(cmake/thirdparty/get_gtest.cmake)
 endif()
 
-# preprocess jitify-able kernels
-include(cmake/Modules/JitifyPreprocessKernels.cmake)
-
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 
@@ -391,6 +409,12 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
+
+# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
+add_subdirectory(librtcx)
+
+# JIT Embedding helper functions
+include(librtcx/embed.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -407,7 +431,62 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
+  install(
+    TARGETS rtcx
+    EXPORT cudf-exports
+    DESTINATION ${lib_dir}
+  )
 endif()
+
+add_embed(cudf_cuda_embed)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
+  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
+  cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY
+  cudf/cpp/src/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
+  cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
+  cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
+  cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
+  cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
+  embed_includes(
+    cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
+    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
+  )
+endforeach()
+
+embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -632,6 +711,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/experimental/variant_extract.cu
+  src/io/parquet/experimental/variant_path.cpp
   src/io/parquet/expression_transform_helpers.cpp
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
@@ -677,11 +758,16 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
-  src/join/filter_join_indices.cu
-  src/join/filter_join_indices_kernel_complex.cu
-  src/join/filter_join_indices_kernel_null_complex.cu
-  src/join/filter_join_indices_kernel_null_primitive.cu
-  src/join/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices.cu
+  src/join/filter_join_indices/filter_join_indices_jit.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_kernel_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
+  src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
@@ -704,11 +790,10 @@ add_library(
   src/join/hash_join/partitioned_left_join.cu
   src/join/hash_join/partitioned_retrieve.cu
   src/join/hash_join/partitioned_retrieve_outer.cu
-  src/join/mark_join.cu
-  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
+  src/join/mark_join.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
@@ -964,20 +1049,10 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
+  ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
 )
 
-# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
-# in how conda builds glibc
-set_source_files_properties(
-  src/binaryop/binaryop.cpp
-  src/jit/cache.cpp
-  src/rolling/detail/rolling_fixed_window.cu
-  src/rolling/detail/rolling_variable_window.cu
-  src/rolling/grouped_rolling.cu
-  src/rolling/rolling.cu
-  src/transform/transform.cu
-  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
-)
+add_dependencies(cudf cudf_cuda_embed)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
@@ -1041,14 +1116,13 @@ target_compile_options(
 # Specify include paths for the current target and dependents
 target_include_directories(
   cudf
-  PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
-         "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+  PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
+          "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1056,20 +1130,6 @@ target_compile_definitions(
   cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
               "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
-
-# Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
-target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
-
-if(JITIFY_USE_CACHE)
-  # Instruct src/jit/cache what version of cudf we are building so it can compute a cal-ver cache
-  # directory. We isolate this definition to the single source so it doesn't effect compiling
-  # caching for all of libcudf
-  set_property(
-    SOURCE src/jit/cache.cpp
-    APPEND
-    PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
-  )
-endif()
 
 # Per-thread default stream
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
@@ -1100,15 +1160,12 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
-# Compile stringified JIT sources first
-add_dependencies(cudf jitify_preprocess_run)
-
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
+          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
 # When building a shared libcudf with static deps, we absorb them via whole-archive linking so that

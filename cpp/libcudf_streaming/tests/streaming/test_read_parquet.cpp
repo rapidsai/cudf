@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "base_streaming_fixture.hpp"
@@ -20,12 +20,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/per_device_resource.hpp>
-
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/parquet.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/per_device_resource.hpp>
+
 #include <rapidsmpf/coll/allgather.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
 #include <rapidsmpf/owning_wrapper.hpp>
@@ -169,7 +170,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
   if (num_rows.has_value()) { options.set_num_rows(num_rows.value()); }
   auto filter_expr = [&]() -> std::unique_ptr<Filter> {
     if (!use_filter) { return nullptr; }
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
     auto owner  = new std::vector<std::any>;
     owner->push_back(std::make_shared<cudf::numeric_scalar<std::int32_t>>(15, true, stream));
     owner->push_back(std::make_shared<cudf::ast::literal>(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -254,7 +254,7 @@ class CategoricalColumn(ColumnBase):
             )
             plc_col = plc.Column.from_scalar(plc_scalar, len(self))
             other = cast(
-                CategoricalColumn,
+                "CategoricalColumn",
                 ColumnBase.create(plc_col, self.dtype),
             )
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
@@ -646,6 +646,14 @@ class CategoricalColumn(ColumnBase):
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if (
+            isinstance(dtype, np.dtype)
+            and dtype.kind in "iu"
+            and self.null_count > 0
+        ):
+            # pandas promotes a null-containing Categorical's categories to
+            # float, so converting to a non-nullable integer dtype raises.
+            raise ValueError("Cannot convert float NaN to integer")
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:

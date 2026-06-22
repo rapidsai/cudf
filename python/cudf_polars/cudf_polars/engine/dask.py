@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Dask distributed cluster."""
 
@@ -16,6 +16,10 @@ import distributed
 import distributed.system
 import pynvml
 import ucxx._lib.libucxx as ucx_api
+
+import polars as pl
+
+import rmm.mr
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
@@ -23,10 +27,6 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import polars as pl
-
-import rmm.mr
 
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -44,8 +44,8 @@ from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -247,7 +247,7 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int,
+            "int",
             executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",

@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd "$(dirname "$0")"; pwd)
 
-VALIDARGS="clean libcudf pylibcudf cudf cudf_polars dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz libcudf_streaming -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
-HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [libcudf_streaming] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
+VALIDARGS="clean libcudf pylibcudf cudf cudf_polars dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz libcudf_streaming cudf_streaming -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
+HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [libcudf_streaming] [cudf_streaming] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
@@ -33,6 +33,7 @@ HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchma
    cudf_kafka                    - build the cudf_kafka Python package
    custreamz                     - build the custreamz Python package
    libcudf_streaming              - build the libcudf_streaming C++ code only
+   cudf_streaming                - build the cudf_streaming Python package
    -v                            - verbose build mode
    -g                            - build for debug
    -n                            - no install step (does not affect Python)
@@ -356,6 +357,7 @@ if hasArg libcudf_streaming; then
           -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
           -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
           -DBUILD_TESTS=${BUILD_TESTS} \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           "${EXTRA_CMAKE_ARGS[@]}"
 
@@ -366,4 +368,14 @@ if hasArg libcudf_streaming; then
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
     fi
+fi
+
+# build cudf_streaming Python package
+if hasArg cudf_streaming; then
+    cd "${REPODIR}/python/cudf_streaming"
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${STREAMING_LIB_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}" \
+        python -m pip install \
+            "${PYTHON_ARGS_FOR_INSTALL[@]}" \
+            "${PY_API_ARGS[@]}" \
+            .
 fi
