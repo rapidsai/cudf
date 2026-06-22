@@ -508,6 +508,7 @@ ConfigureNVBench(
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
+  dictionary/concatenate.cpp
 )
 
 add_custom_target(
