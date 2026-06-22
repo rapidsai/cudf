@@ -13,6 +13,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <future>
+#include <memory>
 #include <optional>
 
 namespace CUDF_EXPORT cudf {
