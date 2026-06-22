@@ -33,6 +33,10 @@ target_include_directories(
   cudf_streaming_test_sources PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
                                       "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+target_compile_options(
+  cudf_streaming_test_sources
+  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS};--expt-extended-lambda>
+)
 target_link_libraries(
   cudf_streaming_test_sources
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf::cudftestutil cudf::cudftestutil_impl
@@ -45,7 +49,10 @@ target_sources(
           streaming/test_channel_metadata.cpp
           streaming/test_partition.cpp
           streaming/test_cudf_utils.cpp
+          streaming/test_shuffler.cpp
+          streaming/test_leaf_actor.cpp
           test_partition.cpp
+          test_shuffler.cpp
 )
 
 add_executable(cudf_streaming_single_tests main/single.cpp)

@@ -6,18 +6,18 @@
 from __future__ import annotations
 
 import pytest
-from rapidsmpf.streaming.cudf.channel_metadata import (
+
+import polars as pl
+
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
-
-import pylibcudf as plc
+from cudf_streaming.streaming.table_chunk import TableChunk
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataFrame, DataType

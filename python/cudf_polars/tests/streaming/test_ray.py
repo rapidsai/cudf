@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import pytest
-from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
+
+from rapidsmpf.bootstrap import is_running_with_rrun
 
 from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.utils.config import RayContext

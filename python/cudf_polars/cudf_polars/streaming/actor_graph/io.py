@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
@@ -8,15 +8,14 @@ import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
+from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import pylibcudf as plc
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -33,6 +32,7 @@ from cudf_polars.streaming.actor_graph.nodes import (
     metadata_feeder_node,
     shutdown_on_error,
 )
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     chunk_to_frame,
@@ -51,6 +51,8 @@ from cudf_polars.streaming.io import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -63,7 +65,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import SplitScan
+    from cudf_polars.streaming.io import FusedScan, SplitScan
 
 
 class Lineariser:
@@ -332,20 +334,13 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
-    if tracer is not None:
-        tracer.add_chunk(table=df.table)
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table,
-                df.stream,
-                exclusive_view=True,
-                br=context.br(),
-            ),
-        ),
+    chunk = TableChunk.from_pylibcudf_table(
+        df.table,
+        df.stream,
+        exclusive_view=True,
+        br=context.br(),
     )
+    await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
 @define_actor()
@@ -377,7 +372,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans = ir.scans
+    scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
@@ -415,12 +410,13 @@ async def scan_node(
         lineariser = Lineariser(context, ch_out, num_producers)
 
         # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, Scan | SplitScan]]] = [
+        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
             [] for _ in range(num_producers)
         ]
         for task_idx, scan in enumerate(scans):
             producer_id = task_idx % num_producers
-            producer_tasks[producer_id].append((task_idx, scan))
+            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
+            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
 
         async def _producer(producer_id: int, ch_out: Channel) -> None:
             for task_idx, scan in producer_tasks[producer_id]:
@@ -481,7 +477,7 @@ def make_rapidsmpf_read_parquet_node(
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from rapidsmpf.streaming.cudf.parquet import Filter, read_parquet
+    from cudf_streaming.streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
@@ -613,7 +609,9 @@ def _(
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
-                estimated_chunk_bytes=executor.target_partition_size,
+                estimated_chunk_bytes=(
+                    plan.estimated_chunk_bytes or executor.target_partition_size
+                ),
             )
         ]
     return nodes, channels
@@ -707,7 +705,7 @@ async def sink_node(
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await ir_context.to_thread(
-                    _sink_to_file,
+                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
                     ir.sink.kind,
                     ir.sink.path,
                     ir.sink.options,

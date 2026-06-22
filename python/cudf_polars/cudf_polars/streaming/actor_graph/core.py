@@ -30,14 +30,14 @@ from cudf_polars.utils.config import SPMDContext
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    import polars as pl
+
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import (

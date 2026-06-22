@@ -9,15 +9,15 @@ import random
 from typing import TYPE_CHECKING
 
 import pytest
-from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
 import pylibcudf as plc
+from cudf_streaming.streaming.table_chunk import TableChunk
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
+from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.utils import (

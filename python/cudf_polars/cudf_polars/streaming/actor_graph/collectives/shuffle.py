@@ -6,27 +6,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.communicator.single import new_communicator as single_comm
-from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.integrations.cudf.partition import (
+import pylibcudf as plc
+import pylibcudf.partitioning
+from cudf_streaming.integrations.partition import (
     partition_and_pack as py_partition_and_pack,
     split_and_pack as py_split_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
+from cudf_streaming.streaming.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
+from cudf_streaming.streaming.table_chunk import TableChunk
+from rapidsmpf.communicator.single import new_communicator as single_comm
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
-    ChannelMetadata,
-    HashScheme,
-    Partitioning,
-)
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import pylibcudf as plc
-import pylibcudf.partitioning
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.streaming.actor_graph.dispatch import (
@@ -48,7 +47,6 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.channel import Channel
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -445,7 +443,7 @@ async def shuffle_actor(
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
-    from rapidsmpf.integrations.cudf.partition.
+    from cudf_streaming.integrations.partition.
 
     Parameters
     ----------

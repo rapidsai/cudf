@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -131,12 +131,12 @@ class DecimalColumn(NumericalBaseColumn):
                     )
                 )
                 return cast(
-                    cudf.core.column.string.StringColumn,
+                    "cudf.core.column.string.StringColumn",
                     ColumnBase.create(plc_column, dtype),
                 )
         else:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 cudf.core.column.column_empty(0, dtype=dtype),
             )
 
@@ -239,7 +239,7 @@ class DecimalColumn(NumericalBaseColumn):
             if isinstance(lhs, (int, Decimal)):
                 lhs_binop = _to_plc_scalar(lhs, new_lhs_dtype)
             else:
-                lhs_binop = lhs.astype(new_lhs_dtype)
+                lhs_binop = lhs.astype(new_lhs_dtype)  # type: ignore[union-attr]  # (lhs is decimal column here)
             if isinstance(rhs, (int, Decimal)):
                 rhs_binop = _to_plc_scalar(rhs, new_rhs_dtype)
             else:
@@ -256,7 +256,7 @@ class DecimalColumn(NumericalBaseColumn):
         }:
             lhs_comp: plc.Scalar | ColumnBase = lhs  # type: ignore[assignment]
             rhs_comp: plc.Scalar | ColumnBase = (
-                _to_plc_scalar(rhs, self.dtype)  # type: ignore[arg-type]
+                _to_plc_scalar(rhs, self.dtype)
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
