@@ -80,7 +80,7 @@ def test_build_plan_operator_plan_ids(
 ) -> None:
     ir, config_options = ir_and_config
     plan_id = uuid.uuid4()
-    plan, operators, _, _ = build_plan(
+    _plan, operators, _, _ = build_plan(
         ir, config_options, Query(), plan_id, _make_worker()
     )
 
@@ -92,7 +92,7 @@ def test_build_plan_edges_reference_ports(
     ir_and_config: tuple[IR, ConfigOptions[StreamingExecutor]],
 ) -> None:
     ir, config_options = ir_and_config
-    plan, operators, ports, _ = build_plan(
+    plan, _operators, ports, _ = build_plan(
         ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     port_ids = {p.id for p in ports}
@@ -106,7 +106,7 @@ def test_build_plan_edge_direction(
 ) -> None:
     """Edges go from child 'out' port to parent input port."""
     ir, config_options = ir_and_config
-    plan, operators, ports, _ = build_plan(
+    plan, _operators, _ports, _ = build_plan(
         ir, config_options, Query(), uuid.uuid4(), _make_worker()
     )
     for edge in plan.edges:
@@ -374,7 +374,7 @@ def test_lower_ir_graph_with_node_map() -> None:
         ir, config_options, concurrent.futures.ThreadPoolExecutor()
     )
 
-    lowered_ir, partition_info, node_map = lower_ir_graph_with_node_map(
+    _lowered_ir, _partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats
     )
 
