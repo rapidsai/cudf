@@ -435,10 +435,22 @@ class CategoricalColumn(ColumnBase):
             ).columns()
 
         if old_plc.size() == 0:
+            if replaced.dtype != self.dtype:
+                raise TypeError(
+                    f"Cannot setitem on a Categorical with a new"
+                    f" category ({replaced.dtype}), set the"
+                    " categories first"
+                )
             return replaced.copy()
 
         remaining_to_replace = ColumnBase.create(old_plc, to_replace_col.dtype)
         if not replaced.categories.isin(remaining_to_replace).any():
+            if replaced.dtype != self.dtype:
+                raise TypeError(
+                    f"Cannot setitem on a Categorical with a new"
+                    f" category ({replaced.dtype}), set the"
+                    " categories first"
+                )
             return replaced.copy()
 
         if new_plc.null_count() > 0:
