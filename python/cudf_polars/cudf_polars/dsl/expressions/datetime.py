@@ -169,9 +169,10 @@ class TemporalFunction(Expr):
             (column,) = columns
             (time_unit,) = self.options
             # Rescale the timestamp to the requested resolution
+            df_stream = df.stream
             return column.astype(
-                DataType(pl.Datetime(time_unit)), stream=df.stream
-            ).astype(self.dtype, stream=df.stream)
+                DataType(pl.Datetime(time_unit)), stream=df_stream
+            ).astype(self.dtype, stream=df_stream)
         elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
