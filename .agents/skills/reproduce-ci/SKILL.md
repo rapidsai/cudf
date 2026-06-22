@@ -28,6 +28,7 @@ Verify all of the following before proceeding. Stop and report if any are missin
    - Environment variables passed to docker (`RAPIDS_BUILD_TYPE`, `RAPIDS_REPOSITORY`, `RAPIDS_REF_NAME`, `GH_TOKEN`)
    - The `docker run` flags (`--pull=always`, `--volume $PWD:/repo`, `--workdir /repo`)
    - The CI script invocation pattern
+   - If anything is out of date, modify `run.sh` as needed and inform the user of the changes
 
 ---
 

@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-
-"""Parse a GitHub Actions job URL and emit shell-friendly variable assignments.
-
-Usage:
-    python parse-job-url.py "https://github.com/rapidsai/cudf/actions/runs/<run_id>/job/<job_id>?pr=<pr_number>"
-
-Output (eval-able):
-    RUN_ID=XXXXXXXXXX
-    JOB_ID=XXXXXXXXX
-    PR_NUMBER=XXXX
-"""
+#
+# Parse a GitHub Actions job URL and emit shell-friendly variable assignments.
+#
+# Usage:
+#    python parse-job-url.py "https://github.com/rapidsai/cudf/actions/runs/<run_id>/job/<job_id>?pr=<pr_number>"
+#
+# Output (eval-able):
+#    RUN_ID=XXXXXXXXXX
+#    JOB_ID=XXXXXXXXX
+#    PR_NUMBER=XXXX
 
 import re
 import sys
