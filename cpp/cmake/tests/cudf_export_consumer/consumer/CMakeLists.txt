@@ -11,7 +11,7 @@ project(cudf_export_consumer LANGUAGES CXX)
 find_package(cudf REQUIRED CONFIG)
 
 get_target_property(cudf_interface_libraries cudf::cudf INTERFACE_LINK_LIBRARIES)
-foreach(forbidden IN ITEMS "rmm::rmm" "rapids_logger::rapids_logger" "spdlog::" "fmt::")
+foreach(forbidden IN ITEMS "rmm::" "rapids_logger::" "spdlog::" "fmt::")
   if(cudf_interface_libraries MATCHES "${forbidden}")
     message(
       FATAL_ERROR
