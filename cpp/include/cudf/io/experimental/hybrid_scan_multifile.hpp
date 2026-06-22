@@ -309,6 +309,27 @@ class hybrid_scan_multifile {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
+  /**
+   * @brief Partition row groups into passes such that the amount of GPU memory required to read,
+   * decompress and decode a pass is bounded by the specified limit
+   *
+   * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
+   * cannot fit within the limit given, it will still constitute a pass. The compressed row group
+   * size is estimated over all columns in each row group (not just the columns selected for
+   * reading), for conservative estimates.
+   *
+   * @throws std::invalid_argument if no row group indices in the input
+   *
+   * @param row_group_indices Input row group indices, one per source
+   * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
+   * no limit (single pass)
+   *
+   * @return Vector of per-source row group indices, one per constructed pass
+   */
+  [[nodiscard]] std::vector<std::vector<std::vector<size_type>>> construct_row_group_passes(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::size_t pass_read_limit) const;
+
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };

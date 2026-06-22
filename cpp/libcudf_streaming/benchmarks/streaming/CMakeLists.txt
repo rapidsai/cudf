@@ -10,6 +10,7 @@ if(CUDF_STREAMING_HAVE_COMM)
   set_target_properties(
     bench_streaming_shuffle
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks"
+               OUTPUT_NAME "libcudf_streaming_bench_streaming_shuffle"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                CUDA_STANDARD 20
@@ -23,7 +24,7 @@ if(CUDF_STREAMING_HAVE_COMM)
   install(
     TARGETS bench_streaming_shuffle
     COMPONENT benchmarking
-    DESTINATION bin/benchmarks/libcudf_streaming
+    DESTINATION "${CUDF_STREAMING_BENCHMARK_INSTALL_DIR}"
     EXCLUDE_FROM_ALL
   )
 else()
