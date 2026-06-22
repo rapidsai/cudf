@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,11 +59,11 @@ struct find_index_fn {
     auto result   = std::make_unique<numeric_scalar<size_type>>(-1, true, stream, mr);
     auto find_fn  = [find_key] __device__(auto const& k) { return k == find_key.value(); };
     auto tmp_size = std::size_t{0};
-    cub::DeviceFind::FindIf(
-      nullptr, tmp_size, keys, result->data(), find_fn, num_keys, stream.value());
+    CUDF_CUDA_TRY(cub::DeviceFind::FindIf(
+      nullptr, tmp_size, keys, result->data(), find_fn, num_keys, stream.value()));
     auto tmp = rmm::device_buffer(tmp_size, stream);
-    cub::DeviceFind::FindIf(
-      tmp.data(), tmp_size, keys, result->data(), find_fn, num_keys, stream.value());
+    CUDF_CUDA_TRY(cub::DeviceFind::FindIf(
+      tmp.data(), tmp_size, keys, result->data(), find_fn, num_keys, stream.value()));
     if (result->value(stream) == num_keys) { result->set_valid_async(false, stream); }
     return result;
   }
