@@ -80,6 +80,11 @@ struct reinst {
   int32_t reserved4;
 };
 
+enum match_flags : int32_t {
+  NONE        = 0,  // no special handling
+  EMPTY_MATCH = 1,  // may match an empty string, e.g. a* or \b$
+};
+
 /**
  * @brief Regex program handles parsing a pattern into a vector
  * of chained instructions.
@@ -131,6 +136,7 @@ class reprog {
   void check_for_errors();
 
   [[nodiscard]] std::pair<literal_fast_path, std::string> check_for_literal_fast_path() const;
+  [[nodiscard]] match_flags compute_match_flags() const;
 
 #ifndef NDEBUG
   void print();

@@ -391,6 +391,7 @@ void mark_join::clear_marks(rmm::cuda_stream_view stream)
   auto const grid_size = cudf::util::div_rounding_up_unsafe(num_buckets, mark_block_size);
   clear_marks_kernel<mark_block_size><<<grid_size, mark_block_size, 0, stream.value()>>>(
     storage_ref, static_cast<slot_type>(masked_empty_sentinel), num_buckets);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 template <typename Comparator>
@@ -421,6 +422,7 @@ cudf::size_type mark_join::mark_probe_without_prefilter(storage_ref_type storage
       num_right_rows,
       d_mark_counter.data(),
       right_row_bitmask);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return d_mark_counter.value(stream);
@@ -459,6 +461,7 @@ cudf::size_type mark_join::mark_probe_with_prefilter(storage_ref_type storage_re
   compact_if_kernel<mark_block_size, right_key_type, right_key_type, prefilter_operator_type>
     <<<filter_grid_size, mark_block_size, 0, stream.value()>>>(
       filtered_right_rows.data(), d_filtered_count.data(), prefilter_op);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto const filtered_count = d_filtered_count.value(stream);
   return mark_probe_without_prefilter(
@@ -558,6 +561,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
           result.data(),
           d_scan_offset.data(),
           num_buckets);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       mark_retrieve_kernel<mark_block_size, true>
         <<<grid_size, mark_block_size, 0, stream.value()>>>(
@@ -566,6 +570,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
           result.data(),
           d_scan_offset.data(),
           num_buckets);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   }
 
@@ -650,6 +655,7 @@ mark_join::mark_join(cudf::table_view const& left,
           cuda::counting_iterator<size_type>{0},
           row_is_valid{row_bitmask_ptr},
           insert_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       cuco::detail::open_addressing_ns::insert_if_n<masked_probing_scheme::cg_size,
                                                     cuco::detail::default_block_size()>
@@ -659,6 +665,7 @@ mark_join::mark_join(cudf::table_view const& left,
           cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           insert_ref);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 
