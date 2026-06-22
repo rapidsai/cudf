@@ -23,6 +23,11 @@ CUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
 read -r -a VERSIONS <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_polars_compat polars_compat_version)"
+
+if [[ "${POLARS_VERSIONS:-all}" == "endpoints" ]]; then
+    VERSIONS=("${VERSIONS[0]}" "${VERSIONS[-1]}")
+fi
+
 LATEST_VERSION="${VERSIONS[-1]}"
 
 # shellcheck disable=SC2317
