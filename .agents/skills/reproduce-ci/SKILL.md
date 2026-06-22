@@ -1,6 +1,6 @@
 ---
 name: reproduce-ci
-description: Reproduce cudf CI failures locally by running the same container images and scripts used in GitHub Actions. Supports both direct invocation (provide container image and script manually) and URL-driven workflow (paste a GitHub Actions job URL to auto-discover parameters). Arguments - container image, CI script path, PR number, and optional flags.
+description: Reproduce cudf CI failures locally. Provide a GitHub Actions job URL to auto-discover parameters, or supply the container image and CI script directly.
 ---
 
 # Reproducing cudf CI Failures Locally
@@ -31,12 +31,16 @@ Verify all of the following before proceeding. Stop and report if any are missin
 
 ---
 
-## Workflow A: URL-Driven (when user provides a GitHub Actions job URL)
+## Step 1: Determine Parameters
 
-Use this workflow when the user provides a URL like:
+You need three arguments for `run.sh`: **container image**, **CI script**, and **PR number**. Plus an optional `--gpu` flag. Use one of the two options below to obtain them.
+
+### Option A: Discover from a GitHub Actions Job URL
+
+Use this option when the user provides a URL like:
 `https://github.com/rapidsai/cudf/actions/runs/<run_id>/job/<job_id>?pr=<pr_number>`
 
-### Step 1: Parse the Job URL
+**Parse the Job URL:**
 
 Run the helper script to extract the run ID, job ID, and optional PR number:
 
@@ -56,7 +60,7 @@ If the script is unavailable, extract manually:
 - **Job ID**: path segment after `/job/`
 - **PR number**: `pr` query parameter (may be absent)
 
-### Step 2: Fetch Job Metadata and Logs
+**Fetch Job Metadata and Logs:**
 
 Use the extracted IDs to get job details:
 
@@ -81,9 +85,35 @@ Read through the log to identify:
 3. The **final outcome** — whether the job passed or failed
 4. If failed, the **exact failure** — error messages, test names, assertion text
 
-### Step 3: Run the Reproduction
+Now you have the three arguments needed for Step 2.
 
-Use the information gathered above to invoke `run.sh`:
+### Option B: Parameters Provided Directly
+
+Use this option when the user already knows the container image and CI script.
+
+The container image tag corresponds to the current RAPIDS version. Derive it from the `VERSION` file at the repo root:
+```bash
+RAPIDS_VERSION=$(head -1 VERSION | cut -d. -f1,2)  # e.g., "26.08"
+```
+
+All CI job definitions live in `.github/workflows/pr.yaml`. Each job specifies:
+- `container_image`: the Docker image to use
+- `script`: the CI script to run
+- `node_type`: determines whether a GPU is needed (`gpu-*` → pass `--gpu`)
+
+```bash
+grep -A 10 'job-name-here:' .github/workflows/pr.yaml
+```
+
+Alternatively, inspect the "Initialize Containers" step in the GitHub Actions job log for the exact image.
+
+Now you have the three arguments needed for Step 2.
+
+---
+
+## Step 2: Run the Reproduction
+
+Invoke `run.sh` with the parameters determined in Step 1:
 
 ```bash
 .agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>] [--dry-run]
@@ -95,11 +125,27 @@ Use `--dry-run` first to preview the exact docker command before executing:
 .agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/build_cpp.sh 22538 --dry-run
 ```
 
+Examples:
+```bash
+.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_cmake.sh 22538
+.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_java.sh 22538 --gpu
+.agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:$(head -1 VERSION | cut -d. -f1,2)-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
+```
+
 Determine whether `--gpu` is needed: check the `node_type` field in the workflow YAML or job metadata — `gpu-*` values indicate a GPU is required.
 
-### Step 4: Analyze Output
+The script launches a detached container, runs the CI script, and leaves the container running for inspection.
+After `--timeout` minutes of idle (default: 30), the container is automatically removed.
+```bash
+docker exec -it cudf-ci-repro bash   # inspect interactively
+docker rm -f cudf-ci-repro           # clean up manually before timeout
+```
 
-After `run.sh` completes, analyze the local output against the CI outcome from Step 2:
+---
+
+## Step 3: Analyze Output
+
+After `run.sh` completes, analyze the local output against the CI outcome:
 
 1. **Compare results** — did the local run match the CI outcome (both pass, both fail, or diverge)?
 2. **Note discrepancies** — if local and CI results differ, call out likely causes:
@@ -112,56 +158,7 @@ After `run.sh` completes, analyze the local output against the CI outcome from S
 
 4. Summarize the **root cause** based on the error output.
 5. **Ask the user** if they would like help investigating a fix.
-6. If yes, launch a sub-agent (Task tool) with the failure log, the relevant CI script paths, the error context from Step 2, and any source files implicated in the failure.
-
----
-
-## Workflow B: Direct Invocation (when user provides image and script manually)
-
-Use this workflow when the user already knows the container image and CI script.
-
-## Usage
-
-```bash
-.agents/skills/reproduce-ci/run.sh <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>] [--dry-run]
-```
-
-Examples:
-```bash
-.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_cmake.sh 22538
-.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:$(head -1 VERSION | cut -d. -f1,2)-latest ci/test_java.sh 22538 --gpu
-.agents/skills/reproduce-ci/run.sh rapidsai/citestwheel:$(head -1 VERSION | cut -d. -f1,2)-latest "ci/cudf_pandas_scripts/pandas-tests/run.sh pr" 22538 --gpu
-```
-
-The container image tag corresponds to the current RAPIDS version. Derive it from the `VERSION` file at the repo root:
-```bash
-RAPIDS_VERSION=$(head -1 VERSION | cut -d. -f1,2)  # e.g., "26.08"
-```
-
-Use `--dry-run` to preview the docker command without executing it:
-```bash
-.agents/skills/reproduce-ci/run.sh rapidsai/ci-conda:26.08-latest ci/test_cmake.sh 22538 --dry-run
-```
-
-The script launches a detached container, runs the CI script, and leaves the container running for inspection.
-After `--timeout` minutes of idle (default: 30), the container is automatically removed.
-```bash
-docker exec -it cudf-ci-repro bash   # inspect interactively
-docker rm -f cudf-ci-repro           # clean up manually before timeout
-```
-
-## Finding the Container Image, Script, and GPU Requirement
-
-All CI job definitions live in `.github/workflows/pr.yaml`. Each job specifies:
-- `container_image`: the Docker image to use
-- `script`: the CI script to run
-- `node_type`: determines whether a GPU is needed (`gpu-*` → pass `--gpu`)
-
-```bash
-grep -A 10 'job-name-here:' .github/workflows/pr.yaml
-```
-
-Alternatively, inspect the "Initialize Containers" step in the GitHub Actions job log for the exact image.
+6. If yes, launch a sub-agent (Task tool) with the failure log, the relevant CI script paths, the error context, and any source files implicated in the failure.
 
 ---
 
