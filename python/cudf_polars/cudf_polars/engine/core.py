@@ -453,7 +453,7 @@ def execute_ir_on_rank(
         Collected channel metadata.
     """
     ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
     metadata_collector: list[ChannelMetadata] = []
 
