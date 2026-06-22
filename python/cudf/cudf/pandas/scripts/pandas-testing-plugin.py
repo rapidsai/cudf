@@ -27,13 +27,10 @@ def patch_testing_functions():
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
-# Node ids (matched by substring) whose only discrepancy from pandas is
-# GPU-vs-CPU floating-point drift in transcendental numpy ufuncs. cuDF
-# evaluates these on the GPU (libcudf / cupy), whose results differ from
-# NumPy's CPU results by ~1 ULP, while ``tm.assert_index_equal`` compares
-# Index values exactly (``check_exact=True``) by default. For these tests we
-# relax the comparison to a tolerant one (NumPy/pandas default rtol/atol) so
-# the numerically-correct GPU results are accepted instead of being xfailed.
+# Some transcendental numpy ufuncs differ by a small (~1e-6) amount between
+# cuDF's GPU results and NumPy's CPU results, so for the tests listed here we
+# relax ``tm.assert_index_equal`` from its default exact check to a tolerant
+# one with a tight ``rtol``.
 TOLERANT_INDEX_COMPARE_SUBSTRINGS = ("test_numpy_ufuncs_basic",)
 
 
@@ -47,7 +44,9 @@ def relax_exact_index_compare(request):
     import pandas._testing as tm
 
     original = tm.assert_index_equal
-    tm.assert_index_equal = replace_kwargs({"check_exact": False})(original)
+    tm.assert_index_equal = replace_kwargs(
+        {"check_exact": False, "rtol": 1e-6}
+    )(original)
     try:
         yield
     finally:
