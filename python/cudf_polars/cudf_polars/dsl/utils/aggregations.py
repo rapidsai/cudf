@@ -205,6 +205,10 @@ def decompose_single_agg(
                     expr.Literal(value.dtype, None),
                 )
 
+                # Lazy pivot lowers to filtered item aggregations. The
+                # selected expression contains nulls for non-matching rows,
+                # so extract the matching value with first_non_null and
+                # validate item cardinality separately with a predicate count.
                 aggs, _ = decompose_single_agg(
                     expr.NamedExpr(next(name_generator), selected),
                     name_generator,
