@@ -417,7 +417,10 @@ class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
  */
 class remote_file_source : public file_source {
  public:
-  explicit remote_file_source(char const* filepath) : file_source(filepath) {}
+  explicit remote_file_source(char const* filepath, std::optional<std::size_t> = std::nullopt)
+    : file_source(filepath)
+  {
+  }
   static constexpr bool could_be_remote_url(std::string const&) { return false; }
 };
 #endif
