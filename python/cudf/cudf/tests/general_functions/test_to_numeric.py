@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -246,7 +246,7 @@ def test_to_numeric_downcast_string_large_float(data, downcast):
 def test_to_numeric_error(data, errors):
     if errors == "raise":
         with pytest.raises(
-            ValueError, match="Unable to convert some strings to numerics."
+            ValueError, match=r"Unable to convert some strings to numerics."
         ):
             cudf.to_numeric(data, errors=errors)
     else:
