@@ -739,40 +739,55 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   return result;
 }
 
-std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row_group_passes(
-  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
+hybrid_scan_reader_impl::construct_row_group_passes(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::size_t total_row_groups,
+  std::size_t pass_read_limit) const
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
 
-  // If pass_read_limit is 0 or there is only one row group, return all in a single pass
-  if (pass_read_limit == 0 or row_group_indices.size() == 1) {
-    return {{row_group_indices.begin(), row_group_indices.end()}};
+  CUDF_EXPECTS(row_group_indices.size() == _extended_metadata->get_num_sources(),
+               "Mismatch in the number of row group indices vectors and the number of input "
+               "datasources",
+               std::invalid_argument);
+
+  if (pass_read_limit == 0) {
+    return {
+      std::vector<std::vector<cudf::size_type>>{row_group_indices.begin(), row_group_indices.end()},
+      std::vector<cudf::size_type>{}};
   }
 
-  // TODO(mh): Need to handle multiple sources in the future
-  auto constexpr source_index = 0;
+  CUDF_EXPECTS(
+    pass_read_limit > 0, "Pass read limit must be greater than 0", std::invalid_argument);
 
-  // Construct row group information
   auto row_groups_info = std::vector<row_group_info>{};
-  row_groups_info.reserve(row_group_indices.size());
+  row_groups_info.reserve(total_row_groups);
   size_t start_row = 0;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(row_groups_info),
-                 [&](auto const& rg_index) {
-                   auto const& row_group =
-                     _extended_metadata->get_row_group(rg_index, source_index);
-                   auto const [compressed_size, total_size, num_rows, max_leaf_values] =
-                     _extended_metadata->get_row_group_properties(row_group);
-                   auto rg_info = row_group_info{.index               = rg_index,
-                                                 .start_row           = start_row,
-                                                 .unadjusted_num_rows = num_rows,
-                                                 .source_index        = source_index,
-                                                 .compressed_size     = compressed_size,
-                                                 .max_leaf_values     = max_leaf_values};
-                   start_row += num_rows;
-                   return rg_info;
-                 });
+  std::for_each(cuda::counting_iterator<cudf::size_type>(0),
+                cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
+                [&](auto const source_index) {
+                  auto const& src_row_groups = row_group_indices[source_index];
+                  std::transform(
+                    src_row_groups.begin(),
+                    src_row_groups.end(),
+                    std::back_inserter(row_groups_info),
+                    [&](auto const rg_index) {
+                      auto const& row_group =
+                        _extended_metadata->get_row_group(rg_index, source_index);
+                      auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+                        _extended_metadata->get_row_group_properties(row_group);
+                      auto rg_info = row_group_info{.index               = rg_index,
+                                                    .start_row           = start_row,
+                                                    .unadjusted_num_rows = num_rows,
+                                                    .source_index        = source_index,
+                                                    .compressed_size     = compressed_size,
+                                                    .max_leaf_values     = max_leaf_values};
+                      start_row += num_rows;
+                      return rg_info;
+                    });
+                });
 
   auto const comp_read_limit = static_cast<std::size_t>(
     pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
@@ -784,15 +799,27 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row
   auto const& offsets = pass_data.pass_row_group_offsets;
   auto passes         = std::vector<std::vector<cudf::size_type>>{};
   passes.reserve(offsets.size() - 1);
+  auto row_group_source_map       = std::vector<cudf::size_type>{};
+  auto const has_multiple_sources = row_group_indices.size() > 1;
+  if (has_multiple_sources) { row_group_source_map.reserve(row_groups_info.size()); }
   std::transform(offsets.begin(),
                  offsets.end() - 1,
                  offsets.begin() + 1,
                  std::back_inserter(passes),
                  [&](auto const start, auto const end) {
-                   return std::vector<cudf::size_type>{row_group_indices.begin() + start,
-                                                       row_group_indices.begin() + end};
+                   auto pass = std::vector<cudf::size_type>{};
+                   pass.reserve(end - start);
+                   std::for_each(row_groups_info.begin() + start,
+                                 row_groups_info.begin() + end,
+                                 [&](auto const& rg_info) {
+                                   pass.emplace_back(rg_info.index);
+                                   if (has_multiple_sources) {
+                                     row_group_source_map.emplace_back(rg_info.source_index);
+                                   }
+                                 });
+                   return pass;
                  });
-  return passes;
+  return {std::move(passes), std::move(row_group_source_map)};
 }
 
 bool hybrid_scan_reader_impl::has_next_table_chunk()

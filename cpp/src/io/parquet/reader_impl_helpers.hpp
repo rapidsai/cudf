@@ -412,6 +412,13 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
   /**
+   * @brief Get total number of sources
+   *
+   * @return Total number of sources
+   */
+  [[nodiscard]] auto get_num_sources() const { return per_file_metadata.size(); }
+
+  /**
    * @brief Get the number of row groups per file
    *
    * @return Number of row groups per file
