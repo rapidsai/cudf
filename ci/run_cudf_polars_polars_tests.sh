@@ -66,7 +66,7 @@ python -m pytest \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
-       -n 8 \
+       -n 4 \
        --dist=worksteal \
        --tb=native \
        --timeout=240 \
@@ -87,7 +87,7 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
-       -n 8 \
+       -n 4 \
        --dist=worksteal \
        --tb=native \
        --timeout=240 \

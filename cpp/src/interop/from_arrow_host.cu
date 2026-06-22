@@ -344,14 +344,22 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView const* schema,
     "number of rows in Arrow column exceeds the column size limit",
     std::overflow_error);
 
-  return type.id() != type_id::EMPTY
-           ? std::move(type_dispatcher(
-               type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask))
-           : std::make_unique<column>(data_type(type_id::EMPTY),
-                                      input->length,
-                                      rmm::device_buffer{},
-                                      rmm::device_buffer{},
-                                      input->length);
+  if (type.id() == type_id::EMPTY) {
+    return std::make_unique<column>(data_type(type_id::EMPTY),
+                                    input->length,
+                                    rmm::device_buffer{},
+                                    rmm::device_buffer{},
+                                    input->length);
+  }
+
+  auto result = type_dispatcher(
+    type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask);
+  if (!result->has_nulls() && !result->nullable() &&           // no nulls, not nullable
+      ((schema->schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
+    result->set_null_mask(
+      cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+  }
+  return result;
 }
 
 /**
