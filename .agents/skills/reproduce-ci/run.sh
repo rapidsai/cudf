@@ -35,6 +35,7 @@ if [[ -z "$RAPIDS_VERSION" ]]; then
     exit 1
 fi
 IDLE_TIMEOUT_MINUTES=30
+DRY_RUN="no"
 
 usage() {
     echo "Usage: $0 <container-image> <ci-script> <pr-number> [--gpu] [--timeout <minutes>]"
@@ -45,6 +46,7 @@ usage() {
     echo "  pr-number        Pull request number"
     echo "  --gpu            Pass --gpus all to docker (for test jobs that need a GPU)"
     echo "  --timeout N      Idle timeout in minutes before container is auto-removed (default: 30)"
+    echo "  --dry-run        Print the docker command without executing it"
     echo ""
     echo "Find these values in .github/workflows/pr.yaml under the job's 'with:' block."
     echo ""
@@ -68,6 +70,7 @@ shift 3
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --gpu) GPU_NEEDED="yes" ;;
+        --dry-run) DRY_RUN="yes" ;;
         --timeout)
             shift
             IDLE_TIMEOUT_MINUTES="$1"
@@ -85,12 +88,6 @@ if [[ -z "$GH_TOKEN" ]]; then
 fi
 
 # Remove existing container with same name if present
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo "Removing existing container: ${CONTAINER_NAME}"
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1
-fi
-
-# Build docker run args
 DOCKER_ARGS=(
     --pull=always
     --volume "$PWD:/repo"
@@ -108,6 +105,37 @@ fi
 
 if [[ "$GPU_NEEDED" == "yes" ]]; then
     DOCKER_ARGS+=(--gpus all)
+fi
+
+if [[ "$DRY_RUN" == "yes" ]]; then
+    echo "=== Dry-run: docker command (not executing) ==="
+    safe_args=()
+    i=0
+    while [[ $i -lt ${#DOCKER_ARGS[@]} ]]; do
+        arg="${DOCKER_ARGS[$i]}"
+        if [[ "$arg" == "--env" ]] && [[ $((i + 1)) -lt ${#DOCKER_ARGS[@]} ]]; then
+            next_arg="${DOCKER_ARGS[$((i + 1))]}"
+            if [[ "$next_arg" == GH_TOKEN=* ]]; then
+                safe_args+=("--env" "GH_TOKEN=***REDACTED***")
+            else
+                safe_args+=("$arg" "$next_arg")
+            fi
+            i=$((i + 2))
+            continue
+        elif [[ "$arg" == GH_TOKEN=* ]]; then
+            safe_args+=("GH_TOKEN=***REDACTED***")
+        else
+            safe_args+=("$arg")
+        fi
+        i=$((i + 1))
+    done
+    echo "docker run ${safe_args[*]} $CONTAINER_IMAGE tail -f /dev/null"
+    exit 0
+fi
+
+if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Removing existing container: ${CONTAINER_NAME}"
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1
 fi
 
 echo "=== Reproducing CI job ==="
