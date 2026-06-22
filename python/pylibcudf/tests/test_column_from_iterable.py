@@ -248,6 +248,7 @@ def test_from_iterable_plc_column():
         pa.array([True, None, False, True, None, False], type=pa.bool_()),
         pa.array(["fóó", "bår", "bäz"], type=pa.string()),
         pa.array([], type=pa.string()),
+        pa.array(["hello", None, "wörld", "🚀"], type=pa.large_string()),
     ],
 )
 def test_to_pylist(arr):

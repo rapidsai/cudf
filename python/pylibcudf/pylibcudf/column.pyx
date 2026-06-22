@@ -1272,13 +1272,18 @@ cdef class Column:
             If the column type is not fixed-width or string.
         """
         cdef type_id dtype = self.type().id()
+        cdef bint large_offsets = (
+            dtype == type_id.STRING
+            and self.num_children() > 0
+            and self.child(0).type().id() == type_id.INT64
+        )
         cdef Stream _stream = _get_stream(None)
         cdef cudaStream_t _cs = _stream.view().value()
         cdef ArrowArray* raw_host_array_ptr = NULL
         with nogil:
             raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
         try:
-            return _arrow_to_pylist_impl(dtype, raw_host_array_ptr)
+            return _arrow_to_pylist_impl(dtype, raw_host_array_ptr, large_offsets)
         finally:
             if raw_host_array_ptr != NULL:
                 with nogil:
@@ -1680,6 +1685,7 @@ cdef extern from *:
     template <bool check_valid>
     struct pylist_functor {
       ArrowArray* arr;
+      bool large_offsets;
 
       // Unsupported types (timestamps, decimals, lists, structs, etc.)
       template <typename T, std::enable_if_t<std::is_same_v<T, void>>* = nullptr>
@@ -1705,20 +1711,31 @@ cdef extern from *:
           });
       }
 
-      // STRING: Arrow uses offsets (buffers[1]) + char data (buffers[2])
+      // STRING: Arrow uses offsets (buffers[1]) + char data (buffers[2]).
+      // Offsets may be int32_t (standard) or int64_t (large strings > 2GB).
       template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
       PyObject* operator()() const
       {
         auto null_bm = check_valid
                           ? static_cast<const uint8_t*>(arr->buffers[0]) : nullptr;
-        auto str_offsets = static_cast<const int32_t*>(arr->buffers[1]) + arr->offset;
-        auto str_base    = static_cast<const char*>(arr->buffers[2]);
-        return _make_pylist<check_valid>(
-          arr->length, arr->offset, null_bm,
-          [str_offsets, str_base](int64_t i, size_t) -> PyObject* {
-            return PyUnicode_DecodeUTF8(
-              str_base + str_offsets[i], str_offsets[i + 1] - str_offsets[i], nullptr);
-          });
+        auto str_base = static_cast<const char*>(arr->buffers[2]);
+        if (large_offsets) {
+          auto str_offsets = static_cast<const int64_t*>(arr->buffers[1]) + arr->offset;
+          return _make_pylist<check_valid>(
+            arr->length, arr->offset, null_bm,
+            [str_offsets, str_base](int64_t i, size_t) -> PyObject* {
+              return PyUnicode_DecodeUTF8(
+                str_base + str_offsets[i], str_offsets[i + 1] - str_offsets[i], nullptr);
+            });
+        } else {
+          auto str_offsets = static_cast<const int32_t*>(arr->buffers[1]) + arr->offset;
+          return _make_pylist<check_valid>(
+            arr->length, arr->offset, null_bm,
+            [str_offsets, str_base](int64_t i, size_t) -> PyObject* {
+              return PyUnicode_DecodeUTF8(
+                str_base + str_offsets[i], str_offsets[i + 1] - str_offsets[i], nullptr);
+            });
+        }
       }
 
       // Numeric fixed-width types (integral and floating point, excluding bool)
@@ -1744,23 +1761,25 @@ cdef extern from *:
       }
     };
 
-    static inline PyObject* cpp_arrow_to_pylist_impl(cudf::type_id dtype, ArrowArray* arr)
+    static inline PyObject* cpp_arrow_to_pylist_impl(
+      cudf::type_id dtype, ArrowArray* arr, bool large_offsets)
     {
       if (arr->length == 0) return PyList_New(0);
 
       if (arr->null_count != 0) {
         return cudf::type_dispatcher<dispatch_pylist_type>(
-          cudf::data_type{dtype}, pylist_functor<true>{arr});
+          cudf::data_type{dtype}, pylist_functor<true>{arr, large_offsets});
       } else {
         return cudf::type_dispatcher<dispatch_pylist_type>(
-          cudf::data_type{dtype}, pylist_functor<false>{arr});
+          cudf::data_type{dtype}, pylist_functor<false>{arr, large_offsets});
       }
     }
     """
-    PyObject* cpp_arrow_to_pylist_impl(type_id dtype, ArrowArray* arr)
+    PyObject* cpp_arrow_to_pylist_impl(
+        type_id dtype, ArrowArray* arr, bint large_offsets)
 
-cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr):
-    cdef PyObject* list_ = cpp_arrow_to_pylist_impl(dtype, arr)
+cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr, bint large_offsets):
+    cdef PyObject* list_ = cpp_arrow_to_pylist_impl(dtype, arr, large_offsets)
     if list_ == NULL:
         if PyErr_Occurred():
             raise
