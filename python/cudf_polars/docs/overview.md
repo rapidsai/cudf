@@ -686,6 +686,7 @@ like the Query Group and Query names:
 
 ```python
 import cudf_polars.quent
+import cudf_polars.engine.spmd
 
 quent_context = cudf_polars.quent.QuentContext(
     query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
