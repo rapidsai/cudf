@@ -619,7 +619,8 @@ void log_nvJitLink_result(link_params const& params,
   }
 
   for (auto& frag : params.memory_fragments) {
-    fragments_str = std::format("{}\t{}\n", fragments_str, frag.name);
+    fragments_str =
+      std::format("{}\t{}\n", fragments_str, frag.name == nullptr ? "<unnamed>" : frag.name);
   }
 
   std::string link_options_str;

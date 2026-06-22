@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Core node definitions for the RapidsMPF streaming runtime."""
 
@@ -199,7 +199,7 @@ async def default_node_multi(
                 ready_chunks,
                 reserve_extra=sum(
                     chunk.data_alloc_size()
-                    for chunk in cast(list[TableChunk], ready_chunks)
+                    for chunk in cast("list[TableChunk]", ready_chunks)
                 ),
                 net_memory_delta=0,
             )

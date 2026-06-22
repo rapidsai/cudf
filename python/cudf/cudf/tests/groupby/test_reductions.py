@@ -94,13 +94,7 @@ def test_series_groupby(groupby_reduction_methods):
     assert_groupby_results_equal(sa, ga)
 
 
-def test_groupby_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_level_zero(groupby_reduction_methods):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
     gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
@@ -113,13 +107,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
     )
 
 
-def test_groupby_series_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_series_level_zero(groupby_reduction_methods):
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
     gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
@@ -351,6 +339,10 @@ def test_groupby_nulls_in_index():
 
 
 def test_groupby_all_nulls_index():
+    # cudf normalizes all-null group keys (e.g. coercing an all-null object key
+    # to float64), so an empty all-null-key result carries a float64 index
+    # rather than the original key dtype. The result is empty either way, so the
+    # index dtype is not meaningful here; skip the index-type check.
     gdf = cudf.DataFrame(
         {
             "a": cudf.Series([None, None, None, None], dtype="object"),
@@ -359,7 +351,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
     gdf = cudf.DataFrame(
@@ -367,7 +361,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
 
@@ -1240,6 +1236,22 @@ def test_groupby_all_any_empty(op):
         got = getattr(gdf.groupby("a"), op)()
     expect = getattr(pdf.groupby("a"), op)()
     assert_eq(expect, got, check_index_type=False)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+@pytest.mark.parametrize("key_is_categorical", [False, True])
+def test_groupby_all_any_as_index_false(op, key_is_categorical):
+    # With as_index=False the grouping key is reset as a column; it must not
+    # be coerced to bool along with the (reduced) value columns.
+    key = [2, 1, 2, 3]
+    if key_is_categorical:
+        key = pd.Categorical(key, categories=[1, 4, 3, 2], ordered=True)
+    pdf = pd.DataFrame({"a": key, "b": range(4)})
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a", as_index=False), op)()
+    expect = getattr(pdf.groupby("a", as_index=False), op)()
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
