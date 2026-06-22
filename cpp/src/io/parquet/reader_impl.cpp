@@ -513,7 +513,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_row_groups(),
              options.is_enabled_use_jit_filter(),
              options.is_enabled_case_sensitive_names(),
-             options.is_enabled_prepend_source_index_column()},
+             options.is_enabled_prepend_source_index_column(),
+             options.is_enabled_prepend_row_index_column()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -682,14 +683,16 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
     // Empty dataframe case: Simply initialize to a list of zeros
     out_metadata.num_rows_per_source =
       std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
+    _current_chunk_read_info = row_range{0, 0};
 
     // Finalize output
     return finalize_output(mode, out_metadata, out_columns);
   }
 
-  auto& pass            = *_pass_itm_data;
-  auto& subpass         = *pass.subpass;
-  auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
+  auto& pass               = *_pass_itm_data;
+  auto& subpass            = *pass.subpass;
+  auto const& read_info    = subpass.output_chunk_read_info[subpass.current_output_chunk];
+  _current_chunk_read_info = read_info;
 
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
@@ -886,6 +889,14 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
+  // Prepend the row index column if requested. Prepended before the source index column so that
+  // the final column order is: source index, row index, data columns
+  if (_options.prepend_row_index_column) {
+    prepend_row_index_column(_current_chunk_read_info, out_columns);
+    out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                     column_name_info{.name = "row_idx", .is_nullable = false});
+  }
+
   // Prepend the source index column if requested
   if (_options.prepend_source_index_column) {
     prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
@@ -894,7 +905,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   }
 
   // Offset column references in `_expr_conv` by the number of prepended columns
-  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
+  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
+                                  static_cast<size_type>(_options.prepend_row_index_column);
   auto const final_filter =
     offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
   auto const final_filter_expr = final_filter.get_converted_expr();

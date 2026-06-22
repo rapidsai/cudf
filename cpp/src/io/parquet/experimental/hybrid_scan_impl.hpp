@@ -535,6 +535,16 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     return _file_itm_data._output_chunk_count == 0 and not _output_chunk_produced;
   }
 
+  /**
+   * @brief Check if number of rows per source should be included in output metadata.
+   *
+   * @return True if AST filter is not present
+   */
+  [[nodiscard]] bool include_output_num_rows_per_source() const
+  {
+    return not _expr_conv.get_converted_expr().has_value();
+  }
+
  private:
   aggregate_reader_metadata* _extended_metadata;
 

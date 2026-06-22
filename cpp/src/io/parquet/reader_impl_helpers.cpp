@@ -1584,6 +1584,16 @@ aggregate_reader_metadata::select_row_groups(
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
 
+      // File-local start row of each row group in this source (exclusive prefix sum of row group
+      // sizes in file order). Independent of the selection and its order.
+      std::vector<size_t> source_start_rows(file_metadata.row_groups.size());
+      std::transform_exclusive_scan(file_metadata.row_groups.cbegin(),
+                                    file_metadata.row_groups.cend(),
+                                    source_start_rows.begin(),
+                                    size_t{0},
+                                    std::plus<size_t>{},
+                                    [](auto const& rg) { return rg.num_rows; });
+
       // For each row group in this data source
       std::for_each(
         current_row_group_indices[src_idx].begin(),
@@ -1625,6 +1635,7 @@ aggregate_reader_metadata::select_row_groups(
           selection.emplace_back(
             row_group_info{.index               = rg_idx,
                            .start_row           = row_group_start_row,
+                           .source_start_row    = source_start_rows[rg_idx],
                            .unadjusted_num_rows = num_rows,
                            .source_index        = static_cast<cudf::size_type>(src_idx),
                            .compressed_size     = compressed_size,

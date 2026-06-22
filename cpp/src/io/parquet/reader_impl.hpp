@@ -420,6 +420,19 @@ class reader_impl {
                                    std::vector<std::unique_ptr<column>>& out_columns);
 
   /**
+   * @brief Construct and prepend the file-local row index column to the output columns
+   *
+   * For each output row, the column contains the row's index within its parquet source file,
+   * accounting for row group selection and row bounds.
+   *
+   * @param read_info Row range of the output chunk relative to the first row of the first
+   *                  selected row group
+   * @param out_columns Current output columns
+   */
+  void prepend_row_index_column(row_range const& read_info,
+                                std::vector<std::unique_ptr<column>>& out_columns);
+
+  /**
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
@@ -459,7 +472,13 @@ class reader_impl {
     bool case_sensitive_names = true;
     // Whether to prepend the source file index column to the output
     bool prepend_source_index_column = false;
+    // Whether to prepend the file-local row index column to the output
+    bool prepend_row_index_column = false;
   } _options;
+
+  // Row range of the current output chunk relative to the first row of the first selected row
+  // group. Set by `read_chunk_internal()` and used to synthesize the row index column.
+  row_range _current_chunk_read_info{0, 0};
 
   // name to reference converter to extract AST output filter
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}, true};

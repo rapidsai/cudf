@@ -1944,6 +1944,96 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
   }
 }
 
+TEST_F(ParquetChunkedReaderTest, TestRowIndexColumnMultipleSources)
+{
+  constexpr int num_rows          = 10'723;  // A prime number
+  constexpr int rows_in_row_group = 500;
+
+  // Table with single col of random int64 values
+  auto const int64_data = random_values<int64_t>(num_rows);
+  auto int64_col        = int64s_col(int64_data.begin(), int64_data.end()).release();
+
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(std::move(int64_col));
+
+  // Write to Parquet
+  auto const [expected, filepath] = write_file(input_columns,
+                                               "row_index_column",
+                                               false,
+                                               false,
+                                               cudf::io::default_max_page_size_bytes,
+                                               rows_in_row_group);
+
+  // Chunked-read four data sources entirely with prepended source and row index columns
+  {
+    auto const nsources              = 4;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources})
+        .prepend_source_index_column(true)
+        .prepend_row_index_column(true)
+        .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    EXPECT_EQ(result->num_columns(), 3);
+
+    // Expected source and (file-local) row index columns
+    auto const src_index = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type i) { return i / num_rows; });
+    auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+      src_index, src_index + nsources * num_rows);
+    auto const row_index = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type i) -> int64_t { return i % num_rows; });
+    auto const expected_row_index =
+      cudf::test::fixed_width_column_wrapper<int64_t>(row_index, row_index + nsources * num_rows);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected_src_index);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(1), expected_row_index);
+  }
+
+  // Chunked-read rows_to_read rows skipping rows_to_skip from four data sources
+  {
+    auto const rows_to_skip          = 15'201;
+    auto const rows_to_read          = 20'232;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
+    auto const nsources              = 4;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .num_rows(rows_to_read)
+        .prepend_source_index_column(true)
+        .prepend_row_index_column(true)
+        .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    EXPECT_EQ(result->num_columns(), 3);
+    EXPECT_EQ(result->num_rows(), rows_to_read);
+
+    // Expected source and (file-local) row index columns
+    auto const src_index = cudf::detail::make_counting_transform_iterator(
+      rows_to_skip, [](cudf::size_type i) { return i / num_rows; });
+    auto const expected_src_index =
+      cudf::test::fixed_width_column_wrapper<cudf::size_type>(src_index, src_index + rows_to_read);
+    auto const row_index = cudf::detail::make_counting_transform_iterator(
+      rows_to_skip, [](cudf::size_type i) -> int64_t { return i % num_rows; });
+    auto const expected_row_index =
+      cudf::test::fixed_width_column_wrapper<int64_t>(row_index, row_index + rows_to_read);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected_src_index);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(1), expected_row_index);
+  }
+}
+
 TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
 {
   auto constexpr output_read_limit = 4'500;

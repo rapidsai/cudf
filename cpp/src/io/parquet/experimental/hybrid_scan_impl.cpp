@@ -749,29 +749,44 @@ hybrid_scan_reader_impl::construct_row_group_passes(
   auto row_groups_info = std::vector<row_group_info>{};
   row_groups_info.reserve(total_row_groups);
   size_t start_row = 0;
-  std::for_each(cuda::counting_iterator<cudf::size_type>(0),
-                cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
-                [&](auto const source_index) {
-                  auto const& src_row_groups = row_group_indices[source_index];
-                  std::transform(
-                    src_row_groups.begin(),
-                    src_row_groups.end(),
-                    std::back_inserter(row_groups_info),
-                    [&](auto const rg_index) {
-                      auto const& row_group =
-                        _extended_metadata->get_row_group(rg_index, source_index);
-                      auto const [compressed_size, total_size, num_rows, max_leaf_values] =
-                        _extended_metadata->get_row_group_properties(row_group);
-                      auto rg_info = row_group_info{.index               = rg_index,
-                                                    .start_row           = start_row,
-                                                    .unadjusted_num_rows = num_rows,
-                                                    .source_index        = source_index,
-                                                    .compressed_size     = compressed_size,
-                                                    .max_leaf_values     = max_leaf_values};
-                      start_row += num_rows;
-                      return rg_info;
-                    });
-                });
+  std::for_each(
+    cuda::counting_iterator<cudf::size_type>(0),
+    cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
+    [&](auto const source_index) {
+      auto const& src_row_groups = row_group_indices[source_index];
+
+      // File-local start row of each row group within this source: the exclusive prefix sum of
+      // row group sizes in file order, independent of the selection and its order. We only need
+      // prefixes up to the largest selected row group index in this source.
+      auto const max_rg_index =
+        src_row_groups.empty()
+          ? cudf::size_type{0}
+          : *std::max_element(src_row_groups.begin(), src_row_groups.end());
+      auto source_start_rows = std::vector<size_t>(max_rg_index + 1, 0);
+      for (cudf::size_type rg = 1; rg <= max_rg_index; ++rg) {
+        source_start_rows[rg] = source_start_rows[rg - 1] +
+                                _extended_metadata->get_row_group(rg - 1, source_index).num_rows;
+      }
+
+      std::transform(
+        src_row_groups.begin(),
+        src_row_groups.end(),
+        std::back_inserter(row_groups_info),
+        [&](auto const rg_index) {
+          auto const& row_group = _extended_metadata->get_row_group(rg_index, source_index);
+          auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+            _extended_metadata->get_row_group_properties(row_group);
+          auto rg_info = row_group_info{.index               = rg_index,
+                                        .start_row           = start_row,
+                                        .source_start_row    = source_start_rows[rg_index],
+                                        .unadjusted_num_rows = num_rows,
+                                        .source_index        = source_index,
+                                        .compressed_size     = compressed_size,
+                                        .max_leaf_values     = max_leaf_values};
+          start_row += num_rows;
+          return rg_info;
+        });
+    });
 
   auto const comp_read_limit = static_cast<std::size_t>(
     pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
